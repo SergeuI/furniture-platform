@@ -1,4 +1,11 @@
-from fastapi import APIRouter
+from fastapi import (
+    APIRouter,
+    Depends
+)
+
+from api.dependencies.auth import (
+    require_current_user
+)
 
 from schemas.project_input import (
     ProjectInputSchema
@@ -221,7 +228,9 @@ async def rollback_project_route(
 
     project_id: str,
 
-    version_id: str
+    version_id: str,
+
+    current_user = Depends(require_current_user)
 ):
 
     project = rollback_project(
@@ -270,7 +279,9 @@ async def rollback_project_route(
 )
 async def delete_project_route(
 
-    project_id: str
+    project_id: str,
+
+    current_user = Depends(require_current_user)
 ):
 
     deleted = delete_project(
