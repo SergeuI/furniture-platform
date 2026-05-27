@@ -7,7 +7,10 @@ from schemas.project_input import (
 from services.project_generation_service import (
     generate_project
 )
+from database.repositories.project_repository import (
 
+    get_project
+)
 router = APIRouter()
 
 
@@ -34,4 +37,49 @@ async def generate_project_route(
         "errors": result.errors,
 
         "result": result.result
+    }
+
+# =====================================================
+# GET PROJECT
+# =====================================================
+
+@router.get(
+    "/{project_id}"
+)
+async def get_project_route(
+
+    project_id: str
+):
+
+    project = get_project(
+        project_id
+    )
+
+    if not project:
+
+        return {
+
+            "success": False,
+
+            "error": "Project not found"
+        }
+
+    return {
+
+        "success": True,
+
+        "project": {
+
+            "id": project.id,
+
+            "width": project.width,
+
+            "height": project.height,
+
+            "depth": project.depth,
+
+            "sections": project.sections,
+
+            "drawers": project.drawers
+        }
     }
