@@ -113,3 +113,9 @@ export async function updateUserActive(token, userId, isActive) {
     }),
   });
 }
+
+export async function listAuditLogs(token, limit, offset) {
+  return request(`/audit/logs?limit=${limit}&offset=${offset}`, {
+    headers: authHeaders(token),
+  });
+}

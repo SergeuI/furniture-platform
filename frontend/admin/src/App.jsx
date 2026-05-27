@@ -17,6 +17,7 @@ import {
   getCurrentUser,
   getProject,
   getProjectHistory,
+  listAuditLogs,
   listUsers,
   listProjects,
   login,
@@ -90,6 +91,14 @@ function formatDateTime(value) {
   return date.toLocaleString();
 }
 
+function formatAuditDetails(details) {
+  if (!details || Object.keys(details).length === 0) {
+    return "No details";
+  }
+
+  return JSON.stringify(details);
+}
+
 export default function App() {
   const [token, setToken] = useState(
     () => localStorage.getItem(TOKEN_STORAGE_KEY) || "",
@@ -99,10 +108,13 @@ export default function App() {
   const [password, setPassword] = useState("");
   const [projects, setProjects] = useState([]);
   const [users, setUsers] = useState([]);
+  const [auditLogs, setAuditLogs] = useState([]);
   const [total, setTotal] = useState(0);
   const [usersTotal, setUsersTotal] = useState(0);
+  const [auditTotal, setAuditTotal] = useState(0);
   const [offset, setOffset] = useState(0);
   const [usersOffset, setUsersOffset] = useState(0);
+  const [auditOffset, setAuditOffset] = useState(0);
   const [selectedProject, setSelectedProject] = useState(null);
   const [historyItems, setHistoryItems] = useState([]);
   const [form, setForm] = useState(projectToForm(null));
@@ -115,6 +127,8 @@ export default function App() {
   const canGoForward = offset + PAGE_SIZE < total;
   const canUsersGoBack = usersOffset > 0;
   const canUsersGoForward = usersOffset + PAGE_SIZE < usersTotal;
+  const canAuditGoBack = auditOffset > 0;
+  const canAuditGoForward = auditOffset + PAGE_SIZE < auditTotal;
 
   const selectedProjectId = selectedProject?.id || "";
 
@@ -136,6 +150,29 @@ export default function App() {
       usersTotal,
     )} of ${usersTotal}`;
   }, [usersOffset, usersTotal]);
+
+  const auditPageLabel = useMemo(() => {
+    if (auditTotal === 0) {
+      return "0 of 0";
+    }
+
+    return `${auditOffset + 1}-${Math.min(
+      auditOffset + PAGE_SIZE,
+      auditTotal,
+    )} of ${auditTotal}`;
+  }, [auditOffset, auditTotal]);
+
+  const activePageLabel = useMemo(() => {
+    if (activeView === "projects") {
+      return pageLabel;
+    }
+
+    if (activeView === "users") {
+      return usersPageLabel;
+    }
+
+    return auditPageLabel;
+  }, [activeView, auditPageLabel, pageLabel, usersPageLabel]);
 
   async function loadUser(activeToken) {
     const result = await getCurrentUser(activeToken);
@@ -188,6 +225,25 @@ export default function App() {
     setUsersOffset(result.offset);
   }
 
+  async function loadAuditLogs(activeToken = token, nextOffset = auditOffset) {
+    if (!activeToken || user?.role !== "admin") {
+      return;
+    }
+
+    setLoading(true);
+    const result = await listAuditLogs(activeToken, PAGE_SIZE, nextOffset);
+    setLoading(false);
+
+    if (!result.success) {
+      setStatus(result.error || "Unable to load audit logs");
+      return;
+    }
+
+    setAuditLogs(result.audit_logs);
+    setAuditTotal(result.total);
+    setAuditOffset(result.offset);
+  }
+
   async function loadProject(projectId) {
     const [projectResult, historyResult] = await Promise.all([
       getProject(token, projectId),
@@ -228,6 +284,7 @@ export default function App() {
     setUser(null);
     setProjects([]);
     setUsers([]);
+    setAuditLogs([]);
     setSelectedProject(null);
     setHistoryItems([]);
     setStatus("");
@@ -244,6 +301,11 @@ export default function App() {
 
     if (view === "users") {
       await loadUsers(token, usersOffset);
+      return;
+    }
+
+    if (view === "audit") {
+      await loadAuditLogs(token, auditOffset);
     }
   }
 
@@ -401,6 +463,14 @@ export default function App() {
     loadUsers(token, 0);
   }, [token, user, activeView]);
 
+  useEffect(() => {
+    if (!token || user?.role !== "admin" || activeView !== "audit") {
+      return;
+    }
+
+    loadAuditLogs(token, 0);
+  }, [token, user, activeView]);
+
   if (!token || !user) {
     return (
       <main className="auth-screen">
@@ -466,13 +536,22 @@ export default function App() {
             Projects
           </button>
           {user.role === "admin" ? (
-            <button
-              className={activeView === "users" ? "active" : ""}
-              onClick={() => switchView("users")}
-              type="button"
-            >
-              Users
-            </button>
+            <>
+              <button
+                className={activeView === "users" ? "active" : ""}
+                onClick={() => switchView("users")}
+                type="button"
+              >
+                Users
+              </button>
+              <button
+                className={activeView === "audit" ? "active" : ""}
+                onClick={() => switchView("audit")}
+                type="button"
+              >
+                Audit
+              </button>
+            </>
           ) : null}
         </nav>
 
@@ -485,8 +564,14 @@ export default function App() {
       <section className="workspace">
         <header className="toolbar">
           <div>
-            <h2>{activeView === "projects" ? "Projects" : "Users"}</h2>
-            <p>{activeView === "projects" ? pageLabel : usersPageLabel}</p>
+            <h2>
+              {activeView === "projects"
+                ? "Projects"
+                : activeView === "users"
+                  ? "Users"
+                  : "Audit"}
+            </h2>
+            <p>{activePageLabel}</p>
           </div>
 
           <div className="toolbar-actions">
@@ -522,7 +607,7 @@ export default function App() {
                   <RefreshCw size={18} />
                 </button>
               </>
-            ) : (
+            ) : activeView === "users" ? (
               <>
                 <button
                   aria-label="Previous users page"
@@ -549,6 +634,38 @@ export default function App() {
                   className="icon-button"
                   disabled={loading}
                   onClick={() => loadUsers(token, usersOffset)}
+                  type="button"
+                >
+                  <RefreshCw size={18} />
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  aria-label="Previous audit page"
+                  className="icon-button"
+                  disabled={!canAuditGoBack || loading}
+                  onClick={() =>
+                    loadAuditLogs(token, Math.max(0, auditOffset - PAGE_SIZE))
+                  }
+                  type="button"
+                >
+                  <ChevronLeft size={18} />
+                </button>
+                <button
+                  aria-label="Next audit page"
+                  className="icon-button"
+                  disabled={!canAuditGoForward || loading}
+                  onClick={() => loadAuditLogs(token, auditOffset + PAGE_SIZE)}
+                  type="button"
+                >
+                  <ChevronRight size={18} />
+                </button>
+                <button
+                  aria-label="Refresh audit logs"
+                  className="icon-button"
+                  disabled={loading}
+                  onClick={() => loadAuditLogs(token, auditOffset)}
                   type="button"
                 >
                   <RefreshCw size={18} />
@@ -721,7 +838,7 @@ export default function App() {
             )}
           </section>
         </div>
-        ) : (
+        ) : activeView === "users" ? (
           <section className="table-panel full-panel">
             <table>
               <thead>
@@ -765,6 +882,35 @@ export default function App() {
                         />
                         Enabled
                       </label>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+        ) : (
+          <section className="table-panel full-panel">
+            <table>
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Actor</th>
+                  <th>Action</th>
+                  <th>Entity</th>
+                  <th>Details</th>
+                </tr>
+              </thead>
+              <tbody>
+                {auditLogs.map((auditLog) => (
+                  <tr key={auditLog.id}>
+                    <td>{formatDateTime(auditLog.created_at)}</td>
+                    <td>{auditLog.actor_email}</td>
+                    <td>{auditLog.action}</td>
+                    <td>
+                      {auditLog.entity_type}: {auditLog.entity_id}
+                    </td>
+                    <td className="audit-details">
+                      {formatAuditDetails(auditLog.details)}
                     </td>
                   </tr>
                 ))}

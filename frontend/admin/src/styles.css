@@ -395,6 +395,14 @@ tbody tr.selected {
   width: 18px;
 }
 
+.audit-details {
+  color: #4a5563;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 12px;
+  max-width: 520px;
+  overflow-wrap: anywhere;
+}
+
 .modal-backdrop {
   align-items: center;
   background: rgba(18, 31, 38, 0.54);

@@ -11,6 +11,9 @@ from api.routes.auth import (
 from api.routes.project import (
     router as project_router
 )
+from api.routes.audit import (
+    router as audit_router
+)
 
 app = FastAPI(
 
@@ -60,4 +63,13 @@ app.include_router(
     prefix="/project",
 
     tags=["Projects"]
+)
+
+app.include_router(
+
+    audit_router,
+
+    prefix="/audit",
+
+    tags=["Audit"]
 )

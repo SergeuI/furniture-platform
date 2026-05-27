@@ -22,9 +22,13 @@ from schemas.auth import (
 
 from database.repositories.user_repository import (
     count_users,
+    get_user_by_id,
     list_users,
     set_user_active,
     update_user_role
+)
+from database.repositories.audit_log_repository import (
+    create_audit_log
 )
 
 from services.auth_service import (
@@ -279,6 +283,31 @@ async def update_user_role_route(
             "error": "Invalid user role"
         }
 
+    if user_id == current_user.id:
+
+        return {
+
+            "success": False,
+
+            "error": "Current user role cannot be changed"
+        }
+
+    existing_user = get_user_by_id(
+
+        user_id
+    )
+
+    if not existing_user:
+
+        return {
+
+            "success": False,
+
+            "error": "User not found"
+        }
+
+    previous_role = existing_user.role
+
     user = update_user_role(
 
         user_id=user_id,
@@ -294,6 +323,28 @@ async def update_user_role_route(
 
             "error": "User not found"
         }
+
+    create_audit_log(
+
+        actor_user_id=current_user.id,
+
+        actor_email=current_user.email,
+
+        action="user.role_updated",
+
+        entity_type="user",
+
+        entity_id=user.id,
+
+        details={
+
+            "email": user.email,
+
+            "previous_role": previous_role,
+
+            "new_role": user.role
+        }
+    )
 
     return {
 
@@ -323,6 +374,31 @@ async def update_user_active_route(
     current_user = Depends(require_auth_admin)
 ):
 
+    if user_id == current_user.id:
+
+        return {
+
+            "success": False,
+
+            "error": "Current user access cannot be changed"
+        }
+
+    existing_user = get_user_by_id(
+
+        user_id
+    )
+
+    if not existing_user:
+
+        return {
+
+            "success": False,
+
+            "error": "User not found"
+        }
+
+    previous_is_active = existing_user.is_active
+
     user = set_user_active(
 
         user_id=user_id,
@@ -338,6 +414,28 @@ async def update_user_active_route(
 
             "error": "User not found"
         }
+
+    create_audit_log(
+
+        actor_user_id=current_user.id,
+
+        actor_email=current_user.email,
+
+        action="user.access_updated",
+
+        entity_type="user",
+
+        entity_id=user.id,
+
+        details={
+
+            "email": user.email,
+
+            "previous_is_active": previous_is_active,
+
+            "new_is_active": user.is_active
+        }
+    )
 
     return {
 

@@ -11,6 +11,9 @@ from database.models.project_version import (
 from database.models.user import (
     UserModel
 )
+from database.models.audit_log import (
+    AuditLogModel
+)
 
 
 def _get_column_names(

@@ -40,6 +40,10 @@ from database.repositories.project_version_repository import (
 
     get_project_versions
 )
+from database.repositories.audit_log_repository import (
+
+    create_audit_log
+)
 router = APIRouter()
 
 require_project_reader = require_roles(
@@ -248,6 +252,23 @@ async def update_project_route(
     current_user = Depends(require_project_admin)
 ):
 
+    existing_project = get_project(
+        project_id
+    )
+
+    if not existing_project:
+
+        return {
+
+            "success": False,
+
+            "error": "Project not found"
+        }
+
+    previous_state = _serialize_project(
+        existing_project
+    )
+
     updated = update_project(
 
         project_id=project_id,
@@ -271,6 +292,28 @@ async def update_project_route(
 
             "error": "Project not found"
         }
+
+    create_audit_log(
+
+        actor_user_id=current_user.id,
+
+        actor_email=current_user.email,
+
+        action="project.updated",
+
+        entity_type="project",
+
+        entity_id=updated.id,
+
+        details={
+
+            "previous": previous_state,
+
+            "current": _serialize_project(
+                updated
+            )
+        }
+    )
 
     return {
 
@@ -350,6 +393,23 @@ async def rollback_project_route(
     current_user = Depends(require_project_admin)
 ):
 
+    existing_project = get_project(
+        project_id
+    )
+
+    if not existing_project:
+
+        return {
+
+            "success": False,
+
+            "error": "Project or version not found"
+        }
+
+    previous_state = _serialize_project(
+        existing_project
+    )
+
     project = rollback_project(
 
         project_id=project_id,
@@ -365,6 +425,30 @@ async def rollback_project_route(
 
             "error": "Project or version not found"
         }
+
+    create_audit_log(
+
+        actor_user_id=current_user.id,
+
+        actor_email=current_user.email,
+
+        action="project.rolled_back",
+
+        entity_type="project",
+
+        entity_id=project.id,
+
+        details={
+
+            "version_id": version_id,
+
+            "previous": previous_state,
+
+            "current": _serialize_project(
+                project
+            )
+        }
+    )
 
     return {
 
@@ -392,6 +476,23 @@ async def delete_project_route(
     current_user = Depends(require_project_admin)
 ):
 
+    project = get_project(
+        project_id
+    )
+
+    if not project:
+
+        return {
+
+            "success": False,
+
+            "error": "Project not found"
+        }
+
+    deleted_state = _serialize_project(
+        project
+    )
+
     deleted = delete_project(
         project_id
     )
@@ -404,6 +505,24 @@ async def delete_project_route(
 
             "error": "Project not found"
         }
+
+    create_audit_log(
+
+        actor_user_id=current_user.id,
+
+        actor_email=current_user.email,
+
+        action="project.deleted",
+
+        entity_type="project",
+
+        entity_id=project_id,
+
+        details={
+
+            "deleted": deleted_state
+        }
+    )
 
     return {
 
