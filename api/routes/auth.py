@@ -11,6 +11,7 @@ from api.dependencies.auth import (
 
 from schemas.auth import (
     AuthResponseSchema,
+    CreateUserSchema,
     CurrentUserResponseSchema,
     LoginUserSchema,
     RegisterUserSchema,
@@ -34,6 +35,7 @@ from database.repositories.audit_log_repository import (
 from services.auth_service import (
     authenticate_user,
     create_access_token,
+    create_managed_user,
     register_user
 )
 
@@ -84,6 +86,15 @@ async def register_route(
     payload: RegisterUserSchema
 ):
 
+    if count_users() > 0:
+
+        return {
+
+            "success": False,
+
+            "error": "Public registration is disabled"
+        }
+
     user = register_user(
 
         email=payload.email,
@@ -114,6 +125,81 @@ async def register_route(
         "access_token": access_token,
 
         "token_type": "bearer",
+
+        "user": _serialize_user(
+            user
+        )
+    }
+
+
+# =====================================================
+# CREATE USER
+# =====================================================
+
+@router.post(
+    "/users",
+
+    response_model=UserOperationResponseSchema
+)
+async def create_user_route(
+
+    payload: CreateUserSchema,
+
+    current_user = Depends(require_auth_admin)
+):
+
+    role = payload.role.strip().lower()
+
+    if role not in ALLOWED_USER_ROLES:
+
+        return {
+
+            "success": False,
+
+            "error": "Invalid user role"
+        }
+
+    user = create_managed_user(
+
+        email=payload.email,
+
+        password=payload.password,
+
+        role=role
+    )
+
+    if not user:
+
+        return {
+
+            "success": False,
+
+            "error": "User already exists"
+        }
+
+    create_audit_log(
+
+        actor_user_id=current_user.id,
+
+        actor_email=current_user.email,
+
+        action="user.created",
+
+        entity_type="user",
+
+        entity_id=user.id,
+
+        details={
+
+            "email": user.email,
+
+            "role": user.role
+        }
+    )
+
+    return {
+
+        "success": True,
 
         "user": _serialize_user(
             user

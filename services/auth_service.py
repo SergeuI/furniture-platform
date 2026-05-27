@@ -225,6 +225,10 @@ def register_user(
 
     normalized_email = email.strip().lower()
 
+    if count_users() > 0:
+
+        return None
+
     if get_user_by_email(
         normalized_email
     ):
@@ -232,6 +236,35 @@ def register_user(
         return None
 
     role = "admin" if count_users() == 0 else "manager"
+
+    return create_user(
+
+        email=normalized_email,
+
+        password_hash=hash_password(
+            password
+        ),
+
+        role=role
+    )
+
+
+def create_managed_user(
+
+    email: str,
+
+    password: str,
+
+    role: str
+):
+
+    normalized_email = email.strip().lower()
+
+    if get_user_by_email(
+        normalized_email
+    ):
+
+        return None
 
     return create_user(
 

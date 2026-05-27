@@ -44,6 +44,30 @@ class LoginUserSchema(BaseModel):
     )
 
 
+class CreateUserSchema(BaseModel):
+
+    email: str = Field(
+
+        min_length=3,
+
+        max_length=255
+    )
+
+    password: str = Field(
+
+        min_length=8,
+
+        max_length=128
+    )
+
+    role: str = Field(
+
+        min_length=3,
+
+        max_length=32
+    )
+
+
 class UpdateUserRoleSchema(BaseModel):
 
     role: str = Field(

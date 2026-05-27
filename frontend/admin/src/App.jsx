@@ -13,6 +13,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 
 import {
+  createUser,
   deleteProject,
   getCurrentUser,
   getProject,
@@ -106,6 +107,11 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [newUserForm, setNewUserForm] = useState({
+    email: "",
+    password: "",
+    role: "manager",
+  });
   const [projects, setProjects] = useState([]);
   const [users, setUsers] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
@@ -335,6 +341,32 @@ export default function App() {
 
     setStatus("User access updated");
     await loadUsers(token, usersOffset);
+  }
+
+  async function handleCreateUser(event) {
+    event.preventDefault();
+
+    setLoading(true);
+    const result = await createUser(
+      token,
+      newUserForm.email,
+      newUserForm.password,
+      newUserForm.role,
+    );
+    setLoading(false);
+
+    if (!result.success) {
+      setStatus(result.error || "Unable to create user");
+      return;
+    }
+
+    setNewUserForm({
+      email: "",
+      password: "",
+      role: "manager",
+    });
+    setStatus("User created");
+    await loadUsers(token, 0);
   }
 
   async function handleUpdate(event) {
@@ -840,6 +872,62 @@ export default function App() {
         </div>
         ) : activeView === "users" ? (
           <section className="table-panel full-panel">
+            <form className="create-user-form" onSubmit={handleCreateUser}>
+              <label>
+                Email
+                <input
+                  autoComplete="email"
+                  onChange={(event) =>
+                    setNewUserForm({
+                      ...newUserForm,
+                      email: event.target.value,
+                    })
+                  }
+                  required
+                  type="email"
+                  value={newUserForm.email}
+                />
+              </label>
+              <label>
+                Password
+                <input
+                  autoComplete="new-password"
+                  minLength={8}
+                  onChange={(event) =>
+                    setNewUserForm({
+                      ...newUserForm,
+                      password: event.target.value,
+                    })
+                  }
+                  required
+                  type="password"
+                  value={newUserForm.password}
+                />
+              </label>
+              <label>
+                Role
+                <select
+                  onChange={(event) =>
+                    setNewUserForm({
+                      ...newUserForm,
+                      role: event.target.value,
+                    })
+                  }
+                  value={newUserForm.role}
+                >
+                  <option value="admin">admin</option>
+                  <option value="manager">manager</option>
+                  <option value="viewer">viewer</option>
+                </select>
+              </label>
+              <button
+                className="primary-button create-user-button"
+                disabled={loading}
+                type="submit"
+              >
+                Create user
+              </button>
+            </form>
             <table>
               <thead>
                 <tr>

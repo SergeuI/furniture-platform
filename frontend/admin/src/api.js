@@ -94,6 +94,18 @@ export async function listUsers(token, limit, offset) {
   });
 }
 
+export async function createUser(token, email, password, role) {
+  return request("/auth/users", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({
+      email,
+      password,
+      role,
+    }),
+  });
+}
+
 export async function updateUserRole(token, userId, role) {
   return request(`/auth/users/${userId}/role`, {
     method: "PUT",
