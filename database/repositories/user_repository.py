@@ -107,6 +107,42 @@ def get_user_by_id(
 
 
 # =====================================================
+# LIST USERS
+# =====================================================
+
+def list_users(
+
+    limit: int = 50,
+
+    offset: int = 0
+):
+
+    db = SessionLocal()
+
+    try:
+
+        return (
+
+            db.query(UserModel)
+
+            .order_by(
+
+                UserModel.email.asc()
+            )
+
+            .offset(offset)
+
+            .limit(limit)
+
+            .all()
+        )
+
+    finally:
+
+        db.close()
+
+
+# =====================================================
 # COUNT USERS
 # =====================================================
 
@@ -122,6 +158,94 @@ def count_users() -> int:
 
             .count()
         )
+
+    finally:
+
+        db.close()
+
+
+# =====================================================
+# UPDATE USER ROLE
+# =====================================================
+
+def update_user_role(
+
+    user_id: str,
+
+    role: str
+):
+
+    db = SessionLocal()
+
+    try:
+
+        user = (
+
+            db.query(UserModel)
+
+            .filter(
+
+                UserModel.id == user_id
+            )
+
+            .first()
+        )
+
+        if not user:
+
+            return None
+
+        user.role = role
+
+        db.commit()
+
+        db.refresh(user)
+
+        return user
+
+    finally:
+
+        db.close()
+
+
+# =====================================================
+# SET USER ACTIVE
+# =====================================================
+
+def set_user_active(
+
+    user_id: str,
+
+    is_active: bool
+):
+
+    db = SessionLocal()
+
+    try:
+
+        user = (
+
+            db.query(UserModel)
+
+            .filter(
+
+                UserModel.id == user_id
+            )
+
+            .first()
+        )
+
+        if not user:
+
+            return None
+
+        user.is_active = is_active
+
+        db.commit()
+
+        db.refresh(user)
+
+        return user
 
     finally:
 

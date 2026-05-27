@@ -2,6 +2,7 @@ from pydantic import (
     BaseModel,
     Field
 )
+from typing import List
 from typing import Optional
 
 
@@ -43,6 +44,21 @@ class LoginUserSchema(BaseModel):
     )
 
 
+class UpdateUserRoleSchema(BaseModel):
+
+    role: str = Field(
+
+        min_length=3,
+
+        max_length=32
+    )
+
+
+class UpdateUserActiveSchema(BaseModel):
+
+    is_active: bool
+
+
 # =====================================================
 # AUTH RESPONSES
 # =====================================================
@@ -72,6 +88,28 @@ class AuthResponseSchema(BaseModel):
 
 
 class CurrentUserResponseSchema(BaseModel):
+
+    success: bool
+
+    user: Optional[UserResponseSchema] = None
+
+    error: Optional[str] = None
+
+
+class UserListResponseSchema(BaseModel):
+
+    success: bool
+
+    total: int
+
+    limit: int
+
+    offset: int
+
+    users: List[UserResponseSchema]
+
+
+class UserOperationResponseSchema(BaseModel):
 
     success: bool
 

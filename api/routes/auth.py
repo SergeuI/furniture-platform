@@ -1,24 +1,52 @@
 from fastapi import (
     APIRouter,
-    Header
+    Depends,
+    Query
+)
+
+from api.dependencies.auth import (
+    require_current_user,
+    require_roles
 )
 
 from schemas.auth import (
     AuthResponseSchema,
     CurrentUserResponseSchema,
     LoginUserSchema,
-    RegisterUserSchema
+    RegisterUserSchema,
+    UpdateUserActiveSchema,
+    UpdateUserRoleSchema,
+    UserListResponseSchema,
+    UserOperationResponseSchema
+)
+
+from database.repositories.user_repository import (
+    count_users,
+    list_users,
+    set_user_active,
+    update_user_role
 )
 
 from services.auth_service import (
     authenticate_user,
     create_access_token,
-    get_user_from_token,
     register_user
 )
 
 
 router = APIRouter()
+
+ALLOWED_USER_ROLES = [
+    "admin",
+    "manager",
+    "viewer"
+]
+
+require_auth_admin = require_roles(
+    [
+        "admin"
+    ]
+)
 
 
 def _serialize_user(
@@ -36,28 +64,6 @@ def _serialize_user(
 
         "is_active": user.is_active
     }
-
-
-def _extract_bearer_token(
-
-    authorization: str | None
-) -> str | None:
-
-    if not authorization:
-
-        return None
-
-    token_type, _, token = authorization.partition(" ")
-
-    if token_type.lower() != "bearer":
-
-        return None
-
-    if not token:
-
-        return None
-
-    return token
 
 
 # =====================================================
@@ -173,24 +179,111 @@ async def login_route(
 )
 async def me_route(
 
-    authorization: str | None = Header(default=None)
+    current_user = Depends(require_current_user)
 ):
 
-    token = _extract_bearer_token(
-        authorization
+    return {
+
+        "success": True,
+
+        "user": _serialize_user(
+            current_user
+        )
+    }
+
+
+# =====================================================
+# LIST USERS
+# =====================================================
+
+@router.get(
+    "/users",
+
+    response_model=UserListResponseSchema
+)
+async def list_users_route(
+
+    limit: int = Query(
+
+        default=50,
+
+        ge=1,
+
+        le=100
+    ),
+
+    offset: int = Query(
+
+        default=0,
+
+        ge=0
+    ),
+
+    current_user = Depends(require_auth_admin)
+):
+
+    users = list_users(
+
+        limit=limit,
+
+        offset=offset
     )
 
-    if not token:
+    return {
+
+        "success": True,
+
+        "total": count_users(),
+
+        "limit": limit,
+
+        "offset": offset,
+
+        "users": [
+
+            _serialize_user(
+                user
+            )
+
+            for user in users
+        ]
+    }
+
+
+# =====================================================
+# UPDATE USER ROLE
+# =====================================================
+
+@router.put(
+    "/users/{user_id}/role",
+
+    response_model=UserOperationResponseSchema
+)
+async def update_user_role_route(
+
+    user_id: str,
+
+    payload: UpdateUserRoleSchema,
+
+    current_user = Depends(require_auth_admin)
+):
+
+    role = payload.role.strip().lower()
+
+    if role not in ALLOWED_USER_ROLES:
 
         return {
 
             "success": False,
 
-            "error": "Missing bearer token"
+            "error": "Invalid user role"
         }
 
-    user = get_user_from_token(
-        token
+    user = update_user_role(
+
+        user_id=user_id,
+
+        role=role
     )
 
     if not user:
@@ -199,7 +292,51 @@ async def me_route(
 
             "success": False,
 
-            "error": "Invalid or expired token"
+            "error": "User not found"
+        }
+
+    return {
+
+        "success": True,
+
+        "user": _serialize_user(
+            user
+        )
+    }
+
+
+# =====================================================
+# UPDATE USER ACTIVE
+# =====================================================
+
+@router.put(
+    "/users/{user_id}/active",
+
+    response_model=UserOperationResponseSchema
+)
+async def update_user_active_route(
+
+    user_id: str,
+
+    payload: UpdateUserActiveSchema,
+
+    current_user = Depends(require_auth_admin)
+):
+
+    user = set_user_active(
+
+        user_id=user_id,
+
+        is_active=payload.is_active
+    )
+
+    if not user:
+
+        return {
+
+            "success": False,
+
+            "error": "User not found"
         }
 
     return {
