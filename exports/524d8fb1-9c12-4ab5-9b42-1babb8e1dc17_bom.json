@@ -1,0 +1,3562 @@
+{
+  "details": [
+    {
+      "id": "d15d3821-4a0d-4643-8757-82bf408ae5f1",
+      "type": "side",
+      "name": "Бок лівий",
+      "width": 500,
+      "height": 750,
+      "qty": 1,
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": 0,
+      "plane": "YZ",
+      "edge_map": {
+        "top": "0.4",
+        "bottom": "0.4",
+        "left": "0.8",
+        "right": null
+      },
+      "edges": {
+        "top": "0.4",
+        "bottom": "0.4",
+        "left": "0.8",
+        "right": null
+      },
+      "geometry": {
+        "length": 750,
+        "width": 500,
+        "thickness": 18,
+        "grain": "vertical",
+        "material": "dsp_18"
+      },
+      "local_coordinates": {
+        "origin": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "axis": {
+          "x": [
+            1,
+            0,
+            0
+          ],
+          "y": [
+            0,
+            1,
+            0
+          ],
+          "z": [
+            0,
+            0,
+            1
+          ]
+        }
+      }
+    },
+    {
+      "id": "f5ef9c1d-f57e-49ad-8e40-b49b1ed8233f",
+      "type": "side",
+      "name": "Бок правий",
+      "width": 500,
+      "height": 750,
+      "qty": 1,
+      "position": {
+        "x": 1182,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": 0,
+      "plane": "YZ",
+      "edge_map": {
+        "top": "0.4",
+        "bottom": "0.4",
+        "left": null,
+        "right": "0.8"
+      },
+      "edges": {
+        "top": "0.4",
+        "bottom": "0.4",
+        "left": null,
+        "right": "0.8"
+      },
+      "geometry": {
+        "length": 750,
+        "width": 500,
+        "thickness": 18,
+        "grain": "vertical",
+        "material": "dsp_18"
+      },
+      "local_coordinates": {
+        "origin": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "axis": {
+          "x": [
+            1,
+            0,
+            0
+          ],
+          "y": [
+            0,
+            1,
+            0
+          ],
+          "z": [
+            0,
+            0,
+            1
+          ]
+        }
+      }
+    },
+    {
+      "id": "1c5c3cdb-b2f8-4421-a706-64dd1c51889d",
+      "type": "bottom",
+      "name": "Дно",
+      "width": 1164,
+      "height": 500,
+      "qty": 1,
+      "position": {
+        "x": 18,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": 0,
+      "plane": "XZ",
+      "edge_map": {
+        "top": "0.8",
+        "bottom": "0.4",
+        "left": "0.4",
+        "right": "0.4"
+      },
+      "edges": {
+        "top": "0.8",
+        "bottom": "0.4",
+        "left": "0.4",
+        "right": "0.4"
+      },
+      "geometry": {
+        "length": 1164,
+        "width": 500,
+        "thickness": 18,
+        "grain": "horizontal",
+        "material": "dsp_18"
+      },
+      "drilling": [
+        {
+          "x": 50,
+          "y": 9.0,
+          "z": 0,
+          "diameter": 5,
+          "depth": 50,
+          "axis": "Y",
+          "face": "edge",
+          "type": "confirmat"
+        },
+        {
+          "x": 1114,
+          "y": 9.0,
+          "z": 0,
+          "diameter": 5,
+          "depth": 50,
+          "axis": "Y",
+          "face": "edge",
+          "type": "confirmat"
+        }
+      ],
+      "local_coordinates": {
+        "origin": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "axis": {
+          "x": [
+            1,
+            0,
+            0
+          ],
+          "y": [
+            0,
+            1,
+            0
+          ],
+          "z": [
+            0,
+            0,
+            1
+          ]
+        }
+      },
+      "global_drilling": [
+        {
+          "x": 50,
+          "y": 9.0,
+          "z": 0,
+          "diameter": 5,
+          "depth": 50,
+          "axis": "Y",
+          "face": "edge",
+          "type": "confirmat",
+          "global_position": {
+            "x": 68,
+            "y": 0,
+            "z": 9.0
+          }
+        },
+        {
+          "x": 1114,
+          "y": 9.0,
+          "z": 0,
+          "diameter": 5,
+          "depth": 50,
+          "axis": "Y",
+          "face": "edge",
+          "type": "confirmat",
+          "global_position": {
+            "x": 1132,
+            "y": 0,
+            "z": 9.0
+          }
+        }
+      ]
+    },
+    {
+      "id": "a1d1049a-6280-4b1e-a4ae-d7ea68fe726d",
+      "type": "top",
+      "name": "Кришка",
+      "width": 1164,
+      "height": 500,
+      "qty": 1,
+      "position": {
+        "x": 18,
+        "y": 732,
+        "z": 0
+      },
+      "rotation": 0,
+      "plane": "XZ",
+      "edge_map": {
+        "top": "0.8",
+        "bottom": "0.4",
+        "left": "0.4",
+        "right": "0.4"
+      },
+      "edges": {
+        "top": "0.8",
+        "bottom": "0.4",
+        "left": "0.4",
+        "right": "0.4"
+      },
+      "geometry": {
+        "length": 1164,
+        "width": 500,
+        "thickness": 18,
+        "grain": "horizontal",
+        "material": "dsp_18"
+      },
+      "drilling": [
+        {
+          "x": 50,
+          "y": 9.0,
+          "z": 0,
+          "diameter": 7,
+          "depth": 18,
+          "axis": "Y",
+          "face": "edge",
+          "type": "confirmat"
+        },
+        {
+          "x": 1114,
+          "y": 9.0,
+          "z": 0,
+          "diameter": 7,
+          "depth": 18,
+          "axis": "Y",
+          "face": "edge",
+          "type": "confirmat"
+        }
+      ],
+      "local_coordinates": {
+        "origin": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "axis": {
+          "x": [
+            1,
+            0,
+            0
+          ],
+          "y": [
+            0,
+            1,
+            0
+          ],
+          "z": [
+            0,
+            0,
+            1
+          ]
+        }
+      },
+      "global_drilling": [
+        {
+          "x": 50,
+          "y": 9.0,
+          "z": 0,
+          "diameter": 7,
+          "depth": 18,
+          "axis": "Y",
+          "face": "edge",
+          "type": "confirmat",
+          "global_position": {
+            "x": 68,
+            "y": 732,
+            "z": 9.0
+          }
+        },
+        {
+          "x": 1114,
+          "y": 9.0,
+          "z": 0,
+          "diameter": 7,
+          "depth": 18,
+          "axis": "Y",
+          "face": "edge",
+          "type": "confirmat",
+          "global_position": {
+            "x": 1132,
+            "y": 732,
+            "z": 9.0
+          }
+        }
+      ]
+    },
+    {
+      "id": "divider_0",
+      "type": "divider",
+      "name": "Перегородка 1",
+      "width": 500,
+      "height": 714,
+      "qty": 1
+    },
+    {
+      "id": "front_socle",
+      "type": "socle",
+      "name": "Цоколь перед",
+      "width": 1164,
+      "height": 50,
+      "qty": 1
+    },
+    {
+      "id": "rear_socle",
+      "type": "socle",
+      "name": "Цоколь зад",
+      "width": 1164,
+      "height": 50,
+      "qty": 1
+    },
+    {
+      "id": "55980259-1682-4c22-b1c0-3ff8e701a92f",
+      "type": "back_wall",
+      "name": "Задня стінка ДВП",
+      "width": 1196,
+      "height": 746,
+      "qty": 1,
+      "material": "hdf_3",
+      "geometry": {
+        "length": 1196,
+        "width": 746,
+        "thickness": 3,
+        "grain": "vertical",
+        "material": "hdf_3"
+      }
+    },
+    {
+      "id": "c9e60da3-f614-4063-ae2a-69e833790536",
+      "name": "S1-1 ліва боковина",
+      "width": 361,
+      "height": 498,
+      "thickness": 18,
+      "qty": 1,
+      "material": "dsp_18",
+      "grain_direction": "vertical",
+      "allow_rotate": true,
+      "rotated": true,
+      "x": 0,
+      "y": 0,
+      "z": 0,
+      "metadata": {
+        "quarter": null,
+        "machining": []
+      },
+      "tracking": {
+        "label": {
+          "part_id": "e78bedb4-ca8a-4dbc-8f00-b02621c9bfd6",
+          "name": "S1-1 ліва боковина",
+          "type": "part",
+          "width": 498,
+          "height": 361
+        },
+        "barcode": "PART-e78bedb4",
+        "qr_data": {
+          "part_id": "e78bedb4-ca8a-4dbc-8f00-b02621c9bfd6",
+          "name": "S1-1 ліва боковина",
+          "type": "part"
+        },
+        "stage": "queue"
+      },
+      "rotation": 90,
+      "optimized": true,
+      "sheet_position": {
+        "x": 0,
+        "y": 0
+      },
+      "sheet_id": 1
+    },
+    {
+      "id": "0b941263-bfe2-4aca-92e2-e7cd2067869c",
+      "name": "S1-1 права боковина",
+      "width": 361,
+      "height": 498,
+      "thickness": 18,
+      "qty": 1,
+      "material": "dsp_18",
+      "grain_direction": "vertical",
+      "allow_rotate": true,
+      "rotated": true,
+      "x": 0,
+      "y": 0,
+      "z": 0,
+      "metadata": {
+        "quarter": null,
+        "machining": []
+      },
+      "tracking": {
+        "label": {
+          "part_id": "a9d48277-5541-4a75-b9ca-9d93d2edb96c",
+          "name": "S1-1 права боковина",
+          "type": "part",
+          "width": 498,
+          "height": 361
+        },
+        "barcode": "PART-a9d48277",
+        "qr_data": {
+          "part_id": "a9d48277-5541-4a75-b9ca-9d93d2edb96c",
+          "name": "S1-1 права боковина",
+          "type": "part"
+        },
+        "stage": "queue"
+      },
+      "rotation": 90,
+      "optimized": true,
+      "sheet_position": {
+        "x": 361,
+        "y": 0
+      },
+      "sheet_id": 1
+    },
+    {
+      "id": "dafecfc8-b4df-4ba8-8817-826b11da9a6d",
+      "name": "S1-1 внутрішній перед",
+      "width": 351,
+      "height": 547,
+      "thickness": 18,
+      "qty": 1,
+      "material": "dsp_18",
+      "grain_direction": "vertical",
+      "allow_rotate": true,
+      "rotated": true,
+      "x": 0,
+      "y": 0,
+      "z": 0,
+      "metadata": {},
+      "tracking": {
+        "label": {
+          "part_id": "82923fa6-ea4c-41f0-8d92-42ac63d6a7b3",
+          "name": "S1-1 внутрішній перед",
+          "type": "part",
+          "width": 547,
+          "height": 351
+        },
+        "barcode": "PART-82923fa6",
+        "qr_data": {
+          "part_id": "82923fa6-ea4c-41f0-8d92-42ac63d6a7b3",
+          "name": "S1-1 внутрішній перед",
+          "type": "part"
+        },
+        "stage": "queue"
+      },
+      "rotation": 90,
+      "optimized": true,
+      "sheet_position": {
+        "x": 0,
+        "y": 498
+      },
+      "sheet_id": 1
+    },
+    {
+      "id": "7fc494a4-a2cc-4e99-bd6c-572605b2a45f",
+      "type": "facade",
+      "name": "Шухляда S1-1 фасад",
+      "width": 396,
+      "height": 569,
+      "thickness": 18,
+      "facade_type": "inset",
+      "system": "tandem",
+      "qty": 1,
+      "drilling": [
+        {
+          "type": "handle_hole",
+          "diameter": 5,
+          "x": 204.5,
+          "y": 198.0,
+          "z": 0,
+          "direction": {
+            "axis": "Z-",
+            "normal": {
+              "x": 0,
+              "y": 0,
+              "z": -1
+            },
+            "machine_side": "front"
+          },
+          "operation": {
+            "operation": "through_drilling",
+            "tool_type": "drill",
+            "diameter": 5,
+            "depth": "through",
+            "tool": {
+              "tool_id": "T2",
+              "type": "drill",
+              "diameter": 5,
+              "rpm": 14400,
+              "feed": 1870,
+              "chip_load": 0.22,
+              "material": "DSP",
+              "machine_profile": "SCM",
+              "acceleration": 1.2,
+              "position_tolerance": 0.02
+            }
+          }
+        },
+        {
+          "type": "handle_hole",
+          "diameter": 5,
+          "x": 364.5,
+          "y": 198.0,
+          "z": 0,
+          "direction": {
+            "axis": "Z-",
+            "normal": {
+              "x": 0,
+              "y": 0,
+              "z": -1
+            },
+            "machine_side": "front"
+          },
+          "operation": {
+            "operation": "through_drilling",
+            "tool_type": "drill",
+            "diameter": 5,
+            "depth": "through",
+            "tool": {
+              "tool_id": "T2",
+              "type": "drill",
+              "diameter": 5,
+              "rpm": 14400,
+              "feed": 1870,
+              "chip_load": 0.22,
+              "material": "DSP",
+              "machine_profile": "SCM",
+              "acceleration": 1.2,
+              "position_tolerance": 0.02
+            }
+          }
+        },
+        {
+          "type": "front_fixing",
+          "diameter": 8,
+          "x": 37,
+          "y": 37,
+          "z": 0,
+          "direction": {
+            "axis": "Z-",
+            "normal": {
+              "x": 0,
+              "y": 0,
+              "z": -1
+            },
+            "machine_side": "front"
+          },
+          "operation": {
+            "operation": "blind_drilling",
+            "tool_type": "drill",
+            "diameter": 8,
+            "depth": 12,
+            "tool": {
+              "tool_id": "T3",
+              "type": "drill",
+              "diameter": 8,
+              "rpm": 12600,
+              "feed": 1530,
+              "chip_load": 0.22,
+              "material": "DSP",
+              "machine_profile": "SCM",
+              "acceleration": 1.2,
+              "position_tolerance": 0.02
+            }
+          }
+        },
+        {
+          "type": "front_fixing",
+          "diameter": 8,
+          "x": 532,
+          "y": 37,
+          "z": 0,
+          "direction": {
+            "axis": "Z-",
+            "normal": {
+              "x": 0,
+              "y": 0,
+              "z": -1
+            },
+            "machine_side": "front"
+          },
+          "operation": {
+            "operation": "blind_drilling",
+            "tool_type": "drill",
+            "diameter": 8,
+            "depth": 12,
+            "tool": {
+              "tool_id": "T3",
+              "type": "drill",
+              "diameter": 8,
+              "rpm": 12600,
+              "feed": 1530,
+              "chip_load": 0.22,
+              "material": "DSP",
+              "machine_profile": "SCM",
+              "acceleration": 1.2,
+              "position_tolerance": 0.02
+            }
+          }
+        }
+      ],
+      "position": {
+        "x": 2,
+        "y": 2,
+        "z": 0
+      },
+      "metadata": {},
+      "collisions": [
+        {
+          "operation": {
+            "operation_type": "drilling",
+            "position": {
+              "x": 39,
+              "y": 39,
+              "z": 0,
+              "rotation": 0
+            },
+            "tool": {
+              "tool_id": "T1",
+              "name": "Drill 5mm",
+              "diameter": 8,
+              "depth": 15,
+              "feed": 3000,
+              "rpm": 18000,
+              "tool_type": "drill",
+              "metadata": {}
+            },
+            "depth": 15,
+            "direction": {
+              "axis": "Z-",
+              "normal": {
+                "x": 0,
+                "y": 0,
+                "z": -1
+              },
+              "machine_side": "front"
+            },
+            "metadata": {
+              "source": "facade",
+              "original_hole": {
+                "type": "front_fixing",
+                "diameter": 8,
+                "x": 37,
+                "y": 37,
+                "z": 0,
+                "direction": {
+                  "axis": "Z-",
+                  "normal": {
+                    "x": 0,
+                    "y": 0,
+                    "z": -1
+                  },
+                  "machine_side": "front"
+                },
+                "operation": {
+                  "operation": "blind_drilling",
+                  "tool_type": "drill",
+                  "diameter": 8,
+                  "depth": 12,
+                  "tool": {
+                    "tool_id": "T3",
+                    "type": "drill",
+                    "diameter": 8,
+                    "rpm": 12600,
+                    "feed": 1530,
+                    "chip_load": 0.22,
+                    "material": "DSP",
+                    "machine_profile": "SCM",
+                    "acceleration": 1.2,
+                    "position_tolerance": 0.02
+                  }
+                }
+              }
+            },
+            "sequence": 1
+          },
+          "collision_zone": {
+            "x1": 0,
+            "y1": 0,
+            "x2": 80,
+            "y2": 80
+          }
+        },
+        {
+          "operation": {
+            "operation_type": "drilling",
+            "position": {
+              "x": 206.5,
+              "y": 200.0,
+              "z": 0,
+              "rotation": 0
+            },
+            "tool": {
+              "tool_id": "T1",
+              "name": "Drill 5mm",
+              "diameter": 5,
+              "depth": 15,
+              "feed": 3000,
+              "rpm": 18000,
+              "tool_type": "drill",
+              "metadata": {}
+            },
+            "depth": 15,
+            "direction": {
+              "axis": "Z-",
+              "normal": {
+                "x": 0,
+                "y": 0,
+                "z": -1
+              },
+              "machine_side": "front"
+            },
+            "metadata": {
+              "source": "facade",
+              "original_hole": {
+                "type": "handle_hole",
+                "diameter": 5,
+                "x": 204.5,
+                "y": 198.0,
+                "z": 0,
+                "direction": {
+                  "axis": "Z-",
+                  "normal": {
+                    "x": 0,
+                    "y": 0,
+                    "z": -1
+                  },
+                  "machine_side": "front"
+                },
+                "operation": {
+                  "operation": "through_drilling",
+                  "tool_type": "drill",
+                  "diameter": 5,
+                  "depth": "through",
+                  "tool": {
+                    "tool_id": "T2",
+                    "type": "drill",
+                    "diameter": 5,
+                    "rpm": 14400,
+                    "feed": 1870,
+                    "chip_load": 0.22,
+                    "material": "DSP",
+                    "machine_profile": "SCM",
+                    "acceleration": 1.2,
+                    "position_tolerance": 0.02
+                  }
+                }
+              }
+            },
+            "sequence": 2
+          },
+          "collision_zone": {
+            "x1": 0,
+            "y1": 0,
+            "x2": 80,
+            "y2": 80
+          }
+        },
+        {
+          "operation": {
+            "operation_type": "drilling",
+            "position": {
+              "x": 366.5,
+              "y": 200.0,
+              "z": 0,
+              "rotation": 0
+            },
+            "tool": {
+              "tool_id": "T1",
+              "name": "Drill 5mm",
+              "diameter": 5,
+              "depth": 15,
+              "feed": 3000,
+              "rpm": 18000,
+              "tool_type": "drill",
+              "metadata": {}
+            },
+            "depth": 15,
+            "direction": {
+              "axis": "Z-",
+              "normal": {
+                "x": 0,
+                "y": 0,
+                "z": -1
+              },
+              "machine_side": "front"
+            },
+            "metadata": {
+              "source": "facade",
+              "original_hole": {
+                "type": "handle_hole",
+                "diameter": 5,
+                "x": 364.5,
+                "y": 198.0,
+                "z": 0,
+                "direction": {
+                  "axis": "Z-",
+                  "normal": {
+                    "x": 0,
+                    "y": 0,
+                    "z": -1
+                  },
+                  "machine_side": "front"
+                },
+                "operation": {
+                  "operation": "through_drilling",
+                  "tool_type": "drill",
+                  "diameter": 5,
+                  "depth": "through",
+                  "tool": {
+                    "tool_id": "T2",
+                    "type": "drill",
+                    "diameter": 5,
+                    "rpm": 14400,
+                    "feed": 1870,
+                    "chip_load": 0.22,
+                    "material": "DSP",
+                    "machine_profile": "SCM",
+                    "acceleration": 1.2,
+                    "position_tolerance": 0.02
+                  }
+                }
+              }
+            },
+            "sequence": 3
+          },
+          "collision_zone": {
+            "x1": 0,
+            "y1": 0,
+            "x2": 80,
+            "y2": 80
+          }
+        },
+        {
+          "operation": {
+            "operation_type": "drilling",
+            "position": {
+              "x": 534,
+              "y": 39,
+              "z": 0,
+              "rotation": 0
+            },
+            "tool": {
+              "tool_id": "T1",
+              "name": "Drill 5mm",
+              "diameter": 8,
+              "depth": 15,
+              "feed": 3000,
+              "rpm": 18000,
+              "tool_type": "drill",
+              "metadata": {}
+            },
+            "depth": 15,
+            "direction": {
+              "axis": "Z-",
+              "normal": {
+                "x": 0,
+                "y": 0,
+                "z": -1
+              },
+              "machine_side": "front"
+            },
+            "metadata": {
+              "source": "facade",
+              "original_hole": {
+                "type": "front_fixing",
+                "diameter": 8,
+                "x": 532,
+                "y": 37,
+                "z": 0,
+                "direction": {
+                  "axis": "Z-",
+                  "normal": {
+                    "x": 0,
+                    "y": 0,
+                    "z": -1
+                  },
+                  "machine_side": "front"
+                },
+                "operation": {
+                  "operation": "blind_drilling",
+                  "tool_type": "drill",
+                  "diameter": 8,
+                  "depth": 12,
+                  "tool": {
+                    "tool_id": "T3",
+                    "type": "drill",
+                    "diameter": 8,
+                    "rpm": 12600,
+                    "feed": 1530,
+                    "chip_load": 0.22,
+                    "material": "DSP",
+                    "machine_profile": "SCM",
+                    "acceleration": 1.2,
+                    "position_tolerance": 0.02
+                  }
+                }
+              }
+            },
+            "sequence": 4
+          },
+          "collision_zone": {
+            "x1": 0,
+            "y1": 0,
+            "x2": 80,
+            "y2": 80
+          }
+        }
+      ],
+      "simulation": [
+        {
+          "type": "clamp_reposition",
+          "old_zone": {
+            "x1": 0,
+            "y1": 0,
+            "x2": 80,
+            "y2": 80
+          },
+          "new_zone": {
+            "x1": 150,
+            "y1": 0,
+            "x2": 230,
+            "y2": 80
+          }
+        },
+        {
+          "type": "clamp_reposition",
+          "old_zone": {
+            "x1": 0,
+            "y1": 0,
+            "x2": 80,
+            "y2": 80
+          },
+          "new_zone": {
+            "x1": 150,
+            "y1": 0,
+            "x2": 230,
+            "y2": 80
+          }
+        },
+        {
+          "type": "clamp_reposition",
+          "old_zone": {
+            "x1": 0,
+            "y1": 0,
+            "x2": 80,
+            "y2": 80
+          },
+          "new_zone": {
+            "x1": 150,
+            "y1": 0,
+            "x2": 230,
+            "y2": 80
+          }
+        },
+        {
+          "type": "clamp_reposition",
+          "old_zone": {
+            "x1": 0,
+            "y1": 0,
+            "x2": 80,
+            "y2": 80
+          },
+          "new_zone": {
+            "x1": 150,
+            "y1": 0,
+            "x2": 230,
+            "y2": 80
+          }
+        }
+      ],
+      "toolpath": [],
+      "gcode": [
+        "%",
+        "G90",
+        "G21",
+        "G17",
+        "M3 S18000",
+        "M5",
+        "G0 Z50",
+        "M30",
+        "%"
+      ],
+      "global_drilling": [],
+      "edges": {
+        "top": "0.8",
+        "bottom": "0.8",
+        "left": "0.8",
+        "right": "0.8"
+      },
+      "tracking": {
+        "label": {
+          "part_id": "5ed09dea-ddd2-4140-a1aa-d46388975b2b",
+          "name": "Шухляда S1-1 фасад",
+          "type": "facade",
+          "width": 569,
+          "height": 396
+        },
+        "barcode": "PART-5ed09dea",
+        "qr_data": {
+          "part_id": "5ed09dea-ddd2-4140-a1aa-d46388975b2b",
+          "name": "Шухляда S1-1 фасад",
+          "type": "facade"
+        },
+        "stage": "queue"
+      },
+      "rotation": 90,
+      "rotated": true,
+      "optimized": true,
+      "sheet_position": {
+        "x": 0,
+        "y": 1045
+      },
+      "sheet_id": 1
+    },
+    {
+      "id": "056edea1-c0d6-4985-a329-6beeceee2855",
+      "name": "S1-1 зад",
+      "width": 351,
+      "height": 547,
+      "thickness": 18,
+      "qty": 1,
+      "material": "dsp_18",
+      "grain_direction": "vertical",
+      "allow_rotate": true,
+      "rotated": true,
+      "x": 0,
+      "y": 0,
+      "z": 0,
+      "metadata": {},
+      "tracking": {
+        "label": {
+          "part_id": "c5b591ca-d8bb-4284-b389-f6e62750b001",
+          "name": "S1-1 зад",
+          "type": "part",
+          "width": 547,
+          "height": 351
+        },
+        "barcode": "PART-c5b591ca",
+        "qr_data": {
+          "part_id": "c5b591ca-d8bb-4284-b389-f6e62750b001",
+          "name": "S1-1 зад",
+          "type": "part"
+        },
+        "stage": "queue"
+      },
+      "rotation": 90,
+      "optimized": true,
+      "sheet_position": {
+        "x": 351,
+        "y": 498
+      },
+      "sheet_id": 1
+    },
+    {
+      "id": "4a85fa73-aa98-45df-8195-b670d2621560",
+      "name": "S1-1 дно",
+      "width": 462,
+      "height": 511,
+      "thickness": 3,
+      "qty": 1,
+      "material": "hdf_3",
+      "grain_direction": "vertical",
+      "allow_rotate": true,
+      "rotated": true,
+      "x": 0,
+      "y": 0,
+      "z": 0,
+      "metadata": {
+        "bottom_offset": 12
+      },
+      "tracking": {
+        "label": {
+          "part_id": "cdf7144f-23c5-4c0f-9e88-7a29819e24d4",
+          "name": "S1-1 дно",
+          "type": "part",
+          "width": 511,
+          "height": 462
+        },
+        "barcode": "PART-cdf7144f",
+        "qr_data": {
+          "part_id": "cdf7144f-23c5-4c0f-9e88-7a29819e24d4",
+          "name": "S1-1 дно",
+          "type": "part"
+        },
+        "stage": "queue"
+      },
+      "rotation": 90,
+      "optimized": true,
+      "sheet_position": {
+        "x": 396,
+        "y": 1045
+      },
+      "sheet_id": 1
+    },
+    {
+      "id": "6a7b9b1e-9868-427d-b16c-93bca51c1ca4",
+      "name": "S1-2 ліва боковина",
+      "width": 361,
+      "height": 498,
+      "thickness": 18,
+      "qty": 1,
+      "material": "dsp_18",
+      "grain_direction": "vertical",
+      "allow_rotate": true,
+      "rotated": true,
+      "x": 0,
+      "y": 0,
+      "z": 0,
+      "metadata": {
+        "quarter": null,
+        "machining": []
+      },
+      "tracking": {
+        "label": {
+          "part_id": "8824c765-3d51-4f85-91a7-7353c452da44",
+          "name": "S1-2 ліва боковина",
+          "type": "part",
+          "width": 498,
+          "height": 361
+        },
+        "barcode": "PART-8824c765",
+        "qr_data": {
+          "part_id": "8824c765-3d51-4f85-91a7-7353c452da44",
+          "name": "S1-2 ліва боковина",
+          "type": "part"
+        },
+        "stage": "queue"
+      },
+      "rotation": 90,
+      "optimized": true,
+      "sheet_position": {
+        "x": 722,
+        "y": 0
+      },
+      "sheet_id": 1
+    },
+    {
+      "id": "40e1f270-957c-4dab-a2e6-40d9a23d7f01",
+      "name": "S1-2 права боковина",
+      "width": 361,
+      "height": 498,
+      "thickness": 18,
+      "qty": 1,
+      "material": "dsp_18",
+      "grain_direction": "vertical",
+      "allow_rotate": true,
+      "rotated": true,
+      "x": 0,
+      "y": 0,
+      "z": 0,
+      "metadata": {
+        "quarter": null,
+        "machining": []
+      },
+      "tracking": {
+        "label": {
+          "part_id": "ed9c264b-9810-432b-bffd-17d2e2725304",
+          "name": "S1-2 права боковина",
+          "type": "part",
+          "width": 498,
+          "height": 361
+        },
+        "barcode": "PART-ed9c264b",
+        "qr_data": {
+          "part_id": "ed9c264b-9810-432b-bffd-17d2e2725304",
+          "name": "S1-2 права боковина",
+          "type": "part"
+        },
+        "stage": "queue"
+      },
+      "rotation": 90,
+      "optimized": true,
+      "sheet_position": {
+        "x": 702,
+        "y": 498
+      },
+      "sheet_id": 1
+    },
+    {
+      "id": "4ecf3bcc-e0f6-4bea-ad10-2a2703edddf4",
+      "name": "S1-2 внутрішній перед",
+      "width": 351,
+      "height": 547,
+      "thickness": 18,
+      "qty": 1,
+      "material": "dsp_18",
+      "grain_direction": "vertical",
+      "allow_rotate": true,
+      "rotated": true,
+      "x": 0,
+      "y": 0,
+      "z": 0,
+      "metadata": {},
+      "tracking": {
+        "label": {
+          "part_id": "bd3c5702-e244-42f6-9a12-e00eecd9b3cd",
+          "name": "S1-2 внутрішній перед",
+          "type": "part",
+          "width": 547,
+          "height": 351
+        },
+        "barcode": "PART-bd3c5702",
+        "qr_data": {
+          "part_id": "bd3c5702-e244-42f6-9a12-e00eecd9b3cd",
+          "name": "S1-2 внутрішній перед",
+          "type": "part"
+        },
+        "stage": "queue"
+      },
+      "rotation": 90,
+      "optimized": true,
+      "sheet_id": 2,
+      "sheet_position": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "d792741f-a773-48e7-9395-dc2cae9df2a9",
+      "type": "facade",
+      "name": "Шухляда S1-2 фасад",
+      "width": 396,
+      "height": 569,
+      "thickness": 18,
+      "facade_type": "inset",
+      "system": "tandem",
+      "qty": 1,
+      "drilling": [
+        {
+          "type": "handle_hole",
+          "diameter": 5,
+          "x": 204.5,
+          "y": 198.0,
+          "z": 0,
+          "direction": {
+            "axis": "Z-",
+            "normal": {
+              "x": 0,
+              "y": 0,
+              "z": -1
+            },
+            "machine_side": "front"
+          },
+          "operation": {
+            "operation": "through_drilling",
+            "tool_type": "drill",
+            "diameter": 5,
+            "depth": "through",
+            "tool": {
+              "tool_id": "T2",
+              "type": "drill",
+              "diameter": 5,
+              "rpm": 14400,
+              "feed": 1870,
+              "chip_load": 0.22,
+              "material": "DSP",
+              "machine_profile": "SCM",
+              "acceleration": 1.2,
+              "position_tolerance": 0.02
+            }
+          }
+        },
+        {
+          "type": "handle_hole",
+          "diameter": 5,
+          "x": 364.5,
+          "y": 198.0,
+          "z": 0,
+          "direction": {
+            "axis": "Z-",
+            "normal": {
+              "x": 0,
+              "y": 0,
+              "z": -1
+            },
+            "machine_side": "front"
+          },
+          "operation": {
+            "operation": "through_drilling",
+            "tool_type": "drill",
+            "diameter": 5,
+            "depth": "through",
+            "tool": {
+              "tool_id": "T2",
+              "type": "drill",
+              "diameter": 5,
+              "rpm": 14400,
+              "feed": 1870,
+              "chip_load": 0.22,
+              "material": "DSP",
+              "machine_profile": "SCM",
+              "acceleration": 1.2,
+              "position_tolerance": 0.02
+            }
+          }
+        },
+        {
+          "type": "front_fixing",
+          "diameter": 8,
+          "x": 37,
+          "y": 37,
+          "z": 0,
+          "direction": {
+            "axis": "Z-",
+            "normal": {
+              "x": 0,
+              "y": 0,
+              "z": -1
+            },
+            "machine_side": "front"
+          },
+          "operation": {
+            "operation": "blind_drilling",
+            "tool_type": "drill",
+            "diameter": 8,
+            "depth": 12,
+            "tool": {
+              "tool_id": "T3",
+              "type": "drill",
+              "diameter": 8,
+              "rpm": 12600,
+              "feed": 1530,
+              "chip_load": 0.22,
+              "material": "DSP",
+              "machine_profile": "SCM",
+              "acceleration": 1.2,
+              "position_tolerance": 0.02
+            }
+          }
+        },
+        {
+          "type": "front_fixing",
+          "diameter": 8,
+          "x": 532,
+          "y": 37,
+          "z": 0,
+          "direction": {
+            "axis": "Z-",
+            "normal": {
+              "x": 0,
+              "y": 0,
+              "z": -1
+            },
+            "machine_side": "front"
+          },
+          "operation": {
+            "operation": "blind_drilling",
+            "tool_type": "drill",
+            "diameter": 8,
+            "depth": 12,
+            "tool": {
+              "tool_id": "T3",
+              "type": "drill",
+              "diameter": 8,
+              "rpm": 12600,
+              "feed": 1530,
+              "chip_load": 0.22,
+              "material": "DSP",
+              "machine_profile": "SCM",
+              "acceleration": 1.2,
+              "position_tolerance": 0.02
+            }
+          }
+        }
+      ],
+      "position": {
+        "x": 2,
+        "y": 2,
+        "z": 0
+      },
+      "metadata": {},
+      "collisions": [
+        {
+          "operation": {
+            "operation_type": "drilling",
+            "position": {
+              "x": 39,
+              "y": 39,
+              "z": 0,
+              "rotation": 0
+            },
+            "tool": {
+              "tool_id": "T1",
+              "name": "Drill 5mm",
+              "diameter": 8,
+              "depth": 15,
+              "feed": 3000,
+              "rpm": 18000,
+              "tool_type": "drill",
+              "metadata": {}
+            },
+            "depth": 15,
+            "direction": {
+              "axis": "Z-",
+              "normal": {
+                "x": 0,
+                "y": 0,
+                "z": -1
+              },
+              "machine_side": "front"
+            },
+            "metadata": {
+              "source": "facade",
+              "original_hole": {
+                "type": "front_fixing",
+                "diameter": 8,
+                "x": 37,
+                "y": 37,
+                "z": 0,
+                "direction": {
+                  "axis": "Z-",
+                  "normal": {
+                    "x": 0,
+                    "y": 0,
+                    "z": -1
+                  },
+                  "machine_side": "front"
+                },
+                "operation": {
+                  "operation": "blind_drilling",
+                  "tool_type": "drill",
+                  "diameter": 8,
+                  "depth": 12,
+                  "tool": {
+                    "tool_id": "T3",
+                    "type": "drill",
+                    "diameter": 8,
+                    "rpm": 12600,
+                    "feed": 1530,
+                    "chip_load": 0.22,
+                    "material": "DSP",
+                    "machine_profile": "SCM",
+                    "acceleration": 1.2,
+                    "position_tolerance": 0.02
+                  }
+                }
+              }
+            },
+            "sequence": 1
+          },
+          "collision_zone": {
+            "x1": 0,
+            "y1": 0,
+            "x2": 80,
+            "y2": 80
+          }
+        },
+        {
+          "operation": {
+            "operation_type": "drilling",
+            "position": {
+              "x": 206.5,
+              "y": 200.0,
+              "z": 0,
+              "rotation": 0
+            },
+            "tool": {
+              "tool_id": "T1",
+              "name": "Drill 5mm",
+              "diameter": 5,
+              "depth": 15,
+              "feed": 3000,
+              "rpm": 18000,
+              "tool_type": "drill",
+              "metadata": {}
+            },
+            "depth": 15,
+            "direction": {
+              "axis": "Z-",
+              "normal": {
+                "x": 0,
+                "y": 0,
+                "z": -1
+              },
+              "machine_side": "front"
+            },
+            "metadata": {
+              "source": "facade",
+              "original_hole": {
+                "type": "handle_hole",
+                "diameter": 5,
+                "x": 204.5,
+                "y": 198.0,
+                "z": 0,
+                "direction": {
+                  "axis": "Z-",
+                  "normal": {
+                    "x": 0,
+                    "y": 0,
+                    "z": -1
+                  },
+                  "machine_side": "front"
+                },
+                "operation": {
+                  "operation": "through_drilling",
+                  "tool_type": "drill",
+                  "diameter": 5,
+                  "depth": "through",
+                  "tool": {
+                    "tool_id": "T2",
+                    "type": "drill",
+                    "diameter": 5,
+                    "rpm": 14400,
+                    "feed": 1870,
+                    "chip_load": 0.22,
+                    "material": "DSP",
+                    "machine_profile": "SCM",
+                    "acceleration": 1.2,
+                    "position_tolerance": 0.02
+                  }
+                }
+              }
+            },
+            "sequence": 2
+          },
+          "collision_zone": {
+            "x1": 0,
+            "y1": 0,
+            "x2": 80,
+            "y2": 80
+          }
+        },
+        {
+          "operation": {
+            "operation_type": "drilling",
+            "position": {
+              "x": 366.5,
+              "y": 200.0,
+              "z": 0,
+              "rotation": 0
+            },
+            "tool": {
+              "tool_id": "T1",
+              "name": "Drill 5mm",
+              "diameter": 5,
+              "depth": 15,
+              "feed": 3000,
+              "rpm": 18000,
+              "tool_type": "drill",
+              "metadata": {}
+            },
+            "depth": 15,
+            "direction": {
+              "axis": "Z-",
+              "normal": {
+                "x": 0,
+                "y": 0,
+                "z": -1
+              },
+              "machine_side": "front"
+            },
+            "metadata": {
+              "source": "facade",
+              "original_hole": {
+                "type": "handle_hole",
+                "diameter": 5,
+                "x": 364.5,
+                "y": 198.0,
+                "z": 0,
+                "direction": {
+                  "axis": "Z-",
+                  "normal": {
+                    "x": 0,
+                    "y": 0,
+                    "z": -1
+                  },
+                  "machine_side": "front"
+                },
+                "operation": {
+                  "operation": "through_drilling",
+                  "tool_type": "drill",
+                  "diameter": 5,
+                  "depth": "through",
+                  "tool": {
+                    "tool_id": "T2",
+                    "type": "drill",
+                    "diameter": 5,
+                    "rpm": 14400,
+                    "feed": 1870,
+                    "chip_load": 0.22,
+                    "material": "DSP",
+                    "machine_profile": "SCM",
+                    "acceleration": 1.2,
+                    "position_tolerance": 0.02
+                  }
+                }
+              }
+            },
+            "sequence": 3
+          },
+          "collision_zone": {
+            "x1": 0,
+            "y1": 0,
+            "x2": 80,
+            "y2": 80
+          }
+        },
+        {
+          "operation": {
+            "operation_type": "drilling",
+            "position": {
+              "x": 534,
+              "y": 39,
+              "z": 0,
+              "rotation": 0
+            },
+            "tool": {
+              "tool_id": "T1",
+              "name": "Drill 5mm",
+              "diameter": 8,
+              "depth": 15,
+              "feed": 3000,
+              "rpm": 18000,
+              "tool_type": "drill",
+              "metadata": {}
+            },
+            "depth": 15,
+            "direction": {
+              "axis": "Z-",
+              "normal": {
+                "x": 0,
+                "y": 0,
+                "z": -1
+              },
+              "machine_side": "front"
+            },
+            "metadata": {
+              "source": "facade",
+              "original_hole": {
+                "type": "front_fixing",
+                "diameter": 8,
+                "x": 532,
+                "y": 37,
+                "z": 0,
+                "direction": {
+                  "axis": "Z-",
+                  "normal": {
+                    "x": 0,
+                    "y": 0,
+                    "z": -1
+                  },
+                  "machine_side": "front"
+                },
+                "operation": {
+                  "operation": "blind_drilling",
+                  "tool_type": "drill",
+                  "diameter": 8,
+                  "depth": 12,
+                  "tool": {
+                    "tool_id": "T3",
+                    "type": "drill",
+                    "diameter": 8,
+                    "rpm": 12600,
+                    "feed": 1530,
+                    "chip_load": 0.22,
+                    "material": "DSP",
+                    "machine_profile": "SCM",
+                    "acceleration": 1.2,
+                    "position_tolerance": 0.02
+                  }
+                }
+              }
+            },
+            "sequence": 4
+          },
+          "collision_zone": {
+            "x1": 0,
+            "y1": 0,
+            "x2": 80,
+            "y2": 80
+          }
+        }
+      ],
+      "simulation": [
+        {
+          "type": "clamp_reposition",
+          "old_zone": {
+            "x1": 0,
+            "y1": 0,
+            "x2": 80,
+            "y2": 80
+          },
+          "new_zone": {
+            "x1": 150,
+            "y1": 0,
+            "x2": 230,
+            "y2": 80
+          }
+        },
+        {
+          "type": "clamp_reposition",
+          "old_zone": {
+            "x1": 0,
+            "y1": 0,
+            "x2": 80,
+            "y2": 80
+          },
+          "new_zone": {
+            "x1": 150,
+            "y1": 0,
+            "x2": 230,
+            "y2": 80
+          }
+        },
+        {
+          "type": "clamp_reposition",
+          "old_zone": {
+            "x1": 0,
+            "y1": 0,
+            "x2": 80,
+            "y2": 80
+          },
+          "new_zone": {
+            "x1": 150,
+            "y1": 0,
+            "x2": 230,
+            "y2": 80
+          }
+        },
+        {
+          "type": "clamp_reposition",
+          "old_zone": {
+            "x1": 0,
+            "y1": 0,
+            "x2": 80,
+            "y2": 80
+          },
+          "new_zone": {
+            "x1": 150,
+            "y1": 0,
+            "x2": 230,
+            "y2": 80
+          }
+        }
+      ],
+      "toolpath": [],
+      "gcode": [
+        "%",
+        "G90",
+        "G21",
+        "G17",
+        "M3 S18000",
+        "M5",
+        "G0 Z50",
+        "M30",
+        "%"
+      ],
+      "global_drilling": [],
+      "edges": {
+        "top": "0.8",
+        "bottom": "0.8",
+        "left": "0.8",
+        "right": "0.8"
+      },
+      "tracking": {
+        "label": {
+          "part_id": "96463276-7702-4c93-9bda-88ca992e1e3b",
+          "name": "Шухляда S1-2 фасад",
+          "type": "facade",
+          "width": 569,
+          "height": 396
+        },
+        "barcode": "PART-96463276",
+        "qr_data": {
+          "part_id": "96463276-7702-4c93-9bda-88ca992e1e3b",
+          "name": "Шухляда S1-2 фасад",
+          "type": "facade"
+        },
+        "stage": "queue"
+      },
+      "rotation": 90,
+      "rotated": true,
+      "optimized": true,
+      "sheet_position": {
+        "x": 0,
+        "y": 547
+      },
+      "sheet_id": 2
+    },
+    {
+      "id": "d477676e-bdc5-4631-b2aa-1b2010f036d0",
+      "name": "S1-2 зад",
+      "width": 351,
+      "height": 547,
+      "thickness": 18,
+      "qty": 1,
+      "material": "dsp_18",
+      "grain_direction": "vertical",
+      "allow_rotate": true,
+      "rotated": true,
+      "x": 0,
+      "y": 0,
+      "z": 0,
+      "metadata": {},
+      "tracking": {
+        "label": {
+          "part_id": "ecd14e70-b158-46ae-be04-77624881da8d",
+          "name": "S1-2 зад",
+          "type": "part",
+          "width": 547,
+          "height": 351
+        },
+        "barcode": "PART-ecd14e70",
+        "qr_data": {
+          "part_id": "ecd14e70-b158-46ae-be04-77624881da8d",
+          "name": "S1-2 зад",
+          "type": "part"
+        },
+        "stage": "queue"
+      },
+      "rotation": 90,
+      "optimized": true,
+      "sheet_position": {
+        "x": 351,
+        "y": 0
+      },
+      "sheet_id": 2
+    },
+    {
+      "id": "1e462044-5014-487a-ab5c-e4ad243e9ec5",
+      "name": "S1-2 дно",
+      "width": 462,
+      "height": 511,
+      "thickness": 3,
+      "qty": 1,
+      "material": "hdf_3",
+      "grain_direction": "vertical",
+      "allow_rotate": true,
+      "rotated": true,
+      "x": 0,
+      "y": 0,
+      "z": 0,
+      "metadata": {
+        "bottom_offset": 12
+      },
+      "tracking": {
+        "label": {
+          "part_id": "d32d2176-5536-493e-a5b4-fcf6d8aa4dba",
+          "name": "S1-2 дно",
+          "type": "part",
+          "width": 511,
+          "height": 462
+        },
+        "barcode": "PART-d32d2176",
+        "qr_data": {
+          "part_id": "d32d2176-5536-493e-a5b4-fcf6d8aa4dba",
+          "name": "S1-2 дно",
+          "type": "part"
+        },
+        "stage": "queue"
+      },
+      "rotation": 90,
+      "optimized": true,
+      "sheet_position": {
+        "x": 396,
+        "y": 547
+      },
+      "sheet_id": 2
+    },
+    {
+      "id": "78f7299d-72af-479c-8366-da1cbf573730",
+      "name": "S2-1 ліва боковина",
+      "width": 361,
+      "height": 498,
+      "thickness": 18,
+      "qty": 1,
+      "material": "dsp_18",
+      "grain_direction": "vertical",
+      "allow_rotate": true,
+      "rotated": true,
+      "x": 0,
+      "y": 0,
+      "z": 0,
+      "metadata": {
+        "quarter": null,
+        "machining": []
+      },
+      "tracking": {
+        "label": {
+          "part_id": "3d20f274-91c5-4cad-9739-98dff67f2127",
+          "name": "S2-1 ліва боковина",
+          "type": "part",
+          "width": 498,
+          "height": 361
+        },
+        "barcode": "PART-3d20f274",
+        "qr_data": {
+          "part_id": "3d20f274-91c5-4cad-9739-98dff67f2127",
+          "name": "S2-1 ліва боковина",
+          "type": "part"
+        },
+        "stage": "queue"
+      },
+      "rotation": 90,
+      "optimized": true,
+      "sheet_position": {
+        "x": 0,
+        "y": 1116
+      },
+      "sheet_id": 2
+    },
+    {
+      "id": "b5a2aa30-41b7-4a77-902d-147a810ba6d3",
+      "name": "S2-1 права боковина",
+      "width": 361,
+      "height": 498,
+      "thickness": 18,
+      "qty": 1,
+      "material": "dsp_18",
+      "grain_direction": "vertical",
+      "allow_rotate": true,
+      "rotated": true,
+      "x": 0,
+      "y": 0,
+      "z": 0,
+      "metadata": {
+        "quarter": null,
+        "machining": []
+      },
+      "tracking": {
+        "label": {
+          "part_id": "5e359d51-e36b-493f-b6d2-19e53b518e93",
+          "name": "S2-1 права боковина",
+          "type": "part",
+          "width": 498,
+          "height": 361
+        },
+        "barcode": "PART-5e359d51",
+        "qr_data": {
+          "part_id": "5e359d51-e36b-493f-b6d2-19e53b518e93",
+          "name": "S2-1 права боковина",
+          "type": "part"
+        },
+        "stage": "queue"
+      },
+      "rotation": 90,
+      "optimized": true,
+      "sheet_position": {
+        "x": 702,
+        "y": 0
+      },
+      "sheet_id": 2
+    },
+    {
+      "id": "47b67150-fae6-4455-a405-a424e6740aa1",
+      "name": "S2-1 внутрішній перед",
+      "width": 351,
+      "height": 547,
+      "thickness": 18,
+      "qty": 1,
+      "material": "dsp_18",
+      "grain_direction": "vertical",
+      "allow_rotate": true,
+      "rotated": true,
+      "x": 0,
+      "y": 0,
+      "z": 0,
+      "metadata": {},
+      "tracking": {
+        "label": {
+          "part_id": "440aa774-ec64-4537-b6dd-ad58de67133c",
+          "name": "S2-1 внутрішній перед",
+          "type": "part",
+          "width": 547,
+          "height": 351
+        },
+        "barcode": "PART-440aa774",
+        "qr_data": {
+          "part_id": "440aa774-ec64-4537-b6dd-ad58de67133c",
+          "name": "S2-1 внутрішній перед",
+          "type": "part"
+        },
+        "stage": "queue"
+      },
+      "rotation": 90,
+      "optimized": true,
+      "sheet_id": 3,
+      "sheet_position": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "a95d4af0-b936-4b08-a4bb-37bddf8217a3",
+      "type": "facade",
+      "name": "Шухляда S2-1 фасад",
+      "width": 396,
+      "height": 569,
+      "thickness": 18,
+      "facade_type": "inset",
+      "system": "tandem",
+      "qty": 1,
+      "drilling": [
+        {
+          "type": "handle_hole",
+          "diameter": 5,
+          "x": 204.5,
+          "y": 198.0,
+          "z": 0,
+          "direction": {
+            "axis": "Z-",
+            "normal": {
+              "x": 0,
+              "y": 0,
+              "z": -1
+            },
+            "machine_side": "front"
+          },
+          "operation": {
+            "operation": "through_drilling",
+            "tool_type": "drill",
+            "diameter": 5,
+            "depth": "through",
+            "tool": {
+              "tool_id": "T2",
+              "type": "drill",
+              "diameter": 5,
+              "rpm": 14400,
+              "feed": 1870,
+              "chip_load": 0.22,
+              "material": "DSP",
+              "machine_profile": "SCM",
+              "acceleration": 1.2,
+              "position_tolerance": 0.02
+            }
+          }
+        },
+        {
+          "type": "handle_hole",
+          "diameter": 5,
+          "x": 364.5,
+          "y": 198.0,
+          "z": 0,
+          "direction": {
+            "axis": "Z-",
+            "normal": {
+              "x": 0,
+              "y": 0,
+              "z": -1
+            },
+            "machine_side": "front"
+          },
+          "operation": {
+            "operation": "through_drilling",
+            "tool_type": "drill",
+            "diameter": 5,
+            "depth": "through",
+            "tool": {
+              "tool_id": "T2",
+              "type": "drill",
+              "diameter": 5,
+              "rpm": 14400,
+              "feed": 1870,
+              "chip_load": 0.22,
+              "material": "DSP",
+              "machine_profile": "SCM",
+              "acceleration": 1.2,
+              "position_tolerance": 0.02
+            }
+          }
+        },
+        {
+          "type": "front_fixing",
+          "diameter": 8,
+          "x": 37,
+          "y": 37,
+          "z": 0,
+          "direction": {
+            "axis": "Z-",
+            "normal": {
+              "x": 0,
+              "y": 0,
+              "z": -1
+            },
+            "machine_side": "front"
+          },
+          "operation": {
+            "operation": "blind_drilling",
+            "tool_type": "drill",
+            "diameter": 8,
+            "depth": 12,
+            "tool": {
+              "tool_id": "T3",
+              "type": "drill",
+              "diameter": 8,
+              "rpm": 12600,
+              "feed": 1530,
+              "chip_load": 0.22,
+              "material": "DSP",
+              "machine_profile": "SCM",
+              "acceleration": 1.2,
+              "position_tolerance": 0.02
+            }
+          }
+        },
+        {
+          "type": "front_fixing",
+          "diameter": 8,
+          "x": 532,
+          "y": 37,
+          "z": 0,
+          "direction": {
+            "axis": "Z-",
+            "normal": {
+              "x": 0,
+              "y": 0,
+              "z": -1
+            },
+            "machine_side": "front"
+          },
+          "operation": {
+            "operation": "blind_drilling",
+            "tool_type": "drill",
+            "diameter": 8,
+            "depth": 12,
+            "tool": {
+              "tool_id": "T3",
+              "type": "drill",
+              "diameter": 8,
+              "rpm": 12600,
+              "feed": 1530,
+              "chip_load": 0.22,
+              "material": "DSP",
+              "machine_profile": "SCM",
+              "acceleration": 1.2,
+              "position_tolerance": 0.02
+            }
+          }
+        }
+      ],
+      "position": {
+        "x": 2,
+        "y": 2,
+        "z": 0
+      },
+      "metadata": {},
+      "collisions": [
+        {
+          "operation": {
+            "operation_type": "drilling",
+            "position": {
+              "x": 39,
+              "y": 39,
+              "z": 0,
+              "rotation": 0
+            },
+            "tool": {
+              "tool_id": "T1",
+              "name": "Drill 5mm",
+              "diameter": 8,
+              "depth": 15,
+              "feed": 3000,
+              "rpm": 18000,
+              "tool_type": "drill",
+              "metadata": {}
+            },
+            "depth": 15,
+            "direction": {
+              "axis": "Z-",
+              "normal": {
+                "x": 0,
+                "y": 0,
+                "z": -1
+              },
+              "machine_side": "front"
+            },
+            "metadata": {
+              "source": "facade",
+              "original_hole": {
+                "type": "front_fixing",
+                "diameter": 8,
+                "x": 37,
+                "y": 37,
+                "z": 0,
+                "direction": {
+                  "axis": "Z-",
+                  "normal": {
+                    "x": 0,
+                    "y": 0,
+                    "z": -1
+                  },
+                  "machine_side": "front"
+                },
+                "operation": {
+                  "operation": "blind_drilling",
+                  "tool_type": "drill",
+                  "diameter": 8,
+                  "depth": 12,
+                  "tool": {
+                    "tool_id": "T3",
+                    "type": "drill",
+                    "diameter": 8,
+                    "rpm": 12600,
+                    "feed": 1530,
+                    "chip_load": 0.22,
+                    "material": "DSP",
+                    "machine_profile": "SCM",
+                    "acceleration": 1.2,
+                    "position_tolerance": 0.02
+                  }
+                }
+              }
+            },
+            "sequence": 1
+          },
+          "collision_zone": {
+            "x1": 0,
+            "y1": 0,
+            "x2": 80,
+            "y2": 80
+          }
+        },
+        {
+          "operation": {
+            "operation_type": "drilling",
+            "position": {
+              "x": 206.5,
+              "y": 200.0,
+              "z": 0,
+              "rotation": 0
+            },
+            "tool": {
+              "tool_id": "T1",
+              "name": "Drill 5mm",
+              "diameter": 5,
+              "depth": 15,
+              "feed": 3000,
+              "rpm": 18000,
+              "tool_type": "drill",
+              "metadata": {}
+            },
+            "depth": 15,
+            "direction": {
+              "axis": "Z-",
+              "normal": {
+                "x": 0,
+                "y": 0,
+                "z": -1
+              },
+              "machine_side": "front"
+            },
+            "metadata": {
+              "source": "facade",
+              "original_hole": {
+                "type": "handle_hole",
+                "diameter": 5,
+                "x": 204.5,
+                "y": 198.0,
+                "z": 0,
+                "direction": {
+                  "axis": "Z-",
+                  "normal": {
+                    "x": 0,
+                    "y": 0,
+                    "z": -1
+                  },
+                  "machine_side": "front"
+                },
+                "operation": {
+                  "operation": "through_drilling",
+                  "tool_type": "drill",
+                  "diameter": 5,
+                  "depth": "through",
+                  "tool": {
+                    "tool_id": "T2",
+                    "type": "drill",
+                    "diameter": 5,
+                    "rpm": 14400,
+                    "feed": 1870,
+                    "chip_load": 0.22,
+                    "material": "DSP",
+                    "machine_profile": "SCM",
+                    "acceleration": 1.2,
+                    "position_tolerance": 0.02
+                  }
+                }
+              }
+            },
+            "sequence": 2
+          },
+          "collision_zone": {
+            "x1": 0,
+            "y1": 0,
+            "x2": 80,
+            "y2": 80
+          }
+        },
+        {
+          "operation": {
+            "operation_type": "drilling",
+            "position": {
+              "x": 366.5,
+              "y": 200.0,
+              "z": 0,
+              "rotation": 0
+            },
+            "tool": {
+              "tool_id": "T1",
+              "name": "Drill 5mm",
+              "diameter": 5,
+              "depth": 15,
+              "feed": 3000,
+              "rpm": 18000,
+              "tool_type": "drill",
+              "metadata": {}
+            },
+            "depth": 15,
+            "direction": {
+              "axis": "Z-",
+              "normal": {
+                "x": 0,
+                "y": 0,
+                "z": -1
+              },
+              "machine_side": "front"
+            },
+            "metadata": {
+              "source": "facade",
+              "original_hole": {
+                "type": "handle_hole",
+                "diameter": 5,
+                "x": 364.5,
+                "y": 198.0,
+                "z": 0,
+                "direction": {
+                  "axis": "Z-",
+                  "normal": {
+                    "x": 0,
+                    "y": 0,
+                    "z": -1
+                  },
+                  "machine_side": "front"
+                },
+                "operation": {
+                  "operation": "through_drilling",
+                  "tool_type": "drill",
+                  "diameter": 5,
+                  "depth": "through",
+                  "tool": {
+                    "tool_id": "T2",
+                    "type": "drill",
+                    "diameter": 5,
+                    "rpm": 14400,
+                    "feed": 1870,
+                    "chip_load": 0.22,
+                    "material": "DSP",
+                    "machine_profile": "SCM",
+                    "acceleration": 1.2,
+                    "position_tolerance": 0.02
+                  }
+                }
+              }
+            },
+            "sequence": 3
+          },
+          "collision_zone": {
+            "x1": 0,
+            "y1": 0,
+            "x2": 80,
+            "y2": 80
+          }
+        },
+        {
+          "operation": {
+            "operation_type": "drilling",
+            "position": {
+              "x": 534,
+              "y": 39,
+              "z": 0,
+              "rotation": 0
+            },
+            "tool": {
+              "tool_id": "T1",
+              "name": "Drill 5mm",
+              "diameter": 8,
+              "depth": 15,
+              "feed": 3000,
+              "rpm": 18000,
+              "tool_type": "drill",
+              "metadata": {}
+            },
+            "depth": 15,
+            "direction": {
+              "axis": "Z-",
+              "normal": {
+                "x": 0,
+                "y": 0,
+                "z": -1
+              },
+              "machine_side": "front"
+            },
+            "metadata": {
+              "source": "facade",
+              "original_hole": {
+                "type": "front_fixing",
+                "diameter": 8,
+                "x": 532,
+                "y": 37,
+                "z": 0,
+                "direction": {
+                  "axis": "Z-",
+                  "normal": {
+                    "x": 0,
+                    "y": 0,
+                    "z": -1
+                  },
+                  "machine_side": "front"
+                },
+                "operation": {
+                  "operation": "blind_drilling",
+                  "tool_type": "drill",
+                  "diameter": 8,
+                  "depth": 12,
+                  "tool": {
+                    "tool_id": "T3",
+                    "type": "drill",
+                    "diameter": 8,
+                    "rpm": 12600,
+                    "feed": 1530,
+                    "chip_load": 0.22,
+                    "material": "DSP",
+                    "machine_profile": "SCM",
+                    "acceleration": 1.2,
+                    "position_tolerance": 0.02
+                  }
+                }
+              }
+            },
+            "sequence": 4
+          },
+          "collision_zone": {
+            "x1": 0,
+            "y1": 0,
+            "x2": 80,
+            "y2": 80
+          }
+        }
+      ],
+      "simulation": [
+        {
+          "type": "clamp_reposition",
+          "old_zone": {
+            "x1": 0,
+            "y1": 0,
+            "x2": 80,
+            "y2": 80
+          },
+          "new_zone": {
+            "x1": 150,
+            "y1": 0,
+            "x2": 230,
+            "y2": 80
+          }
+        },
+        {
+          "type": "clamp_reposition",
+          "old_zone": {
+            "x1": 0,
+            "y1": 0,
+            "x2": 80,
+            "y2": 80
+          },
+          "new_zone": {
+            "x1": 150,
+            "y1": 0,
+            "x2": 230,
+            "y2": 80
+          }
+        },
+        {
+          "type": "clamp_reposition",
+          "old_zone": {
+            "x1": 0,
+            "y1": 0,
+            "x2": 80,
+            "y2": 80
+          },
+          "new_zone": {
+            "x1": 150,
+            "y1": 0,
+            "x2": 230,
+            "y2": 80
+          }
+        },
+        {
+          "type": "clamp_reposition",
+          "old_zone": {
+            "x1": 0,
+            "y1": 0,
+            "x2": 80,
+            "y2": 80
+          },
+          "new_zone": {
+            "x1": 150,
+            "y1": 0,
+            "x2": 230,
+            "y2": 80
+          }
+        }
+      ],
+      "toolpath": [],
+      "gcode": [
+        "%",
+        "G90",
+        "G21",
+        "G17",
+        "M3 S18000",
+        "M5",
+        "G0 Z50",
+        "M30",
+        "%"
+      ],
+      "global_drilling": [],
+      "edges": {
+        "top": "0.8",
+        "bottom": "0.8",
+        "left": "0.8",
+        "right": "0.8"
+      },
+      "tracking": {
+        "label": {
+          "part_id": "fd59e43c-64c7-4f0e-a562-4ff9d6271339",
+          "name": "Шухляда S2-1 фасад",
+          "type": "facade",
+          "width": 569,
+          "height": 396
+        },
+        "barcode": "PART-fd59e43c",
+        "qr_data": {
+          "part_id": "fd59e43c-64c7-4f0e-a562-4ff9d6271339",
+          "name": "Шухляда S2-1 фасад",
+          "type": "facade"
+        },
+        "stage": "queue"
+      },
+      "rotation": 90,
+      "rotated": true,
+      "optimized": true,
+      "sheet_position": {
+        "x": 0,
+        "y": 547
+      },
+      "sheet_id": 3
+    },
+    {
+      "id": "cc2b55c1-5b4c-4f9d-b98e-eb769f102567",
+      "name": "S2-1 зад",
+      "width": 351,
+      "height": 547,
+      "thickness": 18,
+      "qty": 1,
+      "material": "dsp_18",
+      "grain_direction": "vertical",
+      "allow_rotate": true,
+      "rotated": true,
+      "x": 0,
+      "y": 0,
+      "z": 0,
+      "metadata": {},
+      "tracking": {
+        "label": {
+          "part_id": "696034a3-80c7-4790-bd96-5783a4d680e0",
+          "name": "S2-1 зад",
+          "type": "part",
+          "width": 547,
+          "height": 351
+        },
+        "barcode": "PART-696034a3",
+        "qr_data": {
+          "part_id": "696034a3-80c7-4790-bd96-5783a4d680e0",
+          "name": "S2-1 зад",
+          "type": "part"
+        },
+        "stage": "queue"
+      },
+      "rotation": 90,
+      "optimized": true,
+      "sheet_position": {
+        "x": 351,
+        "y": 0
+      },
+      "sheet_id": 3
+    },
+    {
+      "id": "3bca55cd-7ff3-4fab-8ce8-8d3f50d1aa29",
+      "name": "S2-1 дно",
+      "width": 462,
+      "height": 511,
+      "thickness": 3,
+      "qty": 1,
+      "material": "hdf_3",
+      "grain_direction": "vertical",
+      "allow_rotate": true,
+      "rotated": true,
+      "x": 0,
+      "y": 0,
+      "z": 0,
+      "metadata": {
+        "bottom_offset": 12
+      },
+      "tracking": {
+        "label": {
+          "part_id": "423120e4-4ce3-4ffb-b5d0-03002554a79b",
+          "name": "S2-1 дно",
+          "type": "part",
+          "width": 511,
+          "height": 462
+        },
+        "barcode": "PART-423120e4",
+        "qr_data": {
+          "part_id": "423120e4-4ce3-4ffb-b5d0-03002554a79b",
+          "name": "S2-1 дно",
+          "type": "part"
+        },
+        "stage": "queue"
+      },
+      "rotation": 90,
+      "optimized": true,
+      "sheet_position": {
+        "x": 396,
+        "y": 547
+      },
+      "sheet_id": 3
+    },
+    {
+      "id": "2fb05fd5-7700-4421-a457-b55e3bfc52a4",
+      "name": "S2-2 ліва боковина",
+      "width": 361,
+      "height": 498,
+      "thickness": 18,
+      "qty": 1,
+      "material": "dsp_18",
+      "grain_direction": "vertical",
+      "allow_rotate": true,
+      "rotated": true,
+      "x": 0,
+      "y": 0,
+      "z": 0,
+      "metadata": {
+        "quarter": null,
+        "machining": []
+      },
+      "tracking": {
+        "label": {
+          "part_id": "df000fef-380d-4980-bad1-d52c482b03ca",
+          "name": "S2-2 ліва боковина",
+          "type": "part",
+          "width": 498,
+          "height": 361
+        },
+        "barcode": "PART-df000fef",
+        "qr_data": {
+          "part_id": "df000fef-380d-4980-bad1-d52c482b03ca",
+          "name": "S2-2 ліва боковина",
+          "type": "part"
+        },
+        "stage": "queue"
+      },
+      "rotation": 90,
+      "optimized": true,
+      "sheet_position": {
+        "x": 0,
+        "y": 1116
+      },
+      "sheet_id": 3
+    },
+    {
+      "id": "b74f1465-f7b2-4813-a13f-382aa05c2b73",
+      "name": "S2-2 права боковина",
+      "width": 361,
+      "height": 498,
+      "thickness": 18,
+      "qty": 1,
+      "material": "dsp_18",
+      "grain_direction": "vertical",
+      "allow_rotate": true,
+      "rotated": true,
+      "x": 0,
+      "y": 0,
+      "z": 0,
+      "metadata": {
+        "quarter": null,
+        "machining": []
+      },
+      "tracking": {
+        "label": {
+          "part_id": "6f0db39e-d348-4645-a8b8-d3ffc6fb8ddd",
+          "name": "S2-2 права боковина",
+          "type": "part",
+          "width": 498,
+          "height": 361
+        },
+        "barcode": "PART-6f0db39e",
+        "qr_data": {
+          "part_id": "6f0db39e-d348-4645-a8b8-d3ffc6fb8ddd",
+          "name": "S2-2 права боковина",
+          "type": "part"
+        },
+        "stage": "queue"
+      },
+      "rotation": 90,
+      "optimized": true,
+      "sheet_position": {
+        "x": 702,
+        "y": 0
+      },
+      "sheet_id": 3
+    },
+    {
+      "id": "cc99a038-742d-4ff5-8aa9-2002aaca6fbe",
+      "name": "S2-2 внутрішній перед",
+      "width": 351,
+      "height": 547,
+      "thickness": 18,
+      "qty": 1,
+      "material": "dsp_18",
+      "grain_direction": "vertical",
+      "allow_rotate": true,
+      "rotated": true,
+      "x": 0,
+      "y": 0,
+      "z": 0,
+      "metadata": {},
+      "tracking": {
+        "label": {
+          "part_id": "13a770d3-85f9-4bb8-87f2-29e54508650a",
+          "name": "S2-2 внутрішній перед",
+          "type": "part",
+          "width": 547,
+          "height": 351
+        },
+        "barcode": "PART-13a770d3",
+        "qr_data": {
+          "part_id": "13a770d3-85f9-4bb8-87f2-29e54508650a",
+          "name": "S2-2 внутрішній перед",
+          "type": "part"
+        },
+        "stage": "queue"
+      },
+      "rotation": 90,
+      "optimized": true,
+      "sheet_id": 4,
+      "sheet_position": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "7ecfb232-7f59-45d3-82c0-41c197c165ef",
+      "type": "facade",
+      "name": "Шухляда S2-2 фасад",
+      "width": 396,
+      "height": 569,
+      "thickness": 18,
+      "facade_type": "inset",
+      "system": "tandem",
+      "qty": 1,
+      "drilling": [
+        {
+          "type": "handle_hole",
+          "diameter": 5,
+          "x": 204.5,
+          "y": 198.0,
+          "z": 0,
+          "direction": {
+            "axis": "Z-",
+            "normal": {
+              "x": 0,
+              "y": 0,
+              "z": -1
+            },
+            "machine_side": "front"
+          },
+          "operation": {
+            "operation": "through_drilling",
+            "tool_type": "drill",
+            "diameter": 5,
+            "depth": "through",
+            "tool": {
+              "tool_id": "T2",
+              "type": "drill",
+              "diameter": 5,
+              "rpm": 14400,
+              "feed": 1870,
+              "chip_load": 0.22,
+              "material": "DSP",
+              "machine_profile": "SCM",
+              "acceleration": 1.2,
+              "position_tolerance": 0.02
+            }
+          }
+        },
+        {
+          "type": "handle_hole",
+          "diameter": 5,
+          "x": 364.5,
+          "y": 198.0,
+          "z": 0,
+          "direction": {
+            "axis": "Z-",
+            "normal": {
+              "x": 0,
+              "y": 0,
+              "z": -1
+            },
+            "machine_side": "front"
+          },
+          "operation": {
+            "operation": "through_drilling",
+            "tool_type": "drill",
+            "diameter": 5,
+            "depth": "through",
+            "tool": {
+              "tool_id": "T2",
+              "type": "drill",
+              "diameter": 5,
+              "rpm": 14400,
+              "feed": 1870,
+              "chip_load": 0.22,
+              "material": "DSP",
+              "machine_profile": "SCM",
+              "acceleration": 1.2,
+              "position_tolerance": 0.02
+            }
+          }
+        },
+        {
+          "type": "front_fixing",
+          "diameter": 8,
+          "x": 37,
+          "y": 37,
+          "z": 0,
+          "direction": {
+            "axis": "Z-",
+            "normal": {
+              "x": 0,
+              "y": 0,
+              "z": -1
+            },
+            "machine_side": "front"
+          },
+          "operation": {
+            "operation": "blind_drilling",
+            "tool_type": "drill",
+            "diameter": 8,
+            "depth": 12,
+            "tool": {
+              "tool_id": "T3",
+              "type": "drill",
+              "diameter": 8,
+              "rpm": 12600,
+              "feed": 1530,
+              "chip_load": 0.22,
+              "material": "DSP",
+              "machine_profile": "SCM",
+              "acceleration": 1.2,
+              "position_tolerance": 0.02
+            }
+          }
+        },
+        {
+          "type": "front_fixing",
+          "diameter": 8,
+          "x": 532,
+          "y": 37,
+          "z": 0,
+          "direction": {
+            "axis": "Z-",
+            "normal": {
+              "x": 0,
+              "y": 0,
+              "z": -1
+            },
+            "machine_side": "front"
+          },
+          "operation": {
+            "operation": "blind_drilling",
+            "tool_type": "drill",
+            "diameter": 8,
+            "depth": 12,
+            "tool": {
+              "tool_id": "T3",
+              "type": "drill",
+              "diameter": 8,
+              "rpm": 12600,
+              "feed": 1530,
+              "chip_load": 0.22,
+              "material": "DSP",
+              "machine_profile": "SCM",
+              "acceleration": 1.2,
+              "position_tolerance": 0.02
+            }
+          }
+        }
+      ],
+      "position": {
+        "x": 2,
+        "y": 2,
+        "z": 0
+      },
+      "metadata": {},
+      "collisions": [
+        {
+          "operation": {
+            "operation_type": "drilling",
+            "position": {
+              "x": 39,
+              "y": 39,
+              "z": 0,
+              "rotation": 0
+            },
+            "tool": {
+              "tool_id": "T1",
+              "name": "Drill 5mm",
+              "diameter": 8,
+              "depth": 15,
+              "feed": 3000,
+              "rpm": 18000,
+              "tool_type": "drill",
+              "metadata": {}
+            },
+            "depth": 15,
+            "direction": {
+              "axis": "Z-",
+              "normal": {
+                "x": 0,
+                "y": 0,
+                "z": -1
+              },
+              "machine_side": "front"
+            },
+            "metadata": {
+              "source": "facade",
+              "original_hole": {
+                "type": "front_fixing",
+                "diameter": 8,
+                "x": 37,
+                "y": 37,
+                "z": 0,
+                "direction": {
+                  "axis": "Z-",
+                  "normal": {
+                    "x": 0,
+                    "y": 0,
+                    "z": -1
+                  },
+                  "machine_side": "front"
+                },
+                "operation": {
+                  "operation": "blind_drilling",
+                  "tool_type": "drill",
+                  "diameter": 8,
+                  "depth": 12,
+                  "tool": {
+                    "tool_id": "T3",
+                    "type": "drill",
+                    "diameter": 8,
+                    "rpm": 12600,
+                    "feed": 1530,
+                    "chip_load": 0.22,
+                    "material": "DSP",
+                    "machine_profile": "SCM",
+                    "acceleration": 1.2,
+                    "position_tolerance": 0.02
+                  }
+                }
+              }
+            },
+            "sequence": 1
+          },
+          "collision_zone": {
+            "x1": 0,
+            "y1": 0,
+            "x2": 80,
+            "y2": 80
+          }
+        },
+        {
+          "operation": {
+            "operation_type": "drilling",
+            "position": {
+              "x": 206.5,
+              "y": 200.0,
+              "z": 0,
+              "rotation": 0
+            },
+            "tool": {
+              "tool_id": "T1",
+              "name": "Drill 5mm",
+              "diameter": 5,
+              "depth": 15,
+              "feed": 3000,
+              "rpm": 18000,
+              "tool_type": "drill",
+              "metadata": {}
+            },
+            "depth": 15,
+            "direction": {
+              "axis": "Z-",
+              "normal": {
+                "x": 0,
+                "y": 0,
+                "z": -1
+              },
+              "machine_side": "front"
+            },
+            "metadata": {
+              "source": "facade",
+              "original_hole": {
+                "type": "handle_hole",
+                "diameter": 5,
+                "x": 204.5,
+                "y": 198.0,
+                "z": 0,
+                "direction": {
+                  "axis": "Z-",
+                  "normal": {
+                    "x": 0,
+                    "y": 0,
+                    "z": -1
+                  },
+                  "machine_side": "front"
+                },
+                "operation": {
+                  "operation": "through_drilling",
+                  "tool_type": "drill",
+                  "diameter": 5,
+                  "depth": "through",
+                  "tool": {
+                    "tool_id": "T2",
+                    "type": "drill",
+                    "diameter": 5,
+                    "rpm": 14400,
+                    "feed": 1870,
+                    "chip_load": 0.22,
+                    "material": "DSP",
+                    "machine_profile": "SCM",
+                    "acceleration": 1.2,
+                    "position_tolerance": 0.02
+                  }
+                }
+              }
+            },
+            "sequence": 2
+          },
+          "collision_zone": {
+            "x1": 0,
+            "y1": 0,
+            "x2": 80,
+            "y2": 80
+          }
+        },
+        {
+          "operation": {
+            "operation_type": "drilling",
+            "position": {
+              "x": 366.5,
+              "y": 200.0,
+              "z": 0,
+              "rotation": 0
+            },
+            "tool": {
+              "tool_id": "T1",
+              "name": "Drill 5mm",
+              "diameter": 5,
+              "depth": 15,
+              "feed": 3000,
+              "rpm": 18000,
+              "tool_type": "drill",
+              "metadata": {}
+            },
+            "depth": 15,
+            "direction": {
+              "axis": "Z-",
+              "normal": {
+                "x": 0,
+                "y": 0,
+                "z": -1
+              },
+              "machine_side": "front"
+            },
+            "metadata": {
+              "source": "facade",
+              "original_hole": {
+                "type": "handle_hole",
+                "diameter": 5,
+                "x": 364.5,
+                "y": 198.0,
+                "z": 0,
+                "direction": {
+                  "axis": "Z-",
+                  "normal": {
+                    "x": 0,
+                    "y": 0,
+                    "z": -1
+                  },
+                  "machine_side": "front"
+                },
+                "operation": {
+                  "operation": "through_drilling",
+                  "tool_type": "drill",
+                  "diameter": 5,
+                  "depth": "through",
+                  "tool": {
+                    "tool_id": "T2",
+                    "type": "drill",
+                    "diameter": 5,
+                    "rpm": 14400,
+                    "feed": 1870,
+                    "chip_load": 0.22,
+                    "material": "DSP",
+                    "machine_profile": "SCM",
+                    "acceleration": 1.2,
+                    "position_tolerance": 0.02
+                  }
+                }
+              }
+            },
+            "sequence": 3
+          },
+          "collision_zone": {
+            "x1": 0,
+            "y1": 0,
+            "x2": 80,
+            "y2": 80
+          }
+        },
+        {
+          "operation": {
+            "operation_type": "drilling",
+            "position": {
+              "x": 534,
+              "y": 39,
+              "z": 0,
+              "rotation": 0
+            },
+            "tool": {
+              "tool_id": "T1",
+              "name": "Drill 5mm",
+              "diameter": 8,
+              "depth": 15,
+              "feed": 3000,
+              "rpm": 18000,
+              "tool_type": "drill",
+              "metadata": {}
+            },
+            "depth": 15,
+            "direction": {
+              "axis": "Z-",
+              "normal": {
+                "x": 0,
+                "y": 0,
+                "z": -1
+              },
+              "machine_side": "front"
+            },
+            "metadata": {
+              "source": "facade",
+              "original_hole": {
+                "type": "front_fixing",
+                "diameter": 8,
+                "x": 532,
+                "y": 37,
+                "z": 0,
+                "direction": {
+                  "axis": "Z-",
+                  "normal": {
+                    "x": 0,
+                    "y": 0,
+                    "z": -1
+                  },
+                  "machine_side": "front"
+                },
+                "operation": {
+                  "operation": "blind_drilling",
+                  "tool_type": "drill",
+                  "diameter": 8,
+                  "depth": 12,
+                  "tool": {
+                    "tool_id": "T3",
+                    "type": "drill",
+                    "diameter": 8,
+                    "rpm": 12600,
+                    "feed": 1530,
+                    "chip_load": 0.22,
+                    "material": "DSP",
+                    "machine_profile": "SCM",
+                    "acceleration": 1.2,
+                    "position_tolerance": 0.02
+                  }
+                }
+              }
+            },
+            "sequence": 4
+          },
+          "collision_zone": {
+            "x1": 0,
+            "y1": 0,
+            "x2": 80,
+            "y2": 80
+          }
+        }
+      ],
+      "simulation": [
+        {
+          "type": "clamp_reposition",
+          "old_zone": {
+            "x1": 0,
+            "y1": 0,
+            "x2": 80,
+            "y2": 80
+          },
+          "new_zone": {
+            "x1": 150,
+            "y1": 0,
+            "x2": 230,
+            "y2": 80
+          }
+        },
+        {
+          "type": "clamp_reposition",
+          "old_zone": {
+            "x1": 0,
+            "y1": 0,
+            "x2": 80,
+            "y2": 80
+          },
+          "new_zone": {
+            "x1": 150,
+            "y1": 0,
+            "x2": 230,
+            "y2": 80
+          }
+        },
+        {
+          "type": "clamp_reposition",
+          "old_zone": {
+            "x1": 0,
+            "y1": 0,
+            "x2": 80,
+            "y2": 80
+          },
+          "new_zone": {
+            "x1": 150,
+            "y1": 0,
+            "x2": 230,
+            "y2": 80
+          }
+        },
+        {
+          "type": "clamp_reposition",
+          "old_zone": {
+            "x1": 0,
+            "y1": 0,
+            "x2": 80,
+            "y2": 80
+          },
+          "new_zone": {
+            "x1": 150,
+            "y1": 0,
+            "x2": 230,
+            "y2": 80
+          }
+        }
+      ],
+      "toolpath": [],
+      "gcode": [
+        "%",
+        "G90",
+        "G21",
+        "G17",
+        "M3 S18000",
+        "M5",
+        "G0 Z50",
+        "M30",
+        "%"
+      ],
+      "global_drilling": [],
+      "edges": {
+        "top": "0.8",
+        "bottom": "0.8",
+        "left": "0.8",
+        "right": "0.8"
+      },
+      "tracking": {
+        "label": {
+          "part_id": "146991dc-54f1-45f6-bf7f-c6922bd727f5",
+          "name": "Шухляда S2-2 фасад",
+          "type": "facade",
+          "width": 569,
+          "height": 396
+        },
+        "barcode": "PART-146991dc",
+        "qr_data": {
+          "part_id": "146991dc-54f1-45f6-bf7f-c6922bd727f5",
+          "name": "Шухляда S2-2 фасад",
+          "type": "facade"
+        },
+        "stage": "queue"
+      },
+      "rotation": 90,
+      "rotated": true,
+      "optimized": true,
+      "sheet_position": {
+        "x": 0,
+        "y": 547
+      },
+      "sheet_id": 4
+    },
+    {
+      "id": "e61fece1-7ae2-4b6f-a71d-3d23b3423b8b",
+      "name": "S2-2 зад",
+      "width": 351,
+      "height": 547,
+      "thickness": 18,
+      "qty": 1,
+      "material": "dsp_18",
+      "grain_direction": "vertical",
+      "allow_rotate": true,
+      "rotated": true,
+      "x": 0,
+      "y": 0,
+      "z": 0,
+      "metadata": {},
+      "tracking": {
+        "label": {
+          "part_id": "694089ad-aed6-4ff0-9ece-a10ac9e17535",
+          "name": "S2-2 зад",
+          "type": "part",
+          "width": 547,
+          "height": 351
+        },
+        "barcode": "PART-694089ad",
+        "qr_data": {
+          "part_id": "694089ad-aed6-4ff0-9ece-a10ac9e17535",
+          "name": "S2-2 зад",
+          "type": "part"
+        },
+        "stage": "queue"
+      },
+      "rotation": 90,
+      "optimized": true,
+      "sheet_position": {
+        "x": 351,
+        "y": 0
+      },
+      "sheet_id": 4
+    },
+    {
+      "id": "817f9e2e-9013-4f70-b89e-f3349ef5c8f5",
+      "name": "S2-2 дно",
+      "width": 462,
+      "height": 511,
+      "thickness": 3,
+      "qty": 1,
+      "material": "hdf_3",
+      "grain_direction": "vertical",
+      "allow_rotate": true,
+      "rotated": true,
+      "x": 0,
+      "y": 0,
+      "z": 0,
+      "metadata": {
+        "bottom_offset": 12
+      },
+      "tracking": {
+        "label": {
+          "part_id": "bf87c78b-ddfa-44e7-a2b1-e39786992b86",
+          "name": "S2-2 дно",
+          "type": "part",
+          "width": 511,
+          "height": 462
+        },
+        "barcode": "PART-bf87c78b",
+        "qr_data": {
+          "part_id": "bf87c78b-ddfa-44e7-a2b1-e39786992b86",
+          "name": "S2-2 дно",
+          "type": "part"
+        },
+        "stage": "queue"
+      },
+      "rotation": 90,
+      "optimized": true,
+      "sheet_position": {
+        "x": 396,
+        "y": 547
+      },
+      "sheet_id": 4
+    }
+  ],
+  "connections": [
+    {
+      "valid": true,
+      "connection_type": "confirmat",
+      "joint_length": 500,
+      "usable_length": 400,
+      "connections_count": 2,
+      "fittings": [
+        {
+          "code": "confirmat_7x50",
+          "qty": 2
+        }
+      ],
+      "drilling": [
+        {
+          "type": "through",
+          "diameter": 5,
+          "qty": 2
+        },
+        {
+          "type": "end",
+          "diameter": 7,
+          "qty": 2
+        }
+      ],
+      "positions": [
+        50.0,
+        450.0
+      ]
+    },
+    {
+      "valid": true,
+      "connection_type": "confirmat",
+      "joint_length": 500,
+      "usable_length": 400,
+      "connections_count": 2,
+      "fittings": [
+        {
+          "code": "confirmat_7x50",
+          "qty": 2
+        }
+      ],
+      "drilling": [
+        {
+          "type": "through",
+          "diameter": 5,
+          "qty": 2
+        },
+        {
+          "type": "end",
+          "diameter": 7,
+          "qty": 2
+        }
+      ],
+      "positions": [
+        50.0,
+        450.0
+      ]
+    },
+    {
+      "valid": true,
+      "connection_type": "confirmat",
+      "joint_length": 500,
+      "usable_length": 400,
+      "connections_count": 2,
+      "fittings": [
+        {
+          "code": "confirmat_7x50",
+          "qty": 2
+        }
+      ],
+      "drilling": [
+        {
+          "type": "through",
+          "diameter": 5,
+          "qty": 2
+        },
+        {
+          "type": "end",
+          "diameter": 7,
+          "qty": 2
+        }
+      ],
+      "positions": [
+        50.0,
+        450.0
+      ]
+    },
+    {
+      "valid": true,
+      "connection_type": "confirmat",
+      "joint_length": 500,
+      "usable_length": 400,
+      "connections_count": 2,
+      "fittings": [
+        {
+          "code": "confirmat_7x50",
+          "qty": 2
+        }
+      ],
+      "drilling": [
+        {
+          "type": "through",
+          "diameter": 5,
+          "qty": 2
+        },
+        {
+          "type": "end",
+          "diameter": 7,
+          "qty": 2
+        }
+      ],
+      "positions": [
+        50.0,
+        450.0
+      ]
+    }
+  ]
+}
