@@ -1,7 +1,11 @@
 from fastapi import (
-    Header,
+    Depends,
     HTTPException,
     status
+)
+from fastapi.security import (
+    HTTPAuthorizationCredentials,
+    HTTPBearer
 )
 
 from services.auth_service import (
@@ -10,29 +14,12 @@ from services.auth_service import (
 
 
 # =====================================================
-# BEARER TOKEN
+# HTTP BEARER SECURITY
 # =====================================================
 
-def _extract_bearer_token(
-
-    authorization: str | None
-) -> str | None:
-
-    if not authorization:
-
-        return None
-
-    token_type, _, token = authorization.partition(" ")
-
-    if token_type.lower() != "bearer":
-
-        return None
-
-    if not token:
-
-        return None
-
-    return token
+bearer_scheme = HTTPBearer(
+    auto_error=False
+)
 
 
 # =====================================================
@@ -41,14 +28,12 @@ def _extract_bearer_token(
 
 def require_current_user(
 
-    authorization: str | None = Header(default=None)
+    credentials: HTTPAuthorizationCredentials | None = Depends(
+        bearer_scheme
+    )
 ):
 
-    token = _extract_bearer_token(
-        authorization
-    )
-
-    if not token:
+    if not credentials:
 
         raise HTTPException(
 
@@ -61,6 +46,8 @@ def require_current_user(
                 "error": "Missing bearer token"
             }
         )
+
+    token = credentials.credentials
 
     user = get_user_from_token(
         token
