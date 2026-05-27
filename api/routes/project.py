@@ -5,7 +5,7 @@ from fastapi import (
 )
 
 from api.dependencies.auth import (
-    require_current_user
+    require_roles
 )
 
 from schemas.project_input import (
@@ -41,6 +41,20 @@ from database.repositories.project_version_repository import (
     get_project_versions
 )
 router = APIRouter()
+
+require_project_reader = require_roles(
+    [
+        "admin",
+        "manager",
+        "viewer"
+    ]
+)
+
+require_project_admin = require_roles(
+    [
+        "admin"
+    ]
+)
 
 
 def _serialize_project(
@@ -118,7 +132,7 @@ async def list_projects_route(
         ge=0
     ),
 
-    current_user = Depends(require_current_user)
+    current_user = Depends(require_project_reader)
 ):
 
     projects = list_projects(
@@ -189,7 +203,9 @@ async def generate_project_route(
 )
 async def get_project_route(
 
-    project_id: str
+    project_id: str,
+
+    current_user = Depends(require_project_reader)
 ):
 
     project = get_project(
@@ -229,7 +245,7 @@ async def update_project_route(
 
     project: ProjectInputSchema,
 
-    current_user = Depends(require_current_user)
+    current_user = Depends(require_project_admin)
 ):
 
     updated = update_project(
@@ -277,7 +293,9 @@ async def update_project_route(
 )
 async def get_project_history_route(
 
-    project_id: str
+    project_id: str,
+
+    current_user = Depends(require_project_reader)
 ):
 
     project = get_project(
@@ -329,7 +347,7 @@ async def rollback_project_route(
 
     version_id: str,
 
-    current_user = Depends(require_current_user)
+    current_user = Depends(require_project_admin)
 ):
 
     project = rollback_project(
@@ -371,7 +389,7 @@ async def delete_project_route(
 
     project_id: str,
 
-    current_user = Depends(require_current_user)
+    current_user = Depends(require_project_admin)
 ):
 
     deleted = delete_project(

@@ -68,3 +68,36 @@ def require_current_user(
         )
 
     return user
+
+
+# =====================================================
+# ROLE DEPENDENCY
+# =====================================================
+
+def require_roles(
+
+    allowed_roles: list[str]
+):
+
+    def dependency(
+
+        current_user = Depends(require_current_user)
+    ):
+
+        if current_user.role not in allowed_roles:
+
+            raise HTTPException(
+
+                status_code=status.HTTP_403_FORBIDDEN,
+
+                detail={
+
+                    "success": False,
+
+                    "error": "Insufficient permissions"
+                }
+            )
+
+        return current_user
+
+    return dependency
