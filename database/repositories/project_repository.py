@@ -124,6 +124,64 @@ def get_project(
 
 
 # =====================================================
+# LIST PROJECTS
+# =====================================================
+
+def list_projects(
+
+    limit: int = 50,
+
+    offset: int = 0
+):
+
+    db = SessionLocal()
+
+    try:
+
+        return (
+
+            db.query(ProjectModel)
+
+            .order_by(
+
+                ProjectModel.id.asc()
+            )
+
+            .offset(offset)
+
+            .limit(limit)
+
+            .all()
+        )
+
+    finally:
+
+        db.close()
+
+
+# =====================================================
+# COUNT PROJECTS
+# =====================================================
+
+def count_projects() -> int:
+
+    db = SessionLocal()
+
+    try:
+
+        return (
+
+            db.query(ProjectModel)
+
+            .count()
+        )
+
+    finally:
+
+        db.close()
+
+
+# =====================================================
 # UPDATE PROJECT
 # =====================================================
 

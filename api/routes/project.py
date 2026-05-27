@@ -1,6 +1,7 @@
 from fastapi import (
     APIRouter,
-    Depends
+    Depends,
+    Query
 )
 
 from api.dependencies.auth import (
@@ -16,9 +17,13 @@ from services.project_generation_service import (
 )
 from database.repositories.project_repository import (
 
+    count_projects,
+
     delete_project,
 
     get_project,
+
+    list_projects,
 
     rollback_project,
 
@@ -29,6 +34,75 @@ from database.repositories.project_version_repository import (
     get_project_versions
 )
 router = APIRouter()
+
+
+# =====================================================
+# LIST PROJECTS
+# =====================================================
+
+@router.get(
+    ""
+)
+async def list_projects_route(
+
+    limit: int = Query(
+
+        default=50,
+
+        ge=1,
+
+        le=100
+    ),
+
+    offset: int = Query(
+
+        default=0,
+
+        ge=0
+    ),
+
+    current_user = Depends(require_current_user)
+):
+
+    projects = list_projects(
+
+        limit=limit,
+
+        offset=offset
+    )
+
+    total = count_projects()
+
+    return {
+
+        "success": True,
+
+        "total": total,
+
+        "limit": limit,
+
+        "offset": offset,
+
+        "projects": [
+
+            {
+
+                "id": project.id,
+
+                "width": project.width,
+
+                "height": project.height,
+
+                "depth": project.depth,
+
+                "sections": project.sections,
+
+                "drawers": project.drawers
+            }
+
+            for project in projects
+        ]
+    }
 
 
 # =====================================================
