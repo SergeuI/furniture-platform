@@ -14,7 +14,10 @@ from core.project_builder.project_builder import (
     build_project
 )
 
+from database.repositories.project_repository import (
 
+    create_project
+)
 # =====================================================
 # GENERATION RESULT
 # =====================================================
@@ -143,6 +146,19 @@ async def generate_project(
 
         drawers_config=project.drawers.config
     )
+
+    saved_project = create_project(
+
+        width=project.dimensions.width,
+
+        height=project.dimensions.height,
+
+        depth=project.dimensions.depth,
+
+        sections=project.sections.count,
+
+        drawers=project.drawers.config
+    )
     # =================================================
     # RESULT
     # =================================================
@@ -151,5 +167,10 @@ async def generate_project(
 
         success=True,
 
-        result=result
+        result={
+
+            "project_id": saved_project.id,
+
+            "result": result
+        }
     )
