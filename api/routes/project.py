@@ -43,6 +43,54 @@ from database.repositories.project_version_repository import (
 router = APIRouter()
 
 
+def _serialize_project(
+
+    project
+) -> dict:
+
+    return {
+
+        "id": project.id,
+
+        "width": project.width,
+
+        "height": project.height,
+
+        "depth": project.depth,
+
+        "sections": project.sections,
+
+        "drawers": project.drawers,
+
+        "created_at": project.created_at,
+
+        "updated_at": project.updated_at
+    }
+
+
+def _serialize_project_version(
+
+    version
+) -> dict:
+
+    return {
+
+        "id": version.id,
+
+        "width": version.width,
+
+        "height": version.height,
+
+        "depth": version.depth,
+
+        "sections": version.sections,
+
+        "drawers": version.drawers,
+
+        "created_at": version.created_at
+    }
+
+
 # =====================================================
 # LIST PROJECTS
 # =====================================================
@@ -94,20 +142,9 @@ async def list_projects_route(
 
         "projects": [
 
-            {
-
-                "id": project.id,
-
-                "width": project.width,
-
-                "height": project.height,
-
-                "depth": project.depth,
-
-                "sections": project.sections,
-
-                "drawers": project.drawers
-            }
+            _serialize_project(
+                project
+            )
 
             for project in projects
         ]
@@ -172,20 +209,9 @@ async def get_project_route(
 
         "success": True,
 
-        "project": {
-
-            "id": project.id,
-
-            "width": project.width,
-
-            "height": project.height,
-
-            "depth": project.depth,
-
-            "sections": project.sections,
-
-            "drawers": project.drawers
-        }
+        "project": _serialize_project(
+            project
+        )
     }
 
 # =====================================================
@@ -234,20 +260,9 @@ async def update_project_route(
 
         "success": True,
 
-        "project": {
-
-            "id": updated.id,
-
-            "width": updated.width,
-
-            "height": updated.height,
-
-            "depth": updated.depth,
-
-            "sections": updated.sections,
-
-            "drawers": updated.drawers
-        }
+        "project": _serialize_project(
+            updated
+        )
     }
 
 
@@ -290,20 +305,9 @@ async def get_project_history_route(
 
         "versions": [
 
-            {
-
-                "id": version.id,
-
-                "width": version.width,
-
-                "height": version.height,
-
-                "depth": version.depth,
-
-                "sections": version.sections,
-
-                "drawers": version.drawers
-            }
+            _serialize_project_version(
+                version
+            )
 
             for version in versions
         ]
@@ -348,20 +352,9 @@ async def rollback_project_route(
 
         "success": True,
 
-        "project": {
-
-            "id": project.id,
-
-            "width": project.width,
-
-            "height": project.height,
-
-            "depth": project.depth,
-
-            "sections": project.sections,
-
-            "drawers": project.drawers
-        }
+        "project": _serialize_project(
+            project
+        )
     }
 
 

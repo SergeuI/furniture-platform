@@ -231,6 +231,14 @@ tbody tr.selected {
   overflow-wrap: anywhere;
 }
 
+.meta-grid {
+  color: #5c6875;
+  display: grid;
+  font-size: 12px;
+  gap: 4px;
+  margin-top: 10px;
+}
+
 .edit-grid {
   display: grid;
   gap: 12px;

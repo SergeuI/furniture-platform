@@ -82,6 +82,8 @@ def get_project_versions(
 
             .order_by(
 
+                ProjectVersionModel.created_at.desc(),
+
                 ProjectVersionModel.id.asc()
             )
 

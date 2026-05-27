@@ -144,6 +144,8 @@ def list_projects(
 
             .order_by(
 
+                ProjectModel.updated_at.desc(),
+
                 ProjectModel.id.asc()
             )
 

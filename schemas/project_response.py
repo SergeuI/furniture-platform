@@ -2,6 +2,7 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
+from datetime import datetime
 
 from pydantic import (
     BaseModel,
@@ -27,6 +28,10 @@ class ProjectResponseItemSchema(BaseModel):
 
     drawers: List[int]
 
+    created_at: Optional[datetime] = None
+
+    updated_at: Optional[datetime] = None
+
 
 class ProjectVersionResponseItemSchema(BaseModel):
 
@@ -41,6 +46,8 @@ class ProjectVersionResponseItemSchema(BaseModel):
     sections: int
 
     drawers: List[int]
+
+    created_at: Optional[datetime] = None
 
 
 # =====================================================

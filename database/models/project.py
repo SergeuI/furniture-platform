@@ -1,7 +1,9 @@
 import uuid
+from datetime import datetime
 
 from sqlalchemy import (
     Column,
+    DateTime,
     String,
     Integer,
     JSON
@@ -41,4 +43,24 @@ class ProjectModel(Base):
 
     drawers = Column(
         JSON
+    )
+
+    created_at = Column(
+
+        DateTime,
+
+        default=datetime.utcnow,
+
+        nullable=True
+    )
+
+    updated_at = Column(
+
+        DateTime,
+
+        default=datetime.utcnow,
+
+        onupdate=datetime.utcnow,
+
+        nullable=True
     )

@@ -72,6 +72,20 @@ function formatDrawers(drawers) {
   return drawers.join(", ");
 }
 
+function formatDateTime(value) {
+  if (!value) {
+    return "Not set";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "Not set";
+  }
+
+  return date.toLocaleString();
+}
+
 export default function App() {
   const [token, setToken] = useState(
     () => localStorage.getItem(TOKEN_STORAGE_KEY) || "",
@@ -361,6 +375,7 @@ export default function App() {
                   <th>Size</th>
                   <th>Sections</th>
                   <th>Drawers</th>
+                  <th>Updated</th>
                 </tr>
               </thead>
               <tbody>
@@ -376,6 +391,7 @@ export default function App() {
                     </td>
                     <td>{project.sections}</td>
                     <td>{formatDrawers(project.drawers)}</td>
+                    <td>{formatDateTime(project.updated_at)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -389,6 +405,10 @@ export default function App() {
                   <div>
                     <p className="eyebrow">Selected project</p>
                     <h2>{selectedProject.id}</h2>
+                    <div className="meta-grid">
+                      <span>Created: {formatDateTime(selectedProject.created_at)}</span>
+                      <span>Updated: {formatDateTime(selectedProject.updated_at)}</span>
+                    </div>
                   </div>
                   <button
                     className="danger-button"
@@ -483,6 +503,7 @@ export default function App() {
                         <span>
                           {item.width} x {item.height} x {item.depth}
                         </span>
+                        <span>{formatDateTime(item.created_at)}</span>
                       </div>
                       <button
                         className="ghost-button"
