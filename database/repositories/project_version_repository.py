@@ -56,3 +56,72 @@ def create_project_version(
     finally:
 
         db.close()
+
+
+# =====================================================
+# GET PROJECT VERSIONS
+# =====================================================
+
+def get_project_versions(
+
+    project_id: str
+):
+
+    db = SessionLocal()
+
+    try:
+
+        return (
+
+            db.query(ProjectVersionModel)
+
+            .filter(
+
+                ProjectVersionModel.project_id == project_id
+            )
+
+            .order_by(
+
+                ProjectVersionModel.id.asc()
+            )
+
+            .all()
+        )
+
+    finally:
+
+        db.close()
+
+
+# =====================================================
+# GET PROJECT VERSION
+# =====================================================
+
+def get_project_version(
+
+    project_id: str,
+
+    version_id: str
+):
+
+    db = SessionLocal()
+
+    try:
+
+        return (
+
+            db.query(ProjectVersionModel)
+
+            .filter(
+
+                ProjectVersionModel.project_id == project_id,
+
+                ProjectVersionModel.id == version_id
+            )
+
+            .first()
+        )
+
+    finally:
+
+        db.close()
