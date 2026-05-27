@@ -112,7 +112,9 @@ async def update_project_route(
 
     project_id: str,
 
-    project: ProjectInputSchema
+    project: ProjectInputSchema,
+
+    current_user = Depends(require_current_user)
 ):
 
     updated = update_project(
