@@ -7,6 +7,7 @@ import {
   RotateCcw,
   Save,
   Search,
+  X,
   Trash2,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -101,6 +102,7 @@ export default function App() {
   const [form, setForm] = useState(projectToForm(null));
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
+  const [confirmAction, setConfirmAction] = useState(null);
 
   const canGoBack = offset > 0;
   const canGoForward = offset + PAGE_SIZE < total;
@@ -216,6 +218,49 @@ export default function App() {
     await loadProjects(token, offset);
   }
 
+  function openRollbackConfirm(version) {
+    setConfirmAction({
+      type: "rollback",
+      title: "Rollback project",
+      message: `Rollback project ${selectedProjectId} to ${version.width} x ${version.height} x ${version.depth}?`,
+      confirmLabel: "Rollback",
+      targetId: version.id,
+    });
+  }
+
+  function openDeleteConfirm() {
+    if (!selectedProjectId) {
+      return;
+    }
+
+    setConfirmAction({
+      type: "delete",
+      title: "Delete project",
+      message: `Delete project ${selectedProjectId}?`,
+      confirmLabel: "Delete",
+      targetId: selectedProjectId,
+    });
+  }
+
+  function closeConfirm() {
+    setConfirmAction(null);
+  }
+
+  async function confirmSelectedAction() {
+    if (!confirmAction) {
+      return;
+    }
+
+    if (confirmAction.type === "rollback") {
+      await handleRollback(confirmAction.targetId);
+      return;
+    }
+
+    if (confirmAction.type === "delete") {
+      await handleDelete();
+    }
+  }
+
   async function handleRollback(versionId) {
     if (!selectedProjectId) {
       return;
@@ -231,6 +276,7 @@ export default function App() {
     }
 
     setStatus("Project rolled back");
+    closeConfirm();
     await loadProject(selectedProjectId);
     await loadProjects(token, offset);
   }
@@ -250,6 +296,7 @@ export default function App() {
     }
 
     setStatus("Project deleted");
+    closeConfirm();
     setSelectedProject(null);
     setHistoryItems([]);
     await loadProjects(token, offset);
@@ -413,7 +460,7 @@ export default function App() {
                   <button
                     className="danger-button"
                     disabled={loading}
-                    onClick={handleDelete}
+                    onClick={openDeleteConfirm}
                     type="button"
                   >
                     <Trash2 size={18} />
@@ -508,7 +555,7 @@ export default function App() {
                       <button
                         className="ghost-button"
                         disabled={loading}
-                        onClick={() => handleRollback(item.id)}
+                        onClick={() => openRollbackConfirm(item)}
                         type="button"
                       >
                         <RotateCcw size={16} />
@@ -527,6 +574,52 @@ export default function App() {
           </section>
         </div>
       </section>
+
+      {confirmAction ? (
+        <div
+          aria-modal="true"
+          className="modal-backdrop"
+          role="dialog"
+        >
+          <section className="confirm-modal">
+            <header className="confirm-header">
+              <h2>{confirmAction.title}</h2>
+              <button
+                aria-label="Close confirmation"
+                className="icon-button"
+                disabled={loading}
+                onClick={closeConfirm}
+                type="button"
+              >
+                <X size={18} />
+              </button>
+            </header>
+            <p>{confirmAction.message}</p>
+            <div className="confirm-actions">
+              <button
+                className="ghost-button"
+                disabled={loading}
+                onClick={closeConfirm}
+                type="button"
+              >
+                Cancel
+              </button>
+              <button
+                className={
+                  confirmAction.type === "delete"
+                    ? "danger-button"
+                    : "primary-button"
+                }
+                disabled={loading}
+                onClick={confirmSelectedAction}
+                type="button"
+              >
+                {confirmAction.confirmLabel}
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </main>
   );
 }

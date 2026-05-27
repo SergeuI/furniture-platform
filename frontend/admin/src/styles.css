@@ -348,6 +348,52 @@ tbody tr.selected {
   color: #9f1d13;
 }
 
+.modal-backdrop {
+  align-items: center;
+  background: rgba(18, 31, 38, 0.54);
+  display: grid;
+  inset: 0;
+  justify-items: center;
+  padding: 24px;
+  position: fixed;
+  z-index: 20;
+}
+
+.confirm-modal {
+  background: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 24px 70px rgba(18, 31, 38, 0.28);
+  display: grid;
+  gap: 18px;
+  max-width: 460px;
+  padding: 20px;
+  width: min(100%, 460px);
+}
+
+.confirm-header {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.confirm-header h2 {
+  font-size: 18px;
+  margin: 0;
+}
+
+.confirm-modal p {
+  color: #4a5563;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
 @media (max-width: 980px) {
   .app-shell,
   .content-grid {
@@ -378,6 +424,10 @@ tbody tr.selected {
 
   .toolbar-actions {
     justify-content: flex-start;
+  }
+
+  .confirm-actions {
+    flex-direction: column-reverse;
   }
 
   .edit-grid {
