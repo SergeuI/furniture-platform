@@ -17,10 +17,13 @@ import {
   getCurrentUser,
   getProject,
   getProjectHistory,
+  listUsers,
   listProjects,
   login,
   rollbackProject,
   updateProject,
+  updateUserActive,
+  updateUserRole,
 } from "./api";
 
 const TOKEN_STORAGE_KEY = "furniture_admin_token";
@@ -95,17 +98,23 @@ export default function App() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [projects, setProjects] = useState([]);
+  const [users, setUsers] = useState([]);
   const [total, setTotal] = useState(0);
+  const [usersTotal, setUsersTotal] = useState(0);
   const [offset, setOffset] = useState(0);
+  const [usersOffset, setUsersOffset] = useState(0);
   const [selectedProject, setSelectedProject] = useState(null);
   const [historyItems, setHistoryItems] = useState([]);
   const [form, setForm] = useState(projectToForm(null));
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
   const [confirmAction, setConfirmAction] = useState(null);
+  const [activeView, setActiveView] = useState("projects");
 
   const canGoBack = offset > 0;
   const canGoForward = offset + PAGE_SIZE < total;
+  const canUsersGoBack = usersOffset > 0;
+  const canUsersGoForward = usersOffset + PAGE_SIZE < usersTotal;
 
   const selectedProjectId = selectedProject?.id || "";
 
@@ -116,6 +125,17 @@ export default function App() {
 
     return `${offset + 1}-${Math.min(offset + PAGE_SIZE, total)} of ${total}`;
   }, [offset, total]);
+
+  const usersPageLabel = useMemo(() => {
+    if (usersTotal === 0) {
+      return "0 of 0";
+    }
+
+    return `${usersOffset + 1}-${Math.min(
+      usersOffset + PAGE_SIZE,
+      usersTotal,
+    )} of ${usersTotal}`;
+  }, [usersOffset, usersTotal]);
 
   async function loadUser(activeToken) {
     const result = await getCurrentUser(activeToken);
@@ -149,10 +169,29 @@ export default function App() {
     setOffset(result.offset);
   }
 
+  async function loadUsers(activeToken = token, nextOffset = usersOffset) {
+    if (!activeToken || user?.role !== "admin") {
+      return;
+    }
+
+    setLoading(true);
+    const result = await listUsers(activeToken, PAGE_SIZE, nextOffset);
+    setLoading(false);
+
+    if (!result.success) {
+      setStatus(result.error || "Unable to load users");
+      return;
+    }
+
+    setUsers(result.users);
+    setUsersTotal(result.total);
+    setUsersOffset(result.offset);
+  }
+
   async function loadProject(projectId) {
     const [projectResult, historyResult] = await Promise.all([
-      getProject(projectId),
-      getProjectHistory(projectId),
+      getProject(token, projectId),
+      getProjectHistory(token, projectId),
     ]);
 
     if (!projectResult.success) {
@@ -188,9 +227,52 @@ export default function App() {
     setToken("");
     setUser(null);
     setProjects([]);
+    setUsers([]);
     setSelectedProject(null);
     setHistoryItems([]);
     setStatus("");
+  }
+
+  async function switchView(view) {
+    setActiveView(view);
+    setStatus("");
+
+    if (view === "projects") {
+      await loadProjects(token, offset);
+      return;
+    }
+
+    if (view === "users") {
+      await loadUsers(token, usersOffset);
+    }
+  }
+
+  async function handleUserRoleChange(targetUser, role) {
+    setLoading(true);
+    const result = await updateUserRole(token, targetUser.id, role);
+    setLoading(false);
+
+    if (!result.success) {
+      setStatus(result.error || "Unable to update user role");
+      return;
+    }
+
+    setStatus("User role updated");
+    await loadUsers(token, usersOffset);
+  }
+
+  async function handleUserActiveChange(targetUser, isActive) {
+    setLoading(true);
+    const result = await updateUserActive(token, targetUser.id, isActive);
+    setLoading(false);
+
+    if (!result.success) {
+      setStatus(result.error || "Unable to update user access");
+      return;
+    }
+
+    setStatus("User access updated");
+    await loadUsers(token, usersOffset);
   }
 
   async function handleUpdate(event) {
@@ -311,6 +393,14 @@ export default function App() {
     loadProjects(token, 0);
   }, [token]);
 
+  useEffect(() => {
+    if (!token || user?.role !== "admin" || activeView !== "users") {
+      return;
+    }
+
+    loadUsers(token, 0);
+  }, [token, user, activeView]);
+
   if (!token || !user) {
     return (
       <main className="auth-screen">
@@ -367,6 +457,25 @@ export default function App() {
           <strong>{user.role}</strong>
         </div>
 
+        <nav className="nav-tabs" aria-label="Admin sections">
+          <button
+            className={activeView === "projects" ? "active" : ""}
+            onClick={() => switchView("projects")}
+            type="button"
+          >
+            Projects
+          </button>
+          {user.role === "admin" ? (
+            <button
+              className={activeView === "users" ? "active" : ""}
+              onClick={() => switchView("users")}
+              type="button"
+            >
+              Users
+            </button>
+          ) : null}
+        </nav>
+
         <button className="ghost-button" onClick={handleLogout} type="button">
           <LogOut size={18} />
           Logout
@@ -376,44 +485,83 @@ export default function App() {
       <section className="workspace">
         <header className="toolbar">
           <div>
-            <h2>Projects</h2>
-            <p>{pageLabel}</p>
+            <h2>{activeView === "projects" ? "Projects" : "Users"}</h2>
+            <p>{activeView === "projects" ? pageLabel : usersPageLabel}</p>
           </div>
 
           <div className="toolbar-actions">
-            <button
-              aria-label="Previous page"
-              className="icon-button"
-              disabled={!canGoBack || loading}
-              onClick={() => loadProjects(token, Math.max(0, offset - PAGE_SIZE))}
-              type="button"
-            >
-              <ChevronLeft size={18} />
-            </button>
-            <button
-              aria-label="Next page"
-              className="icon-button"
-              disabled={!canGoForward || loading}
-              onClick={() => loadProjects(token, offset + PAGE_SIZE)}
-              type="button"
-            >
-              <ChevronRight size={18} />
-            </button>
-            <button
-              aria-label="Refresh projects"
-              className="icon-button"
-              disabled={loading}
-              onClick={() => loadProjects(token, offset)}
-              type="button"
-            >
-              <RefreshCw size={18} />
-            </button>
+            {activeView === "projects" ? (
+              <>
+                <button
+                  aria-label="Previous page"
+                  className="icon-button"
+                  disabled={!canGoBack || loading}
+                  onClick={() =>
+                    loadProjects(token, Math.max(0, offset - PAGE_SIZE))
+                  }
+                  type="button"
+                >
+                  <ChevronLeft size={18} />
+                </button>
+                <button
+                  aria-label="Next page"
+                  className="icon-button"
+                  disabled={!canGoForward || loading}
+                  onClick={() => loadProjects(token, offset + PAGE_SIZE)}
+                  type="button"
+                >
+                  <ChevronRight size={18} />
+                </button>
+                <button
+                  aria-label="Refresh projects"
+                  className="icon-button"
+                  disabled={loading}
+                  onClick={() => loadProjects(token, offset)}
+                  type="button"
+                >
+                  <RefreshCw size={18} />
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  aria-label="Previous users page"
+                  className="icon-button"
+                  disabled={!canUsersGoBack || loading}
+                  onClick={() =>
+                    loadUsers(token, Math.max(0, usersOffset - PAGE_SIZE))
+                  }
+                  type="button"
+                >
+                  <ChevronLeft size={18} />
+                </button>
+                <button
+                  aria-label="Next users page"
+                  className="icon-button"
+                  disabled={!canUsersGoForward || loading}
+                  onClick={() => loadUsers(token, usersOffset + PAGE_SIZE)}
+                  type="button"
+                >
+                  <ChevronRight size={18} />
+                </button>
+                <button
+                  aria-label="Refresh users"
+                  className="icon-button"
+                  disabled={loading}
+                  onClick={() => loadUsers(token, usersOffset)}
+                  type="button"
+                >
+                  <RefreshCw size={18} />
+                </button>
+              </>
+            )}
           </div>
         </header>
 
         {status ? <p className="status">{status}</p> : null}
 
-        <div className="content-grid">
+        {activeView === "projects" ? (
+          <div className="content-grid">
           <section className="table-panel">
             <table>
               <thead>
@@ -573,6 +721,57 @@ export default function App() {
             )}
           </section>
         </div>
+        ) : (
+          <section className="table-panel full-panel">
+            <table>
+              <thead>
+                <tr>
+                  <th>Email</th>
+                  <th>Role</th>
+                  <th>Status</th>
+                  <th>Access</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.map((targetUser) => (
+                  <tr key={targetUser.id}>
+                    <td>{targetUser.email}</td>
+                    <td>
+                      <select
+                        disabled={loading || targetUser.id === user.id}
+                        onChange={(event) =>
+                          handleUserRoleChange(targetUser, event.target.value)
+                        }
+                        value={targetUser.role}
+                      >
+                        <option value="admin">admin</option>
+                        <option value="manager">manager</option>
+                        <option value="viewer">viewer</option>
+                      </select>
+                    </td>
+                    <td>{targetUser.is_active ? "Active" : "Inactive"}</td>
+                    <td>
+                      <label className="toggle-label">
+                        <input
+                          checked={targetUser.is_active}
+                          disabled={loading || targetUser.id === user.id}
+                          onChange={(event) =>
+                            handleUserActiveChange(
+                              targetUser,
+                              event.target.checked,
+                            )
+                          }
+                          type="checkbox"
+                        />
+                        Enabled
+                      </label>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+        )}
       </section>
 
       {confirmAction ? (

@@ -54,12 +54,16 @@ export async function listProjects(token, limit, offset) {
   });
 }
 
-export async function getProject(projectId) {
-  return request(`/project/${projectId}`);
+export async function getProject(token, projectId) {
+  return request(`/project/${projectId}`, {
+    headers: authHeaders(token),
+  });
 }
 
-export async function getProjectHistory(projectId) {
-  return request(`/project/${projectId}/history`);
+export async function getProjectHistory(token, projectId) {
+  return request(`/project/${projectId}/history`, {
+    headers: authHeaders(token),
+  });
 }
 
 export async function updateProject(token, projectId, project) {
@@ -81,5 +85,31 @@ export async function deleteProject(token, projectId) {
   return request(`/project/${projectId}`, {
     method: "DELETE",
     headers: authHeaders(token),
+  });
+}
+
+export async function listUsers(token, limit, offset) {
+  return request(`/auth/users?limit=${limit}&offset=${offset}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function updateUserRole(token, userId, role) {
+  return request(`/auth/users/${userId}/role`, {
+    method: "PUT",
+    headers: authHeaders(token),
+    body: JSON.stringify({
+      role,
+    }),
+  });
+}
+
+export async function updateUserActive(token, userId, isActive) {
+  return request(`/auth/users/${userId}/active`, {
+    method: "PUT",
+    headers: authHeaders(token),
+    body: JSON.stringify({
+      is_active: isActive,
+    }),
   });
 }

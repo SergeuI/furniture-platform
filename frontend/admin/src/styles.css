@@ -19,7 +19,8 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -48,6 +49,16 @@ input {
   min-height: 40px;
   padding: 8px 10px;
   width: 100%;
+}
+
+select {
+  background: #ffffff;
+  border: 1px solid #c7d0d9;
+  border-radius: 6px;
+  color: #1f2933;
+  min-height: 36px;
+  padding: 7px 10px;
+  width: 160px;
 }
 
 label {
@@ -170,6 +181,24 @@ tbody tr.selected {
   text-transform: uppercase;
 }
 
+.nav-tabs {
+  display: grid;
+  gap: 8px;
+}
+
+.nav-tabs button {
+  background: transparent;
+  color: #d8e5e8;
+  justify-content: flex-start;
+  padding: 0 12px;
+}
+
+.nav-tabs button.active,
+.nav-tabs button:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
 .workspace {
   display: grid;
   gap: 16px;
@@ -209,6 +238,10 @@ tbody tr.selected {
   border-radius: 8px;
   min-width: 0;
   overflow: auto;
+}
+
+.full-panel {
+  min-height: 0;
 }
 
 .detail-panel {
@@ -346,6 +379,20 @@ tbody tr.selected {
   background: #fff0ed;
   border-color: #f0b4aa;
   color: #9f1d13;
+}
+
+.toggle-label {
+  align-items: center;
+  color: #24343d;
+  display: inline-flex;
+  font-size: 13px;
+  gap: 8px;
+}
+
+.toggle-label input {
+  height: 18px;
+  min-height: 18px;
+  width: 18px;
 }
 
 .modal-backdrop {
