@@ -8,6 +8,9 @@ from database.models.project import (
 from database.models.project_version import (
     ProjectVersionModel
 )
+from database.models.user import (
+    UserModel
+)
 Base.metadata.create_all(
     bind=engine
 )
