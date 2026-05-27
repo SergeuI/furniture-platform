@@ -51,7 +51,9 @@ def create_project(
 
     sections: int,
 
-    drawers: list
+    drawers: list,
+
+    created_by_user_id: str | None = None
 ):
 
     db = SessionLocal()
@@ -68,7 +70,11 @@ def create_project(
 
             sections=sections,
 
-            drawers=drawers
+            drawers=drawers,
+
+            created_by_user_id=created_by_user_id,
+
+            updated_by_user_id=created_by_user_id
         )
 
         db.add(project)
@@ -199,7 +205,9 @@ def update_project(
 
     sections: int,
 
-    drawers: list
+    drawers: list,
+
+    updated_by_user_id: str | None = None
 ):
 
     db = SessionLocal()
@@ -239,6 +247,10 @@ def update_project(
 
         project.drawers = drawers
 
+        if updated_by_user_id is not None:
+
+            project.updated_by_user_id = updated_by_user_id
+
         db.commit()
 
         db.refresh(project)
@@ -258,7 +270,9 @@ def rollback_project(
 
     project_id: str,
 
-    version_id: str
+    version_id: str,
+
+    updated_by_user_id: str | None = None
 ):
 
     db = SessionLocal()
@@ -315,6 +329,10 @@ def rollback_project(
         project.sections = version.sections
 
         project.drawers = version.drawers
+
+        if updated_by_user_id is not None:
+
+            project.updated_by_user_id = updated_by_user_id
 
         db.commit()
 

@@ -71,6 +71,28 @@ def require_current_user(
 
 
 # =====================================================
+# OPTIONAL CURRENT USER DEPENDENCY
+# =====================================================
+
+def optional_current_user(
+
+    credentials: HTTPAuthorizationCredentials | None = Depends(
+        bearer_scheme
+    )
+):
+
+    if not credentials:
+
+        return None
+
+    token = credentials.credentials
+
+    return get_user_from_token(
+        token
+    )
+
+
+# =====================================================
 # ROLE DEPENDENCY
 # =====================================================
 

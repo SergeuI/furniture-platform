@@ -45,6 +45,20 @@ class ProjectModel(Base):
         JSON
     )
 
+    created_by_user_id = Column(
+
+        String,
+
+        nullable=True
+    )
+
+    updated_by_user_id = Column(
+
+        String,
+
+        nullable=True
+    )
+
     created_at = Column(
 
         DateTime,

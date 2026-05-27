@@ -102,6 +102,14 @@ function formatAuditDetails(details) {
   return JSON.stringify(details);
 }
 
+function formatUserId(value) {
+  if (!value) {
+    return "Not set";
+  }
+
+  return value;
+}
+
 export default function App() {
   const [token, setToken] = useState(
     () => localStorage.getItem(TOKEN_STORAGE_KEY) || "",
@@ -858,6 +866,12 @@ export default function App() {
                     <div className="meta-grid">
                       <span>Created: {formatDateTime(selectedProject.created_at)}</span>
                       <span>Updated: {formatDateTime(selectedProject.updated_at)}</span>
+                      <span>
+                        Created by: {formatUserId(selectedProject.created_by_user_id)}
+                      </span>
+                      <span>
+                        Updated by: {formatUserId(selectedProject.updated_by_user_id)}
+                      </span>
                     </div>
                   </div>
                   <button

@@ -70,6 +70,28 @@ def upgrade_sqlite_schema():
 
             "projects",
 
+            "created_by_user_id",
+
+            "VARCHAR"
+        )
+
+        _add_column_if_missing(
+
+            connection,
+
+            "projects",
+
+            "updated_by_user_id",
+
+            "VARCHAR"
+        )
+
+        _add_column_if_missing(
+
+            connection,
+
+            "projects",
+
             "created_at",
 
             "DATETIME"

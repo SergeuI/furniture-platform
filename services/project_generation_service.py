@@ -48,7 +48,9 @@ class GenerationResult:
 
 async def generate_project(
 
-    project: ProjectInputSchema
+    project: ProjectInputSchema,
+
+    created_by_user_id: str | None = None
 
 ) -> GenerationResult:
 
@@ -157,7 +159,9 @@ async def generate_project(
 
         sections=project.sections.count,
 
-        drawers=project.drawers.config
+        drawers=project.drawers.config,
+
+        created_by_user_id=created_by_user_id
     )
     # =================================================
     # RESULT

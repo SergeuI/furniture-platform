@@ -5,6 +5,7 @@ from fastapi import (
 )
 
 from api.dependencies.auth import (
+    optional_current_user,
     require_roles
 )
 
@@ -79,6 +80,10 @@ def _serialize_project(
         "sections": project.sections,
 
         "drawers": project.drawers,
+
+        "created_by_user_id": project.created_by_user_id,
+
+        "updated_by_user_id": project.updated_by_user_id,
 
         "created_at": project.created_at,
 
@@ -180,11 +185,19 @@ async def list_projects_route(
 )
 async def generate_project_route(
 
-    project: ProjectInputSchema
+    project: ProjectInputSchema,
+
+    current_user = Depends(optional_current_user)
 ):
 
     result = await generate_project(
-        project
+        project,
+
+        created_by_user_id=(
+            current_user.id
+            if current_user
+            else None
+        )
     )
 
     return {
@@ -281,7 +294,9 @@ async def update_project_route(
 
         sections=project.sections.count,
 
-        drawers=project.drawers.config
+        drawers=project.drawers.config,
+
+        updated_by_user_id=current_user.id
     )
 
     if not updated:
@@ -414,7 +429,9 @@ async def rollback_project_route(
 
         project_id=project_id,
 
-        version_id=version_id
+        version_id=version_id,
+
+        updated_by_user_id=current_user.id
     )
 
     if not project:

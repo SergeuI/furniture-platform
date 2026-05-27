@@ -28,6 +28,10 @@ class ProjectResponseItemSchema(BaseModel):
 
     drawers: List[int]
 
+    created_by_user_id: Optional[str] = None
+
+    updated_by_user_id: Optional[str] = None
+
     created_at: Optional[datetime] = None
 
     updated_at: Optional[datetime] = None
