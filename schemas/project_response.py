@@ -1,0 +1,104 @@
+from typing import Any
+from typing import Dict
+from typing import List
+from typing import Optional
+
+from pydantic import (
+    BaseModel,
+    Field
+)
+
+
+# =====================================================
+# PROJECT DATA
+# =====================================================
+
+class ProjectResponseItemSchema(BaseModel):
+
+    id: str
+
+    width: int
+
+    height: int
+
+    depth: int
+
+    sections: int
+
+    drawers: List[int]
+
+
+class ProjectVersionResponseItemSchema(BaseModel):
+
+    id: str
+
+    width: int
+
+    height: int
+
+    depth: int
+
+    sections: int
+
+    drawers: List[int]
+
+
+# =====================================================
+# PROJECT RESPONSES
+# =====================================================
+
+class GenerateProjectResponseSchema(BaseModel):
+
+    success: bool
+
+    errors: List[str] = Field(
+        default_factory=list
+    )
+
+    result: Dict[str, Any] = Field(
+        default_factory=dict
+    )
+
+
+class ProjectDetailResponseSchema(BaseModel):
+
+    success: bool
+
+    project: Optional[ProjectResponseItemSchema] = None
+
+    error: Optional[str] = None
+
+
+class ProjectListResponseSchema(BaseModel):
+
+    success: bool
+
+    total: int
+
+    limit: int
+
+    offset: int
+
+    projects: List[ProjectResponseItemSchema]
+
+
+class ProjectHistoryResponseSchema(BaseModel):
+
+    success: bool
+
+    project_id: Optional[str] = None
+
+    versions: List[ProjectVersionResponseItemSchema] = Field(
+        default_factory=list
+    )
+
+    error: Optional[str] = None
+
+
+class DeleteProjectResponseSchema(BaseModel):
+
+    success: bool
+
+    deleted_project_id: Optional[str] = None
+
+    error: Optional[str] = None

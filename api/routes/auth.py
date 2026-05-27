@@ -4,6 +4,8 @@ from fastapi import (
 )
 
 from schemas.auth import (
+    AuthResponseSchema,
+    CurrentUserResponseSchema,
     LoginUserSchema,
     RegisterUserSchema
 )
@@ -63,7 +65,9 @@ def _extract_bearer_token(
 # =====================================================
 
 @router.post(
-    "/register"
+    "/register",
+
+    response_model=AuthResponseSchema
 )
 async def register_route(
 
@@ -112,7 +116,9 @@ async def register_route(
 # =====================================================
 
 @router.post(
-    "/login"
+    "/login",
+
+    response_model=AuthResponseSchema
 )
 async def login_route(
 
@@ -161,7 +167,9 @@ async def login_route(
 # =====================================================
 
 @router.get(
-    "/me"
+    "/me",
+
+    response_model=CurrentUserResponseSchema
 )
 async def me_route(
 

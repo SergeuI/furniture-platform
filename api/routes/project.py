@@ -11,6 +11,13 @@ from api.dependencies.auth import (
 from schemas.project_input import (
     ProjectInputSchema
 )
+from schemas.project_response import (
+    DeleteProjectResponseSchema,
+    GenerateProjectResponseSchema,
+    ProjectDetailResponseSchema,
+    ProjectHistoryResponseSchema,
+    ProjectListResponseSchema
+)
 
 from services.project_generation_service import (
     generate_project
@@ -41,7 +48,9 @@ router = APIRouter()
 # =====================================================
 
 @router.get(
-    ""
+    "",
+
+    response_model=ProjectListResponseSchema
 )
 async def list_projects_route(
 
@@ -110,7 +119,9 @@ async def list_projects_route(
 # =====================================================
 
 @router.post(
-    "/generate"
+    "/generate",
+
+    response_model=GenerateProjectResponseSchema
 )
 async def generate_project_route(
 
@@ -135,7 +146,9 @@ async def generate_project_route(
 # =====================================================
 
 @router.get(
-    "/{project_id}"
+    "/{project_id}",
+
+    response_model=ProjectDetailResponseSchema
 )
 async def get_project_route(
 
@@ -180,7 +193,9 @@ async def get_project_route(
 # =====================================================
 
 @router.put(
-    "/{project_id}"
+    "/{project_id}",
+
+    response_model=ProjectDetailResponseSchema
 )
 async def update_project_route(
 
@@ -241,7 +256,9 @@ async def update_project_route(
 # =====================================================
 
 @router.get(
-    "/{project_id}/history"
+    "/{project_id}/history",
+
+    response_model=ProjectHistoryResponseSchema
 )
 async def get_project_history_route(
 
@@ -298,7 +315,9 @@ async def get_project_history_route(
 # =====================================================
 
 @router.post(
-    "/{project_id}/rollback/{version_id}"
+    "/{project_id}/rollback/{version_id}",
+
+    response_model=ProjectDetailResponseSchema
 )
 async def rollback_project_route(
 
@@ -351,7 +370,9 @@ async def rollback_project_route(
 # =====================================================
 
 @router.delete(
-    "/{project_id}"
+    "/{project_id}",
+
+    response_model=DeleteProjectResponseSchema
 )
 async def delete_project_route(
 

@@ -2,6 +2,7 @@ from pydantic import (
     BaseModel,
     Field
 )
+from typing import Optional
 
 
 # =====================================================
@@ -59,8 +60,21 @@ class UserResponseSchema(BaseModel):
 
 class AuthResponseSchema(BaseModel):
 
-    access_token: str
+    success: bool
 
-    token_type: str = "bearer"
+    access_token: Optional[str] = None
 
-    user: UserResponseSchema
+    token_type: Optional[str] = None
+
+    user: Optional[UserResponseSchema] = None
+
+    error: Optional[str] = None
+
+
+class CurrentUserResponseSchema(BaseModel):
+
+    success: bool
+
+    user: Optional[UserResponseSchema] = None
+
+    error: Optional[str] = None
