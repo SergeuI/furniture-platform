@@ -82,3 +82,63 @@ def get_project(
     finally:
 
         db.close()
+
+
+# =====================================================
+# UPDATE PROJECT
+# =====================================================
+
+def update_project(
+
+    project_id: str,
+
+    width: int,
+
+    height: int,
+
+    depth: int,
+
+    sections: int,
+
+    drawers: list
+):
+
+    db = SessionLocal()
+
+    try:
+
+        project = (
+
+            db.query(ProjectModel)
+
+            .filter(
+
+                ProjectModel.id == project_id
+            )
+
+            .first()
+        )
+
+        if not project:
+
+            return None
+
+        project.width = width
+
+        project.height = height
+
+        project.depth = depth
+
+        project.sections = sections
+
+        project.drawers = drawers
+
+        db.commit()
+
+        db.refresh(project)
+
+        return project
+
+    finally:
+
+        db.close()        

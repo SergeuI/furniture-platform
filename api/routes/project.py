@@ -9,7 +9,9 @@ from services.project_generation_service import (
 )
 from database.repositories.project_repository import (
 
-    get_project
+    get_project,
+
+    update_project
 )
 router = APIRouter()
 
@@ -81,5 +83,63 @@ async def get_project_route(
             "sections": project.sections,
 
             "drawers": project.drawers
+        }
+    }
+
+# =====================================================
+# UPDATE PROJECT
+# =====================================================
+
+@router.put(
+    "/{project_id}"
+)
+async def update_project_route(
+
+    project_id: str,
+
+    project: ProjectInputSchema
+):
+
+    updated = update_project(
+
+        project_id=project_id,
+
+        width=project.dimensions.width,
+
+        height=project.dimensions.height,
+
+        depth=project.dimensions.depth,
+
+        sections=project.sections.count,
+
+        drawers=project.drawers.config
+    )
+
+    if not updated:
+
+        return {
+
+            "success": False,
+
+            "error": "Project not found"
+        }
+
+    return {
+
+        "success": True,
+
+        "project": {
+
+            "id": updated.id,
+
+            "width": updated.width,
+
+            "height": updated.height,
+
+            "depth": updated.depth,
+
+            "sections": updated.sections,
+
+            "drawers": updated.drawers
         }
     }
