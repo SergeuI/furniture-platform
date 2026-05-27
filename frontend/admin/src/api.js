@@ -48,6 +48,17 @@ export async function getCurrentUser(token) {
   });
 }
 
+export async function changeOwnPassword(token, currentPassword, newPassword) {
+  return request("/auth/me/password", {
+    method: "PUT",
+    headers: authHeaders(token),
+    body: JSON.stringify({
+      current_password: currentPassword,
+      new_password: newPassword,
+    }),
+  });
+}
+
 export async function listProjects(token, limit, offset) {
   return request(`/project?limit=${limit}&offset=${offset}`, {
     headers: authHeaders(token),
@@ -122,6 +133,16 @@ export async function updateUserActive(token, userId, isActive) {
     headers: authHeaders(token),
     body: JSON.stringify({
       is_active: isActive,
+    }),
+  });
+}
+
+export async function resetUserPassword(token, userId, password) {
+  return request(`/auth/users/${userId}/password`, {
+    method: "PUT",
+    headers: authHeaders(token),
+    body: JSON.stringify({
+      password,
     }),
   });
 }

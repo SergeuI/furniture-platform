@@ -250,3 +250,47 @@ def set_user_active(
     finally:
 
         db.close()
+
+
+# =====================================================
+# UPDATE USER PASSWORD
+# =====================================================
+
+def update_user_password(
+
+    user_id: str,
+
+    password_hash: str
+):
+
+    db = SessionLocal()
+
+    try:
+
+        user = (
+
+            db.query(UserModel)
+
+            .filter(
+
+                UserModel.id == user_id
+            )
+
+            .first()
+        )
+
+        if not user:
+
+            return None
+
+        user.password_hash = password_hash
+
+        db.commit()
+
+        db.refresh(user)
+
+        return user
+
+    finally:
+
+        db.close()

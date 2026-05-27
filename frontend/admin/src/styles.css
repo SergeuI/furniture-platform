@@ -371,10 +371,32 @@ tbody tr.selected {
   color: #24343d;
 }
 
-.sidebar .ghost-button {
+.sidebar > .ghost-button {
   background: rgba(255, 255, 255, 0.12);
   color: #ffffff;
   margin-top: auto;
+}
+
+.password-panel {
+  border-top: 1px solid rgba(255, 255, 255, 0.16);
+  display: grid;
+  gap: 10px;
+  padding-top: 18px;
+}
+
+.password-panel input {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+}
+
+.password-panel input::placeholder {
+  color: #b9c9cf;
+}
+
+.password-panel .ghost-button {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
 }
 
 .icon-button {
@@ -410,6 +432,14 @@ tbody tr.selected {
   height: 18px;
   min-height: 18px;
   width: 18px;
+}
+
+.reset-password-cell {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(160px, 1fr) auto;
+  min-width: 260px;
 }
 
 .audit-details {
@@ -508,6 +538,10 @@ tbody tr.selected {
 
   .create-user-form {
     align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .reset-password-cell {
     grid-template-columns: 1fr;
   }
 

@@ -13,6 +13,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 
 import {
+  changeOwnPassword,
   createUser,
   deleteProject,
   getCurrentUser,
@@ -23,6 +24,7 @@ import {
   listProjects,
   login,
   rollbackProject,
+  resetUserPassword,
   updateProject,
   updateUserActive,
   updateUserRole,
@@ -107,11 +109,16 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [ownPasswordForm, setOwnPasswordForm] = useState({
+    currentPassword: "",
+    newPassword: "",
+  });
   const [newUserForm, setNewUserForm] = useState({
     email: "",
     password: "",
     role: "manager",
   });
+  const [resetPasswordForms, setResetPasswordForms] = useState({});
   const [projects, setProjects] = useState([]);
   const [users, setUsers] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
@@ -291,6 +298,11 @@ export default function App() {
     setProjects([]);
     setUsers([]);
     setAuditLogs([]);
+    setResetPasswordForms({});
+    setOwnPasswordForm({
+      currentPassword: "",
+      newPassword: "",
+    });
     setSelectedProject(null);
     setHistoryItems([]);
     setStatus("");
@@ -340,6 +352,65 @@ export default function App() {
     }
 
     setStatus("User access updated");
+    await loadUsers(token, usersOffset);
+  }
+
+  function setResetPasswordValue(userId, passwordValue) {
+    setResetPasswordForms({
+      ...resetPasswordForms,
+      [userId]: passwordValue,
+    });
+  }
+
+  async function handleOwnPasswordChange(event) {
+    event.preventDefault();
+
+    setLoading(true);
+    const result = await changeOwnPassword(
+      token,
+      ownPasswordForm.currentPassword,
+      ownPasswordForm.newPassword,
+    );
+    setLoading(false);
+
+    if (!result.success) {
+      setStatus(result.error || "Unable to change password");
+      return;
+    }
+
+    setOwnPasswordForm({
+      currentPassword: "",
+      newPassword: "",
+    });
+    setStatus("Password changed");
+  }
+
+  async function handleResetPassword(targetUser) {
+    const passwordValue = resetPasswordForms[targetUser.id] || "";
+
+    if (passwordValue.length < 8) {
+      setStatus("Password must be at least 8 characters");
+      return;
+    }
+
+    setLoading(true);
+    const result = await resetUserPassword(
+      token,
+      targetUser.id,
+      passwordValue,
+    );
+    setLoading(false);
+
+    if (!result.success) {
+      setStatus(result.error || "Unable to reset password");
+      return;
+    }
+
+    setResetPasswordForms({
+      ...resetPasswordForms,
+      [targetUser.id]: "",
+    });
+    setStatus("Password reset");
     await loadUsers(token, usersOffset);
   }
 
@@ -586,6 +657,41 @@ export default function App() {
             </>
           ) : null}
         </nav>
+
+        <form className="password-panel" onSubmit={handleOwnPasswordChange}>
+          <p className="eyebrow">Password</p>
+          <input
+            autoComplete="current-password"
+            minLength={8}
+            onChange={(event) =>
+              setOwnPasswordForm({
+                ...ownPasswordForm,
+                currentPassword: event.target.value,
+              })
+            }
+            placeholder="Current password"
+            required
+            type="password"
+            value={ownPasswordForm.currentPassword}
+          />
+          <input
+            autoComplete="new-password"
+            minLength={8}
+            onChange={(event) =>
+              setOwnPasswordForm({
+                ...ownPasswordForm,
+                newPassword: event.target.value,
+              })
+            }
+            placeholder="New password"
+            required
+            type="password"
+            value={ownPasswordForm.newPassword}
+          />
+          <button className="ghost-button" disabled={loading} type="submit">
+            Change password
+          </button>
+        </form>
 
         <button className="ghost-button" onClick={handleLogout} type="button">
           <LogOut size={18} />
@@ -935,6 +1041,7 @@ export default function App() {
                   <th>Role</th>
                   <th>Status</th>
                   <th>Access</th>
+                  <th>Password</th>
                 </tr>
               </thead>
               <tbody>
@@ -970,6 +1077,32 @@ export default function App() {
                         />
                         Enabled
                       </label>
+                    </td>
+                    <td>
+                      <div className="reset-password-cell">
+                        <input
+                          autoComplete="new-password"
+                          disabled={loading || targetUser.id === user.id}
+                          minLength={8}
+                          onChange={(event) =>
+                            setResetPasswordValue(
+                              targetUser.id,
+                              event.target.value,
+                            )
+                          }
+                          placeholder="New password"
+                          type="password"
+                          value={resetPasswordForms[targetUser.id] || ""}
+                        />
+                        <button
+                          className="ghost-button"
+                          disabled={loading || targetUser.id === user.id}
+                          onClick={() => handleResetPassword(targetUser)}
+                          type="button"
+                        >
+                          Reset
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

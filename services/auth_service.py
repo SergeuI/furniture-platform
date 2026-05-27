@@ -10,7 +10,8 @@ from database.repositories.user_repository import (
     count_users,
     create_user,
     get_user_by_email,
-    get_user_by_id
+    get_user_by_id,
+    update_user_password
 )
 
 
@@ -275,6 +276,67 @@ def create_managed_user(
         ),
 
         role=role
+    )
+
+
+def change_user_password(
+
+    user_id: str,
+
+    current_password: str,
+
+    new_password: str
+):
+
+    user = get_user_by_id(
+        user_id
+    )
+
+    if not user:
+
+        return None
+
+    if not verify_password(
+
+        current_password,
+
+        user.password_hash
+    ):
+
+        return None
+
+    return update_user_password(
+
+        user_id=user.id,
+
+        password_hash=hash_password(
+            new_password
+        )
+    )
+
+
+def reset_user_password(
+
+    user_id: str,
+
+    new_password: str
+):
+
+    user = get_user_by_id(
+        user_id
+    )
+
+    if not user:
+
+        return None
+
+    return update_user_password(
+
+        user_id=user.id,
+
+        password_hash=hash_password(
+            new_password
+        )
     )
 
 

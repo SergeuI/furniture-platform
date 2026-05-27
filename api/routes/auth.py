@@ -11,10 +11,12 @@ from api.dependencies.auth import (
 
 from schemas.auth import (
     AuthResponseSchema,
+    ChangeOwnPasswordSchema,
     CreateUserSchema,
     CurrentUserResponseSchema,
     LoginUserSchema,
     RegisterUserSchema,
+    ResetUserPasswordSchema,
     UpdateUserActiveSchema,
     UpdateUserRoleSchema,
     UserListResponseSchema,
@@ -34,9 +36,11 @@ from database.repositories.audit_log_repository import (
 
 from services.auth_service import (
     authenticate_user,
+    change_user_password,
     create_access_token,
     create_managed_user,
-    register_user
+    register_user,
+    reset_user_password
 )
 
 
@@ -283,6 +287,68 @@ async def me_route(
 
 
 # =====================================================
+# CHANGE OWN PASSWORD
+# =====================================================
+
+@router.put(
+    "/me/password",
+
+    response_model=UserOperationResponseSchema
+)
+async def change_own_password_route(
+
+    payload: ChangeOwnPasswordSchema,
+
+    current_user = Depends(require_current_user)
+):
+
+    user = change_user_password(
+
+        user_id=current_user.id,
+
+        current_password=payload.current_password,
+
+        new_password=payload.new_password
+    )
+
+    if not user:
+
+        return {
+
+            "success": False,
+
+            "error": "Invalid current password"
+        }
+
+    create_audit_log(
+
+        actor_user_id=current_user.id,
+
+        actor_email=current_user.email,
+
+        action="user.password_changed",
+
+        entity_type="user",
+
+        entity_id=current_user.id,
+
+        details={
+
+            "email": current_user.email
+        }
+    )
+
+    return {
+
+        "success": True,
+
+        "user": _serialize_user(
+            user
+        )
+    }
+
+
+# =====================================================
 # LIST USERS
 # =====================================================
 
@@ -520,6 +586,91 @@ async def update_user_active_route(
             "previous_is_active": previous_is_active,
 
             "new_is_active": user.is_active
+        }
+    )
+
+    return {
+
+        "success": True,
+
+        "user": _serialize_user(
+            user
+        )
+    }
+
+
+# =====================================================
+# RESET USER PASSWORD
+# =====================================================
+
+@router.put(
+    "/users/{user_id}/password",
+
+    response_model=UserOperationResponseSchema
+)
+async def reset_user_password_route(
+
+    user_id: str,
+
+    payload: ResetUserPasswordSchema,
+
+    current_user = Depends(require_auth_admin)
+):
+
+    if user_id == current_user.id:
+
+        return {
+
+            "success": False,
+
+            "error": "Use own password change endpoint"
+        }
+
+    existing_user = get_user_by_id(
+
+        user_id
+    )
+
+    if not existing_user:
+
+        return {
+
+            "success": False,
+
+            "error": "User not found"
+        }
+
+    user = reset_user_password(
+
+        user_id=user_id,
+
+        new_password=payload.password
+    )
+
+    if not user:
+
+        return {
+
+            "success": False,
+
+            "error": "User not found"
+        }
+
+    create_audit_log(
+
+        actor_user_id=current_user.id,
+
+        actor_email=current_user.email,
+
+        action="user.password_reset",
+
+        entity_type="user",
+
+        entity_id=user.id,
+
+        details={
+
+            "email": user.email
         }
     )
 
