@@ -249,6 +249,43 @@ class ProjectCuttingResponseSchema(BaseModel):
     error: Optional[str] = None
 
 
+class ProjectCuttingExportFormatResponseSchema(BaseModel):
+
+    format: str
+
+    label: str
+
+    status: str
+
+    description: Optional[str] = None
+
+
+class ProjectCuttingExportFormatsResponseSchema(BaseModel):
+
+    success: bool
+
+    project_id: Optional[str] = None
+
+    formats: List[ProjectCuttingExportFormatResponseSchema] = Field(
+        default_factory=list
+    )
+
+    error: Optional[str] = None
+
+
+class ProjectCuttingJsonExportResponseSchema(BaseModel):
+
+    success: bool
+
+    project_id: Optional[str] = None
+
+    export: Dict[str, Any] = Field(
+        default_factory=dict
+    )
+
+    error: Optional[str] = None
+
+
 class DeleteProjectResponseSchema(BaseModel):
 
     success: bool

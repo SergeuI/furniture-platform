@@ -2,6 +2,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ClipboardList,
+  Download,
   Eye,
   LogOut,
   Plus,
@@ -13,6 +14,8 @@ import { useEffect, useMemo, useState } from "react";
 
 import {
   generateProject,
+  getCuttingExportFormats,
+  getCuttingJsonExport,
   getCurrentUser,
   getProject,
   getProjectBom,
@@ -94,6 +97,10 @@ const TRANSLATIONS = {
     drawerUnit: "Drawer unit",
     edgeBanding: "Edge banding",
     email: "Email",
+    exportDownloadJson: "Download JSON",
+    exportFormats: "Export formats",
+    exportPlanned: "Planned",
+    exportReady: "Ready",
     facadeMaterial: "Facade material",
     furniturePlatform: "Furniture Platform",
     fittings: "Fittings",
@@ -139,6 +146,7 @@ const TRANSLATIONS = {
     unableToCreateProject: "Unable to create project",
     unableToLoadBom: "Unable to load BOM",
     unableToLoadCutting: "Unable to load cutting list",
+    unableToLoadExports: "Unable to load exports",
     unableToLoadProjects: "Unable to load projects",
     updated: "Updated",
     validation: "Validation",
@@ -176,6 +184,10 @@ const TRANSLATIONS = {
     drawerUnit: "Блок шухляд",
     edgeBanding: "Крайка",
     email: "Email",
+    exportDownloadJson: "Завантажити JSON",
+    exportFormats: "Формати експорту",
+    exportPlanned: "Заплановано",
+    exportReady: "Готово",
     facadeMaterial: "Матеріал фасаду",
     furniturePlatform: "Furniture Platform",
     fittings: "Фурнітура",
@@ -221,6 +233,7 @@ const TRANSLATIONS = {
     unableToCreateProject: "Не вдалося створити проект",
     unableToLoadBom: "Не вдалося завантажити BOM",
     unableToLoadCutting: "Не вдалося завантажити карту розкрою",
+    unableToLoadExports: "Не вдалося завантажити експорти",
     unableToLoadProjects: "Не вдалося завантажити проекти",
     updated: "Оновлено",
     validation: "Валідація",
@@ -316,6 +329,8 @@ export default function App() {
   const [bomItems, setBomItems] = useState([]);
   const [cuttingItems, setCuttingItems] = useState([]);
   const [cuttingSummary, setCuttingSummary] = useState(null);
+  const [cuttingExportFormats, setCuttingExportFormats] = useState([]);
+  const [cuttingJsonExport, setCuttingJsonExport] = useState(null);
   const [projectForm, setProjectForm] = useState(DEFAULT_PROJECT_FORM);
   const [projectFilters, setProjectFilters] = useState(DEFAULT_PROJECT_FILTERS);
   const [specificationCatalog, setSpecificationCatalog] = useState(
@@ -407,10 +422,18 @@ export default function App() {
   }
 
   async function loadProject(projectId) {
-    const [result, bomResult, cuttingResult] = await Promise.all([
+    const [
+      result,
+      bomResult,
+      cuttingResult,
+      exportFormatsResult,
+      jsonExportResult,
+    ] = await Promise.all([
       getProject(token, projectId),
       getProjectBom(token, projectId),
       getProjectCutting(token, projectId),
+      getCuttingExportFormats(token, projectId),
+      getCuttingJsonExport(token, projectId),
     ]);
 
     if (!result.success) {
@@ -422,10 +445,20 @@ export default function App() {
     setBomItems(bomResult.success ? bomResult.items : []);
     setCuttingItems(cuttingResult.success ? cuttingResult.items : []);
     setCuttingSummary(cuttingResult.success ? cuttingResult.summary : null);
+    setCuttingExportFormats(
+      exportFormatsResult.success ? exportFormatsResult.formats : [],
+    );
+    setCuttingJsonExport(jsonExportResult.success ? jsonExportResult.export : null);
     if (!bomResult.success) {
       setStatus(bomResult.error || t.unableToLoadBom);
     } else if (!cuttingResult.success) {
       setStatus(cuttingResult.error || t.unableToLoadCutting);
+    } else if (!exportFormatsResult.success || !jsonExportResult.success) {
+      setStatus(
+        exportFormatsResult.error ||
+          jsonExportResult.error ||
+          t.unableToLoadExports,
+      );
     } else {
       setStatus("");
     }
@@ -461,8 +494,35 @@ export default function App() {
     setBomItems([]);
     setCuttingItems([]);
     setCuttingSummary(null);
+    setCuttingExportFormats([]);
+    setCuttingJsonExport(null);
     setActiveProjectTab("general");
     setStatus("");
+  }
+
+  function handleDownloadCuttingJson() {
+    if (!selectedProject || !cuttingJsonExport) {
+      return;
+    }
+
+    const blob = new Blob(
+      [
+        JSON.stringify(
+          cuttingJsonExport,
+          null,
+          2,
+        ),
+      ],
+      {
+        type: "application/json",
+      },
+    );
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${selectedProject.id}-cutting.json`;
+    link.click();
+    URL.revokeObjectURL(url);
   }
 
   async function handleApplyFilters(event) {
@@ -1225,6 +1285,39 @@ export default function App() {
                     <article>
                       <h3>{t.productionDrilling}</h3>
                       <p>{t.productionPlaceholder}</p>
+                    </article>
+                    <article className="wide-production-section">
+                      <h3>{t.exportFormats}</h3>
+                      <div className="export-actions">
+                        {cuttingExportFormats.map((format) => (
+                          <button
+                            className={
+                              format.status === "available"
+                                ? "primary-button"
+                                : "ghost-button"
+                            }
+                            disabled={
+                              format.status !== "available" ||
+                              format.format !== "json"
+                            }
+                            key={format.format}
+                            onClick={
+                              format.format === "json"
+                                ? handleDownloadCuttingJson
+                                : undefined
+                            }
+                            type="button"
+                          >
+                            {format.format === "json" ? <Download size={18} /> : null}
+                            {format.label}
+                            <span>
+                              {format.status === "available"
+                                ? t.exportReady
+                                : t.exportPlanned}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
                     </article>
                   </div>
                 ) : null}

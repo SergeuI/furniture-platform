@@ -387,6 +387,21 @@ tbody tr.selected {
   font-weight: 700;
 }
 
+.export-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.export-actions button {
+  min-width: 150px;
+}
+
+.export-actions button span {
+  font-size: 12px;
+  opacity: 0.78;
+}
+
 .production-grid p,
 .validation-panel span {
   color: #5c6875;

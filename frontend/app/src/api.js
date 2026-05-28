@@ -94,3 +94,15 @@ export async function getProjectCutting(token, projectId) {
     headers: authHeaders(token),
   });
 }
+
+export async function getCuttingExportFormats(token, projectId) {
+  return request(`/project/${projectId}/exports/cutting`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function getCuttingJsonExport(token, projectId) {
+  return request(`/project/${projectId}/exports/cutting/json`, {
+    headers: authHeaders(token),
+  });
+}

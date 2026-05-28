@@ -15,6 +15,8 @@ from schemas.project_input import (
 from schemas.project_response import (
     DeleteProjectResponseSchema,
     GenerateProjectResponseSchema,
+    ProjectCuttingExportFormatsResponseSchema,
+    ProjectCuttingJsonExportResponseSchema,
     ProjectBomResponseSchema,
     ProjectCuttingResponseSchema,
     ProjectDetailResponseSchema,
@@ -33,6 +35,10 @@ from services.project_bom_service import (
 )
 from services.project_cutting_service import (
     build_project_cutting
+)
+from services.cutting_export_service import (
+    build_cutting_json_export,
+    list_cutting_export_formats
 )
 from database.repositories.project_repository import (
 
@@ -513,6 +519,106 @@ async def get_project_cutting_route(
         "items": cutting["items"],
 
         "summary": cutting["summary"]
+    }
+
+
+# =====================================================
+# PROJECT CUTTING EXPORTS
+# =====================================================
+
+@router.get(
+    "/{project_id}/exports/cutting",
+
+    response_model=ProjectCuttingExportFormatsResponseSchema
+)
+async def list_project_cutting_exports_route(
+
+    project_id: str,
+
+    current_user = Depends(require_project_reader)
+):
+
+    project = get_project(
+        project_id
+    )
+
+    if not project:
+
+        return {
+
+            "success": False,
+
+            "error": "Project not found"
+        }
+
+    if not _can_read_project(
+        current_user,
+        project
+    ):
+
+        return {
+
+            "success": False,
+
+            "error": "Insufficient project permissions"
+        }
+
+    return {
+
+        "success": True,
+
+        "project_id": project_id,
+
+        "formats": list_cutting_export_formats()
+    }
+
+
+@router.get(
+    "/{project_id}/exports/cutting/json",
+
+    response_model=ProjectCuttingJsonExportResponseSchema
+)
+async def get_project_cutting_json_export_route(
+
+    project_id: str,
+
+    current_user = Depends(require_project_reader)
+):
+
+    project = get_project(
+        project_id
+    )
+
+    if not project:
+
+        return {
+
+            "success": False,
+
+            "error": "Project not found"
+        }
+
+    if not _can_read_project(
+        current_user,
+        project
+    ):
+
+        return {
+
+            "success": False,
+
+            "error": "Insufficient project permissions"
+        }
+
+    return {
+
+        "success": True,
+
+        "project_id": project_id,
+
+        "export": build_cutting_json_export(
+            project
+        )
     }
 
 
