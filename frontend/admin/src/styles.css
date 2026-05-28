@@ -281,18 +281,34 @@ tbody tr.selected {
   padding: 16px;
 }
 
+.project-filter-form {
+  align-items: end;
+  background: #f8fafb;
+  border-bottom: 1px solid #dbe1e7;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(180px, 1.4fr) repeat(7, minmax(110px, 1fr)) auto auto auto;
+  padding: 16px;
+}
+
 .create-user-form select {
   width: 100%;
 }
 
 .create-project-form select,
+.project-filter-form select,
 .edit-grid select {
   width: 100%;
 }
 
 .create-user-button,
-.create-project-button {
+.create-project-button,
+.filter-button {
   white-space: nowrap;
+}
+
+.filter-toggle {
+  min-height: 40px;
 }
 
 .detail-panel {
@@ -596,6 +612,11 @@ tbody tr.selected {
   }
 
   .create-project-form {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .project-filter-form {
     align-items: stretch;
     grid-template-columns: 1fr;
   }

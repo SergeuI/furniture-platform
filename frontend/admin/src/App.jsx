@@ -55,6 +55,17 @@ const DEFAULT_PROJECT_FORM = {
   handlePosition: "",
   notes: "",
 };
+const DEFAULT_PROJECT_FILTERS = {
+  search: "",
+  project_type: "",
+  slide_type: "",
+  bottom_type: "",
+  width_min: "",
+  width_max: "",
+  height_min: "",
+  height_max: "",
+  only_mine: false,
+};
 
 const TRANSLATIONS = {
   en: {
@@ -63,6 +74,8 @@ const TRANSLATIONS = {
     active: "Active",
     actor: "Actor",
     admin: "Admin",
+    all: "All",
+    applyFilters: "Apply",
     audit: "Audit",
     cancel: "Cancel",
     changePassword: "Change password",
@@ -93,6 +106,8 @@ const TRANSLATIONS = {
     handlePosition: "Handle position",
     handleType: "Handle type",
     height: "Height",
+    heightMax: "Height max",
+    heightMin: "Height min",
     history: "History",
     insideMaterial: "Inside material",
     inactive: "Inactive",
@@ -106,6 +121,7 @@ const TRANSLATIONS = {
     materialThickness: "Thickness",
     notes: "Notes",
     of: "of",
+    onlyMine: "Only mine",
     password: "Password",
     passwordChanged: "Password changed",
     passwordMustBeLong: "Password must be at least 8 characters",
@@ -130,6 +146,7 @@ const TRANSLATIONS = {
     rollbackProject: "Rollback project",
     room: "Room",
     save: "Save",
+    searchProjects: "Search projects",
     sections: "Sections",
     selectProject: "Select a project",
     selectedProject: "Selected project",
@@ -157,6 +174,8 @@ const TRANSLATIONS = {
     userRoleUpdated: "User role updated",
     users: "Users",
     width: "Width",
+    widthMax: "Width max",
+    widthMin: "Width min",
     wardrobe: "Wardrobe",
   },
   uk: {
@@ -165,6 +184,8 @@ const TRANSLATIONS = {
     active: "Активний",
     actor: "Користувач",
     admin: "Адмін",
+    all: "Всі",
+    applyFilters: "Застосувати",
     audit: "Аудит",
     cancel: "Скасувати",
     changePassword: "Змінити пароль",
@@ -195,6 +216,8 @@ const TRANSLATIONS = {
     handlePosition: "Позиція ручки",
     handleType: "Тип ручки",
     height: "Висота",
+    heightMax: "Висота до",
+    heightMin: "Висота від",
     history: "Історія",
     insideMaterial: "Матеріал корпусу",
     inactive: "Неактивний",
@@ -208,6 +231,7 @@ const TRANSLATIONS = {
     materialThickness: "Товщина",
     notes: "Нотатки",
     of: "з",
+    onlyMine: "Тільки мої",
     password: "Пароль",
     passwordChanged: "Пароль змінено",
     passwordMustBeLong: "Пароль має містити мінімум 8 символів",
@@ -232,6 +256,7 @@ const TRANSLATIONS = {
     rollbackProject: "Відновити проект",
     room: "Кімната",
     save: "Зберегти",
+    searchProjects: "Пошук проектів",
     sections: "Секції",
     selectProject: "Виберіть проект",
     selectedProject: "Вибраний проект",
@@ -259,6 +284,8 @@ const TRANSLATIONS = {
     userRoleUpdated: "Роль користувача оновлено",
     users: "Користувачі",
     width: "Ширина",
+    widthMax: "Ширина до",
+    widthMin: "Ширина від",
     wardrobe: "Шафа",
   },
 };
@@ -412,6 +439,7 @@ export default function App() {
     role: "manager",
   });
   const [newProjectForm, setNewProjectForm] = useState(DEFAULT_PROJECT_FORM);
+  const [projectFilters, setProjectFilters] = useState(DEFAULT_PROJECT_FILTERS);
   const [resetPasswordForms, setResetPasswordForms] = useState({});
   const [projects, setProjects] = useState([]);
   const [users, setUsers] = useState([]);
@@ -505,13 +533,22 @@ export default function App() {
     setUser(result.user);
   }
 
-  async function loadProjects(activeToken = token, nextOffset = offset) {
+  async function loadProjects(
+    activeToken = token,
+    nextOffset = offset,
+    filters = projectFilters,
+  ) {
     if (!activeToken) {
       return;
     }
 
     setLoading(true);
-    const result = await listProjects(activeToken, PAGE_SIZE, nextOffset);
+    const result = await listProjects(
+      activeToken,
+      PAGE_SIZE,
+      nextOffset,
+      filters,
+    );
     setLoading(false);
 
     if (!result.success) {
@@ -745,6 +782,17 @@ export default function App() {
     await loadUsers(token, 0);
   }
 
+  async function handleApplyProjectFilters(event) {
+    event.preventDefault();
+
+    await loadProjects(token, 0, projectFilters);
+  }
+
+  async function handleResetProjectFilters() {
+    setProjectFilters(DEFAULT_PROJECT_FILTERS);
+    await loadProjects(token, 0, DEFAULT_PROJECT_FILTERS);
+  }
+
   async function handleCreateProject(event) {
     event.preventDefault();
 
@@ -769,8 +817,9 @@ export default function App() {
     const projectId = result.result?.project_id;
 
     setNewProjectForm(DEFAULT_PROJECT_FORM);
+    setProjectFilters(DEFAULT_PROJECT_FILTERS);
     setStatus(t.projectCreated);
-    await loadProjects(token, 0);
+    await loadProjects(token, 0, DEFAULT_PROJECT_FILTERS);
 
     if (projectId) {
       await loadProject(projectId);
@@ -1197,6 +1246,160 @@ export default function App() {
         {activeView === "projects" ? (
           <div className="content-grid">
           <section className="table-panel">
+            <form
+              className="project-filter-form"
+              onSubmit={handleApplyProjectFilters}
+            >
+              <label>
+                {t.searchProjects}
+                <input
+                  onChange={(event) =>
+                    setProjectFilters({
+                      ...projectFilters,
+                      search: event.target.value,
+                    })
+                  }
+                  type="search"
+                  value={projectFilters.search}
+                />
+              </label>
+              <label>
+                {t.projectType}
+                <select
+                  onChange={(event) =>
+                    setProjectFilters({
+                      ...projectFilters,
+                      project_type: event.target.value,
+                    })
+                  }
+                  value={projectFilters.project_type}
+                >
+                  <option value="">{t.all}</option>
+                  <option value="dresser">{t.dresser}</option>
+                  <option value="wardrobe">{t.wardrobe}</option>
+                  <option value="cabinet">{t.cabinet}</option>
+                  <option value="kitchen">{t.kitchen}</option>
+                  <option value="drawer_unit">{t.drawerUnit}</option>
+                </select>
+              </label>
+              <label>
+                {t.slideType}
+                <select
+                  onChange={(event) =>
+                    setProjectFilters({
+                      ...projectFilters,
+                      slide_type: event.target.value,
+                    })
+                  }
+                  value={projectFilters.slide_type}
+                >
+                  <option value="">{t.all}</option>
+                  <option value="tandem">tandem</option>
+                  <option value="movento">movento</option>
+                  <option value="telescopic">telescopic</option>
+                </select>
+              </label>
+              <label>
+                {t.bottomType}
+                <select
+                  onChange={(event) =>
+                    setProjectFilters({
+                      ...projectFilters,
+                      bottom_type: event.target.value,
+                    })
+                  }
+                  value={projectFilters.bottom_type}
+                >
+                  <option value="">{t.all}</option>
+                  <option value="hdf">hdf</option>
+                  <option value="dsp">dsp</option>
+                </select>
+              </label>
+              <label>
+                {t.widthMin}
+                <input
+                  min="1"
+                  onChange={(event) =>
+                    setProjectFilters({
+                      ...projectFilters,
+                      width_min: event.target.value,
+                    })
+                  }
+                  type="number"
+                  value={projectFilters.width_min}
+                />
+              </label>
+              <label>
+                {t.widthMax}
+                <input
+                  min="1"
+                  onChange={(event) =>
+                    setProjectFilters({
+                      ...projectFilters,
+                      width_max: event.target.value,
+                    })
+                  }
+                  type="number"
+                  value={projectFilters.width_max}
+                />
+              </label>
+              <label>
+                {t.heightMin}
+                <input
+                  min="1"
+                  onChange={(event) =>
+                    setProjectFilters({
+                      ...projectFilters,
+                      height_min: event.target.value,
+                    })
+                  }
+                  type="number"
+                  value={projectFilters.height_min}
+                />
+              </label>
+              <label>
+                {t.heightMax}
+                <input
+                  min="1"
+                  onChange={(event) =>
+                    setProjectFilters({
+                      ...projectFilters,
+                      height_max: event.target.value,
+                    })
+                  }
+                  type="number"
+                  value={projectFilters.height_max}
+                />
+              </label>
+              <label className="toggle-label filter-toggle">
+                <input
+                  checked={projectFilters.only_mine}
+                  onChange={(event) =>
+                    setProjectFilters({
+                      ...projectFilters,
+                      only_mine: event.target.checked,
+                    })
+                  }
+                  type="checkbox"
+                />
+                {t.onlyMine}
+              </label>
+              <button
+                className="primary-button filter-button"
+                disabled={loading}
+                type="submit"
+              >
+                {t.applyFilters}
+              </button>
+              <button
+                className="ghost-button filter-button"
+                disabled={loading}
+                onClick={handleResetProjectFilters}
+                type="button"
+              >
+                {t.reset}
+              </button>
+            </form>
             {canCreateNewProject ? (
               <form
                 className="create-project-form"

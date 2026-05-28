@@ -101,6 +101,104 @@ def _apply_access_filter(
     )
 
 
+def _apply_project_filters(
+
+    query,
+
+    search: str | None = None,
+
+    project_type: str | None = None,
+
+    slide_type: str | None = None,
+
+    bottom_type: str | None = None,
+
+    width_min: int | None = None,
+
+    width_max: int | None = None,
+
+    height_min: int | None = None,
+
+    height_max: int | None = None,
+
+    only_mine: bool = False,
+
+    user_id: str | None = None
+):
+
+    if search:
+
+        search_value = f"%{search.strip()}%"
+
+        query = query.filter(
+
+            or_(
+
+                ProjectModel.id.ilike(search_value),
+
+                ProjectModel.project_name.ilike(search_value),
+
+                ProjectModel.client_name.ilike(search_value),
+
+                ProjectModel.room_name.ilike(search_value),
+
+                ProjectModel.facade_material.ilike(search_value),
+
+                ProjectModel.inside_material.ilike(search_value)
+            )
+        )
+
+    if project_type:
+
+        query = query.filter(
+            ProjectModel.project_type == project_type
+        )
+
+    if slide_type:
+
+        query = query.filter(
+            ProjectModel.slide_type == slide_type
+        )
+
+    if bottom_type:
+
+        query = query.filter(
+            ProjectModel.bottom_type == bottom_type
+        )
+
+    if width_min is not None:
+
+        query = query.filter(
+            ProjectModel.width >= width_min
+        )
+
+    if width_max is not None:
+
+        query = query.filter(
+            ProjectModel.width <= width_max
+        )
+
+    if height_min is not None:
+
+        query = query.filter(
+            ProjectModel.height >= height_min
+        )
+
+    if height_max is not None:
+
+        query = query.filter(
+            ProjectModel.height <= height_max
+        )
+
+    if only_mine and user_id:
+
+        query = query.filter(
+            ProjectModel.created_by_user_id == user_id
+        )
+
+    return query
+
+
 # =====================================================
 # CREATE PROJECT
 # =====================================================
@@ -291,7 +389,25 @@ def list_accessible_projects(
 
     limit: int = 50,
 
-    offset: int = 0
+    offset: int = 0,
+
+    search: str | None = None,
+
+    project_type: str | None = None,
+
+    slide_type: str | None = None,
+
+    bottom_type: str | None = None,
+
+    width_min: int | None = None,
+
+    width_max: int | None = None,
+
+    height_min: int | None = None,
+
+    height_max: int | None = None,
+
+    only_mine: bool = False
 ):
 
     db = SessionLocal()
@@ -305,6 +421,31 @@ def list_accessible_projects(
             user_id=user_id,
 
             role=role
+        )
+
+        query = _apply_project_filters(
+
+            query,
+
+            search=search,
+
+            project_type=project_type,
+
+            slide_type=slide_type,
+
+            bottom_type=bottom_type,
+
+            width_min=width_min,
+
+            width_max=width_max,
+
+            height_min=height_min,
+
+            height_max=height_max,
+
+            only_mine=only_mine,
+
+            user_id=user_id
         )
 
         return (
@@ -356,7 +497,25 @@ def count_accessible_projects(
 
     user_id: str,
 
-    role: str
+    role: str,
+
+    search: str | None = None,
+
+    project_type: str | None = None,
+
+    slide_type: str | None = None,
+
+    bottom_type: str | None = None,
+
+    width_min: int | None = None,
+
+    width_max: int | None = None,
+
+    height_min: int | None = None,
+
+    height_max: int | None = None,
+
+    only_mine: bool = False
 ) -> int:
 
     db = SessionLocal()
@@ -370,6 +529,31 @@ def count_accessible_projects(
             user_id=user_id,
 
             role=role
+        )
+
+        query = _apply_project_filters(
+
+            query,
+
+            search=search,
+
+            project_type=project_type,
+
+            slide_type=slide_type,
+
+            bottom_type=bottom_type,
+
+            width_min=width_min,
+
+            width_max=width_max,
+
+            height_min=height_min,
+
+            height_max=height_max,
+
+            only_mine=only_mine,
+
+            user_id=user_id
         )
 
         return query.count()

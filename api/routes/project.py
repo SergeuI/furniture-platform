@@ -242,6 +242,46 @@ async def list_projects_route(
         ge=0
     ),
 
+    search: str | None = Query(
+        default=None
+    ),
+
+    project_type: str | None = Query(
+        default=None
+    ),
+
+    slide_type: str | None = Query(
+        default=None
+    ),
+
+    bottom_type: str | None = Query(
+        default=None
+    ),
+
+    width_min: int | None = Query(
+        default=None,
+        ge=1
+    ),
+
+    width_max: int | None = Query(
+        default=None,
+        ge=1
+    ),
+
+    height_min: int | None = Query(
+        default=None,
+        ge=1
+    ),
+
+    height_max: int | None = Query(
+        default=None,
+        ge=1
+    ),
+
+    only_mine: bool = Query(
+        default=False
+    ),
+
     current_user = Depends(require_project_reader)
 ):
 
@@ -253,14 +293,50 @@ async def list_projects_route(
 
         limit=limit,
 
-        offset=offset
+        offset=offset,
+
+        search=search,
+
+        project_type=project_type,
+
+        slide_type=slide_type,
+
+        bottom_type=bottom_type,
+
+        width_min=width_min,
+
+        width_max=width_max,
+
+        height_min=height_min,
+
+        height_max=height_max,
+
+        only_mine=only_mine
     )
 
     total = count_accessible_projects(
 
         user_id=current_user.id,
 
-        role=current_user.role
+        role=current_user.role,
+
+        search=search,
+
+        project_type=project_type,
+
+        slide_type=slide_type,
+
+        bottom_type=bottom_type,
+
+        width_min=width_min,
+
+        width_max=width_max,
+
+        height_min=height_min,
+
+        height_max=height_max,
+
+        only_mine=only_mine
     )
 
     return {

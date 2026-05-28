@@ -59,8 +59,19 @@ export async function changeOwnPassword(token, currentPassword, newPassword) {
   });
 }
 
-export async function listProjects(token, limit, offset) {
-  return request(`/project?limit=${limit}&offset=${offset}`, {
+export async function listProjects(token, limit, offset, filters = {}) {
+  const params = new URLSearchParams({
+    limit: String(limit),
+    offset: String(offset),
+  });
+
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value !== "" && value !== null && value !== undefined) {
+      params.set(key, String(value));
+    }
+  });
+
+  return request(`/project?${params.toString()}`, {
     headers: authHeaders(token),
   });
 }
