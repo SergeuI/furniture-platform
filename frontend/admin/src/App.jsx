@@ -42,8 +42,9 @@ import {
 const TOKEN_STORAGE_KEY = "furniture_admin_token";
 const LANGUAGE_STORAGE_KEY = "furniture_admin_language";
 const PAGE_SIZE = 20;
+const DEFAULT_PROJECT_NAME = "Новий проект";
 const DEFAULT_PROJECT_FORM = {
-  projectName: "",
+  projectName: DEFAULT_PROJECT_NAME,
   projectType: "dresser",
   clientName: "",
   roomName: "",
@@ -148,6 +149,7 @@ const TRANSLATIONS = {
     created: "Created",
     createdBy: "Created by",
     currentPassword: "Current password",
+    dataProject: "Project data",
     cuttingArea: "Area, m2",
     cuttingEdge: "Edge, m",
     cuttingExportCode: "Code",
@@ -195,6 +197,7 @@ const TRANSLATIONS = {
     noDetails: "No details",
     noCuttingItems: "No cutting items yet.",
     newPassword: "New password",
+    newProjectDefault: "New project",
     notSet: "Not set",
     materialThickness: "Thickness",
     material_thickness: "Thickness",
@@ -298,6 +301,7 @@ const TRANSLATIONS = {
     created: "Створено",
     createdBy: "Створив",
     currentPassword: "Поточний пароль",
+    dataProject: "Дані проекту",
     cuttingArea: "Площа, м2",
     cuttingEdge: "Крайка, м",
     cuttingExportCode: "Код",
@@ -345,6 +349,7 @@ const TRANSLATIONS = {
     noDetails: "Без деталей",
     noCuttingItems: "Карта розкрою ще порожня.",
     newPassword: "Новий пароль",
+    newProjectDefault: "Новий проект",
     notSet: "Не вказано",
     materialThickness: "Товщина",
     material_thickness: "Товщина",
@@ -429,7 +434,7 @@ const TRANSLATIONS = {
 function buildProjectPayload(form) {
   return {
     metadata: {
-      name: form.projectName || null,
+      name: form.projectName || DEFAULT_PROJECT_NAME,
       type: form.projectType || null,
       client: form.clientName || null,
       room: form.roomName || null,
@@ -468,7 +473,7 @@ function buildProjectPayload(form) {
 
 function projectToForm(project) {
   return {
-    projectName: project?.project_name || "",
+    projectName: project?.project_name || DEFAULT_PROJECT_NAME,
     projectType: project?.project_type || "dresser",
     clientName: project?.client_name || "",
     roomName: project?.room_name || "",
@@ -709,6 +714,9 @@ export default function App() {
   const [cuttingItems, setCuttingItems] = useState([]);
   const [cuttingSummary, setCuttingSummary] = useState(null);
   const [selectedPartDetail, setSelectedPartDetail] = useState(null);
+  const [activeProjectTab, setActiveProjectTab] = useState("data");
+  const [historyLoaded, setHistoryLoaded] = useState(false);
+  const [productionLoaded, setProductionLoaded] = useState(false);
   const [form, setForm] = useState(projectToForm(null));
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
@@ -770,7 +778,7 @@ export default function App() {
     }
 
     if (activeView === "projectDetails") {
-      return selectedProjectId || t.selectProject;
+      return selectedProject?.project_name || t.newProjectDefault;
     }
 
     if (activeView === "users") {
@@ -787,7 +795,7 @@ export default function App() {
     auditPageLabel,
     catalogItems.length,
     pageLabel,
-    selectedProjectId,
+    selectedProject,
     t,
     usersPageLabel,
   ]);
@@ -914,11 +922,7 @@ export default function App() {
   }
 
   async function loadProject(projectId) {
-    const [projectResult, historyResult, cuttingResult] = await Promise.all([
-      getProject(token, projectId),
-      getProjectHistory(token, projectId),
-      getProjectCutting(token, projectId),
-    ]);
+    const projectResult = await getProject(token, projectId);
 
     if (!projectResult.success) {
       setStatus(projectResult.error || t.projectNotFound);
@@ -927,16 +931,68 @@ export default function App() {
 
     setSelectedProject(projectResult.project);
     setForm(projectToForm(projectResult.project));
-    setHistoryItems(historyResult.success ? historyResult.versions : []);
-    setCuttingItems(cuttingResult.success ? cuttingResult.items : []);
-    setCuttingSummary(cuttingResult.success ? cuttingResult.summary : null);
+    setHistoryItems([]);
+    setCuttingItems([]);
+    setCuttingSummary(null);
     setSelectedPartDetail(null);
+    setHistoryLoaded(false);
+    setProductionLoaded(false);
+    setActiveProjectTab("data");
+    setStatus("");
+    setActiveView("projectDetails");
+  }
 
-    if (!cuttingResult.success) {
-      setStatus(cuttingResult.error || t.unableToLoadCutting);
+  async function loadProjectHistory(projectId = selectedProjectId) {
+    if (!projectId) {
+      return;
     }
 
-    setActiveView("projectDetails");
+    setLoading(true);
+    const result = await getProjectHistory(token, projectId);
+    setLoading(false);
+
+    if (!result.success) {
+      setStatus(result.error || t.projectNotFound);
+      return;
+    }
+
+    setHistoryItems(result.versions || []);
+    setHistoryLoaded(true);
+    setStatus("");
+  }
+
+  async function loadProjectProduction(projectId = selectedProjectId) {
+    if (!projectId) {
+      return;
+    }
+
+    setLoading(true);
+    const result = await getProjectCutting(token, projectId);
+    setLoading(false);
+
+    if (!result.success) {
+      setStatus(result.error || t.unableToLoadCutting);
+      return;
+    }
+
+    setCuttingItems(result.items || []);
+    setCuttingSummary(result.summary || null);
+    setSelectedPartDetail(null);
+    setProductionLoaded(true);
+    setStatus("");
+  }
+
+  async function handleProjectTabChange(tabName) {
+    setActiveProjectTab(tabName);
+
+    if (tabName === "history" && !historyLoaded) {
+      await loadProjectHistory();
+      return;
+    }
+
+    if (tabName === "production" && !productionLoaded) {
+      await loadProjectProduction();
+    }
   }
 
   async function handleLogin(event) {
@@ -976,6 +1032,9 @@ export default function App() {
     setCuttingItems([]);
     setCuttingSummary(null);
     setSelectedPartDetail(null);
+    setHistoryLoaded(false);
+    setProductionLoaded(false);
+    setActiveProjectTab("data");
     setStatus("");
   }
 
@@ -992,6 +1051,7 @@ export default function App() {
     }
 
     setSelectedPartDetail(result);
+    setActiveProjectTab("production");
     setStatus("");
   }
 
@@ -1286,7 +1346,7 @@ export default function App() {
     setConfirmAction({
       type: "rollback",
       title: t.rollbackProject,
-      message: `${t.rollbackProject} ${selectedProjectId} ${t.to} ${version.width} x ${version.height} x ${version.depth}?`,
+      message: `${t.rollbackProject} ${selectedProject?.project_name || t.newProjectDefault} ${t.to} ${version.width} x ${version.height} x ${version.depth}?`,
       confirmLabel: t.rollback,
       targetId: version.id,
     });
@@ -1305,7 +1365,7 @@ export default function App() {
     setConfirmAction({
       type: "delete",
       title: t.deleteProject,
-      message: `${t.deleteProjectConfirm} ${selectedProjectId}?`,
+      message: `${t.deleteProjectConfirm} ${selectedProject?.project_name || t.newProjectDefault}?`,
       confirmLabel: t.delete,
       targetId: selectedProjectId,
     });
@@ -1352,6 +1412,8 @@ export default function App() {
     setStatus(t.projectRolledBack);
     closeConfirm();
     await loadProject(selectedProjectId);
+    setActiveProjectTab("history");
+    await loadProjectHistory(selectedProjectId);
     await loadProjects(token, offset);
   }
 
@@ -1381,6 +1443,9 @@ export default function App() {
     setCuttingItems([]);
     setCuttingSummary(null);
     setSelectedPartDetail(null);
+    setHistoryLoaded(false);
+    setProductionLoaded(false);
+    setActiveProjectTab("data");
     setActiveView("projects");
     await loadProjects(token, offset);
   }
@@ -1900,7 +1965,7 @@ export default function App() {
             <table>
               <thead>
                 <tr>
-                  <th>ID</th>
+                  <th>{t.projectName}</th>
                   <th>{t.projectType}</th>
                   <th>{t.size}</th>
                   <th>{t.sections}</th>
@@ -1915,8 +1980,8 @@ export default function App() {
                     key={project.id}
                     onClick={() => loadProject(project.id)}
                   >
-                    <td>{project.id}</td>
-                    <td>{project.project_type || t.notSet}</td>
+                    <td>{project.project_name || t.newProjectDefault}</td>
+                    <td>{formatCatalogLabel(project.project_type, t)}</td>
                     <td>
                       {project.width} x {project.height} x {project.depth}
                     </td>
@@ -1936,22 +2001,13 @@ export default function App() {
                 <div className="detail-header">
                   <div>
                     <p className="eyebrow">{t.selectedProject}</p>
-                    <h2>{selectedProject.id}</h2>
+                    <h2>{selectedProject.project_name || t.newProjectDefault}</h2>
                     <div className="meta-grid">
                       <span>
-                        {t.projectName}: {selectedProject.project_name || t.notSet}
-                      </span>
-                      <span>
-                        {t.projectType}: {selectedProject.project_type || t.notSet}
+                        {t.projectType}: {formatCatalogLabel(selectedProject.project_type, t)}
                       </span>
                       <span>{t.created}: {formatDateTime(selectedProject.created_at, t)}</span>
                       <span>{t.updated}: {formatDateTime(selectedProject.updated_at, t)}</span>
-                      <span>
-                        {t.createdBy}: {formatUserId(selectedProject.created_by_user_id, t)}
-                      </span>
-                      <span>
-                        {t.updatedBy}: {formatUserId(selectedProject.updated_by_user_id, t)}
-                      </span>
                     </div>
                   </div>
                   {canDeleteSelectedProject ? (
@@ -1974,6 +2030,31 @@ export default function App() {
                   </div>
                 ) : null}
 
+                <div className="detail-tabs" role="tablist">
+                  <button
+                    className={activeProjectTab === "data" ? "active" : ""}
+                    onClick={() => handleProjectTabChange("data")}
+                    type="button"
+                  >
+                    {t.dataProject}
+                  </button>
+                  <button
+                    className={activeProjectTab === "production" ? "active" : ""}
+                    onClick={() => handleProjectTabChange("production")}
+                    type="button"
+                  >
+                    {t.production}
+                  </button>
+                  <button
+                    className={activeProjectTab === "history" ? "active" : ""}
+                    onClick={() => handleProjectTabChange("history")}
+                    type="button"
+                  >
+                    {t.history}
+                  </button>
+                </div>
+
+                {activeProjectTab === "data" ? (
                 <form className="edit-grid" onSubmit={handleUpdate}>
                   <label>
                     {t.projectName}
@@ -2230,7 +2311,9 @@ export default function App() {
                     {t.save}
                   </button>
                 </form>
+                ) : null}
 
+                {activeProjectTab === "production" ? (
                 <section className="production-section">
                   <div className="history-header production-header">
                     <h3>{t.production}</h3>
@@ -2375,7 +2458,10 @@ export default function App() {
                     </article>
                   ) : null}
                 </section>
+                ) : null}
 
+                {activeProjectTab === "history" ? (
+                <>
                 <div className="history-header">
                   <History size={18} />
                   <h3>{t.history}</h3>
@@ -2384,11 +2470,10 @@ export default function App() {
                   {historyItems.map((item) => (
                     <article className="history-item" key={item.id}>
                       <div>
-                        <strong>{item.id}</strong>
+                        <strong>{formatDateTime(item.created_at, t)}</strong>
                         <span>
                           {item.width} x {item.height} x {item.depth}
                         </span>
-                        <span>{formatDateTime(item.created_at, t)}</span>
                       </div>
                       {canRollbackSelectedProject ? (
                         <button
@@ -2404,6 +2489,8 @@ export default function App() {
                     </article>
                   ))}
                 </div>
+                </>
+                ) : null}
               </>
             ) : (
               <div className="empty-state">

@@ -378,6 +378,25 @@ tbody tr.selected {
   font-size: 12px;
 }
 
+.detail-tabs {
+  border-bottom: 1px solid #dbe1e7;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-bottom: 12px;
+}
+
+.detail-tabs button {
+  background: #eef2f5;
+  color: #24343d;
+}
+
+.detail-tabs button.active,
+.detail-tabs button:hover {
+  background: #216e7a;
+  color: #ffffff;
+}
+
 .edit-grid {
   display: grid;
   gap: 12px;
