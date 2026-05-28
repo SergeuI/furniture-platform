@@ -5,6 +5,9 @@ from database.session import (
 from database.models.catalog_item import (
     CatalogItemModel
 )
+from sqlalchemy.exc import (
+    IntegrityError
+)
 
 
 DEFAULT_CATALOG_ITEMS = {
@@ -48,6 +51,10 @@ DEFAULT_CATALOG_ITEMS = {
         "integrated"
     ]
 }
+
+ALLOWED_CATALOG_CATEGORIES = list(
+    DEFAULT_CATALOG_ITEMS.keys()
+)
 
 
 def _to_int_values(values: list[str]) -> list[int]:
@@ -116,6 +123,197 @@ def seed_default_catalog_items():
                 )
 
         db.commit()
+
+    finally:
+
+        db.close()
+
+
+# =====================================================
+# LIST CATALOG ITEMS
+# =====================================================
+
+def list_catalog_items(
+
+    include_inactive: bool = True
+):
+
+    db = SessionLocal()
+
+    try:
+
+        query = db.query(CatalogItemModel)
+
+        if not include_inactive:
+
+            query = query.filter(
+                CatalogItemModel.is_active.is_(True)
+            )
+
+        return (
+
+            query
+
+            .order_by(
+
+                CatalogItemModel.category.asc(),
+
+                CatalogItemModel.sort_order.asc(),
+
+                CatalogItemModel.value.asc()
+            )
+
+            .all()
+        )
+
+    finally:
+
+        db.close()
+
+
+# =====================================================
+# CREATE CATALOG ITEM
+# =====================================================
+
+def create_catalog_item(
+
+    category: str,
+
+    value: str,
+
+    sort_order: int = 0
+):
+
+    db = SessionLocal()
+
+    try:
+
+        item = CatalogItemModel(
+
+            category=category,
+
+            value=value,
+
+            sort_order=sort_order,
+
+            is_active=True
+        )
+
+        db.add(item)
+
+        db.commit()
+
+        db.refresh(item)
+
+        return item
+
+    except IntegrityError:
+
+        db.rollback()
+
+        return None
+
+    finally:
+
+        db.close()
+
+
+# =====================================================
+# UPDATE CATALOG ITEM
+# =====================================================
+
+def update_catalog_item(
+
+    item_id: str,
+
+    value: str,
+
+    sort_order: int
+):
+
+    db = SessionLocal()
+
+    try:
+
+        item = (
+
+            db.query(CatalogItemModel)
+
+            .filter(
+                CatalogItemModel.id == item_id
+            )
+
+            .first()
+        )
+
+        if not item:
+
+            return None
+
+        item.value = value
+
+        item.sort_order = sort_order
+
+        db.commit()
+
+        db.refresh(item)
+
+        return item
+
+    except IntegrityError:
+
+        db.rollback()
+
+        return None
+
+    finally:
+
+        db.close()
+
+
+# =====================================================
+# UPDATE CATALOG ITEM ACTIVE
+# =====================================================
+
+def set_catalog_item_active(
+
+    item_id: str,
+
+    is_active: bool
+):
+
+    db = SessionLocal()
+
+    try:
+
+        item = (
+
+            db.query(CatalogItemModel)
+
+            .filter(
+                CatalogItemModel.id == item_id
+            )
+
+            .first()
+        )
+
+        if not item:
+
+            return None
+
+        item.is_active = is_active
+
+        db.commit()
+
+        db.refresh(item)
+
+        return item
+
+    except IntegrityError:
+
+        db.rollback()
+
+        return None
 
     finally:
 

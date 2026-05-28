@@ -272,6 +272,15 @@ tbody tr.selected {
   padding: 16px;
 }
 
+.catalog-form {
+  align-items: end;
+  border-bottom: 1px solid #dbe1e7;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(180px, 240px) minmax(220px, 1fr) minmax(120px, 160px) auto;
+  padding: 16px;
+}
+
 .create-project-form {
   align-items: end;
   border-bottom: 1px solid #dbe1e7;
@@ -304,6 +313,7 @@ tbody tr.selected {
   width: 100%;
 }
 
+.catalog-form select,
 .create-project-form select,
 .project-filter-form select,
 .edit-grid select {
@@ -521,6 +531,13 @@ tbody tr.selected {
   min-width: 260px;
 }
 
+.catalog-actions {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  min-width: 240px;
+}
+
 .audit-details {
   color: #4a5563;
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
@@ -620,6 +637,11 @@ tbody tr.selected {
     grid-template-columns: 1fr;
   }
 
+  .catalog-form {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
   .create-project-form {
     align-items: stretch;
     grid-template-columns: 1fr;
@@ -636,6 +658,11 @@ tbody tr.selected {
 
   .reset-password-cell {
     grid-template-columns: 1fr;
+  }
+
+  .catalog-actions {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   th,

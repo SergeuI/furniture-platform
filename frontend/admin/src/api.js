@@ -52,6 +52,45 @@ export async function getSpecificationCatalog() {
   return request("/catalog/specification");
 }
 
+export async function listCatalogItems(token) {
+  return request("/catalog/items?include_inactive=true", {
+    headers: authHeaders(token),
+  });
+}
+
+export async function createCatalogItem(token, category, value, sortOrder) {
+  return request("/catalog/items", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({
+      category,
+      value,
+      sort_order: Number(sortOrder),
+    }),
+  });
+}
+
+export async function updateCatalogItem(token, itemId, value, sortOrder) {
+  return request(`/catalog/items/${itemId}`, {
+    method: "PUT",
+    headers: authHeaders(token),
+    body: JSON.stringify({
+      value,
+      sort_order: Number(sortOrder),
+    }),
+  });
+}
+
+export async function updateCatalogItemActive(token, itemId, isActive) {
+  return request(`/catalog/items/${itemId}/active`, {
+    method: "PUT",
+    headers: authHeaders(token),
+    body: JSON.stringify({
+      is_active: isActive,
+    }),
+  });
+}
+
 export async function changeOwnPassword(token, currentPassword, newPassword) {
   return request("/auth/me/password", {
     method: "PUT",

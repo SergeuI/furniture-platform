@@ -15,6 +15,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import {
   changeOwnPassword,
+  createCatalogItem,
   createUser,
   deleteProject,
   generateProject,
@@ -23,11 +24,14 @@ import {
   getProjectHistory,
   getSpecificationCatalog,
   listAuditLogs,
+  listCatalogItems,
   listUsers,
   listProjects,
   login,
   rollbackProject,
   resetUserPassword,
+  updateCatalogItem,
+  updateCatalogItemActive,
   updateProject,
   updateUserActive,
   updateUserRole,
@@ -108,6 +112,14 @@ const DEFAULT_SPECIFICATION_CATALOG = {
     "integrated",
   ],
 };
+const CATALOG_CATEGORIES = [
+  "project_type",
+  "slide_type",
+  "bottom_type",
+  "material_thickness",
+  "edge_banding",
+  "handle_position",
+];
 
 const TRANSLATIONS = {
   en: {
@@ -119,14 +131,23 @@ const TRANSLATIONS = {
     all: "All",
     applyFilters: "Apply",
     audit: "Audit",
+    catalog: "Catalog",
+    catalogCategory: "Category",
+    catalogItemCreated: "Catalog item created",
+    catalogItemUpdated: "Catalog item updated",
+    catalogItemValue: "Value",
+    catalogSortOrder: "Order",
+    catalogStatusUpdated: "Catalog status updated",
     cancel: "Cancel",
     changePassword: "Change password",
+    create: "Create",
     createProject: "Create project",
     createUser: "Create user",
     created: "Created",
     createdBy: "Created by",
     currentPassword: "Current password",
     bottomType: "Bottom type",
+    bottom_type: "Bottom type",
     cabinet: "Cabinet",
     center: "Center",
     client: "Client",
@@ -144,9 +165,11 @@ const TRANSLATIONS = {
     email: "Email",
     enabled: "Enabled",
     entity: "Entity",
+    edge_banding: "Edge banding",
     facadeMaterial: "Facade material",
     furniturePlatform: "Furniture Platform",
     handlePosition: "Handle position",
+    handle_position: "Handle position",
     handleType: "Handle type",
     height: "Height",
     heightMax: "Height max",
@@ -164,6 +187,7 @@ const TRANSLATIONS = {
     newPassword: "New password",
     notSet: "Not set",
     materialThickness: "Thickness",
+    material_thickness: "Thickness",
     notes: "Notes",
     of: "of",
     onlyMine: "Only mine",
@@ -182,6 +206,7 @@ const TRANSLATIONS = {
     projectUpdated: "Project updated",
     projects: "Projects",
     projectType: "Project type",
+    project_type: "Project type",
     readOnlyProject: "Read-only project",
     readOnlyProjectDescription: "You can view this project, but cannot edit it.",
     reset: "Reset",
@@ -197,6 +222,7 @@ const TRANSLATIONS = {
     selectProject: "Select a project",
     selectedProject: "Selected project",
     slideType: "Slide type",
+    slide_type: "Slide type",
     signIn: "Sign in",
     size: "Size",
     specification: "Specification",
@@ -207,6 +233,9 @@ const TRANSLATIONS = {
     unableToChangePassword: "Unable to change password",
     unableToCreateProject: "Unable to create project",
     unableToCreateUser: "Unable to create user",
+    unableToLoadCatalog: "Unable to load catalog",
+    unableToSaveCatalogItem: "Unable to save catalog item",
+    unableToUpdateCatalogStatus: "Unable to update catalog status",
     unableToLoadAuditLogs: "Unable to load audit logs",
     unableToLoadProjects: "Unable to load projects",
     unableToLoadUsers: "Unable to load users",
@@ -234,14 +263,23 @@ const TRANSLATIONS = {
     all: "Всі",
     applyFilters: "Застосувати",
     audit: "Аудит",
+    catalog: "Довідники",
+    catalogCategory: "Категорія",
+    catalogItemCreated: "Значення довідника створено",
+    catalogItemUpdated: "Значення довідника оновлено",
+    catalogItemValue: "Значення",
+    catalogSortOrder: "Порядок",
+    catalogStatusUpdated: "Статус довідника оновлено",
     cancel: "Скасувати",
     changePassword: "Змінити пароль",
+    create: "Створити",
     createProject: "Створити проект",
     createUser: "Створити користувача",
     created: "Створено",
     createdBy: "Створив",
     currentPassword: "Поточний пароль",
     bottomType: "Тип дна",
+    bottom_type: "Тип дна",
     cabinet: "Тумба",
     center: "По центру",
     client: "Клієнт",
@@ -259,9 +297,11 @@ const TRANSLATIONS = {
     email: "Email",
     enabled: "Увімкнено",
     entity: "Сутність",
+    edge_banding: "Крайка",
     facadeMaterial: "Матеріал фасаду",
     furniturePlatform: "Furniture Platform",
     handlePosition: "Позиція ручки",
+    handle_position: "Позиція ручки",
     handleType: "Тип ручки",
     height: "Висота",
     heightMax: "Висота до",
@@ -279,6 +319,7 @@ const TRANSLATIONS = {
     newPassword: "Новий пароль",
     notSet: "Не вказано",
     materialThickness: "Товщина",
+    material_thickness: "Товщина",
     notes: "Нотатки",
     of: "з",
     onlyMine: "Тільки мої",
@@ -297,6 +338,7 @@ const TRANSLATIONS = {
     projectUpdated: "Проект оновлено",
     projects: "Проекти",
     projectType: "Тип проекту",
+    project_type: "Тип проекту",
     readOnlyProject: "Проект лише для перегляду",
     readOnlyProjectDescription: "Ви можете переглядати цей проект, але не можете його редагувати.",
     reset: "Скинути",
@@ -312,6 +354,7 @@ const TRANSLATIONS = {
     selectProject: "Виберіть проект",
     selectedProject: "Вибраний проект",
     slideType: "Тип направляючих",
+    slide_type: "Тип направляючих",
     signIn: "Увійти",
     size: "Розмір",
     specification: "Специфікація",
@@ -322,6 +365,9 @@ const TRANSLATIONS = {
     unableToChangePassword: "Не вдалося змінити пароль",
     unableToCreateProject: "Не вдалося створити проект",
     unableToCreateUser: "Не вдалося створити користувача",
+    unableToLoadCatalog: "Не вдалося завантажити довідники",
+    unableToSaveCatalogItem: "Не вдалося зберегти значення довідника",
+    unableToUpdateCatalogStatus: "Не вдалося оновити статус довідника",
     unableToLoadAuditLogs: "Не вдалося завантажити аудит",
     unableToLoadProjects: "Не вдалося завантажити проекти",
     unableToLoadUsers: "Не вдалося завантажити користувачів",
@@ -498,12 +544,18 @@ export default function App() {
     password: "",
     role: "manager",
   });
+  const [newCatalogItemForm, setNewCatalogItemForm] = useState({
+    category: "project_type",
+    value: "",
+    sortOrder: 0,
+  });
   const [newProjectForm, setNewProjectForm] = useState(DEFAULT_PROJECT_FORM);
   const [projectFilters, setProjectFilters] = useState(DEFAULT_PROJECT_FILTERS);
   const [resetPasswordForms, setResetPasswordForms] = useState({});
   const [projects, setProjects] = useState([]);
   const [users, setUsers] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
+  const [catalogItems, setCatalogItems] = useState([]);
   const [specificationCatalog, setSpecificationCatalog] = useState(
     DEFAULT_SPECIFICATION_CATALOG,
   );
@@ -579,8 +631,12 @@ export default function App() {
       return usersPageLabel;
     }
 
+    if (activeView === "catalog") {
+      return `${catalogItems.length} ${t.of} ${catalogItems.length}`;
+    }
+
     return auditPageLabel;
-  }, [activeView, auditPageLabel, pageLabel, usersPageLabel]);
+  }, [activeView, auditPageLabel, catalogItems.length, pageLabel, t, usersPageLabel]);
 
   function changeLanguage(nextLanguage) {
     localStorage.setItem(LANGUAGE_STORAGE_KEY, nextLanguage);
@@ -686,6 +742,23 @@ export default function App() {
     setAuditOffset(result.offset);
   }
 
+  async function loadCatalogItems(activeToken = token) {
+    if (!activeToken || user?.role !== "admin") {
+      return;
+    }
+
+    setLoading(true);
+    const result = await listCatalogItems(activeToken);
+    setLoading(false);
+
+    if (!result.success) {
+      setStatus(result.error || t.unableToLoadCatalog);
+      return;
+    }
+
+    setCatalogItems(result.items);
+  }
+
   async function loadProject(projectId) {
     const [projectResult, historyResult] = await Promise.all([
       getProject(token, projectId),
@@ -728,6 +801,7 @@ export default function App() {
     setProjects([]);
     setUsers([]);
     setAuditLogs([]);
+    setCatalogItems([]);
     setResetPasswordForms({});
     setOwnPasswordForm({
       currentPassword: "",
@@ -753,6 +827,11 @@ export default function App() {
 
     if (view === "users") {
       await loadUsers(token, usersOffset);
+      return;
+    }
+
+    if (view === "catalog") {
+      await loadCatalogItems(token);
       return;
     }
 
@@ -872,6 +951,72 @@ export default function App() {
     });
     setStatus(t.userCreated);
     await loadUsers(token, 0);
+  }
+
+  async function handleCreateCatalogItem(event) {
+    event.preventDefault();
+
+    setLoading(true);
+    const result = await createCatalogItem(
+      token,
+      newCatalogItemForm.category,
+      newCatalogItemForm.value,
+      newCatalogItemForm.sortOrder,
+    );
+    setLoading(false);
+
+    if (!result.success) {
+      setStatus(result.error || t.unableToSaveCatalogItem);
+      return;
+    }
+
+    setNewCatalogItemForm({
+      ...newCatalogItemForm,
+      value: "",
+      sortOrder: 0,
+    });
+    setStatus(t.catalogItemCreated);
+    await loadCatalogItems(token);
+    await loadSpecificationCatalog();
+  }
+
+  async function handleCatalogItemUpdate(item, value, sortOrder) {
+    setLoading(true);
+    const result = await updateCatalogItem(
+      token,
+      item.id,
+      value,
+      sortOrder,
+    );
+    setLoading(false);
+
+    if (!result.success) {
+      setStatus(result.error || t.unableToSaveCatalogItem);
+      return;
+    }
+
+    setStatus(t.catalogItemUpdated);
+    await loadCatalogItems(token);
+    await loadSpecificationCatalog();
+  }
+
+  async function handleCatalogItemActiveChange(item, isActive) {
+    setLoading(true);
+    const result = await updateCatalogItemActive(
+      token,
+      item.id,
+      isActive,
+    );
+    setLoading(false);
+
+    if (!result.success) {
+      setStatus(result.error || t.unableToUpdateCatalogStatus);
+      return;
+    }
+
+    setStatus(t.catalogStatusUpdated);
+    await loadCatalogItems(token);
+    await loadSpecificationCatalog();
   }
 
   async function handleApplyProjectFilters(event) {
@@ -1079,6 +1224,14 @@ export default function App() {
     loadAuditLogs(token, 0);
   }, [token, user, activeView]);
 
+  useEffect(() => {
+    if (!token || user?.role !== "admin" || activeView !== "catalog") {
+      return;
+    }
+
+    loadCatalogItems(token);
+  }, [token, user, activeView]);
+
   if (!token || !user) {
     return (
       <main className="auth-screen">
@@ -1179,6 +1332,13 @@ export default function App() {
                 {t.users}
               </button>
               <button
+                className={activeView === "catalog" ? "active" : ""}
+                onClick={() => switchView("catalog")}
+                type="button"
+              >
+                {t.catalog}
+              </button>
+              <button
                 className={activeView === "audit" ? "active" : ""}
                 onClick={() => switchView("audit")}
                 type="button"
@@ -1240,6 +1400,8 @@ export default function App() {
                   ? t.createProject
                 : activeView === "users"
                   ? t.users
+                : activeView === "catalog"
+                  ? t.catalog
                   : t.audit}
             </h2>
             <p>{activePageLabel}</p>
@@ -1310,6 +1472,16 @@ export default function App() {
                   <RefreshCw size={18} />
                 </button>
               </>
+            ) : activeView === "catalog" ? (
+              <button
+                aria-label="Refresh catalog"
+                className="icon-button"
+                disabled={loading}
+                onClick={() => loadCatalogItems(token)}
+                type="button"
+              >
+                <RefreshCw size={18} />
+              </button>
             ) : activeView === "audit" ? (
               <>
                 <button
@@ -2300,6 +2472,152 @@ export default function App() {
                           type="button"
                         >
                           {t.reset}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+        ) : activeView === "catalog" ? (
+          <section className="table-panel full-panel">
+            <form className="catalog-form" onSubmit={handleCreateCatalogItem}>
+              <label>
+                {t.catalogCategory}
+                <select
+                  onChange={(event) =>
+                    setNewCatalogItemForm({
+                      ...newCatalogItemForm,
+                      category: event.target.value,
+                    })
+                  }
+                  value={newCatalogItemForm.category}
+                >
+                  {CATALOG_CATEGORIES.map((category) => (
+                    <option key={category} value={category}>
+                      {formatCatalogLabel(category, t)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                {t.catalogItemValue}
+                <input
+                  onChange={(event) =>
+                    setNewCatalogItemForm({
+                      ...newCatalogItemForm,
+                      value: event.target.value,
+                    })
+                  }
+                  required
+                  type="text"
+                  value={newCatalogItemForm.value}
+                />
+              </label>
+              <label>
+                {t.catalogSortOrder}
+                <input
+                  onChange={(event) =>
+                    setNewCatalogItemForm({
+                      ...newCatalogItemForm,
+                      sortOrder: event.target.value,
+                    })
+                  }
+                  type="number"
+                  value={newCatalogItemForm.sortOrder}
+                />
+              </label>
+              <button
+                className="primary-button"
+                disabled={loading}
+                type="submit"
+              >
+                <Plus size={18} />
+                {t.create}
+              </button>
+            </form>
+            <table>
+              <thead>
+                <tr>
+                  <th>{t.catalogCategory}</th>
+                  <th>{t.catalogItemValue}</th>
+                  <th>{t.catalogSortOrder}</th>
+                  <th>{t.status}</th>
+                  <th>{t.action}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {catalogItems.map((item) => (
+                  <tr key={item.id}>
+                    <td>{formatCatalogLabel(item.category, t)}</td>
+                    <td>
+                      <input
+                        onChange={(event) =>
+                          setCatalogItems(
+                            catalogItems.map((catalogItem) =>
+                              catalogItem.id === item.id
+                                ? {
+                                    ...catalogItem,
+                                    value: event.target.value,
+                                  }
+                                : catalogItem,
+                            ),
+                          )
+                        }
+                        type="text"
+                        value={item.value}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        onChange={(event) =>
+                          setCatalogItems(
+                            catalogItems.map((catalogItem) =>
+                              catalogItem.id === item.id
+                                ? {
+                                    ...catalogItem,
+                                    sort_order: event.target.value,
+                                  }
+                                : catalogItem,
+                            ),
+                          )
+                        }
+                        type="number"
+                        value={item.sort_order}
+                      />
+                    </td>
+                    <td>{item.is_active ? t.active : t.inactive}</td>
+                    <td>
+                      <div className="catalog-actions">
+                        <label className="toggle-label">
+                          <input
+                            checked={item.is_active}
+                            disabled={loading}
+                            onChange={(event) =>
+                              handleCatalogItemActiveChange(
+                                item,
+                                event.target.checked,
+                              )
+                            }
+                            type="checkbox"
+                          />
+                          {t.enabled}
+                        </label>
+                        <button
+                          className="ghost-button"
+                          disabled={loading}
+                          onClick={() =>
+                            handleCatalogItemUpdate(
+                              item,
+                              item.value,
+                              item.sort_order,
+                            )
+                          }
+                          type="button"
+                        >
+                          <Save size={16} />
+                          {t.save}
                         </button>
                       </div>
                     </td>
