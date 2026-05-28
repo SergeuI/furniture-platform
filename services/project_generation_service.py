@@ -6,6 +6,10 @@ from services.project_validator import (
     validate_project_input
 )
 
+from services.project_catalog_validator import (
+    validate_project_catalog_values
+)
+
 from services.validation_engine import (
     validate_project
 )
@@ -69,6 +73,23 @@ async def generate_project(
             success=False,
 
             errors=validation.errors
+        )
+
+    # =================================================
+    # CATALOG VALIDATION
+    # =================================================
+
+    catalog_errors = validate_project_catalog_values(
+        project
+    )
+
+    if catalog_errors:
+
+        return GenerationResult(
+
+            success=False,
+
+            errors=catalog_errors
         )
 
     # =================================================

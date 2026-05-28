@@ -131,6 +131,10 @@ class ProjectDetailResponseSchema(BaseModel):
 
     error: Optional[str] = None
 
+    errors: List[str] = Field(
+        default_factory=list
+    )
+
 
 class ProjectListResponseSchema(BaseModel):
 

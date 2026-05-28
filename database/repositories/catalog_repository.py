@@ -365,6 +365,44 @@ def list_catalog_values(
 
 
 # =====================================================
+# CATALOG VALUE EXISTS
+# =====================================================
+
+def catalog_value_exists(
+
+    category: str,
+
+    value: str
+) -> bool:
+
+    db = SessionLocal()
+
+    try:
+
+        return (
+
+            db.query(CatalogItemModel)
+
+            .filter(
+
+                CatalogItemModel.category == category,
+
+                CatalogItemModel.value == value,
+
+                CatalogItemModel.is_active.is_(True)
+            )
+
+            .first()
+
+            is not None
+        )
+
+    finally:
+
+        db.close()
+
+
+# =====================================================
 # GET SPECIFICATION CATALOG
 # =====================================================
 

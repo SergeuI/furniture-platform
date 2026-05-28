@@ -23,6 +23,9 @@ from schemas.project_response import (
 from services.project_generation_service import (
     generate_project
 )
+from services.project_catalog_validator import (
+    validate_project_catalog_values
+)
 from database.repositories.project_repository import (
 
     count_accessible_projects,
@@ -491,6 +494,21 @@ async def update_project_route(
     previous_state = _serialize_project(
         existing_project
     )
+
+    catalog_errors = validate_project_catalog_values(
+        project
+    )
+
+    if catalog_errors:
+
+        return {
+
+            "success": False,
+
+            "errors": catalog_errors,
+
+            "error": ", ".join(catalog_errors)
+        }
 
     updated = update_project(
 
