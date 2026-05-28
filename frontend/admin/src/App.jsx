@@ -211,6 +211,7 @@ const TRANSLATIONS = {
     projectCreated: "Project created",
     projectName: "Project name",
     projectNotFound: "Project not found",
+    projectDetails: "Project details",
     projectRolledBack: "Project rolled back",
     projectRollbackRestricted: "You do not have permission to roll back this project",
     projectUpdated: "Project updated",
@@ -360,6 +361,7 @@ const TRANSLATIONS = {
     projectCreated: "Проект створено",
     projectName: "Назва проекту",
     projectNotFound: "Проект не знайдено",
+    projectDetails: "Деталі проекту",
     projectRolledBack: "Проект відновлено",
     projectRollbackRestricted: "У вас немає прав для відновлення цього проекту",
     projectUpdated: "Проект оновлено",
@@ -767,6 +769,10 @@ export default function App() {
       return t.specification;
     }
 
+    if (activeView === "projectDetails") {
+      return selectedProjectId || t.selectProject;
+    }
+
     if (activeView === "users") {
       return usersPageLabel;
     }
@@ -776,7 +782,15 @@ export default function App() {
     }
 
     return auditPageLabel;
-  }, [activeView, auditPageLabel, catalogItems.length, pageLabel, t, usersPageLabel]);
+  }, [
+    activeView,
+    auditPageLabel,
+    catalogItems.length,
+    pageLabel,
+    selectedProjectId,
+    t,
+    usersPageLabel,
+  ]);
 
   function changeLanguage(nextLanguage) {
     localStorage.setItem(LANGUAGE_STORAGE_KEY, nextLanguage);
@@ -921,6 +935,8 @@ export default function App() {
     if (!cuttingResult.success) {
       setStatus(cuttingResult.error || t.unableToLoadCutting);
     }
+
+    setActiveView("projectDetails");
   }
 
   async function handleLogin(event) {
@@ -1365,6 +1381,7 @@ export default function App() {
     setCuttingItems([]);
     setCuttingSummary(null);
     setSelectedPartDetail(null);
+    setActiveView("projects");
     await loadProjects(token, offset);
   }
 
@@ -1490,7 +1507,11 @@ export default function App() {
 
         <nav className="nav-tabs" aria-label="Admin sections">
           <button
-            className={activeView === "projects" ? "active" : ""}
+            className={
+              activeView === "projects" || activeView === "projectDetails"
+                ? "active"
+                : ""
+            }
             onClick={() => switchView("projects")}
             type="button"
           >
@@ -1581,6 +1602,8 @@ export default function App() {
                 ? t.projects
                 : activeView === "createProject"
                   ? t.createProject
+                : activeView === "projectDetails"
+                  ? t.projectDetails
                 : activeView === "users"
                   ? t.users
                 : activeView === "catalog"
@@ -1623,6 +1646,16 @@ export default function App() {
                   <RefreshCw size={18} />
                 </button>
               </>
+            ) : activeView === "projectDetails" ? (
+              <button
+                className="ghost-button"
+                disabled={loading}
+                onClick={() => switchView("projects")}
+                type="button"
+              >
+                <ChevronLeft size={18} />
+                {t.projects}
+              </button>
             ) : activeView === "users" ? (
               <>
                 <button
@@ -1704,8 +1737,7 @@ export default function App() {
         {status ? <p className="status">{status}</p> : null}
 
         {activeView === "projects" ? (
-          <div className="content-grid">
-          <section className="table-panel">
+          <section className="table-panel full-panel">
             <form
               className="project-filter-form"
               onSubmit={handleApplyProjectFilters}
@@ -1897,7 +1929,8 @@ export default function App() {
             </table>
           </section>
 
-          <section className="detail-panel">
+        ) : activeView === "projectDetails" ? (
+          <section className="detail-panel full-panel">
             {selectedProject ? (
               <>
                 <div className="detail-header">
@@ -2379,7 +2412,6 @@ export default function App() {
               </div>
             )}
           </section>
-        </div>
         ) : activeView === "createProject" ? (
           <section className="table-panel full-panel create-project-panel">
             <form
