@@ -130,6 +130,32 @@ def _serialize_project(
 
         "drawers": project.drawers,
 
+        "project_name": project.project_name,
+
+        "project_type": project.project_type,
+
+        "client_name": project.client_name,
+
+        "room_name": project.room_name,
+
+        "facade_material": project.facade_material,
+
+        "inside_material": project.inside_material,
+
+        "edge_banding": project.edge_banding,
+
+        "material_thickness": project.material_thickness,
+
+        "slide_type": project.slide_type,
+
+        "bottom_type": project.bottom_type,
+
+        "handle_type": project.handle_type,
+
+        "handle_position": project.handle_position,
+
+        "notes": project.notes,
+
         "created_by_user_id": project.created_by_user_id,
 
         "updated_by_user_id": project.updated_by_user_id,
@@ -158,6 +184,32 @@ def _serialize_project_version(
         "sections": version.sections,
 
         "drawers": version.drawers,
+
+        "project_name": version.project_name,
+
+        "project_type": version.project_type,
+
+        "client_name": version.client_name,
+
+        "room_name": version.room_name,
+
+        "facade_material": version.facade_material,
+
+        "inside_material": version.inside_material,
+
+        "edge_banding": version.edge_banding,
+
+        "material_thickness": version.material_thickness,
+
+        "slide_type": version.slide_type,
+
+        "bottom_type": version.bottom_type,
+
+        "handle_type": version.handle_type,
+
+        "handle_position": version.handle_position,
+
+        "notes": version.notes,
 
         "created_at": version.created_at
     }
@@ -377,6 +429,32 @@ async def update_project_route(
         sections=project.sections.count,
 
         drawers=project.drawers.config,
+
+        project_name=project.metadata.name,
+
+        project_type=project.metadata.type,
+
+        client_name=project.metadata.client,
+
+        room_name=project.metadata.room,
+
+        facade_material=project.materials.facade,
+
+        inside_material=project.materials.inside,
+
+        edge_banding=project.materials.edge_banding,
+
+        material_thickness=project.materials.thickness,
+
+        slide_type=project.fittings.slide_type,
+
+        bottom_type=project.fittings.bottom_type,
+
+        handle_type=project.fittings.handle_type,
+
+        handle_position=project.fittings.handle_position,
+
+        notes=project.metadata.notes,
 
         updated_by_user_id=current_user.id
     )

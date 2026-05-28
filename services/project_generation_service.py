@@ -161,6 +161,32 @@ async def generate_project(
 
         drawers=project.drawers.config,
 
+        project_name=project.metadata.name,
+
+        project_type=project.metadata.type,
+
+        client_name=project.metadata.client,
+
+        room_name=project.metadata.room,
+
+        facade_material=project.materials.facade,
+
+        inside_material=project.materials.inside,
+
+        edge_banding=project.materials.edge_banding,
+
+        material_thickness=project.materials.thickness,
+
+        slide_type=project.fittings.slide_type,
+
+        bottom_type=project.fittings.bottom_type,
+
+        handle_type=project.fittings.handle_type,
+
+        handle_position=project.fittings.handle_position,
+
+        notes=project.metadata.notes,
+
         created_by_user_id=created_by_user_id
     )
     # =================================================

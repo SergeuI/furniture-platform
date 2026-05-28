@@ -1,7 +1,25 @@
 from pydantic import BaseModel
+from pydantic import Field
 
 from typing import List
 from typing import Optional
+
+
+# =====================================================
+# PROJECT METADATA
+# =====================================================
+
+class ProjectMetadataSchema(BaseModel):
+
+    name: Optional[str] = None
+
+    type: Optional[str] = None
+
+    client: Optional[str] = None
+
+    room: Optional[str] = None
+
+    notes: Optional[str] = None
 
 
 # =====================================================
@@ -47,6 +65,10 @@ class MaterialsSchema(BaseModel):
 
     inside: Optional[str] = None
 
+    edge_banding: Optional[str] = None
+
+    thickness: Optional[int] = None
+
 
 # =====================================================
 # FITTINGS
@@ -58,12 +80,20 @@ class FittingsSchema(BaseModel):
 
     bottom_type: Optional[str] = None
 
+    handle_type: Optional[str] = None
+
+    handle_position: Optional[str] = None
+
 
 # =====================================================
 # PROJECT INPUT
 # =====================================================
 
 class ProjectInputSchema(BaseModel):
+
+    metadata: ProjectMetadataSchema = Field(
+        default_factory=ProjectMetadataSchema
+    )
 
     dimensions: DimensionsSchema
 

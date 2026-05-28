@@ -33,7 +33,33 @@ def _create_project_version_from_project(
 
         sections=project.sections,
 
-        drawers=project.drawers
+        drawers=project.drawers,
+
+        project_name=project.project_name,
+
+        project_type=project.project_type,
+
+        client_name=project.client_name,
+
+        room_name=project.room_name,
+
+        facade_material=project.facade_material,
+
+        inside_material=project.inside_material,
+
+        edge_banding=project.edge_banding,
+
+        material_thickness=project.material_thickness,
+
+        slide_type=project.slide_type,
+
+        bottom_type=project.bottom_type,
+
+        handle_type=project.handle_type,
+
+        handle_position=project.handle_position,
+
+        notes=project.notes
     )
 
     db.add(version)
@@ -91,6 +117,32 @@ def create_project(
 
     drawers: list,
 
+    project_name: str | None = None,
+
+    project_type: str | None = None,
+
+    client_name: str | None = None,
+
+    room_name: str | None = None,
+
+    facade_material: str | None = None,
+
+    inside_material: str | None = None,
+
+    edge_banding: str | None = None,
+
+    material_thickness: int | None = None,
+
+    slide_type: str | None = None,
+
+    bottom_type: str | None = None,
+
+    handle_type: str | None = None,
+
+    handle_position: str | None = None,
+
+    notes: str | None = None,
+
     created_by_user_id: str | None = None
 ):
 
@@ -109,6 +161,32 @@ def create_project(
             sections=sections,
 
             drawers=drawers,
+
+            project_name=project_name,
+
+            project_type=project_type,
+
+            client_name=client_name,
+
+            room_name=room_name,
+
+            facade_material=facade_material,
+
+            inside_material=inside_material,
+
+            edge_banding=edge_banding,
+
+            material_thickness=material_thickness,
+
+            slide_type=slide_type,
+
+            bottom_type=bottom_type,
+
+            handle_type=handle_type,
+
+            handle_position=handle_position,
+
+            notes=notes,
 
             created_by_user_id=created_by_user_id,
 
@@ -319,6 +397,32 @@ def update_project(
 
     drawers: list,
 
+    project_name: str | None = None,
+
+    project_type: str | None = None,
+
+    client_name: str | None = None,
+
+    room_name: str | None = None,
+
+    facade_material: str | None = None,
+
+    inside_material: str | None = None,
+
+    edge_banding: str | None = None,
+
+    material_thickness: int | None = None,
+
+    slide_type: str | None = None,
+
+    bottom_type: str | None = None,
+
+    handle_type: str | None = None,
+
+    handle_position: str | None = None,
+
+    notes: str | None = None,
+
     updated_by_user_id: str | None = None
 ):
 
@@ -358,6 +462,32 @@ def update_project(
         project.sections = sections
 
         project.drawers = drawers
+
+        project.project_name = project_name
+
+        project.project_type = project_type
+
+        project.client_name = client_name
+
+        project.room_name = room_name
+
+        project.facade_material = facade_material
+
+        project.inside_material = inside_material
+
+        project.edge_banding = edge_banding
+
+        project.material_thickness = material_thickness
+
+        project.slide_type = slide_type
+
+        project.bottom_type = bottom_type
+
+        project.handle_type = handle_type
+
+        project.handle_position = handle_position
+
+        project.notes = notes
 
         if updated_by_user_id is not None:
 
@@ -441,6 +571,32 @@ def rollback_project(
         project.sections = version.sections
 
         project.drawers = version.drawers
+
+        project.project_name = version.project_name
+
+        project.project_type = version.project_type
+
+        project.client_name = version.client_name
+
+        project.room_name = version.room_name
+
+        project.facade_material = version.facade_material
+
+        project.inside_material = version.inside_material
+
+        project.edge_banding = version.edge_banding
+
+        project.material_thickness = version.material_thickness
+
+        project.slide_type = version.slide_type
+
+        project.bottom_type = version.bottom_type
+
+        project.handle_type = version.handle_type
+
+        project.handle_position = version.handle_position
+
+        project.notes = version.notes
 
         if updated_by_user_id is not None:
 

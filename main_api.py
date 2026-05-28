@@ -5,6 +5,10 @@ from fastapi.middleware.cors import (
     CORSMiddleware
 )
 
+from database.init_db import (
+    init_database
+)
+
 from api.routes.auth import (
     router as auth_router
 )
@@ -14,6 +18,8 @@ from api.routes.project import (
 from api.routes.audit import (
     router as audit_router
 )
+
+init_database()
 
 app = FastAPI(
 

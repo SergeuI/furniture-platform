@@ -285,6 +285,11 @@ tbody tr.selected {
   width: 100%;
 }
 
+.create-project-form select,
+.edit-grid select {
+  width: 100%;
+}
+
 .create-user-button,
 .create-project-button {
   white-space: nowrap;

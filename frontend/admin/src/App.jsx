@@ -36,11 +36,24 @@ const TOKEN_STORAGE_KEY = "furniture_admin_token";
 const LANGUAGE_STORAGE_KEY = "furniture_admin_language";
 const PAGE_SIZE = 20;
 const DEFAULT_PROJECT_FORM = {
+  projectName: "",
+  projectType: "dresser",
+  clientName: "",
+  roomName: "",
   width: 1000,
   height: 800,
   depth: 500,
   sections: 2,
   drawers: "1, 2",
+  facadeMaterial: "",
+  insideMaterial: "",
+  edgeBanding: "",
+  materialThickness: 18,
+  slideType: "tandem",
+  bottomType: "hdf",
+  handleType: "",
+  handlePosition: "",
+  notes: "",
 };
 
 const TRANSLATIONS = {
@@ -58,6 +71,9 @@ const TRANSLATIONS = {
     created: "Created",
     createdBy: "Created by",
     currentPassword: "Current password",
+    bottomType: "Bottom type",
+    cabinet: "Cabinet",
+    client: "Client",
     delete: "Delete",
     deleteFailed: "Delete failed",
     deleteProject: "Delete project",
@@ -65,20 +81,30 @@ const TRANSLATIONS = {
     deleteRestricted: "Only admins can delete projects",
     depth: "Depth",
     details: "Details",
+    dresser: "Dresser",
     drawers: "Drawers",
+    drawerUnit: "Drawer unit",
+    edgeBanding: "Edge banding",
     email: "Email",
     enabled: "Enabled",
     entity: "Entity",
+    facadeMaterial: "Facade material",
     furniturePlatform: "Furniture Platform",
+    handlePosition: "Handle position",
+    handleType: "Handle type",
     height: "Height",
     history: "History",
+    insideMaterial: "Inside material",
     inactive: "Inactive",
+    kitchen: "Kitchen",
     invalidCurrentPassword: "Invalid current password",
     loginFailed: "Login failed",
     logout: "Logout",
     noDetails: "No details",
     newPassword: "New password",
     notSet: "Not set",
+    materialThickness: "Thickness",
+    notes: "Notes",
     of: "of",
     password: "Password",
     passwordChanged: "Password changed",
@@ -88,11 +114,13 @@ const TRANSLATIONS = {
     projectDeleteRestricted: "You do not have permission to delete this project",
     projectEditRestricted: "You do not have permission to edit this project",
     projectCreated: "Project created",
+    projectName: "Project name",
     projectNotFound: "Project not found",
     projectRolledBack: "Project rolled back",
     projectRollbackRestricted: "You do not have permission to roll back this project",
     projectUpdated: "Project updated",
     projects: "Projects",
+    projectType: "Project type",
     readOnlyProject: "Read-only project",
     readOnlyProjectDescription: "You can view this project, but cannot edit it.",
     reset: "Reset",
@@ -100,12 +128,15 @@ const TRANSLATIONS = {
     rollback: "Rollback",
     rollbackFailed: "Rollback failed",
     rollbackProject: "Rollback project",
+    room: "Room",
     save: "Save",
     sections: "Sections",
     selectProject: "Select a project",
     selectedProject: "Selected project",
+    slideType: "Slide type",
     signIn: "Sign in",
     size: "Size",
+    specification: "Specification",
     status: "Status",
     time: "Time",
     to: "to",
@@ -126,6 +157,7 @@ const TRANSLATIONS = {
     userRoleUpdated: "User role updated",
     users: "Users",
     width: "Width",
+    wardrobe: "Wardrobe",
   },
   uk: {
     access: "Доступ",
@@ -141,6 +173,9 @@ const TRANSLATIONS = {
     created: "Створено",
     createdBy: "Створив",
     currentPassword: "Поточний пароль",
+    bottomType: "Тип дна",
+    cabinet: "Тумба",
+    client: "Клієнт",
     delete: "Видалити",
     deleteFailed: "Не вдалося видалити",
     deleteProject: "Видалити проект",
@@ -148,20 +183,30 @@ const TRANSLATIONS = {
     deleteRestricted: "Видаляти проекти може тільки адміністратор",
     depth: "Глибина",
     details: "Деталі",
+    dresser: "Комод",
     drawers: "Шухляди",
+    drawerUnit: "Блок шухляд",
+    edgeBanding: "Крайка",
     email: "Email",
     enabled: "Увімкнено",
     entity: "Сутність",
+    facadeMaterial: "Матеріал фасаду",
     furniturePlatform: "Furniture Platform",
+    handlePosition: "Позиція ручки",
+    handleType: "Тип ручки",
     height: "Висота",
     history: "Історія",
+    insideMaterial: "Матеріал корпусу",
     inactive: "Неактивний",
+    kitchen: "Кухня",
     invalidCurrentPassword: "Невірний поточний пароль",
     loginFailed: "Не вдалося увійти",
     logout: "Вийти",
     noDetails: "Без деталей",
     newPassword: "Новий пароль",
     notSet: "Не вказано",
+    materialThickness: "Товщина",
+    notes: "Нотатки",
     of: "з",
     password: "Пароль",
     passwordChanged: "Пароль змінено",
@@ -171,11 +216,13 @@ const TRANSLATIONS = {
     projectDeleteRestricted: "У вас немає прав для видалення цього проекту",
     projectEditRestricted: "У вас немає прав для редагування цього проекту",
     projectCreated: "Проект створено",
+    projectName: "Назва проекту",
     projectNotFound: "Проект не знайдено",
     projectRolledBack: "Проект відновлено",
     projectRollbackRestricted: "У вас немає прав для відновлення цього проекту",
     projectUpdated: "Проект оновлено",
     projects: "Проекти",
+    projectType: "Тип проекту",
     readOnlyProject: "Проект лише для перегляду",
     readOnlyProjectDescription: "Ви можете переглядати цей проект, але не можете його редагувати.",
     reset: "Скинути",
@@ -183,12 +230,15 @@ const TRANSLATIONS = {
     rollback: "Відновити",
     rollbackFailed: "Не вдалося відновити",
     rollbackProject: "Відновити проект",
+    room: "Кімната",
     save: "Зберегти",
     sections: "Секції",
     selectProject: "Виберіть проект",
     selectedProject: "Вибраний проект",
+    slideType: "Тип направляючих",
     signIn: "Увійти",
     size: "Розмір",
+    specification: "Специфікація",
     status: "Статус",
     time: "Час",
     to: "до",
@@ -209,11 +259,19 @@ const TRANSLATIONS = {
     userRoleUpdated: "Роль користувача оновлено",
     users: "Користувачі",
     width: "Ширина",
+    wardrobe: "Шафа",
   },
 };
 
 function buildProjectPayload(form) {
   return {
+    metadata: {
+      name: form.projectName || null,
+      type: form.projectType || null,
+      client: form.clientName || null,
+      room: form.roomName || null,
+      notes: form.notes || null,
+    },
     dimensions: {
       width: Number(form.width),
       height: Number(form.height),
@@ -231,23 +289,40 @@ function buildProjectPayload(form) {
         .map(Number),
     },
     materials: {
-      facade: null,
-      inside: null,
+      facade: form.facadeMaterial || null,
+      inside: form.insideMaterial || null,
+      edge_banding: form.edgeBanding || null,
+      thickness: form.materialThickness ? Number(form.materialThickness) : null,
     },
     fittings: {
-      slide_type: "tandem",
-      bottom_type: "hdf",
+      slide_type: form.slideType || "tandem",
+      bottom_type: form.bottomType || "hdf",
+      handle_type: form.handleType || null,
+      handle_position: form.handlePosition || null,
     },
   };
 }
 
 function projectToForm(project) {
   return {
+    projectName: project?.project_name || "",
+    projectType: project?.project_type || "dresser",
+    clientName: project?.client_name || "",
+    roomName: project?.room_name || "",
     width: project?.width || "",
     height: project?.height || "",
     depth: project?.depth || "",
     sections: project?.sections || "",
     drawers: Array.isArray(project?.drawers) ? project.drawers.join(", ") : "",
+    facadeMaterial: project?.facade_material || "",
+    insideMaterial: project?.inside_material || "",
+    edgeBanding: project?.edge_banding || "",
+    materialThickness: project?.material_thickness || 18,
+    slideType: project?.slide_type || "tandem",
+    bottomType: project?.bottom_type || "hdf",
+    handleType: project?.handle_type || "",
+    handlePosition: project?.handle_position || "",
+    notes: project?.notes || "",
   };
 }
 
@@ -1128,6 +1203,63 @@ export default function App() {
                 onSubmit={handleCreateProject}
               >
                 <label>
+                  {t.projectName}
+                  <input
+                    onChange={(event) =>
+                      setNewProjectForm({
+                        ...newProjectForm,
+                        projectName: event.target.value,
+                      })
+                    }
+                    type="text"
+                    value={newProjectForm.projectName}
+                  />
+                </label>
+                <label>
+                  {t.projectType}
+                  <select
+                    onChange={(event) =>
+                      setNewProjectForm({
+                        ...newProjectForm,
+                        projectType: event.target.value,
+                      })
+                    }
+                    value={newProjectForm.projectType}
+                  >
+                    <option value="dresser">{t.dresser}</option>
+                    <option value="wardrobe">{t.wardrobe}</option>
+                    <option value="cabinet">{t.cabinet}</option>
+                    <option value="kitchen">{t.kitchen}</option>
+                    <option value="drawer_unit">{t.drawerUnit}</option>
+                  </select>
+                </label>
+                <label>
+                  {t.client}
+                  <input
+                    onChange={(event) =>
+                      setNewProjectForm({
+                        ...newProjectForm,
+                        clientName: event.target.value,
+                      })
+                    }
+                    type="text"
+                    value={newProjectForm.clientName}
+                  />
+                </label>
+                <label>
+                  {t.room}
+                  <input
+                    onChange={(event) =>
+                      setNewProjectForm({
+                        ...newProjectForm,
+                        roomName: event.target.value,
+                      })
+                    }
+                    type="text"
+                    value={newProjectForm.roomName}
+                  />
+                </label>
+                <label>
                   {t.width}
                   <input
                     min="1"
@@ -1201,6 +1333,129 @@ export default function App() {
                     value={newProjectForm.drawers}
                   />
                 </label>
+                <label>
+                  {t.facadeMaterial}
+                  <input
+                    onChange={(event) =>
+                      setNewProjectForm({
+                        ...newProjectForm,
+                        facadeMaterial: event.target.value,
+                      })
+                    }
+                    type="text"
+                    value={newProjectForm.facadeMaterial}
+                  />
+                </label>
+                <label>
+                  {t.insideMaterial}
+                  <input
+                    onChange={(event) =>
+                      setNewProjectForm({
+                        ...newProjectForm,
+                        insideMaterial: event.target.value,
+                      })
+                    }
+                    type="text"
+                    value={newProjectForm.insideMaterial}
+                  />
+                </label>
+                <label>
+                  {t.edgeBanding}
+                  <input
+                    onChange={(event) =>
+                      setNewProjectForm({
+                        ...newProjectForm,
+                        edgeBanding: event.target.value,
+                      })
+                    }
+                    type="text"
+                    value={newProjectForm.edgeBanding}
+                  />
+                </label>
+                <label>
+                  {t.materialThickness}
+                  <input
+                    min="1"
+                    onChange={(event) =>
+                      setNewProjectForm({
+                        ...newProjectForm,
+                        materialThickness: event.target.value,
+                      })
+                    }
+                    type="number"
+                    value={newProjectForm.materialThickness}
+                  />
+                </label>
+                <label>
+                  {t.slideType}
+                  <select
+                    onChange={(event) =>
+                      setNewProjectForm({
+                        ...newProjectForm,
+                        slideType: event.target.value,
+                      })
+                    }
+                    value={newProjectForm.slideType}
+                  >
+                    <option value="tandem">tandem</option>
+                    <option value="movento">movento</option>
+                    <option value="telescopic">telescopic</option>
+                  </select>
+                </label>
+                <label>
+                  {t.bottomType}
+                  <select
+                    onChange={(event) =>
+                      setNewProjectForm({
+                        ...newProjectForm,
+                        bottomType: event.target.value,
+                      })
+                    }
+                    value={newProjectForm.bottomType}
+                  >
+                    <option value="hdf">hdf</option>
+                    <option value="dsp">dsp</option>
+                  </select>
+                </label>
+                <label>
+                  {t.handleType}
+                  <input
+                    onChange={(event) =>
+                      setNewProjectForm({
+                        ...newProjectForm,
+                        handleType: event.target.value,
+                      })
+                    }
+                    type="text"
+                    value={newProjectForm.handleType}
+                  />
+                </label>
+                <label>
+                  {t.handlePosition}
+                  <input
+                    onChange={(event) =>
+                      setNewProjectForm({
+                        ...newProjectForm,
+                        handlePosition: event.target.value,
+                      })
+                    }
+                    type="text"
+                    value={newProjectForm.handlePosition}
+                  />
+                </label>
+                <label>
+                  {t.notes}
+                  <input
+                    onChange={(event) =>
+                      setNewProjectForm({
+                        ...newProjectForm,
+                        notes: event.target.value,
+                      })
+                    }
+                    type="text"
+                    value={newProjectForm.notes}
+                  />
+                </label>
                 <button
                   className="primary-button create-project-button"
                   disabled={loading}
@@ -1215,6 +1470,7 @@ export default function App() {
               <thead>
                 <tr>
                   <th>ID</th>
+                  <th>{t.projectType}</th>
                   <th>{t.size}</th>
                   <th>{t.sections}</th>
                   <th>{t.drawers}</th>
@@ -1229,6 +1485,7 @@ export default function App() {
                     onClick={() => loadProject(project.id)}
                   >
                     <td>{project.id}</td>
+                    <td>{project.project_type || t.notSet}</td>
                     <td>
                       {project.width} x {project.height} x {project.depth}
                     </td>
@@ -1249,6 +1506,12 @@ export default function App() {
                     <p className="eyebrow">{t.selectedProject}</p>
                     <h2>{selectedProject.id}</h2>
                     <div className="meta-grid">
+                      <span>
+                        {t.projectName}: {selectedProject.project_name || t.notSet}
+                      </span>
+                      <span>
+                        {t.projectType}: {selectedProject.project_type || t.notSet}
+                      </span>
                       <span>{t.created}: {formatDateTime(selectedProject.created_at, t)}</span>
                       <span>{t.updated}: {formatDateTime(selectedProject.updated_at, t)}</span>
                       <span>
@@ -1280,6 +1543,55 @@ export default function App() {
                 ) : null}
 
                 <form className="edit-grid" onSubmit={handleUpdate}>
+                  <label>
+                    {t.projectName}
+                    <input
+                      disabled={!canEditSelectedProject || loading}
+                      onChange={(event) =>
+                        setForm({ ...form, projectName: event.target.value })
+                      }
+                      type="text"
+                      value={form.projectName}
+                    />
+                  </label>
+                  <label>
+                    {t.projectType}
+                    <select
+                      disabled={!canEditSelectedProject || loading}
+                      onChange={(event) =>
+                        setForm({ ...form, projectType: event.target.value })
+                      }
+                      value={form.projectType}
+                    >
+                      <option value="dresser">{t.dresser}</option>
+                      <option value="wardrobe">{t.wardrobe}</option>
+                      <option value="cabinet">{t.cabinet}</option>
+                      <option value="kitchen">{t.kitchen}</option>
+                      <option value="drawer_unit">{t.drawerUnit}</option>
+                    </select>
+                  </label>
+                  <label>
+                    {t.client}
+                    <input
+                      disabled={!canEditSelectedProject || loading}
+                      onChange={(event) =>
+                        setForm({ ...form, clientName: event.target.value })
+                      }
+                      type="text"
+                      value={form.clientName}
+                    />
+                  </label>
+                  <label>
+                    {t.room}
+                    <input
+                      disabled={!canEditSelectedProject || loading}
+                      onChange={(event) =>
+                        setForm({ ...form, roomName: event.target.value })
+                      }
+                      type="text"
+                      value={form.roomName}
+                    />
+                  </label>
                   <label>
                     {t.width}
                     <input
@@ -1342,6 +1654,114 @@ export default function App() {
                       placeholder="1, 2, 3"
                       type="text"
                       value={form.drawers}
+                    />
+                  </label>
+                  <label>
+                    {t.facadeMaterial}
+                    <input
+                      disabled={!canEditSelectedProject || loading}
+                      onChange={(event) =>
+                        setForm({ ...form, facadeMaterial: event.target.value })
+                      }
+                      type="text"
+                      value={form.facadeMaterial}
+                    />
+                  </label>
+                  <label>
+                    {t.insideMaterial}
+                    <input
+                      disabled={!canEditSelectedProject || loading}
+                      onChange={(event) =>
+                        setForm({ ...form, insideMaterial: event.target.value })
+                      }
+                      type="text"
+                      value={form.insideMaterial}
+                    />
+                  </label>
+                  <label>
+                    {t.edgeBanding}
+                    <input
+                      disabled={!canEditSelectedProject || loading}
+                      onChange={(event) =>
+                        setForm({ ...form, edgeBanding: event.target.value })
+                      }
+                      type="text"
+                      value={form.edgeBanding}
+                    />
+                  </label>
+                  <label>
+                    {t.materialThickness}
+                    <input
+                      disabled={!canEditSelectedProject || loading}
+                      min="1"
+                      onChange={(event) =>
+                        setForm({
+                          ...form,
+                          materialThickness: event.target.value,
+                        })
+                      }
+                      type="number"
+                      value={form.materialThickness}
+                    />
+                  </label>
+                  <label>
+                    {t.slideType}
+                    <select
+                      disabled={!canEditSelectedProject || loading}
+                      onChange={(event) =>
+                        setForm({ ...form, slideType: event.target.value })
+                      }
+                      value={form.slideType}
+                    >
+                      <option value="tandem">tandem</option>
+                      <option value="movento">movento</option>
+                      <option value="telescopic">telescopic</option>
+                    </select>
+                  </label>
+                  <label>
+                    {t.bottomType}
+                    <select
+                      disabled={!canEditSelectedProject || loading}
+                      onChange={(event) =>
+                        setForm({ ...form, bottomType: event.target.value })
+                      }
+                      value={form.bottomType}
+                    >
+                      <option value="hdf">hdf</option>
+                      <option value="dsp">dsp</option>
+                    </select>
+                  </label>
+                  <label>
+                    {t.handleType}
+                    <input
+                      disabled={!canEditSelectedProject || loading}
+                      onChange={(event) =>
+                        setForm({ ...form, handleType: event.target.value })
+                      }
+                      type="text"
+                      value={form.handleType}
+                    />
+                  </label>
+                  <label>
+                    {t.handlePosition}
+                    <input
+                      disabled={!canEditSelectedProject || loading}
+                      onChange={(event) =>
+                        setForm({ ...form, handlePosition: event.target.value })
+                      }
+                      type="text"
+                      value={form.handlePosition}
+                    />
+                  </label>
+                  <label className="wide-field">
+                    {t.notes}
+                    <input
+                      disabled={!canEditSelectedProject || loading}
+                      onChange={(event) =>
+                        setForm({ ...form, notes: event.target.value })
+                      }
+                      type="text"
+                      value={form.notes}
                     />
                   </label>
                   <button

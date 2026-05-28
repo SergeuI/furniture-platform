@@ -47,6 +47,71 @@ class ProjectVersionModel(Base):
 
     drawers = Column(JSON)
 
+    project_name = Column(
+        String,
+        nullable=True
+    )
+
+    project_type = Column(
+        String,
+        nullable=True
+    )
+
+    client_name = Column(
+        String,
+        nullable=True
+    )
+
+    room_name = Column(
+        String,
+        nullable=True
+    )
+
+    facade_material = Column(
+        String,
+        nullable=True
+    )
+
+    inside_material = Column(
+        String,
+        nullable=True
+    )
+
+    edge_banding = Column(
+        String,
+        nullable=True
+    )
+
+    material_thickness = Column(
+        Integer,
+        nullable=True
+    )
+
+    slide_type = Column(
+        String,
+        nullable=True
+    )
+
+    bottom_type = Column(
+        String,
+        nullable=True
+    )
+
+    handle_type = Column(
+        String,
+        nullable=True
+    )
+
+    handle_position = Column(
+        String,
+        nullable=True
+    )
+
+    notes = Column(
+        String,
+        nullable=True
+    )
+
     created_at = Column(
 
         DateTime,

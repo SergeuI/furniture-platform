@@ -28,6 +28,32 @@ class ProjectResponseItemSchema(BaseModel):
 
     drawers: List[int]
 
+    project_name: Optional[str] = None
+
+    project_type: Optional[str] = None
+
+    client_name: Optional[str] = None
+
+    room_name: Optional[str] = None
+
+    facade_material: Optional[str] = None
+
+    inside_material: Optional[str] = None
+
+    edge_banding: Optional[str] = None
+
+    material_thickness: Optional[int] = None
+
+    slide_type: Optional[str] = None
+
+    bottom_type: Optional[str] = None
+
+    handle_type: Optional[str] = None
+
+    handle_position: Optional[str] = None
+
+    notes: Optional[str] = None
+
     created_by_user_id: Optional[str] = None
 
     updated_by_user_id: Optional[str] = None
@@ -50,6 +76,32 @@ class ProjectVersionResponseItemSchema(BaseModel):
     sections: int
 
     drawers: List[int]
+
+    project_name: Optional[str] = None
+
+    project_type: Optional[str] = None
+
+    client_name: Optional[str] = None
+
+    room_name: Optional[str] = None
+
+    facade_material: Optional[str] = None
+
+    inside_material: Optional[str] = None
+
+    edge_banding: Optional[str] = None
+
+    material_thickness: Optional[int] = None
+
+    slide_type: Optional[str] = None
+
+    bottom_type: Optional[str] = None
+
+    handle_type: Optional[str] = None
+
+    handle_position: Optional[str] = None
+
+    notes: Optional[str] = None
 
     created_at: Optional[datetime] = None
 

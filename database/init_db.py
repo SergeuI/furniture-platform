@@ -64,6 +64,46 @@ def upgrade_sqlite_schema():
 
     with engine.begin() as connection:
 
+        project_specification_columns = {
+            "project_name": "VARCHAR",
+            "project_type": "VARCHAR",
+            "client_name": "VARCHAR",
+            "room_name": "VARCHAR",
+            "facade_material": "VARCHAR",
+            "inside_material": "VARCHAR",
+            "edge_banding": "VARCHAR",
+            "material_thickness": "INTEGER",
+            "slide_type": "VARCHAR",
+            "bottom_type": "VARCHAR",
+            "handle_type": "VARCHAR",
+            "handle_position": "VARCHAR",
+            "notes": "VARCHAR"
+        }
+
+        for column_name, column_type in project_specification_columns.items():
+
+            _add_column_if_missing(
+
+                connection,
+
+                "projects",
+
+                column_name,
+
+                column_type
+            )
+
+            _add_column_if_missing(
+
+                connection,
+
+                "project_versions",
+
+                column_name,
+
+                column_type
+            )
+
         _add_column_if_missing(
 
             connection,
@@ -144,12 +184,19 @@ def upgrade_sqlite_schema():
         )
 
 
-Base.metadata.create_all(
-    bind=engine
-)
+def init_database():
 
-upgrade_sqlite_schema()
+    Base.metadata.create_all(
+        bind=engine
+    )
 
-print(
-    "Database initialized"
-)
+    upgrade_sqlite_schema()
+
+
+if __name__ == "__main__":
+
+    init_database()
+
+    print(
+        "Database initialized"
+    )
