@@ -21,7 +21,9 @@ import {
   generateProject,
   getCurrentUser,
   getProject,
+  getProjectCutting,
   getProjectHistory,
+  getProjectPartDetail,
   getSpecificationCatalog,
   listAuditLogs,
   listCatalogItems,
@@ -146,6 +148,13 @@ const TRANSLATIONS = {
     created: "Created",
     createdBy: "Created by",
     currentPassword: "Current password",
+    cuttingArea: "Area, m2",
+    cuttingEdge: "Edge, m",
+    cuttingExportCode: "Code",
+    cuttingGrain: "Grain",
+    cuttingLength: "Length",
+    cuttingSize: "Size",
+    cuttingSummary: "Summary",
     bottomType: "Bottom type",
     bottom_type: "Bottom type",
     cabinet: "Cabinet",
@@ -184,6 +193,7 @@ const TRANSLATIONS = {
     loginFailed: "Login failed",
     logout: "Logout",
     noDetails: "No details",
+    noCuttingItems: "No cutting items yet.",
     newPassword: "New password",
     notSet: "Not set",
     materialThickness: "Thickness",
@@ -207,6 +217,12 @@ const TRANSLATIONS = {
     projects: "Projects",
     projectType: "Project type",
     project_type: "Project type",
+    production: "Production",
+    productionCutting: "Cutting list",
+    productionGrooves: "Grooves",
+    productionHoles: "Holes",
+    productionPartViewer: "Part map",
+    productionQuarters: "Quarters",
     readOnlyProject: "Read-only project",
     readOnlyProjectDescription: "You can view this project, but cannot edit it.",
     reset: "Reset",
@@ -221,6 +237,7 @@ const TRANSLATIONS = {
     sections: "Sections",
     selectProject: "Select a project",
     selectedProject: "Selected project",
+    side: "Side",
     slideType: "Slide type",
     slide_type: "Slide type",
     signIn: "Sign in",
@@ -233,6 +250,8 @@ const TRANSLATIONS = {
     unableToChangePassword: "Unable to change password",
     unableToCreateProject: "Unable to create project",
     unableToCreateUser: "Unable to create user",
+    unableToLoadCutting: "Unable to load cutting list",
+    unableToLoadPart: "Unable to load part map",
     unableToLoadCatalog: "Unable to load catalog",
     unableToSaveCatalogItem: "Unable to save catalog item",
     unableToUpdateCatalogStatus: "Unable to update catalog status",
@@ -278,6 +297,13 @@ const TRANSLATIONS = {
     created: "Створено",
     createdBy: "Створив",
     currentPassword: "Поточний пароль",
+    cuttingArea: "Площа, м2",
+    cuttingEdge: "Крайка, м",
+    cuttingExportCode: "Код",
+    cuttingGrain: "Волокно",
+    cuttingLength: "Довжина",
+    cuttingSize: "Розмір",
+    cuttingSummary: "Підсумок",
     bottomType: "Тип дна",
     bottom_type: "Тип дна",
     cabinet: "Тумба",
@@ -316,6 +342,7 @@ const TRANSLATIONS = {
     loginFailed: "Не вдалося увійти",
     logout: "Вийти",
     noDetails: "Без деталей",
+    noCuttingItems: "Карта розкрою ще порожня.",
     newPassword: "Новий пароль",
     notSet: "Не вказано",
     materialThickness: "Товщина",
@@ -339,6 +366,12 @@ const TRANSLATIONS = {
     projects: "Проекти",
     projectType: "Тип проекту",
     project_type: "Тип проекту",
+    production: "Виробництво",
+    productionCutting: "Карта розкрою",
+    productionGrooves: "Пази",
+    productionHoles: "Отвори",
+    productionPartViewer: "Карта деталі",
+    productionQuarters: "Чверті",
     readOnlyProject: "Проект лише для перегляду",
     readOnlyProjectDescription: "Ви можете переглядати цей проект, але не можете його редагувати.",
     reset: "Скинути",
@@ -353,6 +386,7 @@ const TRANSLATIONS = {
     sections: "Секції",
     selectProject: "Виберіть проект",
     selectedProject: "Вибраний проект",
+    side: "Сторона",
     slideType: "Тип направляючих",
     slide_type: "Тип направляючих",
     signIn: "Увійти",
@@ -365,6 +399,8 @@ const TRANSLATIONS = {
     unableToChangePassword: "Не вдалося змінити пароль",
     unableToCreateProject: "Не вдалося створити проект",
     unableToCreateUser: "Не вдалося створити користувача",
+    unableToLoadCutting: "Не вдалося завантажити карту розкрою",
+    unableToLoadPart: "Не вдалося завантажити карту деталі",
     unableToLoadCatalog: "Не вдалося завантажити довідники",
     unableToSaveCatalogItem: "Не вдалося зберегти значення довідника",
     unableToUpdateCatalogStatus: "Не вдалося оновити статус довідника",
@@ -525,6 +561,107 @@ function canCreateProject(user) {
   return user?.role === "admin" || user?.role === "manager";
 }
 
+function PartPreview({ detail }) {
+  if (!detail?.part) {
+    return null;
+  }
+
+  const { part } = detail;
+  const viewWidth = 720;
+  const viewHeight = 360;
+  const margin = 58;
+  const scale = Math.min(
+    (viewWidth - margin * 2) / part.width,
+    (viewHeight - margin * 2) / part.height,
+  );
+  const width = part.width * scale;
+  const height = part.height * scale;
+  const x = (viewWidth - width) / 2;
+  const y = (viewHeight - height) / 2;
+
+  function pxX(value) {
+    return x + value * scale;
+  }
+
+  function pxY(value) {
+    return y + height - value * scale;
+  }
+
+  function edgeLine(side, material) {
+    if (!material || material === "not_set") {
+      return null;
+    }
+
+    const props = {
+      className: "part-edge",
+      key: side,
+    };
+
+    if (side === "top") {
+      return <line {...props} x1={x} x2={x + width} y1={y} y2={y} />;
+    }
+
+    if (side === "bottom") {
+      return <line {...props} x1={x} x2={x + width} y1={y + height} y2={y + height} />;
+    }
+
+    if (side === "left") {
+      return <line {...props} x1={x} x2={x} y1={y} y2={y + height} />;
+    }
+
+    return <line {...props} x1={x + width} x2={x + width} y1={y} y2={y + height} />;
+  }
+
+  return (
+    <svg className="part-preview" role="img" viewBox={`0 0 ${viewWidth} ${viewHeight}`}>
+      <rect className="part-board" height={height} width={width} x={x} y={y} />
+      {edgeLine("top", part.edge_top)}
+      {edgeLine("bottom", part.edge_bottom)}
+      {edgeLine("left", part.edge_left)}
+      {edgeLine("right", part.edge_right)}
+
+      <line className="dimension-line" x1={x} x2={x + width} y1={y - 28} y2={y - 28} />
+      <line className="dimension-line" x1={x} x2={x} y1={y - 42} y2={y - 12} />
+      <line className="dimension-line" x1={x + width} x2={x + width} y1={y - 42} y2={y - 12} />
+      <text className="dimension-text" textAnchor="middle" x={viewWidth / 2} y={y - 36}>
+        {part.width}
+      </text>
+
+      <line className="dimension-line" x1={x + width + 30} x2={x + width + 30} y1={y} y2={y + height} />
+      <line className="dimension-line" x1={x + width + 16} x2={x + width + 44} y1={y} y2={y} />
+      <line className="dimension-line" x1={x + width + 16} x2={x + width + 44} y1={y + height} y2={y + height} />
+      <text
+        className="dimension-text rotated"
+        textAnchor="middle"
+        transform={`translate(${x + width + 62} ${viewHeight / 2}) rotate(-90)`}
+      >
+        {part.height}
+      </text>
+
+      {detail.holes.map((hole) => (
+        <circle
+          className="part-hole"
+          cx={pxX(hole.x)}
+          cy={pxY(hole.y)}
+          key={`hole-${hole.number}`}
+          r={Math.max(4, hole.diameter * 0.75)}
+        />
+      ))}
+
+      {detail.grooves.map((groove) => (
+        <rect
+          className="part-groove"
+          height={Math.max(3, groove.width * scale)}
+          key={`groove-${groove.number}`}
+          width={groove.length * scale}
+          x={pxX(groove.x)}
+          y={pxY(groove.y) - Math.max(3, groove.width * scale) / 2}
+        />
+      ))}
+    </svg>
+  );
+}
+
 export default function App() {
   const [language, setLanguage] = useState(
     () => localStorage.getItem(LANGUAGE_STORAGE_KEY) || "en",
@@ -567,6 +704,9 @@ export default function App() {
   const [auditOffset, setAuditOffset] = useState(0);
   const [selectedProject, setSelectedProject] = useState(null);
   const [historyItems, setHistoryItems] = useState([]);
+  const [cuttingItems, setCuttingItems] = useState([]);
+  const [cuttingSummary, setCuttingSummary] = useState(null);
+  const [selectedPartDetail, setSelectedPartDetail] = useState(null);
   const [form, setForm] = useState(projectToForm(null));
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
@@ -760,9 +900,10 @@ export default function App() {
   }
 
   async function loadProject(projectId) {
-    const [projectResult, historyResult] = await Promise.all([
+    const [projectResult, historyResult, cuttingResult] = await Promise.all([
       getProject(token, projectId),
       getProjectHistory(token, projectId),
+      getProjectCutting(token, projectId),
     ]);
 
     if (!projectResult.success) {
@@ -773,6 +914,13 @@ export default function App() {
     setSelectedProject(projectResult.project);
     setForm(projectToForm(projectResult.project));
     setHistoryItems(historyResult.success ? historyResult.versions : []);
+    setCuttingItems(cuttingResult.success ? cuttingResult.items : []);
+    setCuttingSummary(cuttingResult.success ? cuttingResult.summary : null);
+    setSelectedPartDetail(null);
+
+    if (!cuttingResult.success) {
+      setStatus(cuttingResult.error || t.unableToLoadCutting);
+    }
   }
 
   async function handleLogin(event) {
@@ -809,6 +957,25 @@ export default function App() {
     });
     setSelectedProject(null);
     setHistoryItems([]);
+    setCuttingItems([]);
+    setCuttingSummary(null);
+    setSelectedPartDetail(null);
+    setStatus("");
+  }
+
+  async function handleSelectCuttingPart(partCode) {
+    if (!selectedProjectId) {
+      return;
+    }
+
+    const result = await getProjectPartDetail(token, selectedProjectId, partCode);
+
+    if (!result.success) {
+      setStatus(result.error || t.unableToLoadPart);
+      return;
+    }
+
+    setSelectedPartDetail(result);
     setStatus("");
   }
 
@@ -1195,6 +1362,9 @@ export default function App() {
     closeConfirm();
     setSelectedProject(null);
     setHistoryItems([]);
+    setCuttingItems([]);
+    setCuttingSummary(null);
+    setSelectedPartDetail(null);
     await loadProjects(token, offset);
   }
 
@@ -2014,6 +2184,151 @@ export default function App() {
                     {t.save}
                   </button>
                 </form>
+
+                <section className="production-section">
+                  <div className="history-header production-header">
+                    <h3>{t.production}</h3>
+                  </div>
+
+                  <article className="production-card">
+                    <h4>{t.productionCutting}</h4>
+                    {cuttingSummary ? (
+                      <div className="summary-row">
+                        <span>{t.cuttingSummary}</span>
+                        <strong>
+                          {cuttingSummary.total_parts} {t.details} / {cuttingSummary.total_area_m2} {t.cuttingArea} / {cuttingSummary.total_cut_length_m} {t.cuttingLength} / {cuttingSummary.total_edge_length_m} {t.cuttingEdge}
+                        </strong>
+                      </div>
+                    ) : null}
+
+                    {cuttingItems.length > 0 ? (
+                      <table className="cutting-table">
+                        <thead>
+                          <tr>
+                            <th>{t.cuttingExportCode}</th>
+                            <th>{t.details}</th>
+                            <th>{t.cuttingSize}</th>
+                            <th>{t.cuttingGrain}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {cuttingItems.map((item) => (
+                            <tr
+                              className={
+                                selectedPartDetail?.part?.export_code === item.export_code
+                                  ? "selected"
+                                  : ""
+                              }
+                              key={item.export_code}
+                              onClick={() => handleSelectCuttingPart(item.export_code)}
+                            >
+                              <td>{item.export_code}</td>
+                              <td>{item.part_name}</td>
+                              <td>{item.width} x {item.height}</td>
+                              <td>{item.grain_direction || t.notSet}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    ) : (
+                      <p>{t.noCuttingItems}</p>
+                    )}
+                  </article>
+
+                  {selectedPartDetail ? (
+                    <article className="production-card part-detail-panel">
+                      <h4>{t.productionPartViewer}</h4>
+                      <strong className="part-title">
+                        {selectedPartDetail.part.export_code} / {selectedPartDetail.part.part_name}
+                      </strong>
+                      <PartPreview detail={selectedPartDetail} />
+
+                      <div className="part-operation-tables">
+                        <section>
+                          <h5>{t.productionHoles} {selectedPartDetail.holes.length}</h5>
+                          <table>
+                            <thead>
+                              <tr>
+                                <th>#</th>
+                                <th>{t.side}</th>
+                                <th>X</th>
+                                <th>Y</th>
+                                <th>{t.depth}</th>
+                                <th>D</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {selectedPartDetail.holes.map((hole) => (
+                                <tr key={hole.number}>
+                                  <td>{hole.number}</td>
+                                  <td>{hole.side}</td>
+                                  <td>{hole.x}</td>
+                                  <td>{hole.y}</td>
+                                  <td>{hole.depth}</td>
+                                  <td>{hole.diameter}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </section>
+
+                        <section>
+                          <h5>{t.productionGrooves} {selectedPartDetail.grooves.length}</h5>
+                          <table>
+                            <thead>
+                              <tr>
+                                <th>#</th>
+                                <th>{t.side}</th>
+                                <th>X</th>
+                                <th>Y</th>
+                                <th>{t.cuttingLength}</th>
+                                <th>{t.depth}</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {selectedPartDetail.grooves.map((groove) => (
+                                <tr key={groove.number}>
+                                  <td>{groove.number}</td>
+                                  <td>{groove.side}</td>
+                                  <td>{groove.x}</td>
+                                  <td>{groove.y}</td>
+                                  <td>{groove.length}</td>
+                                  <td>{groove.depth}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </section>
+
+                        <section>
+                          <h5>{t.productionQuarters} {selectedPartDetail.quarters.length}</h5>
+                          <table>
+                            <thead>
+                              <tr>
+                                <th>#</th>
+                                <th>{t.side}</th>
+                                <th>{t.cuttingLength}</th>
+                                <th>{t.cuttingSize}</th>
+                                <th>{t.depth}</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {selectedPartDetail.quarters.map((quarter) => (
+                                <tr key={quarter.number}>
+                                  <td>{quarter.number}</td>
+                                  <td>{quarter.side}</td>
+                                  <td>{quarter.length}</td>
+                                  <td>{quarter.width}</td>
+                                  <td>{quarter.depth}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </section>
+                      </div>
+                    </article>
+                  ) : null}
+                </section>
 
                 <div className="history-header">
                   <History size={18} />

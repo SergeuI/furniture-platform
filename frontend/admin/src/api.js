@@ -139,6 +139,18 @@ export async function getProjectHistory(token, projectId) {
   });
 }
 
+export async function getProjectCutting(token, projectId) {
+  return request(`/project/${projectId}/cutting`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function getProjectPartDetail(token, projectId, partCode) {
+  return request(`/project/${projectId}/production/parts/${partCode}`, {
+    headers: authHeaders(token),
+  });
+}
+
 export async function updateProject(token, projectId, project) {
   return request(`/project/${projectId}`, {
     method: "PUT",
