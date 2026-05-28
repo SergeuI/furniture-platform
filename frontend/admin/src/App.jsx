@@ -508,6 +508,10 @@ export default function App() {
       return pageLabel;
     }
 
+    if (activeView === "createProject") {
+      return t.specification;
+    }
+
     if (activeView === "users") {
       return usersPageLabel;
     }
@@ -656,6 +660,10 @@ export default function App() {
 
     if (view === "projects") {
       await loadProjects(token, offset);
+      return;
+    }
+
+    if (view === "createProject") {
       return;
     }
 
@@ -819,6 +827,7 @@ export default function App() {
     setNewProjectForm(DEFAULT_PROJECT_FORM);
     setProjectFilters(DEFAULT_PROJECT_FILTERS);
     setStatus(t.projectCreated);
+    setActiveView("projects");
     await loadProjects(token, 0, DEFAULT_PROJECT_FILTERS);
 
     if (projectId) {
@@ -1066,6 +1075,15 @@ export default function App() {
           >
             {t.projects}
           </button>
+          {canCreateNewProject ? (
+            <button
+              className={activeView === "createProject" ? "active" : ""}
+              onClick={() => switchView("createProject")}
+              type="button"
+            >
+              {t.createProject}
+            </button>
+          ) : null}
           {user.role === "admin" ? (
             <>
               <button
@@ -1133,6 +1151,8 @@ export default function App() {
             <h2>
               {activeView === "projects"
                 ? t.projects
+                : activeView === "createProject"
+                  ? t.createProject
                 : activeView === "users"
                   ? t.users
                   : t.audit}
@@ -1205,7 +1225,7 @@ export default function App() {
                   <RefreshCw size={18} />
                 </button>
               </>
-            ) : (
+            ) : activeView === "audit" ? (
               <>
                 <button
                   aria-label="Previous audit page"
@@ -1237,7 +1257,7 @@ export default function App() {
                   <RefreshCw size={18} />
                 </button>
               </>
-            )}
+            ) : null}
           </div>
         </header>
 
@@ -1400,275 +1420,6 @@ export default function App() {
                 {t.reset}
               </button>
             </form>
-            {canCreateNewProject ? (
-              <form
-                className="create-project-form"
-                onSubmit={handleCreateProject}
-              >
-                <label>
-                  {t.projectName}
-                  <input
-                    onChange={(event) =>
-                      setNewProjectForm({
-                        ...newProjectForm,
-                        projectName: event.target.value,
-                      })
-                    }
-                    type="text"
-                    value={newProjectForm.projectName}
-                  />
-                </label>
-                <label>
-                  {t.projectType}
-                  <select
-                    onChange={(event) =>
-                      setNewProjectForm({
-                        ...newProjectForm,
-                        projectType: event.target.value,
-                      })
-                    }
-                    value={newProjectForm.projectType}
-                  >
-                    <option value="dresser">{t.dresser}</option>
-                    <option value="wardrobe">{t.wardrobe}</option>
-                    <option value="cabinet">{t.cabinet}</option>
-                    <option value="kitchen">{t.kitchen}</option>
-                    <option value="drawer_unit">{t.drawerUnit}</option>
-                  </select>
-                </label>
-                <label>
-                  {t.client}
-                  <input
-                    onChange={(event) =>
-                      setNewProjectForm({
-                        ...newProjectForm,
-                        clientName: event.target.value,
-                      })
-                    }
-                    type="text"
-                    value={newProjectForm.clientName}
-                  />
-                </label>
-                <label>
-                  {t.room}
-                  <input
-                    onChange={(event) =>
-                      setNewProjectForm({
-                        ...newProjectForm,
-                        roomName: event.target.value,
-                      })
-                    }
-                    type="text"
-                    value={newProjectForm.roomName}
-                  />
-                </label>
-                <label>
-                  {t.width}
-                  <input
-                    min="1"
-                    onChange={(event) =>
-                      setNewProjectForm({
-                        ...newProjectForm,
-                        width: event.target.value,
-                      })
-                    }
-                    required
-                    type="number"
-                    value={newProjectForm.width}
-                  />
-                </label>
-                <label>
-                  {t.height}
-                  <input
-                    min="1"
-                    onChange={(event) =>
-                      setNewProjectForm({
-                        ...newProjectForm,
-                        height: event.target.value,
-                      })
-                    }
-                    required
-                    type="number"
-                    value={newProjectForm.height}
-                  />
-                </label>
-                <label>
-                  {t.depth}
-                  <input
-                    min="1"
-                    onChange={(event) =>
-                      setNewProjectForm({
-                        ...newProjectForm,
-                        depth: event.target.value,
-                      })
-                    }
-                    required
-                    type="number"
-                    value={newProjectForm.depth}
-                  />
-                </label>
-                <label>
-                  {t.sections}
-                  <input
-                    min="1"
-                    onChange={(event) =>
-                      setNewProjectForm({
-                        ...newProjectForm,
-                        sections: event.target.value,
-                      })
-                    }
-                    required
-                    type="number"
-                    value={newProjectForm.sections}
-                  />
-                </label>
-                <label>
-                  {t.drawers}
-                  <input
-                    onChange={(event) =>
-                      setNewProjectForm({
-                        ...newProjectForm,
-                        drawers: event.target.value,
-                      })
-                    }
-                    placeholder="1, 2"
-                    type="text"
-                    value={newProjectForm.drawers}
-                  />
-                </label>
-                <label>
-                  {t.facadeMaterial}
-                  <input
-                    onChange={(event) =>
-                      setNewProjectForm({
-                        ...newProjectForm,
-                        facadeMaterial: event.target.value,
-                      })
-                    }
-                    type="text"
-                    value={newProjectForm.facadeMaterial}
-                  />
-                </label>
-                <label>
-                  {t.insideMaterial}
-                  <input
-                    onChange={(event) =>
-                      setNewProjectForm({
-                        ...newProjectForm,
-                        insideMaterial: event.target.value,
-                      })
-                    }
-                    type="text"
-                    value={newProjectForm.insideMaterial}
-                  />
-                </label>
-                <label>
-                  {t.edgeBanding}
-                  <input
-                    onChange={(event) =>
-                      setNewProjectForm({
-                        ...newProjectForm,
-                        edgeBanding: event.target.value,
-                      })
-                    }
-                    type="text"
-                    value={newProjectForm.edgeBanding}
-                  />
-                </label>
-                <label>
-                  {t.materialThickness}
-                  <input
-                    min="1"
-                    onChange={(event) =>
-                      setNewProjectForm({
-                        ...newProjectForm,
-                        materialThickness: event.target.value,
-                      })
-                    }
-                    type="number"
-                    value={newProjectForm.materialThickness}
-                  />
-                </label>
-                <label>
-                  {t.slideType}
-                  <select
-                    onChange={(event) =>
-                      setNewProjectForm({
-                        ...newProjectForm,
-                        slideType: event.target.value,
-                      })
-                    }
-                    value={newProjectForm.slideType}
-                  >
-                    <option value="tandem">tandem</option>
-                    <option value="movento">movento</option>
-                    <option value="telescopic">telescopic</option>
-                  </select>
-                </label>
-                <label>
-                  {t.bottomType}
-                  <select
-                    onChange={(event) =>
-                      setNewProjectForm({
-                        ...newProjectForm,
-                        bottomType: event.target.value,
-                      })
-                    }
-                    value={newProjectForm.bottomType}
-                  >
-                    <option value="hdf">hdf</option>
-                    <option value="dsp">dsp</option>
-                  </select>
-                </label>
-                <label>
-                  {t.handleType}
-                  <input
-                    onChange={(event) =>
-                      setNewProjectForm({
-                        ...newProjectForm,
-                        handleType: event.target.value,
-                      })
-                    }
-                    type="text"
-                    value={newProjectForm.handleType}
-                  />
-                </label>
-                <label>
-                  {t.handlePosition}
-                  <input
-                    onChange={(event) =>
-                      setNewProjectForm({
-                        ...newProjectForm,
-                        handlePosition: event.target.value,
-                      })
-                    }
-                    type="text"
-                    value={newProjectForm.handlePosition}
-                  />
-                </label>
-                <label>
-                  {t.notes}
-                  <input
-                    onChange={(event) =>
-                      setNewProjectForm({
-                        ...newProjectForm,
-                        notes: event.target.value,
-                      })
-                    }
-                    type="text"
-                    value={newProjectForm.notes}
-                  />
-                </label>
-                <button
-                  className="primary-button create-project-button"
-                  disabled={loading}
-                  type="submit"
-                >
-                  <Plus size={18} />
-                  {t.createProject}
-                </button>
-              </form>
-            ) : null}
             <table>
               <thead>
                 <tr>
@@ -2014,6 +1765,276 @@ export default function App() {
             )}
           </section>
         </div>
+        ) : activeView === "createProject" ? (
+          <section className="table-panel full-panel create-project-panel">
+            <form
+              className="create-project-form standalone-create-project-form"
+              onSubmit={handleCreateProject}
+            >
+              <label>
+                {t.projectName}
+                <input
+                  onChange={(event) =>
+                    setNewProjectForm({
+                      ...newProjectForm,
+                      projectName: event.target.value,
+                    })
+                  }
+                  type="text"
+                  value={newProjectForm.projectName}
+                />
+              </label>
+              <label>
+                {t.projectType}
+                <select
+                  onChange={(event) =>
+                    setNewProjectForm({
+                      ...newProjectForm,
+                      projectType: event.target.value,
+                    })
+                  }
+                  value={newProjectForm.projectType}
+                >
+                  <option value="dresser">{t.dresser}</option>
+                  <option value="wardrobe">{t.wardrobe}</option>
+                  <option value="cabinet">{t.cabinet}</option>
+                  <option value="kitchen">{t.kitchen}</option>
+                  <option value="drawer_unit">{t.drawerUnit}</option>
+                </select>
+              </label>
+              <label>
+                {t.client}
+                <input
+                  onChange={(event) =>
+                    setNewProjectForm({
+                      ...newProjectForm,
+                      clientName: event.target.value,
+                    })
+                  }
+                  type="text"
+                  value={newProjectForm.clientName}
+                />
+              </label>
+              <label>
+                {t.room}
+                <input
+                  onChange={(event) =>
+                    setNewProjectForm({
+                      ...newProjectForm,
+                      roomName: event.target.value,
+                    })
+                  }
+                  type="text"
+                  value={newProjectForm.roomName}
+                />
+              </label>
+              <label>
+                {t.width}
+                <input
+                  min="1"
+                  onChange={(event) =>
+                    setNewProjectForm({
+                      ...newProjectForm,
+                      width: event.target.value,
+                    })
+                  }
+                  required
+                  type="number"
+                  value={newProjectForm.width}
+                />
+              </label>
+              <label>
+                {t.height}
+                <input
+                  min="1"
+                  onChange={(event) =>
+                    setNewProjectForm({
+                      ...newProjectForm,
+                      height: event.target.value,
+                    })
+                  }
+                  required
+                  type="number"
+                  value={newProjectForm.height}
+                />
+              </label>
+              <label>
+                {t.depth}
+                <input
+                  min="1"
+                  onChange={(event) =>
+                    setNewProjectForm({
+                      ...newProjectForm,
+                      depth: event.target.value,
+                    })
+                  }
+                  required
+                  type="number"
+                  value={newProjectForm.depth}
+                />
+              </label>
+              <label>
+                {t.sections}
+                <input
+                  min="1"
+                  onChange={(event) =>
+                    setNewProjectForm({
+                      ...newProjectForm,
+                      sections: event.target.value,
+                    })
+                  }
+                  required
+                  type="number"
+                  value={newProjectForm.sections}
+                />
+              </label>
+              <label>
+                {t.drawers}
+                <input
+                  onChange={(event) =>
+                    setNewProjectForm({
+                      ...newProjectForm,
+                      drawers: event.target.value,
+                    })
+                  }
+                  placeholder="1, 2"
+                  type="text"
+                  value={newProjectForm.drawers}
+                />
+              </label>
+              <label>
+                {t.facadeMaterial}
+                <input
+                  onChange={(event) =>
+                    setNewProjectForm({
+                      ...newProjectForm,
+                      facadeMaterial: event.target.value,
+                    })
+                  }
+                  type="text"
+                  value={newProjectForm.facadeMaterial}
+                />
+              </label>
+              <label>
+                {t.insideMaterial}
+                <input
+                  onChange={(event) =>
+                    setNewProjectForm({
+                      ...newProjectForm,
+                      insideMaterial: event.target.value,
+                    })
+                  }
+                  type="text"
+                  value={newProjectForm.insideMaterial}
+                />
+              </label>
+              <label>
+                {t.edgeBanding}
+                <input
+                  onChange={(event) =>
+                    setNewProjectForm({
+                      ...newProjectForm,
+                      edgeBanding: event.target.value,
+                    })
+                  }
+                  type="text"
+                  value={newProjectForm.edgeBanding}
+                />
+              </label>
+              <label>
+                {t.materialThickness}
+                <input
+                  min="1"
+                  onChange={(event) =>
+                    setNewProjectForm({
+                      ...newProjectForm,
+                      materialThickness: event.target.value,
+                    })
+                  }
+                  type="number"
+                  value={newProjectForm.materialThickness}
+                />
+              </label>
+              <label>
+                {t.slideType}
+                <select
+                  onChange={(event) =>
+                    setNewProjectForm({
+                      ...newProjectForm,
+                      slideType: event.target.value,
+                    })
+                  }
+                  value={newProjectForm.slideType}
+                >
+                  <option value="tandem">tandem</option>
+                  <option value="movento">movento</option>
+                  <option value="telescopic">telescopic</option>
+                </select>
+              </label>
+              <label>
+                {t.bottomType}
+                <select
+                  onChange={(event) =>
+                    setNewProjectForm({
+                      ...newProjectForm,
+                      bottomType: event.target.value,
+                    })
+                  }
+                  value={newProjectForm.bottomType}
+                >
+                  <option value="hdf">hdf</option>
+                  <option value="dsp">dsp</option>
+                </select>
+              </label>
+              <label>
+                {t.handleType}
+                <input
+                  onChange={(event) =>
+                    setNewProjectForm({
+                      ...newProjectForm,
+                      handleType: event.target.value,
+                    })
+                  }
+                  type="text"
+                  value={newProjectForm.handleType}
+                />
+              </label>
+              <label>
+                {t.handlePosition}
+                <input
+                  onChange={(event) =>
+                    setNewProjectForm({
+                      ...newProjectForm,
+                      handlePosition: event.target.value,
+                    })
+                  }
+                  type="text"
+                  value={newProjectForm.handlePosition}
+                />
+              </label>
+              <label className="wide-field">
+                {t.notes}
+                <input
+                  onChange={(event) =>
+                    setNewProjectForm({
+                      ...newProjectForm,
+                      notes: event.target.value,
+                    })
+                  }
+                  type="text"
+                  value={newProjectForm.notes}
+                />
+              </label>
+              <button
+                className="primary-button wide-button"
+                disabled={loading}
+                type="submit"
+              >
+                <Plus size={18} />
+                {t.createProject}
+              </button>
+            </form>
+          </section>
         ) : activeView === "users" ? (
           <section className="table-panel full-panel">
             <form className="create-user-form" onSubmit={handleCreateUser}>

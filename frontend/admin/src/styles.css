@@ -281,6 +281,15 @@ tbody tr.selected {
   padding: 16px;
 }
 
+.create-project-panel {
+  padding: 0;
+}
+
+.standalone-create-project-form {
+  border-bottom: 0;
+  grid-template-columns: repeat(4, minmax(160px, 1fr));
+}
+
 .project-filter-form {
   align-items: end;
   background: #f8fafb;
@@ -613,6 +622,10 @@ tbody tr.selected {
 
   .create-project-form {
     align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .standalone-create-project-form {
     grid-template-columns: 1fr;
   }
 
