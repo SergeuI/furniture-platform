@@ -48,6 +48,10 @@ export async function getCurrentUser(token) {
   });
 }
 
+export async function getSpecificationCatalog() {
+  return request("/catalog/specification");
+}
+
 export async function changeOwnPassword(token, currentPassword, newPassword) {
   return request("/auth/me/password", {
     method: "PUT",

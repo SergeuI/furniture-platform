@@ -18,6 +18,9 @@ from api.routes.project import (
 from api.routes.audit import (
     router as audit_router
 )
+from api.routes.catalog import (
+    router as catalog_router
+)
 
 init_database()
 
@@ -78,4 +81,13 @@ app.include_router(
     prefix="/audit",
 
     tags=["Audit"]
+)
+
+app.include_router(
+
+    catalog_router,
+
+    prefix="/catalog",
+
+    tags=["Catalog"]
 )

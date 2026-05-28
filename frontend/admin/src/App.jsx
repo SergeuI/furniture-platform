@@ -21,6 +21,7 @@ import {
   getCurrentUser,
   getProject,
   getProjectHistory,
+  getSpecificationCatalog,
   listAuditLogs,
   listUsers,
   listProjects,
@@ -66,6 +67,47 @@ const DEFAULT_PROJECT_FILTERS = {
   height_max: "",
   only_mine: false,
 };
+const DEFAULT_SPECIFICATION_CATALOG = {
+  project_types: [
+    "dresser",
+    "wardrobe",
+    "cabinet",
+    "kitchen",
+    "drawer_unit",
+  ],
+  slide_types: [
+    "tandem",
+    "movento",
+    "telescopic",
+  ],
+  bottom_types: [
+    "hdf",
+    "hdf_3",
+    "dsp",
+    "dsp_18",
+  ],
+  material_thicknesses: [
+    16,
+    18,
+    19,
+  ],
+  edge_bandings: [
+    "abs_0_5",
+    "abs_1",
+    "abs_2",
+    "pvc_0_5",
+    "pvc_1",
+    "pvc_2",
+  ],
+  handle_positions: [
+    "top",
+    "center",
+    "bottom",
+    "left",
+    "right",
+    "integrated",
+  ],
+};
 
 const TRANSLATIONS = {
   en: {
@@ -86,6 +128,7 @@ const TRANSLATIONS = {
     currentPassword: "Current password",
     bottomType: "Bottom type",
     cabinet: "Cabinet",
+    center: "Center",
     client: "Client",
     delete: "Delete",
     deleteFailed: "Delete failed",
@@ -111,7 +154,9 @@ const TRANSLATIONS = {
     history: "History",
     insideMaterial: "Inside material",
     inactive: "Inactive",
+    integrated: "Integrated",
     kitchen: "Kitchen",
+    left: "Left",
     invalidCurrentPassword: "Invalid current password",
     loginFailed: "Login failed",
     logout: "Logout",
@@ -140,6 +185,7 @@ const TRANSLATIONS = {
     readOnlyProject: "Read-only project",
     readOnlyProjectDescription: "You can view this project, but cannot edit it.",
     reset: "Reset",
+    right: "Right",
     role: "Role",
     rollback: "Rollback",
     rollbackFailed: "Rollback failed",
@@ -156,6 +202,7 @@ const TRANSLATIONS = {
     specification: "Specification",
     status: "Status",
     time: "Time",
+    top: "Top",
     to: "to",
     unableToChangePassword: "Unable to change password",
     unableToCreateProject: "Unable to create project",
@@ -196,6 +243,7 @@ const TRANSLATIONS = {
     currentPassword: "Поточний пароль",
     bottomType: "Тип дна",
     cabinet: "Тумба",
+    center: "По центру",
     client: "Клієнт",
     delete: "Видалити",
     deleteFailed: "Не вдалося видалити",
@@ -221,7 +269,9 @@ const TRANSLATIONS = {
     history: "Історія",
     insideMaterial: "Матеріал корпусу",
     inactive: "Неактивний",
+    integrated: "Інтегрована",
     kitchen: "Кухня",
+    left: "Зліва",
     invalidCurrentPassword: "Невірний поточний пароль",
     loginFailed: "Не вдалося увійти",
     logout: "Вийти",
@@ -250,6 +300,7 @@ const TRANSLATIONS = {
     readOnlyProject: "Проект лише для перегляду",
     readOnlyProjectDescription: "Ви можете переглядати цей проект, але не можете його редагувати.",
     reset: "Скинути",
+    right: "Справа",
     role: "Роль",
     rollback: "Відновити",
     rollbackFailed: "Не вдалося відновити",
@@ -266,6 +317,7 @@ const TRANSLATIONS = {
     specification: "Специфікація",
     status: "Статус",
     time: "Час",
+    top: "Зверху",
     to: "до",
     unableToChangePassword: "Не вдалося змінити пароль",
     unableToCreateProject: "Не вдалося створити проект",
@@ -391,6 +443,14 @@ function formatUserId(value, t) {
   return value;
 }
 
+function formatCatalogLabel(value, t) {
+  if (!value) {
+    return t.notSet;
+  }
+
+  return t[value] || value;
+}
+
 function canEditProject(project, user) {
   if (!project || !user) {
     return false;
@@ -444,6 +504,9 @@ export default function App() {
   const [projects, setProjects] = useState([]);
   const [users, setUsers] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
+  const [specificationCatalog, setSpecificationCatalog] = useState(
+    DEFAULT_SPECIFICATION_CATALOG,
+  );
   const [total, setTotal] = useState(0);
   const [usersTotal, setUsersTotal] = useState(0);
   const [auditTotal, setAuditTotal] = useState(0);
@@ -565,6 +628,26 @@ export default function App() {
     setOffset(result.offset);
   }
 
+  async function loadSpecificationCatalog() {
+    const result = await getSpecificationCatalog();
+
+    if (!result.success) {
+      return;
+    }
+
+    setSpecificationCatalog({
+      project_types: result.project_types || DEFAULT_SPECIFICATION_CATALOG.project_types,
+      slide_types: result.slide_types || DEFAULT_SPECIFICATION_CATALOG.slide_types,
+      bottom_types: result.bottom_types || DEFAULT_SPECIFICATION_CATALOG.bottom_types,
+      material_thicknesses:
+        result.material_thicknesses ||
+        DEFAULT_SPECIFICATION_CATALOG.material_thicknesses,
+      edge_bandings: result.edge_bandings || DEFAULT_SPECIFICATION_CATALOG.edge_bandings,
+      handle_positions:
+        result.handle_positions || DEFAULT_SPECIFICATION_CATALOG.handle_positions,
+    });
+  }
+
   async function loadUsers(activeToken = token, nextOffset = usersOffset) {
     if (!activeToken || user?.role !== "admin") {
       return;
@@ -634,6 +717,7 @@ export default function App() {
     setToken(result.access_token);
     setUser(result.user);
     setStatus("");
+    await loadSpecificationCatalog();
     await loadProjects(result.access_token, 0);
   }
 
@@ -975,6 +1059,7 @@ export default function App() {
     }
 
     loadUser(token);
+    loadSpecificationCatalog();
     loadProjects(token, 0);
   }, [token]);
 
@@ -1295,11 +1380,11 @@ export default function App() {
                   value={projectFilters.project_type}
                 >
                   <option value="">{t.all}</option>
-                  <option value="dresser">{t.dresser}</option>
-                  <option value="wardrobe">{t.wardrobe}</option>
-                  <option value="cabinet">{t.cabinet}</option>
-                  <option value="kitchen">{t.kitchen}</option>
-                  <option value="drawer_unit">{t.drawerUnit}</option>
+                  {specificationCatalog.project_types.map((projectType) => (
+                    <option key={projectType} value={projectType}>
+                      {formatCatalogLabel(projectType, t)}
+                    </option>
+                  ))}
                 </select>
               </label>
               <label>
@@ -1314,9 +1399,11 @@ export default function App() {
                   value={projectFilters.slide_type}
                 >
                   <option value="">{t.all}</option>
-                  <option value="tandem">tandem</option>
-                  <option value="movento">movento</option>
-                  <option value="telescopic">telescopic</option>
+                  {specificationCatalog.slide_types.map((slideType) => (
+                    <option key={slideType} value={slideType}>
+                      {slideType}
+                    </option>
+                  ))}
                 </select>
               </label>
               <label>
@@ -1331,8 +1418,11 @@ export default function App() {
                   value={projectFilters.bottom_type}
                 >
                   <option value="">{t.all}</option>
-                  <option value="hdf">hdf</option>
-                  <option value="dsp">dsp</option>
+                  {specificationCatalog.bottom_types.map((bottomType) => (
+                    <option key={bottomType} value={bottomType}>
+                      {bottomType}
+                    </option>
+                  ))}
                 </select>
               </label>
               <label>
@@ -1517,11 +1607,11 @@ export default function App() {
                       }
                       value={form.projectType}
                     >
-                      <option value="dresser">{t.dresser}</option>
-                      <option value="wardrobe">{t.wardrobe}</option>
-                      <option value="cabinet">{t.cabinet}</option>
-                      <option value="kitchen">{t.kitchen}</option>
-                      <option value="drawer_unit">{t.drawerUnit}</option>
+                      {specificationCatalog.project_types.map((projectType) => (
+                        <option key={projectType} value={projectType}>
+                          {formatCatalogLabel(projectType, t)}
+                        </option>
+                      ))}
                     </select>
                   </label>
                   <label>
@@ -1634,29 +1724,41 @@ export default function App() {
                   </label>
                   <label>
                     {t.edgeBanding}
-                    <input
+                    <select
                       disabled={!canEditSelectedProject || loading}
                       onChange={(event) =>
                         setForm({ ...form, edgeBanding: event.target.value })
                       }
-                      type="text"
                       value={form.edgeBanding}
-                    />
+                    >
+                      <option value="">{t.notSet}</option>
+                      {specificationCatalog.edge_bandings.map((edgeBanding) => (
+                        <option key={edgeBanding} value={edgeBanding}>
+                          {edgeBanding}
+                        </option>
+                      ))}
+                    </select>
                   </label>
                   <label>
                     {t.materialThickness}
-                    <input
+                    <select
                       disabled={!canEditSelectedProject || loading}
-                      min="1"
                       onChange={(event) =>
                         setForm({
                           ...form,
                           materialThickness: event.target.value,
                         })
                       }
-                      type="number"
                       value={form.materialThickness}
-                    />
+                    >
+                      {specificationCatalog.material_thicknesses.map(
+                        (thickness) => (
+                          <option key={thickness} value={thickness}>
+                            {thickness}
+                          </option>
+                        ),
+                      )}
+                    </select>
                   </label>
                   <label>
                     {t.slideType}
@@ -1667,9 +1769,11 @@ export default function App() {
                       }
                       value={form.slideType}
                     >
-                      <option value="tandem">tandem</option>
-                      <option value="movento">movento</option>
-                      <option value="telescopic">telescopic</option>
+                      {specificationCatalog.slide_types.map((slideType) => (
+                        <option key={slideType} value={slideType}>
+                          {slideType}
+                        </option>
+                      ))}
                     </select>
                   </label>
                   <label>
@@ -1681,8 +1785,11 @@ export default function App() {
                       }
                       value={form.bottomType}
                     >
-                      <option value="hdf">hdf</option>
-                      <option value="dsp">dsp</option>
+                      {specificationCatalog.bottom_types.map((bottomType) => (
+                        <option key={bottomType} value={bottomType}>
+                          {bottomType}
+                        </option>
+                      ))}
                     </select>
                   </label>
                   <label>
@@ -1698,14 +1805,22 @@ export default function App() {
                   </label>
                   <label>
                     {t.handlePosition}
-                    <input
+                    <select
                       disabled={!canEditSelectedProject || loading}
                       onChange={(event) =>
                         setForm({ ...form, handlePosition: event.target.value })
                       }
-                      type="text"
                       value={form.handlePosition}
-                    />
+                    >
+                      <option value="">{t.notSet}</option>
+                      {specificationCatalog.handle_positions.map(
+                        (handlePosition) => (
+                          <option key={handlePosition} value={handlePosition}>
+                            {formatCatalogLabel(handlePosition, t)}
+                          </option>
+                        ),
+                      )}
+                    </select>
                   </label>
                   <label className="wide-field">
                     {t.notes}
@@ -1795,11 +1910,11 @@ export default function App() {
                   }
                   value={newProjectForm.projectType}
                 >
-                  <option value="dresser">{t.dresser}</option>
-                  <option value="wardrobe">{t.wardrobe}</option>
-                  <option value="cabinet">{t.cabinet}</option>
-                  <option value="kitchen">{t.kitchen}</option>
-                  <option value="drawer_unit">{t.drawerUnit}</option>
+                  {specificationCatalog.project_types.map((projectType) => (
+                    <option key={projectType} value={projectType}>
+                      {formatCatalogLabel(projectType, t)}
+                    </option>
+                  ))}
                 </select>
               </label>
               <label>
@@ -1930,30 +2045,42 @@ export default function App() {
               </label>
               <label>
                 {t.edgeBanding}
-                <input
+                <select
                   onChange={(event) =>
                     setNewProjectForm({
                       ...newProjectForm,
                       edgeBanding: event.target.value,
                     })
                   }
-                  type="text"
                   value={newProjectForm.edgeBanding}
-                />
+                >
+                  <option value="">{t.notSet}</option>
+                  {specificationCatalog.edge_bandings.map((edgeBanding) => (
+                    <option key={edgeBanding} value={edgeBanding}>
+                      {edgeBanding}
+                    </option>
+                  ))}
+                </select>
               </label>
               <label>
                 {t.materialThickness}
-                <input
-                  min="1"
+                <select
                   onChange={(event) =>
                     setNewProjectForm({
                       ...newProjectForm,
                       materialThickness: event.target.value,
                     })
                   }
-                  type="number"
                   value={newProjectForm.materialThickness}
-                />
+                >
+                  {specificationCatalog.material_thicknesses.map(
+                    (thickness) => (
+                      <option key={thickness} value={thickness}>
+                        {thickness}
+                      </option>
+                    ),
+                  )}
+                </select>
               </label>
               <label>
                 {t.slideType}
@@ -1966,9 +2093,11 @@ export default function App() {
                   }
                   value={newProjectForm.slideType}
                 >
-                  <option value="tandem">tandem</option>
-                  <option value="movento">movento</option>
-                  <option value="telescopic">telescopic</option>
+                  {specificationCatalog.slide_types.map((slideType) => (
+                    <option key={slideType} value={slideType}>
+                      {slideType}
+                    </option>
+                  ))}
                 </select>
               </label>
               <label>
@@ -1982,8 +2111,11 @@ export default function App() {
                   }
                   value={newProjectForm.bottomType}
                 >
-                  <option value="hdf">hdf</option>
-                  <option value="dsp">dsp</option>
+                  {specificationCatalog.bottom_types.map((bottomType) => (
+                    <option key={bottomType} value={bottomType}>
+                      {bottomType}
+                    </option>
+                  ))}
                 </select>
               </label>
               <label>
@@ -2001,16 +2133,24 @@ export default function App() {
               </label>
               <label>
                 {t.handlePosition}
-                <input
+                <select
                   onChange={(event) =>
                     setNewProjectForm({
                       ...newProjectForm,
                       handlePosition: event.target.value,
                     })
                   }
-                  type="text"
                   value={newProjectForm.handlePosition}
-                />
+                >
+                  <option value="">{t.notSet}</option>
+                  {specificationCatalog.handle_positions.map(
+                    (handlePosition) => (
+                      <option key={handlePosition} value={handlePosition}>
+                        {formatCatalogLabel(handlePosition, t)}
+                      </option>
+                    ),
+                  )}
+                </select>
               </label>
               <label className="wide-field">
                 {t.notes}
