@@ -65,6 +65,14 @@ export async function listProjects(token, limit, offset) {
   });
 }
 
+export async function generateProject(token, project) {
+  return request("/project/generate", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(project),
+  });
+}
+
 export async function getProject(token, projectId) {
   return request(`/project/${projectId}`, {
     headers: authHeaders(token),

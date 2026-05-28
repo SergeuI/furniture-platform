@@ -3,6 +3,7 @@ import {
   ChevronRight,
   History,
   LogOut,
+  Plus,
   RefreshCw,
   RotateCcw,
   Save,
@@ -16,6 +17,7 @@ import {
   changeOwnPassword,
   createUser,
   deleteProject,
+  generateProject,
   getCurrentUser,
   getProject,
   getProjectHistory,
@@ -33,6 +35,13 @@ import {
 const TOKEN_STORAGE_KEY = "furniture_admin_token";
 const LANGUAGE_STORAGE_KEY = "furniture_admin_language";
 const PAGE_SIZE = 20;
+const DEFAULT_PROJECT_FORM = {
+  width: 1000,
+  height: 800,
+  depth: 500,
+  sections: 2,
+  drawers: "1, 2",
+};
 
 const TRANSLATIONS = {
   en: {
@@ -44,6 +53,7 @@ const TRANSLATIONS = {
     audit: "Audit",
     cancel: "Cancel",
     changePassword: "Change password",
+    createProject: "Create project",
     createUser: "Create user",
     created: "Created",
     createdBy: "Created by",
@@ -77,6 +87,7 @@ const TRANSLATIONS = {
     projectDeleted: "Project deleted",
     projectDeleteRestricted: "You do not have permission to delete this project",
     projectEditRestricted: "You do not have permission to edit this project",
+    projectCreated: "Project created",
     projectNotFound: "Project not found",
     projectRolledBack: "Project rolled back",
     projectRollbackRestricted: "You do not have permission to roll back this project",
@@ -99,6 +110,7 @@ const TRANSLATIONS = {
     time: "Time",
     to: "to",
     unableToChangePassword: "Unable to change password",
+    unableToCreateProject: "Unable to create project",
     unableToCreateUser: "Unable to create user",
     unableToLoadAuditLogs: "Unable to load audit logs",
     unableToLoadProjects: "Unable to load projects",
@@ -124,6 +136,7 @@ const TRANSLATIONS = {
     audit: "Аудит",
     cancel: "Скасувати",
     changePassword: "Змінити пароль",
+    createProject: "Створити проект",
     createUser: "Створити користувача",
     created: "Створено",
     createdBy: "Створив",
@@ -157,6 +170,7 @@ const TRANSLATIONS = {
     projectDeleted: "Проект видалено",
     projectDeleteRestricted: "У вас немає прав для видалення цього проекту",
     projectEditRestricted: "У вас немає прав для редагування цього проекту",
+    projectCreated: "Проект створено",
     projectNotFound: "Проект не знайдено",
     projectRolledBack: "Проект відновлено",
     projectRollbackRestricted: "У вас немає прав для відновлення цього проекту",
@@ -179,6 +193,7 @@ const TRANSLATIONS = {
     time: "Час",
     to: "до",
     unableToChangePassword: "Не вдалося змінити пароль",
+    unableToCreateProject: "Не вдалося створити проект",
     unableToCreateUser: "Не вдалося створити користувача",
     unableToLoadAuditLogs: "Не вдалося завантажити аудит",
     unableToLoadProjects: "Не вдалося завантажити проекти",
@@ -220,8 +235,8 @@ function buildProjectPayload(form) {
       inside: null,
     },
     fittings: {
-      slide_type: null,
-      bottom_type: null,
+      slide_type: "tandem",
+      bottom_type: "hdf",
     },
   };
 }
@@ -298,6 +313,10 @@ function canRollbackProject(user) {
   return user?.role === "admin";
 }
 
+function canCreateProject(user) {
+  return user?.role === "admin" || user?.role === "manager";
+}
+
 export default function App() {
   const [language, setLanguage] = useState(
     () => localStorage.getItem(LANGUAGE_STORAGE_KEY) || "en",
@@ -317,6 +336,7 @@ export default function App() {
     password: "",
     role: "manager",
   });
+  const [newProjectForm, setNewProjectForm] = useState(DEFAULT_PROJECT_FORM);
   const [resetPasswordForms, setResetPasswordForms] = useState({});
   const [projects, setProjects] = useState([]);
   const [users, setUsers] = useState([]);
@@ -348,6 +368,7 @@ export default function App() {
   const canEditSelectedProject = canEditProject(selectedProject, user);
   const canDeleteSelectedProject = canDeleteProject(user);
   const canRollbackSelectedProject = canRollbackProject(user);
+  const canCreateNewProject = canCreateProject(user);
 
   const pageLabel = useMemo(() => {
     if (total === 0) {
@@ -647,6 +668,38 @@ export default function App() {
     });
     setStatus(t.userCreated);
     await loadUsers(token, 0);
+  }
+
+  async function handleCreateProject(event) {
+    event.preventDefault();
+
+    if (!canCreateNewProject) {
+      return;
+    }
+
+    setLoading(true);
+    const result = await generateProject(
+      token,
+      buildProjectPayload(newProjectForm),
+    );
+    setLoading(false);
+
+    if (!result.success) {
+      setStatus(
+        result.errors?.join(", ") || result.error || t.unableToCreateProject,
+      );
+      return;
+    }
+
+    const projectId = result.result?.project_id;
+
+    setNewProjectForm(DEFAULT_PROJECT_FORM);
+    setStatus(t.projectCreated);
+    await loadProjects(token, 0);
+
+    if (projectId) {
+      await loadProject(projectId);
+    }
   }
 
   async function handleUpdate(event) {
@@ -1069,6 +1122,95 @@ export default function App() {
         {activeView === "projects" ? (
           <div className="content-grid">
           <section className="table-panel">
+            {canCreateNewProject ? (
+              <form
+                className="create-project-form"
+                onSubmit={handleCreateProject}
+              >
+                <label>
+                  {t.width}
+                  <input
+                    min="1"
+                    onChange={(event) =>
+                      setNewProjectForm({
+                        ...newProjectForm,
+                        width: event.target.value,
+                      })
+                    }
+                    required
+                    type="number"
+                    value={newProjectForm.width}
+                  />
+                </label>
+                <label>
+                  {t.height}
+                  <input
+                    min="1"
+                    onChange={(event) =>
+                      setNewProjectForm({
+                        ...newProjectForm,
+                        height: event.target.value,
+                      })
+                    }
+                    required
+                    type="number"
+                    value={newProjectForm.height}
+                  />
+                </label>
+                <label>
+                  {t.depth}
+                  <input
+                    min="1"
+                    onChange={(event) =>
+                      setNewProjectForm({
+                        ...newProjectForm,
+                        depth: event.target.value,
+                      })
+                    }
+                    required
+                    type="number"
+                    value={newProjectForm.depth}
+                  />
+                </label>
+                <label>
+                  {t.sections}
+                  <input
+                    min="1"
+                    onChange={(event) =>
+                      setNewProjectForm({
+                        ...newProjectForm,
+                        sections: event.target.value,
+                      })
+                    }
+                    required
+                    type="number"
+                    value={newProjectForm.sections}
+                  />
+                </label>
+                <label>
+                  {t.drawers}
+                  <input
+                    onChange={(event) =>
+                      setNewProjectForm({
+                        ...newProjectForm,
+                        drawers: event.target.value,
+                      })
+                    }
+                    placeholder="1, 2"
+                    type="text"
+                    value={newProjectForm.drawers}
+                  />
+                </label>
+                <button
+                  className="primary-button create-project-button"
+                  disabled={loading}
+                  type="submit"
+                >
+                  <Plus size={18} />
+                  {t.createProject}
+                </button>
+              </form>
+            ) : null}
             <table>
               <thead>
                 <tr>

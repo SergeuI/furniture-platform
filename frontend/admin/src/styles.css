@@ -272,11 +272,21 @@ tbody tr.selected {
   padding: 16px;
 }
 
+.create-project-form {
+  align-items: end;
+  border-bottom: 1px solid #dbe1e7;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(5, minmax(110px, 1fr)) auto;
+  padding: 16px;
+}
+
 .create-user-form select {
   width: 100%;
 }
 
-.create-user-button {
+.create-user-button,
+.create-project-button {
   white-space: nowrap;
 }
 
@@ -576,6 +586,11 @@ tbody tr.selected {
   }
 
   .create-user-form {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .create-project-form {
     align-items: stretch;
     grid-template-columns: 1fr;
   }
