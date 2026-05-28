@@ -162,6 +162,36 @@ class ProjectHistoryResponseSchema(BaseModel):
     error: Optional[str] = None
 
 
+class ProjectBomItemResponseSchema(BaseModel):
+
+    part_name: str
+
+    category: str
+
+    quantity: int
+
+    material: Optional[str] = None
+
+    thickness: Optional[int] = None
+
+    edge_banding: Optional[str] = None
+
+    notes: Optional[str] = None
+
+
+class ProjectBomResponseSchema(BaseModel):
+
+    success: bool
+
+    project_id: Optional[str] = None
+
+    items: List[ProjectBomItemResponseSchema] = Field(
+        default_factory=list
+    )
+
+    error: Optional[str] = None
+
+
 class DeleteProjectResponseSchema(BaseModel):
 
     success: bool

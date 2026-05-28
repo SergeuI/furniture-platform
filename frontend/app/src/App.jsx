@@ -15,6 +15,7 @@ import {
   generateProject,
   getCurrentUser,
   getProject,
+  getProjectBom,
   getSpecificationCatalog,
   listProjects,
   login,
@@ -67,6 +68,13 @@ const TRANSLATIONS = {
     all: "All",
     app: "App",
     bottomType: "Bottom type",
+    bomCategory: "Category",
+    bomEdgeBanding: "Edge",
+    bomMaterial: "Material",
+    bomNotes: "Notes",
+    bomPartName: "Part",
+    bomQuantity: "Qty",
+    bomThickness: "Thickness",
     cabinet: "Cabinet",
     center: "Center",
     client: "Client",
@@ -94,6 +102,7 @@ const TRANSLATIONS = {
     materialThickness: "Thickness",
     materials: "Materials",
     newProject: "New project",
+    noBomItems: "No BOM items yet.",
     notes: "Notes",
     notSet: "Not set",
     of: "of",
@@ -108,7 +117,7 @@ const TRANSLATIONS = {
     productionBom: "BOM preview",
     productionCutting: "Cutting list preview",
     productionDrilling: "Drilling preview",
-    productionPlaceholder: "Production outputs will appear here after BOM, cutting, and drilling APIs are connected.",
+    productionPlaceholder: "Production outputs will appear here after cutting and drilling APIs are connected.",
     right: "Right",
     room: "Room",
     saveProject: "Save project",
@@ -119,6 +128,7 @@ const TRANSLATIONS = {
     slideType: "Slide type",
     top: "Top",
     unableToCreateProject: "Unable to create project",
+    unableToLoadBom: "Unable to load BOM",
     unableToLoadProjects: "Unable to load projects",
     updated: "Updated",
     validation: "Validation",
@@ -131,6 +141,13 @@ const TRANSLATIONS = {
     all: "Всі",
     app: "Застосунок",
     bottomType: "Тип дна",
+    bomCategory: "Категорія",
+    bomEdgeBanding: "Крайка",
+    bomMaterial: "Матеріал",
+    bomNotes: "Нотатки",
+    bomPartName: "Деталь",
+    bomQuantity: "К-сть",
+    bomThickness: "Товщина",
     cabinet: "Тумба",
     center: "По центру",
     client: "Клієнт",
@@ -158,6 +175,7 @@ const TRANSLATIONS = {
     materialThickness: "Товщина",
     materials: "Матеріали",
     newProject: "Новий проект",
+    noBomItems: "BOM ще порожній.",
     notes: "Нотатки",
     notSet: "Не вказано",
     of: "з",
@@ -172,7 +190,7 @@ const TRANSLATIONS = {
     productionBom: "BOM перегляд",
     productionCutting: "Карта розкрою",
     productionDrilling: "Свердління",
-    productionPlaceholder: "Виробничі результати зʼявляться тут після підключення BOM, розкрою і свердління.",
+    productionPlaceholder: "Виробничі результати зʼявляться тут після підключення розкрою і свердління.",
     right: "Справа",
     room: "Кімната",
     saveProject: "Зберегти проект",
@@ -183,6 +201,7 @@ const TRANSLATIONS = {
     slideType: "Тип направляючих",
     top: "Зверху",
     unableToCreateProject: "Не вдалося створити проект",
+    unableToLoadBom: "Не вдалося завантажити BOM",
     unableToLoadProjects: "Не вдалося завантажити проекти",
     updated: "Оновлено",
     validation: "Валідація",
@@ -275,6 +294,7 @@ export default function App() {
   const [password, setPassword] = useState("");
   const [projects, setProjects] = useState([]);
   const [selectedProject, setSelectedProject] = useState(null);
+  const [bomItems, setBomItems] = useState([]);
   const [projectForm, setProjectForm] = useState(DEFAULT_PROJECT_FORM);
   const [projectFilters, setProjectFilters] = useState(DEFAULT_PROJECT_FILTERS);
   const [specificationCatalog, setSpecificationCatalog] = useState(
@@ -366,7 +386,10 @@ export default function App() {
   }
 
   async function loadProject(projectId) {
-    const result = await getProject(token, projectId);
+    const [result, bomResult] = await Promise.all([
+      getProject(token, projectId),
+      getProjectBom(token, projectId),
+    ]);
 
     if (!result.success) {
       setStatus(result.error || t.unableToLoadProjects);
@@ -374,6 +397,12 @@ export default function App() {
     }
 
     setSelectedProject(result.project);
+    setBomItems(bomResult.success ? bomResult.items : []);
+    if (!bomResult.success) {
+      setStatus(bomResult.error || t.unableToLoadBom);
+    } else {
+      setStatus("");
+    }
     setActiveProjectTab("general");
     setActiveView("details");
   }
@@ -403,6 +432,7 @@ export default function App() {
     setUser(null);
     setProjects([]);
     setSelectedProject(null);
+    setBomItems([]);
     setActiveProjectTab("general");
     setStatus("");
   }
@@ -1084,9 +1114,38 @@ export default function App() {
 
                 {activeProjectTab === "production" ? (
                   <div className="production-grid">
-                    <article>
+                    <article className="wide-production-section">
                       <h3>{t.productionBom}</h3>
-                      <p>{t.productionPlaceholder}</p>
+                      {bomItems.length > 0 ? (
+                        <table className="bom-table">
+                          <thead>
+                            <tr>
+                              <th>{t.bomPartName}</th>
+                              <th>{t.bomCategory}</th>
+                              <th>{t.bomQuantity}</th>
+                              <th>{t.bomMaterial}</th>
+                              <th>{t.bomThickness}</th>
+                              <th>{t.bomEdgeBanding}</th>
+                              <th>{t.bomNotes}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {bomItems.map((item) => (
+                              <tr key={`${item.category}-${item.part_name}`}>
+                                <td>{item.part_name}</td>
+                                <td>{item.category}</td>
+                                <td>{item.quantity}</td>
+                                <td>{item.material || t.notSet}</td>
+                                <td>{item.thickness || t.notSet}</td>
+                                <td>{item.edge_banding || t.notSet}</td>
+                                <td>{item.notes || t.notSet}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      ) : (
+                        <p>{t.noBomItems}</p>
+                      )}
                     </article>
                     <article>
                       <h3>{t.productionCutting}</h3>

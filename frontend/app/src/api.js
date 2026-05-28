@@ -82,3 +82,9 @@ export async function getProject(token, projectId) {
     headers: authHeaders(token),
   });
 }
+
+export async function getProjectBom(token, projectId) {
+  return request(`/project/${projectId}/bom`, {
+    headers: authHeaders(token),
+  });
+}

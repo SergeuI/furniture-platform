@@ -15,6 +15,7 @@ from schemas.project_input import (
 from schemas.project_response import (
     DeleteProjectResponseSchema,
     GenerateProjectResponseSchema,
+    ProjectBomResponseSchema,
     ProjectDetailResponseSchema,
     ProjectHistoryResponseSchema,
     ProjectListResponseSchema
@@ -25,6 +26,9 @@ from services.project_generation_service import (
 )
 from services.project_catalog_validator import (
     validate_project_catalog_values
+)
+from services.project_bom_service import (
+    build_project_bom
 )
 from database.repositories.project_repository import (
 
@@ -397,6 +401,59 @@ async def generate_project_route(
 
         "result": result.result
     }
+
+# =====================================================
+# PROJECT BOM
+# =====================================================
+
+@router.get(
+    "/{project_id}/bom",
+
+    response_model=ProjectBomResponseSchema
+)
+async def get_project_bom_route(
+
+    project_id: str,
+
+    current_user = Depends(require_project_reader)
+):
+
+    project = get_project(
+        project_id
+    )
+
+    if not project:
+
+        return {
+
+            "success": False,
+
+            "error": "Project not found"
+        }
+
+    if not _can_read_project(
+        current_user,
+        project
+    ):
+
+        return {
+
+            "success": False,
+
+            "error": "Insufficient project permissions"
+        }
+
+    return {
+
+        "success": True,
+
+        "project_id": project_id,
+
+        "items": build_project_bom(
+            project
+        )
+    }
+
 
 # =====================================================
 # GET PROJECT

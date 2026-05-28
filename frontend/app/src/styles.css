@@ -336,7 +336,7 @@ tbody tr.selected {
 .production-grid {
   display: grid;
   gap: 12px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .production-grid article,
@@ -352,6 +352,15 @@ tbody tr.selected {
   color: #24343d;
   font-size: 15px;
   margin: 0;
+}
+
+.wide-production-section {
+  grid-column: 1 / -1;
+}
+
+.bom-table td:first-child {
+  color: #1f2933;
+  font-family: inherit;
 }
 
 .production-grid p,
