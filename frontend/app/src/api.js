@@ -106,3 +106,9 @@ export async function getCuttingJsonExport(token, projectId) {
     headers: authHeaders(token),
   });
 }
+
+export async function getProjectPartDetail(token, projectId, partCode) {
+  return request(`/project/${projectId}/production/parts/${partCode}`, {
+    headers: authHeaders(token),
+  });
+}

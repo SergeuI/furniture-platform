@@ -402,6 +402,77 @@ tbody tr.selected {
   opacity: 0.78;
 }
 
+.part-detail-panel {
+  overflow: auto;
+}
+
+.part-detail-layout {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(320px, 1.1fr) minmax(320px, 0.9fr);
+}
+
+.part-detail-layout > div:first-child {
+  display: grid;
+  gap: 10px;
+}
+
+.part-preview {
+  background: #ffffff;
+  border: 1px solid #dbe1e7;
+  border-radius: 6px;
+  min-height: 280px;
+  width: 100%;
+}
+
+.part-board {
+  fill: #f8fafb;
+  stroke: #1f2933;
+  stroke-width: 1.5;
+}
+
+.part-edge {
+  stroke: #f47b20;
+  stroke-linecap: square;
+  stroke-width: 12;
+}
+
+.dimension-line {
+  stroke: #1f2933;
+  stroke-width: 1;
+}
+
+.dimension-text {
+  fill: #000000;
+  font-size: 34px;
+  font-weight: 800;
+}
+
+.part-hole {
+  fill: none;
+  stroke: #e200b6;
+  stroke-dasharray: 3 3;
+  stroke-width: 2;
+}
+
+.part-groove {
+  fill: rgba(226, 0, 182, 0.08);
+  stroke: #e200b6;
+  stroke-dasharray: 5 4;
+  stroke-width: 1.5;
+}
+
+.part-operation-tables {
+  display: grid;
+  gap: 12px;
+}
+
+.part-operation-tables h4 {
+  color: #1d5965;
+  font-size: 14px;
+  margin: 0 0 6px;
+}
+
 .production-grid p,
 .validation-panel span {
   color: #5c6875;
@@ -504,7 +575,8 @@ tbody tr.selected {
   .filter-form,
   .project-form,
   .detail-grid,
-  .production-grid {
+  .production-grid,
+  .part-detail-layout {
     grid-template-columns: 1fr;
   }
 

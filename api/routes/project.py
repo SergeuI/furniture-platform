@@ -21,7 +21,8 @@ from schemas.project_response import (
     ProjectCuttingResponseSchema,
     ProjectDetailResponseSchema,
     ProjectHistoryResponseSchema,
-    ProjectListResponseSchema
+    ProjectListResponseSchema,
+    ProjectPartDetailResponseSchema
 )
 
 from services.project_generation_service import (
@@ -39,6 +40,9 @@ from services.project_cutting_service import (
 from services.cutting_export_service import (
     build_cutting_json_export,
     list_cutting_export_formats
+)
+from services.project_part_detail_service import (
+    build_project_part_detail
 )
 from database.repositories.project_repository import (
 
@@ -619,6 +623,75 @@ async def get_project_cutting_json_export_route(
         "export": build_cutting_json_export(
             project
         )
+    }
+
+
+# =====================================================
+# PROJECT PART DETAIL
+# =====================================================
+
+@router.get(
+    "/{project_id}/production/parts/{part_code}",
+
+    response_model=ProjectPartDetailResponseSchema
+)
+async def get_project_part_detail_route(
+
+    project_id: str,
+
+    part_code: str,
+
+    current_user = Depends(require_project_reader)
+):
+
+    project = get_project(
+        project_id
+    )
+
+    if not project:
+
+        return {
+
+            "success": False,
+
+            "error": "Project not found"
+        }
+
+    if not _can_read_project(
+        current_user,
+        project
+    ):
+
+        return {
+
+            "success": False,
+
+            "error": "Insufficient project permissions"
+        }
+
+    part_detail = build_project_part_detail(
+        project,
+        part_code
+    )
+
+    if not part_detail:
+
+        return {
+
+            "success": False,
+
+            "project_id": project_id,
+
+            "error": "Part not found"
+        }
+
+    return {
+
+        "success": True,
+
+        "project_id": project_id,
+
+        **part_detail
     }
 
 

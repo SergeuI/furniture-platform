@@ -20,6 +20,7 @@ import {
   getProject,
   getProjectBom,
   getProjectCutting,
+  getProjectPartDetail,
   getSpecificationCatalog,
   listProjects,
   login,
@@ -92,6 +93,7 @@ const TRANSLATIONS = {
     cuttingSize: "Size",
     cuttingSummary: "Summary",
     depth: "Depth",
+    detailViewer: "Detail viewer",
     dresser: "Dresser",
     drawers: "Drawers",
     drawerUnit: "Drawer unit",
@@ -133,6 +135,9 @@ const TRANSLATIONS = {
     productionBom: "BOM preview",
     productionCutting: "Cutting list preview",
     productionDrilling: "Drilling preview",
+    productionGrooves: "Grooves",
+    productionHoles: "Holes",
+    productionQuarters: "Quarters",
     productionPlaceholder: "Production outputs will appear here after cutting and drilling APIs are connected.",
     right: "Right",
     room: "Room",
@@ -147,6 +152,7 @@ const TRANSLATIONS = {
     unableToLoadBom: "Unable to load BOM",
     unableToLoadCutting: "Unable to load cutting list",
     unableToLoadExports: "Unable to load exports",
+    unableToLoadPart: "Unable to load part detail",
     unableToLoadProjects: "Unable to load projects",
     updated: "Updated",
     validation: "Validation",
@@ -179,6 +185,7 @@ const TRANSLATIONS = {
     cuttingSize: "Розмір",
     cuttingSummary: "Підсумок",
     depth: "Глибина",
+    detailViewer: "Карта деталі",
     dresser: "Комод",
     drawers: "Шухляди",
     drawerUnit: "Блок шухляд",
@@ -220,6 +227,9 @@ const TRANSLATIONS = {
     productionBom: "BOM перегляд",
     productionCutting: "Карта розкрою",
     productionDrilling: "Свердління",
+    productionGrooves: "Пази",
+    productionHoles: "Отвори",
+    productionQuarters: "Чверті",
     productionPlaceholder: "Виробничі результати зʼявляться тут після підключення розкрою і свердління.",
     right: "Справа",
     room: "Кімната",
@@ -234,6 +244,7 @@ const TRANSLATIONS = {
     unableToLoadBom: "Не вдалося завантажити BOM",
     unableToLoadCutting: "Не вдалося завантажити карту розкрою",
     unableToLoadExports: "Не вдалося завантажити експорти",
+    unableToLoadPart: "Не вдалося завантажити карту деталі",
     unableToLoadProjects: "Не вдалося завантажити проекти",
     updated: "Оновлено",
     validation: "Валідація",
@@ -314,6 +325,107 @@ function formatDrawers(drawers, t) {
   return drawers.join(", ");
 }
 
+function PartPreview({ detail }) {
+  if (!detail?.part) {
+    return null;
+  }
+
+  const { part } = detail;
+  const viewWidth = 720;
+  const viewHeight = 360;
+  const margin = 58;
+  const scale = Math.min(
+    (viewWidth - margin * 2) / part.width,
+    (viewHeight - margin * 2) / part.height,
+  );
+  const width = part.width * scale;
+  const height = part.height * scale;
+  const x = (viewWidth - width) / 2;
+  const y = (viewHeight - height) / 2;
+
+  function pxX(value) {
+    return x + value * scale;
+  }
+
+  function pxY(value) {
+    return y + height - value * scale;
+  }
+
+  function edgeLine(side, material) {
+    if (!material || material === "not_set") {
+      return null;
+    }
+
+    const props = {
+      className: "part-edge",
+      key: side,
+    };
+
+    if (side === "top") {
+      return <line {...props} x1={x} x2={x + width} y1={y} y2={y} />;
+    }
+
+    if (side === "bottom") {
+      return <line {...props} x1={x} x2={x + width} y1={y + height} y2={y + height} />;
+    }
+
+    if (side === "left") {
+      return <line {...props} x1={x} x2={x} y1={y} y2={y + height} />;
+    }
+
+    return <line {...props} x1={x + width} x2={x + width} y1={y} y2={y + height} />;
+  }
+
+  return (
+    <svg className="part-preview" viewBox={`0 0 ${viewWidth} ${viewHeight}`} role="img">
+      <rect className="part-board" height={height} width={width} x={x} y={y} />
+      {edgeLine("top", part.edge_top)}
+      {edgeLine("bottom", part.edge_bottom)}
+      {edgeLine("left", part.edge_left)}
+      {edgeLine("right", part.edge_right)}
+
+      <line className="dimension-line" x1={x} x2={x + width} y1={y - 28} y2={y - 28} />
+      <line className="dimension-line" x1={x} x2={x} y1={y - 42} y2={y - 12} />
+      <line className="dimension-line" x1={x + width} x2={x + width} y1={y - 42} y2={y - 12} />
+      <text className="dimension-text" textAnchor="middle" x={viewWidth / 2} y={y - 36}>
+        {part.width}
+      </text>
+
+      <line className="dimension-line" x1={x + width + 30} x2={x + width + 30} y1={y} y2={y + height} />
+      <line className="dimension-line" x1={x + width + 16} x2={x + width + 44} y1={y} y2={y} />
+      <line className="dimension-line" x1={x + width + 16} x2={x + width + 44} y1={y + height} y2={y + height} />
+      <text
+        className="dimension-text rotated"
+        textAnchor="middle"
+        transform={`translate(${x + width + 62} ${viewHeight / 2}) rotate(-90)`}
+      >
+        {part.height}
+      </text>
+
+      {detail.holes.map((hole) => (
+        <circle
+          className="part-hole"
+          cx={pxX(hole.x)}
+          cy={pxY(hole.y)}
+          key={`hole-${hole.number}`}
+          r={Math.max(4, hole.diameter * 0.75)}
+        />
+      ))}
+
+      {detail.grooves.map((groove) => (
+        <rect
+          className="part-groove"
+          height={Math.max(3, groove.width * scale)}
+          key={`groove-${groove.number}`}
+          width={groove.length * scale}
+          x={pxX(groove.x)}
+          y={pxY(groove.y) - Math.max(3, groove.width * scale) / 2}
+        />
+      ))}
+    </svg>
+  );
+}
+
 export default function App() {
   const [language, setLanguage] = useState(
     () => localStorage.getItem(LANGUAGE_STORAGE_KEY) || "uk",
@@ -331,6 +443,7 @@ export default function App() {
   const [cuttingSummary, setCuttingSummary] = useState(null);
   const [cuttingExportFormats, setCuttingExportFormats] = useState([]);
   const [cuttingJsonExport, setCuttingJsonExport] = useState(null);
+  const [selectedPartDetail, setSelectedPartDetail] = useState(null);
   const [projectForm, setProjectForm] = useState(DEFAULT_PROJECT_FORM);
   const [projectFilters, setProjectFilters] = useState(DEFAULT_PROJECT_FILTERS);
   const [specificationCatalog, setSpecificationCatalog] = useState(
@@ -445,6 +558,7 @@ export default function App() {
     setBomItems(bomResult.success ? bomResult.items : []);
     setCuttingItems(cuttingResult.success ? cuttingResult.items : []);
     setCuttingSummary(cuttingResult.success ? cuttingResult.summary : null);
+    setSelectedPartDetail(null);
     setCuttingExportFormats(
       exportFormatsResult.success ? exportFormatsResult.formats : [],
     );
@@ -496,7 +610,28 @@ export default function App() {
     setCuttingSummary(null);
     setCuttingExportFormats([]);
     setCuttingJsonExport(null);
+    setSelectedPartDetail(null);
     setActiveProjectTab("general");
+    setStatus("");
+  }
+
+  async function handleSelectCuttingPart(partCode) {
+    if (!selectedProject) {
+      return;
+    }
+
+    const result = await getProjectPartDetail(
+      token,
+      selectedProject.id,
+      partCode,
+    );
+
+    if (!result.success) {
+      setStatus(result.error || t.unableToLoadPart);
+      return;
+    }
+
+    setSelectedPartDetail(result);
     setStatus("");
   }
 
@@ -1261,7 +1396,15 @@ export default function App() {
                           </thead>
                           <tbody>
                             {cuttingItems.map((item) => (
-                              <tr key={item.export_code}>
+                              <tr
+                                className={
+                                  selectedPartDetail?.part?.export_code === item.export_code
+                                    ? "selected"
+                                    : ""
+                                }
+                                key={item.export_code}
+                                onClick={() => handleSelectCuttingPart(item.export_code)}
+                              >
                                 <td>{item.export_code}</td>
                                 <td>{item.part_name}</td>
                                 <td>{item.width} x {item.height}</td>
@@ -1282,6 +1425,102 @@ export default function App() {
                         <p>{t.noCuttingItems}</p>
                       )}
                     </article>
+                    {selectedPartDetail ? (
+                      <article className="wide-production-section part-detail-panel">
+                        <h3>{t.detailViewer}</h3>
+                        <div className="part-detail-layout">
+                          <div>
+                            <strong>
+                              {selectedPartDetail.part.export_code} / {selectedPartDetail.part.part_name}
+                            </strong>
+                            <PartPreview detail={selectedPartDetail} />
+                          </div>
+                          <div className="part-operation-tables">
+                            <section>
+                              <h4>{t.productionHoles} {selectedPartDetail.holes.length}</h4>
+                              <table>
+                                <thead>
+                                  <tr>
+                                    <th>#</th>
+                                    <th>{t.bomCategory}</th>
+                                    <th>X</th>
+                                    <th>Y</th>
+                                    <th>{t.bomThickness}</th>
+                                    <th>D</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {selectedPartDetail.holes.map((hole) => (
+                                    <tr key={hole.number}>
+                                      <td>{hole.number}</td>
+                                      <td>{hole.side}</td>
+                                      <td>{hole.x}</td>
+                                      <td>{hole.y}</td>
+                                      <td>{hole.depth}</td>
+                                      <td>{hole.diameter}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </section>
+
+                            <section>
+                              <h4>{t.productionGrooves} {selectedPartDetail.grooves.length}</h4>
+                              <table>
+                                <thead>
+                                  <tr>
+                                    <th>#</th>
+                                    <th>{t.bomCategory}</th>
+                                    <th>X</th>
+                                    <th>Y</th>
+                                    <th>{t.cuttingLength}</th>
+                                    <th>{t.bomThickness}</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {selectedPartDetail.grooves.map((groove) => (
+                                    <tr key={groove.number}>
+                                      <td>{groove.number}</td>
+                                      <td>{groove.side}</td>
+                                      <td>{groove.x}</td>
+                                      <td>{groove.y}</td>
+                                      <td>{groove.length}</td>
+                                      <td>{groove.depth}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </section>
+
+                            <section>
+                              <h4>{t.productionQuarters} {selectedPartDetail.quarters.length}</h4>
+                              <table>
+                                <thead>
+                                  <tr>
+                                    <th>#</th>
+                                    <th>{t.bomCategory}</th>
+                                    <th>{t.cuttingLength}</th>
+                                    <th>{t.cuttingSize}</th>
+                                    <th>{t.bomThickness}</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {selectedPartDetail.quarters.map((quarter) => (
+                                    <tr key={quarter.number}>
+                                      <td>{quarter.number}</td>
+                                      <td>{quarter.side}</td>
+                                      <td>{quarter.length}</td>
+                                      <td>{quarter.width}</td>
+                                      <td>{quarter.depth}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </section>
+                          </div>
+                        </div>
+                      </article>
+                    ) : null}
                     <article>
                       <h3>{t.productionDrilling}</h3>
                       <p>{t.productionPlaceholder}</p>

@@ -286,6 +286,107 @@ class ProjectCuttingJsonExportResponseSchema(BaseModel):
     error: Optional[str] = None
 
 
+class ProjectPartEdgeResponseSchema(BaseModel):
+
+    side: str
+
+    material: str
+
+    length: int
+
+
+class ProjectPartHoleResponseSchema(BaseModel):
+
+    number: int
+
+    side: str
+
+    origin: str
+
+    x: float
+
+    y: float
+
+    z: float
+
+    diameter: float
+
+    depth: float
+
+    type: str
+
+
+class ProjectPartGrooveResponseSchema(BaseModel):
+
+    number: int
+
+    side: str
+
+    origin: str
+
+    x: float
+
+    y: float
+
+    depth: float
+
+    width: float
+
+    length: float
+
+    type: str
+
+
+class ProjectPartQuarterResponseSchema(BaseModel):
+
+    number: int
+
+    side: str
+
+    origin: str
+
+    x: float
+
+    y: float
+
+    depth: float
+
+    width: float
+
+    length: float
+
+    radius: float
+
+    type: str
+
+
+class ProjectPartDetailResponseSchema(BaseModel):
+
+    success: bool
+
+    project_id: Optional[str] = None
+
+    part: Optional[ProjectCuttingItemResponseSchema] = None
+
+    edges: List[ProjectPartEdgeResponseSchema] = Field(
+        default_factory=list
+    )
+
+    holes: List[ProjectPartHoleResponseSchema] = Field(
+        default_factory=list
+    )
+
+    grooves: List[ProjectPartGrooveResponseSchema] = Field(
+        default_factory=list
+    )
+
+    quarters: List[ProjectPartQuarterResponseSchema] = Field(
+        default_factory=list
+    )
+
+    error: Optional[str] = None
+
+
 class DeleteProjectResponseSchema(BaseModel):
 
     success: bool
