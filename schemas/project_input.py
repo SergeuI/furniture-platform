@@ -104,3 +104,18 @@ class ProjectInputSchema(BaseModel):
     materials: MaterialsSchema
 
     fittings: FittingsSchema
+
+
+# =====================================================
+# PROJECT PART EDGES
+# =====================================================
+
+class ProjectPartEdgesUpdateSchema(BaseModel):
+
+    top: Optional[str] = None
+
+    bottom: Optional[str] = None
+
+    left: Optional[str] = None
+
+    right: Optional[str] = None

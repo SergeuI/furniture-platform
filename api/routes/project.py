@@ -10,7 +10,8 @@ from api.dependencies.auth import (
 )
 
 from schemas.project_input import (
-    ProjectInputSchema
+    ProjectInputSchema,
+    ProjectPartEdgesUpdateSchema
 )
 from schemas.project_response import (
     DeleteProjectResponseSchema,
@@ -56,7 +57,9 @@ from database.repositories.project_repository import (
 
     rollback_project,
 
-    update_project
+    update_project,
+
+    update_project_part_edges
 )
 from database.repositories.project_version_repository import (
 
@@ -165,6 +168,8 @@ def _serialize_project(
 
         "edge_banding": project.edge_banding,
 
+        "edge_overrides": project.edge_overrides or {},
+
         "material_thickness": project.material_thickness,
 
         "slide_type": project.slide_type,
@@ -219,6 +224,8 @@ def _serialize_project_version(
         "inside_material": version.inside_material,
 
         "edge_banding": version.edge_banding,
+
+        "edge_overrides": version.edge_overrides or {},
 
         "material_thickness": version.material_thickness,
 
@@ -692,6 +699,108 @@ async def get_project_part_detail_route(
         "project_id": project_id,
 
         **part_detail
+    }
+
+
+@router.put(
+    "/{project_id}/production/parts/{part_code}/edges",
+
+    response_model=ProjectPartDetailResponseSchema
+)
+async def update_project_part_edges_route(
+
+    project_id: str,
+
+    part_code: str,
+
+    edges: ProjectPartEdgesUpdateSchema,
+
+    current_user = Depends(require_project_writer)
+):
+
+    project = get_project(
+        project_id
+    )
+
+    if not project:
+
+        return {
+
+            "success": False,
+
+            "error": "Project not found"
+        }
+
+    if not _can_update_project(
+        current_user,
+        project
+    ):
+
+        return {
+
+            "success": False,
+
+            "error": "Insufficient project permissions"
+        }
+
+    part_detail = build_project_part_detail(
+        project,
+        part_code
+    )
+
+    if not part_detail:
+
+        return {
+
+            "success": False,
+
+            "project_id": project_id,
+
+            "error": "Part not found"
+        }
+
+    updated_project = update_project_part_edges(
+        project_id=project_id,
+        part_code=part_code,
+        edges=edges.model_dump(),
+        updated_by_user_id=current_user.id
+    )
+
+    if not updated_project:
+
+        return {
+
+            "success": False,
+
+            "project_id": project_id,
+
+            "error": "Unable to update part edges"
+        }
+
+    updated_part_detail = build_project_part_detail(
+        updated_project,
+        part_code
+    )
+
+    create_audit_log(
+        actor_user_id=current_user.id,
+        actor_email=current_user.email,
+        action="project.part_edges.updated",
+        entity_type="project",
+        entity_id=project_id,
+        details={
+            "part_code": part_code,
+            "edges": edges.model_dump()
+        }
+    )
+
+    return {
+
+        "success": True,
+
+        "project_id": project_id,
+
+        **updated_part_detail
     }
 
 

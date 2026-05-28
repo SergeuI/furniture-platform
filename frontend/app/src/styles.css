@@ -493,6 +493,90 @@ tbody tr.selected {
   stroke-width: 1.5;
 }
 
+.edge-editor-panel {
+  background: #eef8fc;
+  border: 1px solid #b8dced;
+  border-radius: 6px;
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.edge-editor-header {
+  display: grid;
+  gap: 4px;
+}
+
+.edge-editor-header strong {
+  color: #0f5064;
+  font-size: 15px;
+}
+
+.edge-editor-header span {
+  color: #5c6875;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.edge-editor-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.edge-editor-row {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 24px minmax(64px, 0.5fr) minmax(150px, 1fr);
+}
+
+.edge-editor-row span {
+  color: #24323f;
+  font-size: 13px;
+}
+
+.edge-side-icon {
+  border: 2px solid #456273;
+  display: block;
+  height: 18px;
+  position: relative;
+  width: 18px;
+}
+
+.edge-side-icon::after {
+  background: #2f93cf;
+  content: "";
+  position: absolute;
+}
+
+.edge-side-icon.top::after {
+  height: 4px;
+  left: 0;
+  right: 0;
+  top: -6px;
+}
+
+.edge-side-icon.right::after {
+  bottom: 0;
+  right: -6px;
+  top: 0;
+  width: 4px;
+}
+
+.edge-side-icon.bottom::after {
+  bottom: -6px;
+  height: 4px;
+  left: 0;
+  right: 0;
+}
+
+.edge-side-icon.left::after {
+  bottom: 0;
+  left: -6px;
+  top: 0;
+  width: 4px;
+}
+
 .part-operation-tables {
   display: grid;
   gap: 12px;

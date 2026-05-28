@@ -78,6 +78,7 @@ def upgrade_sqlite_schema():
             "facade_material": "VARCHAR",
             "inside_material": "VARCHAR",
             "edge_banding": "VARCHAR",
+            "edge_overrides": "JSON",
             "material_thickness": "INTEGER",
             "slide_type": "VARCHAR",
             "bottom_type": "VARCHAR",

@@ -155,6 +155,14 @@ export async function getProjectPartDetail(token, projectId, partCode) {
   });
 }
 
+export async function updateProjectPartEdges(token, projectId, partCode, edges) {
+  return request(`/project/${projectId}/production/parts/${partCode}/edges`, {
+    method: "PUT",
+    headers: authHeaders(token),
+    body: JSON.stringify(edges),
+  });
+}
+
 export async function updateProject(token, projectId, project) {
   return request(`/project/${projectId}`, {
     method: "PUT",

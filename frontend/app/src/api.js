@@ -112,3 +112,11 @@ export async function getProjectPartDetail(token, projectId, partCode) {
     headers: authHeaders(token),
   });
 }
+
+export async function updateProjectPartEdges(token, projectId, partCode, edges) {
+  return request(`/project/${projectId}/production/parts/${partCode}/edges`, {
+    method: "PUT",
+    headers: authHeaders(token),
+    body: JSON.stringify(edges),
+  });
+}

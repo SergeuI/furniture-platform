@@ -134,6 +134,53 @@ def _edge_length_m(item):
     ) / 1000
 
 
+def _normalize_edge_override(value):
+
+    if value in (
+        None,
+        "",
+        "not_set"
+    ):
+
+        return None
+
+    return value
+
+
+def _apply_edge_overrides(items, edge_overrides):
+
+    if not isinstance(edge_overrides, dict):
+
+        return items
+
+    for item in items:
+
+        override = edge_overrides.get(
+            item["export_code"]
+        )
+
+        if not isinstance(override, dict):
+
+            continue
+
+        for side in (
+            "top",
+            "bottom",
+            "left",
+            "right"
+        ):
+
+            if side in override:
+
+                item[f"edge_{side}"] = _normalize_edge_override(
+                    override.get(
+                        side
+                    )
+                )
+
+    return items
+
+
 def build_project_cutting(project):
 
     width = int(project.width or 0)
@@ -339,6 +386,11 @@ def build_project_cutting(project):
             and item["height"] > 0
         )
     ]
+
+    items = _apply_edge_overrides(
+        items,
+        project.edge_overrides
+    )
 
     return {
         "items": items,

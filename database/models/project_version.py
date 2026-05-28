@@ -82,6 +82,11 @@ class ProjectVersionModel(Base):
         nullable=True
     )
 
+    edge_overrides = Column(
+        JSON,
+        nullable=True
+    )
+
     material_thickness = Column(
         Integer,
         nullable=True

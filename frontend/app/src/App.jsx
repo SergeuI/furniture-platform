@@ -24,6 +24,7 @@ import {
   getSpecificationCatalog,
   listProjects,
   login,
+  updateProjectPartEdges,
 } from "./api";
 
 const TOKEN_STORAGE_KEY = "furniture_app_token";
@@ -73,6 +74,7 @@ const TRANSLATIONS = {
     all: "All",
     app: "App",
     bottomType: "Bottom type",
+    bottom: "Bottom",
     bomCategory: "Category",
     bomEdgeBanding: "Edge",
     bomMaterial: "Material",
@@ -98,6 +100,9 @@ const TRANSLATIONS = {
     drawers: "Drawers",
     drawerUnit: "Drawer unit",
     edgeBanding: "Edge banding",
+    edgeEditor: "Edge processing",
+    edgeEditorDescription: "Edit edge banding for the selected production part.",
+    edgeSaved: "Part edges updated",
     email: "Email",
     exportDownloadJson: "Download JSON",
     exportFormats: "Export formats",
@@ -153,6 +158,7 @@ const TRANSLATIONS = {
     unableToLoadCutting: "Unable to load cutting list",
     unableToLoadExports: "Unable to load exports",
     unableToLoadPart: "Unable to load part detail",
+    unableToSaveEdges: "Unable to save part edges",
     unableToLoadProjects: "Unable to load projects",
     updated: "Updated",
     validation: "Validation",
@@ -165,6 +171,7 @@ const TRANSLATIONS = {
     all: "Всі",
     app: "Застосунок",
     bottomType: "Тип дна",
+    bottom: "Низ",
     bomCategory: "Категорія",
     bomEdgeBanding: "Крайка",
     bomMaterial: "Матеріал",
@@ -190,6 +197,9 @@ const TRANSLATIONS = {
     drawers: "Шухляди",
     drawerUnit: "Блок шухляд",
     edgeBanding: "Крайка",
+    edgeEditor: "Обробка торців",
+    edgeEditorDescription: "Редагування крайки для вибраної виробничої деталі.",
+    edgeSaved: "Крайку деталі оновлено",
     email: "Email",
     exportDownloadJson: "Завантажити JSON",
     exportFormats: "Формати експорту",
@@ -245,6 +255,7 @@ const TRANSLATIONS = {
     unableToLoadCutting: "Не вдалося завантажити карту розкрою",
     unableToLoadExports: "Не вдалося завантажити експорти",
     unableToLoadPart: "Не вдалося завантажити карту деталі",
+    unableToSaveEdges: "Не вдалося зберегти крайку деталі",
     unableToLoadProjects: "Не вдалося завантажити проекти",
     updated: "Оновлено",
     validation: "Валідація",
@@ -567,6 +578,65 @@ function PartPreview({ detail }) {
   );
 }
 
+function PartEdgeEditor({
+  detail,
+  disabled,
+  edgeBandings,
+  loading,
+  onChange,
+  onSave,
+  t,
+}) {
+  if (!detail?.part) {
+    return null;
+  }
+
+  const sides = [
+    ["top", t.top],
+    ["right", t.right],
+    ["bottom", t.bottom],
+    ["left", t.left],
+  ];
+
+  return (
+    <section className="edge-editor-panel">
+      <div className="edge-editor-header">
+        <strong>{t.edgeEditor}</strong>
+        <span>{t.edgeEditorDescription}</span>
+      </div>
+      <div className="edge-editor-grid">
+        {sides.map(([side, label]) => (
+          <label className="edge-editor-row" key={side}>
+            <span className={`edge-side-icon ${side}`} aria-hidden="true" />
+            <span>{label}</span>
+            <select
+              disabled={disabled || loading}
+              onChange={(event) => onChange(side, event.target.value)}
+              value={detail.part[`edge_${side}`] || ""}
+            >
+              <option value="">{t.notSet}</option>
+              {edgeBandings.map((edgeBanding) => (
+                <option key={edgeBanding} value={edgeBanding}>
+                  {edgeBanding}
+                </option>
+              ))}
+            </select>
+          </label>
+        ))}
+      </div>
+      <button
+        className="primary-button wide-button"
+        disabled={disabled || loading}
+        onClick={onSave}
+        type="button"
+      >
+        <Save size={18} />
+        {t.saveProject}
+      </button>
+    </section>
+  );
+}
+
 export default function App() {
   const [language, setLanguage] = useState(
     () => localStorage.getItem(LANGUAGE_STORAGE_KEY) || "uk",
@@ -774,6 +844,65 @@ export default function App() {
 
     setSelectedPartDetail(result);
     setStatus("");
+  }
+
+  function handlePartEdgeChange(side, value) {
+    setSelectedPartDetail((current) => {
+      if (!current?.part) {
+        return current;
+      }
+
+      return {
+        ...current,
+        part: {
+          ...current.part,
+          [`edge_${side}`]: value || null,
+        },
+      };
+    });
+  }
+
+  async function handleSavePartEdges() {
+    if (!selectedProject?.id || !selectedPartDetail?.part) {
+      return;
+    }
+
+    setLoading(true);
+    const result = await updateProjectPartEdges(
+      token,
+      selectedProject.id,
+      selectedPartDetail.part.export_code,
+      {
+        top: selectedPartDetail.part.edge_top || null,
+        bottom: selectedPartDetail.part.edge_bottom || null,
+        left: selectedPartDetail.part.edge_left || null,
+        right: selectedPartDetail.part.edge_right || null,
+      },
+    );
+
+    const [
+      cuttingResult,
+      jsonExportResult,
+    ] = await Promise.all([
+      getProjectCutting(token, selectedProject.id),
+      getCuttingJsonExport(token, selectedProject.id),
+    ]);
+    setLoading(false);
+
+    if (!result.success) {
+      setStatus(result.error || t.unableToSaveEdges);
+      return;
+    }
+
+    setSelectedPartDetail(result);
+    if (cuttingResult.success) {
+      setCuttingItems(cuttingResult.items || []);
+      setCuttingSummary(cuttingResult.summary || null);
+    }
+    if (jsonExportResult.success) {
+      setCuttingJsonExport(jsonExportResult.export || null);
+    }
+    setStatus(t.edgeSaved);
   }
 
   function handleDownloadCuttingJson() {
@@ -1575,6 +1704,15 @@ export default function App() {
                               {selectedPartDetail.part.export_code} / {selectedPartDetail.part.part_name}
                             </strong>
                             <PartPreview detail={selectedPartDetail} />
+                            <PartEdgeEditor
+                              detail={selectedPartDetail}
+                              disabled={user?.role === "viewer"}
+                              edgeBandings={specificationCatalog.edge_bandings}
+                              loading={loading}
+                              onChange={handlePartEdgeChange}
+                              onSave={handleSavePartEdges}
+                              t={t}
+                            />
                           </div>
                           <div className="part-operation-tables">
                             <section>

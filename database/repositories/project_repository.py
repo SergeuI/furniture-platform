@@ -49,6 +49,8 @@ def _create_project_version_from_project(
 
         edge_banding=project.edge_banding,
 
+        edge_overrides=project.edge_overrides,
+
         material_thickness=project.material_thickness,
 
         slide_type=project.slide_type,
@@ -273,6 +275,8 @@ def create_project(
             inside_material=inside_material,
 
             edge_banding=edge_banding,
+
+            edge_overrides={},
 
             material_thickness=material_thickness,
 
@@ -689,6 +693,78 @@ def update_project(
 
 
 # =====================================================
+# UPDATE PROJECT PART EDGES
+# =====================================================
+
+def update_project_part_edges(
+
+    project_id: str,
+
+    part_code: str,
+
+    edges: dict,
+
+    updated_by_user_id: str | None = None
+):
+
+    db = SessionLocal()
+
+    try:
+
+        project = (
+
+            db.query(ProjectModel)
+
+            .filter(
+
+                ProjectModel.id == project_id
+            )
+
+            .first()
+        )
+
+        if not project:
+
+            return None
+
+        _create_project_version_from_project(
+
+            db,
+
+            project
+        )
+
+        edge_overrides = dict(project.edge_overrides or {})
+
+        edge_overrides[part_code] = {
+
+            "top": edges.get("top"),
+
+            "bottom": edges.get("bottom"),
+
+            "left": edges.get("left"),
+
+            "right": edges.get("right")
+        }
+
+        project.edge_overrides = edge_overrides
+
+        if updated_by_user_id is not None:
+
+            project.updated_by_user_id = updated_by_user_id
+
+        db.commit()
+
+        db.refresh(project)
+
+        return project
+
+    finally:
+
+        db.close()
+
+
+# =====================================================
 # ROLLBACK PROJECT
 # =====================================================
 
@@ -769,6 +845,8 @@ def rollback_project(
         project.inside_material = version.inside_material
 
         project.edge_banding = version.edge_banding
+
+        project.edge_overrides = version.edge_overrides or {}
 
         project.material_thickness = version.material_thickness
 
