@@ -16,6 +16,7 @@ from schemas.project_response import (
     DeleteProjectResponseSchema,
     GenerateProjectResponseSchema,
     ProjectBomResponseSchema,
+    ProjectCuttingResponseSchema,
     ProjectDetailResponseSchema,
     ProjectHistoryResponseSchema,
     ProjectListResponseSchema
@@ -29,6 +30,9 @@ from services.project_catalog_validator import (
 )
 from services.project_bom_service import (
     build_project_bom
+)
+from services.project_cutting_service import (
+    build_project_cutting
 )
 from database.repositories.project_repository import (
 
@@ -452,6 +456,63 @@ async def get_project_bom_route(
         "items": build_project_bom(
             project
         )
+    }
+
+
+# =====================================================
+# PROJECT CUTTING
+# =====================================================
+
+@router.get(
+    "/{project_id}/cutting",
+
+    response_model=ProjectCuttingResponseSchema
+)
+async def get_project_cutting_route(
+
+    project_id: str,
+
+    current_user = Depends(require_project_reader)
+):
+
+    project = get_project(
+        project_id
+    )
+
+    if not project:
+
+        return {
+
+            "success": False,
+
+            "error": "Project not found"
+        }
+
+    if not _can_read_project(
+        current_user,
+        project
+    ):
+
+        return {
+
+            "success": False,
+
+            "error": "Insufficient project permissions"
+        }
+
+    cutting = build_project_cutting(
+        project
+    )
+
+    return {
+
+        "success": True,
+
+        "project_id": project_id,
+
+        "items": cutting["items"],
+
+        "summary": cutting["summary"]
     }
 
 

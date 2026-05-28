@@ -192,6 +192,63 @@ class ProjectBomResponseSchema(BaseModel):
     error: Optional[str] = None
 
 
+class ProjectCuttingItemResponseSchema(BaseModel):
+
+    export_code: str
+
+    part_name: str
+
+    category: str
+
+    width: int
+
+    height: int
+
+    quantity: int
+
+    material: Optional[str] = None
+
+    thickness: Optional[int] = None
+
+    edge_top: Optional[str] = None
+
+    edge_bottom: Optional[str] = None
+
+    edge_left: Optional[str] = None
+
+    edge_right: Optional[str] = None
+
+    grain_direction: Optional[str] = None
+
+    notes: Optional[str] = None
+
+
+class ProjectCuttingSummaryResponseSchema(BaseModel):
+
+    total_parts: int
+
+    total_area_m2: float
+
+    total_cut_length_m: float
+
+    total_edge_length_m: float
+
+
+class ProjectCuttingResponseSchema(BaseModel):
+
+    success: bool
+
+    project_id: Optional[str] = None
+
+    items: List[ProjectCuttingItemResponseSchema] = Field(
+        default_factory=list
+    )
+
+    summary: Optional[ProjectCuttingSummaryResponseSchema] = None
+
+    error: Optional[str] = None
+
+
 class DeleteProjectResponseSchema(BaseModel):
 
     success: bool

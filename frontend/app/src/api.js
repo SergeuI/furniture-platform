@@ -88,3 +88,9 @@ export async function getProjectBom(token, projectId) {
     headers: authHeaders(token),
   });
 }
+
+export async function getProjectCutting(token, projectId) {
+  return request(`/project/${projectId}/cutting`, {
+    headers: authHeaders(token),
+  });
+}

@@ -16,6 +16,7 @@ import {
   getCurrentUser,
   getProject,
   getProjectBom,
+  getProjectCutting,
   getSpecificationCatalog,
   listProjects,
   login,
@@ -80,6 +81,13 @@ const TRANSLATIONS = {
     client: "Client",
     createProject: "Create project",
     created: "Created",
+    cuttingArea: "Area, m2",
+    cuttingEdge: "Edge, m",
+    cuttingExportCode: "Code",
+    cuttingGrain: "Grain",
+    cuttingLength: "Cut, m",
+    cuttingSize: "Size",
+    cuttingSummary: "Summary",
     depth: "Depth",
     dresser: "Dresser",
     drawers: "Drawers",
@@ -103,6 +111,7 @@ const TRANSLATIONS = {
     materials: "Materials",
     newProject: "New project",
     noBomItems: "No BOM items yet.",
+    noCuttingItems: "No cutting items yet.",
     notes: "Notes",
     notSet: "Not set",
     of: "of",
@@ -129,6 +138,7 @@ const TRANSLATIONS = {
     top: "Top",
     unableToCreateProject: "Unable to create project",
     unableToLoadBom: "Unable to load BOM",
+    unableToLoadCutting: "Unable to load cutting list",
     unableToLoadProjects: "Unable to load projects",
     updated: "Updated",
     validation: "Validation",
@@ -153,6 +163,13 @@ const TRANSLATIONS = {
     client: "Клієнт",
     createProject: "Створити проект",
     created: "Створено",
+    cuttingArea: "Площа, м2",
+    cuttingEdge: "Крайка, м",
+    cuttingExportCode: "Код",
+    cuttingGrain: "Волокно",
+    cuttingLength: "Різ, м",
+    cuttingSize: "Розмір",
+    cuttingSummary: "Підсумок",
     depth: "Глибина",
     dresser: "Комод",
     drawers: "Шухляди",
@@ -176,6 +193,7 @@ const TRANSLATIONS = {
     materials: "Матеріали",
     newProject: "Новий проект",
     noBomItems: "BOM ще порожній.",
+    noCuttingItems: "Карта розкрою ще порожня.",
     notes: "Нотатки",
     notSet: "Не вказано",
     of: "з",
@@ -202,6 +220,7 @@ const TRANSLATIONS = {
     top: "Зверху",
     unableToCreateProject: "Не вдалося створити проект",
     unableToLoadBom: "Не вдалося завантажити BOM",
+    unableToLoadCutting: "Не вдалося завантажити карту розкрою",
     unableToLoadProjects: "Не вдалося завантажити проекти",
     updated: "Оновлено",
     validation: "Валідація",
@@ -295,6 +314,8 @@ export default function App() {
   const [projects, setProjects] = useState([]);
   const [selectedProject, setSelectedProject] = useState(null);
   const [bomItems, setBomItems] = useState([]);
+  const [cuttingItems, setCuttingItems] = useState([]);
+  const [cuttingSummary, setCuttingSummary] = useState(null);
   const [projectForm, setProjectForm] = useState(DEFAULT_PROJECT_FORM);
   const [projectFilters, setProjectFilters] = useState(DEFAULT_PROJECT_FILTERS);
   const [specificationCatalog, setSpecificationCatalog] = useState(
@@ -386,9 +407,10 @@ export default function App() {
   }
 
   async function loadProject(projectId) {
-    const [result, bomResult] = await Promise.all([
+    const [result, bomResult, cuttingResult] = await Promise.all([
       getProject(token, projectId),
       getProjectBom(token, projectId),
+      getProjectCutting(token, projectId),
     ]);
 
     if (!result.success) {
@@ -398,8 +420,12 @@ export default function App() {
 
     setSelectedProject(result.project);
     setBomItems(bomResult.success ? bomResult.items : []);
+    setCuttingItems(cuttingResult.success ? cuttingResult.items : []);
+    setCuttingSummary(cuttingResult.success ? cuttingResult.summary : null);
     if (!bomResult.success) {
       setStatus(bomResult.error || t.unableToLoadBom);
+    } else if (!cuttingResult.success) {
+      setStatus(cuttingResult.error || t.unableToLoadCutting);
     } else {
       setStatus("");
     }
@@ -433,6 +459,8 @@ export default function App() {
     setProjects([]);
     setSelectedProject(null);
     setBomItems([]);
+    setCuttingItems([]);
+    setCuttingSummary(null);
     setActiveProjectTab("general");
     setStatus("");
   }
@@ -1147,9 +1175,52 @@ export default function App() {
                         <p>{t.noBomItems}</p>
                       )}
                     </article>
-                    <article>
+                    <article className="wide-production-section">
                       <h3>{t.productionCutting}</h3>
-                      <p>{t.productionPlaceholder}</p>
+                      {cuttingSummary ? (
+                        <div className="summary-row">
+                          <span>{t.cuttingSummary}</span>
+                          <strong>
+                            {cuttingSummary.total_parts} {t.bomQuantity} / {cuttingSummary.total_area_m2} {t.cuttingArea} / {cuttingSummary.total_cut_length_m} {t.cuttingLength} / {cuttingSummary.total_edge_length_m} {t.cuttingEdge}
+                          </strong>
+                        </div>
+                      ) : null}
+                      {cuttingItems.length > 0 ? (
+                        <table className="cutting-table">
+                          <thead>
+                            <tr>
+                              <th>{t.cuttingExportCode}</th>
+                              <th>{t.bomPartName}</th>
+                              <th>{t.cuttingSize}</th>
+                              <th>{t.bomQuantity}</th>
+                              <th>{t.bomMaterial}</th>
+                              <th>{t.bomThickness}</th>
+                              <th>{t.bomEdgeBanding}</th>
+                              <th>{t.cuttingGrain}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {cuttingItems.map((item) => (
+                              <tr key={item.export_code}>
+                                <td>{item.export_code}</td>
+                                <td>{item.part_name}</td>
+                                <td>{item.width} x {item.height}</td>
+                                <td>{item.quantity}</td>
+                                <td>{item.material || t.notSet}</td>
+                                <td>{item.thickness || t.notSet}</td>
+                                <td>
+                                  {[item.edge_top, item.edge_bottom, item.edge_left, item.edge_right]
+                                    .filter(Boolean)
+                                    .join(", ") || t.notSet}
+                                </td>
+                                <td>{item.grain_direction || t.notSet}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      ) : (
+                        <p>{t.noCuttingItems}</p>
+                      )}
                     </article>
                     <article>
                       <h3>{t.productionDrilling}</h3>

@@ -363,6 +363,30 @@ tbody tr.selected {
   font-family: inherit;
 }
 
+.cutting-table td:first-child {
+  color: #2f5f6f;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.summary-row {
+  align-items: center;
+  background: #f8fafb;
+  border: 1px solid #dbe1e7;
+  border-radius: 6px;
+  color: #4a5563;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 13px;
+  gap: 8px;
+  justify-content: space-between;
+  padding: 10px 12px;
+}
+
+.summary-row strong {
+  color: #1f2933;
+  font-weight: 700;
+}
+
 .production-grid p,
 .validation-panel span {
   color: #5c6875;
