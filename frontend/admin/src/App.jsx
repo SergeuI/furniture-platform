@@ -1379,6 +1379,19 @@ export default function App() {
   }, [token]);
 
   useEffect(() => {
+    function handleUnauthorized() {
+      handleLogout();
+      setStatus(t.loginFailed);
+    }
+
+    window.addEventListener("furniture-admin-unauthorized", handleUnauthorized);
+
+    return () => {
+      window.removeEventListener("furniture-admin-unauthorized", handleUnauthorized);
+    };
+  }, [t]);
+
+  useEffect(() => {
     if (!token || user?.role !== "admin" || activeView !== "users") {
       return;
     }

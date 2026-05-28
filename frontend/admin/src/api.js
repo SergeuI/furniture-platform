@@ -16,6 +16,10 @@ async function request(path, options = {}) {
   const payload = await response.json();
 
   if (!response.ok) {
+    if (response.status === 401) {
+      window.dispatchEvent(new CustomEvent("furniture-admin-unauthorized"));
+    }
+
     return {
       success: false,
       error: payload.detail?.error || payload.error || "Request failed",
