@@ -31,7 +31,159 @@ import {
 } from "./api";
 
 const TOKEN_STORAGE_KEY = "furniture_admin_token";
+const LANGUAGE_STORAGE_KEY = "furniture_admin_language";
 const PAGE_SIZE = 20;
+
+const TRANSLATIONS = {
+  en: {
+    access: "Access",
+    action: "Action",
+    active: "Active",
+    actor: "Actor",
+    admin: "Admin",
+    audit: "Audit",
+    cancel: "Cancel",
+    changePassword: "Change password",
+    createUser: "Create user",
+    created: "Created",
+    createdBy: "Created by",
+    currentPassword: "Current password",
+    delete: "Delete",
+    deleteFailed: "Delete failed",
+    deleteProject: "Delete project",
+    deleteProjectConfirm: "Delete project",
+    depth: "Depth",
+    details: "Details",
+    drawers: "Drawers",
+    email: "Email",
+    enabled: "Enabled",
+    entity: "Entity",
+    furniturePlatform: "Furniture Platform",
+    height: "Height",
+    history: "History",
+    inactive: "Inactive",
+    invalidCurrentPassword: "Invalid current password",
+    loginFailed: "Login failed",
+    logout: "Logout",
+    noDetails: "No details",
+    newPassword: "New password",
+    notSet: "Not set",
+    of: "of",
+    password: "Password",
+    passwordChanged: "Password changed",
+    passwordMustBeLong: "Password must be at least 8 characters",
+    passwordReset: "Password reset",
+    projectDeleted: "Project deleted",
+    projectNotFound: "Project not found",
+    projectRolledBack: "Project rolled back",
+    projectUpdated: "Project updated",
+    projects: "Projects",
+    reset: "Reset",
+    role: "Role",
+    rollback: "Rollback",
+    rollbackFailed: "Rollback failed",
+    rollbackProject: "Rollback project",
+    save: "Save",
+    sections: "Sections",
+    selectProject: "Select a project",
+    selectedProject: "Selected project",
+    signIn: "Sign in",
+    size: "Size",
+    status: "Status",
+    time: "Time",
+    to: "to",
+    unableToChangePassword: "Unable to change password",
+    unableToCreateUser: "Unable to create user",
+    unableToLoadAuditLogs: "Unable to load audit logs",
+    unableToLoadProjects: "Unable to load projects",
+    unableToLoadUsers: "Unable to load users",
+    unableToResetPassword: "Unable to reset password",
+    unableToUpdateUserAccess: "Unable to update user access",
+    unableToUpdateUserRole: "Unable to update user role",
+    updateFailed: "Update failed",
+    updated: "Updated",
+    updatedBy: "Updated by",
+    userAccessUpdated: "User access updated",
+    userCreated: "User created",
+    userRoleUpdated: "User role updated",
+    users: "Users",
+    width: "Width",
+  },
+  uk: {
+    access: "Доступ",
+    action: "Дія",
+    active: "Активний",
+    actor: "Користувач",
+    admin: "Адмін",
+    audit: "Аудит",
+    cancel: "Скасувати",
+    changePassword: "Змінити пароль",
+    createUser: "Створити користувача",
+    created: "Створено",
+    createdBy: "Створив",
+    currentPassword: "Поточний пароль",
+    delete: "Видалити",
+    deleteFailed: "Не вдалося видалити",
+    deleteProject: "Видалити проект",
+    deleteProjectConfirm: "Видалити проект",
+    depth: "Глибина",
+    details: "Деталі",
+    drawers: "Шухляди",
+    email: "Email",
+    enabled: "Увімкнено",
+    entity: "Сутність",
+    furniturePlatform: "Furniture Platform",
+    height: "Висота",
+    history: "Історія",
+    inactive: "Неактивний",
+    invalidCurrentPassword: "Невірний поточний пароль",
+    loginFailed: "Не вдалося увійти",
+    logout: "Вийти",
+    noDetails: "Без деталей",
+    newPassword: "Новий пароль",
+    notSet: "Не вказано",
+    of: "з",
+    password: "Пароль",
+    passwordChanged: "Пароль змінено",
+    passwordMustBeLong: "Пароль має містити мінімум 8 символів",
+    passwordReset: "Пароль скинуто",
+    projectDeleted: "Проект видалено",
+    projectNotFound: "Проект не знайдено",
+    projectRolledBack: "Проект відновлено",
+    projectUpdated: "Проект оновлено",
+    projects: "Проекти",
+    reset: "Скинути",
+    role: "Роль",
+    rollback: "Відновити",
+    rollbackFailed: "Не вдалося відновити",
+    rollbackProject: "Відновити проект",
+    save: "Зберегти",
+    sections: "Секції",
+    selectProject: "Виберіть проект",
+    selectedProject: "Вибраний проект",
+    signIn: "Увійти",
+    size: "Розмір",
+    status: "Статус",
+    time: "Час",
+    to: "до",
+    unableToChangePassword: "Не вдалося змінити пароль",
+    unableToCreateUser: "Не вдалося створити користувача",
+    unableToLoadAuditLogs: "Не вдалося завантажити аудит",
+    unableToLoadProjects: "Не вдалося завантажити проекти",
+    unableToLoadUsers: "Не вдалося завантажити користувачів",
+    unableToResetPassword: "Не вдалося скинути пароль",
+    unableToUpdateUserAccess: "Не вдалося оновити доступ користувача",
+    unableToUpdateUserRole: "Не вдалося оновити роль користувача",
+    updateFailed: "Не вдалося оновити",
+    updated: "Оновлено",
+    updatedBy: "Оновив",
+    userAccessUpdated: "Доступ користувача оновлено",
+    userCreated: "Користувача створено",
+    userRoleUpdated: "Роль користувача оновлено",
+    users: "Користувачі",
+    width: "Ширина",
+  },
+};
 
 function buildProjectPayload(form) {
   return {
@@ -72,45 +224,48 @@ function projectToForm(project) {
   };
 }
 
-function formatDrawers(drawers) {
+function formatDrawers(drawers, t) {
   if (!Array.isArray(drawers) || drawers.length === 0) {
-    return "None";
+    return t.notSet;
   }
 
   return drawers.join(", ");
 }
 
-function formatDateTime(value) {
+function formatDateTime(value, t) {
   if (!value) {
-    return "Not set";
+    return t.notSet;
   }
 
   const date = new Date(value);
 
   if (Number.isNaN(date.getTime())) {
-    return "Not set";
+    return t.notSet;
   }
 
   return date.toLocaleString();
 }
 
-function formatAuditDetails(details) {
+function formatAuditDetails(details, t) {
   if (!details || Object.keys(details).length === 0) {
-    return "No details";
+    return t.noDetails;
   }
 
   return JSON.stringify(details);
 }
 
-function formatUserId(value) {
+function formatUserId(value, t) {
   if (!value) {
-    return "Not set";
+    return t.notSet;
   }
 
   return value;
 }
 
 export default function App() {
+  const [language, setLanguage] = useState(
+    () => localStorage.getItem(LANGUAGE_STORAGE_KEY) || "en",
+  );
   const [token, setToken] = useState(
     () => localStorage.getItem(TOKEN_STORAGE_KEY) || "",
   );
@@ -144,6 +299,8 @@ export default function App() {
   const [confirmAction, setConfirmAction] = useState(null);
   const [activeView, setActiveView] = useState("projects");
 
+  const t = TRANSLATIONS[language] || TRANSLATIONS.en;
+
   const canGoBack = offset > 0;
   const canGoForward = offset + PAGE_SIZE < total;
   const canUsersGoBack = usersOffset > 0;
@@ -158,8 +315,8 @@ export default function App() {
       return "0 of 0";
     }
 
-    return `${offset + 1}-${Math.min(offset + PAGE_SIZE, total)} of ${total}`;
-  }, [offset, total]);
+    return `${offset + 1}-${Math.min(offset + PAGE_SIZE, total)} ${t.of} ${total}`;
+  }, [offset, total, t]);
 
   const usersPageLabel = useMemo(() => {
     if (usersTotal === 0) {
@@ -169,8 +326,8 @@ export default function App() {
     return `${usersOffset + 1}-${Math.min(
       usersOffset + PAGE_SIZE,
       usersTotal,
-    )} of ${usersTotal}`;
-  }, [usersOffset, usersTotal]);
+    )} ${t.of} ${usersTotal}`;
+  }, [usersOffset, usersTotal, t]);
 
   const auditPageLabel = useMemo(() => {
     if (auditTotal === 0) {
@@ -180,8 +337,8 @@ export default function App() {
     return `${auditOffset + 1}-${Math.min(
       auditOffset + PAGE_SIZE,
       auditTotal,
-    )} of ${auditTotal}`;
-  }, [auditOffset, auditTotal]);
+    )} ${t.of} ${auditTotal}`;
+  }, [auditOffset, auditTotal, t]);
 
   const activePageLabel = useMemo(() => {
     if (activeView === "projects") {
@@ -194,6 +351,11 @@ export default function App() {
 
     return auditPageLabel;
   }, [activeView, auditPageLabel, pageLabel, usersPageLabel]);
+
+  function changeLanguage(nextLanguage) {
+    localStorage.setItem(LANGUAGE_STORAGE_KEY, nextLanguage);
+    setLanguage(nextLanguage);
+  }
 
   async function loadUser(activeToken) {
     const result = await getCurrentUser(activeToken);
@@ -218,7 +380,7 @@ export default function App() {
     setLoading(false);
 
     if (!result.success) {
-      setStatus(result.error || "Unable to load projects");
+      setStatus(result.error || t.unableToLoadProjects);
       return;
     }
 
@@ -237,7 +399,7 @@ export default function App() {
     setLoading(false);
 
     if (!result.success) {
-      setStatus(result.error || "Unable to load users");
+      setStatus(result.error || t.unableToLoadUsers);
       return;
     }
 
@@ -256,7 +418,7 @@ export default function App() {
     setLoading(false);
 
     if (!result.success) {
-      setStatus(result.error || "Unable to load audit logs");
+      setStatus(result.error || t.unableToLoadAuditLogs);
       return;
     }
 
@@ -272,7 +434,7 @@ export default function App() {
     ]);
 
     if (!projectResult.success) {
-      setStatus(projectResult.error || "Project not found");
+      setStatus(projectResult.error || t.projectNotFound);
       return;
     }
 
@@ -288,7 +450,7 @@ export default function App() {
     setLoading(false);
 
     if (!result.success) {
-      setStatus(result.error || "Login failed");
+      setStatus(result.error || t.loginFailed);
       return;
     }
 
@@ -341,11 +503,11 @@ export default function App() {
     setLoading(false);
 
     if (!result.success) {
-      setStatus(result.error || "Unable to update user role");
+      setStatus(result.error || t.unableToUpdateUserRole);
       return;
     }
 
-    setStatus("User role updated");
+    setStatus(t.userRoleUpdated);
     await loadUsers(token, usersOffset);
   }
 
@@ -355,11 +517,11 @@ export default function App() {
     setLoading(false);
 
     if (!result.success) {
-      setStatus(result.error || "Unable to update user access");
+      setStatus(result.error || t.unableToUpdateUserAccess);
       return;
     }
 
-    setStatus("User access updated");
+    setStatus(t.userAccessUpdated);
     await loadUsers(token, usersOffset);
   }
 
@@ -382,7 +544,7 @@ export default function App() {
     setLoading(false);
 
     if (!result.success) {
-      setStatus(result.error || "Unable to change password");
+      setStatus(result.error || t.unableToChangePassword);
       return;
     }
 
@@ -390,14 +552,14 @@ export default function App() {
       currentPassword: "",
       newPassword: "",
     });
-    setStatus("Password changed");
+    setStatus(t.passwordChanged);
   }
 
   async function handleResetPassword(targetUser) {
     const passwordValue = resetPasswordForms[targetUser.id] || "";
 
     if (passwordValue.length < 8) {
-      setStatus("Password must be at least 8 characters");
+      setStatus(t.passwordMustBeLong);
       return;
     }
 
@@ -410,7 +572,7 @@ export default function App() {
     setLoading(false);
 
     if (!result.success) {
-      setStatus(result.error || "Unable to reset password");
+      setStatus(result.error || t.unableToResetPassword);
       return;
     }
 
@@ -418,7 +580,7 @@ export default function App() {
       ...resetPasswordForms,
       [targetUser.id]: "",
     });
-    setStatus("Password reset");
+    setStatus(t.passwordReset);
     await loadUsers(token, usersOffset);
   }
 
@@ -435,7 +597,7 @@ export default function App() {
     setLoading(false);
 
     if (!result.success) {
-      setStatus(result.error || "Unable to create user");
+      setStatus(result.error || t.unableToCreateUser);
       return;
     }
 
@@ -444,7 +606,7 @@ export default function App() {
       password: "",
       role: "manager",
     });
-    setStatus("User created");
+    setStatus(t.userCreated);
     await loadUsers(token, 0);
   }
 
@@ -464,11 +626,11 @@ export default function App() {
     setLoading(false);
 
     if (!result.success) {
-      setStatus(result.error || "Update failed");
+      setStatus(result.error || t.updateFailed);
       return;
     }
 
-    setStatus("Project updated");
+    setStatus(t.projectUpdated);
     await loadProject(selectedProjectId);
     await loadProjects(token, offset);
   }
@@ -476,9 +638,9 @@ export default function App() {
   function openRollbackConfirm(version) {
     setConfirmAction({
       type: "rollback",
-      title: "Rollback project",
-      message: `Rollback project ${selectedProjectId} to ${version.width} x ${version.height} x ${version.depth}?`,
-      confirmLabel: "Rollback",
+      title: t.rollbackProject,
+      message: `${t.rollbackProject} ${selectedProjectId} ${t.to} ${version.width} x ${version.height} x ${version.depth}?`,
+      confirmLabel: t.rollback,
       targetId: version.id,
     });
   }
@@ -490,9 +652,9 @@ export default function App() {
 
     setConfirmAction({
       type: "delete",
-      title: "Delete project",
-      message: `Delete project ${selectedProjectId}?`,
-      confirmLabel: "Delete",
+      title: t.deleteProject,
+      message: `${t.deleteProjectConfirm} ${selectedProjectId}?`,
+      confirmLabel: t.delete,
       targetId: selectedProjectId,
     });
   }
@@ -526,11 +688,11 @@ export default function App() {
     setLoading(false);
 
     if (!result.success) {
-      setStatus(result.error || "Rollback failed");
+      setStatus(result.error || t.rollbackFailed);
       return;
     }
 
-    setStatus("Project rolled back");
+    setStatus(t.projectRolledBack);
     closeConfirm();
     await loadProject(selectedProjectId);
     await loadProjects(token, offset);
@@ -546,11 +708,11 @@ export default function App() {
     setLoading(false);
 
     if (!result.success) {
-      setStatus(result.error || "Delete failed");
+      setStatus(result.error || t.deleteFailed);
       return;
     }
 
-    setStatus("Project deleted");
+    setStatus(t.projectDeleted);
     closeConfirm();
     setSelectedProject(null);
     setHistoryItems([]);
@@ -587,12 +749,12 @@ export default function App() {
       <main className="auth-screen">
         <form className="login-panel" onSubmit={handleLogin}>
           <div>
-            <p className="eyebrow">Furniture Platform</p>
-            <h1>Admin</h1>
+            <p className="eyebrow">{t.furniturePlatform}</p>
+            <h1>{t.admin}</h1>
           </div>
 
           <label>
-            Email
+            {t.email}
             <input
               autoComplete="email"
               onChange={(event) => setEmail(event.target.value)}
@@ -603,7 +765,7 @@ export default function App() {
           </label>
 
           <label>
-            Password
+            {t.password}
             <input
               autoComplete="current-password"
               minLength={8}
@@ -618,7 +780,7 @@ export default function App() {
 
           <button className="primary-button" disabled={loading} type="submit">
             <Search size={18} />
-            Sign in
+            {t.signIn}
           </button>
         </form>
       </main>
@@ -629,8 +791,25 @@ export default function App() {
     <main className="app-shell">
       <aside className="sidebar">
         <div className="brand-block">
-          <p className="eyebrow">Furniture Platform</p>
-          <h1>Admin</h1>
+          <p className="eyebrow">{t.furniturePlatform}</p>
+          <h1>{t.admin}</h1>
+        </div>
+
+        <div className="language-switcher" aria-label="Language">
+          <button
+            className={language === "en" ? "active" : ""}
+            onClick={() => changeLanguage("en")}
+            type="button"
+          >
+            EN
+          </button>
+          <button
+            className={language === "uk" ? "active" : ""}
+            onClick={() => changeLanguage("uk")}
+            type="button"
+          >
+            UA
+          </button>
         </div>
 
         <div className="user-block">
@@ -644,7 +823,7 @@ export default function App() {
             onClick={() => switchView("projects")}
             type="button"
           >
-            Projects
+            {t.projects}
           </button>
           {user.role === "admin" ? (
             <>
@@ -653,21 +832,21 @@ export default function App() {
                 onClick={() => switchView("users")}
                 type="button"
               >
-                Users
+                {t.users}
               </button>
               <button
                 className={activeView === "audit" ? "active" : ""}
                 onClick={() => switchView("audit")}
                 type="button"
               >
-                Audit
+                {t.audit}
               </button>
             </>
           ) : null}
         </nav>
 
         <form className="password-panel" onSubmit={handleOwnPasswordChange}>
-          <p className="eyebrow">Password</p>
+          <p className="eyebrow">{t.password}</p>
           <input
             autoComplete="current-password"
             minLength={8}
@@ -677,7 +856,7 @@ export default function App() {
                 currentPassword: event.target.value,
               })
             }
-            placeholder="Current password"
+            placeholder={t.currentPassword}
             required
             type="password"
             value={ownPasswordForm.currentPassword}
@@ -691,19 +870,19 @@ export default function App() {
                 newPassword: event.target.value,
               })
             }
-            placeholder="New password"
+            placeholder={t.newPassword}
             required
             type="password"
             value={ownPasswordForm.newPassword}
           />
           <button className="ghost-button" disabled={loading} type="submit">
-            Change password
+            {t.changePassword}
           </button>
         </form>
 
         <button className="ghost-button" onClick={handleLogout} type="button">
           <LogOut size={18} />
-          Logout
+          {t.logout}
         </button>
       </aside>
 
@@ -712,10 +891,10 @@ export default function App() {
           <div>
             <h2>
               {activeView === "projects"
-                ? "Projects"
+                ? t.projects
                 : activeView === "users"
-                  ? "Users"
-                  : "Audit"}
+                  ? t.users
+                  : t.audit}
             </h2>
             <p>{activePageLabel}</p>
           </div>
@@ -830,10 +1009,10 @@ export default function App() {
               <thead>
                 <tr>
                   <th>ID</th>
-                  <th>Size</th>
-                  <th>Sections</th>
-                  <th>Drawers</th>
-                  <th>Updated</th>
+                  <th>{t.size}</th>
+                  <th>{t.sections}</th>
+                  <th>{t.drawers}</th>
+                  <th>{t.updated}</th>
                 </tr>
               </thead>
               <tbody>
@@ -848,8 +1027,8 @@ export default function App() {
                       {project.width} x {project.height} x {project.depth}
                     </td>
                     <td>{project.sections}</td>
-                    <td>{formatDrawers(project.drawers)}</td>
-                    <td>{formatDateTime(project.updated_at)}</td>
+                    <td>{formatDrawers(project.drawers, t)}</td>
+                    <td>{formatDateTime(project.updated_at, t)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -861,16 +1040,16 @@ export default function App() {
               <>
                 <div className="detail-header">
                   <div>
-                    <p className="eyebrow">Selected project</p>
+                    <p className="eyebrow">{t.selectedProject}</p>
                     <h2>{selectedProject.id}</h2>
                     <div className="meta-grid">
-                      <span>Created: {formatDateTime(selectedProject.created_at)}</span>
-                      <span>Updated: {formatDateTime(selectedProject.updated_at)}</span>
+                      <span>{t.created}: {formatDateTime(selectedProject.created_at, t)}</span>
+                      <span>{t.updated}: {formatDateTime(selectedProject.updated_at, t)}</span>
                       <span>
-                        Created by: {formatUserId(selectedProject.created_by_user_id)}
+                        {t.createdBy}: {formatUserId(selectedProject.created_by_user_id, t)}
                       </span>
                       <span>
-                        Updated by: {formatUserId(selectedProject.updated_by_user_id)}
+                        {t.updatedBy}: {formatUserId(selectedProject.updated_by_user_id, t)}
                       </span>
                     </div>
                   </div>
@@ -881,13 +1060,13 @@ export default function App() {
                     type="button"
                   >
                     <Trash2 size={18} />
-                    Delete
+                    {t.delete}
                   </button>
                 </div>
 
                 <form className="edit-grid" onSubmit={handleUpdate}>
                   <label>
-                    Width
+                    {t.width}
                     <input
                       min="1"
                       onChange={(event) =>
@@ -899,7 +1078,7 @@ export default function App() {
                     />
                   </label>
                   <label>
-                    Height
+                    {t.height}
                     <input
                       min="1"
                       onChange={(event) =>
@@ -911,7 +1090,7 @@ export default function App() {
                     />
                   </label>
                   <label>
-                    Depth
+                    {t.depth}
                     <input
                       min="1"
                       onChange={(event) =>
@@ -923,7 +1102,7 @@ export default function App() {
                     />
                   </label>
                   <label>
-                    Sections
+                    {t.sections}
                     <input
                       min="1"
                       onChange={(event) =>
@@ -935,7 +1114,7 @@ export default function App() {
                     />
                   </label>
                   <label className="wide-field">
-                    Drawers
+                    {t.drawers}
                     <input
                       onChange={(event) =>
                         setForm({ ...form, drawers: event.target.value })
@@ -951,13 +1130,13 @@ export default function App() {
                     type="submit"
                   >
                     <Save size={18} />
-                    Save
+                    {t.save}
                   </button>
                 </form>
 
                 <div className="history-header">
                   <History size={18} />
-                  <h3>History</h3>
+                  <h3>{t.history}</h3>
                 </div>
                 <div className="history-list">
                   {historyItems.map((item) => (
@@ -967,7 +1146,7 @@ export default function App() {
                         <span>
                           {item.width} x {item.height} x {item.depth}
                         </span>
-                        <span>{formatDateTime(item.created_at)}</span>
+                        <span>{formatDateTime(item.created_at, t)}</span>
                       </div>
                       <button
                         className="ghost-button"
@@ -976,7 +1155,7 @@ export default function App() {
                         type="button"
                       >
                         <RotateCcw size={16} />
-                        Rollback
+                        {t.rollback}
                       </button>
                     </article>
                   ))}
@@ -985,7 +1164,7 @@ export default function App() {
             ) : (
               <div className="empty-state">
                 <Search size={22} />
-                <p>Select a project</p>
+                <p>{t.selectProject}</p>
               </div>
             )}
           </section>
@@ -994,7 +1173,7 @@ export default function App() {
           <section className="table-panel full-panel">
             <form className="create-user-form" onSubmit={handleCreateUser}>
               <label>
-                Email
+                {t.email}
                 <input
                   autoComplete="email"
                   onChange={(event) =>
@@ -1009,7 +1188,7 @@ export default function App() {
                 />
               </label>
               <label>
-                Password
+                {t.password}
                 <input
                   autoComplete="new-password"
                   minLength={8}
@@ -1025,7 +1204,7 @@ export default function App() {
                 />
               </label>
               <label>
-                Role
+                {t.role}
                 <select
                   onChange={(event) =>
                     setNewUserForm({
@@ -1045,17 +1224,17 @@ export default function App() {
                 disabled={loading}
                 type="submit"
               >
-                Create user
+                {t.createUser}
               </button>
             </form>
             <table>
               <thead>
                 <tr>
-                  <th>Email</th>
-                  <th>Role</th>
-                  <th>Status</th>
-                  <th>Access</th>
-                  <th>Password</th>
+                  <th>{t.email}</th>
+                  <th>{t.role}</th>
+                  <th>{t.status}</th>
+                  <th>{t.access}</th>
+                  <th>{t.password}</th>
                 </tr>
               </thead>
               <tbody>
@@ -1075,7 +1254,7 @@ export default function App() {
                         <option value="viewer">viewer</option>
                       </select>
                     </td>
-                    <td>{targetUser.is_active ? "Active" : "Inactive"}</td>
+                    <td>{targetUser.is_active ? t.active : t.inactive}</td>
                     <td>
                       <label className="toggle-label">
                         <input
@@ -1089,7 +1268,7 @@ export default function App() {
                           }
                           type="checkbox"
                         />
-                        Enabled
+                        {t.enabled}
                       </label>
                     </td>
                     <td>
@@ -1104,7 +1283,7 @@ export default function App() {
                               event.target.value,
                             )
                           }
-                          placeholder="New password"
+                          placeholder={t.newPassword}
                           type="password"
                           value={resetPasswordForms[targetUser.id] || ""}
                         />
@@ -1114,7 +1293,7 @@ export default function App() {
                           onClick={() => handleResetPassword(targetUser)}
                           type="button"
                         >
-                          Reset
+                          {t.reset}
                         </button>
                       </div>
                     </td>
@@ -1128,24 +1307,24 @@ export default function App() {
             <table>
               <thead>
                 <tr>
-                  <th>Time</th>
-                  <th>Actor</th>
-                  <th>Action</th>
-                  <th>Entity</th>
-                  <th>Details</th>
+                  <th>{t.time}</th>
+                  <th>{t.actor}</th>
+                  <th>{t.action}</th>
+                  <th>{t.entity}</th>
+                  <th>{t.details}</th>
                 </tr>
               </thead>
               <tbody>
                 {auditLogs.map((auditLog) => (
                   <tr key={auditLog.id}>
-                    <td>{formatDateTime(auditLog.created_at)}</td>
+                    <td>{formatDateTime(auditLog.created_at, t)}</td>
                     <td>{auditLog.actor_email}</td>
                     <td>{auditLog.action}</td>
                     <td>
                       {auditLog.entity_type}: {auditLog.entity_id}
                     </td>
                     <td className="audit-details">
-                      {formatAuditDetails(auditLog.details)}
+                      {formatAuditDetails(auditLog.details, t)}
                     </td>
                   </tr>
                 ))}
@@ -1182,7 +1361,7 @@ export default function App() {
                 onClick={closeConfirm}
                 type="button"
               >
-                Cancel
+                {t.cancel}
               </button>
               <button
                 className={

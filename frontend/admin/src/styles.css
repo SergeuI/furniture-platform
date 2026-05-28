@@ -181,6 +181,25 @@ tbody tr.selected {
   text-transform: uppercase;
 }
 
+.language-switcher {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.language-switcher button {
+  background: rgba(255, 255, 255, 0.08);
+  color: #d8e5e8;
+  min-height: 34px;
+  padding: 0 10px;
+}
+
+.language-switcher button.active,
+.language-switcher button:hover {
+  background: #b7dbd5;
+  color: #18313a;
+}
+
 .nav-tabs {
   display: grid;
   gap: 8px;
