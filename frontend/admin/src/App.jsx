@@ -575,16 +575,21 @@ function PartPreview({ detail }) {
 
   const { part } = detail;
   const viewWidth = 720;
-  const viewHeight = 360;
-  const margin = 58;
+  const viewHeight = 450;
+  const marginX = 112;
+  const marginTop = 84;
+  const marginBottom = 118;
   const scale = Math.min(
-    (viewWidth - margin * 2) / part.width,
-    (viewHeight - margin * 2) / part.height,
+    (viewWidth - marginX * 2) / part.width,
+    (viewHeight - marginTop - marginBottom) / part.height,
   );
   const width = part.width * scale;
   const height = part.height * scale;
   const x = (viewWidth - width) / 2;
-  const y = (viewHeight - height) / 2;
+  const y = marginTop + (viewHeight - marginTop - marginBottom - height) / 2;
+  const edgeStripSize = 18;
+  const edgeGap = 12;
+  const legendY = viewHeight - 38;
 
   function pxX(value) {
     return x + value * scale;
@@ -594,56 +599,164 @@ function PartPreview({ detail }) {
     return y + height - value * scale;
   }
 
-  function edgeLine(side, material) {
+  function edgeThickness(material) {
+    if (!material || material === "not_set") {
+      return null;
+    }
+
+    const normalized = String(material).replace(",", ".").replaceAll("_", ".");
+    const match = normalized.match(/(\d+(?:\.\d+)?)/);
+
+    if (!match) {
+      return null;
+    }
+
+    const value = Number(match[1]);
+    return Number.isFinite(value) ? value : null;
+  }
+
+  function edgeColor(material) {
+    const thickness = edgeThickness(material);
+
+    if (thickness === null) {
+      return "#f47b20";
+    }
+
+    if (thickness <= 0.6) {
+      return "#078000";
+    }
+
+    if (thickness <= 0.8) {
+      return "#ff7300";
+    }
+
+    if (thickness <= 1) {
+      return "#b7dce8";
+    }
+
+    if (thickness < 2) {
+      return "#0b1cff";
+    }
+
+    return "#7a0b80";
+  }
+
+  function edgeStrip(side, material) {
     if (!material || material === "not_set") {
       return null;
     }
 
     const props = {
-      className: "part-edge",
+      className: "part-edge-strip",
+      fill: edgeColor(material),
       key: side,
     };
 
     if (side === "top") {
-      return <line {...props} x1={x} x2={x + width} y1={y} y2={y} />;
+      return (
+        <rect
+          {...props}
+          height={edgeStripSize}
+          width={width}
+          x={x}
+          y={y - edgeGap - edgeStripSize}
+        />
+      );
     }
 
     if (side === "bottom") {
-      return <line {...props} x1={x} x2={x + width} y1={y + height} y2={y + height} />;
+      return (
+        <rect
+          {...props}
+          height={edgeStripSize}
+          width={width}
+          x={x}
+          y={y + height + edgeGap}
+        />
+      );
     }
 
     if (side === "left") {
-      return <line {...props} x1={x} x2={x} y1={y} y2={y + height} />;
+      return (
+        <rect
+          {...props}
+          height={height}
+          width={edgeStripSize}
+          x={x - edgeGap - edgeStripSize}
+          y={y}
+        />
+      );
     }
 
-    return <line {...props} x1={x + width} x2={x + width} y1={y} y2={y + height} />;
+    return (
+      <rect
+        {...props}
+        height={height}
+        width={edgeStripSize}
+        x={x + width + edgeGap}
+        y={y}
+      />
+    );
   }
 
   return (
     <svg className="part-preview" role="img" viewBox={`0 0 ${viewWidth} ${viewHeight}`}>
+      <defs>
+        <marker id="dimension-arrow" markerHeight="10" markerWidth="10" orient="auto" refX="9" refY="5">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#111827" />
+        </marker>
+        <marker id="dimension-arrow-start" markerHeight="10" markerWidth="10" orient="auto-start-reverse" refX="1" refY="5">
+          <path d="M 10 0 L 0 5 L 10 10 z" fill="#111827" />
+        </marker>
+        <marker id="axis-arrow" markerHeight="8" markerWidth="8" orient="auto" refX="7" refY="4">
+          <path d="M 0 0 L 8 4 L 0 8 z" fill="#7f8790" />
+        </marker>
+      </defs>
+      {edgeStrip("top", part.edge_top)}
+      {edgeStrip("bottom", part.edge_bottom)}
+      {edgeStrip("left", part.edge_left)}
+      {edgeStrip("right", part.edge_right)}
       <rect className="part-board" height={height} width={width} x={x} y={y} />
-      {edgeLine("top", part.edge_top)}
-      {edgeLine("bottom", part.edge_bottom)}
-      {edgeLine("left", part.edge_left)}
-      {edgeLine("right", part.edge_right)}
 
-      <line className="dimension-line" x1={x} x2={x + width} y1={y - 28} y2={y - 28} />
+      <line
+        className="dimension-line"
+        markerEnd="url(#dimension-arrow)"
+        markerStart="url(#dimension-arrow-start)"
+        x1={x}
+        x2={x + width}
+        y1={y - 38}
+        y2={y - 38}
+      />
       <line className="dimension-line" x1={x} x2={x} y1={y - 42} y2={y - 12} />
       <line className="dimension-line" x1={x + width} x2={x + width} y1={y - 42} y2={y - 12} />
-      <text className="dimension-text" textAnchor="middle" x={viewWidth / 2} y={y - 36}>
+      <text className="dimension-text" textAnchor="middle" x={viewWidth / 2} y={y - 48}>
         {part.width}
       </text>
 
-      <line className="dimension-line" x1={x + width + 30} x2={x + width + 30} y1={y} y2={y + height} />
+      <line
+        className="dimension-line"
+        markerEnd="url(#dimension-arrow)"
+        markerStart="url(#dimension-arrow-start)"
+        x1={x + width + 46}
+        x2={x + width + 46}
+        y1={y}
+        y2={y + height}
+      />
       <line className="dimension-line" x1={x + width + 16} x2={x + width + 44} y1={y} y2={y} />
       <line className="dimension-line" x1={x + width + 16} x2={x + width + 44} y1={y + height} y2={y + height} />
       <text
         className="dimension-text rotated"
         textAnchor="middle"
-        transform={`translate(${x + width + 62} ${viewHeight / 2}) rotate(-90)`}
+        transform={`translate(${x + width + 78} ${y + height / 2}) rotate(-90)`}
       >
         {part.height}
       </text>
+
+      <g className="grain-direction" transform={`translate(${x + width / 2 - 18} ${y + height / 2 - 12})`}>
+        <line x1="0" x2="36" y1="0" y2="0" />
+        <line x1="0" x2="36" y1="10" y2="10" />
+        <line x1="0" x2="36" y1="20" y2="20" />
+      </g>
 
       {detail.holes.map((hole) => (
         <circle
@@ -665,6 +778,34 @@ function PartPreview({ detail }) {
           y={pxY(groove.y) - Math.max(3, groove.width * scale) / 2}
         />
       ))}
+
+      <g className="coordinate-axis" transform={`translate(${x - 78} ${y + height + 82})`}>
+        <line markerEnd="url(#axis-arrow)" x1="0" x2="96" y1="0" y2="0" />
+        <line markerEnd="url(#axis-arrow)" x1="0" x2="0" y1="0" y2="-96" />
+        <text x="104" y="9">X</text>
+        <text x="8" y="-104">Y</text>
+      </g>
+
+      <g className="part-legend" transform={`translate(34 ${legendY})`}>
+        <rect className="legend-swatch" fill="#078000" height="18" width="22" x="0" y="-14" />
+        <text x="30" y="0">≤ 0.6 мм</text>
+        <rect className="legend-swatch" fill="#ff7300" height="18" width="22" x="98" y="-14" />
+        <text x="128" y="0">≤ 0.8 мм</text>
+        <rect className="legend-swatch" fill="#b7dce8" height="18" width="22" x="196" y="-14" />
+        <text x="226" y="0">≤ 1.0 мм</text>
+        <rect className="legend-swatch" fill="#0b1cff" height="18" width="22" x="294" y="-14" />
+        <text x="324" y="0">&lt; 2.0 мм</text>
+        <rect className="legend-swatch" fill="#7a0b80" height="18" width="22" x="392" y="-14" />
+        <text x="422" y="0">= 2.0 мм</text>
+        <rect className="legend-swatch" fill="#f3b300" height="18" width="22" x="490" y="-14" />
+        <line className="legend-facade-line" x1="490" x2="512" y1="-5" y2="-5" />
+        <text x="520" y="0">з фаскою 45</text>
+        <g className="legend-grain" transform="translate(615 -11)">
+          <line x1="0" x2="24" y1="0" y2="0" />
+          <line x1="0" x2="24" y1="7" y2="7" />
+          <line x1="0" x2="24" y1="14" y2="14" />
+        </g>
+      </g>
     </svg>
   );
 }

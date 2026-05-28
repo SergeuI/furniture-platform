@@ -421,7 +421,7 @@ tbody tr.selected {
   background: #ffffff;
   border: 1px solid #dbe1e7;
   border-radius: 6px;
-  min-height: 280px;
+  min-height: 340px;
   width: 100%;
 }
 
@@ -431,14 +431,13 @@ tbody tr.selected {
   stroke-width: 1.5;
 }
 
-.part-edge {
-  stroke: #f47b20;
-  stroke-linecap: square;
-  stroke-width: 12;
+.part-edge-strip {
+  stroke: #111827;
+  stroke-width: 1;
 }
 
 .dimension-line {
-  stroke: #1f2933;
+  stroke: #111827;
   stroke-width: 1;
 }
 
@@ -446,6 +445,38 @@ tbody tr.selected {
   fill: #000000;
   font-size: 34px;
   font-weight: 800;
+}
+
+.coordinate-axis line {
+  stroke: #7f8790;
+  stroke-width: 1.5;
+}
+
+.coordinate-axis text {
+  fill: #3b4652;
+  font-size: 34px;
+  font-weight: 800;
+}
+
+.grain-direction line,
+.legend-grain line {
+  stroke: #9aa3ad;
+  stroke-width: 2;
+}
+
+.part-legend text {
+  fill: #1f2933;
+  font-size: 13px;
+}
+
+.legend-swatch {
+  stroke: #111827;
+  stroke-width: 1;
+}
+
+.legend-facade-line {
+  stroke: #111827;
+  stroke-width: 1;
 }
 
 .part-hole {
