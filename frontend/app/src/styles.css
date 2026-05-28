@@ -294,6 +294,26 @@ tbody tr.selected {
   grid-template-columns: minmax(160px, 260px) minmax(0, 1fr);
 }
 
+.detail-tabs {
+  border-bottom: 1px solid #dbe1e7;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-bottom: 12px;
+}
+
+.detail-tabs button {
+  background: #e7edf0;
+  color: #24343d;
+  min-height: 36px;
+}
+
+.detail-tabs button.active,
+.detail-tabs button:hover {
+  background: #216e7a;
+  color: #ffffff;
+}
+
 .detail-grid span,
 .detail-grid strong {
   border-bottom: 1px solid #dbe1e7;
@@ -311,6 +331,40 @@ tbody tr.selected {
   color: #1f2933;
   font-size: 13px;
   overflow-wrap: anywhere;
+}
+
+.production-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.production-grid article,
+.validation-panel {
+  border: 1px solid #dbe1e7;
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+}
+
+.production-grid h3 {
+  color: #24343d;
+  font-size: 15px;
+  margin: 0;
+}
+
+.production-grid p,
+.validation-panel span {
+  color: #5c6875;
+  font-size: 13px;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.validation-panel strong {
+  color: #1d5965;
+  font-size: 14px;
 }
 
 .primary-button {
@@ -401,7 +455,8 @@ tbody tr.selected {
 
   .filter-form,
   .project-form,
-  .detail-grid {
+  .detail-grid,
+  .production-grid {
     grid-template-columns: 1fr;
   }
 

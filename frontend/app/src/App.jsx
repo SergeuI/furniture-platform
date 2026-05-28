@@ -80,6 +80,8 @@ const TRANSLATIONS = {
     email: "Email",
     facadeMaterial: "Facade material",
     furniturePlatform: "Furniture Platform",
+    fittings: "Fittings",
+    general: "General",
     handlePosition: "Handle position",
     handleType: "Handle type",
     height: "Height",
@@ -90,6 +92,7 @@ const TRANSLATIONS = {
     loginFailed: "Login failed",
     logout: "Logout",
     materialThickness: "Thickness",
+    materials: "Materials",
     newProject: "New project",
     notes: "Notes",
     notSet: "Not set",
@@ -101,6 +104,11 @@ const TRANSLATIONS = {
     projectName: "Project name",
     projects: "Projects",
     projectType: "Project type",
+    production: "Production",
+    productionBom: "BOM preview",
+    productionCutting: "Cutting list preview",
+    productionDrilling: "Drilling preview",
+    productionPlaceholder: "Production outputs will appear here after BOM, cutting, and drilling APIs are connected.",
     right: "Right",
     room: "Room",
     saveProject: "Save project",
@@ -113,6 +121,8 @@ const TRANSLATIONS = {
     unableToCreateProject: "Unable to create project",
     unableToLoadProjects: "Unable to load projects",
     updated: "Updated",
+    validation: "Validation",
+    validationReady: "Project data passed API validation and catalog checks.",
     view: "View",
     wardrobe: "Wardrobe",
     width: "Width",
@@ -134,6 +144,8 @@ const TRANSLATIONS = {
     email: "Email",
     facadeMaterial: "Матеріал фасаду",
     furniturePlatform: "Furniture Platform",
+    fittings: "Фурнітура",
+    general: "Загальне",
     handlePosition: "Позиція ручки",
     handleType: "Тип ручки",
     height: "Висота",
@@ -144,6 +156,7 @@ const TRANSLATIONS = {
     loginFailed: "Не вдалося увійти",
     logout: "Вийти",
     materialThickness: "Товщина",
+    materials: "Матеріали",
     newProject: "Новий проект",
     notes: "Нотатки",
     notSet: "Не вказано",
@@ -155,6 +168,11 @@ const TRANSLATIONS = {
     projectName: "Назва проекту",
     projects: "Проекти",
     projectType: "Тип проекту",
+    production: "Виробництво",
+    productionBom: "BOM перегляд",
+    productionCutting: "Карта розкрою",
+    productionDrilling: "Свердління",
+    productionPlaceholder: "Виробничі результати зʼявляться тут після підключення BOM, розкрою і свердління.",
     right: "Справа",
     room: "Кімната",
     saveProject: "Зберегти проект",
@@ -167,6 +185,8 @@ const TRANSLATIONS = {
     unableToCreateProject: "Не вдалося створити проект",
     unableToLoadProjects: "Не вдалося завантажити проекти",
     updated: "Оновлено",
+    validation: "Валідація",
+    validationReady: "Дані проекту пройшли API-валідацію і перевірку довідників.",
     view: "Перегляд",
     wardrobe: "Шафа",
     width: "Ширина",
@@ -261,6 +281,7 @@ export default function App() {
     DEFAULT_SPECIFICATION_CATALOG,
   );
   const [activeView, setActiveView] = useState("projects");
+  const [activeProjectTab, setActiveProjectTab] = useState("general");
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
   const [status, setStatus] = useState("");
@@ -353,6 +374,7 @@ export default function App() {
     }
 
     setSelectedProject(result.project);
+    setActiveProjectTab("general");
     setActiveView("details");
   }
 
@@ -381,6 +403,7 @@ export default function App() {
     setUser(null);
     setProjects([]);
     setSelectedProject(null);
+    setActiveProjectTab("general");
     setStatus("");
   }
 
@@ -970,30 +993,118 @@ export default function App() {
                   </button>
                 </header>
 
-                <div className="detail-grid">
-                  <span>{t.projectName}</span>
-                  <strong>{selectedProject.project_name || t.notSet}</strong>
-                  <span>{t.projectType}</span>
-                  <strong>{formatCatalogLabel(selectedProject.project_type, t)}</strong>
-                  <span>{t.width} x {t.height} x {t.depth}</span>
-                  <strong>
-                    {selectedProject.width} x {selectedProject.height} x {selectedProject.depth}
-                  </strong>
-                  <span>{t.sections}</span>
-                  <strong>{selectedProject.sections}</strong>
-                  <span>{t.drawers}</span>
-                  <strong>{formatDrawers(selectedProject.drawers, t)}</strong>
-                  <span>{t.slideType}</span>
-                  <strong>{selectedProject.slide_type || t.notSet}</strong>
-                  <span>{t.bottomType}</span>
-                  <strong>{selectedProject.bottom_type || t.notSet}</strong>
-                  <span>{t.edgeBanding}</span>
-                  <strong>{selectedProject.edge_banding || t.notSet}</strong>
-                  <span>{t.created}</span>
-                  <strong>{formatDateTime(selectedProject.created_at, t)}</strong>
-                  <span>{t.updated}</span>
-                  <strong>{formatDateTime(selectedProject.updated_at, t)}</strong>
+                <div className="detail-tabs" role="tablist">
+                  <button
+                    className={activeProjectTab === "general" ? "active" : ""}
+                    onClick={() => setActiveProjectTab("general")}
+                    type="button"
+                  >
+                    {t.general}
+                  </button>
+                  <button
+                    className={activeProjectTab === "materials" ? "active" : ""}
+                    onClick={() => setActiveProjectTab("materials")}
+                    type="button"
+                  >
+                    {t.materials}
+                  </button>
+                  <button
+                    className={activeProjectTab === "fittings" ? "active" : ""}
+                    onClick={() => setActiveProjectTab("fittings")}
+                    type="button"
+                  >
+                    {t.fittings}
+                  </button>
+                  <button
+                    className={activeProjectTab === "production" ? "active" : ""}
+                    onClick={() => setActiveProjectTab("production")}
+                    type="button"
+                  >
+                    {t.production}
+                  </button>
+                  <button
+                    className={activeProjectTab === "validation" ? "active" : ""}
+                    onClick={() => setActiveProjectTab("validation")}
+                    type="button"
+                  >
+                    {t.validation}
+                  </button>
                 </div>
+
+                {activeProjectTab === "general" ? (
+                  <div className="detail-grid">
+                    <span>{t.projectName}</span>
+                    <strong>{selectedProject.project_name || t.notSet}</strong>
+                    <span>{t.projectType}</span>
+                    <strong>{formatCatalogLabel(selectedProject.project_type, t)}</strong>
+                    <span>{t.client}</span>
+                    <strong>{selectedProject.client_name || t.notSet}</strong>
+                    <span>{t.room}</span>
+                    <strong>{selectedProject.room_name || t.notSet}</strong>
+                    <span>{t.width} x {t.height} x {t.depth}</span>
+                    <strong>
+                      {selectedProject.width} x {selectedProject.height} x {selectedProject.depth}
+                    </strong>
+                    <span>{t.sections}</span>
+                    <strong>{selectedProject.sections}</strong>
+                    <span>{t.drawers}</span>
+                    <strong>{formatDrawers(selectedProject.drawers, t)}</strong>
+                    <span>{t.created}</span>
+                    <strong>{formatDateTime(selectedProject.created_at, t)}</strong>
+                    <span>{t.updated}</span>
+                    <strong>{formatDateTime(selectedProject.updated_at, t)}</strong>
+                  </div>
+                ) : null}
+
+                {activeProjectTab === "materials" ? (
+                  <div className="detail-grid">
+                    <span>{t.facadeMaterial}</span>
+                    <strong>{selectedProject.facade_material || t.notSet}</strong>
+                    <span>{t.insideMaterial}</span>
+                    <strong>{selectedProject.inside_material || t.notSet}</strong>
+                    <span>{t.edgeBanding}</span>
+                    <strong>{selectedProject.edge_banding || t.notSet}</strong>
+                    <span>{t.materialThickness}</span>
+                    <strong>{selectedProject.material_thickness || t.notSet}</strong>
+                  </div>
+                ) : null}
+
+                {activeProjectTab === "fittings" ? (
+                  <div className="detail-grid">
+                    <span>{t.slideType}</span>
+                    <strong>{selectedProject.slide_type || t.notSet}</strong>
+                    <span>{t.bottomType}</span>
+                    <strong>{selectedProject.bottom_type || t.notSet}</strong>
+                    <span>{t.handleType}</span>
+                    <strong>{selectedProject.handle_type || t.notSet}</strong>
+                    <span>{t.handlePosition}</span>
+                    <strong>{formatCatalogLabel(selectedProject.handle_position, t)}</strong>
+                  </div>
+                ) : null}
+
+                {activeProjectTab === "production" ? (
+                  <div className="production-grid">
+                    <article>
+                      <h3>{t.productionBom}</h3>
+                      <p>{t.productionPlaceholder}</p>
+                    </article>
+                    <article>
+                      <h3>{t.productionCutting}</h3>
+                      <p>{t.productionPlaceholder}</p>
+                    </article>
+                    <article>
+                      <h3>{t.productionDrilling}</h3>
+                      <p>{t.productionPlaceholder}</p>
+                    </article>
+                  </div>
+                ) : null}
+
+                {activeProjectTab === "validation" ? (
+                  <div className="validation-panel">
+                    <strong>{t.validationReady}</strong>
+                    <span>{t.updated}: {formatDateTime(selectedProject.updated_at, t)}</span>
+                  </div>
+                ) : null}
               </>
             ) : (
               <div className="empty-state">
