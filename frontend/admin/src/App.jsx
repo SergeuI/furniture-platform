@@ -154,7 +154,7 @@ const TRANSLATIONS = {
     cuttingEdge: "Edge, m",
     cuttingExportCode: "Code",
     cuttingGrain: "Grain",
-    cuttingLength: "Length",
+    cuttingLength: "Cut, m",
     cuttingSize: "Size",
     cuttingSummary: "Summary",
     bottomType: "Bottom type",
@@ -306,7 +306,7 @@ const TRANSLATIONS = {
     cuttingEdge: "Крайка, м",
     cuttingExportCode: "Код",
     cuttingGrain: "Волокно",
-    cuttingLength: "Довжина",
+    cuttingLength: "Різ, м",
     cuttingSize: "Розмір",
     cuttingSummary: "Підсумок",
     bottomType: "Тип дна",
@@ -2367,93 +2367,96 @@ export default function App() {
                   {selectedPartDetail ? (
                     <article className="production-card part-detail-panel">
                       <h4>{t.productionPartViewer}</h4>
-                      <strong className="part-title">
-                        {selectedPartDetail.part.export_code} / {selectedPartDetail.part.part_name}
-                      </strong>
-                      <PartPreview detail={selectedPartDetail} />
-
-                      <div className="part-operation-tables">
-                        <section>
-                          <h5>{t.productionHoles} {selectedPartDetail.holes.length}</h5>
-                          <table>
-                            <thead>
-                              <tr>
-                                <th>#</th>
-                                <th>{t.side}</th>
-                                <th>X</th>
-                                <th>Y</th>
-                                <th>{t.depth}</th>
-                                <th>D</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {selectedPartDetail.holes.map((hole) => (
-                                <tr key={hole.number}>
-                                  <td>{hole.number}</td>
-                                  <td>{hole.side}</td>
-                                  <td>{hole.x}</td>
-                                  <td>{hole.y}</td>
-                                  <td>{hole.depth}</td>
-                                  <td>{hole.diameter}</td>
+                      <div className="part-detail-layout">
+                        <div>
+                          <strong className="part-title">
+                            {selectedPartDetail.part.export_code} / {selectedPartDetail.part.part_name}
+                          </strong>
+                          <PartPreview detail={selectedPartDetail} />
+                        </div>
+                        <div className="part-operation-tables">
+                          <section>
+                            <h4>{t.productionHoles} {selectedPartDetail.holes.length}</h4>
+                            <table>
+                              <thead>
+                                <tr>
+                                  <th>#</th>
+                                  <th>{t.catalogCategory}</th>
+                                  <th>X</th>
+                                  <th>Y</th>
+                                  <th>{t.materialThickness}</th>
+                                  <th>D</th>
                                 </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </section>
+                              </thead>
+                              <tbody>
+                                {selectedPartDetail.holes.map((hole) => (
+                                  <tr key={hole.number}>
+                                    <td>{hole.number}</td>
+                                    <td>{hole.side}</td>
+                                    <td>{hole.x}</td>
+                                    <td>{hole.y}</td>
+                                    <td>{hole.depth}</td>
+                                    <td>{hole.diameter}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </section>
 
-                        <section>
-                          <h5>{t.productionGrooves} {selectedPartDetail.grooves.length}</h5>
-                          <table>
-                            <thead>
-                              <tr>
-                                <th>#</th>
-                                <th>{t.side}</th>
-                                <th>X</th>
-                                <th>Y</th>
-                                <th>{t.cuttingLength}</th>
-                                <th>{t.depth}</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {selectedPartDetail.grooves.map((groove) => (
-                                <tr key={groove.number}>
-                                  <td>{groove.number}</td>
-                                  <td>{groove.side}</td>
-                                  <td>{groove.x}</td>
-                                  <td>{groove.y}</td>
-                                  <td>{groove.length}</td>
-                                  <td>{groove.depth}</td>
+                          <section>
+                            <h4>{t.productionGrooves} {selectedPartDetail.grooves.length}</h4>
+                            <table>
+                              <thead>
+                                <tr>
+                                  <th>#</th>
+                                  <th>{t.catalogCategory}</th>
+                                  <th>X</th>
+                                  <th>Y</th>
+                                  <th>{t.cuttingLength}</th>
+                                  <th>{t.materialThickness}</th>
                                 </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </section>
+                              </thead>
+                              <tbody>
+                                {selectedPartDetail.grooves.map((groove) => (
+                                  <tr key={groove.number}>
+                                    <td>{groove.number}</td>
+                                    <td>{groove.side}</td>
+                                    <td>{groove.x}</td>
+                                    <td>{groove.y}</td>
+                                    <td>{groove.length}</td>
+                                    <td>{groove.depth}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </section>
 
-                        <section>
-                          <h5>{t.productionQuarters} {selectedPartDetail.quarters.length}</h5>
-                          <table>
-                            <thead>
-                              <tr>
-                                <th>#</th>
-                                <th>{t.side}</th>
-                                <th>{t.cuttingLength}</th>
-                                <th>{t.cuttingSize}</th>
-                                <th>{t.depth}</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {selectedPartDetail.quarters.map((quarter) => (
-                                <tr key={quarter.number}>
-                                  <td>{quarter.number}</td>
-                                  <td>{quarter.side}</td>
-                                  <td>{quarter.length}</td>
-                                  <td>{quarter.width}</td>
-                                  <td>{quarter.depth}</td>
+                          <section>
+                            <h4>{t.productionQuarters} {selectedPartDetail.quarters.length}</h4>
+                            <table>
+                              <thead>
+                                <tr>
+                                  <th>#</th>
+                                  <th>{t.catalogCategory}</th>
+                                  <th>{t.cuttingLength}</th>
+                                  <th>{t.cuttingSize}</th>
+                                  <th>{t.materialThickness}</th>
                                 </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </section>
+                              </thead>
+                              <tbody>
+                                {selectedPartDetail.quarters.map((quarter) => (
+                                  <tr key={quarter.number}>
+                                    <td>{quarter.number}</td>
+                                    <td>{quarter.side}</td>
+                                    <td>{quarter.length}</td>
+                                    <td>{quarter.width}</td>
+                                    <td>{quarter.depth}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </section>
+                        </div>
                       </div>
                     </article>
                   ) : null}

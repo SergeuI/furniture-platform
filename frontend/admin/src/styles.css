@@ -529,11 +529,22 @@ tbody tr.selected {
   overflow: auto;
 }
 
+.part-detail-layout {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(320px, 1.1fr) minmax(320px, 0.9fr);
+}
+
+.part-detail-layout > div:first-child {
+  display: grid;
+  gap: 10px;
+}
+
 .part-preview {
   background: #ffffff;
   border: 1px solid #dbe1e7;
   border-radius: 6px;
-  min-height: 220px;
+  min-height: 280px;
   width: 100%;
 }
 
@@ -577,6 +588,12 @@ tbody tr.selected {
 .part-operation-tables {
   display: grid;
   gap: 12px;
+}
+
+.part-operation-tables h4 {
+  color: #1d5965;
+  font-size: 14px;
+  margin: 0 0 6px;
 }
 
 .part-operation-tables section {
