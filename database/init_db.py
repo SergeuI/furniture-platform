@@ -14,6 +14,12 @@ from database.models.user import (
 from database.models.audit_log import (
     AuditLogModel
 )
+from database.models.catalog_item import (
+    CatalogItemModel
+)
+from database.repositories.catalog_repository import (
+    seed_default_catalog_items
+)
 
 
 def _get_column_names(
@@ -191,6 +197,8 @@ def init_database():
     )
 
     upgrade_sqlite_schema()
+
+    seed_default_catalog_items()
 
 
 if __name__ == "__main__":
