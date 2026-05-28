@@ -25,13 +25,13 @@ from services.project_generation_service import (
 )
 from database.repositories.project_repository import (
 
-    count_projects,
+    count_accessible_projects,
 
     delete_project,
 
     get_project,
 
-    list_projects,
+    list_accessible_projects,
 
     rollback_project,
 
@@ -60,6 +60,55 @@ require_project_admin = require_roles(
         "admin"
     ]
 )
+
+require_project_writer = require_roles(
+    [
+        "admin",
+        "manager"
+    ]
+)
+
+
+def _can_read_project(
+
+    current_user,
+
+    project
+) -> bool:
+
+    if current_user.role in (
+        "admin",
+        "viewer"
+    ):
+
+        return True
+
+    if current_user.role == "manager":
+
+        return (
+            project.created_by_user_id == current_user.id
+            or project.created_by_user_id is None
+        )
+
+    return False
+
+
+def _can_update_project(
+
+    current_user,
+
+    project
+) -> bool:
+
+    if current_user.role == "admin":
+
+        return True
+
+    if current_user.role == "manager":
+
+        return project.created_by_user_id == current_user.id
+
+    return False
 
 
 def _serialize_project(
@@ -144,14 +193,23 @@ async def list_projects_route(
     current_user = Depends(require_project_reader)
 ):
 
-    projects = list_projects(
+    projects = list_accessible_projects(
+
+        user_id=current_user.id,
+
+        role=current_user.role,
 
         limit=limit,
 
         offset=offset
     )
 
-    total = count_projects()
+    total = count_accessible_projects(
+
+        user_id=current_user.id,
+
+        role=current_user.role
+    )
 
     return {
 
@@ -238,6 +296,18 @@ async def get_project_route(
             "error": "Project not found"
         }
 
+    if not _can_read_project(
+        current_user,
+        project
+    ):
+
+        return {
+
+            "success": False,
+
+            "error": "Insufficient project permissions"
+        }
+
     return {
 
         "success": True,
@@ -262,7 +332,7 @@ async def update_project_route(
 
     project: ProjectInputSchema,
 
-    current_user = Depends(require_project_admin)
+    current_user = Depends(require_project_writer)
 ):
 
     existing_project = get_project(
@@ -276,6 +346,18 @@ async def update_project_route(
             "success": False,
 
             "error": "Project not found"
+        }
+
+    if not _can_update_project(
+        current_user,
+        existing_project
+    ):
+
+        return {
+
+            "success": False,
+
+            "error": "Insufficient project permissions"
         }
 
     previous_state = _serialize_project(
@@ -367,6 +449,18 @@ async def get_project_history_route(
             "success": False,
 
             "error": "Project not found"
+        }
+
+    if not _can_read_project(
+        current_user,
+        project
+    ):
+
+        return {
+
+            "success": False,
+
+            "error": "Insufficient project permissions"
         }
 
     versions = get_project_versions(

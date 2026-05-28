@@ -52,6 +52,7 @@ const TRANSLATIONS = {
     deleteFailed: "Delete failed",
     deleteProject: "Delete project",
     deleteProjectConfirm: "Delete project",
+    deleteRestricted: "Only admins can delete projects",
     depth: "Depth",
     details: "Details",
     drawers: "Drawers",
@@ -74,10 +75,15 @@ const TRANSLATIONS = {
     passwordMustBeLong: "Password must be at least 8 characters",
     passwordReset: "Password reset",
     projectDeleted: "Project deleted",
+    projectDeleteRestricted: "You do not have permission to delete this project",
+    projectEditRestricted: "You do not have permission to edit this project",
     projectNotFound: "Project not found",
     projectRolledBack: "Project rolled back",
+    projectRollbackRestricted: "You do not have permission to roll back this project",
     projectUpdated: "Project updated",
     projects: "Projects",
+    readOnlyProject: "Read-only project",
+    readOnlyProjectDescription: "You can view this project, but cannot edit it.",
     reset: "Reset",
     role: "Role",
     rollback: "Rollback",
@@ -126,6 +132,7 @@ const TRANSLATIONS = {
     deleteFailed: "Не вдалося видалити",
     deleteProject: "Видалити проект",
     deleteProjectConfirm: "Видалити проект",
+    deleteRestricted: "Видаляти проекти може тільки адміністратор",
     depth: "Глибина",
     details: "Деталі",
     drawers: "Шухляди",
@@ -148,10 +155,15 @@ const TRANSLATIONS = {
     passwordMustBeLong: "Пароль має містити мінімум 8 символів",
     passwordReset: "Пароль скинуто",
     projectDeleted: "Проект видалено",
+    projectDeleteRestricted: "У вас немає прав для видалення цього проекту",
+    projectEditRestricted: "У вас немає прав для редагування цього проекту",
     projectNotFound: "Проект не знайдено",
     projectRolledBack: "Проект відновлено",
+    projectRollbackRestricted: "У вас немає прав для відновлення цього проекту",
     projectUpdated: "Проект оновлено",
     projects: "Проекти",
+    readOnlyProject: "Проект лише для перегляду",
+    readOnlyProjectDescription: "Ви можете переглядати цей проект, але не можете його редагувати.",
     reset: "Скинути",
     role: "Роль",
     rollback: "Відновити",
@@ -262,6 +274,30 @@ function formatUserId(value, t) {
   return value;
 }
 
+function canEditProject(project, user) {
+  if (!project || !user) {
+    return false;
+  }
+
+  if (user.role === "admin") {
+    return true;
+  }
+
+  if (user.role === "manager") {
+    return project.created_by_user_id === user.id;
+  }
+
+  return false;
+}
+
+function canDeleteProject(user) {
+  return user?.role === "admin";
+}
+
+function canRollbackProject(user) {
+  return user?.role === "admin";
+}
+
 export default function App() {
   const [language, setLanguage] = useState(
     () => localStorage.getItem(LANGUAGE_STORAGE_KEY) || "en",
@@ -309,6 +345,9 @@ export default function App() {
   const canAuditGoForward = auditOffset + PAGE_SIZE < auditTotal;
 
   const selectedProjectId = selectedProject?.id || "";
+  const canEditSelectedProject = canEditProject(selectedProject, user);
+  const canDeleteSelectedProject = canDeleteProject(user);
+  const canRollbackSelectedProject = canRollbackProject(user);
 
   const pageLabel = useMemo(() => {
     if (total === 0) {
@@ -617,6 +656,11 @@ export default function App() {
       return;
     }
 
+    if (!canEditSelectedProject) {
+      setStatus(t.projectEditRestricted);
+      return;
+    }
+
     setLoading(true);
     const result = await updateProject(
       token,
@@ -636,6 +680,11 @@ export default function App() {
   }
 
   function openRollbackConfirm(version) {
+    if (!canRollbackSelectedProject) {
+      setStatus(t.projectRollbackRestricted);
+      return;
+    }
+
     setConfirmAction({
       type: "rollback",
       title: t.rollbackProject,
@@ -647,6 +696,11 @@ export default function App() {
 
   function openDeleteConfirm() {
     if (!selectedProjectId) {
+      return;
+    }
+
+    if (!canDeleteSelectedProject) {
+      setStatus(t.projectDeleteRestricted);
       return;
     }
 
@@ -683,6 +737,11 @@ export default function App() {
       return;
     }
 
+    if (!canRollbackSelectedProject) {
+      setStatus(t.projectRollbackRestricted);
+      return;
+    }
+
     setLoading(true);
     const result = await rollbackProject(token, selectedProjectId, versionId);
     setLoading(false);
@@ -700,6 +759,11 @@ export default function App() {
 
   async function handleDelete() {
     if (!selectedProjectId) {
+      return;
+    }
+
+    if (!canDeleteSelectedProject) {
+      setStatus(t.projectDeleteRestricted);
       return;
     }
 
@@ -1053,21 +1117,31 @@ export default function App() {
                       </span>
                     </div>
                   </div>
-                  <button
-                    className="danger-button"
-                    disabled={loading}
-                    onClick={openDeleteConfirm}
-                    type="button"
-                  >
-                    <Trash2 size={18} />
-                    {t.delete}
-                  </button>
+                  {canDeleteSelectedProject ? (
+                    <button
+                      className="danger-button"
+                      disabled={loading}
+                      onClick={openDeleteConfirm}
+                      type="button"
+                    >
+                      <Trash2 size={18} />
+                      {t.delete}
+                    </button>
+                  ) : null}
                 </div>
+
+                {!canEditSelectedProject ? (
+                  <div className="readonly-note">
+                    <strong>{t.readOnlyProject}</strong>
+                    <span>{t.readOnlyProjectDescription}</span>
+                  </div>
+                ) : null}
 
                 <form className="edit-grid" onSubmit={handleUpdate}>
                   <label>
                     {t.width}
                     <input
+                      disabled={!canEditSelectedProject || loading}
                       min="1"
                       onChange={(event) =>
                         setForm({ ...form, width: event.target.value })
@@ -1080,6 +1154,7 @@ export default function App() {
                   <label>
                     {t.height}
                     <input
+                      disabled={!canEditSelectedProject || loading}
                       min="1"
                       onChange={(event) =>
                         setForm({ ...form, height: event.target.value })
@@ -1092,6 +1167,7 @@ export default function App() {
                   <label>
                     {t.depth}
                     <input
+                      disabled={!canEditSelectedProject || loading}
                       min="1"
                       onChange={(event) =>
                         setForm({ ...form, depth: event.target.value })
@@ -1104,6 +1180,7 @@ export default function App() {
                   <label>
                     {t.sections}
                     <input
+                      disabled={!canEditSelectedProject || loading}
                       min="1"
                       onChange={(event) =>
                         setForm({ ...form, sections: event.target.value })
@@ -1116,6 +1193,7 @@ export default function App() {
                   <label className="wide-field">
                     {t.drawers}
                     <input
+                      disabled={!canEditSelectedProject || loading}
                       onChange={(event) =>
                         setForm({ ...form, drawers: event.target.value })
                       }
@@ -1126,7 +1204,7 @@ export default function App() {
                   </label>
                   <button
                     className="primary-button wide-button"
-                    disabled={loading}
+                    disabled={!canEditSelectedProject || loading}
                     type="submit"
                   >
                     <Save size={18} />
@@ -1148,15 +1226,17 @@ export default function App() {
                         </span>
                         <span>{formatDateTime(item.created_at, t)}</span>
                       </div>
-                      <button
-                        className="ghost-button"
-                        disabled={loading}
-                        onClick={() => openRollbackConfirm(item)}
-                        type="button"
-                      >
-                        <RotateCcw size={16} />
-                        {t.rollback}
-                      </button>
+                      {canRollbackSelectedProject ? (
+                        <button
+                          className="ghost-button"
+                          disabled={loading}
+                          onClick={() => openRollbackConfirm(item)}
+                          type="button"
+                        >
+                          <RotateCcw size={16} />
+                          {t.rollback}
+                        </button>
+                      ) : null}
                     </article>
                   ))}
                 </div>

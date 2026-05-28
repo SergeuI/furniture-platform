@@ -2,6 +2,10 @@ from database.session import (
     SessionLocal
 )
 
+from sqlalchemy import (
+    or_
+)
+
 from database.models.project import (
     ProjectModel
 )
@@ -35,6 +39,40 @@ def _create_project_version_from_project(
     db.add(version)
 
     return version
+
+
+def _apply_access_filter(
+
+    query,
+
+    user_id: str,
+
+    role: str
+):
+
+    if role in (
+        "admin",
+        "viewer"
+    ):
+
+        return query
+
+    if role == "manager":
+
+        return query.filter(
+
+            or_(
+
+                ProjectModel.created_by_user_id == user_id,
+
+                ProjectModel.created_by_user_id.is_(None)
+            )
+        )
+
+    return query.filter(
+
+        ProjectModel.id.is_(None)
+    )
 
 
 # =====================================================
@@ -167,6 +205,53 @@ def list_projects(
         db.close()
 
 
+def list_accessible_projects(
+
+    user_id: str,
+
+    role: str,
+
+    limit: int = 50,
+
+    offset: int = 0
+):
+
+    db = SessionLocal()
+
+    try:
+
+        query = _apply_access_filter(
+
+            db.query(ProjectModel),
+
+            user_id=user_id,
+
+            role=role
+        )
+
+        return (
+
+            query
+
+            .order_by(
+
+                ProjectModel.updated_at.desc(),
+
+                ProjectModel.id.asc()
+            )
+
+            .offset(offset)
+
+            .limit(limit)
+
+            .all()
+        )
+
+    finally:
+
+        db.close()
+
+
 # =====================================================
 # COUNT PROJECTS
 # =====================================================
@@ -183,6 +268,33 @@ def count_projects() -> int:
 
             .count()
         )
+
+    finally:
+
+        db.close()
+
+
+def count_accessible_projects(
+
+    user_id: str,
+
+    role: str
+) -> int:
+
+    db = SessionLocal()
+
+    try:
+
+        query = _apply_access_filter(
+
+            db.query(ProjectModel),
+
+            user_id=user_id,
+
+            role=role
+        )
+
+        return query.count()
 
     finally:
 

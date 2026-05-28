@@ -308,6 +308,26 @@ tbody tr.selected {
   margin-top: 10px;
 }
 
+.readonly-note {
+  background: #f1f5f7;
+  border: 1px solid #d7e1e6;
+  border-radius: 8px;
+  color: #3b4652;
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+}
+
+.readonly-note strong {
+  color: #24343d;
+  font-size: 13px;
+}
+
+.readonly-note span {
+  color: #5c6875;
+  font-size: 12px;
+}
+
 .edit-grid {
   display: grid;
   gap: 12px;
