@@ -477,6 +477,48 @@ tbody tr.selected {
   overflow: auto;
 }
 
+.part-workspace {
+  background: #ffffff;
+  border: 1px solid #dbe1e7;
+  border-radius: 8px;
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  overflow: hidden;
+  padding: 16px;
+}
+
+.part-workspace-header {
+  align-items: flex-start;
+  border-bottom: 1px solid #dbe1e7;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  padding-bottom: 14px;
+}
+
+.part-workspace-header h3 {
+  margin: 0 0 6px;
+}
+
+.part-workspace-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(420px, 1.15fr) minmax(340px, 0.85fr);
+  min-width: 0;
+}
+
+.part-workspace-preview,
+.part-workspace-side {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.part-workspace-preview .part-preview {
+  min-height: 520px;
+}
+
 .part-detail-layout {
   display: grid;
   gap: 16px;
@@ -786,6 +828,10 @@ tbody tr.selected {
   .project-form {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .part-workspace-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 @media (max-width: 640px) {
@@ -795,6 +841,7 @@ tbody tr.selected {
   }
 
   .toolbar,
+  .part-workspace-header,
   .detail-header {
     align-items: stretch;
     flex-direction: column;

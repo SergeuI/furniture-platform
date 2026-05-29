@@ -149,6 +149,8 @@ const TRANSLATIONS = {
     productionDrilling: "Drilling preview",
     productionGrooves: "Grooves",
     productionHoles: "Holes",
+    productionPartBack: "Back to production",
+    productionPartWorkspace: "Detail workspace",
     productionQuarters: "Quarters",
     productionPlaceholder: "Production outputs will appear here after cutting and drilling APIs are connected.",
     right: "Right",
@@ -253,6 +255,8 @@ const TRANSLATIONS = {
     productionDrilling: "Свердління",
     productionGrooves: "Пази",
     productionHoles: "Отвори",
+    productionPartBack: "Назад до виробництва",
+    productionPartWorkspace: "Робоче місце деталі",
     productionQuarters: "Чверті",
     productionPlaceholder: "Виробничі результати зʼявляться тут після підключення розкрою і свердління.",
     right: "Справа",
@@ -747,6 +751,154 @@ function PartMachiningEditor({
   );
 }
 
+function PartDetailWorkspace({
+  canEdit,
+  detail,
+  edgeBandings,
+  loading,
+  onAddMachining,
+  onBack,
+  onEdgeChange,
+  onMachiningChange,
+  onRemoveMachining,
+  onSaveEdges,
+  onSaveMachining,
+  t,
+}) {
+  if (!detail?.part) {
+    return null;
+  }
+
+  return (
+    <section className="part-workspace">
+      <div className="part-workspace-header">
+        <div>
+          <p className="eyebrow">{t.productionPartWorkspace}</p>
+          <h3>{detail.part.part_name}</h3>
+          <strong className="part-title">
+            {detail.part.export_code} / {detail.part.width} x {detail.part.height} x {detail.part.thickness}
+          </strong>
+        </div>
+        <button className="ghost-button" onClick={onBack} type="button">
+          <ChevronLeft size={18} />
+          {t.productionPartBack}
+        </button>
+      </div>
+
+      <div className="part-workspace-grid">
+        <div className="part-workspace-preview">
+          <PartPreview detail={detail} />
+        </div>
+        <div className="part-workspace-side">
+          <PartEdgeEditor
+            detail={detail}
+            disabled={!canEdit}
+            edgeBandings={edgeBandings}
+            loading={loading}
+            onChange={onEdgeChange}
+            onSave={onSaveEdges}
+            t={t}
+          />
+          <div className="part-operation-tables">
+            <section>
+              <h4>{t.productionHoles} {detail.holes.length}</h4>
+              <table>
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>{t.bomCategory}</th>
+                    <th>X</th>
+                    <th>Y</th>
+                    <th>{t.bomThickness}</th>
+                    <th>D</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {detail.holes.map((hole) => (
+                    <tr key={hole.number}>
+                      <td>{hole.number}</td>
+                      <td>{hole.side}</td>
+                      <td>{hole.x}</td>
+                      <td>{hole.y}</td>
+                      <td>{hole.depth}</td>
+                      <td>{hole.diameter}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </section>
+
+            <section>
+              <h4>{t.productionGrooves} {detail.grooves.length}</h4>
+              <table>
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>{t.bomCategory}</th>
+                    <th>X</th>
+                    <th>Y</th>
+                    <th>{t.cuttingLength}</th>
+                    <th>{t.bomThickness}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {detail.grooves.map((groove) => (
+                    <tr key={groove.number}>
+                      <td>{groove.number}</td>
+                      <td>{groove.side}</td>
+                      <td>{groove.x}</td>
+                      <td>{groove.y}</td>
+                      <td>{groove.length}</td>
+                      <td>{groove.depth}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </section>
+
+            <section>
+              <h4>{t.productionQuarters} {detail.quarters.length}</h4>
+              <table>
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>{t.bomCategory}</th>
+                    <th>{t.cuttingLength}</th>
+                    <th>{t.cuttingSize}</th>
+                    <th>{t.bomThickness}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {detail.quarters.map((quarter) => (
+                    <tr key={quarter.number}>
+                      <td>{quarter.number}</td>
+                      <td>{quarter.side}</td>
+                      <td>{quarter.length}</td>
+                      <td>{quarter.width}</td>
+                      <td>{quarter.depth}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </section>
+          </div>
+        </div>
+      </div>
+
+      <PartMachiningEditor
+        detail={detail}
+        disabled={!canEdit}
+        loading={loading}
+        onAdd={onAddMachining}
+        onChange={onMachiningChange}
+        onRemove={onRemoveMachining}
+        onSave={onSaveMachining}
+        t={t}
+      />
+    </section>
+  );
+}
+
 export default function App() {
   const [language, setLanguage] = useState(
     () => localStorage.getItem(LANGUAGE_STORAGE_KEY) || "uk",
@@ -953,6 +1105,7 @@ export default function App() {
     }
 
     setSelectedPartDetail(result);
+    setActiveProjectTab("partDetail");
     setStatus("");
   }
 
@@ -1773,6 +1926,15 @@ export default function App() {
                   >
                     {t.production}
                   </button>
+                  {selectedPartDetail ? (
+                    <button
+                      className={activeProjectTab === "partDetail" ? "active" : ""}
+                      onClick={() => setActiveProjectTab("partDetail")}
+                      type="button"
+                    >
+                      {t.detailViewer}
+                    </button>
+                  ) : null}
                   <button
                     className={activeProjectTab === "validation" ? "active" : ""}
                     onClick={() => setActiveProjectTab("validation")}
@@ -1923,121 +2085,6 @@ export default function App() {
                         <p>{t.noCuttingItems}</p>
                       )}
                     </article>
-                    {selectedPartDetail ? (
-                      <article className="wide-production-section part-detail-panel">
-                        <h3>{t.detailViewer}</h3>
-                        <div className="part-detail-layout">
-                          <div>
-                            <strong>
-                              {selectedPartDetail.part.export_code} / {selectedPartDetail.part.part_name}
-                            </strong>
-                            <PartPreview detail={selectedPartDetail} />
-                            <PartEdgeEditor
-                              detail={selectedPartDetail}
-                              disabled={user?.role === "viewer"}
-                              edgeBandings={specificationCatalog.edge_bandings}
-                              loading={loading}
-                              onChange={handlePartEdgeChange}
-                              onSave={handleSavePartEdges}
-                              t={t}
-                            />
-                            <PartMachiningEditor
-                              detail={selectedPartDetail}
-                              disabled={user?.role === "viewer"}
-                              loading={loading}
-                              onAdd={handleAddMachiningRow}
-                              onChange={handleMachiningChange}
-                              onRemove={handleRemoveMachiningRow}
-                              onSave={handleSavePartMachining}
-                              t={t}
-                            />
-                          </div>
-                          <div className="part-operation-tables">
-                            <section>
-                              <h4>{t.productionHoles} {selectedPartDetail.holes.length}</h4>
-                              <table>
-                                <thead>
-                                  <tr>
-                                    <th>#</th>
-                                    <th>{t.bomCategory}</th>
-                                    <th>X</th>
-                                    <th>Y</th>
-                                    <th>{t.bomThickness}</th>
-                                    <th>D</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {selectedPartDetail.holes.map((hole) => (
-                                    <tr key={hole.number}>
-                                      <td>{hole.number}</td>
-                                      <td>{hole.side}</td>
-                                      <td>{hole.x}</td>
-                                      <td>{hole.y}</td>
-                                      <td>{hole.depth}</td>
-                                      <td>{hole.diameter}</td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </section>
-
-                            <section>
-                              <h4>{t.productionGrooves} {selectedPartDetail.grooves.length}</h4>
-                              <table>
-                                <thead>
-                                  <tr>
-                                    <th>#</th>
-                                    <th>{t.bomCategory}</th>
-                                    <th>X</th>
-                                    <th>Y</th>
-                                    <th>{t.cuttingLength}</th>
-                                    <th>{t.bomThickness}</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {selectedPartDetail.grooves.map((groove) => (
-                                    <tr key={groove.number}>
-                                      <td>{groove.number}</td>
-                                      <td>{groove.side}</td>
-                                      <td>{groove.x}</td>
-                                      <td>{groove.y}</td>
-                                      <td>{groove.length}</td>
-                                      <td>{groove.depth}</td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </section>
-
-                            <section>
-                              <h4>{t.productionQuarters} {selectedPartDetail.quarters.length}</h4>
-                              <table>
-                                <thead>
-                                  <tr>
-                                    <th>#</th>
-                                    <th>{t.bomCategory}</th>
-                                    <th>{t.cuttingLength}</th>
-                                    <th>{t.cuttingSize}</th>
-                                    <th>{t.bomThickness}</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {selectedPartDetail.quarters.map((quarter) => (
-                                    <tr key={quarter.number}>
-                                      <td>{quarter.number}</td>
-                                      <td>{quarter.side}</td>
-                                      <td>{quarter.length}</td>
-                                      <td>{quarter.width}</td>
-                                      <td>{quarter.depth}</td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </section>
-                          </div>
-                        </div>
-                      </article>
-                    ) : null}
                     <article>
                       <h3>{t.productionDrilling}</h3>
                       <p>{t.productionPlaceholder}</p>
@@ -2076,6 +2123,23 @@ export default function App() {
                       </div>
                     </article>
                   </div>
+                ) : null}
+
+                {activeProjectTab === "partDetail" && selectedPartDetail ? (
+                  <PartDetailWorkspace
+                    canEdit={user?.role !== "viewer"}
+                    detail={selectedPartDetail}
+                    edgeBandings={specificationCatalog.edge_bandings}
+                    loading={loading}
+                    onAddMachining={handleAddMachiningRow}
+                    onBack={() => setActiveProjectTab("production")}
+                    onEdgeChange={handlePartEdgeChange}
+                    onMachiningChange={handleMachiningChange}
+                    onRemoveMachining={handleRemoveMachiningRow}
+                    onSaveEdges={handleSavePartEdges}
+                    onSaveMachining={handleSavePartMachining}
+                    t={t}
+                  />
                 ) : null}
 
                 {activeProjectTab === "validation" ? (
