@@ -189,7 +189,7 @@ const TRANSLATIONS = {
     entity: "Entity",
     edge_banding: "Edge banding",
     facadeMaterial: "Facade material",
-    furniturePlatform: "Furniture Platform",
+    furniturePlatform: "MProject.furniture",
     handlePosition: "Handle position",
     handle_position: "Handle position",
     handleType: "Handle type",
@@ -352,7 +352,7 @@ const TRANSLATIONS = {
     entity: "Сутність",
     edge_banding: "Крайка",
     facadeMaterial: "Матеріал фасаду",
-    furniturePlatform: "Furniture Platform",
+    furniturePlatform: "MProject.furniture",
     handlePosition: "Позиція ручки",
     handle_position: "Позиція ручки",
     handleType: "Тип ручки",
@@ -1978,9 +1978,12 @@ export default function App() {
     return (
       <main className="auth-screen">
         <form className="login-panel" onSubmit={handleLogin}>
-          <div>
-            <p className="eyebrow">{t.furniturePlatform}</p>
-            <h1>{t.admin}</h1>
+          <div className="brand-lockup auth-brand">
+            <img alt="" className="brand-mark" src="/brand/mp-symbol-flat.svg" />
+            <div>
+              <p className="eyebrow">{t.furniturePlatform}</p>
+              <h1>{t.admin}</h1>
+            </div>
           </div>
 
           <label>
@@ -2020,9 +2023,12 @@ export default function App() {
   return (
     <main className="app-shell">
       <aside className="sidebar">
-        <div className="brand-block">
-          <p className="eyebrow">{t.furniturePlatform}</p>
-          <h1>{t.admin}</h1>
+        <div className="brand-block brand-lockup">
+          <img alt="" className="brand-mark" src="/brand/mp-symbol-flat.svg" />
+          <div>
+            <p className="eyebrow">{t.furniturePlatform}</p>
+            <h1>{t.admin}</h1>
+          </div>
         </div>
 
         <div className="language-switcher" aria-label="Language">
