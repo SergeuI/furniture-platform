@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="480" viewBox="0 0 1440 480" role="img" aria-labelledby="title desc">
+  <title id="title">MProject.furniture flat logo</title>
+  <desc id="desc">Flat minimalist MProject.furniture logo.</desc>
+  <rect width="1440" height="480" fill="#0d141a"/>
+  <g transform="translate(100 86)">
+    <path d="M0 248V0h86l96 138L278 0h82v248h-78V112l-86 126h-28L78 112v136z" fill="#202932"/>
+    <path d="M420 248V0h154c80 0 132 49 132 124s-52 124-132 124h-76v0zm78-70h70c36 0 58-20 58-54s-22-54-58-54h-70z" fill="#202932"/>
+    <path d="M0 302l76-43v68L0 368z" fill="#39d353"/>
+  </g>
+  <g transform="translate(665 172)">
+    <text x="0" y="0" fill="#f7fafc" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="70" font-weight="800">MProject<tspan fill="#39d353">.furniture</tspan></text>
+    <text x="2" y="58" fill="#98a2ad" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="20" font-weight="500" letter-spacing="2.6">CAD-FIRST FURNITURE PRODUCTION</text>
+  </g>
+</svg>

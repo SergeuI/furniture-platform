@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">MProject Telegram avatar</title>
+  <desc id="desc">Circular Telegram avatar for MProject.furniture.</desc>
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="38%" r="68%">
+      <stop offset="0" stop-color="#26303a"/>
+      <stop offset="1" stop-color="#0a1015"/>
+    </radialGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="24" stdDeviation="22" flood-color="#000000" flood-opacity="0.45"/>
+      <feDropShadow dx="0" dy="0" stdDeviation="26" flood-color="#39d353" flood-opacity="0.2"/>
+    </filter>
+  </defs>
+  <circle cx="512" cy="512" r="512" fill="url(#bg)"/>
+  <g transform="translate(122 250) scale(1.02)" filter="url(#shadow)">
+    <path d="M0 248V0h86l96 138L278 0h82v248h-78V112l-86 126h-28L78 112v136z" fill="#6f7983"/>
+    <path d="M420 248V0h154c80 0 132 49 132 124s-52 124-132 124h-76v0zm78-70h70c36 0 58-20 58-54s-22-54-58-54h-70z" fill="#6f7983"/>
+    <path d="M0 318l86-49v78L0 394z" fill="#39d353"/>
+  </g>
+</svg>

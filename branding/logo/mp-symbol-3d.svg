@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">MProject MP symbol</title>
+  <desc id="desc">Standalone 3D MP symbol with neon green furniture plate.</desc>
+  <defs>
+    <linearGradient id="mp-face" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#6f7983"/>
+      <stop offset="0.45" stop-color="#26303a"/>
+      <stop offset="1" stop-color="#101820"/>
+    </linearGradient>
+    <linearGradient id="green-face" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#55f34c"/>
+      <stop offset="1" stop-color="#20ad2f"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="170%">
+      <feDropShadow dx="0" dy="18" stdDeviation="14" flood-color="#000000" flood-opacity="0.45"/>
+      <feDropShadow dx="0" dy="0" stdDeviation="18" flood-color="#39d353" flood-opacity="0.18"/>
+    </filter>
+  </defs>
+  <g filter="url(#shadow)" transform="translate(26 102) scale(0.58)">
+    <path d="M8 284V0h104l104 154L320 0h96v284h-90V128L228 274h-28L102 128v156z" fill="url(#mp-face)" stroke="#8e99a3" stroke-width="3"/>
+    <path d="M472 284V0h170c90 0 148 54 148 136s-58 136-148 136h-80v12zm90-94h76c38 0 62-20 62-54s-24-54-62-54h-76z" fill="url(#mp-face)" stroke="#8e99a3" stroke-width="3"/>
+    <path d="M8 344l86-48v78L8 420z" fill="url(#green-face)" stroke="#77ff6e" stroke-width="3"/>
+  </g>
+</svg>

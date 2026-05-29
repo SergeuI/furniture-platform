@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>MProject.furniture Brand Usage</title>
+    <link rel="stylesheet" href="./brand-tokens.css">
+    <style>
+      body {
+        background: #f7fafc;
+        color: #111820;
+        font-family: var(--mp-font-sans);
+        margin: 0;
+        padding: 32px;
+      }
+
+      .grid {
+        display: grid;
+        gap: 24px;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      }
+
+      .sample {
+        border: 1px solid #dbe1e7;
+        border-radius: 8px;
+        padding: 24px;
+      }
+
+      .dark {
+        background: #0d141a;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="grid">
+      <section class="sample dark">
+        <img src="../logo/mproject-logo-dark.svg" alt="MProject.furniture dark logo" width="100%">
+      </section>
+      <section class="sample">
+        <img src="../logo/mproject-logo-light.svg" alt="MProject.furniture light logo" width="100%">
+      </section>
+      <section class="sample mp-brand-panel">
+        <img src="../logo/mp-symbol-flat.svg" alt="" width="84">
+        <h1>MProject.furniture</h1>
+        <p>Furniture production platform for projects, BOM, cutting, and machining.</p>
+        <button class="mp-primary-action">Open project</button>
+      </section>
+    </main>
+  </body>
+</html>

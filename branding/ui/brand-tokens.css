@@ -1,0 +1,41 @@
+:root {
+  --mp-color-graphite-950: #0d141a;
+  --mp-color-graphite-900: #111820;
+  --mp-color-graphite-800: #202932;
+  --mp-color-graphite-700: #26303a;
+  --mp-color-steel-500: #66717b;
+  --mp-color-steel-300: #a8b1ba;
+  --mp-color-surface: #f7fafc;
+  --mp-color-green-500: #39d353;
+  --mp-color-green-600: #2cc23f;
+  --mp-color-green-700: #1faa28;
+  --mp-radius-control: 6px;
+  --mp-radius-card: 8px;
+  --mp-space-1: 4px;
+  --mp-space-2: 8px;
+  --mp-space-3: 12px;
+  --mp-space-4: 16px;
+  --mp-space-6: 24px;
+  --mp-space-8: 32px;
+  --mp-space-12: 48px;
+  --mp-font-sans: Inter, "Segoe UI", Arial, sans-serif;
+}
+
+.mp-brand-panel {
+  background: var(--mp-color-graphite-950);
+  border: 1px solid rgba(168, 177, 186, 0.22);
+  border-radius: var(--mp-radius-card);
+  color: var(--mp-color-surface);
+  font-family: var(--mp-font-sans);
+  padding: var(--mp-space-6);
+}
+
+.mp-primary-action {
+  background: var(--mp-color-green-500);
+  border: 0;
+  border-radius: var(--mp-radius-control);
+  color: var(--mp-color-graphite-950);
+  font-weight: 800;
+  min-height: 40px;
+  padding: 0 var(--mp-space-4);
+}

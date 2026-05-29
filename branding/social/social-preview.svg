@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
+  <title id="title">MProject.furniture social preview</title>
+  <desc id="desc">Social sharing image for MProject.furniture.</desc>
+  <defs>
+    <radialGradient id="bg" cx="40%" cy="28%" r="85%">
+      <stop offset="0" stop-color="#26303a"/>
+      <stop offset="1" stop-color="#0d141a"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <g transform="translate(86 118) scale(0.54)">
+    <path d="M8 284V0h104l104 154L320 0h96v284h-90V128L228 274h-28L102 128v156z" fill="#65717c"/>
+    <path d="M472 284V0h170c90 0 148 54 148 136s-58 136-148 136h-80v12zm90-94h76c38 0 62-20 62-54s-24-54-62-54h-76z" fill="#65717c"/>
+    <path d="M8 344l86-48v78L8 420z" fill="#39d353"/>
+  </g>
+  <text x="590" y="258" fill="#f7fafc" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="76" font-weight="800">MProject<tspan fill="#39d353">.furniture</tspan></text>
+  <text x="594" y="324" fill="#a8b1ba" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="24" font-weight="500" letter-spacing="3">FURNITURE PRODUCTION PLATFORM</text>
+  <rect x="594" y="390" width="292" height="52" rx="8" fill="#39d353"/>
+  <text x="628" y="424" fill="#0d141a" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="20" font-weight="800">CAD + BOM + CNC</text>
+</svg>
