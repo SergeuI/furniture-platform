@@ -74,6 +74,7 @@ const TRANSLATIONS = {
   en: {
     all: "All",
     app: "App",
+    brandTagline: "Furniture production platform",
     bottomType: "Bottom type",
     bottom: "Bottom",
     bomCategory: "Category",
@@ -177,6 +178,7 @@ const TRANSLATIONS = {
   uk: {
     all: "Всі",
     app: "Застосунок",
+    brandTagline: "Професійне рішення для меблевого виробництва",
     bottomType: "Тип дна",
     bottom: "Низ",
     bomCategory: "Категорія",
@@ -1192,10 +1194,14 @@ export default function App() {
     return (
       <main className="auth-screen">
         <form className="login-panel" onSubmit={handleLogin}>
-          <div className="brand-lockup auth-brand">
-            <img alt="" className="brand-mark" src="/brand/mp-symbol-flat.svg" />
-            <div>
-              <p className="eyebrow">{t.furniturePlatform}</p>
+          <div className="auth-brand">
+            <img
+              alt={t.furniturePlatform}
+              className="brand-logo"
+              src="/brand/mproject-logo-flat.svg"
+            />
+            <div className="auth-heading">
+              <p>{t.brandTagline}</p>
               <h1>{t.app}</h1>
             </div>
           </div>
@@ -1239,7 +1245,7 @@ export default function App() {
       <aside className="sidebar">
         <div className="brand-block brand-lockup">
           <img alt="" className="brand-mark" src="/brand/mp-symbol-flat.svg" />
-          <div>
+          <div className="brand-copy">
             <p className="eyebrow">{t.furniturePlatform}</p>
             <h1>{t.app}</h1>
           </div>
