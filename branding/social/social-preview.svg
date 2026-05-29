@@ -1,20 +1,31 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
   <title id="title">MProject.furniture social preview</title>
-  <desc id="desc">Social sharing image for MProject.furniture.</desc>
+  <desc id="desc">Dark graphite social preview for MProject.furniture.</desc>
   <defs>
-    <radialGradient id="bg" cx="40%" cy="28%" r="85%">
-      <stop offset="0" stop-color="#26303a"/>
-      <stop offset="1" stop-color="#0d141a"/>
+    <radialGradient id="bg" cx="30%" cy="38%" r="78%">
+      <stop offset="0" stop-color="#1b2730"/>
+      <stop offset=".55" stop-color="#0d141a"/>
+      <stop offset="1" stop-color="#070b0f"/>
     </radialGradient>
+    <linearGradient id="metal" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#f1f4f6"/>
+      <stop offset=".14" stop-color="#9aa3ad"/>
+      <stop offset=".5" stop-color="#3d4852"/>
+      <stop offset="1" stop-color="#101820"/>
+    </linearGradient>
+    <filter id="shadow" x="-22%" y="-22%" width="144%" height="154%">
+      <feDropShadow dx="0" dy="18" stdDeviation="16" flood-color="#000" flood-opacity=".54"/>
+      <feDropShadow dx="0" dy="0" stdDeviation="18" flood-color="#39d353" flood-opacity=".16"/>
+    </filter>
   </defs>
   <rect width="1200" height="630" fill="url(#bg)"/>
-  <g transform="translate(86 118) scale(0.54)">
-    <path d="M8 284V0h104l104 154L320 0h96v284h-90V128L228 274h-28L102 128v156z" fill="#65717c"/>
-    <path d="M472 284V0h170c90 0 148 54 148 136s-58 136-148 136h-80v12zm90-94h76c38 0 62-20 62-54s-24-54-62-54h-76z" fill="#65717c"/>
-    <path d="M8 344l86-48v78L8 420z" fill="#39d353"/>
+  <g transform="translate(84 118) scale(.54)" filter="url(#shadow)">
+    <path d="M0 248V0h78l98 123L274 0h72v248h-80V108l-76 114h-28L82 108v140z" fill="url(#metal)" stroke="#b8c0c8" stroke-width="3"/>
+    <path d="M365 304V0h152c82 0 136 48 136 124s-54 124-136 124h-72v56zm80-126h66c38 0 62-20 62-54s-24-54-62-54h-66z" fill="url(#metal)" stroke="#b8c0c8" stroke-width="3"/>
+    <path d="M0 310l76-44v70L0 380z" fill="#39d353" stroke="#88ff76" stroke-width="3"/>
   </g>
-  <text x="590" y="258" fill="#f7fafc" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="76" font-weight="800">MProject<tspan fill="#39d353">.furniture</tspan></text>
-  <text x="594" y="324" fill="#a8b1ba" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="24" font-weight="500" letter-spacing="3">FURNITURE PRODUCTION PLATFORM</text>
-  <rect x="594" y="390" width="292" height="52" rx="8" fill="#39d353"/>
-  <text x="628" y="424" fill="#0d141a" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="20" font-weight="800">CAD + BOM + CNC</text>
+  <g transform="translate(520 232)">
+    <text x="0" y="0" fill="#f7fafc" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="72" font-weight="800">MProject<tspan fill="#39d353">.furniture</tspan></text>
+    <text x="4" y="74" fill="#a8b1ba" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="22" font-weight="500" letter-spacing="1">ПРОФЕСІЙНЕ РІШЕННЯ ДЛЯ МЕБЛЕВОГО ВИРОБНИЦТВА</text>
+  </g>
 </svg>

@@ -1,24 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
   <title id="title">MProject app icon</title>
-  <desc id="desc">Rounded premium application icon for MProject.furniture.</desc>
+  <desc id="desc">Rounded app icon for MProject.furniture.</desc>
   <defs>
-    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+    <radialGradient id="bg" cx="50%" cy="36%" r="72%">
       <stop offset="0" stop-color="#26303a"/>
       <stop offset="1" stop-color="#0d141a"/>
-    </linearGradient>
-    <linearGradient id="mp" x1="0" x2="1" y1="0" y2="1">
-      <stop offset="0" stop-color="#7f8790"/>
-      <stop offset="1" stop-color="#202932"/>
-    </linearGradient>
-    <filter id="glow" x="-20%" y="-20%" width="140%" height="150%">
-      <feDropShadow dx="0" dy="28" stdDeviation="24" flood-color="#000000" flood-opacity="0.42"/>
-      <feDropShadow dx="0" dy="0" stdDeviation="28" flood-color="#39d353" flood-opacity="0.22"/>
-    </filter>
+    </radialGradient>
   </defs>
-  <rect width="1024" height="1024" rx="220" fill="url(#bg)"/>
-  <g transform="translate(120 238) scale(1.02)" filter="url(#glow)">
-    <path d="M0 248V0h86l96 138L278 0h82v248h-78V112l-86 126h-28L78 112v136z" fill="url(#mp)"/>
-    <path d="M420 248V0h154c80 0 132 49 132 124s-52 124-132 124h-76v0zm78-70h70c36 0 58-20 58-54s-22-54-58-54h-70z" fill="url(#mp)"/>
-    <path d="M0 318l86-49v78L0 394z" fill="#39d353"/>
+  <rect width="1024" height="1024" rx="210" fill="url(#bg)"/>
+  <g transform="translate(92 240) scale(1.18)">
+    <path d="M0 248V0h78l98 123L274 0h72v248h-80V108l-76 114h-28L82 108v140z" fill="#7d8791"/>
+    <path d="M365 304V0h152c82 0 136 48 136 124s-54 124-136 124h-72v56zm80-126h66c38 0 62-20 62-54s-24-54-62-54h-66z" fill="#7d8791"/>
+    <path d="M0 310l76-44v70L0 380z" fill="#39d353"/>
   </g>
 </svg>

@@ -2,23 +2,33 @@
   <title id="title">MProject MP symbol</title>
   <desc id="desc">Standalone 3D MP symbol with neon green furniture plate.</desc>
   <defs>
-    <linearGradient id="mp-face" x1="0" x2="1" y1="0" y2="1">
-      <stop offset="0" stop-color="#6f7983"/>
-      <stop offset="0.45" stop-color="#26303a"/>
+    <linearGradient id="metal" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#f1f4f6"/>
+      <stop offset="0.14" stop-color="#9aa3ad"/>
+      <stop offset="0.5" stop-color="#3d4852"/>
       <stop offset="1" stop-color="#101820"/>
     </linearGradient>
-    <linearGradient id="green-face" x1="0" x2="1" y1="0" y2="1">
-      <stop offset="0" stop-color="#55f34c"/>
-      <stop offset="1" stop-color="#20ad2f"/>
+    <linearGradient id="side" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#41505b"/>
+      <stop offset="1" stop-color="#080d12"/>
     </linearGradient>
-    <filter id="shadow" x="-30%" y="-30%" width="160%" height="170%">
-      <feDropShadow dx="0" dy="18" stdDeviation="14" flood-color="#000000" flood-opacity="0.45"/>
+    <linearGradient id="green" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#6cff4f"/>
+      <stop offset="1" stop-color="#1fb832"/>
+    </linearGradient>
+    <filter id="shadow" x="-22%" y="-22%" width="144%" height="154%">
+      <feDropShadow dx="0" dy="18" stdDeviation="14" flood-color="#000000" flood-opacity="0.5"/>
       <feDropShadow dx="0" dy="0" stdDeviation="18" flood-color="#39d353" flood-opacity="0.18"/>
     </filter>
   </defs>
-  <g filter="url(#shadow)" transform="translate(26 102) scale(0.58)">
-    <path d="M8 284V0h104l104 154L320 0h96v284h-90V128L228 274h-28L102 128v156z" fill="url(#mp-face)" stroke="#8e99a3" stroke-width="3"/>
-    <path d="M472 284V0h170c90 0 148 54 148 136s-58 136-148 136h-80v12zm90-94h76c38 0 62-20 62-54s-24-54-62-54h-76z" fill="url(#mp-face)" stroke="#8e99a3" stroke-width="3"/>
-    <path d="M8 344l86-48v78L8 420z" fill="url(#green-face)" stroke="#77ff6e" stroke-width="3"/>
+  <g transform="translate(40 82) scale(.66)" filter="url(#shadow)">
+    <path d="M18 20h78l98 123L292 20h72v248h-80V128l-76 114h-28L100 128v140H18z" fill="#05090d" opacity=".68"/>
+    <path d="M383 324V20h152c82 0 136 48 136 124s-54 124-136 124h-72v56z" fill="#05090d" opacity=".68"/>
+    <path d="M0 248V0h78l98 123L274 0h72v248h-80V108l-76 114h-28L82 108v140z" fill="url(#metal)" stroke="#b8c0c8" stroke-width="3"/>
+    <path d="M0 248l18 20h82V128L82 108v140z" fill="url(#side)" opacity=".78"/>
+    <path d="M365 304V0h152c82 0 136 48 136 124s-54 124-136 124h-72v56zm80-126h66c38 0 62-20 62-54s-24-54-62-54h-66z" fill="url(#metal)" stroke="#b8c0c8" stroke-width="3"/>
+    <path d="M365 304l18 20h80v-56l-18-20v56z" fill="url(#side)" opacity=".8"/>
+    <path d="M0 310l76-44v70L0 380z" fill="url(#green)" stroke="#88ff76" stroke-width="3"/>
+    <path d="M76 266l40-23v70l-40 23z" fill="#1f8d2a" opacity=".82"/>
   </g>
 </svg>
