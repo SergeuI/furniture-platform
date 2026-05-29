@@ -577,6 +577,47 @@ tbody tr.selected {
   width: 4px;
 }
 
+.machining-editor-panel {
+  background: #ffffff;
+  border: 1px solid #dbe1e7;
+  border-radius: 6px;
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+}
+
+.machining-editor-heading {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.machining-editor-heading h4 {
+  color: #1d5965;
+  font-size: 14px;
+  margin: 0;
+}
+
+.compact-button {
+  min-height: 32px;
+  padding: 6px 10px;
+}
+
+.machining-editor-table {
+  table-layout: fixed;
+}
+
+.machining-editor-table input {
+  min-width: 0;
+  padding: 7px 8px;
+  width: 100%;
+}
+
+.danger-icon {
+  color: #b42318;
+}
+
 .part-operation-tables {
   display: grid;
   gap: 12px;

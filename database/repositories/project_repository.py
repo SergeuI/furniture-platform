@@ -51,6 +51,8 @@ def _create_project_version_from_project(
 
         edge_overrides=project.edge_overrides,
 
+        machining_overrides=project.machining_overrides,
+
         material_thickness=project.material_thickness,
 
         slide_type=project.slide_type,
@@ -277,6 +279,8 @@ def create_project(
             edge_banding=edge_banding,
 
             edge_overrides={},
+
+            machining_overrides={},
 
             material_thickness=material_thickness,
 
@@ -764,6 +768,72 @@ def update_project_part_edges(
         db.close()
 
 
+def update_project_part_machining(
+
+    project_id: str,
+
+    part_code: str,
+
+    machining: dict,
+
+    updated_by_user_id: str | None = None
+):
+
+    db = SessionLocal()
+
+    try:
+
+        project = (
+
+            db.query(ProjectModel)
+
+            .filter(
+
+                ProjectModel.id == project_id
+            )
+
+            .first()
+        )
+
+        if not project:
+
+            return None
+
+        _create_project_version_from_project(
+
+            db,
+
+            project
+        )
+
+        machining_overrides = dict(project.machining_overrides or {})
+
+        machining_overrides[part_code] = {
+
+            "holes": machining.get("holes") or [],
+
+            "grooves": machining.get("grooves") or [],
+
+            "quarters": machining.get("quarters") or []
+        }
+
+        project.machining_overrides = machining_overrides
+
+        if updated_by_user_id is not None:
+
+            project.updated_by_user_id = updated_by_user_id
+
+        db.commit()
+
+        db.refresh(project)
+
+        return project
+
+    finally:
+
+        db.close()
+
+
 # =====================================================
 # ROLLBACK PROJECT
 # =====================================================
@@ -847,6 +917,8 @@ def rollback_project(
         project.edge_banding = version.edge_banding
 
         project.edge_overrides = version.edge_overrides or {}
+
+        project.machining_overrides = version.machining_overrides or {}
 
         project.material_thickness = version.material_thickness
 

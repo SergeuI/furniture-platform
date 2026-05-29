@@ -46,6 +46,10 @@ class ProjectResponseItemSchema(BaseModel):
         default_factory=dict
     )
 
+    machining_overrides: Dict[str, Any] = Field(
+        default_factory=dict
+    )
+
     material_thickness: Optional[int] = None
 
     slide_type: Optional[str] = None
@@ -96,6 +100,10 @@ class ProjectVersionResponseItemSchema(BaseModel):
     edge_banding: Optional[str] = None
 
     edge_overrides: Dict[str, Any] = Field(
+        default_factory=dict
+    )
+
+    machining_overrides: Dict[str, Any] = Field(
         default_factory=dict
     )
 

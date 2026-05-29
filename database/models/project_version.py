@@ -87,6 +87,11 @@ class ProjectVersionModel(Base):
         nullable=True
     )
 
+    machining_overrides = Column(
+        JSON,
+        nullable=True
+    )
+
     material_thickness = Column(
         Integer,
         nullable=True

@@ -119,3 +119,83 @@ class ProjectPartEdgesUpdateSchema(BaseModel):
     left: Optional[str] = None
 
     right: Optional[str] = None
+
+
+class ProjectPartHoleUpdateSchema(BaseModel):
+
+    number: int
+
+    side: str = "front"
+
+    origin: str = "left_bottom"
+
+    x: float
+
+    y: float
+
+    z: float = 0
+
+    diameter: float
+
+    depth: float
+
+    type: str = "manual"
+
+
+class ProjectPartGrooveUpdateSchema(BaseModel):
+
+    number: int
+
+    side: str = "front"
+
+    origin: str = "left_bottom"
+
+    x: float
+
+    y: float
+
+    depth: float
+
+    width: float
+
+    length: float
+
+    type: str = "manual"
+
+
+class ProjectPartQuarterUpdateSchema(BaseModel):
+
+    number: int
+
+    side: str = "bottom"
+
+    origin: str = "left_bottom"
+
+    x: float = 0
+
+    y: float = 0
+
+    depth: float
+
+    width: float
+
+    length: float
+
+    radius: float = 0
+
+    type: str = "manual"
+
+
+class ProjectPartMachiningUpdateSchema(BaseModel):
+
+    holes: List[ProjectPartHoleUpdateSchema] = Field(
+        default_factory=list
+    )
+
+    grooves: List[ProjectPartGrooveUpdateSchema] = Field(
+        default_factory=list
+    )
+
+    quarters: List[ProjectPartQuarterUpdateSchema] = Field(
+        default_factory=list
+    )

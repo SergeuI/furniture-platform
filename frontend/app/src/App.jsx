@@ -25,6 +25,7 @@ import {
   listProjects,
   login,
   updateProjectPartEdges,
+  updateProjectPartMachining,
 } from "./api";
 
 const TOKEN_STORAGE_KEY = "furniture_app_token";
@@ -104,6 +105,11 @@ const TRANSLATIONS = {
     edgeEditorDescription: "Edit edge banding for the selected production part.",
     edgeSaved: "Part edges updated",
     email: "Email",
+    machiningAddGroove: "Add groove",
+    machiningAddHole: "Add hole",
+    machiningAddQuarter: "Add quarter",
+    machiningEditor: "Machining editor",
+    machiningSaved: "Part machining updated",
     exportDownloadJson: "Download JSON",
     exportFormats: "Export formats",
     exportPlanned: "Planned",
@@ -159,6 +165,7 @@ const TRANSLATIONS = {
     unableToLoadExports: "Unable to load exports",
     unableToLoadPart: "Unable to load part detail",
     unableToSaveEdges: "Unable to save part edges",
+    unableToSaveMachining: "Unable to save part machining",
     unableToLoadProjects: "Unable to load projects",
     updated: "Updated",
     validation: "Validation",
@@ -201,6 +208,11 @@ const TRANSLATIONS = {
     edgeEditorDescription: "Редагування крайки для вибраної виробничої деталі.",
     edgeSaved: "Крайку деталі оновлено",
     email: "Email",
+    machiningAddGroove: "Додати паз",
+    machiningAddHole: "Додати отвір",
+    machiningAddQuarter: "Додати чверть",
+    machiningEditor: "Редактор обробки",
+    machiningSaved: "Обробку деталі оновлено",
     exportDownloadJson: "Завантажити JSON",
     exportFormats: "Формати експорту",
     exportPlanned: "Заплановано",
@@ -256,6 +268,7 @@ const TRANSLATIONS = {
     unableToLoadExports: "Не вдалося завантажити експорти",
     unableToLoadPart: "Не вдалося завантажити карту деталі",
     unableToSaveEdges: "Не вдалося зберегти крайку деталі",
+    unableToSaveMachining: "Не вдалося зберегти обробку деталі",
     unableToLoadProjects: "Не вдалося завантажити проекти",
     updated: "Оновлено",
     validation: "Валідація",
@@ -637,6 +650,101 @@ function PartEdgeEditor({
   );
 }
 
+function PartMachiningEditor({
+  detail,
+  disabled,
+  loading,
+  onAdd,
+  onChange,
+  onRemove,
+  onSave,
+  t,
+}) {
+  if (!detail?.part) {
+    return null;
+  }
+
+  function renderRows(kind, rows, fields) {
+    return (
+      <section>
+        <div className="machining-editor-heading">
+          <h4>
+            {kind === "holes" ? t.productionHoles : kind === "grooves" ? t.productionGrooves : t.productionQuarters} {rows.length}
+          </h4>
+          <button
+            className="ghost-button compact-button"
+            disabled={disabled || loading}
+            onClick={() => onAdd(kind)}
+            type="button"
+          >
+            <Plus size={14} />
+            {kind === "holes" ? t.machiningAddHole : kind === "grooves" ? t.machiningAddGroove : t.machiningAddQuarter}
+          </button>
+        </div>
+        <table className="machining-editor-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              {fields.map((field) => (
+                <th key={field}>{field.toUpperCase()}</th>
+              ))}
+              <th>{t.action || ""}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, index) => (
+              <tr key={`${kind}-${index}`}>
+                <td>{index + 1}</td>
+                {fields.map((field) => (
+                  <td key={field}>
+                    <input
+                      disabled={disabled || loading}
+                      onChange={(event) => onChange(kind, index, field, event.target.value)}
+                      type={["side", "origin", "type"].includes(field) ? "text" : "number"}
+                      value={row[field] ?? ""}
+                    />
+                  </td>
+                ))}
+                <td>
+                  <button
+                    className="icon-button danger-icon"
+                    disabled={disabled || loading}
+                    onClick={() => onRemove(kind, index)}
+                    type="button"
+                  >
+                    x
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+    );
+  }
+
+  return (
+    <section className="machining-editor-panel">
+      <div className="edge-editor-header">
+        <strong>{t.machiningEditor}</strong>
+        <span>{t.detailViewer}</span>
+      </div>
+      {renderRows("holes", detail.holes, ["side", "x", "y", "diameter", "depth", "type"])}
+      {renderRows("grooves", detail.grooves, ["side", "x", "y", "length", "width", "depth", "type"])}
+      {renderRows("quarters", detail.quarters, ["side", "x", "y", "length", "width", "depth", "radius", "type"])}
+      <button
+        className="primary-button wide-button"
+        disabled={disabled || loading}
+        onClick={onSave}
+        type="button"
+      >
+        <Save size={18} />
+        {t.saveProject}
+      </button>
+    </section>
+  );
+}
+
 export default function App() {
   const [language, setLanguage] = useState(
     () => localStorage.getItem(LANGUAGE_STORAGE_KEY) || "uk",
@@ -903,6 +1011,114 @@ export default function App() {
       setCuttingJsonExport(jsonExportResult.export || null);
     }
     setStatus(t.edgeSaved);
+  }
+
+  function createMachiningRow(kind) {
+    const nextNumber = (selectedPartDetail?.[kind]?.length || 0) + 1;
+
+    if (kind === "holes") {
+      return {
+        number: nextNumber,
+        side: "front",
+        origin: "left_bottom",
+        x: 0,
+        y: 0,
+        z: 0,
+        diameter: 5,
+        depth: selectedPartDetail?.part?.thickness || 18,
+        type: "manual",
+      };
+    }
+
+    if (kind === "grooves") {
+      return {
+        number: nextNumber,
+        side: "front",
+        origin: "left_bottom",
+        x: 0,
+        y: 0,
+        depth: 8,
+        width: 4,
+        length: selectedPartDetail?.part?.width || 0,
+        type: "manual",
+      };
+    }
+
+    return {
+      number: nextNumber,
+      side: "bottom",
+      origin: "left_bottom",
+      x: 0,
+      y: 0,
+      depth: 2,
+      width: 12,
+      length: selectedPartDetail?.part?.width || 0,
+      radius: 0,
+      type: "manual",
+    };
+  }
+
+  function handleAddMachiningRow(kind) {
+    setSelectedPartDetail((current) => ({
+      ...current,
+      [kind]: [
+        ...(current?.[kind] || []),
+        createMachiningRow(kind),
+      ],
+    }));
+  }
+
+  function handleMachiningChange(kind, index, field, value) {
+    setSelectedPartDetail((current) => ({
+      ...current,
+      [kind]: (current?.[kind] || []).map((row, rowIndex) => (
+        rowIndex === index
+          ? {
+              ...row,
+              [field]: ["side", "origin", "type"].includes(field) ? value : Number(value),
+            }
+          : row
+      )),
+    }));
+  }
+
+  function handleRemoveMachiningRow(kind, index) {
+    setSelectedPartDetail((current) => ({
+      ...current,
+      [kind]: (current?.[kind] || [])
+        .filter((_, rowIndex) => rowIndex !== index)
+        .map((row, rowIndex) => ({
+          ...row,
+          number: rowIndex + 1,
+        })),
+    }));
+  }
+
+  async function handleSavePartMachining() {
+    if (!selectedProject?.id || !selectedPartDetail?.part) {
+      return;
+    }
+
+    setLoading(true);
+    const result = await updateProjectPartMachining(
+      token,
+      selectedProject.id,
+      selectedPartDetail.part.export_code,
+      {
+        holes: selectedPartDetail.holes || [],
+        grooves: selectedPartDetail.grooves || [],
+        quarters: selectedPartDetail.quarters || [],
+      },
+    );
+    setLoading(false);
+
+    if (!result.success) {
+      setStatus(result.error || t.unableToSaveMachining);
+      return;
+    }
+
+    setSelectedPartDetail(result);
+    setStatus(t.machiningSaved);
   }
 
   function handleDownloadCuttingJson() {
@@ -1711,6 +1927,16 @@ export default function App() {
                               loading={loading}
                               onChange={handlePartEdgeChange}
                               onSave={handleSavePartEdges}
+                              t={t}
+                            />
+                            <PartMachiningEditor
+                              detail={selectedPartDetail}
+                              disabled={user?.role === "viewer"}
+                              loading={loading}
+                              onAdd={handleAddMachiningRow}
+                              onChange={handleMachiningChange}
+                              onRemove={handleRemoveMachiningRow}
+                              onSave={handleSavePartMachining}
                               t={t}
                             />
                           </div>

@@ -176,6 +176,67 @@ def _holes(part, project):
     return []
 
 
+def _renumber_operations(items):
+
+    return [
+        {
+            **item,
+            "number": index + 1
+        }
+        for index, item in enumerate(
+            items or []
+        )
+    ]
+
+
+def _apply_machining_overrides(project, part_code, holes, grooves, quarters):
+
+    overrides = getattr(
+        project,
+        "machining_overrides",
+        None
+    )
+
+    if not isinstance(
+        overrides,
+        dict
+    ):
+
+        return holes, grooves, quarters
+
+    part_override = overrides.get(
+        part_code
+    )
+
+    if not isinstance(
+        part_override,
+        dict
+    ):
+
+        return holes, grooves, quarters
+
+    return (
+        _renumber_operations(
+            part_override.get(
+                "holes",
+                holes
+            )
+        ),
+        _renumber_operations(
+            part_override.get(
+                "grooves",
+                grooves
+            )
+        ),
+        _renumber_operations(
+            part_override.get(
+                "quarters",
+                quarters
+            )
+        )
+    )
+
+
 def build_project_part_detail(project, part_code):
 
     cutting = build_project_cutting(
@@ -195,6 +256,25 @@ def build_project_part_detail(project, part_code):
 
         return None
 
+    holes = _holes(
+        part,
+        project
+    )
+    grooves = _grooves(
+        part
+    )
+    quarters = _quarters(
+        part,
+        project
+    )
+    holes, grooves, quarters = _apply_machining_overrides(
+        project,
+        part_code,
+        holes,
+        grooves,
+        quarters
+    )
+
     return {
         "part": part,
         "edges": [
@@ -206,15 +286,7 @@ def build_project_part_detail(project, part_code):
                 edge
             )
         ],
-        "holes": _holes(
-            part,
-            project
-        ),
-        "grooves": _grooves(
-            part
-        ),
-        "quarters": _quarters(
-            part,
-            project
-        )
+        "holes": holes,
+        "grooves": grooves,
+        "quarters": quarters
     }

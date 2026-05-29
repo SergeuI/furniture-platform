@@ -163,6 +163,14 @@ export async function updateProjectPartEdges(token, projectId, partCode, edges) 
   });
 }
 
+export async function updateProjectPartMachining(token, projectId, partCode, machining) {
+  return request(`/project/${projectId}/production/parts/${partCode}/machining`, {
+    method: "PUT",
+    headers: authHeaders(token),
+    body: JSON.stringify(machining),
+  });
+}
+
 export async function updateProject(token, projectId, project) {
   return request(`/project/${projectId}`, {
     method: "PUT",
