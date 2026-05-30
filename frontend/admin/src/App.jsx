@@ -1692,17 +1692,6 @@ export default function App() {
       return;
     }
 
-    const validationError = validatePartEdges(
-      selectedPartDetail.part,
-      specificationCatalog.edge_bandings,
-      t,
-    );
-
-    if (validationError) {
-      setStatus(validationError);
-      return;
-    }
-
     setLoading(true);
     const result = await updateProjectPartEdges(
       token,
