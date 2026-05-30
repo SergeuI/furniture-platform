@@ -549,6 +549,22 @@ tbody tr.selected {
   stroke-width: 1;
 }
 
+.part-edge-guide {
+  fill: rgba(120, 144, 156, 0.08);
+  stroke: rgba(96, 113, 124, 0.32);
+  stroke-dasharray: 4 3;
+}
+
+.part-edge-hitbox {
+  cursor: pointer;
+  stroke-width: 5;
+}
+
+.part-edge-hitbox.selected {
+  fill: rgba(57, 211, 83, 0.12);
+  stroke: rgba(57, 211, 83, 0.9);
+}
+
 .dimension-line {
   stroke: #111827;
   stroke-width: 1;
@@ -636,11 +652,82 @@ tbody tr.selected {
   gap: 8px;
 }
 
+.edge-quick-editor {
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(47, 147, 207, 0.18);
+  border-radius: 6px;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.edge-side-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.edge-side-pills button {
+  background: #dbeaf2;
+  color: #1d5965;
+  min-height: 34px;
+  padding: 0 12px;
+}
+
+.edge-side-pills button.active {
+  background: #2f93cf;
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.edge-quick-row {
+  display: grid;
+  gap: 10px;
+}
+
+.edge-quick-row strong {
+  color: #1d5965;
+  font-size: 13px;
+}
+
+.edge-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.edge-quick-actions select {
+  flex: 1 1 220px;
+}
+
+.edge-helper-text,
+.edge-validation-message {
+  font-size: 12px;
+  margin: 0;
+}
+
+.edge-helper-text {
+  color: #5c6875;
+}
+
+.edge-validation-message {
+  color: #b42318;
+  font-weight: 600;
+}
+
 .edge-editor-row {
   align-items: center;
+  border: 1px solid transparent;
+  border-radius: 6px;
   display: grid;
   gap: 8px;
   grid-template-columns: 24px minmax(64px, 0.5fr) minmax(150px, 1fr);
+  padding: 8px 10px;
+}
+
+.edge-editor-row.active {
+  background: rgba(47, 147, 207, 0.08);
+  border-color: rgba(47, 147, 207, 0.28);
 }
 
 .edge-editor-row span {

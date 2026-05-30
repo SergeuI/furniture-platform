@@ -151,6 +151,7 @@ const TRANSLATIONS = {
     created: "Created",
     createdBy: "Created by",
     currentPassword: "Current password",
+    clearEdge: "Clear edge",
     dataProject: "Project data",
     cuttingArea: "Area, m2",
     cuttingEdge: "Edge, m",
@@ -177,9 +178,13 @@ const TRANSLATIONS = {
     drawers: "Drawers",
     drawerUnit: "Drawer unit",
     edgeBanding: "Edge banding",
+    edgeBandingInvalid: "Select a value from the edge banding catalog",
     edgeEditor: "Edge processing",
     edgeEditorDescription: "Edit edge banding for the selected production part.",
     edgeSaved: "Part edges updated",
+    edgeSelectSide: "Select a side on the scheme or in the quick selector.",
+    edgeSelectedSide: "Selected side",
+    edgeThicknessInvalid: "Edge thickness could not be determined",
     email: "Email",
     machiningAddGroove: "Add groove",
     machiningAddHole: "Add hole",
@@ -461,6 +466,25 @@ const TRANSLATIONS = {
   },
 };
 
+Object.assign(TRANSLATIONS.en, {
+  clearEdge: TRANSLATIONS.en.clearEdge || "Clear edge",
+  edgeBandingInvalid:
+    TRANSLATIONS.en.edgeBandingInvalid || "Select a value from the edge banding catalog",
+  edgeSelectSide:
+    TRANSLATIONS.en.edgeSelectSide || "Select a side on the scheme or in the quick selector.",
+  edgeSelectedSide: TRANSLATIONS.en.edgeSelectedSide || "Selected side",
+  edgeThicknessInvalid:
+    TRANSLATIONS.en.edgeThicknessInvalid || "Edge thickness could not be determined",
+});
+
+Object.assign(TRANSLATIONS.uk, {
+  clearEdge: "Очистити крайку",
+  edgeBandingInvalid: "Оберіть значення з каталогу крайки",
+  edgeSelectSide: "Оберіть сторону на схемі або в швидкому перемикачі.",
+  edgeSelectedSide: "Вибрана сторона",
+  edgeThicknessInvalid: "Не вдалося визначити товщину крайки",
+});
+
 function buildProjectPayload(form) {
   return {
     metadata: {
@@ -598,7 +622,88 @@ function canCreateProject(user) {
   return user?.role === "admin" || user?.role === "manager";
 }
 
-function PartPreview({ detail }) {
+const EDGE_SIDES = ["top", "right", "bottom", "left"];
+
+function getEdgeValue(part, side) {
+  return part?.[`edge_${side}`] || "";
+}
+
+function getEdgeThickness(material) {
+  if (!material || material === "not_set") {
+    return null;
+  }
+
+  const normalized = String(material).replace(",", ".").replaceAll("_", ".");
+  const match = normalized.match(/(\d+(?:\.\d+)?)/);
+
+  if (!match) {
+    return null;
+  }
+
+  const value = Number(match[1]);
+  return Number.isFinite(value) ? value : null;
+}
+
+function getEdgeColor(material) {
+  const thickness = getEdgeThickness(material);
+
+  if (thickness === null) {
+    return "#f47b20";
+  }
+
+  if (thickness <= 0.6) {
+    return "#078000";
+  }
+
+  if (thickness <= 0.8) {
+    return "#ff7300";
+  }
+
+  if (thickness <= 1) {
+    return "#b7dce8";
+  }
+
+  if (thickness < 2) {
+    return "#0b1cff";
+  }
+
+  return "#7a0b80";
+}
+
+function getEdgeLabel(side, t) {
+  return t[side] || side;
+}
+
+function validateEdgeValue(value, edgeBandings, t) {
+  if (!value) {
+    return "";
+  }
+
+  if (!edgeBandings.includes(value)) {
+    return t.edgeBandingInvalid;
+  }
+
+  if (getEdgeThickness(value) === null) {
+    return t.edgeThicknessInvalid;
+  }
+
+  return "";
+}
+
+function validatePartEdges(part, edgeBandings, t) {
+  for (const side of EDGE_SIDES) {
+    const value = getEdgeValue(part, side);
+    const error = validateEdgeValue(value, edgeBandings, t);
+
+    if (error) {
+      return `${getEdgeLabel(side, t)}: ${error}`;
+    }
+  }
+
+  return "";
+}
+
+function PartPreview({ detail, onSelectEdge, selectedEdgeSide, t }) {
   if (!detail?.part) {
     return null;
   }
@@ -629,103 +734,69 @@ function PartPreview({ detail }) {
     return y + height - value * scale;
   }
 
-  function edgeThickness(material) {
-    if (!material || material === "not_set") {
-      return null;
-    }
-
-    const normalized = String(material).replace(",", ".").replaceAll("_", ".");
-    const match = normalized.match(/(\d+(?:\.\d+)?)/);
-
-    if (!match) {
-      return null;
-    }
-
-    const value = Number(match[1]);
-    return Number.isFinite(value) ? value : null;
-  }
-
-  function edgeColor(material) {
-    const thickness = edgeThickness(material);
-
-    if (thickness === null) {
-      return "#f47b20";
-    }
-
-    if (thickness <= 0.6) {
-      return "#078000";
-    }
-
-    if (thickness <= 0.8) {
-      return "#ff7300";
-    }
-
-    if (thickness <= 1) {
-      return "#b7dce8";
-    }
-
-    if (thickness < 2) {
-      return "#0b1cff";
-    }
-
-    return "#7a0b80";
-  }
-
-  function edgeStrip(side, material) {
-    if (!material || material === "not_set") {
-      return null;
-    }
-
-    const props = {
-      className: "part-edge-strip",
-      fill: edgeColor(material),
-      key: side,
-    };
-
+  function getEdgeRect(side) {
     if (side === "top") {
-      return (
-        <rect
-          {...props}
-          height={edgeStripSize}
-          width={width}
-          x={x}
-          y={y - edgeGap - edgeStripSize}
-        />
-      );
+      return {
+        height: edgeStripSize,
+        width,
+        x,
+        y: y - edgeGap - edgeStripSize,
+      };
     }
 
     if (side === "bottom") {
-      return (
-        <rect
-          {...props}
-          height={edgeStripSize}
-          width={width}
-          x={x}
-          y={y + height + edgeGap}
-        />
-      );
+      return {
+        height: edgeStripSize,
+        width,
+        x,
+        y: y + height + edgeGap,
+      };
     }
 
     if (side === "left") {
-      return (
-        <rect
-          {...props}
-          height={height}
-          width={edgeStripSize}
-          x={x - edgeGap - edgeStripSize}
-          y={y}
-        />
-      );
+      return {
+        height,
+        width: edgeStripSize,
+        x: x - edgeGap - edgeStripSize,
+        y,
+      };
     }
 
+    return {
+      height,
+      width: edgeStripSize,
+      x: x + width + edgeGap,
+      y,
+    };
+  }
+
+  function edgeStrip(side, material) {
+    const rect = getEdgeRect(side);
+    const hasMaterial = Boolean(material && material !== "not_set");
+    const isSelected = selectedEdgeSide === side;
+
     return (
-      <rect
-        {...props}
-        height={height}
-        width={edgeStripSize}
-        x={x + width + edgeGap}
-        y={y}
-      />
+      <g key={side}>
+        {hasMaterial ? (
+          <rect
+            className="part-edge-strip"
+            fill={getEdgeColor(material)}
+            {...rect}
+          />
+        ) : (
+          <rect className="part-edge-guide" {...rect} />
+        )}
+        <rect
+          aria-label={`${t.edgeSelectedSide}: ${getEdgeLabel(side, t)}`}
+          className={`part-edge-hitbox${isSelected ? " selected" : ""}`}
+          fill="transparent"
+          onClick={() => onSelectEdge?.(side)}
+          role={onSelectEdge ? "button" : undefined}
+          stroke="transparent"
+          tabIndex={onSelectEdge ? 0 : undefined}
+          {...rect}
+        />
+      </g>
     );
   }
 
@@ -846,19 +917,20 @@ function PartEdgeEditor({
   edgeBandings,
   loading,
   onChange,
+  onSelectSide,
   onSave,
+  selectedEdgeSide,
   t,
 }) {
   if (!detail?.part) {
     return null;
   }
-
-  const sides = [
-    ["top", t.top],
-    ["right", t.right],
-    ["bottom", t.bottom],
-    ["left", t.left],
-  ];
+  const selectedValue = selectedEdgeSide
+    ? getEdgeValue(detail.part, selectedEdgeSide)
+    : "";
+  const validationMessage = selectedEdgeSide
+    ? validateEdgeValue(selectedValue, edgeBandings, t)
+    : "";
 
   return (
     <section className="edge-editor-panel">
@@ -866,15 +938,67 @@ function PartEdgeEditor({
         <strong>{t.edgeEditor}</strong>
         <span>{t.edgeEditorDescription}</span>
       </div>
+      <div className="edge-quick-editor">
+        <div className="edge-side-pills">
+          {EDGE_SIDES.map((side) => (
+            <button
+              className={selectedEdgeSide === side ? "active" : ""}
+              disabled={disabled || loading}
+              key={side}
+              onClick={() => onSelectSide(side)}
+              type="button"
+            >
+              {getEdgeLabel(side, t)}
+            </button>
+          ))}
+        </div>
+        {selectedEdgeSide ? (
+          <div className="edge-quick-row">
+            <strong>{t.edgeSelectedSide}: {getEdgeLabel(selectedEdgeSide, t)}</strong>
+            <div className="edge-quick-actions">
+              <select
+                disabled={disabled || loading}
+                onChange={(event) => onChange(selectedEdgeSide, event.target.value)}
+                value={selectedValue}
+              >
+                <option value="">{t.notSet}</option>
+                {edgeBandings.map((edgeBanding) => (
+                  <option key={edgeBanding} value={edgeBanding}>
+                    {edgeBanding}
+                  </option>
+                ))}
+              </select>
+              <button
+                className="ghost-button"
+                disabled={disabled || loading}
+                onClick={() => onChange(selectedEdgeSide, "")}
+                type="button"
+              >
+                {t.clearEdge}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <p className="edge-helper-text">{t.edgeSelectSide}</p>
+        )}
+        {validationMessage ? (
+          <p className="edge-validation-message">{validationMessage}</p>
+        ) : null}
+      </div>
       <div className="edge-editor-grid">
-        {sides.map(([side, label]) => (
-          <label className="edge-editor-row" key={side}>
+        {EDGE_SIDES.map((side) => (
+          <label
+            className={`edge-editor-row${selectedEdgeSide === side ? " active" : ""}`}
+            key={side}
+            onClick={() => onSelectSide(side)}
+          >
             <span className={`edge-side-icon ${side}`} aria-hidden="true" />
-            <span>{label}</span>
+            <span>{getEdgeLabel(side, t)}</span>
             <select
               disabled={disabled || loading}
+              onClick={() => onSelectSide(side)}
               onChange={(event) => onChange(side, event.target.value)}
-              value={detail.part[`edge_${side}`] || ""}
+              value={getEdgeValue(detail.part, side)}
             >
               <option value="">{t.notSet}</option>
               {edgeBandings.map((edgeBanding) => (
@@ -1002,10 +1126,12 @@ function PartDetailWorkspace({
   onAddMachining,
   onBack,
   onEdgeChange,
+  onEdgeSelect,
   onMachiningChange,
   onRemoveMachining,
   onSaveEdges,
   onSaveMachining,
+  selectedEdgeSide,
   t,
 }) {
   if (!detail?.part) {
@@ -1030,7 +1156,12 @@ function PartDetailWorkspace({
 
       <div className="part-workspace-grid">
         <div className="part-workspace-preview">
-          <PartPreview detail={detail} />
+          <PartPreview
+            detail={detail}
+            onSelectEdge={onEdgeSelect}
+            selectedEdgeSide={selectedEdgeSide}
+            t={t}
+          />
         </div>
         <div className="part-workspace-side">
           <PartEdgeEditor
@@ -1039,7 +1170,9 @@ function PartDetailWorkspace({
             edgeBandings={edgeBandings}
             loading={loading}
             onChange={onEdgeChange}
+            onSelectSide={onEdgeSelect}
             onSave={onSaveEdges}
+            selectedEdgeSide={selectedEdgeSide}
             t={t}
           />
           <div className="part-operation-tables">
@@ -1187,6 +1320,7 @@ export default function App() {
   const [cuttingItems, setCuttingItems] = useState([]);
   const [cuttingSummary, setCuttingSummary] = useState(null);
   const [selectedPartDetail, setSelectedPartDetail] = useState(null);
+  const [selectedEdgeSide, setSelectedEdgeSide] = useState(null);
   const [activeProjectTab, setActiveProjectTab] = useState("data");
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [productionLoaded, setProductionLoaded] = useState(false);
@@ -1408,6 +1542,7 @@ export default function App() {
     setCuttingItems([]);
     setCuttingSummary(null);
     setSelectedPartDetail(null);
+    setSelectedEdgeSide(null);
     setHistoryLoaded(false);
     setProductionLoaded(false);
     setActiveProjectTab("data");
@@ -1455,6 +1590,7 @@ export default function App() {
     setCuttingSummary(result.summary || null);
     if (clearSelectedPart) {
       setSelectedPartDetail(null);
+      setSelectedEdgeSide(null);
     }
     setProductionLoaded(true);
     setStatus("");
@@ -1510,6 +1646,7 @@ export default function App() {
     setCuttingItems([]);
     setCuttingSummary(null);
     setSelectedPartDetail(null);
+    setSelectedEdgeSide(null);
     setHistoryLoaded(false);
     setProductionLoaded(false);
     setActiveProjectTab("data");
@@ -1529,6 +1666,7 @@ export default function App() {
     }
 
     setSelectedPartDetail(result);
+    setSelectedEdgeSide(null);
     setActiveProjectTab("partDetail");
     setStatus("");
   }
@@ -1551,6 +1689,17 @@ export default function App() {
 
   async function handleSavePartEdges() {
     if (!selectedProjectId || !selectedPartDetail?.part) {
+      return;
+    }
+
+    const validationError = validatePartEdges(
+      selectedPartDetail.part,
+      specificationCatalog.edge_bandings,
+      t,
+    );
+
+    if (validationError) {
+      setStatus(validationError);
       return;
     }
 
@@ -3026,10 +3175,12 @@ export default function App() {
                     onAddMachining={handleAddMachiningRow}
                     onBack={() => setActiveProjectTab("production")}
                     onEdgeChange={handlePartEdgeChange}
+                    onEdgeSelect={setSelectedEdgeSide}
                     onMachiningChange={handleMachiningChange}
                     onRemoveMachining={handleRemoveMachiningRow}
                     onSaveEdges={handleSavePartEdges}
                     onSaveMachining={handleSavePartMachining}
+                    selectedEdgeSide={selectedEdgeSide}
                     t={t}
                   />
                 ) : null}
