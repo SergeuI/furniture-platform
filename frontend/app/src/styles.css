@@ -677,6 +677,37 @@ tbody tr.selected {
   gap: 10px;
 }
 
+.project-three-viewer-toolbar {
+  display: grid;
+  gap: 10px;
+}
+
+.project-three-viewer-toggle,
+.project-three-viewer-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.project-three-viewer-toggle button,
+.project-three-viewer-filters button {
+  align-items: center;
+  background: #eef2f5;
+  color: #1f2933;
+  display: inline-flex;
+  font-size: 13px;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 12px;
+}
+
+.project-three-viewer-toggle button.active,
+.project-three-viewer-filters button.active {
+  background: #2f93cf;
+  color: #ffffff;
+  font-weight: 700;
+}
+
 .project-three-viewer-canvas {
   background:
     radial-gradient(circle at 50% 12%, rgba(57, 211, 83, 0.06), transparent 32%),

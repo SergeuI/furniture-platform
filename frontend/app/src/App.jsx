@@ -321,12 +321,28 @@ Object.assign(TRANSLATIONS.en, {
   preview3dInteractiveHint: TRANSLATIONS.en.preview3dInteractiveHint || "Drag to rotate. Use the mouse wheel or pinch to zoom. Edge colors, holes, grooves and quarters are shown in the 3D model.",
   productionAssembly3d: TRANSLATIONS.en.productionAssembly3d || "3D assembly",
   productionAssemblyHint: TRANSLATIONS.en.productionAssemblyHint || "This 3D assembly is inferred from the cutting map. Click a panel to open its detail workspace.",
+  assemblyAssembled: TRANSLATIONS.en.assemblyAssembled || "Assembled",
+  assemblyExploded: TRANSLATIONS.en.assemblyExploded || "Exploded",
+  assemblyShowAll: TRANSLATIONS.en.assemblyShowAll || "Show all",
+  assemblyGroupCarcass: TRANSLATIONS.en.assemblyGroupCarcass || "Carcass",
+  assemblyGroupFacades: TRANSLATIONS.en.assemblyGroupFacades || "Facades",
+  assemblyGroupDrawers: TRANSLATIONS.en.assemblyGroupDrawers || "Drawers",
+  assemblyGroupBack: TRANSLATIONS.en.assemblyGroupBack || "Back panel",
+  assemblyGroupOther: TRANSLATIONS.en.assemblyGroupOther || "Other panels",
 });
 
 Object.assign(TRANSLATIONS.uk, {
   preview3dInteractiveHint: "Перетягуйте для обертання. Колесо миші або жест масштабування змінює зум. У 3D моделі показані крайка, отвори, пази та чверті.",
   productionAssembly3d: "3D збірка",
   productionAssemblyHint: "Ця 3D збірка побудована на основі карти розкрою. Натисніть на панель, щоб відкрити її робоче місце деталі.",
+  assemblyAssembled: "Зібрано",
+  assemblyExploded: "Рознесено",
+  assemblyShowAll: "Показати все",
+  assemblyGroupCarcass: "Корпус",
+  assemblyGroupFacades: "Фасади",
+  assemblyGroupDrawers: "Шухляди",
+  assemblyGroupBack: "Задня стінка",
+  assemblyGroupOther: "Інші панелі",
 });
 
 function buildProjectPayload(form) {
