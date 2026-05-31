@@ -538,6 +538,75 @@ tbody tr.selected {
   width: 100%;
 }
 
+.part-preview-shell {
+  display: grid;
+  gap: 12px;
+}
+
+.part-preview-toolbar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.preview-mode-toggle,
+.preview-rotation-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.preview-mode-toggle button,
+.preview-rotation-controls button {
+  align-items: center;
+  background: #eef2f5;
+  color: #1f2933;
+  display: inline-flex;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 12px;
+}
+
+.preview-mode-toggle button.active {
+  background: #2f93cf;
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.part-preview.three-d {
+  background:
+    radial-gradient(circle at 50% 18%, rgba(57, 211, 83, 0.08), transparent 34%),
+    linear-gradient(180deg, #f8fbfc 0%, #eef3f6 100%);
+}
+
+.part-3d-shadow {
+  fill: rgba(13, 20, 26, 0.08);
+}
+
+.part-3d-face {
+  stroke: rgba(13, 20, 26, 0.18);
+  stroke-width: 1;
+}
+
+.part-3d-dimension {
+  fill: #111827;
+  font-size: 34px;
+  font-weight: 800;
+}
+
+.part-3d-meta {
+  fill: #24323f;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.part-3d-note {
+  fill: #60717c;
+  font-size: 12px;
+}
+
 .part-board {
   fill: #f8fafb;
   stroke: #1f2933;

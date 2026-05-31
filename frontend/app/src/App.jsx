@@ -2,6 +2,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ClipboardList,
+  RotateCcw,
   Download,
   Eye,
   LogOut,
@@ -291,6 +292,12 @@ Object.assign(TRANSLATIONS.en, {
   edgeSelectSide: "Select a side on the scheme or in the quick selector.",
   edgeSelectedSide: "Selected side",
   edgeThicknessInvalid: "Edge thickness could not be determined",
+  preview2d: "2D map",
+  preview3d: "3D panel",
+  rotateLeft: "Left",
+  rotateRight: "Right",
+  resetView: "Reset",
+  preview3dHint: "3D preview for visual inspection. Use 2D mode for precise edge editing and machining coordinates.",
 });
 
 Object.assign(TRANSLATIONS.uk, {
@@ -299,6 +306,12 @@ Object.assign(TRANSLATIONS.uk, {
   edgeSelectSide: "РћР±РµСЂС–С‚СЊ СЃС‚РѕСЂРѕРЅСѓ РЅР° СЃС…РµРјС– Р°Р±Рѕ РІ С€РІРёРґРєРѕРјСѓ РїРµСЂРµРјРёРєР°С‡С–.",
   edgeSelectedSide: "Р’РёР±СЂР°РЅР° СЃС‚РѕСЂРѕРЅР°",
   edgeThicknessInvalid: "РќРµ РІРґР°Р»РѕСЃСЏ РІРёР·РЅР°С‡РёС‚Рё С‚РѕРІС‰РёРЅСѓ РєСЂР°Р№РєРё",
+  preview2d: "2D карта",
+  preview3d: "3D панель",
+  rotateLeft: "Вліво",
+  rotateRight: "Вправо",
+  resetView: "Скинути",
+  preview3dHint: "3D перегляд для візуальної оцінки. Для точного редагування крайки й координат обробки використовуйте режим 2D.",
 });
 
 function buildProjectPayload(form) {
@@ -458,6 +471,8 @@ function PartPreview({ detail, onSelectEdge, selectedEdgeSide, t }) {
   }
 
   const { part } = detail;
+  const [previewMode, setPreviewMode] = useState("3d");
+  const [rotation, setRotation] = useState(28);
   const viewWidth = 720;
   const viewHeight = 450;
   const marginX = 112;
@@ -481,6 +496,10 @@ function PartPreview({ detail, onSelectEdge, selectedEdgeSide, t }) {
 
   function pxY(value) {
     return y + height - value * scale;
+  }
+
+  function clampRotation(nextRotation) {
+    return Math.max(-60, Math.min(60, nextRotation));
   }
 
   function getEdgeRect(side) {
@@ -549,114 +568,299 @@ function PartPreview({ detail, onSelectEdge, selectedEdgeSide, t }) {
     );
   }
 
-  return (
-    <svg className="part-preview" viewBox={`0 0 ${viewWidth} ${viewHeight}`} role="img">
-      <defs>
-        <marker id="dimension-arrow" markerHeight="10" markerWidth="10" orient="auto" refX="9" refY="5">
-          <path d="M 0 0 L 10 5 L 0 10 z" fill="#111827" />
-        </marker>
-        <marker id="dimension-arrow-start" markerHeight="10" markerWidth="10" orient="auto-start-reverse" refX="1" refY="5">
-          <path d="M 10 0 L 0 5 L 10 10 z" fill="#111827" />
-        </marker>
-        <marker id="axis-arrow" markerHeight="8" markerWidth="8" orient="auto" refX="7" refY="4">
-          <path d="M 0 0 L 8 4 L 0 8 z" fill="#7f8790" />
-        </marker>
-      </defs>
-      {edgeStrip("top", part.edge_top)}
-      {edgeStrip("bottom", part.edge_bottom)}
-      {edgeStrip("left", part.edge_left)}
-      {edgeStrip("right", part.edge_right)}
-      <rect className="part-board" height={height} width={width} x={x} y={y} />
+  function pointsToString(points) {
+    return points.map((point) => point.join(",")).join(" ");
+  }
 
-      <line
-        className="dimension-line"
-        markerEnd="url(#dimension-arrow)"
-        markerStart="url(#dimension-arrow-start)"
-        x1={x}
-        x2={x + width}
-        y1={y - 38}
-        y2={y - 38}
-      />
-      <line className="dimension-line" x1={x} x2={x} y1={y - 42} y2={y - 12} />
-      <line className="dimension-line" x1={x + width} x2={x + width} y1={y - 42} y2={y - 12} />
-      <text className="dimension-text" textAnchor="middle" x={viewWidth / 2} y={y - 48}>
-        {part.width}
-      </text>
+  function render3dFace() {
+    const faceWidth = Math.min(300, viewWidth - 260);
+    const faceHeight = Math.min(220, viewHeight - 190);
+    const faceX = (viewWidth - faceWidth) / 2 - 12;
+    const faceY = 112;
+    const depthOffset = 56;
+    const angle = (rotation * Math.PI) / 180;
+    const dx = Math.sin(angle) * depthOffset;
+    const dy = Math.cos(angle) * depthOffset * 0.52;
+    const topLeft = [faceX, faceY];
+    const topRight = [faceX + faceWidth, faceY];
+    const bottomLeft = [faceX, faceY + faceHeight];
+    const bottomRight = [faceX + faceWidth, faceY + faceHeight];
+    const backTopLeft = [faceX + dx, faceY - dy];
+    const backTopRight = [faceX + faceWidth + dx, faceY - dy];
+    const backBottomLeft = [faceX + dx, faceY + faceHeight - dy];
+    const backBottomRight = [faceX + faceWidth + dx, faceY + faceHeight - dy];
 
-      <line
-        className="dimension-line"
-        markerEnd="url(#dimension-arrow)"
-        markerStart="url(#dimension-arrow-start)"
-        x1={x + width + 46}
-        x2={x + width + 46}
-        y1={y}
-        y2={y + height}
-      />
-      <line className="dimension-line" x1={x + width + 16} x2={x + width + 44} y1={y} y2={y} />
-      <line className="dimension-line" x1={x + width + 16} x2={x + width + 44} y1={y + height} y2={y + height} />
-      <text
-        className="dimension-text rotated"
-        textAnchor="middle"
-        transform={`translate(${x + width + 78} ${y + height / 2}) rotate(-90)`}
-      >
-        {part.height}
-      </text>
+    function edgeBand(side, color) {
+      if (!color) {
+        return null;
+      }
 
-      <g className="grain-direction" transform={`translate(${x + width / 2 - 18} ${y + height / 2 - 12})`}>
-        <line x1="0" x2="36" y1="0" y2="0" />
-        <line x1="0" x2="36" y1="10" y2="10" />
-        <line x1="0" x2="36" y1="20" y2="20" />
-      </g>
+      const bandStyle = {
+        fill: color,
+        stroke: "rgba(13, 20, 26, 0.75)",
+        strokeWidth: 1,
+      };
 
-      {detail.holes.map((hole) => (
-        <circle
-          className="part-hole"
-          cx={pxX(hole.x)}
-          cy={pxY(hole.y)}
-          key={`hole-${hole.number}`}
-          r={Math.max(4, hole.diameter * 0.75)}
+      if (side === "top") {
+        return (
+          <polygon
+            {...bandStyle}
+            key={side}
+            points={pointsToString([topLeft, topRight, backTopRight, backTopLeft])}
+          />
+        );
+      }
+
+      if (side === "bottom") {
+        return (
+          <polygon
+            {...bandStyle}
+            key={side}
+            opacity="0.92"
+            points={pointsToString([bottomLeft, bottomRight, backBottomRight, backBottomLeft])}
+          />
+        );
+      }
+
+      if (side === "left") {
+        return (
+          <polygon
+            {...bandStyle}
+            key={side}
+            opacity="0.96"
+            points={pointsToString([topLeft, bottomLeft, backBottomLeft, backTopLeft])}
+          />
+        );
+      }
+
+      return (
+        <polygon
+          {...bandStyle}
+          key={side}
+          opacity="0.96"
+          points={pointsToString([topRight, bottomRight, backBottomRight, backTopRight])}
         />
-      ))}
+      );
+    }
 
-      {detail.grooves.map((groove) => (
-        <rect
-          className="part-groove"
-          height={Math.max(3, groove.width * scale)}
-          key={`groove-${groove.number}`}
-          width={groove.length * scale}
-          x={pxX(groove.x)}
-          y={pxY(groove.y) - Math.max(3, groove.width * scale) / 2}
-        />
-      ))}
-
-      <g className="coordinate-axis" transform={`translate(${x - 78} ${y + height + 82})`}>
-        <line markerEnd="url(#axis-arrow)" x1="0" x2="96" y1="0" y2="0" />
-        <line markerEnd="url(#axis-arrow)" x1="0" x2="0" y1="0" y2="-96" />
-        <text x="104" y="9">X</text>
-        <text x="8" y="-104">Y</text>
-      </g>
-
-      <g className="part-legend" transform={`translate(34 ${legendY})`}>
-        <rect className="legend-swatch" fill="#078000" height="18" width="22" x="0" y="-14" />
-        <text x="30" y="0">в‰¤ 0.6 РјРј</text>
-        <rect className="legend-swatch" fill="#ff7300" height="18" width="22" x="98" y="-14" />
-        <text x="128" y="0">в‰¤ 0.8 РјРј</text>
-        <rect className="legend-swatch" fill="#b7dce8" height="18" width="22" x="196" y="-14" />
-        <text x="226" y="0">в‰¤ 1.0 РјРј</text>
-        <rect className="legend-swatch" fill="#0b1cff" height="18" width="22" x="294" y="-14" />
-        <text x="324" y="0">&lt; 2.0 РјРј</text>
-        <rect className="legend-swatch" fill="#7a0b80" height="18" width="22" x="392" y="-14" />
-        <text x="422" y="0">= 2.0 РјРј</text>
-        <rect className="legend-swatch" fill="#f3b300" height="18" width="22" x="490" y="-14" />
-        <line className="legend-facade-line" x1="490" x2="512" y1="-5" y2="-5" />
-        <text x="520" y="0">Р· С„Р°СЃРєРѕСЋ 45</text>
-        <g className="legend-grain" transform="translate(615 -11)">
-          <line x1="0" x2="24" y1="0" y2="0" />
-          <line x1="0" x2="24" y1="7" y2="7" />
-          <line x1="0" x2="24" y1="14" y2="14" />
+    return (
+      <>
+        <defs>
+          <linearGradient id="panel-front-gradient-app" x1="0%" x2="0%" y1="0%" y2="100%">
+            <stop offset="0%" stopColor="#fbfdfe" />
+            <stop offset="100%" stopColor="#d8e2e8" />
+          </linearGradient>
+          <linearGradient id="panel-top-gradient-app" x1="0%" x2="100%" y1="0%" y2="100%">
+            <stop offset="0%" stopColor="#f7fbfd" />
+            <stop offset="100%" stopColor="#bcc8d1" />
+          </linearGradient>
+          <linearGradient id="panel-side-gradient-app" x1="0%" x2="100%" y1="0%" y2="100%">
+            <stop offset="0%" stopColor="#cbd6de" />
+            <stop offset="100%" stopColor="#a8b6bf" />
+          </linearGradient>
+          <filter id="panel-shadow-app" colorInterpolationFilters="sRGB" height="160%" width="160%" x="-30%" y="-30%">
+            <feDropShadow dx="0" dy="10" floodColor="rgba(13,20,26,0.18)" stdDeviation="10" />
+          </filter>
+        </defs>
+        <ellipse className="part-3d-shadow" cx={viewWidth / 2} cy={faceY + faceHeight + 56} rx={faceWidth * 0.42} ry="24" />
+        <g filter="url(#panel-shadow-app)">
+          <polygon
+            className="part-3d-face part-3d-top"
+            fill="url(#panel-top-gradient-app)"
+            points={pointsToString([topLeft, topRight, backTopRight, backTopLeft])}
+          />
+          {dx >= 0 ? (
+            <polygon
+              className="part-3d-face part-3d-side"
+              fill="url(#panel-side-gradient-app)"
+              points={pointsToString([topRight, bottomRight, backBottomRight, backTopRight])}
+            />
+          ) : (
+            <polygon
+              className="part-3d-face part-3d-side"
+              fill="url(#panel-side-gradient-app)"
+              points={pointsToString([topLeft, bottomLeft, backBottomLeft, backTopLeft])}
+            />
+          )}
+          <rect
+            className="part-board"
+            fill="url(#panel-front-gradient-app)"
+            height={faceHeight}
+            rx="2"
+            width={faceWidth}
+            x={faceX}
+            y={faceY}
+          />
+          {edgeBand("top", getEdgeColor(part.edge_top))}
+          {edgeBand("bottom", getEdgeColor(part.edge_bottom))}
+          {edgeBand("left", getEdgeColor(part.edge_left))}
+          {edgeBand("right", getEdgeColor(part.edge_right))}
         </g>
-      </g>
-    </svg>
+        <text className="part-3d-dimension width" textAnchor="middle" x={viewWidth / 2} y={74}>
+          {part.width}
+        </text>
+        <text
+          className="part-3d-dimension height"
+          textAnchor="middle"
+          transform={`translate(${faceX + faceWidth + 92} ${faceY + faceHeight / 2}) rotate(-90)`}
+        >
+          {part.height}
+        </text>
+        <text className="part-3d-meta" textAnchor="middle" x={viewWidth / 2} y={viewHeight - 42}>
+          {part.part_name} · {part.width} x {part.height} x {part.thickness}
+        </text>
+        <text className="part-3d-note" textAnchor="middle" x={viewWidth / 2} y={viewHeight - 18}>
+          {t.preview3dHint}
+        </text>
+      </>
+    );
+  }
+
+  function render2dPreview() {
+    return (
+      <>
+        <defs>
+          <marker id="dimension-arrow" markerHeight="10" markerWidth="10" orient="auto" refX="9" refY="5">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#111827" />
+          </marker>
+          <marker id="dimension-arrow-start" markerHeight="10" markerWidth="10" orient="auto-start-reverse" refX="1" refY="5">
+            <path d="M 10 0 L 0 5 L 10 10 z" fill="#111827" />
+          </marker>
+          <marker id="axis-arrow" markerHeight="8" markerWidth="8" orient="auto" refX="7" refY="4">
+            <path d="M 0 0 L 8 4 L 0 8 z" fill="#7f8790" />
+          </marker>
+        </defs>
+        {edgeStrip("top", part.edge_top)}
+        {edgeStrip("bottom", part.edge_bottom)}
+        {edgeStrip("left", part.edge_left)}
+        {edgeStrip("right", part.edge_right)}
+        <rect className="part-board" height={height} width={width} x={x} y={y} />
+        <line
+          className="dimension-line"
+          markerEnd="url(#dimension-arrow)"
+          markerStart="url(#dimension-arrow-start)"
+          x1={x}
+          x2={x + width}
+          y1={y - 38}
+          y2={y - 38}
+        />
+        <line className="dimension-line" x1={x} x2={x} y1={y - 42} y2={y - 12} />
+        <line className="dimension-line" x1={x + width} x2={x + width} y1={y - 42} y2={y - 12} />
+        <text className="dimension-text" textAnchor="middle" x={viewWidth / 2} y={y - 48}>
+          {part.width}
+        </text>
+        <line
+          className="dimension-line"
+          markerEnd="url(#dimension-arrow)"
+          markerStart="url(#dimension-arrow-start)"
+          x1={x + width + 46}
+          x2={x + width + 46}
+          y1={y}
+          y2={y + height}
+        />
+        <line className="dimension-line" x1={x + width + 16} x2={x + width + 44} y1={y} y2={y} />
+        <line className="dimension-line" x1={x + width + 16} x2={x + width + 44} y1={y + height} y2={y + height} />
+        <text
+          className="dimension-text rotated"
+          textAnchor="middle"
+          transform={`translate(${x + width + 78} ${y + height / 2}) rotate(-90)`}
+        >
+          {part.height}
+        </text>
+        <g className="grain-direction" transform={`translate(${x + width / 2 - 18} ${y + height / 2 - 12})`}>
+          <line x1="0" x2="36" y1="0" y2="0" />
+          <line x1="0" x2="36" y1="10" y2="10" />
+          <line x1="0" x2="36" y1="20" y2="20" />
+        </g>
+        {detail.holes.map((hole) => (
+          <circle
+            className="part-hole"
+            cx={pxX(hole.x)}
+            cy={pxY(hole.y)}
+            key={`hole-${hole.number}`}
+            r={Math.max(4, hole.diameter * 0.75)}
+          />
+        ))}
+        {detail.grooves.map((groove) => (
+          <rect
+            className="part-groove"
+            height={Math.max(3, groove.width * scale)}
+            key={`groove-${groove.number}`}
+            width={groove.length * scale}
+            x={pxX(groove.x)}
+            y={pxY(groove.y) - Math.max(3, groove.width * scale) / 2}
+          />
+        ))}
+        <g className="coordinate-axis" transform={`translate(${x - 78} ${y + height + 82})`}>
+          <line markerEnd="url(#axis-arrow)" x1="0" x2="96" y1="0" y2="0" />
+          <line markerEnd="url(#axis-arrow)" x1="0" x2="0" y1="0" y2="-96" />
+          <text x="104" y="9">X</text>
+          <text x="8" y="-104">Y</text>
+        </g>
+        <g className="part-legend" transform={`translate(34 ${legendY})`}>
+          <rect className="legend-swatch" fill="#078000" height="18" width="22" x="0" y="-14" />
+          <text x="30" y="0">в‰¤ 0.6 РјРј</text>
+          <rect className="legend-swatch" fill="#ff7300" height="18" width="22" x="98" y="-14" />
+          <text x="128" y="0">в‰¤ 0.8 РјРј</text>
+          <rect className="legend-swatch" fill="#b7dce8" height="18" width="22" x="196" y="-14" />
+          <text x="226" y="0">в‰¤ 1.0 РјРј</text>
+          <rect className="legend-swatch" fill="#0b1cff" height="18" width="22" x="294" y="-14" />
+          <text x="324" y="0">&lt; 2.0 РјРј</text>
+          <rect className="legend-swatch" fill="#7a0b80" height="18" width="22" x="392" y="-14" />
+          <text x="422" y="0">= 2.0 РјРј</text>
+          <rect className="legend-swatch" fill="#f3b300" height="18" width="22" x="490" y="-14" />
+          <line className="legend-facade-line" x1="490" x2="512" y1="-5" y2="-5" />
+          <text x="520" y="0">Р· С„Р°СЃРєРѕСЋ 45</text>
+          <g className="legend-grain" transform="translate(615 -11)">
+            <line x1="0" x2="24" y1="0" y2="0" />
+            <line x1="0" x2="24" y1="7" y2="7" />
+            <line x1="0" x2="24" y1="14" y2="14" />
+          </g>
+        </g>
+      </>
+    );
+  }
+
+  return (
+    <div className="part-preview-shell">
+      <div className="part-preview-toolbar">
+        <div className="preview-mode-toggle">
+          <button
+            className={previewMode === "2d" ? "active" : ""}
+            onClick={() => setPreviewMode("2d")}
+            type="button"
+          >
+            {t.preview2d}
+          </button>
+          <button
+            className={previewMode === "3d" ? "active" : ""}
+            onClick={() => setPreviewMode("3d")}
+            type="button"
+          >
+            {t.preview3d}
+          </button>
+        </div>
+        {previewMode === "3d" ? (
+          <div className="preview-rotation-controls">
+            <button onClick={() => setRotation((value) => clampRotation(value - 12))} type="button">
+              <ChevronLeft size={16} />
+              {t.rotateLeft}
+            </button>
+            <button onClick={() => setRotation((value) => clampRotation(value + 12))} type="button">
+              {t.rotateRight}
+              <ChevronRight size={16} />
+            </button>
+            <button onClick={() => setRotation(28)} type="button">
+              <RotateCcw size={16} />
+              {t.resetView}
+            </button>
+          </div>
+        ) : null}
+      </div>
+      <svg className={`part-preview ${previewMode === "3d" ? "three-d" : ""}`} role="img" viewBox={`0 0 ${viewWidth} ${viewHeight}`}>
+        {previewMode === "3d" ? render3dFace() : render2dPreview()}
+      </svg>
+    </div>
   );
 }
 
@@ -2292,3 +2496,4 @@ export default function App() {
     </main>
   );
 }
+
