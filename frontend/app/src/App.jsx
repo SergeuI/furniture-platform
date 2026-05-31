@@ -304,45 +304,31 @@ Object.assign(TRANSLATIONS.en, {
 });
 
 Object.assign(TRANSLATIONS.uk, {
-  clearEdge: "РћС‡РёСЃС‚РёС‚Рё РєСЂР°Р№РєСѓ",
-  edgeBandingInvalid: "РћР±РµСЂС–С‚СЊ Р·РЅР°С‡РµРЅРЅСЏ Р· РєР°С‚Р°Р»РѕРіСѓ РєСЂР°Р№РєРё",
-  edgeSelectSide: "РћР±РµСЂС–С‚СЊ СЃС‚РѕСЂРѕРЅСѓ РЅР° СЃС…РµРјС– Р°Р±Рѕ РІ С€РІРёРґРєРѕРјСѓ РїРµСЂРµРјРёРєР°С‡С–.",
-  edgeSelectedSide: "Р’РёР±СЂР°РЅР° СЃС‚РѕСЂРѕРЅР°",
-  edgeThicknessInvalid: "РќРµ РІРґР°Р»РѕСЃСЏ РІРёР·РЅР°С‡РёС‚Рё С‚РѕРІС‰РёРЅСѓ РєСЂР°Р№РєРё",
-  preview2d: "2D карта",
-  preview3d: "3D панель",
-  rotateLeft: "Вліво",
-  rotateRight: "Вправо",
-  resetView: "Скинути",
-  preview3dHint: "3D перегляд для візуальної оцінки. Для точного редагування крайки й координат обробки використовуйте режим 2D.",
-});
-
-Object.assign(TRANSLATIONS.en, {
-  preview3dInteractiveHint: TRANSLATIONS.en.preview3dInteractiveHint || "Drag to rotate. Use the mouse wheel or pinch to zoom. Edge colors, holes, grooves and quarters are shown in the 3D model.",
-  productionAssembly3d: TRANSLATIONS.en.productionAssembly3d || "3D assembly",
-  productionAssemblyHint: TRANSLATIONS.en.productionAssemblyHint || "This 3D assembly is inferred from the cutting map. Click a panel to open its detail workspace.",
-  assemblyAssembled: TRANSLATIONS.en.assemblyAssembled || "Assembled",
-  assemblyExploded: TRANSLATIONS.en.assemblyExploded || "Exploded",
-  assemblyShowAll: TRANSLATIONS.en.assemblyShowAll || "Show all",
-  assemblyGroupCarcass: TRANSLATIONS.en.assemblyGroupCarcass || "Carcass",
-  assemblyGroupFacades: TRANSLATIONS.en.assemblyGroupFacades || "Facades",
-  assemblyGroupDrawers: TRANSLATIONS.en.assemblyGroupDrawers || "Drawers",
-  assemblyGroupBack: TRANSLATIONS.en.assemblyGroupBack || "Back panel",
-  assemblyGroupOther: TRANSLATIONS.en.assemblyGroupOther || "Other panels",
+  preview3dInteractiveHint: "??????????? ??? ?????????. ?????? ???? ??? ???? ????????????? ?????? ???. ? 3D ?????? ???????? ??????, ??????, ???? ?? ??????.",
+  productionAssembly3d: "3D ??????",
+  productionAssemblyHint: "?? 3D ?????? ?????????? ?? ?????? ????? ???????. ????????? ?? ??????, ??? ???????? ?? ?????? ????? ??????.",
+  assemblyAssembled: "???????",
+  assemblyExploded: "?????????",
+  assemblyShowAll: "???????? ???",
+  assemblyGroupCarcass: "??????",
+  assemblyGroupFacades: "??????",
+  assemblyGroupDrawers: "???????",
+  assemblyGroupBack: "????? ??????",
+  assemblyGroupOther: "???? ??????",
 });
 
 Object.assign(TRANSLATIONS.uk, {
-  preview3dInteractiveHint: "Перетягуйте для обертання. Колесо миші або жест масштабування змінює зум. У 3D моделі показані крайка, отвори, пази та чверті.",
-  productionAssembly3d: "3D збірка",
-  productionAssemblyHint: "Ця 3D збірка побудована на основі карти розкрою. Натисніть на панель, щоб відкрити її робоче місце деталі.",
-  assemblyAssembled: "Зібрано",
-  assemblyExploded: "Рознесено",
-  assemblyShowAll: "Показати все",
-  assemblyGroupCarcass: "Корпус",
-  assemblyGroupFacades: "Фасади",
-  assemblyGroupDrawers: "Шухляди",
-  assemblyGroupBack: "Задня стінка",
-  assemblyGroupOther: "Інші панелі",
+  preview3dInteractiveHint: "пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ. пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ. пїЅ 3D пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ, пїЅпїЅпїЅпїЅпїЅпїЅ, пїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅ.",
+  productionAssembly3d: "3D пїЅпїЅпїЅпїЅпїЅ",
+  productionAssemblyHint: "пїЅпїЅ 3D пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ. пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ, пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ.",
+  assemblyAssembled: "ЗіпїЅпїЅпїЅпїЅпїЅ",
+  assemblyExploded: "пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ",
+  assemblyShowAll: "пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ",
+  assemblyGroupCarcass: "пїЅпїЅпїЅпїЅпїЅпїЅ",
+  assemblyGroupFacades: "пїЅпїЅпїЅпїЅпїЅпїЅ",
+  assemblyGroupDrawers: "пїЅпїЅпїЅпїЅпїЅпїЅпїЅ",
+  assemblyGroupBack: "пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ",
+  assemblyGroupOther: "пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ",
 });
 
 function buildProjectPayload(form) {
@@ -738,7 +724,7 @@ function PartPreview({ detail, onSelectEdge, selectedEdgeSide, t }) {
           {part.height}
         </text>
         <text className="part-3d-meta" textAnchor="middle" x={viewWidth / 2} y={viewHeight - 42}>
-          {part.part_name} · {part.width} x {part.height} x {part.thickness}
+          {part.part_name} ? {part.width} x {part.height} x {part.thickness}
         </text>
         <text className="part-3d-note" textAnchor="middle" x={viewWidth / 2} y={viewHeight - 18}>
           {t.preview3dHint}
