@@ -1449,9 +1449,22 @@ export default function App() {
     setStatus("");
   }
 
-  function handlePreviewCuttingPart(partCode) {
+  async function handlePreviewCuttingPart(partCode) {
     setSelectedCuttingPartCode(partCode);
     setStatus("");
+
+    if (!selectedProjectId || !partCode) {
+      return;
+    }
+
+    const result = await getProjectPartDetail(token, selectedProjectId, partCode);
+
+    if (!result.success) {
+      return;
+    }
+
+    setSelectedPartDetail(result);
+    setSelectedEdgeSide(null);
   }
 
   async function handleSelectCuttingPart(partCode = selectedCuttingPartCode) {
@@ -2416,6 +2429,7 @@ export default function App() {
                             onClearSelection={handleClearCuttingPartSelection}
                             onOpenPart={handleSelectCuttingPart}
                             onSelectPart={handlePreviewCuttingPart}
+                            selectedPartDetail={selectedPartDetail}
                             selectedPartCode={selectedCuttingPartCode || selectedPartDetail?.part?.export_code}
                             t={t}
                           />

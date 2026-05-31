@@ -3,6 +3,7 @@ import { Edges, OrbitControls } from "@react-three/drei";
 import { useMemo, useState } from "react";
 
 const VISIBILITY_GROUPS = ["carcass", "facades", "drawers", "back", "other"];
+const AXIS_INDEX = { x: 0, y: 1, z: 2 };
 
 function getPanelColor(item) {
   const category = String(item?.category || "").toLowerCase();
@@ -94,6 +95,34 @@ function groupByKind(kind) {
   return "other";
 }
 
+function normalizeDetailDimensions(part) {
+  return {
+    height: Math.max(Number(part?.height) || 1, 1),
+    thickness: Math.max(Number(part?.thickness) || 18, 1),
+    width: Math.max(Number(part?.width) || 1, 1),
+  };
+}
+
+function holeMarkerPosition(hole, detailDimensions, mesh) {
+  if (!mesh?.surfaceAxes) {
+    return mesh?.position || [0, 0, 0];
+  }
+
+  const position = [...mesh.position];
+  const [dimX, dimY, dimZ] = mesh.dimensions;
+  const dimensionByAxis = { x: dimX, y: dimY, z: dimZ };
+  const widthRatio = Math.min(Math.max((Number(hole?.x) || 0) / detailDimensions.width, 0), 1);
+  const heightRatio = Math.min(Math.max((Number(hole?.y) || 0) / detailDimensions.height, 0), 1);
+
+  position[AXIS_INDEX[mesh.surfaceAxes.width]] +=
+    -dimensionByAxis[mesh.surfaceAxes.width] / 2 + widthRatio * dimensionByAxis[mesh.surfaceAxes.width];
+  position[AXIS_INDEX[mesh.surfaceAxes.height]] +=
+    -dimensionByAxis[mesh.surfaceAxes.height] / 2 + heightRatio * dimensionByAxis[mesh.surfaceAxes.height];
+  position[AXIS_INDEX[mesh.surfaceAxes.normal]] += 0;
+
+  return position;
+}
+
 function buildAssembly(items, exploded, visibility, selectedPartCode, focusSelected) {
   const normalizedItems = items.map((item, index) => ({
     ...item,
@@ -145,32 +174,67 @@ function buildAssembly(items, exploded, visibility, selectedPartCode, focusSelec
       const color = getPanelColor(item);
       let dimensions = [width, height, thickness];
       let position = [0, 0, 0];
+      let surfaceAxes = {
+        height: "y",
+        normal: "z",
+        width: "x",
+      };
 
       switch (item._kind) {
         case "side-left":
           dimensions = [thickness, heightUnits, depthUnits];
           position = [-widthUnits / 2 + thickness / 2 - spread, 0, 0];
+          surfaceAxes = {
+            height: "y",
+            normal: "x",
+            width: "z",
+          };
           break;
         case "side-right":
           dimensions = [thickness, heightUnits, depthUnits];
           position = [widthUnits / 2 - thickness / 2 + spread, 0, 0];
+          surfaceAxes = {
+            height: "y",
+            normal: "x",
+            width: "z",
+          };
           break;
         case "top":
           dimensions = [widthUnits - 2 * thickness, thickness, depthUnits];
           position = [0, heightUnits / 2 - thickness / 2 + spread, 0];
+          surfaceAxes = {
+            height: "z",
+            normal: "y",
+            width: "x",
+          };
           break;
         case "bottom":
           dimensions = [widthUnits - 2 * thickness, thickness, depthUnits];
           position = [0, -heightUnits / 2 + thickness / 2 - spread, 0];
+          surfaceAxes = {
+            height: "z",
+            normal: "y",
+            width: "x",
+          };
           break;
         case "back":
           dimensions = [widthUnits - 2 * thickness, heightUnits - 2 * thickness, thickness * 0.5];
           position = [0, 0, -depthUnits / 2 - thickness * 0.25 - spread];
+          surfaceAxes = {
+            height: "y",
+            normal: "z",
+            width: "x",
+          };
           break;
         case "shelf":
           dimensions = [Math.min(widthUnits - 2 * thickness, width), thickness, Math.min(depthUnits, height)];
           position = [0, -heightUnits / 2 + 0.34 + shelfLevel * 0.42, exploded ? (shelfLevel % 2 === 0 ? -spread * 0.35 : spread * 0.35) : 0];
           shelfLevel += 1;
+          surfaceAxes = {
+            height: "z",
+            normal: "y",
+            width: "x",
+          };
           break;
         case "facade":
           dimensions = [Math.min(widthUnits * 0.48, width), Math.min(heightUnits * 0.38, height), thickness];
@@ -180,6 +244,11 @@ function buildAssembly(items, exploded, visibility, selectedPartCode, focusSelec
             depthUnits / 2 + thickness / 2 + gap,
           ];
           facadeOffset += 1;
+          surfaceAxes = {
+            height: "y",
+            normal: "z",
+            width: "x",
+          };
           break;
         case "drawer":
           dimensions = [
@@ -193,6 +262,11 @@ function buildAssembly(items, exploded, visibility, selectedPartCode, focusSelec
             depthUnits / 2 + dimensions[2] / 2 + (exploded ? 0.82 : 0.3),
           ];
           drawerOffset += 1;
+          surfaceAxes = {
+            height: "y",
+            normal: "z",
+            width: "x",
+          };
           break;
         default:
           dimensions = [width, Math.max(thickness, 0.04), height];
@@ -202,6 +276,11 @@ function buildAssembly(items, exploded, visibility, selectedPartCode, focusSelec
             0,
           ];
           otherColumn += 1;
+          surfaceAxes = {
+            height: "z",
+            normal: "y",
+            width: "x",
+          };
           break;
       }
 
@@ -211,6 +290,7 @@ function buildAssembly(items, exploded, visibility, selectedPartCode, focusSelec
         item,
         key: `${item.export_code}-${index}`,
         position,
+        surfaceAxes,
       };
     });
 
@@ -218,10 +298,12 @@ function buildAssembly(items, exploded, visibility, selectedPartCode, focusSelec
 }
 
 function ProjectAssemblyModel({
+  displayMode,
   exploded,
   focusSelected,
   items,
   onSelectPart,
+  selectedPartDetail,
   selectedPartCode,
   visibility,
 }) {
@@ -229,6 +311,30 @@ function ProjectAssemblyModel({
     () => buildAssembly(items, exploded, visibility, selectedPartCode, focusSelected),
     [exploded, focusSelected, items, selectedPartCode, visibility],
   );
+  const selectedMesh = useMemo(
+    () => assembly.meshes.find((mesh) => mesh.item.export_code === selectedPartCode) || null,
+    [assembly.meshes, selectedPartCode],
+  );
+  const holeMarkers = useMemo(() => {
+    if (
+      displayMode !== "transparent" ||
+      !selectedMesh ||
+      !selectedPartDetail?.part ||
+      selectedPartDetail.part.export_code !== selectedPartCode ||
+      !selectedPartDetail.holes?.length
+    ) {
+      return [];
+    }
+
+    const detailDimensions = normalizeDetailDimensions(selectedPartDetail.part);
+
+    return selectedPartDetail.holes.map((hole) => ({
+      hole,
+      key: `hole-${selectedPartCode}-${hole.number}`,
+      markerRadius: Math.max((Number(hole.diameter) || 5) * 0.008, 0.03),
+      position: holeMarkerPosition(hole, detailDimensions, selectedMesh),
+    }));
+  }, [displayMode, selectedMesh, selectedPartCode, selectedPartDetail]);
 
   return (
     <group rotation={[-0.4, 0.72, 0]}>
@@ -250,11 +356,18 @@ function ProjectAssemblyModel({
             metalness={0.08}
             opacity={
               selectedPartCode && selectedPartCode !== mesh.item.export_code && !focusSelected
-                ? 0.24
-                : 1
+                ? displayMode === "transparent"
+                  ? 0.12
+                  : 0.24
+                : displayMode === "transparent"
+                  ? selectedPartCode === mesh.item.export_code
+                    ? 0.72
+                    : 0.46
+                  : 1
             }
             roughness={0.72}
             transparent={
+              displayMode === "transparent" ||
               Boolean(
                 selectedPartCode && selectedPartCode !== mesh.item.export_code && !focusSelected,
               )
@@ -272,6 +385,12 @@ function ProjectAssemblyModel({
           />
         </mesh>
       ))}
+      {holeMarkers.map((marker) => (
+        <mesh key={marker.key} position={marker.position}>
+          <cylinderGeometry args={[marker.markerRadius, marker.markerRadius, 0.032, 20]} />
+          <meshStandardMaterial color="#ff33c4" emissive="#ff8de0" emissiveIntensity={0.3} />
+        </mesh>
+      ))}
     </group>
   );
 }
@@ -281,9 +400,11 @@ export default function ProjectThreeViewer({
   onClearSelection,
   onOpenPart,
   onSelectPart,
+  selectedPartDetail,
   selectedPartCode,
   t,
 }) {
+  const [displayMode, setDisplayMode] = useState("solid");
   const [exploded, setExploded] = useState(false);
   const [focusSelected, setFocusSelected] = useState(false);
   const [visibility, setVisibility] = useState({
@@ -345,6 +466,22 @@ export default function ProjectThreeViewer({
       <div className="project-three-viewer-toolbar">
         <div className="project-three-viewer-toggle">
           <button
+            className={displayMode === "solid" ? "active" : ""}
+            onClick={() => setDisplayMode("solid")}
+            type="button"
+          >
+            {t.assemblyModeSolid || "Solid"}
+          </button>
+          <button
+            className={displayMode === "transparent" ? "active" : ""}
+            onClick={() => setDisplayMode("transparent")}
+            type="button"
+          >
+            {t.assemblyModeTransparent || "Transparent + holes"}
+          </button>
+        </div>
+        <div className="project-three-viewer-toggle">
+          <button
             className={!exploded ? "active" : ""}
             onClick={() => setExploded(false)}
             type="button"
@@ -401,10 +538,12 @@ export default function ProjectThreeViewer({
           <directionalLight castShadow intensity={1.24} position={[6, 7, 6]} />
           <directionalLight intensity={0.3} position={[-4, -3, 4]} />
           <ProjectAssemblyModel
+            displayMode={displayMode}
             exploded={exploded}
             focusSelected={focusSelected}
             items={items}
             onSelectPart={onSelectPart}
+            selectedPartDetail={selectedPartDetail}
             selectedPartCode={selectedPartCode}
             visibility={visibility}
           />
@@ -428,6 +567,11 @@ export default function ProjectThreeViewer({
         {selectedItem?.part_name ? (
           <span className="project-three-viewer-badge">
             {selectedItem.part_name}
+          </span>
+        ) : null}
+        {displayMode === "transparent" && selectedPartDetail?.part?.export_code === selectedPartCode ? (
+          <span className="project-three-viewer-badge">
+            {selectedPartDetail.holes?.length || 0} {t.holes || "holes"}
           </span>
         ) : null}
       </div>
