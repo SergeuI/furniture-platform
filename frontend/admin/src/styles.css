@@ -795,6 +795,53 @@ tbody tr.selected {
   justify-content: center;
 }
 
+.project-three-viewer {
+  display: grid;
+  gap: 10px;
+}
+
+.project-three-viewer-canvas {
+  background:
+    radial-gradient(circle at 50% 12%, rgba(57, 211, 83, 0.06), transparent 32%),
+    linear-gradient(180deg, #f8fbfc 0%, #edf3f6 100%);
+  border: 1px solid #dbe1e7;
+  border-radius: 8px;
+  height: 460px;
+  overflow: hidden;
+}
+
+.project-three-viewer-canvas canvas {
+  display: block;
+  height: 100% !important;
+  width: 100% !important;
+}
+
+.project-three-viewer-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.project-three-viewer-badge {
+  background: #eef3f6;
+  border-radius: 999px;
+  color: #20303b;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 6px 12px;
+}
+
+.project-three-viewer-badge.active {
+  background: rgba(57, 211, 83, 0.14);
+  color: #136126;
+}
+
+.project-three-viewer-hint {
+  color: #60717c;
+  font-size: 13px;
+  margin: 0;
+}
+
 .part-board {
   fill: #f8fafb;
   stroke: #1f2933;

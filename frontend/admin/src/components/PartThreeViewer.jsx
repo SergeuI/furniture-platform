@@ -277,7 +277,7 @@ export default function PartThreeViewer({
         ) : null}
       </div>
       <p className="part-three-viewer-hint">
-        Drag to rotate. Use the mouse wheel or pinch to zoom. Edge colors, holes, grooves and quarters are shown in the 3D model.
+        {t.preview3dInteractiveHint}
       </p>
     </div>
   );

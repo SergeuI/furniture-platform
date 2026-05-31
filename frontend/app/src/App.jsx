@@ -29,6 +29,7 @@ import {
   updateProjectPartMachining,
 } from "./api";
 const PartThreeViewer = lazy(() => import("./components/PartThreeViewer"));
+const ProjectThreeViewer = lazy(() => import("./components/ProjectThreeViewer"));
 
 
 const TOKEN_STORAGE_KEY = "furniture_app_token";
@@ -314,6 +315,18 @@ Object.assign(TRANSLATIONS.uk, {
   rotateRight: "Вправо",
   resetView: "Скинути",
   preview3dHint: "3D перегляд для візуальної оцінки. Для точного редагування крайки й координат обробки використовуйте режим 2D.",
+});
+
+Object.assign(TRANSLATIONS.en, {
+  preview3dInteractiveHint: TRANSLATIONS.en.preview3dInteractiveHint || "Drag to rotate. Use the mouse wheel or pinch to zoom. Edge colors, holes, grooves and quarters are shown in the 3D model.",
+  productionAssembly3d: TRANSLATIONS.en.productionAssembly3d || "3D assembly",
+  productionAssemblyHint: TRANSLATIONS.en.productionAssemblyHint || "This 3D assembly is inferred from the cutting map. Click a panel to open its detail workspace.",
+});
+
+Object.assign(TRANSLATIONS.uk, {
+  preview3dInteractiveHint: "Перетягуйте для обертання. Колесо миші або жест масштабування змінює зум. У 3D моделі показані крайка, отвори, пази та чверті.",
+  productionAssembly3d: "3D збірка",
+  productionAssemblyHint: "Ця 3D збірка побудована на основі карти розкрою. Натисніть на панель, щоб відкрити її робоче місце деталі.",
 });
 
 function buildProjectPayload(form) {
@@ -2373,6 +2386,21 @@ export default function App() {
                         </table>
                       ) : (
                         <p>{t.noBomItems}</p>
+                      )}
+                    </article>
+                    <article className="wide-production-section">
+                      <h3>{t.productionAssembly3d}</h3>
+                      {cuttingItems.length > 0 ? (
+                        <Suspense fallback={<div className="part-three-viewer part-three-viewer-loading">Loading 3D assembly...</div>}>
+                          <ProjectThreeViewer
+                            items={cuttingItems}
+                            onSelectPart={handleSelectCuttingPart}
+                            selectedPartCode={selectedPartDetail?.part?.export_code}
+                            t={t}
+                          />
+                        </Suspense>
+                      ) : (
+                        <p>{t.noCuttingItems}</p>
                       )}
                     </article>
                     <article className="wide-production-section">
