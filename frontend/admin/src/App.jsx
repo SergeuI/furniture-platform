@@ -489,31 +489,31 @@ Object.assign(TRANSLATIONS.en, {
 });
 
 Object.assign(TRANSLATIONS.uk, {
-  preview3dInteractiveHint: "??????????? ??? ?????????. ?????? ???? ??? ???? ????????????? ?????? ???. ? 3D ?????? ???????? ??????, ??????, ???? ?? ??????.",
-  productionAssembly3d: "3D ??????",
-  productionAssemblyHint: "?? 3D ?????? ?????????? ?? ?????? ????? ???????. ????????? ?? ??????, ??? ???????? ?? ?????? ????? ??????.",
-  assemblyAssembled: "???????",
-  assemblyExploded: "?????????",
-  assemblyShowAll: "???????? ???",
-  assemblyGroupCarcass: "??????",
-  assemblyGroupFacades: "??????",
-  assemblyGroupDrawers: "???????",
-  assemblyGroupBack: "????? ??????",
-  assemblyGroupOther: "???? ??????",
+  preview3dInteractiveHint: "Перетягуйте для обертання. Колесо миші або жест масштабування змінює зум. У 3D моделі показані крайка, отвори, пази та чверті.",
+  productionAssembly3d: "3D збірка",
+  productionAssemblyHint: "Ця 3D збірка побудована на основі карти розкрою. Натисніть на панель, щоб відкрити її робоче місце деталі.",
+  assemblyAssembled: "Зібрано",
+  assemblyExploded: "Рознесено",
+  assemblyShowAll: "Показати все",
+  assemblyGroupCarcass: "Корпус",
+  assemblyGroupFacades: "Фасади",
+  assemblyGroupDrawers: "Шухляди",
+  assemblyGroupBack: "Задня стінка",
+  assemblyGroupOther: "Інші панелі",
 });
 
 Object.assign(TRANSLATIONS.uk, {
-  preview3dInteractiveHint: "����������� ��� ���������. ������ ���� ��� ���� ������������� ����� ���. � 3D ����� �������� ������, ������, ���� �� �����.",
-  productionAssembly3d: "3D �����",
-  productionAssemblyHint: "�� 3D ����� ���������� �� ����� ����� �������. ��������� �� ������, ��� ������� �� ������ ���� �����.",
-  assemblyAssembled: "ǳ�����",
-  assemblyExploded: "���������",
-  assemblyShowAll: "�������� ���",
-  assemblyGroupCarcass: "������",
-  assemblyGroupFacades: "������",
-  assemblyGroupDrawers: "�������",
-  assemblyGroupBack: "����� �����",
-  assemblyGroupOther: "���� �����",
+  preview3dInteractiveHint: "Перетягуйте для обертання. Колесо миші або жест масштабування змінює зум. У 3D моделі показані крайка, отвори, пази та чверті.",
+  productionAssembly3d: "3D збірка",
+  productionAssemblyHint: "Ця 3D збірка побудована на основі карти розкрою. Натисніть на панель, щоб відкрити її робоче місце деталі.",
+  assemblyAssembled: "Зібрано",
+  assemblyExploded: "Рознесено",
+  assemblyShowAll: "Показати все",
+  assemblyGroupCarcass: "Корпус",
+  assemblyGroupFacades: "Фасади",
+  assemblyGroupDrawers: "Шухляди",
+  assemblyGroupBack: "Задня стінка",
+  assemblyGroupOther: "Інші панелі",
 });
 
 function buildProjectPayload(form) {
