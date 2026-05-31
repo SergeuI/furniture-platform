@@ -607,6 +607,71 @@ tbody tr.selected {
   font-size: 12px;
 }
 
+.part-three-viewer {
+  display: grid;
+  gap: 10px;
+}
+
+.part-three-viewer-canvas {
+  background:
+    radial-gradient(circle at 50% 14%, rgba(57, 211, 83, 0.08), transparent 34%),
+    linear-gradient(180deg, #f8fbfc 0%, #edf3f6 100%);
+  border: 1px solid #dbe1e7;
+  border-radius: 8px;
+  height: 420px;
+  overflow: hidden;
+}
+
+.part-three-viewer-canvas canvas {
+  display: block;
+  height: 100% !important;
+  width: 100% !important;
+}
+
+.part-three-viewer-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.part-three-viewer-badge {
+  background: #eef3f6;
+  border-radius: 999px;
+  color: #20303b;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 6px 12px;
+}
+
+.part-three-viewer-badge.subtle {
+  color: #5a6a75;
+  font-weight: 600;
+}
+
+.part-three-viewer-badge.active {
+  background: rgba(57, 211, 83, 0.14);
+  color: #136126;
+}
+
+.part-three-viewer-hint {
+  color: #60717c;
+  font-size: 13px;
+  margin: 0;
+}
+
+.part-three-viewer-loading {
+  align-items: center;
+  background: #f6fafc;
+  border: 1px solid #dbe1e7;
+  border-radius: 8px;
+  color: #60717c;
+  display: flex;
+  font-size: 14px;
+  font-weight: 600;
+  height: 420px;
+  justify-content: center;
+}
+
 .part-board {
   fill: #f8fafb;
   stroke: #1f2933;

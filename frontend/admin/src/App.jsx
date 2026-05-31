@@ -11,7 +11,7 @@ import {
   X,
   Trash2,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useState } from "react";
 
 import {
   changeOwnPassword,
@@ -40,6 +40,8 @@ import {
   updateUserActive,
   updateUserRole,
 } from "./api";
+const PartThreeViewer = lazy(() => import("./components/PartThreeViewer"));
+
 
 const TOKEN_STORAGE_KEY = "furniture_admin_token";
 const LANGUAGE_STORAGE_KEY = "furniture_admin_language";
@@ -1073,8 +1075,7 @@ function PartPreview({ detail, onSelectEdge, selectedEdgeSide, t }) {
     );
   }
 
-  return (
-    <div className="part-preview-shell">
+  return (    <div className="part-preview-shell">
       <div className="part-preview-toolbar">
         <div className="preview-mode-toggle">
           <button
@@ -1109,11 +1110,22 @@ function PartPreview({ detail, onSelectEdge, selectedEdgeSide, t }) {
           </div>
         ) : null}
       </div>
-      <svg className={`part-preview ${previewMode === "3d" ? "three-d" : ""}`} role="img" viewBox={`0 0 ${viewWidth} ${viewHeight}`}>
-        {previewMode === "3d" ? render3dFace() : render2dPreview()}
-      </svg>
-    </div>
-  );
+      {previewMode === "3d" ? (
+        <Suspense fallback={<div className="part-three-viewer part-three-viewer-loading">Loading 3D viewer...</div>}>
+          <PartThreeViewer
+            detail={detail}
+            onSelectEdge={onSelectEdge}
+            rotation={rotation}
+            selectedEdgeSide={selectedEdgeSide}
+            t={t}
+          />
+        </Suspense>
+      ) : (
+        <svg className="part-preview" role="img" viewBox={`0 0 ${viewWidth} ${viewHeight}`}>
+          {render2dPreview()}
+        </svg>
+      )}
+    </div>  );
 }
 
 function PartEdgeEditor({
