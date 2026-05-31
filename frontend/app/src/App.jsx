@@ -1273,6 +1273,7 @@ export default function App() {
   const [cuttingExportFormats, setCuttingExportFormats] = useState([]);
   const [cuttingJsonExport, setCuttingJsonExport] = useState(null);
   const [selectedPartDetail, setSelectedPartDetail] = useState(null);
+  const [selectedCuttingPartCode, setSelectedCuttingPartCode] = useState(null);
   const [selectedEdgeSide, setSelectedEdgeSide] = useState(null);
   const [projectForm, setProjectForm] = useState(DEFAULT_PROJECT_FORM);
   const [projectFilters, setProjectFilters] = useState(DEFAULT_PROJECT_FILTERS);
@@ -1442,13 +1443,23 @@ export default function App() {
     setCuttingExportFormats([]);
     setCuttingJsonExport(null);
     setSelectedPartDetail(null);
+    setSelectedCuttingPartCode(null);
     setSelectedEdgeSide(null);
     setActiveProjectTab("general");
     setStatus("");
   }
 
-  async function handleSelectCuttingPart(partCode) {
+  function handlePreviewCuttingPart(partCode) {
+    setSelectedCuttingPartCode(partCode);
+    setStatus("");
+  }
+
+  async function handleSelectCuttingPart(partCode = selectedCuttingPartCode) {
     if (!selectedProject) {
+      return;
+    }
+
+    if (!partCode) {
       return;
     }
 
@@ -1463,9 +1474,15 @@ export default function App() {
       return;
     }
 
+    setSelectedCuttingPartCode(partCode);
     setSelectedPartDetail(result);
     setSelectedEdgeSide(null);
     setActiveProjectTab("partDetail");
+    setStatus("");
+  }
+
+  function handleClearCuttingPartSelection() {
+    setSelectedCuttingPartCode(null);
     setStatus("");
   }
 
@@ -2396,8 +2413,10 @@ export default function App() {
                         <Suspense fallback={<div className="part-three-viewer part-three-viewer-loading">Loading 3D assembly...</div>}>
                           <ProjectThreeViewer
                             items={cuttingItems}
-                            onSelectPart={handleSelectCuttingPart}
-                            selectedPartCode={selectedPartDetail?.part?.export_code}
+                            onClearSelection={handleClearCuttingPartSelection}
+                            onOpenPart={handleSelectCuttingPart}
+                            onSelectPart={handlePreviewCuttingPart}
+                            selectedPartCode={selectedCuttingPartCode || selectedPartDetail?.part?.export_code}
                             t={t}
                           />
                         </Suspense>
@@ -2433,13 +2452,14 @@ export default function App() {
                             {cuttingItems.map((item) => (
                               <tr
                                 className={
-                                  selectedPartDetail?.part?.export_code === item.export_code
-                                    ? "selected"
-                                    : ""
-                                }
-                                key={item.export_code}
-                                onClick={() => handleSelectCuttingPart(item.export_code)}
-                              >
+                                selectedPartDetail?.part?.export_code === item.export_code
+                                  || selectedCuttingPartCode === item.export_code
+                                  ? "selected"
+                                  : ""
+                              }
+                              key={item.export_code}
+                              onClick={() => handlePreviewCuttingPart(item.export_code)}
+                            >
                                 <td>{item.export_code}</td>
                                 <td>{item.part_name}</td>
                                 <td>{item.width} x {item.height}</td>
@@ -2538,4 +2558,3 @@ export default function App() {
     </main>
   );
 }
-

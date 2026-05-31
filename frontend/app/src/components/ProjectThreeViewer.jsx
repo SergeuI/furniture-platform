@@ -94,7 +94,7 @@ function groupByKind(kind) {
   return "other";
 }
 
-function buildAssembly(items, exploded, visibility) {
+function buildAssembly(items, exploded, visibility, selectedPartCode, focusSelected) {
   const normalizedItems = items.map((item, index) => ({
     ...item,
     _index: index,
@@ -137,6 +137,7 @@ function buildAssembly(items, exploded, visibility) {
 
   const meshes = normalizedItems
     .filter((item) => visibility[groupByKind(item._kind)] !== false)
+    .filter((item) => !focusSelected || !selectedPartCode || item.export_code === selectedPartCode)
     .map((item, index) => {
       const thickness = item._thickness * scale;
       const width = item._width * scale;
@@ -218,14 +219,15 @@ function buildAssembly(items, exploded, visibility) {
 
 function ProjectAssemblyModel({
   exploded,
+  focusSelected,
   items,
   onSelectPart,
   selectedPartCode,
   visibility,
 }) {
   const assembly = useMemo(
-    () => buildAssembly(items, exploded, visibility),
-    [exploded, items, visibility],
+    () => buildAssembly(items, exploded, visibility, selectedPartCode, focusSelected),
+    [exploded, focusSelected, items, selectedPartCode, visibility],
   );
 
   return (
@@ -246,10 +248,26 @@ function ProjectAssemblyModel({
             emissive={selectedPartCode === mesh.item.export_code ? "#9df0b1" : "#000000"}
             emissiveIntensity={selectedPartCode === mesh.item.export_code ? 0.34 : 0}
             metalness={0.08}
+            opacity={
+              selectedPartCode && selectedPartCode !== mesh.item.export_code && !focusSelected
+                ? 0.24
+                : 1
+            }
             roughness={0.72}
+            transparent={
+              Boolean(
+                selectedPartCode && selectedPartCode !== mesh.item.export_code && !focusSelected,
+              )
+            }
           />
           <Edges
-            color={selectedPartCode === mesh.item.export_code ? "#117a29" : "#22313e"}
+            color={
+              selectedPartCode === mesh.item.export_code
+                ? "#117a29"
+                : selectedPartCode && !focusSelected
+                  ? "#90a2af"
+                  : "#22313e"
+            }
             lineWidth={1}
           />
         </mesh>
@@ -260,11 +278,14 @@ function ProjectAssemblyModel({
 
 export default function ProjectThreeViewer({
   items,
+  onClearSelection,
+  onOpenPart,
   onSelectPart,
   selectedPartCode,
   t,
 }) {
   const [exploded, setExploded] = useState(false);
+  const [focusSelected, setFocusSelected] = useState(false);
   const [visibility, setVisibility] = useState({
     back: true,
     carcass: true,
@@ -276,6 +297,10 @@ export default function ProjectThreeViewer({
   if (!items?.length) {
     return null;
   }
+
+  const selectedItem = selectedPartCode
+    ? items.find((item) => item.export_code === selectedPartCode) || null
+    : null;
 
   function toggleGroup(group) {
     setVisibility((current) => ({
@@ -292,6 +317,19 @@ export default function ProjectThreeViewer({
       facades: true,
       other: true,
     });
+  }
+
+  function handleFocusSelected() {
+    if (!selectedPartCode) {
+      return;
+    }
+
+    setFocusSelected((current) => !current);
+  }
+
+  function handleClearSelection() {
+    setFocusSelected(false);
+    onClearSelection?.();
   }
 
   const groupLabels = {
@@ -337,6 +375,25 @@ export default function ProjectThreeViewer({
           ))}
         </div>
       </div>
+      {selectedPartCode ? (
+        <div className="project-three-viewer-actions">
+          <button
+            className={focusSelected ? "active" : ""}
+            onClick={handleFocusSelected}
+            type="button"
+          >
+            {focusSelected
+              ? (t.assemblyShowFull || "Show full assembly")
+              : (t.assemblyFocusSelected || "Focus selected")}
+          </button>
+          <button onClick={() => onOpenPart?.(selectedPartCode)} type="button">
+            {t.assemblyOpenWorkspace || "Open detail workspace"}
+          </button>
+          <button onClick={handleClearSelection} type="button">
+            {t.assemblyClearSelection || "Clear selection"}
+          </button>
+        </div>
+      ) : null}
       <div className="project-three-viewer-canvas">
         <Canvas camera={{ fov: 30, position: [0, 0, 7.8] }} shadows>
           <color attach="background" args={["#f7fbfc"]} />
@@ -345,6 +402,7 @@ export default function ProjectThreeViewer({
           <directionalLight intensity={0.3} position={[-4, -3, 4]} />
           <ProjectAssemblyModel
             exploded={exploded}
+            focusSelected={focusSelected}
             items={items}
             onSelectPart={onSelectPart}
             selectedPartCode={selectedPartCode}
@@ -365,6 +423,11 @@ export default function ProjectThreeViewer({
         {selectedPartCode ? (
           <span className="project-three-viewer-badge active">
             {t.cuttingExportCode}: {selectedPartCode}
+          </span>
+        ) : null}
+        {selectedItem?.part_name ? (
+          <span className="project-three-viewer-badge">
+            {selectedItem.part_name}
           </span>
         ) : null}
       </div>

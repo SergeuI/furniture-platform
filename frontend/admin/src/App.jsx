@@ -1552,6 +1552,7 @@ export default function App() {
   const [cuttingItems, setCuttingItems] = useState([]);
   const [cuttingSummary, setCuttingSummary] = useState(null);
   const [selectedPartDetail, setSelectedPartDetail] = useState(null);
+  const [selectedCuttingPartCode, setSelectedCuttingPartCode] = useState(null);
   const [selectedEdgeSide, setSelectedEdgeSide] = useState(null);
   const [activeProjectTab, setActiveProjectTab] = useState("data");
   const [historyLoaded, setHistoryLoaded] = useState(false);
@@ -1822,6 +1823,7 @@ export default function App() {
     setCuttingSummary(result.summary || null);
     if (clearSelectedPart) {
       setSelectedPartDetail(null);
+      setSelectedCuttingPartCode(null);
       setSelectedEdgeSide(null);
     }
     setProductionLoaded(true);
@@ -1878,6 +1880,7 @@ export default function App() {
     setCuttingItems([]);
     setCuttingSummary(null);
     setSelectedPartDetail(null);
+    setSelectedCuttingPartCode(null);
     setSelectedEdgeSide(null);
     setHistoryLoaded(false);
     setProductionLoaded(false);
@@ -1885,8 +1888,17 @@ export default function App() {
     setStatus("");
   }
 
-  async function handleSelectCuttingPart(partCode) {
+  function handlePreviewCuttingPart(partCode) {
+    setSelectedCuttingPartCode(partCode);
+    setStatus("");
+  }
+
+  async function handleSelectCuttingPart(partCode = selectedCuttingPartCode) {
     if (!selectedProjectId) {
+      return;
+    }
+
+    if (!partCode) {
       return;
     }
 
@@ -1897,9 +1909,15 @@ export default function App() {
       return;
     }
 
+    setSelectedCuttingPartCode(partCode);
     setSelectedPartDetail(result);
     setSelectedEdgeSide(null);
     setActiveProjectTab("partDetail");
+    setStatus("");
+  }
+
+  function handleClearCuttingPartSelection() {
+    setSelectedCuttingPartCode(null);
     setStatus("");
   }
 
@@ -3345,8 +3363,10 @@ export default function App() {
                       <Suspense fallback={<div className="part-three-viewer part-three-viewer-loading">Loading 3D assembly...</div>}>
                         <ProjectThreeViewer
                           items={cuttingItems}
-                          onSelectPart={handleSelectCuttingPart}
-                          selectedPartCode={selectedPartDetail?.part?.export_code}
+                          onClearSelection={handleClearCuttingPartSelection}
+                          onOpenPart={handleSelectCuttingPart}
+                          onSelectPart={handlePreviewCuttingPart}
+                          selectedPartCode={selectedCuttingPartCode || selectedPartDetail?.part?.export_code}
                           t={t}
                         />
                       </Suspense>
@@ -3381,11 +3401,12 @@ export default function App() {
                             <tr
                               className={
                                 selectedPartDetail?.part?.export_code === item.export_code
+                                  || selectedCuttingPartCode === item.export_code
                                   ? "selected"
                                   : ""
                               }
                               key={item.export_code}
-                              onClick={() => handleSelectCuttingPart(item.export_code)}
+                              onClick={() => handlePreviewCuttingPart(item.export_code)}
                             >
                               <td>{item.export_code}</td>
                               <td>{item.part_name}</td>
@@ -4115,4 +4136,3 @@ export default function App() {
     </main>
   );
 }
-

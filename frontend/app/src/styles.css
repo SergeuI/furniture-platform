@@ -708,6 +708,25 @@ tbody tr.selected {
   font-weight: 700;
 }
 
+.project-three-viewer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.project-three-viewer-actions button {
+  background: #eef3f6;
+  color: #20303b;
+  min-height: 34px;
+  padding: 0 12px;
+}
+
+.project-three-viewer-actions button.active {
+  background: rgba(57, 211, 83, 0.14);
+  color: #136126;
+  font-weight: 700;
+}
+
 .project-three-viewer-canvas {
   background:
     radial-gradient(circle at 50% 12%, rgba(57, 211, 83, 0.06), transparent 32%),
