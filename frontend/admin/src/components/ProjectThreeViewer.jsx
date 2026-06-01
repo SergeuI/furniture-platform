@@ -357,7 +357,7 @@ function buildAssembly(items, exploded, visibility, selectedPartCode, focusSelec
   return { meshes };
 }
 
-function AssemblyCameraController({ controlsRef, focusSelected, groupRef, selectedMesh }) {
+function AssemblyCameraController({ controlsRef, focusSelected, groupRef, resetToken, selectedMesh }) {
   const { camera } = useThree();
 
   useEffect(() => {
@@ -393,7 +393,7 @@ function AssemblyCameraController({ controlsRef, focusSelected, groupRef, select
     camera.position.copy(nextCameraPosition);
     camera.lookAt(worldTarget);
     controls.update();
-  }, [camera, controlsRef, focusSelected, groupRef, selectedMesh]);
+  }, [camera, controlsRef, focusSelected, groupRef, resetToken, selectedMesh]);
 
   return null;
 }
@@ -480,6 +480,7 @@ function ProjectAssemblyModel({
         controlsRef={controlsRef}
         focusSelected={focusSelected}
         groupRef={groupRef}
+        resetToken={resetToken}
         selectedMesh={selectedMesh}
       />
       <group ref={groupRef} rotation={[-0.4, 0.72, 0]}>
@@ -580,6 +581,7 @@ export default function ProjectThreeViewer({
   const [exploded, setExploded] = useState(false);
   const [focusSelected, setFocusSelected] = useState(false);
   const [hoveredPartCode, setHoveredPartCode] = useState(null);
+  const [resetToken, setResetToken] = useState(0);
   const [visibility, setVisibility] = useState({
     back: true,
     carcass: true,
@@ -632,6 +634,11 @@ export default function ProjectThreeViewer({
   function handleClearSelection() {
     setFocusSelected(false);
     onClearSelection?.();
+  }
+
+  function handleResetCamera() {
+    setFocusSelected(false);
+    setResetToken((current) => current + 1);
   }
 
   function toggleLayer(layer) {
@@ -708,7 +715,11 @@ export default function ProjectThreeViewer({
                 onClick={() => toggleLayer(layer)}
                 type="button"
               >
-                {layer}
+                {layer === "holes"
+                  ? (t.assemblyLayerHoles || "Holes")
+                  : layer === "grooves"
+                    ? (t.assemblyLayerGrooves || "Grooves")
+                    : (t.assemblyLayerQuarters || "Quarters")}
               </button>
             ))}
           </div>
@@ -727,6 +738,9 @@ export default function ProjectThreeViewer({
           </button>
           <button onClick={() => onOpenPart?.(selectedPartCode)} type="button">
             {t.assemblyOpenWorkspace || "Open detail workspace"}
+          </button>
+          <button onClick={handleResetCamera} type="button">
+            {t.assemblyResetCamera || "Reset camera"}
           </button>
           <button onClick={handleClearSelection} type="button">
             {t.assemblyClearSelection || "Clear selection"}
@@ -805,15 +819,15 @@ export default function ProjectThreeViewer({
         <div className="project-three-viewer-legend">
           <span className="project-three-viewer-legend-item">
             <span className="project-three-viewer-legend-swatch holes" />
-            {t.holes || "holes"}
+            {t.assemblyLayerHoles || "Holes"}
           </span>
           <span className="project-three-viewer-legend-item">
             <span className="project-three-viewer-legend-swatch grooves" />
-            grooves
+            {t.assemblyLayerGrooves || "Grooves"}
           </span>
           <span className="project-three-viewer-legend-item">
             <span className="project-three-viewer-legend-swatch quarters" />
-            quarters
+            {t.assemblyLayerQuarters || "Quarters"}
           </span>
         </div>
       ) : null}
