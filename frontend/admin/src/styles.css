@@ -858,6 +858,31 @@ tbody tr.selected {
   border-radius: 8px;
   height: 460px;
   overflow: hidden;
+  position: relative;
+}
+
+.project-three-viewer-tooltip {
+  background: rgba(16, 24, 32, 0.88);
+  border-radius: 8px;
+  color: #f4f7fa;
+  display: grid;
+  gap: 2px;
+  min-width: 180px;
+  padding: 10px 12px;
+  pointer-events: none;
+  position: absolute;
+  right: 14px;
+  top: 14px;
+  z-index: 2;
+}
+
+.project-three-viewer-tooltip strong {
+  font-size: 13px;
+}
+
+.project-three-viewer-tooltip span {
+  font-size: 12px;
+  opacity: 0.9;
 }
 
 .project-three-viewer-canvas canvas {

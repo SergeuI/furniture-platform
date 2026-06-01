@@ -1,6 +1,7 @@
-import { Canvas } from "@react-three/fiber";
+import { Canvas, useThree } from "@react-three/fiber";
 import { Edges, OrbitControls } from "@react-three/drei";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import * as THREE from "three";
 
 const VISIBILITY_GROUPS = ["carcass", "facades", "drawers", "back", "other"];
 const VISUAL_LAYERS = ["holes", "grooves", "quarters"];
@@ -356,17 +357,61 @@ function buildAssembly(items, exploded, visibility, selectedPartCode, focusSelec
   return { meshes };
 }
 
+function AssemblyCameraController({ controlsRef, focusSelected, groupRef, selectedMesh }) {
+  const { camera } = useThree();
+
+  useEffect(() => {
+    if (!controlsRef.current) {
+      return;
+    }
+
+    const controls = controlsRef.current;
+    const defaultTarget = new THREE.Vector3(0, 0, 0);
+    const defaultPosition = new THREE.Vector3(0, 0, 7.8);
+
+    if (!focusSelected || !selectedMesh || !groupRef.current) {
+      controls.target.copy(defaultTarget);
+      camera.position.copy(defaultPosition);
+      camera.lookAt(defaultTarget);
+      controls.update();
+      return;
+    }
+
+    const worldTarget = groupRef.current.localToWorld(new THREE.Vector3(...selectedMesh.position));
+    const direction = camera.position.clone().sub(controls.target);
+
+    if (direction.lengthSq() < 0.001) {
+      direction.set(1.6, 1.1, 2.8);
+    }
+
+    direction.normalize();
+
+    const radius = Math.max(...selectedMesh.dimensions) * 2.2;
+    const nextCameraPosition = worldTarget.clone().add(direction.multiplyScalar(Math.max(radius, 1.4)));
+
+    controls.target.copy(worldTarget);
+    camera.position.copy(nextCameraPosition);
+    camera.lookAt(worldTarget);
+    controls.update();
+  }, [camera, controlsRef, focusSelected, groupRef, selectedMesh]);
+
+  return null;
+}
+
 function ProjectAssemblyModel({
+  controlsRef,
   displayMode,
   exploded,
   focusSelected,
   items,
+  onHoverPart,
   onSelectPart,
   selectedPartDetail,
   selectedPartCode,
   visibility,
   visualLayers,
 }) {
+  const groupRef = useRef(null);
   const assembly = useMemo(
     () => buildAssembly(items, exploded, visibility, selectedPartCode, focusSelected),
     [exploded, focusSelected, items, selectedPartCode, visibility],
@@ -429,13 +474,28 @@ function ProjectAssemblyModel({
   }, [displayMode, selectedMesh, selectedPartCode, selectedPartDetail, visualLayers.quarters]);
 
   return (
-    <group rotation={[-0.4, 0.72, 0]}>
+    <>
+      <AssemblyCameraController
+        controlsRef={controlsRef}
+        focusSelected={focusSelected}
+        groupRef={groupRef}
+        selectedMesh={selectedMesh}
+      />
+      <group ref={groupRef} rotation={[-0.4, 0.72, 0]}>
       {assembly.meshes.map((mesh) => (
         <mesh
           key={mesh.key}
           onClick={(event) => {
             event.stopPropagation();
             onSelectPart?.(mesh.item.export_code);
+          }}
+          onPointerOut={(event) => {
+            event.stopPropagation();
+            onHoverPart?.(null);
+          }}
+          onPointerOver={(event) => {
+            event.stopPropagation();
+            onHoverPart?.(mesh.item.export_code);
           }}
           position={mesh.position}
           scale={selectedPartCode === mesh.item.export_code ? [1.03, 1.03, 1.03] : [1, 1, 1]}
@@ -495,7 +555,8 @@ function ProjectAssemblyModel({
           <meshStandardMaterial color="#f3b300" transparent opacity={0.68} />
         </mesh>
       ))}
-    </group>
+      </group>
+    </>
   );
 }
 
@@ -508,9 +569,11 @@ export default function ProjectThreeViewer({
   selectedPartCode,
   t,
 }) {
+  const controlsRef = useRef(null);
   const [displayMode, setDisplayMode] = useState("solid");
   const [exploded, setExploded] = useState(false);
   const [focusSelected, setFocusSelected] = useState(false);
+  const [hoveredPartCode, setHoveredPartCode] = useState(null);
   const [visibility, setVisibility] = useState({
     back: true,
     carcass: true,
@@ -530,6 +593,9 @@ export default function ProjectThreeViewer({
 
   const selectedItem = selectedPartCode
     ? items.find((item) => item.export_code === selectedPartCode) || null
+    : null;
+  const hoveredItem = hoveredPartCode
+    ? items.find((item) => item.export_code === hoveredPartCode) || null
     : null;
 
   function toggleGroup(group) {
@@ -662,16 +728,27 @@ export default function ProjectThreeViewer({
         </div>
       ) : null}
       <div className="project-three-viewer-canvas">
+        {hoveredItem ? (
+          <div className="project-three-viewer-tooltip">
+            <strong>{hoveredItem.export_code}</strong>
+            <span>{hoveredItem.part_name}</span>
+            <span>
+              {hoveredItem.width} x {hoveredItem.height} x {hoveredItem.thickness || 18}
+            </span>
+          </div>
+        ) : null}
         <Canvas camera={{ fov: 30, position: [0, 0, 7.8] }} shadows>
           <color attach="background" args={["#f7fbfc"]} />
           <ambientLight intensity={0.96} />
           <directionalLight castShadow intensity={1.24} position={[6, 7, 6]} />
           <directionalLight intensity={0.3} position={[-4, -3, 4]} />
           <ProjectAssemblyModel
+            controlsRef={controlsRef}
             displayMode={displayMode}
             exploded={exploded}
             focusSelected={focusSelected}
             items={items}
+            onHoverPart={setHoveredPartCode}
             onSelectPart={onSelectPart}
             selectedPartDetail={selectedPartDetail}
             selectedPartCode={selectedPartCode}
@@ -679,6 +756,7 @@ export default function ProjectThreeViewer({
             visualLayers={visualLayers}
           />
           <OrbitControls
+            ref={controlsRef}
             enablePan={false}
             maxDistance={12}
             minDistance={3}
