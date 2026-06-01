@@ -3,6 +3,7 @@ import { Edges, OrbitControls } from "@react-three/drei";
 import { useMemo, useState } from "react";
 
 const VISIBILITY_GROUPS = ["carcass", "facades", "drawers", "back", "other"];
+const VISUAL_LAYERS = ["holes", "grooves", "quarters"];
 const AXIS_INDEX = { x: 0, y: 1, z: 2 };
 
 function getPanelColor(item) {
@@ -104,6 +105,17 @@ function normalizeDetailDimensions(part) {
 }
 
 function holeMarkerPosition(hole, detailDimensions, mesh) {
+  return projectSurfacePoint(
+    {
+      heightRatio: Math.min(Math.max((Number(hole?.y) || 0) / detailDimensions.height, 0), 1),
+      normalOffset: 0,
+      widthRatio: Math.min(Math.max((Number(hole?.x) || 0) / detailDimensions.width, 0), 1),
+    },
+    mesh,
+  );
+}
+
+function projectSurfacePoint(point, mesh) {
   if (!mesh?.surfaceAxes) {
     return mesh?.position || [0, 0, 0];
   }
@@ -111,16 +123,63 @@ function holeMarkerPosition(hole, detailDimensions, mesh) {
   const position = [...mesh.position];
   const [dimX, dimY, dimZ] = mesh.dimensions;
   const dimensionByAxis = { x: dimX, y: dimY, z: dimZ };
-  const widthRatio = Math.min(Math.max((Number(hole?.x) || 0) / detailDimensions.width, 0), 1);
-  const heightRatio = Math.min(Math.max((Number(hole?.y) || 0) / detailDimensions.height, 0), 1);
 
   position[AXIS_INDEX[mesh.surfaceAxes.width]] +=
-    -dimensionByAxis[mesh.surfaceAxes.width] / 2 + widthRatio * dimensionByAxis[mesh.surfaceAxes.width];
+    -dimensionByAxis[mesh.surfaceAxes.width] / 2 + point.widthRatio * dimensionByAxis[mesh.surfaceAxes.width];
   position[AXIS_INDEX[mesh.surfaceAxes.height]] +=
-    -dimensionByAxis[mesh.surfaceAxes.height] / 2 + heightRatio * dimensionByAxis[mesh.surfaceAxes.height];
-  position[AXIS_INDEX[mesh.surfaceAxes.normal]] += 0;
+    -dimensionByAxis[mesh.surfaceAxes.height] / 2 + point.heightRatio * dimensionByAxis[mesh.surfaceAxes.height];
+  position[AXIS_INDEX[mesh.surfaceAxes.normal]] += point.normalOffset || 0;
 
   return position;
+}
+
+function grooveOverlay(groove, detailDimensions, mesh) {
+  const widthRatio = Math.min(Math.max((Number(groove?.x) || 0) / detailDimensions.width, 0), 1);
+  const heightRatio = Math.min(Math.max((Number(groove?.y) || 0) / detailDimensions.height, 0), 1);
+  const grooveWidth = Math.max(((Number(groove?.length) || 0) / detailDimensions.width) * mesh.dimensions[AXIS_INDEX[mesh.surfaceAxes.width]], 0.08);
+  const grooveHeight = Math.max(((Number(groove?.width) || 0) / detailDimensions.height) * mesh.dimensions[AXIS_INDEX[mesh.surfaceAxes.height]], 0.03);
+
+  return {
+    key: `groove-${groove.number}`,
+    position: projectSurfacePoint(
+      {
+        heightRatio,
+        normalOffset: 0.004,
+        widthRatio: Math.min(widthRatio + grooveWidth / mesh.dimensions[AXIS_INDEX[mesh.surfaceAxes.width]] / 2, 1),
+      },
+      mesh,
+    ),
+    size: mesh.surfaceAxes.normal === "x"
+      ? [0.03, grooveHeight, grooveWidth]
+      : mesh.surfaceAxes.normal === "y"
+        ? [grooveWidth, 0.03, grooveHeight]
+        : [grooveWidth, grooveHeight, 0.03],
+  };
+}
+
+function quarterOverlay(quarter, detailDimensions, mesh) {
+  const widthRatio = Math.min(Math.max((Number(quarter?.x) || 0) / detailDimensions.width, 0), 1);
+  const heightRatio = Math.min(Math.max((Number(quarter?.y) || 0) / detailDimensions.height, 0), 1);
+  const quarterWidth = Math.max(((Number(quarter?.length) || 0) / detailDimensions.width) * mesh.dimensions[AXIS_INDEX[mesh.surfaceAxes.width]], 0.08);
+  const quarterHeight = Math.max(((Number(quarter?.width) || 0) / detailDimensions.height) * mesh.dimensions[AXIS_INDEX[mesh.surfaceAxes.height]], 0.04);
+  const quarterDepth = Math.max(((Number(quarter?.depth) || 0) / detailDimensions.thickness) * Math.max(mesh.dimensions[AXIS_INDEX[mesh.surfaceAxes.normal]], 0.05), 0.03);
+
+  return {
+    key: `quarter-${quarter.number}`,
+    position: projectSurfacePoint(
+      {
+        heightRatio: Math.min(heightRatio + quarterHeight / mesh.dimensions[AXIS_INDEX[mesh.surfaceAxes.height]] / 2, 1),
+        normalOffset: -quarterDepth / 3,
+        widthRatio: Math.min(widthRatio + quarterWidth / mesh.dimensions[AXIS_INDEX[mesh.surfaceAxes.width]] / 2, 1),
+      },
+      mesh,
+    ),
+    size: mesh.surfaceAxes.normal === "x"
+      ? [quarterDepth, quarterHeight, quarterWidth]
+      : mesh.surfaceAxes.normal === "y"
+        ? [quarterWidth, quarterDepth, quarterHeight]
+        : [quarterWidth, quarterHeight, quarterDepth],
+  };
 }
 
 function buildAssembly(items, exploded, visibility, selectedPartCode, focusSelected) {
@@ -306,6 +365,7 @@ function ProjectAssemblyModel({
   selectedPartDetail,
   selectedPartCode,
   visibility,
+  visualLayers,
 }) {
   const assembly = useMemo(
     () => buildAssembly(items, exploded, visibility, selectedPartCode, focusSelected),
@@ -318,6 +378,7 @@ function ProjectAssemblyModel({
   const holeMarkers = useMemo(() => {
     if (
       displayMode !== "transparent" ||
+      !visualLayers.holes ||
       !selectedMesh ||
       !selectedPartDetail?.part ||
       selectedPartDetail.part.export_code !== selectedPartCode ||
@@ -329,12 +390,43 @@ function ProjectAssemblyModel({
     const detailDimensions = normalizeDetailDimensions(selectedPartDetail.part);
 
     return selectedPartDetail.holes.map((hole) => ({
-      hole,
       key: `hole-${selectedPartCode}-${hole.number}`,
       markerRadius: Math.max((Number(hole.diameter) || 5) * 0.008, 0.03),
       position: holeMarkerPosition(hole, detailDimensions, selectedMesh),
     }));
-  }, [displayMode, selectedMesh, selectedPartCode, selectedPartDetail]);
+  }, [displayMode, selectedMesh, selectedPartCode, selectedPartDetail, visualLayers.holes]);
+  const grooveMeshes = useMemo(() => {
+    if (
+      displayMode !== "transparent" ||
+      !visualLayers.grooves ||
+      !selectedMesh ||
+      !selectedPartDetail?.part ||
+      selectedPartDetail.part.export_code !== selectedPartCode ||
+      !selectedPartDetail.grooves?.length
+    ) {
+      return [];
+    }
+
+    const detailDimensions = normalizeDetailDimensions(selectedPartDetail.part);
+
+    return selectedPartDetail.grooves.map((groove) => grooveOverlay(groove, detailDimensions, selectedMesh));
+  }, [displayMode, selectedMesh, selectedPartCode, selectedPartDetail, visualLayers.grooves]);
+  const quarterMeshes = useMemo(() => {
+    if (
+      displayMode !== "transparent" ||
+      !visualLayers.quarters ||
+      !selectedMesh ||
+      !selectedPartDetail?.part ||
+      selectedPartDetail.part.export_code !== selectedPartCode ||
+      !selectedPartDetail.quarters?.length
+    ) {
+      return [];
+    }
+
+    const detailDimensions = normalizeDetailDimensions(selectedPartDetail.part);
+
+    return selectedPartDetail.quarters.map((quarter) => quarterOverlay(quarter, detailDimensions, selectedMesh));
+  }, [displayMode, selectedMesh, selectedPartCode, selectedPartDetail, visualLayers.quarters]);
 
   return (
     <group rotation={[-0.4, 0.72, 0]}>
@@ -391,6 +483,18 @@ function ProjectAssemblyModel({
           <meshStandardMaterial color="#ff33c4" emissive="#ff8de0" emissiveIntensity={0.3} />
         </mesh>
       ))}
+      {grooveMeshes.map((groove) => (
+        <mesh key={groove.key} position={groove.position}>
+          <boxGeometry args={groove.size} />
+          <meshStandardMaterial color="#ff6a6a" transparent opacity={0.82} />
+        </mesh>
+      ))}
+      {quarterMeshes.map((quarter) => (
+        <mesh key={quarter.key} position={quarter.position}>
+          <boxGeometry args={quarter.size} />
+          <meshStandardMaterial color="#f3b300" transparent opacity={0.68} />
+        </mesh>
+      ))}
     </group>
   );
 }
@@ -413,6 +517,11 @@ export default function ProjectThreeViewer({
     drawers: true,
     facades: true,
     other: true,
+  });
+  const [visualLayers, setVisualLayers] = useState({
+    holes: true,
+    grooves: true,
+    quarters: true,
   });
 
   if (!items?.length) {
@@ -451,6 +560,13 @@ export default function ProjectThreeViewer({
   function handleClearSelection() {
     setFocusSelected(false);
     onClearSelection?.();
+  }
+
+  function toggleLayer(layer) {
+    setVisualLayers((current) => ({
+      ...current,
+      [layer]: !current[layer],
+    }));
   }
 
   const groupLabels = {
@@ -511,6 +627,20 @@ export default function ProjectThreeViewer({
             </button>
           ))}
         </div>
+        {displayMode === "transparent" && selectedPartCode && selectedPartDetail?.part?.export_code === selectedPartCode ? (
+          <div className="project-three-viewer-toggle">
+            {VISUAL_LAYERS.map((layer) => (
+              <button
+                className={visualLayers[layer] ? "active" : ""}
+                key={layer}
+                onClick={() => toggleLayer(layer)}
+                type="button"
+              >
+                {layer}
+              </button>
+            ))}
+          </div>
+        ) : null}
       </div>
       {selectedPartCode ? (
         <div className="project-three-viewer-actions">
@@ -546,6 +676,7 @@ export default function ProjectThreeViewer({
             selectedPartDetail={selectedPartDetail}
             selectedPartCode={selectedPartCode}
             visibility={visibility}
+            visualLayers={visualLayers}
           />
           <OrbitControls
             enablePan={false}
@@ -572,6 +703,16 @@ export default function ProjectThreeViewer({
         {displayMode === "transparent" && selectedPartDetail?.part?.export_code === selectedPartCode ? (
           <span className="project-three-viewer-badge">
             {selectedPartDetail.holes?.length || 0} {t.holes || "holes"}
+          </span>
+        ) : null}
+        {displayMode === "transparent" && selectedPartDetail?.part?.export_code === selectedPartCode ? (
+          <span className="project-three-viewer-badge">
+            {selectedPartDetail.grooves?.length || 0} grooves
+          </span>
+        ) : null}
+        {displayMode === "transparent" && selectedPartDetail?.part?.export_code === selectedPartCode ? (
+          <span className="project-three-viewer-badge">
+            {selectedPartDetail.quarters?.length || 0} quarters
           </span>
         ) : null}
       </div>
