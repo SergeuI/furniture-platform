@@ -405,6 +405,7 @@ function ProjectAssemblyModel({
   focusSelected,
   items,
   onHoverPart,
+  onOpenPart,
   onSelectPart,
   selectedPartDetail,
   selectedPartCode,
@@ -488,6 +489,11 @@ function ProjectAssemblyModel({
           onClick={(event) => {
             event.stopPropagation();
             onSelectPart?.(mesh.item.export_code);
+          }}
+          onDoubleClick={(event) => {
+            event.stopPropagation();
+            onSelectPart?.(mesh.item.export_code);
+            onOpenPart?.(mesh.item.export_code);
           }}
           onPointerOut={(event) => {
             event.stopPropagation();
@@ -749,6 +755,7 @@ export default function ProjectThreeViewer({
             focusSelected={focusSelected}
             items={items}
             onHoverPart={setHoveredPartCode}
+            onOpenPart={onOpenPart}
             onSelectPart={onSelectPart}
             selectedPartDetail={selectedPartDetail}
             selectedPartCode={selectedPartCode}
@@ -794,6 +801,22 @@ export default function ProjectThreeViewer({
           </span>
         ) : null}
       </div>
+      {displayMode === "transparent" && selectedPartCode ? (
+        <div className="project-three-viewer-legend">
+          <span className="project-three-viewer-legend-item">
+            <span className="project-three-viewer-legend-swatch holes" />
+            {t.holes || "holes"}
+          </span>
+          <span className="project-three-viewer-legend-item">
+            <span className="project-three-viewer-legend-swatch grooves" />
+            grooves
+          </span>
+          <span className="project-three-viewer-legend-item">
+            <span className="project-three-viewer-legend-swatch quarters" />
+            quarters
+          </span>
+        </div>
+      ) : null}
       <p className="project-three-viewer-hint">{t.productionAssemblyHint}</p>
     </section>
   );

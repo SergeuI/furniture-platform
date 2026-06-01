@@ -774,6 +774,40 @@ tbody tr.selected {
   gap: 8px;
 }
 
+.project-three-viewer-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.project-three-viewer-legend-item {
+  align-items: center;
+  color: #4e5f6b;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 700;
+  gap: 6px;
+}
+
+.project-three-viewer-legend-swatch {
+  border-radius: 999px;
+  display: inline-block;
+  height: 10px;
+  width: 10px;
+}
+
+.project-three-viewer-legend-swatch.holes {
+  background: #ff33c4;
+}
+
+.project-three-viewer-legend-swatch.grooves {
+  background: #ff6a6a;
+}
+
+.project-three-viewer-legend-swatch.quarters {
+  background: #f3b300;
+}
+
 .project-three-viewer-badge {
   background: #eef3f6;
   border-radius: 999px;
