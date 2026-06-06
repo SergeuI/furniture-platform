@@ -1,13 +1,17 @@
 import aiosqlite
+from services.legacy_db_config import (
+    DEFAULT_DB_PATH,
+    TELEGRAM_USERS_TABLE,
+)
 
-DB_NAME = "mebli_calculator.db"
+DB_NAME = DEFAULT_DB_PATH
 
 
 
 async def get_user_city(telegram_id: int):
     async with aiosqlite.connect(DB_NAME) as db:
         cursor = await db.execute(
-            "SELECT citi FROM users WHERE telegram_id = ?",
+            f"SELECT citi FROM {TELEGRAM_USERS_TABLE} WHERE telegram_id = ?",
             (telegram_id,)
         )
         row = await cursor.fetchone()

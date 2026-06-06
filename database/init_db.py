@@ -17,8 +17,21 @@ from database.models.audit_log import (
 from database.models.catalog_item import (
     CatalogItemModel
 )
+from database.models.service_catalog_item import (
+    ServiceCatalogItemModel
+)
+from database.models.user_service_catalog_price import (
+    UserServiceCatalogPriceModel
+)
 from database.repositories.catalog_repository import (
     seed_default_catalog_items
+)
+from database.repositories.service_catalog_repository import (
+    seed_default_viyar_service_catalog
+)
+from services.legacy_db_config import (
+    ensure_unified_legacy_schema,
+    migrate_legacy_sqlite_to_unified_db,
 )
 
 
@@ -191,6 +204,49 @@ def upgrade_sqlite_schema():
             """
         )
 
+        service_catalog_columns = {
+            "article": "VARCHAR",
+            "last_synced_at": "DATETIME",
+            "price_sync_status": "VARCHAR",
+            "price_source_label": "VARCHAR",
+        }
+
+        for column_name, column_type in service_catalog_columns.items():
+
+            _add_column_if_missing(
+
+                connection,
+
+                "service_catalog_items",
+
+                column_name,
+
+                column_type
+            )
+
+        user_columns = {
+            "viyar_email": "VARCHAR",
+            "viyar_password_secret": "VARCHAR",
+            "viyar_cookie": "VARCHAR",
+            "viyar_cookie_updated_at": "DATETIME",
+            "viyar_last_auth_at": "DATETIME",
+            "viyar_last_auth_status": "VARCHAR",
+            "viyar_last_auth_error": "VARCHAR",
+        }
+
+        for column_name, column_type in user_columns.items():
+
+            _add_column_if_missing(
+
+                connection,
+
+                "users",
+
+                column_name,
+
+                column_type
+            )
+
 
 def init_database():
 
@@ -198,9 +254,13 @@ def init_database():
         bind=engine
     )
 
+    ensure_unified_legacy_schema()
+    migrate_legacy_sqlite_to_unified_db()
+
     upgrade_sqlite_schema()
 
     seed_default_catalog_items()
+    seed_default_viyar_service_catalog()
 
 
 if __name__ == "__main__":

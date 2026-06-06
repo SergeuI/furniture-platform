@@ -33,7 +33,7 @@ logging.basicConfig(
 # DATABASE
 # =====================================================
 
-DB_NAME = "mebli_calculator.db"
+DB_NAME = "furniture_platform.db"
 
 
 # =====================================================

@@ -3,7 +3,7 @@
 from services.mt_parser import get_mt_product_from_db # ✅ Правильний імпорт з БД
 import aiosqlite
 
-DB_NAME = "mebli_calculator.db"
+DB_NAME = "furniture_platform.db"
 
 # 🔹 ОПИС КОМПЛЕКТІВ
 KITS = {

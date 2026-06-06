@@ -2,9 +2,13 @@ import json
 import uuid
 import aiosqlite
 import logging
+from services.legacy_db_config import (
+    DEFAULT_DB_PATH,
+    TELEGRAM_PROJECTS_TABLE,
+)
 
 
-DB_NAME = "mebli_calculator.db"
+DB_NAME = DEFAULT_DB_PATH
 
 
 # =====================================================
@@ -28,7 +32,7 @@ async def save_project(
         await db.execute(
 
             """
-            INSERT INTO projects (
+            INSERT INTO telegram_projects (
 
                 project_id,
                 telegram_id,
@@ -91,7 +95,7 @@ async def get_project(
                 project_json,
                 cutting_json
 
-            FROM projects
+            FROM telegram_projects
 
             WHERE project_id = ?
             """,

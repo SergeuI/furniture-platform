@@ -1,12 +1,22 @@
 import aiosqlite
+from services.legacy_db_config import (
+    DEFAULT_DB_PATH,
+    TELEGRAM_PROJECTS_TABLE,
+    TELEGRAM_USERS_TABLE,
+    ensure_unified_legacy_schema,
+    migrate_legacy_sqlite_to_unified_db,
+)
 
-DB_NAME = "mebli_calculator.db"
+DB_NAME = DEFAULT_DB_PATH
 
 # =====================================================
 # INIT DATABASE
 # =====================================================
 
 async def init_db():
+
+    ensure_unified_legacy_schema(DB_NAME)
+    migrate_legacy_sqlite_to_unified_db(DB_NAME)
 
     async with aiosqlite.connect(DB_NAME) as db:
 
@@ -15,7 +25,7 @@ async def init_db():
         # =====================================================
 
         await db.execute("""
-            CREATE TABLE IF NOT EXISTS users (
+            CREATE TABLE IF NOT EXISTS telegram_users (
 
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
 
@@ -150,7 +160,7 @@ async def init_db():
         """)
 
         await db.execute("""
-            CREATE TABLE IF NOT EXISTS projects (
+            CREATE TABLE IF NOT EXISTS telegram_projects (
 
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
 
@@ -176,7 +186,7 @@ async def init_db():
 
         CREATE INDEX IF NOT EXISTS idx_users_tg
 
-        ON users(telegram_id)
+        ON telegram_users(telegram_id)
 
         """)
 
@@ -184,7 +194,7 @@ async def init_db():
 
         CREATE INDEX IF NOT EXISTS idx_projects_tg
 
-        ON projects(telegram_id)
+        ON telegram_projects(telegram_id)
 
         """)
 

@@ -13,7 +13,7 @@ import sqlite3
 
 def init_auth_tables(
 
-    db_path="mebli_calculator.db"
+    db_path="furniture_platform.db"
 ):
 
     connection = sqlite3.connect(
@@ -53,7 +53,7 @@ def register_user(
 
     role,
 
-    db_path="mebli_calculator.db"
+    db_path="furniture_platform.db"
 ):
 
     connection = sqlite3.connect(
@@ -99,7 +99,7 @@ def get_user_role(
 
     telegram_id,
 
-    db_path="mebli_calculator.db"
+    db_path="furniture_platform.db"
 ):
 
     connection = sqlite3.connect(

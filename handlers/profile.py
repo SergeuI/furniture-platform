@@ -18,6 +18,10 @@ from forms.user import (
 
 import re
 import aiosqlite
+from services.legacy_db_config import (
+    DEFAULT_DB_PATH,
+    TELEGRAM_USERS_TABLE,
+)
 
 from keyboards.ReplyKeyboard import (
     user_menu,
@@ -35,14 +39,14 @@ from services.profile_card import (
 
 router = Router()
 
-DB_NAME = "mebli_calculator.db"
+DB_NAME = DEFAULT_DB_PATH
 
 
 
 async def user_exists(telegram_id: int):
     async with aiosqlite.connect(DB_NAME) as db:
         cursor = await db.execute(
-            "SELECT 1 FROM users WHERE telegram_id = ?",
+            f"SELECT 1 FROM {TELEGRAM_USERS_TABLE} WHERE telegram_id = ?",
             (telegram_id,)
         )
         return await cursor.fetchone()
@@ -50,7 +54,7 @@ async def user_exists(telegram_id: int):
 async def add_user(telegram_id, name, phone, citi, email):
     async with aiosqlite.connect(DB_NAME) as db:
         await db.execute("""
-            INSERT INTO users (telegram_id, name, phone, citi, email)
+            INSERT INTO telegram_users (telegram_id, name, phone, citi, email)
             VALUES (?, ?, ?, ?, ?)
         """, (telegram_id, name, phone, citi, email))
         await db.commit()
@@ -58,7 +62,7 @@ async def add_user(telegram_id, name, phone, citi, email):
 async def get_user(telegram_id: int):
     async with aiosqlite.connect(DB_NAME) as db:
         cursor = await db.execute(
-            "SELECT name, phone, citi, email FROM users WHERE telegram_id = ?",
+            f"SELECT name, phone, citi, email FROM {TELEGRAM_USERS_TABLE} WHERE telegram_id = ?",
             (telegram_id,)
         )
         return await cursor.fetchone()
@@ -199,7 +203,7 @@ async def update_user_field(telegram_id, field, value):
 
     async with aiosqlite.connect(DB_NAME) as db:
         await db.execute(
-            f"UPDATE users SET {field} = ? WHERE telegram_id = ?",
+            f"UPDATE {TELEGRAM_USERS_TABLE} SET {field} = ? WHERE telegram_id = ?",
             (value, telegram_id)
         )
         await db.commit()

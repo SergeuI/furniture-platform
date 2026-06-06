@@ -1,7 +1,7 @@
 import aiosqlite
 
 
-DB_NAME = "mebli_calculator.db"
+DB_NAME = "furniture_platform.db"
 
 
 async def save_fitting(

@@ -14,7 +14,7 @@ from datetime import datetime
 
 def connect_db(
 
-    db_path="mebli_calculator.db"
+    db_path="furniture_platform.db"
 ):
 
     return sqlite3.connect(
@@ -29,7 +29,7 @@ def connect_db(
 
 def init_production_db(
 
-    db_path="mebli_calculator.db"
+    db_path="furniture_platform.db"
 ):
 
     connection = connect_db(
@@ -189,7 +189,7 @@ def create_order(
 
     project_name,
 
-    db_path="mebli_calculator.db"
+    db_path="furniture_platform.db"
 ):
 
     connection = connect_db(
@@ -242,7 +242,7 @@ def register_part(
 
     order_id=None,
 
-    db_path="mebli_calculator.db"
+    db_path="furniture_platform.db"
 ):
 
     connection = connect_db(
@@ -360,7 +360,7 @@ def update_stage(
 
     operator="",
 
-    db_path="mebli_calculator.db"
+    db_path="furniture_platform.db"
 ):
 
     connection = connect_db(
@@ -409,7 +409,7 @@ def get_part(
 
     part_id,
 
-    db_path="mebli_calculator.db"
+    db_path="furniture_platform.db"
 ):
 
     connection = connect_db(

@@ -12,7 +12,7 @@ import re
 from playwright.async_api import async_playwright
 from bs4 import BeautifulSoup
 
-DB_NAME = "mebli_calculator.db"
+DB_NAME = "furniture_platform.db"
 BASE_URL = "https://mt.ua"
 
 # Список артикулів для парсингу (з KITS + додаткові)

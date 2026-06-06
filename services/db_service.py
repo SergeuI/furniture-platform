@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DB_NAME = "mebli_calculator.db"
+DB_NAME = "furniture_platform.db"
 
 ADMIN_ID = os.getenv(
     "ADMIN_ID"
@@ -193,6 +193,7 @@ async def seed_materials():
             )
 
         await db.commit()
+
 
 
 

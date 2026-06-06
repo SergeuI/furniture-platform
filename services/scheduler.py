@@ -1,3 +1,5 @@
+import logging
+
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from services.run_parser import main as run_viyar_parser
@@ -32,4 +34,6 @@ def start_scheduler():
 
     scheduler.start()
 
-    print("✅ Scheduler запущено")
+    logging.info(
+        "Scheduler started"
+    )

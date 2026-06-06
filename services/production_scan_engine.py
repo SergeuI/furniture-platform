@@ -48,7 +48,7 @@ def find_part_by_barcode(
 
     barcode,
 
-    db_path="mebli_calculator.db"
+    db_path="furniture_platform.db"
 ):
 
     parsed = parse_barcode(
