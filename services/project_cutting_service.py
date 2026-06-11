@@ -1,3 +1,9 @@
+from services.project_assembly_service import (
+    build_project_assembly_layout,
+    build_project_assembly_mapping
+)
+
+
 def _safe_text(value, fallback="not_set"):
 
     if value is None:
@@ -391,9 +397,17 @@ def build_project_cutting(project):
         items,
         project.edge_overrides
     )
+    assembly_layout = build_project_assembly_layout(
+        project
+    )
 
     return {
         "items": items,
+        "assembly": build_project_assembly_mapping(
+            project,
+            items,
+            assembly_layout
+        ),
         "summary": {
             "total_parts": sum(
                 item["quantity"]

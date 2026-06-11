@@ -22,6 +22,10 @@ from services.callback_lock import (
 from core.geometry.sections import (
     build_sections_geometry
 )
+from services.telegram_access_service import (
+    ensure_calculator_access_for_message,
+    ensure_calculator_access_for_callback,
+)
 
 
 router = Router()
@@ -66,6 +70,8 @@ def get_available_sections(width: int):
 # =====================================================
 
 async def show_sections(message, state, index=0):
+    if not await ensure_calculator_access_for_message(message):
+        return
 
     data = await state.get_data()
 
@@ -110,6 +116,8 @@ async def show_sections(message, state, index=0):
 
 @router.callback_query(F.data.startswith("sec_prev_"))
 async def prev_section(callback: CallbackQuery, state: FSMContext):
+    if not await ensure_calculator_access_for_callback(callback):
+        return
 
     data = await state.get_data()
 
@@ -166,6 +174,8 @@ async def prev_section(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data.startswith("sec_next_"))
 async def next_section(callback: CallbackQuery, state: FSMContext):
+    if not await ensure_calculator_access_for_callback(callback):
+        return
 
     data = await state.get_data()
 
@@ -223,6 +233,8 @@ async def next_section(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data.startswith("select_section_"))
 async def select_section(callback: CallbackQuery, state: FSMContext):
+    if not await ensure_calculator_access_for_callback(callback):
+        return
 
     data = await state.get_data()
 

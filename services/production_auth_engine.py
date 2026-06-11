@@ -5,6 +5,17 @@
 
 import sqlite3
 
+from database.repositories.user_repository import (
+    get_user_by_telegram_id,
+)
+from services.telegram_identity_service import (
+    ensure_telegram_identity,
+)
+from services.user_roles import (
+    normalize_user_role,
+    ROLE_GUEST,
+)
+
 
 # =====================================================
 # INIT AUTH TABLE
@@ -55,6 +66,16 @@ def register_user(
 
     db_path="furniture_platform.db"
 ):
+
+    core_user = get_user_by_telegram_id(telegram_id)
+
+    if not core_user:
+        ensure_telegram_identity(
+            telegram_id=telegram_id,
+            email=f"tg_{telegram_id}@telegram.local",
+            display_name=username,
+            role=ROLE_GUEST,
+        )
 
     connection = sqlite3.connect(
         db_path
@@ -125,8 +146,13 @@ def get_user_role(
 
     connection.close()
 
-    if not row:
+    if row:
+        return row[0]
 
-        return "guest"
+    core_user = get_user_by_telegram_id(telegram_id)
 
-    return row[0]
+    if not core_user:
+
+        return ROLE_GUEST
+
+    return normalize_user_role(core_user.role)

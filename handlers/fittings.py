@@ -6,6 +6,9 @@ from aiogram.types import (
     FSInputFile,
     InputMediaPhoto
 )
+from aiogram.exceptions import (
+    TelegramBadRequest
+)
 
 from aiogram.fsm.context import FSMContext
 
@@ -54,6 +57,10 @@ from services.project_storage_service import (
 from services.material_db import (
     get_user_city
 )
+from services.telegram_access_service import (
+    ensure_calculator_access_for_message,
+    ensure_calculator_access_for_callback,
+)
 
 
 
@@ -62,6 +69,8 @@ router = Router()
 
 # ✅ ОНОВЛЕНО: Миттєва карусель фурнітури з БД
 async def show_fittings(message, state):
+    if not await ensure_calculator_access_for_message(message):
+        return
 
     data = await state.get_data()
 
@@ -105,27 +114,50 @@ async def show_fittings(message, state):
         "kyiv"
     )
 
-    await state.update_data(
-
-        fittings=fittings,
-
-        fit_index=0,
-
-        city=city
-    )
-
-    # =====================================
-    # ПЕРШИЙ ЕЛЕМЕНТ
-    # =====================================
-
-    item = fittings[0]
-
     drawers = data.get(
         "drawers_config",
         []
     )
 
     drawer_count = sum(drawers)
+
+    available_fittings = []
+
+    for fitting in fittings:
+
+        normalized = await normalize_fitting(
+            item=fitting,
+            city=city,
+            drawer_count=drawer_count
+        )
+
+        if normalized and normalized.get("photo"):
+            available_fittings.append(fitting)
+
+    if not available_fittings:
+
+        await message.answer(
+            "❌ Немає доступних варіантів направляючих для preview"
+        )
+
+        return
+
+    await state.update_data(
+
+        fittings=available_fittings,
+
+        fit_index=0,
+
+        city=city,
+
+        drawer_count=drawer_count
+    )
+
+    # =====================================
+    # ПЕРШИЙ ЕЛЕМЕНТ
+    # =====================================
+
+    item = available_fittings[0]
 
     normalized = await normalize_fitting(
         item=item,
@@ -181,6 +213,9 @@ async def show_fittings(message, state):
 
 
 async def show_one_fitting(message: Message, state: FSMContext):
+    if not await ensure_calculator_access_for_message(message):
+        return
+
 
     try:
 
@@ -203,7 +238,9 @@ async def show_one_fitting(message: Message, state: FSMContext):
         item = fittings[index]
 
         city_raw = await get_user_city(
-            message.chat.id
+            message.from_user.id
+            if message.from_user
+            else message.chat.id
         )
 
         city = CITY_MAP.get(
@@ -211,10 +248,16 @@ async def show_one_fitting(message: Message, state: FSMContext):
             "kyiv"
         )
 
+        drawer_count = data.get(
+            "drawer_count",
+            1
+        )
+
         media = await build_fitting_media(
             item=item,
             city=city,
-            index=index
+            index=index,
+            drawer_count=drawer_count
         )
 
         if not media:
@@ -255,16 +298,23 @@ async def show_one_fitting(message: Message, state: FSMContext):
 
         else:
 
-            await message.bot.edit_message_media(
+            try:
 
-                chat_id=message.chat.id,
+                await message.bot.edit_message_media(
 
-                message_id=fit_msg_id,
+                    chat_id=message.chat.id,
 
-                media=media,
+                    message_id=fit_msg_id,
 
-                reply_markup=fitting_carousel_keyboard()
-            )
+                    media=media,
+
+                    reply_markup=fitting_carousel_keyboard()
+                )
+
+            except TelegramBadRequest as e:
+
+                if "message is not modified" not in str(e):
+                    raise
 
     except Exception as e:
 
@@ -281,6 +331,8 @@ async def show_one_fitting(message: Message, state: FSMContext):
 # обробка кнопок
 @router.callback_query(F.data == "fit_next")
 async def fit_next(callback: CallbackQuery, state: FSMContext):
+    if not await ensure_calculator_access_for_callback(callback):
+        return
 
     data = await state.get_data()
 
@@ -289,6 +341,13 @@ async def fit_next(callback: CallbackQuery, state: FSMContext):
     if not fittings:
 
         await callback.answer()
+        return
+
+    if len(fittings) <= 1:
+
+        await callback.answer(
+            "Є лише один варіант"
+        )
         return
 
     index = data.get("fit_index", 0)
@@ -312,6 +371,8 @@ async def fit_next(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data == "fit_prev")
 async def fit_prev(callback: CallbackQuery, state: FSMContext):
+    if not await ensure_calculator_access_for_callback(callback):
+        return
 
     data = await state.get_data()
 
@@ -320,6 +381,13 @@ async def fit_prev(callback: CallbackQuery, state: FSMContext):
     if not fittings:
 
         await callback.answer()
+        return
+
+    if len(fittings) <= 1:
+
+        await callback.answer(
+            "Є лише один варіант"
+        )
         return
 
     index = data.get("fit_index", 0)
@@ -344,6 +412,8 @@ async def fit_prev(callback: CallbackQuery, state: FSMContext):
 # Обробник після вибору напрямних
 @router.callback_query(F.data == "fit_select")
 async def fit_select(callback: CallbackQuery, state: FSMContext):
+    if not await ensure_calculator_access_for_callback(callback):
+        return
 
     lock = await acquire_lock(
 
@@ -676,6 +746,8 @@ async def bottom_prev(
     callback: CallbackQuery,
     state: FSMContext
 ):
+    if not await ensure_calculator_access_for_callback(callback):
+        return
 
     index = int(
         callback.data.split("_")[-1]
@@ -728,6 +800,8 @@ async def bottom_next(
     callback: CallbackQuery,
     state: FSMContext
 ):
+    if not await ensure_calculator_access_for_callback(callback):
+        return
 
     index = int(
         callback.data.split("_")[-1]
@@ -782,6 +856,8 @@ async def choose_drawer_bottom(
 
     state: FSMContext
 ):
+    if not await ensure_calculator_access_for_callback(callback):
+        return
 
     index = int(
         callback.data.split("_")[-1]

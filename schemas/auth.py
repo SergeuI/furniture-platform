@@ -2,6 +2,7 @@ from pydantic import (
     BaseModel,
     Field
 )
+from datetime import datetime
 from typing import List
 from typing import Optional
 
@@ -110,6 +111,62 @@ class UpdateUserActiveSchema(BaseModel):
     is_active: bool
 
 
+class UpdateOwnViyarAuthSchema(BaseModel):
+
+    email: str = Field(
+
+        min_length=3,
+
+        max_length=255
+    )
+
+    password: str | None = Field(
+
+        default=None,
+
+        min_length=8,
+
+        max_length=255
+    )
+
+
+class UpdateOwnProfileSchema(BaseModel):
+
+    phone: str | None = Field(
+        default=None,
+        min_length=3,
+        max_length=64
+    )
+
+    username: str | None = Field(
+        default=None,
+        min_length=3,
+        max_length=64
+    )
+
+    city: str | None = Field(
+        default=None,
+        min_length=2,
+        max_length=64
+    )
+
+
+class CreateEmailChangeRequestSchema(BaseModel):
+
+    new_email: str = Field(
+        min_length=3,
+        max_length=255
+    )
+
+
+class ReviewUserChangeRequestSchema(BaseModel):
+
+    status: str = Field(
+        min_length=8,
+        max_length=16
+    )
+
+
 # =====================================================
 # AUTH RESPONSES
 # =====================================================
@@ -120,9 +177,31 @@ class UserResponseSchema(BaseModel):
 
     email: str
 
+    username: str | None = None
+
+    phone: str | None = None
+
+    city: str | None = None
+
+    telegram_id: str | None = None
+
     role: str
 
     is_active: bool
+
+    last_username_change_at: datetime | None = None
+
+    viyar_email: str | None = None
+
+    viyar_has_password: bool = False
+
+    viyar_has_cookie: bool = False
+
+    viyar_last_auth_at: datetime | None = None
+
+    viyar_last_auth_status: str | None = None
+
+    viyar_last_auth_error: str | None = None
 
 
 class AuthResponseSchema(BaseModel):
@@ -167,3 +246,105 @@ class UserOperationResponseSchema(BaseModel):
     user: Optional[UserResponseSchema] = None
 
     error: Optional[str] = None
+
+
+class ViyarAuthStatusSchema(BaseModel):
+
+    email: str | None = None
+
+    has_password: bool
+
+    has_cookie: bool
+
+    cookie_updated_at: datetime | None = None
+
+    last_auth_at: datetime | None = None
+
+    last_auth_status: str | None = None
+
+    last_auth_error: str | None = None
+
+
+class ViyarAuthResponseSchema(BaseModel):
+
+    success: bool
+
+    viyar: ViyarAuthStatusSchema | None = None
+
+    error: str | None = None
+
+
+class UserChangeRequestItemSchema(BaseModel):
+
+    id: str
+
+    user_id: str
+
+    change_type: str
+
+    old_value: str | None = None
+
+    new_value: str
+
+    status: str
+
+    created_at: datetime | None = None
+
+    reviewed_at: datetime | None = None
+
+    reviewed_by_user_id: str | None = None
+
+
+class UserChangeRequestResponseSchema(BaseModel):
+
+    success: bool
+
+    request: UserChangeRequestItemSchema | None = None
+
+    error: str | None = None
+
+
+class UserChangeRequestListResponseSchema(BaseModel):
+
+    success: bool
+
+    limit: int | None = None
+
+    offset: int | None = None
+
+    requests: List[UserChangeRequestItemSchema]
+
+
+class AdminUserProjectSummarySchema(BaseModel):
+
+    id: str
+
+    project_name: str | None = None
+
+    project_type: str | None = None
+
+    client_name: str | None = None
+
+    room_name: str | None = None
+
+    created_at: datetime | None = None
+
+    updated_at: datetime | None = None
+
+
+class AdminUserDetailsSchema(BaseModel):
+
+    user: UserResponseSchema
+
+    change_requests: List[UserChangeRequestItemSchema]
+
+    projects: List[AdminUserProjectSummarySchema]
+
+
+class AdminUserDetailsResponseSchema(BaseModel):
+
+    success: bool
+
+    details: AdminUserDetailsSchema | None = None
+
+    error: str | None = None

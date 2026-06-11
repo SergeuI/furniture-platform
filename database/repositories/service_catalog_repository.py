@@ -1,0 +1,624 @@
+from datetime import datetime
+import re
+import uuid
+
+from database.session import (
+    SessionLocal,
+)
+
+from database.models.service_catalog_item import (
+    ServiceCatalogItemModel,
+)
+from database.models.user_service_catalog_price import (
+    UserServiceCatalogPriceModel,
+)
+
+from services.viyar_service_catalog_service import (
+    build_viyar_service_catalog_records,
+    fetch_viyar_service_price_updates,
+)
+
+
+def _serialize_service_catalog_item(
+    item,
+    user_price=None,
+) -> dict:
+
+    effective_price = (
+        user_price.base_price
+        if user_price and user_price.base_price is not None
+        else item.base_price
+    )
+    effective_currency = (
+        user_price.currency
+        if user_price and user_price.currency
+        else item.currency
+    )
+
+    return {
+        "id": item.id,
+        "source": item.source,
+        "external_code": item.external_code,
+        "parent_external_code": item.parent_external_code,
+        "owner_user_id": item.owner_user_id,
+        "name": item.name,
+        "slug": item.slug,
+        "item_type": item.item_type,
+        "folder_path": item.folder_path,
+        "description": item.description,
+        "article": item.article,
+        "unit": item.unit,
+        "base_price": item.base_price,
+        "currency": item.currency,
+        "source_url": item.source_url,
+        "is_calculable": item.is_calculable,
+        "sort_order": item.sort_order,
+        "is_active": item.is_active,
+        "last_synced_at": item.last_synced_at,
+        "price_sync_status": item.price_sync_status,
+        "price_source_label": item.price_source_label,
+        "effective_price": effective_price,
+        "effective_currency": effective_currency,
+        "user_price": user_price.base_price if user_price else None,
+        "user_currency": user_price.currency if user_price else None,
+        "user_last_synced_at": user_price.last_synced_at if user_price else None,
+        "user_price_sync_status": user_price.price_sync_status if user_price else None,
+        "user_price_source_label": user_price.price_source_label if user_price else None,
+    }
+
+
+def seed_default_viyar_service_catalog():
+
+    sync_viyar_service_catalog(
+        use_remote=False
+    )
+
+
+def sync_viyar_service_catalog(
+    use_remote: bool = True,
+    cookie_override: str | None = None,
+) -> dict:
+
+    records = build_viyar_service_catalog_records(
+        use_remote=use_remote,
+        cookie_override=cookie_override,
+    )
+
+    db = SessionLocal()
+
+    try:
+
+        existing_items = (
+            db.query(ServiceCatalogItemModel)
+            .filter(ServiceCatalogItemModel.source == "viyar")
+            .all()
+        )
+
+        existing_by_code = {
+            item.external_code: item
+            for item in existing_items
+        }
+        existing_active_service_count = sum(
+            1
+            for item in existing_items
+            if item.item_type == "service" and item.is_active
+        )
+
+        imported_codes: set[str] = set()
+        imported_service_count = sum(
+            1
+            for record in records
+            if record["item_type"] == "service"
+        )
+        imported_service_articles = sum(
+            1
+            for record in records
+            if record["item_type"] == "service" and record.get("article")
+        )
+        fallback_only_import = (
+            imported_service_count > 0
+            and imported_service_count <= 12
+            and imported_service_articles == 0
+            and existing_active_service_count > imported_service_count
+        )
+
+        for record in records:
+
+            item = existing_by_code.get(record["external_code"])
+
+            if not item:
+                item = ServiceCatalogItemModel(
+                    source=record["source"],
+                    external_code=record["external_code"],
+                )
+                db.add(item)
+
+            item.parent_external_code = record["parent_external_code"]
+            item.name = record["name"]
+            item.slug = record["slug"]
+            item.item_type = record["item_type"]
+            item.folder_path = record["folder_path"]
+            item.description = record["description"] or item.description
+            item.article = record.get("article") or item.article
+            item.unit = record["unit"] or item.unit
+            item.base_price = (
+                record["base_price"]
+                if record["base_price"] is not None
+                else item.base_price
+            )
+            item.currency = (
+                record["currency"]
+                if record["base_price"] is not None
+                else (item.currency or record["currency"])
+            )
+            item.source_url = record["source_url"] or item.source_url
+            item.is_calculable = record["is_calculable"]
+            item.sort_order = record["sort_order"]
+            item.is_active = record["is_active"]
+
+            imported_codes.add(record["external_code"])
+
+        if not fallback_only_import:
+            for item in existing_items:
+                if item.external_code not in imported_codes:
+                    item.is_active = False
+
+        db.commit()
+
+        return {
+            "items": list_service_catalog_tree(
+                source="viyar",
+                include_inactive=False,
+            ),
+            "fallback_only_import": fallback_only_import,
+            "folder_count": sum(
+                1
+                for record in records
+                if record["item_type"] == "folder"
+                and record["parent_external_code"] is not None
+            ),
+            "imported_count": len(records),
+            "service_count": sum(
+                1
+                for record in records
+                if record["item_type"] == "service"
+            ),
+        }
+
+    finally:
+
+        db.close()
+
+
+def list_service_catalog_items(
+    source: str = "viyar",
+    include_inactive: bool = False,
+    user_id: str | None = None,
+    owner_user_id: str | None = None,
+) -> list[dict]:
+
+    db = SessionLocal()
+
+    try:
+
+        query = db.query(ServiceCatalogItemModel).filter(
+            ServiceCatalogItemModel.source == source,
+        )
+
+        if source == "manual":
+            query = query.filter(
+                ServiceCatalogItemModel.owner_user_id == owner_user_id,
+            )
+
+        if not include_inactive:
+            query = query.filter(
+                ServiceCatalogItemModel.is_active.is_(True),
+            )
+
+        items = (
+            query.order_by(
+                ServiceCatalogItemModel.folder_path.asc(),
+                ServiceCatalogItemModel.sort_order.asc(),
+                ServiceCatalogItemModel.name.asc(),
+            )
+            .all()
+        )
+
+        user_prices_by_item_id = {}
+
+        if user_id:
+            user_prices = (
+                db.query(UserServiceCatalogPriceModel)
+                .filter(UserServiceCatalogPriceModel.user_id == user_id)
+                .all()
+            )
+            user_prices_by_item_id = {
+                price.service_catalog_item_id: price
+                for price in user_prices
+            }
+
+        return [
+            _serialize_service_catalog_item(
+                item,
+                user_price=user_prices_by_item_id.get(item.id),
+            )
+            for item in items
+        ]
+
+    finally:
+
+        db.close()
+
+
+def list_service_catalog_tree(
+    source: str = "viyar",
+    include_inactive: bool = False,
+    user_id: str | None = None,
+    owner_user_id: str | None = None,
+) -> list[dict]:
+
+    items = list_service_catalog_items(
+        source=source,
+        include_inactive=include_inactive,
+        user_id=user_id,
+        owner_user_id=owner_user_id,
+    )
+
+    nodes = {
+        item["external_code"]: {
+            **item,
+            "children": [],
+        }
+        for item in items
+    }
+
+    roots: list[dict] = []
+
+    for item in items:
+
+        node = nodes[item["external_code"]]
+        parent_code = item["parent_external_code"]
+
+        if parent_code and parent_code in nodes:
+            nodes[parent_code]["children"].append(node)
+        else:
+            roots.append(node)
+
+    def _sort_nodes(node: dict):
+        node["children"].sort(
+            key=lambda child: (
+                child["sort_order"],
+                child["name"],
+            )
+        )
+        for child in node["children"]:
+            _sort_nodes(child)
+
+    for root in roots:
+        _sort_nodes(root)
+
+    roots.sort(
+        key=lambda item: (
+            item["sort_order"],
+            item["name"],
+        )
+    )
+
+    return roots
+
+
+def list_calculable_service_catalog_items(
+    source: str | None = None,
+    user_id: str | None = None,
+    owner_user_id: str | None = None,
+) -> list[dict]:
+
+    db = SessionLocal()
+
+    try:
+
+        query = db.query(ServiceCatalogItemModel).filter(
+            ServiceCatalogItemModel.item_type == "service",
+            ServiceCatalogItemModel.is_active.is_(True),
+            ServiceCatalogItemModel.is_calculable.is_(True),
+        )
+
+        if source:
+            query = query.filter(
+                ServiceCatalogItemModel.source == source,
+            )
+
+        if source == "manual":
+            query = query.filter(
+                ServiceCatalogItemModel.owner_user_id == owner_user_id,
+            )
+
+        items = (
+            query.order_by(
+                ServiceCatalogItemModel.folder_path.asc(),
+                ServiceCatalogItemModel.sort_order.asc(),
+                ServiceCatalogItemModel.name.asc(),
+            )
+            .all()
+        )
+
+        user_prices_by_item_id = {}
+
+        if user_id:
+            user_prices = (
+                db.query(UserServiceCatalogPriceModel)
+                .filter(UserServiceCatalogPriceModel.user_id == user_id)
+                .all()
+            )
+            user_prices_by_item_id = {
+                price.service_catalog_item_id: price
+                for price in user_prices
+            }
+
+        return [
+            _serialize_service_catalog_item(
+                item,
+                user_price=user_prices_by_item_id.get(item.id),
+            )
+            for item in items
+        ]
+
+    finally:
+
+        db.close()
+
+
+def update_service_catalog_item(
+    item_id: str,
+    unit: str | None,
+    base_price: float | None,
+    is_calculable: bool,
+    is_active: bool,
+) -> dict | None:
+
+    db = SessionLocal()
+
+    try:
+
+        item = (
+            db.query(ServiceCatalogItemModel)
+            .filter(ServiceCatalogItemModel.id == item_id)
+            .first()
+        )
+
+        if not item:
+            return None
+
+        if item.item_type != "service":
+            return None
+
+        item.unit = unit.strip() if isinstance(unit, str) and unit.strip() else None
+        item.base_price = base_price
+        item.is_calculable = is_calculable
+        item.is_active = is_active
+
+        db.commit()
+        db.refresh(item)
+
+        return _serialize_service_catalog_item(item)
+
+    finally:
+
+        db.close()
+
+
+def create_manual_service_catalog_item(
+    user_id: str,
+    name: str,
+    article: str | None,
+    description: str | None,
+    unit: str | None,
+    base_price: float | None,
+    is_calculable: bool,
+    is_active: bool,
+) -> dict:
+
+    db = SessionLocal()
+
+    try:
+        normalized_name = name.strip()
+        if not normalized_name:
+            raise ValueError("Manual service name is required")
+        article_value = article.strip() if isinstance(article, str) and article.strip() else None
+        description_value = (
+            description.strip()
+            if isinstance(description, str) and description.strip()
+            else None
+        )
+        unit_value = unit.strip() if isinstance(unit, str) and unit.strip() else None
+        slug_base = re.sub(r"[^a-z0-9]+", "-", normalized_name.lower()).strip("-") or "service"
+        external_code = f"manual-{uuid.uuid4().hex}"
+        next_sort_order = (
+            db.query(ServiceCatalogItemModel)
+            .filter(ServiceCatalogItemModel.source == "manual")
+            .filter(ServiceCatalogItemModel.owner_user_id == user_id)
+            .count()
+        )
+
+        item = ServiceCatalogItemModel(
+            source="manual",
+            external_code=external_code,
+            parent_external_code=None,
+            owner_user_id=user_id,
+            name=normalized_name,
+            slug=f"{slug_base}-{external_code[-6:]}",
+            item_type="service",
+            folder_path="manual-services",
+            description=description_value,
+            article=article_value,
+            unit=unit_value,
+            base_price=base_price,
+            currency="UAH" if base_price is not None else None,
+            source_url=None,
+            is_calculable=is_calculable,
+            sort_order=next_sort_order,
+            is_active=is_active,
+            price_sync_status="manual",
+            price_source_label="manual",
+        )
+        db.add(item)
+        db.commit()
+        db.refresh(item)
+
+        return _serialize_service_catalog_item(item)
+    finally:
+        db.close()
+
+
+def update_manual_service_catalog_item(
+    user_id: str,
+    item_id: str,
+    name: str,
+    article: str | None,
+    description: str | None,
+    unit: str | None,
+    base_price: float | None,
+    is_calculable: bool,
+    is_active: bool,
+) -> dict | None:
+
+    db = SessionLocal()
+
+    try:
+        item = (
+            db.query(ServiceCatalogItemModel)
+            .filter(ServiceCatalogItemModel.id == item_id)
+            .filter(ServiceCatalogItemModel.source == "manual")
+            .filter(ServiceCatalogItemModel.owner_user_id == user_id)
+            .first()
+        )
+
+        if not item:
+            return None
+
+        normalized_name = name.strip()
+        if not normalized_name:
+            return None
+
+        item.name = normalized_name
+        item.article = article.strip() if isinstance(article, str) and article.strip() else None
+        item.description = (
+            description.strip()
+            if isinstance(description, str) and description.strip()
+            else None
+        )
+        item.unit = unit.strip() if isinstance(unit, str) and unit.strip() else None
+        item.base_price = base_price
+        item.currency = "UAH" if base_price is not None else None
+        item.is_calculable = is_calculable
+        item.is_active = is_active
+        item.price_sync_status = "manual"
+        item.price_source_label = "manual"
+
+        db.commit()
+        db.refresh(item)
+
+        return _serialize_service_catalog_item(item)
+    finally:
+        db.close()
+
+
+def sync_viyar_service_prices(
+    user_id: str,
+    cookie_override: str | None = None,
+    use_remote: bool = True,
+) -> dict:
+
+    db = SessionLocal()
+
+    try:
+
+        service_items = (
+            db.query(ServiceCatalogItemModel)
+            .filter(ServiceCatalogItemModel.source == "viyar")
+            .filter(ServiceCatalogItemModel.item_type == "service")
+            .all()
+        )
+
+        serialized_items = [
+            _serialize_service_catalog_item(item)
+            for item in service_items
+        ]
+
+        result = fetch_viyar_service_price_updates(
+            serialized_items,
+            use_remote=use_remote,
+            cookie_override=cookie_override,
+        )
+
+        priced_count = 0
+        skipped_count = 0
+        now = datetime.utcnow()
+
+        updates_by_code = {
+            item["external_code"]: item
+            for item in result["updates"]
+        }
+        user_prices = (
+            db.query(UserServiceCatalogPriceModel)
+            .filter(UserServiceCatalogPriceModel.user_id == user_id)
+            .all()
+        )
+        user_price_by_item_id = {
+            price.service_catalog_item_id: price
+            for price in user_prices
+        }
+
+        for item in service_items:
+            update = updates_by_code.get(item.external_code)
+            price_row = user_price_by_item_id.get(item.id)
+
+            if not price_row:
+                price_row = UserServiceCatalogPriceModel(
+                    user_id=user_id,
+                    service_catalog_item_id=item.id,
+                )
+                db.add(price_row)
+                user_price_by_item_id[item.id] = price_row
+
+            if not update:
+                price_row.last_synced_at = now
+                price_row.price_sync_status = "skipped"
+                price_row.price_source_label = None
+                skipped_count += 1
+                continue
+
+            price_row.last_synced_at = now
+            price_row.price_sync_status = update["status"]
+            price_row.price_source_label = update.get("price_source_label")
+
+            if update["status"] == "priced":
+                price_row.base_price = update["base_price"]
+                price_row.currency = update.get("currency") or item.currency or "UAH"
+                if update.get("article"):
+                    item.article = update["article"]
+                priced_count += 1
+            else:
+                price_row.base_price = None
+                price_row.currency = None
+                if update.get("article"):
+                    item.article = update["article"]
+                skipped_count += 1
+
+        db.commit()
+
+        return {
+            "auth_required": result["auth_required"],
+            "items": list_service_catalog_tree(
+                source="viyar",
+                include_inactive=False,
+                user_id=user_id,
+            ),
+            "priced_count": priced_count,
+            "skipped_count": skipped_count,
+            "source": result.get("source", "viyar"),
+        }
+
+    finally:
+
+        db.close()

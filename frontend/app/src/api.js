@@ -48,6 +48,35 @@ export async function getCurrentUser(token) {
   });
 }
 
+export async function updateMyProfile(token, payload) {
+  return request("/auth/me/profile", {
+    method: "PUT",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function createMyEmailChangeRequest(token, newEmail) {
+  return request("/auth/me/email-change-request", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({
+      new_email: newEmail,
+    }),
+  });
+}
+
+export async function changeOwnPassword(token, currentPassword, newPassword) {
+  return request("/auth/me/password", {
+    method: "PUT",
+    headers: authHeaders(token),
+    body: JSON.stringify({
+      current_password: currentPassword,
+      new_password: newPassword,
+    }),
+  });
+}
+
 export async function getSpecificationCatalog() {
   return request("/catalog/specification");
 }

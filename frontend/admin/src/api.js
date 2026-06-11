@@ -8,12 +8,35 @@ async function request(path, options = {}) {
     ...(options.headers || {}),
   };
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers,
-  });
+  const controller = new AbortController();
+  const timeoutMs = options.timeoutMs || 30000;
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-  const payload = await response.json();
+  let response;
+  let payload = {};
+
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      ...options,
+      headers,
+      signal: controller.signal,
+    });
+
+    const responseText = await response.text();
+    payload = responseText ? JSON.parse(responseText) : {};
+  } catch (error) {
+    clearTimeout(timeoutId);
+    return {
+      success: false,
+      error:
+        error?.name === "AbortError"
+          ? `Request timed out after ${Math.round(timeoutMs / 1000)} seconds`
+          : error?.message || "Network request failed",
+      status: 0,
+    };
+  }
+
+  clearTimeout(timeoutId);
 
   if (!response.ok) {
     if (response.status === 401) {
@@ -56,9 +79,109 @@ export async function getSpecificationCatalog() {
   return request("/catalog/specification");
 }
 
+export async function getMaterialsCatalog(token, params = {}) {
+  const searchParams = new URLSearchParams();
+
+  if (params.search) {
+    searchParams.set("search", params.search);
+  }
+
+  if (params.category) {
+    searchParams.set("category", params.category);
+  }
+
+  if (params.city) {
+    searchParams.set("city", params.city);
+  }
+
+  const query = searchParams.toString();
+
+  return request(`/catalog/materials${query ? `?${query}` : ""}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function importMaterialFromViyar(token, article, category = "dsp", sourceUrl = "") {
+  return request("/catalog/materials/import-viyar", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({
+      article,
+      category,
+      source_url: sourceUrl || null,
+    }),
+    timeoutMs: 120000,
+  });
+}
+
+export async function getMaterialImportJob(token, jobId) {
+  return request(`/catalog/materials/import-jobs/${jobId}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function deleteMaterial(token, article) {
+  return request(`/catalog/materials/${encodeURIComponent(article)}`, {
+    method: "DELETE",
+    headers: authHeaders(token),
+  });
+}
+
 export async function listCatalogItems(token) {
   return request("/catalog/items?include_inactive=true", {
     headers: authHeaders(token),
+  });
+}
+
+export async function getViyarServicesTree(token) {
+  return request("/catalog/viyar-services/tree", {
+    headers: authHeaders(token),
+  });
+}
+
+export async function importViyarServices(token) {
+  return request("/catalog/viyar-services/import", {
+    method: "POST",
+    headers: authHeaders(token),
+    timeoutMs: 180000,
+  });
+}
+
+export async function updateViyarService(token, itemId, payload) {
+  return request(`/catalog/viyar-services/${itemId}`, {
+    method: "PUT",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function syncViyarServicePrices(token) {
+  return request("/catalog/viyar-services/sync-prices", {
+    method: "POST",
+    headers: authHeaders(token),
+    timeoutMs: 180000,
+  });
+}
+
+export async function getManualServicesTree(token) {
+  return request("/catalog/manual-services/tree?include_inactive=true", {
+    headers: authHeaders(token),
+  });
+}
+
+export async function createManualService(token, payload) {
+  return request("/catalog/manual-services", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateManualService(token, itemId, payload) {
+  return request(`/catalog/manual-services/${itemId}`, {
+    method: "PUT",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
   });
 }
 
@@ -103,6 +226,69 @@ export async function changeOwnPassword(token, currentPassword, newPassword) {
       current_password: currentPassword,
       new_password: newPassword,
     }),
+  });
+}
+
+export async function updateMyProfile(token, payload) {
+  return request("/auth/me/profile", {
+    method: "PUT",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function createMyEmailChangeRequest(token, newEmail) {
+  return request("/auth/me/email-change-request", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({
+      new_email: newEmail,
+    }),
+  });
+}
+
+export async function listUserChangeRequests(token, status = "pending") {
+  const params = new URLSearchParams();
+  if (status) {
+    params.set("status", status);
+  }
+  return request(`/auth/change-requests?${params.toString()}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function reviewUserChangeRequest(token, requestId, status) {
+  return request(`/auth/change-requests/${requestId}/review`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({
+      status,
+    }),
+  });
+}
+
+export async function getMyViyarAuthStatus(token) {
+  return request("/auth/me/viyar", {
+    headers: authHeaders(token),
+  });
+}
+
+export async function updateMyViyarAuth(token, email, password) {
+  return request("/auth/me/viyar", {
+    method: "PUT",
+    headers: authHeaders(token),
+    body: JSON.stringify({
+      email,
+      password,
+    }),
+  });
+}
+
+export async function refreshMyViyarSession(token) {
+  return request("/auth/me/viyar/session", {
+    method: "POST",
+    headers: authHeaders(token),
+    timeoutMs: 45000,
   });
 }
 
@@ -195,6 +381,12 @@ export async function deleteProject(token, projectId) {
 
 export async function listUsers(token, limit, offset) {
   return request(`/auth/users?limit=${limit}&offset=${offset}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function getUserDetails(token, userId) {
+  return request(`/auth/users/${userId}`, {
     headers: authHeaders(token),
   });
 }

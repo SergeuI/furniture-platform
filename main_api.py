@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import (
     CORSMiddleware
 )
+from dotenv import load_dotenv
 
 from database.init_db import (
     init_database
@@ -21,13 +22,30 @@ from api.routes.audit import (
 from api.routes.catalog import (
     router as catalog_router
 )
+from services.material_import_queue_service import (
+    start_material_import_queue_loop,
+    stop_material_import_queue_loop,
+)
 
+load_dotenv()
 init_database()
 
 app = FastAPI(
 
     title="Furniture Platform API"
 )
+
+
+@app.on_event("startup")
+async def startup_background_services():
+
+    start_material_import_queue_loop()
+
+
+@app.on_event("shutdown")
+async def shutdown_background_services():
+
+    stop_material_import_queue_loop()
 
 frontend_origins = [
 

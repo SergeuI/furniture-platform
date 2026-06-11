@@ -39,12 +39,18 @@ from services.project_bom_service import (
 from services.project_cutting_service import (
     build_project_cutting
 )
+from services.project_costing_service import (
+    build_project_service_requirements,
+)
 from services.cutting_export_service import (
     build_cutting_json_export,
     list_cutting_export_formats
 )
 from services.project_part_detail_service import (
     build_project_part_detail
+)
+from services.project_assembly_service import (
+    build_project_assembly_layout
 )
 from database.repositories.project_repository import (
 
@@ -72,13 +78,49 @@ from database.repositories.audit_log_repository import (
 
     create_audit_log
 )
+from database.repositories.service_catalog_repository import (
+    list_calculable_service_catalog_items,
+)
+from services.user_roles import (
+    normalize_user_role,
+)
 router = APIRouter()
+
+
+def _build_project_pricing_catalog(current_user) -> dict:
+
+    viyar_services = list_calculable_service_catalog_items(
+        source="viyar",
+        user_id=current_user.id,
+    )
+    manual_services = list_calculable_service_catalog_items(
+        source="manual",
+        user_id=current_user.id,
+        owner_user_id=current_user.id,
+    )
+    all_services = [
+        *viyar_services,
+        *manual_services,
+    ]
+    priced_services = sum(
+        1
+        for item in all_services
+        if item.get("effective_price") is not None
+    )
+
+    return {
+        "viyar_services": viyar_services,
+        "manual_services": manual_services,
+        "total_services": len(all_services),
+        "priced_services": priced_services,
+    }
 
 require_project_reader = require_roles(
     [
         "admin",
-        "manager",
-        "viewer"
+        "pro",
+        "user",
+        "guest"
     ]
 )
 
@@ -91,7 +133,8 @@ require_project_admin = require_roles(
 require_project_writer = require_roles(
     [
         "admin",
-        "manager"
+        "pro",
+        "user"
     ]
 )
 
@@ -103,14 +146,19 @@ def _can_read_project(
     project
 ) -> bool:
 
-    if current_user.role in (
+    current_role = normalize_user_role(current_user.role)
+
+    if current_role in (
         "admin",
-        "viewer"
+        "guest"
     ):
 
         return True
 
-    if current_user.role == "manager":
+    if current_role in (
+        "user",
+        "pro"
+    ):
 
         return (
             project.created_by_user_id == current_user.id
@@ -127,11 +175,16 @@ def _can_update_project(
     project
 ) -> bool:
 
-    if current_user.role == "admin":
+    current_role = normalize_user_role(current_user.role)
+
+    if current_role == "admin":
 
         return True
 
-    if current_user.role == "manager":
+    if current_role in (
+        "user",
+        "pro"
+    ):
 
         return project.created_by_user_id == current_user.id
 
@@ -190,6 +243,10 @@ def _serialize_project(
         "created_by_user_id": project.created_by_user_id,
 
         "updated_by_user_id": project.updated_by_user_id,
+
+        "assembly_layout": build_project_assembly_layout(
+            project
+        ),
 
         "created_at": project.created_at,
 
@@ -479,7 +536,15 @@ async def get_project_bom_route(
 
         "items": build_project_bom(
             project
-        )
+        ),
+
+        "pricing_catalog": _build_project_pricing_catalog(
+            current_user
+        ),
+
+        "service_requirements": build_project_service_requirements(
+            project
+        ),
     }
 
 
@@ -535,6 +600,8 @@ async def get_project_cutting_route(
         "project_id": project_id,
 
         "items": cutting["items"],
+
+        "assembly": cutting.get("assembly", {}),
 
         "summary": cutting["summary"]
     }

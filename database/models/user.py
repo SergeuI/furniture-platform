@@ -3,6 +3,7 @@ import uuid
 from sqlalchemy import (
     Boolean,
     Column,
+    DateTime,
     String
 )
 
@@ -37,6 +38,42 @@ class UserModel(Base):
         nullable=False
     )
 
+    username = Column(
+
+        String,
+
+        unique=True,
+
+        index=True,
+
+        nullable=True
+    )
+
+    phone = Column(
+
+        String,
+
+        nullable=True
+    )
+
+    city = Column(
+
+        String,
+
+        nullable=True
+    )
+
+    telegram_id = Column(
+
+        String,
+
+        unique=True,
+
+        index=True,
+
+        nullable=True
+    )
+
     password_hash = Column(
 
         String,
@@ -50,7 +87,7 @@ class UserModel(Base):
 
         nullable=False,
 
-        default="manager"
+        default="user"
     )
 
     is_active = Column(
@@ -60,4 +97,60 @@ class UserModel(Base):
         nullable=False,
 
         default=True
+    )
+
+    last_username_change_at = Column(
+
+        DateTime,
+
+        nullable=True
+    )
+
+    viyar_email = Column(
+
+        String,
+
+        nullable=True
+    )
+
+    viyar_password_secret = Column(
+
+        String,
+
+        nullable=True
+    )
+
+    viyar_cookie = Column(
+
+        String,
+
+        nullable=True
+    )
+
+    viyar_cookie_updated_at = Column(
+
+        DateTime,
+
+        nullable=True
+    )
+
+    viyar_last_auth_at = Column(
+
+        DateTime,
+
+        nullable=True
+    )
+
+    viyar_last_auth_status = Column(
+
+        String,
+
+        nullable=True
+    )
+
+    viyar_last_auth_error = Column(
+
+        String,
+
+        nullable=True
     )

@@ -1,4 +1,5 @@
 from aiogram import Router, F
+import asyncio
 
 from aiogram.filters import (
     Command
@@ -22,6 +23,23 @@ from services.legacy_db_config import (
     DEFAULT_DB_PATH,
     TELEGRAM_USERS_TABLE,
 )
+from services.telegram_identity_service import (
+    ensure_telegram_identity,
+)
+from services.telegram_access_service import (
+    get_telegram_platform_role,
+)
+from database.repositories.user_repository import (
+    get_user_by_email,
+    get_user_by_telegram_id,
+)
+from database.repositories.user_change_request_repository import (
+    create_user_change_request,
+    get_pending_change_request,
+)
+from services.user_roles import (
+    ROLE_USER,
+)
 
 from keyboards.ReplyKeyboard import (
     user_menu,
@@ -42,14 +60,17 @@ router = Router()
 DB_NAME = DEFAULT_DB_PATH
 
 
-
 async def user_exists(telegram_id: int):
     async with aiosqlite.connect(DB_NAME) as db:
         cursor = await db.execute(
             f"SELECT 1 FROM {TELEGRAM_USERS_TABLE} WHERE telegram_id = ?",
             (telegram_id,)
         )
-        return await cursor.fetchone()
+        row = await cursor.fetchone()
+        if row:
+            return row
+    return await asyncio.to_thread(get_user_by_telegram_id, str(telegram_id))
+
 
 async def add_user(telegram_id, name, phone, citi, email):
     async with aiosqlite.connect(DB_NAME) as db:
@@ -58,6 +79,15 @@ async def add_user(telegram_id, name, phone, citi, email):
             VALUES (?, ?, ?, ?, ?)
         """, (telegram_id, name, phone, citi, email))
         await db.commit()
+    await asyncio.to_thread(
+        ensure_telegram_identity,
+        telegram_id,
+        email,
+        name,
+        phone,
+        ROLE_USER,
+    )
+
 
 async def get_user(telegram_id: int):
     async with aiosqlite.connect(DB_NAME) as db:
@@ -65,10 +95,73 @@ async def get_user(telegram_id: int):
             f"SELECT name, phone, citi, email FROM {TELEGRAM_USERS_TABLE} WHERE telegram_id = ?",
             (telegram_id,)
         )
-        return await cursor.fetchone()
+        row = await cursor.fetchone()
+        if row:
+            return row
+
+    core_user = await asyncio.to_thread(get_user_by_telegram_id, str(telegram_id))
+
+    if not core_user:
+        return None
+
+    fallback_name = core_user.username or core_user.email.split("@")[0]
+    return (
+        fallback_name,
+        core_user.phone or "-",
+        "-",
+        core_user.email,
+    )
 
 
-# -----------Форма реестрації-----------
+async def send_user_profile(message: Message):
+    tg_id = message.from_user.id
+    user = await get_user(tg_id)
+
+    if not user:
+        await message.answer("❌ Не вдалося знайти ваш профіль. Спробуйте /start ще раз.")
+        return
+
+    name, phone, citi, email = user
+    role = await get_telegram_platform_role(tg_id)
+    photos = await message.bot.get_user_profile_photos(
+        user_id=message.from_user.id,
+        limit=1,
+    )
+
+    caption = (
+        f"🙋🏻‍♂️ <b>Ваш профіль:</b>\n\n"
+        f"Ім'я: <i>{name}</i>\n"
+        f"Телефон: <i>{phone}</i>\n"
+        f"Місто: <i>{citi}</i>\n"
+        f"Email: <i>{email}</i>\n"
+        f"Статус: <i>{role}</i>"
+    )
+
+    if photos.total_count > 0:
+        profile_path = await build_profile_card(
+            bot=message.bot,
+            user_id=message.from_user.id,
+            name=name,
+            phone=phone,
+            city=citi,
+            email=email,
+            role=role,
+        )
+        await message.answer_photo(
+            photo=FSInputFile(profile_path),
+            caption="✅ Ваш профіль завантажено",
+            reply_markup=user_menu(role),
+        )
+        return
+
+    await message.answer(
+        caption,
+        parse_mode="HTML",
+        reply_markup=user_menu(role),
+    )
+
+
+# -----------Форма реєстрації-----------
 @router.message(Command("start"))
 async def start(message: Message, state: FSMContext):
     tg_id = message.from_user.id
@@ -76,6 +169,15 @@ async def start(message: Message, state: FSMContext):
     if await user_exists(tg_id):
         user = await get_user(tg_id)
         name, phone, citi, email = user
+        await asyncio.to_thread(
+            ensure_telegram_identity,
+            tg_id,
+            email,
+            name,
+            phone,
+            ROLE_USER,
+        )
+        role = await get_telegram_platform_role(tg_id)
 
         photos = await message.bot.get_user_profile_photos(
             user_id=message.from_user.id,
@@ -87,21 +189,19 @@ async def start(message: Message, state: FSMContext):
             f"Ім'я: <i>{name}</i>\n"
             f"Телефон: <i>{phone}</i>\n"
             f"Місто: <i>{citi}</i>\n"
-            f"Email: <i>{email}</i>"
+            f"Email: <i>{email}</i>\n"
+            f"Статус: <i>{role}</i>"
         )
 
-        # якщо є аватар
         if photos.total_count > 0:
-
-            file_id = photos.photos[0][-1].file_id
-
             profile_path = await build_profile_card(
                 bot=message.bot,
                 user_id=message.from_user.id,
                 name=name,
                 phone=phone,
                 city=citi,
-                email=email
+                email=email,
+                role=role,
             )
 
             photo = FSInputFile(profile_path)
@@ -109,16 +209,13 @@ async def start(message: Message, state: FSMContext):
             await message.answer_photo(
                 photo=photo,
                 caption="✅ Ваш профіль завантажено",
-                reply_markup=user_menu()
+                reply_markup=user_menu(role)
             )
-
-        # якщо аватару нема
         else:
-
             await message.answer(
                 caption,
                 parse_mode="HTML",
-                reply_markup=user_menu()
+                reply_markup=user_menu(role)
             )
         return
 
@@ -192,9 +289,13 @@ async def process_email(message: Message, state: FSMContext):
         data["email"]
     )
 
-    await message.answer("✅ Реєстрація завершена!", reply_markup=user_menu())
+    await message.answer(
+        "✅ Реєстрація завершена!",
+        reply_markup=user_menu(
+            await get_telegram_platform_role(message.from_user.id)
+        )
+    )
     await state.clear()
-
 
 
 async def update_user_field(telegram_id, field, value):
@@ -208,14 +309,34 @@ async def update_user_field(telegram_id, field, value):
         )
         await db.commit()
 
+    if field in ("phone", "email"):
+        user = await get_user(telegram_id)
+        if user:
+            name, phone, _citi, email = user
+            await asyncio.to_thread(
+                ensure_telegram_identity,
+                telegram_id,
+                email,
+                name,
+                phone,
+                ROLE_USER,
+            )
+
 
 # ----------Зміна данних анкети----------
+@router.message(Command("profile"))
+@router.message(F.text == "👤 Мої дані")
+async def show_profile(message: Message):
+    await send_user_profile(message)
+
+
 @router.message(F.text == "✏️ Змінити дані профілю")
 async def edit_profile(message: Message, state: FSMContext):
     await message.answer(
         "Що хочете змінити?",
         reply_markup=edit_menu()
     )
+
 
 @router.message(Form.edit_phone)
 async def update_phone(message: Message, state: FSMContext):
@@ -259,8 +380,51 @@ async def update_email(message: Message, state: FSMContext):
         await message.answer("❌ Невірний email")
         return
 
-    await update_user_field(message.from_user.id, "email", email)
-    await message.answer("✅ Email оновлено")
+    core_user = await asyncio.to_thread(
+        get_user_by_telegram_id,
+        str(message.from_user.id),
+    )
+
+    if not core_user:
+        await message.answer(
+            "❌ Не вдалося знайти ваш профіль. Спробуйте /start ще раз."
+        )
+        return
+
+    existing_user = await asyncio.to_thread(
+        get_user_by_email,
+        email.lower(),
+    )
+
+    if existing_user and existing_user.id != core_user.id:
+        await message.answer(
+            "❌ Ця email-адреса вже використовується іншим користувачем."
+        )
+        return
+
+    pending_request = await asyncio.to_thread(
+        get_pending_change_request,
+        core_user.id,
+        "email",
+    )
+
+    if pending_request:
+        await message.answer(
+            "⏳ У вас уже є активний запит на зміну email. Дочекайтеся рішення адміністратора."
+        )
+        return
+
+    await asyncio.to_thread(
+        create_user_change_request,
+        core_user.id,
+        "email",
+        core_user.email,
+        email.lower(),
+    )
+
+    await message.answer(
+        "✅ Запит на зміну email створено. Після погодження адміністратором адресу буде оновлено."
+    )
     await state.clear()
 
 
@@ -268,7 +432,9 @@ async def update_email(message: Message, state: FSMContext):
 async def back_to_menu(message: Message):
     await message.answer(
         "Головне меню:",
-        reply_markup=user_menu()
+        reply_markup=user_menu(
+            await get_telegram_platform_role(message.from_user.id)
+        )
     )
 
 

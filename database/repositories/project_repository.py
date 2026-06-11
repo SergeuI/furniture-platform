@@ -14,6 +14,41 @@ from database.models.project_version import (
 )
 
 
+def list_projects_created_by_user(
+
+    user_id: str,
+
+    limit: int = 20
+):
+
+    db = SessionLocal()
+
+    try:
+
+        return (
+
+            db.query(ProjectModel)
+
+            .filter(
+
+                ProjectModel.created_by_user_id == user_id
+            )
+
+            .order_by(
+
+                ProjectModel.updated_at.desc()
+            )
+
+            .limit(limit)
+
+            .all()
+        )
+
+    finally:
+
+        db.close()
+
+
 def _create_project_version_from_project(
 
     db,

@@ -1,14 +1,42 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1440" height="480" viewBox="0 0 1440 480" role="img" aria-labelledby="title desc">
-  <title id="title">MProject.furniture flat logo</title>
-  <desc id="desc">Flat minimalist MProject.furniture logo.</desc>
-  <rect width="1440" height="480" fill="#0d141a"/>
-  <g transform="translate(68 54) scale(.62)">
-    <path d="M0 248V0h78l98 123L274 0h72v248h-80V108l-76 114h-28L82 108v140z" fill="#202932"/>
-    <path d="M365 304V0h152c82 0 136 48 136 124s-54 124-136 124h-72v56zm80-126h66c38 0 62-20 62-54s-24-54-62-54h-66z" fill="#202932"/>
-    <path d="M0 310l76-44v70L0 380z" fill="#39d353"/>
+  <title id="title">MProject.furniture logo</title>
+  <desc id="desc">MProject.furniture lockup with technical MP symbol and stacked wordmark.</desc>
+  <defs>
+    <linearGradient id="panelDark" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#30323c"/>
+      <stop offset="55%" stop-color="#252731"/>
+      <stop offset="100%" stop-color="#161922"/>
+    </linearGradient>
+    <linearGradient id="accentGreen" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#adff54"/>
+      <stop offset="100%" stop-color="#55d623"/>
+    </linearGradient>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="12" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="1 0 0 0 0.20  0 1 0 0 0.78  0 0 1 0 0.20  0 0 0 0.68 0"/>
+    </filter>
+  </defs>
+  <rect x="0" y="0" width="1440" height="480" rx="32" fill="#13131b"/>
+  <rect x="30" y="30" width="1380" height="420" rx="28" fill="#171820"/>
+  <ellipse cx="190" cy="372" rx="82" ry="24" fill="#22411c" opacity=".60"/>
+  <ellipse cx="300" cy="394" rx="168" ry="30" fill="#13290f" opacity=".55"/>
+  <g transform="translate(76 54)">
+    <path d="M0 0h158l62 116L286 0h152v344H310V151l-78 142h-31L123 152v192H0z" fill="url(#panelDark)"/>
+    <path d="M478 0h168c55 0 92 12 112 35 18 20 26 46 26 82 0 75-48 117-142 124v103H518V0zm124 86v121h58c48 0 73-20 73-59 0-41-27-62-79-62z" fill="url(#panelDark)"/>
+    <g stroke="#f3f5f7" stroke-opacity=".68" stroke-width="3" fill="none">
+      <rect x="0" y="0" width="438" height="344" opacity=".28"/>
+      <path d="M0 0l123 152M62 0l139 293M158 0l74 140M286 0l-85 140M438 0l-152 344M220 116l90 0"/>
+      <path d="M478 0h306M518 0v344M642 0v238M784 0v178M518 86h266M642 207h142"/>
+    </g>
+    <g transform="translate(28 244)">
+      <path d="M0 58l70-40h104l-70 40z" fill="#d8ff74" filter="url(#glow)" opacity=".82"/>
+      <path d="M0 58h104v92H0z" fill="url(#accentGreen)"/>
+      <path d="M104 58l70-40v92l-70 40z" fill="#42bf23"/>
+      <path d="M0 58l70-40M104 58l70-40" stroke="#f1ffd3" stroke-opacity=".7" stroke-width="2" fill="none"/>
+    </g>
   </g>
-  <g transform="translate(540 173)">
-    <text x="0" y="0" fill="#f7fafc" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="82" font-weight="800">MProject<tspan fill="#39d353">.furniture</tspan></text>
-    <text x="4" y="68" fill="#98a2ad" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="24" font-weight="500" letter-spacing="1.2">ПРОФЕСІЙНЕ РІШЕННЯ ДЛЯ МЕБЛЕВОГО ВИРОБНИЦТВА</text>
+  <g transform="translate(822 118)">
+    <text x="0" y="0" fill="#ffffff" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="108" font-weight="800">MProject<tspan fill="#9eea2f">.</tspan></text>
+    <text x="0" y="126" fill="#7ee42c" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="116" font-weight="800">furniture</text>
   </g>
 </svg>

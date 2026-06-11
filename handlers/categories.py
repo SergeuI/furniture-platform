@@ -12,16 +12,15 @@ from aiogram.fsm.context import FSMContext
 from forms.user import Form
 
 import logging
+from services.telegram_access_service import (
+    ensure_calculator_access_for_message,
+    ensure_calculator_access_for_callback,
+)
 from keyboards.inline import (
-
     CATEGORIES,
-
     SUBCATEGORIES,
-
     DIMENSION_HINT_IMAGE,
-
     category_keyboard,
-
     subcategory_keyboard
 )
 
@@ -31,13 +30,16 @@ router = Router()
 # --------------Вибір категорій------------------
 @router.message(F.text == "🧮 Розпочати прорахунок")
 async def show_categories(message: Message, state: FSMContext):
+    if not await ensure_calculator_access_for_message(message):
+        return
+
     await state.clear()
     index = 0
     cat = CATEGORIES[index]
 
     photo = FSInputFile(cat["img"])
 
-    msg = await message.answer_photo(
+    await message.answer_photo(
         photo=photo,
         caption=f"Оберіть категорію:\n\n{cat['name']}",
         reply_markup=category_keyboard(index)
@@ -48,6 +50,9 @@ async def show_categories(message: Message, state: FSMContext):
 
 @router.callback_query(F.data.startswith("cat_next_") | F.data.startswith("cat_prev_"))
 async def category_navigation(callback: CallbackQuery, state: FSMContext):
+    if not await ensure_calculator_access_for_callback(callback):
+        return
+
     data = callback.data.split("_")
     action = data[1]
     index = int(data[2])
@@ -62,8 +67,6 @@ async def category_navigation(callback: CallbackQuery, state: FSMContext):
 
     cat = CATEGORIES[index]
     photo = FSInputFile(cat["img"])
-
-    from aiogram.types import InputMediaPhoto
 
     await callback.message.edit_media(
         InputMediaPhoto(
@@ -80,14 +83,15 @@ async def category_navigation(callback: CallbackQuery, state: FSMContext):
         pass
 
 
-
 # Відкриття підкатегорій
 @router.callback_query(F.data.startswith("cat_select_"))
 async def select_category(callback: CallbackQuery, state: FSMContext):
+    if not await ensure_calculator_access_for_callback(callback):
+        return
+
     index = int(callback.data.split("_")[2])
     cat = CATEGORIES[index]
-    
-    # 🔥 ВИПРАВЛЕННЯ: Перевіряємо наявність 'code'
+
     code = cat.get("code")
     if not code:
         logging.error(f"Category {cat} missing 'code' key!")
@@ -131,6 +135,9 @@ async def select_category(callback: CallbackQuery, state: FSMContext):
 # Навігація підкатегорій
 @router.callback_query(F.data.startswith("sub_"))
 async def subcategory_navigation(callback: CallbackQuery, state: FSMContext):
+    if not await ensure_calculator_access_for_callback(callback):
+        return
+
     data = callback.data.split("_")
     action = data[1]
     index = int(data[2])
@@ -144,25 +151,16 @@ async def subcategory_navigation(callback: CallbackQuery, state: FSMContext):
     elif action == "prev":
         index = (index - 1) % len(sub_list)
     elif action == "select":
-
         sub = sub_list[index]
 
         await callback.message.delete()
 
         await state.update_data(
-
             current_category=code,
-
             subcategory=sub["name"],
-
             sub_type=sub.get("code"),
-
-            has_handles=(
-                sub.get("code") == "handles"
-            ),
-
+            has_handles=(sub.get("code") == "handles"),
             current_step=0,
-
             params={}
         )
 
@@ -176,11 +174,8 @@ async def subcategory_navigation(callback: CallbackQuery, state: FSMContext):
         )
 
         try:
-
             await callback.answer()
-
         except:
-
             pass
 
         return
@@ -201,4 +196,3 @@ async def subcategory_navigation(callback: CallbackQuery, state: FSMContext):
         await callback.answer()
     except:
         pass
-

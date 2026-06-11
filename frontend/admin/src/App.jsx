@@ -1,44 +1,74 @@
 import {
+  Blocks,
   ChevronLeft,
   ChevronRight,
+  Drill,
+  FileSliders,
+  FolderTree,
   History,
+  Info,
+  LayoutGrid,
+  MoreHorizontal,
+  Package,
   LogOut,
   Plus,
   RefreshCw,
   RotateCcw,
   Save,
+  Scissors,
   Search,
+  Settings2,
   X,
   Trash2,
+  Wrench,
 } from "lucide-react";
-import { Suspense, lazy, useEffect, useMemo, useState } from "react";
+import { Component, Suspense, lazy, useEffect, useMemo, useState } from "react";
 
 import {
   changeOwnPassword,
+  createManualService,
+  createMyEmailChangeRequest,
   createCatalogItem,
   createUser,
+  deleteMaterial,
   deleteProject,
   generateProject,
   getCurrentUser,
+  getMaterialImportJob,
+  getMaterialsCatalog,
+  getMyViyarAuthStatus,
+  getManualServicesTree,
   getProject,
   getProjectCutting,
   getProjectHistory,
   getProjectPartDetail,
+  getUserDetails,
   getSpecificationCatalog,
+  getViyarServicesTree,
+  importViyarServices,
+  importMaterialFromViyar,
   listAuditLogs,
   listCatalogItems,
   listUsers,
+  listUserChangeRequests,
   listProjects,
   login,
+  reviewUserChangeRequest,
   rollbackProject,
   resetUserPassword,
   updateCatalogItem,
   updateCatalogItemActive,
+  updateMyViyarAuth,
+  updateManualService,
   updateProject,
   updateProjectPartEdges,
   updateProjectPartMachining,
+  updateViyarService,
+  syncViyarServicePrices,
+  updateMyProfile,
   updateUserActive,
   updateUserRole,
+  refreshMyViyarSession,
 } from "./api";
 const PartThreeViewer = lazy(() => import("./components/PartThreeViewer"));
 const ProjectThreeViewer = lazy(() => import("./components/ProjectThreeViewer"));
@@ -46,6 +76,7 @@ const ProjectThreeViewer = lazy(() => import("./components/ProjectThreeViewer"))
 
 const TOKEN_STORAGE_KEY = "furniture_admin_token";
 const LANGUAGE_STORAGE_KEY = "furniture_admin_language";
+const VIYAR_SERVICES_CACHE_PREFIX = "furniture_admin_viyar_services_cache";
 const PAGE_SIZE = 20;
 const DEFAULT_PROJECT_NAME = "Новий проект";
 const DEFAULT_PROJECT_FORM = {
@@ -120,6 +151,405 @@ const DEFAULT_SPECIFICATION_CATALOG = {
     "integrated",
   ],
 };
+
+const DEFAULT_CITY_OPTIONS = [
+  "kyiv",
+  "lviv",
+  "odessa",
+  "dnipro",
+  "kharkiv",
+  "khmelnytskyi",
+  "rivne",
+];
+
+function buildViyarServicesCacheKey(userId) {
+  return `${VIYAR_SERVICES_CACHE_PREFIX}:${userId}`;
+}
+
+function readViyarServicesCache(userId) {
+  if (!userId) {
+    return null;
+  }
+
+  try {
+    const rawValue = localStorage.getItem(buildViyarServicesCacheKey(userId));
+
+    if (!rawValue) {
+      return null;
+    }
+
+    const parsed = JSON.parse(rawValue);
+
+    if (!Array.isArray(parsed?.items)) {
+      return null;
+    }
+
+    return {
+      items: parsed.items,
+      priceSyncSummary: parsed.priceSyncSummary || null,
+      source: parsed.source || "viyar",
+      savedAt: parsed.savedAt || null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeViyarServicesCache(userId, payload) {
+  if (!userId) {
+    return;
+  }
+
+  try {
+    localStorage.setItem(
+      buildViyarServicesCacheKey(userId),
+      JSON.stringify({
+        items: Array.isArray(payload?.items) ? payload.items : [],
+        priceSyncSummary: payload?.priceSyncSummary || null,
+        source: payload?.source || "viyar",
+        savedAt: new Date().toISOString(),
+      }),
+    );
+  } catch {
+    // Ignore cache write failures and keep runtime state working.
+  }
+}
+
+class ProductionViewerBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { errorMessage: "", hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error) {
+    this.setState({
+      errorMessage: error?.message || "Unknown production viewer error",
+    });
+  }
+
+  componentDidUpdate(prevProps) {
+    if (
+      prevProps.selectedPartCode !== this.props.selectedPartCode ||
+      prevProps.itemCount !== this.props.itemCount
+    ) {
+      if (this.state.hasError) {
+        this.setState({ errorMessage: "", hasError: false });
+      }
+    }
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="project-three-viewer-error">
+          <strong>{this.props.t?.productionAssembly3d || "3D assembly"}</strong>
+          <span>{this.props.t?.productionAssemblyHint || "3D preview is temporarily unavailable."}</span>
+          {this.state.errorMessage ? <code>{this.state.errorMessage}</code> : null}
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+function filterServiceCatalogTree(nodes, query) {
+  const normalizedQuery = query.trim().toLowerCase();
+
+  if (!normalizedQuery) {
+    return nodes;
+  }
+
+  function filterNode(node) {
+    const children = (node.children || [])
+      .map(filterNode)
+      .filter(Boolean);
+    const haystack = [
+      node.name,
+      node.description,
+      node.folder_path,
+      node.slug,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+
+    if (haystack.includes(normalizedQuery) || children.length) {
+      return {
+        ...node,
+        children,
+      };
+    }
+
+    return null;
+  }
+
+  return nodes.map(filterNode).filter(Boolean);
+}
+
+function collectServiceFolderCodes(nodes) {
+  return nodes.flatMap((node) => {
+    const nested = collectServiceFolderCodes(node.children || []);
+
+    if (node.item_type === "folder") {
+      return [node.external_code, ...nested];
+    }
+
+    return nested;
+  });
+}
+
+function countServiceTreeItems(nodes) {
+  return nodes.reduce((total, node) => {
+    const own = node.item_type === "service" ? 1 : 0;
+    return total + own + countServiceTreeItems(node.children || []);
+  }, 0);
+}
+
+function flattenServiceTree(nodes) {
+  return nodes.flatMap((node) => [
+    node,
+    ...flattenServiceTree(node.children || []),
+  ]);
+}
+
+function formatDateTimeValue(value) {
+  if (!value) {
+    return "";
+  }
+
+  const parsed = new Date(value);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return String(value);
+  }
+
+  return parsed.toLocaleString("uk-UA");
+}
+
+const CATALOG_TILE_VISUALS = {
+  materials: {
+    accent: "#2563eb",
+    icon: LayoutGrid,
+  },
+  manual: {
+    accent: "var(--brand-green)",
+    icon: Wrench,
+  },
+  values: {
+    accent: "#2f8ecb",
+    icon: FileSliders,
+  },
+  viyar: {
+    accent: "#1f6b34",
+    icon: FolderTree,
+  },
+};
+
+const VIYAR_FOLDER_TILE_VISUALS = {
+  "viyar-folder-cutting": { accent: "#2f8ecb", icon: Scissors },
+  "viyar-folder-drilling": { accent: "#14b8a6", icon: Drill },
+  "viyar-folder-straight_edgebanding": { accent: "#3b82f6", icon: Blocks },
+  "viyar-folder-milling": { accent: "#8b5cf6", icon: Settings2 },
+  "viyar-folder-additional_services": { accent: "#f59e0b", icon: Wrench },
+  "viyar-folder-curved_edgebanding": { accent: "#ec4899", icon: LayoutGrid },
+  "viyar-folder-jointing": { accent: "#10b981", icon: Blocks },
+  "viyar-folder-packing": { accent: "#f97316", icon: Package },
+};
+
+function updateServiceTreeNode(nodes, itemId, updater) {
+  return nodes.map((node) => {
+    if (node.id === itemId) {
+      return updater(node);
+    }
+
+    if (node.children?.length) {
+      return {
+        ...node,
+        children: updateServiceTreeNode(node.children, itemId, updater),
+      };
+    }
+
+    return node;
+  });
+}
+
+function ServiceCatalogTreeNode({
+  collapsedFolders,
+  level = 0,
+  node,
+  loading = false,
+  onSaveService,
+  onServiceFieldChange,
+  onToggleCollapse,
+  searchQuery,
+  t,
+}) {
+  const [isDescriptionOpen, setIsDescriptionOpen] = useState(false);
+  const isFolder = node.item_type === "folder";
+  const isCollapsed =
+    isFolder &&
+    !searchQuery.trim() &&
+    Boolean(collapsedFolders[node.external_code]);
+  const effectiveStatus = node.user_price_sync_status || node.price_sync_status;
+  const effectiveSourceLabel =
+    node.user_price_source_label || node.price_source_label;
+  const hasVisiblePrice =
+    node.user_price !== null &&
+    node.user_price !== undefined;
+  const nestedServiceCount = isFolder
+    ? countServiceTreeItems(node.children || [])
+    : 0;
+  const rowPaddingLeft = isFolder
+    ? `${level * 18}px`
+    : `${Math.max(0, (level - 1) * 18)}px`;
+
+  return (
+    <li className={`service-tree-node ${isFolder ? "folder" : "service"}`}>
+      <div
+        data-folder-code={isFolder ? node.external_code : undefined}
+        className={`service-tree-row${!isFolder ? " service-row" : ""}`}
+        style={{ paddingLeft: rowPaddingLeft }}
+      >
+        {isFolder ? (
+          <>
+            <div className="service-tree-main">
+              <button
+                className="service-tree-collapse"
+                onClick={() => onToggleCollapse(node.external_code)}
+                type="button"
+              >
+                <ChevronRight
+                  className={isCollapsed ? "" : "expanded"}
+                  size={14}
+                />
+              </button>
+              <span className={`service-tree-bullet ${isFolder ? "folder" : "service"}`} />
+              <div className="service-tree-copy">
+                <div className="service-tree-title-row">
+                  <strong>{node.name}</strong>
+                  {nestedServiceCount ? (
+                    <span className="service-tree-folder-count">
+                      {nestedServiceCount}
+                    </span>
+                  ) : null}
+                </div>
+                {node.description ? <span>{node.description}</span> : null}
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="service-tree-service-line">
+            <div className="service-tree-name-cell">
+              <span className="service-tree-bullet service" />
+              <strong>{node.name}</strong>
+            </div>
+            <label>
+              <span>{t.viyarArticle}</span>
+              <input
+                disabled
+                type="text"
+                value={node.article || ""}
+              />
+            </label>
+            <label>
+              <span>{t.serviceUnit}</span>
+              <input
+                disabled={loading}
+                onChange={(event) =>
+                  onServiceFieldChange(node.id, "unit", event.target.value)
+                }
+                type="text"
+                value={node.unit || ""}
+              />
+            </label>
+            <label>
+              <span>{t.basePrice}</span>
+              <input
+                disabled={loading}
+                min="0"
+                onChange={(event) =>
+                  onServiceFieldChange(node.id, "base_price", event.target.value)
+                }
+                step="0.01"
+                type="number"
+                value={node.base_price ?? ""}
+              />
+            </label>
+            <button
+              className="ghost-button compact-button service-tree-inline-action"
+              disabled={!node.description}
+              onClick={() => setIsDescriptionOpen((current) => !current)}
+              type="button"
+            >
+              {isDescriptionOpen ? t.hideDescription : t.showDescription}
+            </button>
+            <label className="toggle-label">
+              <input
+                checked={Boolean(node.is_calculable)}
+                disabled={loading}
+                onChange={(event) =>
+                  onServiceFieldChange(node.id, "is_calculable", event.target.checked)
+                }
+                type="checkbox"
+              />
+              {t.viyarCalculable}
+            </label>
+            <label className="toggle-label">
+              <input
+                checked={Boolean(node.is_active)}
+                disabled={loading}
+                onChange={(event) =>
+                  onServiceFieldChange(node.id, "is_active", event.target.checked)
+                }
+                type="checkbox"
+              />
+              {t.enabled}
+            </label>
+            <button
+              className="ghost-button compact-button"
+              disabled={loading}
+              onClick={() => onSaveService(node)}
+              type="button"
+            >
+              <Save size={16} />
+              {t.save}
+            </button>
+          </div>
+        )}
+      </div>
+      {!isFolder && node.description && isDescriptionOpen ? (
+        <div className="service-tree-description-panel" style={{ marginLeft: `${Math.max(0, (level - 1) * 18) + 32}px` }}>
+          <strong>{t.showDescription}</strong>
+          <p>{node.description}</p>
+        </div>
+      ) : null}
+      {node.children?.length && !isCollapsed ? (
+        <ul className="service-tree-list">
+          {node.children.map((child) => (
+            <ServiceCatalogTreeNode
+              collapsedFolders={collapsedFolders}
+              key={child.external_code}
+              level={level + 1}
+              loading={loading}
+              node={child}
+              onSaveService={onSaveService}
+              onServiceFieldChange={onServiceFieldChange}
+              onToggleCollapse={onToggleCollapse}
+              searchQuery={searchQuery}
+              t={t}
+            />
+          ))}
+        </ul>
+      ) : null}
+    </li>
+  );
+}
+
 const CATALOG_CATEGORIES = [
   "project_type",
   "slide_type",
@@ -140,6 +570,24 @@ const TRANSLATIONS = {
     applyFilters: "Apply",
     audit: "Audit",
     catalog: "Catalog",
+    myData: "My data",
+    username: "Username",
+    phone: "Phone",
+    saveProfile: "Save profile",
+    profileSaved: "Profile saved",
+    requestEmailChange: "Request email change",
+    newEmail: "New email",
+    emailChangeRequested: "Email change request created",
+    usernameChangeWeekly: "Username can be changed only once every 7 days",
+    pendingRequests: "Pending requests",
+    noPendingRequests: "No pending requests",
+    changeType: "Change type",
+    oldValue: "Current value",
+    newValue: "Requested value",
+    requestedAt: "Requested at",
+    approve: "Approve",
+    reject: "Reject",
+    requestReviewed: "Request reviewed",
     catalogCategory: "Category",
     catalogItemCreated: "Catalog item created",
     catalogItemUpdated: "Catalog item updated",
@@ -263,10 +711,13 @@ const TRANSLATIONS = {
     sections: "Sections",
     selectProject: "Select a project",
     selectedProject: "Selected project",
+    showProjectOverview: "Show project overview",
     side: "Side",
     slideType: "Slide type",
+    hideProjectOverview: "Hide project overview",
     slide_type: "Slide type",
     signIn: "Sign in",
+    settings: "Settings",
     size: "Size",
     specification: "Specification",
     status: "Status",
@@ -311,6 +762,24 @@ const TRANSLATIONS = {
     applyFilters: "Застосувати",
     audit: "Аудит",
     catalog: "Довідники",
+    myData: "\u041c\u043e\u0457 \u0434\u0430\u043d\u0456",
+    username: "\u041b\u043e\u0433\u0456\u043d",
+    phone: "\u0422\u0435\u043b\u0435\u0444\u043e\u043d",
+    saveProfile: "\u0417\u0431\u0435\u0440\u0435\u0433\u0442\u0438 \u043f\u0440\u043e\u0444\u0456\u043b\u044c",
+    profileSaved: "\u041f\u0440\u043e\u0444\u0456\u043b\u044c \u0437\u0431\u0435\u0440\u0435\u0436\u0435\u043d\u043e",
+    requestEmailChange: "\u0417\u0430\u043f\u0438\u0442\u0438 \u0437\u043c\u0456\u043d\u0443 email",
+    newEmail: "\u041d\u043e\u0432\u0430 \u043f\u043e\u0448\u0442\u0430",
+    emailChangeRequested: "\u0417\u0430\u043f\u0438\u0442 \u043d\u0430 \u0437\u043c\u0456\u043d\u0443 email \u0441\u0442\u0432\u043e\u0440\u0435\u043d\u043e",
+    usernameChangeWeekly: "\u041b\u043e\u0433\u0456\u043d \u043c\u043e\u0436\u043d\u0430 \u0437\u043c\u0456\u043d\u044e\u0432\u0430\u0442\u0438 \u043d\u0435 \u0447\u0430\u0441\u0442\u0456\u0448\u0435 \u043d\u0456\u0436 \u0440\u0430\u0437 \u043d\u0430 7 \u0434\u043d\u0456\u0432",
+    pendingRequests: "\u0417\u0430\u043f\u0438\u0442\u0438 \u0432 \u043e\u0447\u0456\u043a\u0443\u0432\u0430\u043d\u043d\u0456",
+    noPendingRequests: "\u041d\u0435\u043c\u0430\u0454 \u0437\u0430\u043f\u0438\u0442\u0456\u0432 \u0432 \u043e\u0447\u0456\u043a\u0443\u0432\u0430\u043d\u043d\u0456",
+    changeType: "\u0422\u0438\u043f \u0437\u043c\u0456\u043d\u0438",
+    oldValue: "\u041f\u043e\u0442\u043e\u0447\u043d\u0435 \u0437\u043d\u0430\u0447\u0435\u043d\u043d\u044f",
+    newValue: "\u041d\u043e\u0432\u0435 \u0437\u043d\u0430\u0447\u0435\u043d\u043d\u044f",
+    requestedAt: "\u0421\u0442\u0432\u043e\u0440\u0435\u043d\u043e",
+    approve: "\u041f\u043e\u0433\u043e\u0434\u0438\u0442\u0438",
+    reject: "\u0412\u0456\u0434\u0445\u0438\u043b\u0438\u0442\u0438",
+    requestReviewed: "\u0417\u0430\u043f\u0438\u0442 \u043e\u043f\u0440\u0430\u0446\u044c\u043e\u0432\u0430\u043d\u043e",
     catalogCategory: "Категорія",
     catalogItemCreated: "Значення довідника створено",
     catalogItemUpdated: "Значення довідника оновлено",
@@ -429,10 +898,13 @@ const TRANSLATIONS = {
     sections: "Секції",
     selectProject: "Виберіть проект",
     selectedProject: "Вибраний проект",
+    showProjectOverview: "Показати дані проекту",
     side: "Сторона",
     slideType: "Тип направляючих",
+    hideProjectOverview: "Сховати дані проекту",
     slide_type: "Тип направляючих",
     signIn: "Увійти",
+    settings: "\u041d\u0430\u043b\u0430\u0448\u0442\u0443\u0432\u0430\u043d\u043d\u044f",
     size: "Розмір",
     specification: "Специфікація",
     status: "Статус",
@@ -470,6 +942,24 @@ const TRANSLATIONS = {
 };
 
 Object.assign(TRANSLATIONS.en, {
+  assemblyAssembled: "Assembled",
+  assemblyClearSelection: "Clear selection",
+  assemblyExploded: "Exploded",
+  assemblyFocusSelected: "Focus selected",
+  assemblyGroupBack: "Back panel",
+  assemblyGroupCarcass: "Carcass",
+  assemblyGroupDrawers: "Drawers",
+  assemblyGroupFacades: "Facades",
+  assemblyGroupOther: "Other panels",
+  assemblyLayerGrooves: "Grooves",
+  assemblyLayerHoles: "Holes",
+  assemblyLayerQuarters: "Quarters",
+  assemblyModeSolid: "Solid",
+  assemblyModeTransparent: "Transparent + holes",
+  assemblyOpenWorkspace: "Open detail workspace",
+  assemblyResetCamera: "Reset camera",
+  assemblyShowAll: "Show all",
+  assemblyShowFull: "Show full assembly",
   clearEdge: TRANSLATIONS.en.clearEdge || "Clear edge",
   edgeBandingInvalid:
     TRANSLATIONS.en.edgeBandingInvalid || "Select a value from the edge banding catalog",
@@ -480,6 +970,12 @@ Object.assign(TRANSLATIONS.en, {
     TRANSLATIONS.en.edgeThicknessInvalid || "Edge thickness could not be determined",
   preview2d: TRANSLATIONS.en.preview2d || "2D map",
   preview3d: TRANSLATIONS.en.preview3d || "3D panel",
+  preview3dInteractiveHint:
+    TRANSLATIONS.en.preview3dInteractiveHint || "LMB rotate, RMB move, wheel zoom.",
+  productionAssembly3d: TRANSLATIONS.en.productionAssembly3d || "3D assembly",
+  productionAssemblyHint:
+    TRANSLATIONS.en.productionAssemblyHint ||
+    "This 3D assembly is based on the cutting map. Click a panel to open its detail workspace.",
   rotateLeft: TRANSLATIONS.en.rotateLeft || "Left",
   rotateRight: TRANSLATIONS.en.rotateRight || "Right",
   resetView: TRANSLATIONS.en.resetView || "Reset",
@@ -516,19 +1012,6 @@ Object.assign(TRANSLATIONS.uk, {
   assemblyGroupOther: "Інші панелі",
 });
 
-Object.assign(TRANSLATIONS.en, {
-  assemblyClearSelection: "Clear selection",
-  assemblyFocusSelected: "Focus selected",
-  assemblyLayerGrooves: "Grooves",
-  assemblyLayerHoles: "Holes",
-  assemblyLayerQuarters: "Quarters",
-  assemblyModeSolid: "Solid",
-  assemblyModeTransparent: "Transparent + holes",
-  assemblyOpenWorkspace: "Open detail workspace",
-  assemblyResetCamera: "Reset camera",
-  assemblyShowFull: "Show full assembly",
-});
-
 Object.assign(TRANSLATIONS.uk, {
   assemblyClearSelection: "\u041e\u0447\u0438\u0441\u0442\u0438\u0442\u0438 \u0432\u0438\u0431\u0456\u0440",
   assemblyFocusSelected: "\u0424\u043e\u043a\u0443\u0441 \u043d\u0430 \u0434\u0435\u0442\u0430\u043b\u0456",
@@ -540,6 +1023,332 @@ Object.assign(TRANSLATIONS.uk, {
   assemblyOpenWorkspace: "\u0412\u0456\u0434\u043a\u0440\u0438\u0442\u0438 \u043a\u0430\u0440\u0442\u0443 \u0434\u0435\u0442\u0430\u043b\u0456",
   assemblyResetCamera: "\u0421\u043a\u0438\u043d\u0443\u0442\u0438 \u043a\u0430\u043c\u0435\u0440\u0443",
   assemblyShowFull: "\u041f\u043e\u043a\u0430\u0437\u0430\u0442\u0438 \u0432\u0441\u044e \u0437\u0431\u0456\u0440\u043a\u0443",
+});
+
+Object.assign(TRANSLATIONS.en, {
+  viyarEmail: "Viyar email",
+  viyarPassword: "Viyar password",
+  viyarPasswordHint: "Leave empty to keep the saved password.",
+  viyarPasswordSavedHint: "Password is already saved. Enter a new one only to replace it.",
+  viyarSaveCredentials: "Save Viyar credentials",
+  viyarConnect: "Connect to Viyar",
+  viyarConnected: "Viyar connected",
+  viyarCredentialsSaved: "Viyar credentials saved",
+  viyarSavingCredentials: "Saving Viyar credentials...",
+  viyarConnectingNow: "Connecting to Viyar...",
+  viyarSyncingPricesNow: "Synchronizing Viyar prices...",
+  viyarHasSavedPassword: "Saved password",
+  viyarHasSavedSession: "Saved session",
+  viyarSavedState: "Saved",
+  viyarLastAuthAt: "Last authorization",
+  viyarLastAuthStatus: "Authorization status",
+  viyarLastAuthError: "Authorization error",
+  viyarNotConnected: "Not connected",
+  viyarSettingsTitle: "Viyar account",
+  viyarStepSave: "Step 1. Save your Viyar credentials.",
+  viyarStepConnect: "Step 2. Connect to Viyar and create a session.",
+  viyarStepSync: "Step 3. Synchronize your personal Viyar prices.",
+  unableToLoadViyarAuth: "Unable to load Viyar authorization settings",
+  unableToSaveViyarAuth: "Unable to save Viyar authorization settings",
+  unableToRefreshViyarSession: "Unable to connect to Viyar",
+  viyarCurrentPrice: "Current Viyar price",
+  viyarLastSynced: "Last synced",
+  viyarArticle: "Article",
+  viyarNoPersonalPrice: "No personal price synced yet",
+  viyarSyncStatus: "Sync status",
+  viyarCalculable: "Calculable",
+  viyarAuthRequired: "Viyar authorization required for actual prices",
+  basePrice: "Base price",
+  serviceUnit: "Unit",
+  showDescription: "Description",
+  hideDescription: "Hide description",
+  viyarCollapseAll: "Collapse all",
+  viyarExpandAll: "Expand all",
+  viyarFolder: "Folder",
+  viyarImported: "Viyar services imported",
+  viyarLoadedFromCache:
+    "Showing saved Viyar services from cache. Refresh from Viyar when you need the latest data.",
+  viyarPricesSynced: "Viyar prices synchronized",
+  viyarRefresh: "Refresh from Viyar",
+  viyarSearch: "Search services",
+  viyarService: "Service",
+  viyarServicesDescription:
+    "Folder tree of services prepared for future calculation and connection to project costing.",
+  viyarSyncPrices: "Sync prices",
+  viyarServicesTitle: "Viyar production services",
+  viyarSource: "Source",
+  manualServiceArticlePlaceholder: "Optional article",
+  manualServiceCreated: "Manual service created",
+  manualServiceDescriptionPlaceholder: "Short description",
+  manualServiceNamePlaceholder: "Service name",
+  manualServiceUpdated: "Manual service updated",
+  manualServicesDescription:
+    "Your own service items for calculation when the price should not come from Viyar.",
+  manualServicesTitle: "My manual services",
+  unableToImportViyarServices: "Unable to import Viyar services",
+  unableToLoadManualServices: "Unable to load manual services",
+  unableToLoadViyarServices: "Unable to load Viyar services",
+  unableToSaveManualService: "Unable to save manual service",
+  unableToSyncViyarPrices: "Unable to synchronize Viyar prices",
+});
+
+Object.assign(TRANSLATIONS.uk, {
+  viyarEmail: "Email Viyar",
+  viyarPassword: "\u041f\u0430\u0440\u043e\u043b\u044c Viyar",
+  viyarPasswordHint:
+    "\u0417\u0430\u043b\u0438\u0448\u0442\u0435 \u043f\u043e\u0440\u043e\u0436\u043d\u0456\u043c, \u0449\u043e\u0431 \u0437\u0431\u0435\u0440\u0435\u0433\u0442\u0438 \u0443\u0436\u0435 \u0437\u0430\u043f\u0438\u0441\u0430\u043d\u0438\u0439 \u043f\u0430\u0440\u043e\u043b\u044c.",
+  viyarPasswordSavedHint:
+    "\u041f\u0430\u0440\u043e\u043b\u044c \u0432\u0436\u0435 \u0437\u0431\u0435\u0440\u0435\u0436\u0435\u043d\u043e. \u0412\u0432\u043e\u0434\u044c\u0442\u0435 \u043d\u043e\u0432\u0438\u0439 \u043b\u0438\u0448\u0435 \u044f\u043a\u0449\u043e \u0445\u043e\u0447\u0435\u0442\u0435 \u0439\u043e\u0433\u043e \u0437\u0430\u043c\u0456\u043d\u0438\u0442\u0438.",
+  viyarSaveCredentials:
+      "\u0417\u0431\u0435\u0440\u0435\u0433\u0442\u0438 \u0434\u0430\u043d\u0456 Viyar",
+  viyarConnect: "\u041f\u0456\u0434\u043a\u043b\u044e\u0447\u0438\u0442\u0438 Viyar",
+  viyarConnected: "Viyar \u043f\u0456\u0434\u043a\u043b\u044e\u0447\u0435\u043d\u043e",
+  viyarCredentialsSaved:
+      "\u0414\u0430\u043d\u0456 Viyar \u0437\u0431\u0435\u0440\u0435\u0436\u0435\u043d\u043e",
+  viyarSavingCredentials:
+      "\u0417\u0431\u0435\u0440\u0456\u0433\u0430\u0454\u043c\u043e \u0434\u0430\u043d\u0456 Viyar...",
+  viyarConnectingNow:
+      "\u041f\u0456\u0434\u043a\u043b\u044e\u0447\u0430\u0454\u043c\u043e\u0441\u044f \u0434\u043e Viyar...",
+  viyarSyncingPricesNow:
+      "\u0421\u0438\u043d\u0445\u0440\u043e\u043d\u0456\u0437\u0443\u0454\u043c\u043e \u0446\u0456\u043d\u0438 Viyar...",
+  viyarHasSavedPassword:
+      "\u0417\u0431\u0435\u0440\u0435\u0436\u0435\u043d\u0438\u0439 \u043f\u0430\u0440\u043e\u043b\u044c",
+  viyarHasSavedSession:
+    "\u0417\u0431\u0435\u0440\u0435\u0436\u0435\u043d\u0430 \u0441\u0435\u0441\u0456\u044f",
+  viyarSavedState: "\u0417\u0431\u0435\u0440\u0435\u0436\u0435\u043d\u043e",
+  viyarLastAuthAt:
+    "\u041e\u0441\u0442\u0430\u043d\u043d\u044f \u0430\u0432\u0442\u043e\u0440\u0438\u0437\u0430\u0446\u0456\u044f",
+  viyarLastAuthStatus:
+    "\u0421\u0442\u0430\u0442\u0443\u0441 \u0430\u0432\u0442\u043e\u0440\u0438\u0437\u0430\u0446\u0456\u0457",
+  viyarLastAuthError:
+    "\u041f\u043e\u043c\u0438\u043b\u043a\u0430 \u0430\u0432\u0442\u043e\u0440\u0438\u0437\u0430\u0446\u0456\u0457",
+  viyarNotConnected: "\u041d\u0435 \u043f\u0456\u0434\u043a\u043b\u044e\u0447\u0435\u043d\u043e",
+  viyarSettingsTitle: "\u0410\u043a\u0430\u0443\u043d\u0442 Viyar",
+  viyarStepSave:
+    "\u041a\u0440\u043e\u043a 1. \u0417\u0431\u0435\u0440\u0435\u0436\u0456\u0442\u044c \u0441\u0432\u043e\u0457 \u0434\u0430\u043d\u0456 Viyar.",
+  viyarStepConnect:
+    "\u041a\u0440\u043e\u043a 2. \u041f\u0456\u0434\u043a\u043b\u044e\u0447\u0456\u0442\u044c\u0441\u044f \u0434\u043e Viyar \u0456 \u0441\u0442\u0432\u043e\u0440\u0456\u0442\u044c \u0441\u0435\u0441\u0456\u044e.",
+  viyarStepSync:
+    "\u041a\u0440\u043e\u043a 3. \u0421\u0438\u043d\u0445\u0440\u043e\u043d\u0456\u0437\u0443\u0439\u0442\u0435 \u0441\u0432\u043e\u0457 \u043f\u0435\u0440\u0441\u043e\u043d\u0430\u043b\u044c\u043d\u0456 \u0446\u0456\u043d\u0438 Viyar.",
+  unableToLoadViyarAuth:
+    "\u041d\u0435 \u0432\u0434\u0430\u043b\u043e\u0441\u044f \u0437\u0430\u0432\u0430\u043d\u0442\u0430\u0436\u0438\u0442\u0438 \u043d\u0430\u043b\u0430\u0448\u0442\u0443\u0432\u0430\u043d\u043d\u044f Viyar",
+  unableToSaveViyarAuth:
+    "\u041d\u0435 \u0432\u0434\u0430\u043b\u043e\u0441\u044f \u0437\u0431\u0435\u0440\u0435\u0433\u0442\u0438 \u043d\u0430\u043b\u0430\u0448\u0442\u0443\u0432\u0430\u043d\u043d\u044f Viyar",
+  unableToRefreshViyarSession:
+    "\u041d\u0435 \u0432\u0434\u0430\u043b\u043e\u0441\u044f \u043f\u0456\u0434\u043a\u043b\u044e\u0447\u0438\u0442\u0438 Viyar",
+  viyarCurrentPrice:
+    "\u041f\u043e\u0442\u043e\u0447\u043d\u0430 \u0446\u0456\u043d\u0430 Viyar",
+  viyarLastSynced:
+    "\u041e\u0441\u0442\u0430\u043d\u043d\u044f \u0441\u0438\u043d\u0445\u0440\u043e\u043d\u0456\u0437\u0430\u0446\u0456\u044f",
+  viyarArticle: "\u0410\u0440\u0442\u0438\u043a\u0443\u043b",
+  viyarNoPersonalPrice:
+    "\u041f\u0435\u0440\u0441\u043e\u043d\u0430\u043b\u044c\u043d\u0443 \u0446\u0456\u043d\u0443 \u0449\u0435 \u043d\u0435 \u0441\u0438\u043d\u0445\u0440\u043e\u043d\u0456\u0437\u043e\u0432\u0430\u043d\u043e",
+  viyarSyncStatus: "\u0421\u0442\u0430\u0442\u0443\u0441 \u0441\u0438\u043d\u0445\u0440\u043e\u043d\u0456\u0437\u0430\u0446\u0456\u0457",
+  basePrice: "\u0411\u0430\u0437\u043e\u0432\u0430 \u0446\u0456\u043d\u0430",
+  serviceUnit: "\u041e\u0434\u0438\u043d\u0438\u0446\u044f",
+  showDescription: "\u041e\u043f\u0438\u0441",
+  hideDescription: "\u0421\u0445\u043e\u0432\u0430\u0442\u0438 \u043e\u043f\u0438\u0441",
+  viyarAuthRequired:
+    "\u0414\u043b\u044f \u0430\u043a\u0442\u0443\u0430\u043b\u044c\u043d\u0438\u0445 \u0446\u0456\u043d Viyar \u043f\u043e\u0442\u0440\u0456\u0431\u043d\u0430 \u0430\u0432\u0442\u043e\u0440\u0438\u0437\u0430\u0446\u0456\u044f",
+  viyarCalculable: "\u0414\u043b\u044f \u0440\u043e\u0437\u0440\u0430\u0445\u0443\u043d\u043a\u0443",
+  viyarCollapseAll: "\u0417\u0433\u043e\u0440\u043d\u0443\u0442\u0438 \u0432\u0441\u0435",
+  viyarExpandAll: "\u0420\u043e\u0437\u0433\u043e\u0440\u043d\u0443\u0442\u0438 \u0432\u0441\u0435",
+  viyarFolder: "\u041f\u0430\u043f\u043a\u0430",
+  viyarImported: "\u041f\u043e\u0441\u043b\u0443\u0433\u0438 Viyar \u043e\u043d\u043e\u0432\u043b\u0435\u043d\u043e",
+  viyarLoadedFromCache:
+    "\u041f\u043e\u043a\u0430\u0437\u0430\u043d\u043e \u0437\u0431\u0435\u0440\u0435\u0436\u0435\u043d\u0456 \u043f\u043e\u0441\u043b\u0443\u0433\u0438 Viyar \u0437 \u043a\u0435\u0448\u0443. \u041e\u043d\u043e\u0432\u0456\u0442\u044c \u0437 Viyar, \u043a\u043e\u043b\u0438 \u043f\u043e\u0442\u0440\u0456\u0431\u043d\u0456 \u043d\u0430\u0439\u0441\u0432\u0456\u0436\u0456 \u0434\u0430\u043d\u0456.",
+  viyarPricesSynced:
+    "\u0426\u0456\u043d\u0438 Viyar \u0441\u0438\u043d\u0445\u0440\u043e\u043d\u0456\u0437\u043e\u0432\u0430\u043d\u043e",
+  viyarRefresh: "\u041e\u043d\u043e\u0432\u0438\u0442\u0438 \u0437 Viyar",
+  viyarSearch: "\u041f\u043e\u0448\u0443\u043a \u043f\u043e\u0441\u043b\u0443\u0433",
+  viyarService: "\u041f\u043e\u0441\u043b\u0443\u0433\u0430",
+  viyarServicesDescription:
+    "\u0414\u0435\u0440\u0435\u0432\u043e \u043f\u043e\u0441\u043b\u0443\u0433, \u043f\u0456\u0434\u0433\u043e\u0442\u043e\u0432\u043b\u0435\u043d\u0435 \u0434\u043b\u044f \u043c\u0430\u0439\u0431\u0443\u0442\u043d\u044c\u043e\u0433\u043e \u043f\u0440\u043e\u0440\u0430\u0445\u0443\u043d\u043a\u0443 \u0456 \u043f\u0440\u0438\u0432'\u044f\u0437\u043a\u0438 \u0434\u043e \u0441\u043e\u0431\u0456\u0432\u0430\u0440\u0442\u043e\u0441\u0442\u0456 \u043f\u0440\u043e\u0454\u043a\u0442\u0443.",
+  viyarSyncPrices: "\u0421\u0438\u043d\u0445\u0440\u043e\u043d\u0456\u0437\u0443\u0432\u0430\u0442\u0438 \u0446\u0456\u043d\u0438",
+  viyarServicesTitle: "\u041f\u043e\u0441\u043b\u0443\u0433\u0438 Viyar",
+  viyarSource: "\u0414\u0436\u0435\u0440\u0435\u043b\u043e",
+  manualServiceArticlePlaceholder: "\u0410\u0440\u0442\u0438\u043a\u0443\u043b (\u043d\u0435 \u043e\u0431\u043e\u0432'\u044f\u0437\u043a\u043e\u0432\u043e)",
+  manualServiceCreated: "\u0420\u0443\u0447\u043d\u0443 \u043f\u043e\u0441\u043b\u0443\u0433\u0443 \u0441\u0442\u0432\u043e\u0440\u0435\u043d\u043e",
+  manualServiceDescriptionPlaceholder: "\u041a\u043e\u0440\u043e\u0442\u043a\u0438\u0439 \u043e\u043f\u0438\u0441",
+  manualServiceNamePlaceholder: "\u041d\u0430\u0437\u0432\u0430 \u043f\u043e\u0441\u043b\u0443\u0433\u0438",
+  manualServiceUpdated: "\u0420\u0443\u0447\u043d\u0443 \u043f\u043e\u0441\u043b\u0443\u0433\u0443 \u043e\u043d\u043e\u0432\u043b\u0435\u043d\u043e",
+  manualServicesDescription:
+    "\u0412\u043b\u0430\u0441\u043d\u0456 \u043f\u043e\u0441\u043b\u0443\u0433\u0438 \u0434\u043b\u044f \u043f\u0440\u043e\u0440\u0430\u0445\u0443\u043d\u043a\u0443, \u044f\u043a\u0456 \u043d\u0435 \u043f\u043e\u0432'\u044f\u0437\u0430\u043d\u0456 \u0434\u043e \u0446\u0456\u043d Viyar.",
+  manualServicesTitle: "\u041c\u043e\u0457 \u0440\u0443\u0447\u043d\u0456 \u043f\u043e\u0441\u043b\u0443\u0433\u0438",
+  unableToImportViyarServices: "\u041d\u0435 \u0432\u0434\u0430\u043b\u043e\u0441\u044f \u043e\u043d\u043e\u0432\u0438\u0442\u0438 \u043f\u043e\u0441\u043b\u0443\u0433\u0438 Viyar",
+  unableToLoadManualServices: "\u041d\u0435 \u0432\u0434\u0430\u043b\u043e\u0441\u044f \u0437\u0430\u0432\u0430\u043d\u0442\u0430\u0436\u0438\u0442\u0438 \u0440\u0443\u0447\u043d\u0456 \u043f\u043e\u0441\u043b\u0443\u0433\u0438",
+  unableToLoadViyarServices: "\u041d\u0435 \u0432\u0434\u0430\u043b\u043e\u0441\u044f \u0437\u0430\u0432\u0430\u043d\u0442\u0430\u0436\u0438\u0442\u0438 \u043f\u043e\u0441\u043b\u0443\u0433\u0438 Viyar",
+  unableToSaveManualService: "\u041d\u0435 \u0432\u0434\u0430\u043b\u043e\u0441\u044f \u0437\u0431\u0435\u0440\u0435\u0433\u0442\u0438 \u0440\u0443\u0447\u043d\u0443 \u043f\u043e\u0441\u043b\u0443\u0433\u0443",
+  unableToSyncViyarPrices:
+    "\u041d\u0435 \u0432\u0434\u0430\u043b\u043e\u0441\u044f \u0441\u0438\u043d\u0445\u0440\u043e\u043d\u0456\u0437\u0443\u0432\u0430\u0442\u0438 \u0446\u0456\u043d\u0438 Viyar",
+});
+
+Object.assign(TRANSLATIONS.en, {
+  viyarFallbackImportNotice:
+    "Viyar returned only a simplified catalog. Existing full service list was kept unchanged.",
+  catalogBrowseCategories: "Browse categories",
+  catalogHubDescription:
+    "Quick access to service directories and reference catalogs in a visual category view.",
+  catalogHubTitle: "Directories overview",
+  openDirectory: "Open directory",
+  catalogManualDescription:
+    "Create and maintain your own services that do not depend on Viyar pricing.",
+  catalogValuesDescription:
+    "Edit shared reference values used across projects, forms, and calculations.",
+  catalogValuesGroups: "Groups",
+  catalogManual: "Manual services",
+  catalogValues: "Value catalog",
+  catalogViyar: "Viyar catalog",
+  authError: "Auth error",
+  authStatus: "Auth status",
+  connected: "Connected",
+  createdProjects: "Created projects",
+  openUserCard: "Open user card",
+  lastAuth: "Last auth",
+  lastUsernameChange: "Last username change",
+  noError: "No error",
+  noProjectsYet: "No projects yet",
+  noRequestsHistory: "No request history",
+  notConnected: "Not connected",
+  session: "Session",
+  telegram: "Telegram",
+  userProfile: "Profile",
+  viyarConnection: "Viyar",
+});
+
+Object.assign(TRANSLATIONS.uk, {
+  viyarFallbackImportNotice:
+    "\u0412\u0456\u0434 Viyar \u043e\u0442\u0440\u0438\u043c\u0430\u043d\u043e \u043b\u0438\u0448\u0435 \u0441\u043f\u0440\u043e\u0449\u0435\u043d\u0438\u0439 \u043a\u0430\u0442\u0430\u043b\u043e\u0433. \u041f\u043e\u043f\u0435\u0440\u0435\u0434\u043d\u0456\u0439 \u043f\u043e\u0432\u043d\u0438\u0439 \u0441\u043f\u0438\u0441\u043e\u043a \u043f\u043e\u0441\u043b\u0443\u0433 \u0437\u0431\u0435\u0440\u0435\u0436\u0435\u043d\u043e.",
+  catalogBrowseCategories:
+    "\u041f\u0435\u0440\u0435\u0433\u043b\u044f\u043d\u0443\u0442\u0438 \u043a\u0430\u0442\u0435\u0433\u043e\u0440\u0456\u0457",
+  catalogHubDescription:
+    "\u0428\u0432\u0438\u0434\u043a\u0438\u0439 \u0434\u043e\u0441\u0442\u0443\u043f \u0434\u043e \u0434\u043e\u0432\u0456\u0434\u043d\u0438\u043a\u0456\u0432 \u043f\u043e\u0441\u043b\u0443\u0433 \u0442\u0430 \u0434\u043e\u0432\u0456\u0434\u043a\u043e\u0432\u0438\u0445 \u0437\u043d\u0430\u0447\u0435\u043d\u044c \u0443 \u0432\u0438\u0433\u043b\u044f\u0434\u0456 \u043a\u0430\u0442\u0435\u0433\u043e\u0440\u0456\u0439.",
+  catalogHubTitle:
+    "\u041e\u0433\u043b\u044f\u0434 \u0434\u043e\u0432\u0456\u0434\u043d\u0438\u043a\u0456\u0432",
+  openDirectory:
+    "\u0412\u0456\u0434\u043a\u0440\u0438\u0442\u0438 \u0434\u043e\u0432\u0456\u0434\u043d\u0438\u043a",
+  catalogManualDescription:
+    "\u0421\u0442\u0432\u043e\u0440\u044e\u0439\u0442\u0435 \u0442\u0430 \u043f\u0456\u0434\u0442\u0440\u0438\u043c\u0443\u0439\u0442\u0435 \u0432\u043b\u0430\u0441\u043d\u0456 \u043f\u043e\u0441\u043b\u0443\u0433\u0438, \u044f\u043a\u0456 \u043d\u0435 \u0437\u0430\u043b\u0435\u0436\u0430\u0442\u044c \u0432\u0456\u0434 \u0446\u0456\u043d Viyar.",
+  catalogValuesDescription:
+    "\u0420\u0435\u0434\u0430\u0433\u0443\u0439\u0442\u0435 \u0441\u043f\u0456\u043b\u044c\u043d\u0456 \u0434\u043e\u0432\u0456\u0434\u043a\u043e\u0432\u0456 \u0437\u043d\u0430\u0447\u0435\u043d\u043d\u044f \u0434\u043b\u044f \u043f\u0440\u043e\u0454\u043a\u0442\u0456\u0432, \u0444\u043e\u0440\u043c \u0442\u0430 \u043f\u0440\u043e\u0440\u0430\u0445\u0443\u043d\u043a\u0456\u0432.",
+  catalogValuesGroups: "\u0413\u0440\u0443\u043f\u0438",
+  catalogManual: "\u0420\u0443\u0447\u043d\u0456 \u043f\u043e\u0441\u043b\u0443\u0433\u0438",
+  catalogValues: "\u0414\u043e\u0432\u0456\u0434\u043d\u0438\u043a \u0437\u043d\u0430\u0447\u0435\u043d\u044c",
+  catalogViyar: "\u0414\u043e\u0432\u0456\u0434\u043d\u0438\u043a Viyar",
+  authError: "\u041f\u043e\u043c\u0438\u043b\u043a\u0430 \u0430\u0432\u0442\u043e\u0440\u0438\u0437\u0430\u0446\u0456\u0457",
+  authStatus: "\u0421\u0442\u0430\u0442\u0443\u0441 \u0430\u0432\u0442\u043e\u0440\u0438\u0437\u0430\u0446\u0456\u0457",
+  connected: "\u041f\u0456\u0434\u043a\u043b\u044e\u0447\u0435\u043d\u043e",
+  createdProjects: "\u0421\u0442\u0432\u043e\u0440\u0435\u043d\u0456 \u043f\u0440\u043e\u0454\u043a\u0442\u0438",
+  lastAuth: "\u041e\u0441\u0442\u0430\u043d\u043d\u044f \u0430\u0432\u0442\u043e\u0440\u0438\u0437\u0430\u0446\u0456\u044f",
+  lastUsernameChange: "\u041e\u0441\u0442\u0430\u043d\u043d\u044f \u0437\u043c\u0456\u043d\u0430 \u043b\u043e\u0433\u0456\u043d\u0430",
+  noError: "\u041d\u0435 \u0432\u043a\u0430\u0437\u0430\u043d\u043e",
+  noProjectsYet: "\u0429\u0435 \u043d\u0435\u043c\u0430\u0454 \u043f\u0440\u043e\u0454\u043a\u0442\u0456\u0432",
+  noRequestsHistory: "\u0429\u0435 \u043d\u0435\u043c\u0430\u0454 \u0456\u0441\u0442\u043e\u0440\u0456\u0457 \u0437\u0430\u043f\u0438\u0442\u0456\u0432",
+  notConnected: "\u041d\u0435 \u043f\u0456\u0434\u043a\u043b\u044e\u0447\u0435\u043d\u043e",
+  openUserCard: "\u041a\u0430\u0440\u0442\u043a\u0430 \u043a\u043e\u0440\u0438\u0441\u0442\u0443\u0432\u0430\u0447\u0430",
+  session: "\u0421\u0435\u0441\u0456\u044f",
+  telegram: "Telegram",
+  userProfile: "\u041f\u0440\u043e\u0444\u0456\u043b\u044c",
+  viyarConnection: "Viyar",
+});
+
+Object.assign(TRANSLATIONS.en, {
+  city: "City",
+  citySaved: "City saved",
+  currentCity: "Current city",
+  cityRequiredForMaterialImport: "Select your city in profile settings before adding a material.",
+  catalogMaterials: "Materials",
+  catalogMaterialsDescription:
+    "Board materials shown as cards with image and city-based price.",
+  materialAdd: "Add material from Viyar",
+  materialAddArticle: "Viyar article",
+  materialAddArticlePlaceholder: "Enter article and add",
+  materialAddUrl: "Viyar product URL (optional)",
+  materialAddUrlPlaceholder: "Paste direct product link if search fails",
+  materialCategory: "Material type",
+  materialImportSuccess: "Material added from Viyar",
+  materialImportQueued: "Material import queued. The system will retry automatically.",
+  materialImportRunning: "Material import is in progress.",
+  materialImportRetry: "Material import is waiting for the next retry.",
+  materialImportFailed: "Material import failed after several attempts.",
+  materialImportStatusTitle: "Material import status",
+  materialImportArticle: "Article",
+  materialImportState: "State",
+  materialImportAttempts: "Attempts",
+  materialImportNextRetry: "Next retry",
+  materialImportLastError: "Last error",
+  materialImportStateQueued: "Queued",
+  materialImportStateRunning: "Running",
+  materialImportStateRetry: "Retry scheduled",
+  materialImportStateSuccess: "Completed",
+  materialImportStateError: "Failed",
+  materialPriceForCity: "Price for city",
+  materialsCount: "Materials",
+  deleteMaterial: "Delete material",
+  deleteMaterialConfirm: "Delete custom material",
+  materialDeleted: "Material deleted",
+  saveCity: "Save city",
+  dsp: "DSP",
+  mdf: "MDF",
+  dvp: "DVP",
+  kyiv: "Kyiv",
+  lviv: "Lviv",
+  odessa: "Odesa",
+  dnipro: "Dnipro",
+  kharkiv: "Kharkiv",
+  khmelnytskyi: "Khmelnytskyi",
+  rivne: "Rivne",
+});
+
+Object.assign(TRANSLATIONS.uk, {
+  city: "\u041c\u0456\u0441\u0442\u043e",
+  citySaved: "\u041c\u0456\u0441\u0442\u043e \u0437\u0431\u0435\u0440\u0435\u0436\u0435\u043d\u043e",
+  currentCity: "\u041f\u043e\u0442\u043e\u0447\u043d\u0435 \u043c\u0456\u0441\u0442\u043e",
+  cityRequiredForMaterialImport:
+    "\u041e\u0431\u0435\u0440\u0456\u0442\u044c \u043c\u0456\u0441\u0442\u043e \u0443 \u043d\u0430\u043b\u0430\u0448\u0442\u0443\u0432\u0430\u043d\u043d\u044f\u0445 \u043f\u0440\u043e\u0444\u0456\u043b\u044e \u043f\u0435\u0440\u0435\u0434 \u0434\u043e\u0434\u0430\u0432\u0430\u043d\u043d\u044f\u043c \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b\u0443.",
+  catalogMaterials: "\u041c\u0430\u0442\u0435\u0440\u0456\u0430\u043b\u0438",
+  catalogMaterialsDescription:
+    "\u041f\u043b\u0438\u0442\u043d\u0456 \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b\u0438 \u0443 \u0432\u0438\u0433\u043b\u044f\u0434\u0456 \u043a\u0430\u0440\u0442\u043e\u043a \u0456\u0437 \u0437\u043e\u0431\u0440\u0430\u0436\u0435\u043d\u043d\u044f\u043c \u0442\u0430 \u0446\u0456\u043d\u043e\u044e \u0437\u0430 \u043c\u0456\u0441\u0442\u043e\u043c.",
+  materialAdd: "\u0414\u043e\u0434\u0430\u0442\u0438 \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b \u0437 Viyar",
+  materialAddArticle: "\u0410\u0440\u0442\u0438\u043a\u0443\u043b Viyar",
+  materialAddArticlePlaceholder:
+    "\u0412\u0432\u0435\u0434\u0456\u0442\u044c \u0430\u0440\u0442\u0438\u043a\u0443\u043b \u0456 \u0434\u043e\u0434\u0430\u0439\u0442\u0435",
+  materialAddUrl: "\u041f\u0440\u044f\u043c\u0435 \u043f\u043e\u0441\u0438\u043b\u0430\u043d\u043d\u044f Viyar (\u043d\u0435\u043e\u0431\u043e\u0432'\u044f\u0437\u043a\u043e\u0432\u043e)",
+  materialAddUrlPlaceholder:
+    "\u0412\u0441\u0442\u0430\u0432\u0442\u0435 \u043f\u0440\u044f\u043c\u0438\u0439 URL \u0442\u043e\u0432\u0430\u0440\u0443, \u044f\u043a\u0449\u043e \u043f\u043e\u0448\u0443\u043a \u043d\u0435 \u0441\u043f\u0440\u0430\u0446\u044e\u0432\u0430\u0432",
+  materialCategory: "\u0422\u0438\u043f \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b\u0443",
+  materialImportSuccess: "\u041c\u0430\u0442\u0435\u0440\u0456\u0430\u043b \u0434\u043e\u0434\u0430\u043d\u043e \u0437 Viyar",
+  materialImportQueued: "\u0406\u043c\u043f\u043e\u0440\u0442 \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b\u0443 \u043f\u043e\u0441\u0442\u0430\u0432\u043b\u0435\u043d\u043e \u0432 \u0447\u0435\u0440\u0433\u0443. \u0421\u0438\u0441\u0442\u0435\u043c\u0430 \u0441\u0430\u043c\u0430 \u043f\u043e\u0432\u0442\u043e\u0440\u0438\u0442\u044c \u0441\u043f\u0440\u043e\u0431\u0438.",
+  materialImportRunning: "\u0406\u043c\u043f\u043e\u0440\u0442 \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b\u0443 \u0432\u0438\u043a\u043e\u043d\u0443\u0454\u0442\u044c\u0441\u044f.",
+  materialImportRetry: "\u0406\u043c\u043f\u043e\u0440\u0442 \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b\u0443 \u0447\u0435\u043a\u0430\u0454 \u043d\u0430 \u043d\u0430\u0441\u0442\u0443\u043f\u043d\u0443 \u0441\u043f\u0440\u043e\u0431\u0443.",
+  materialImportFailed: "\u0406\u043c\u043f\u043e\u0440\u0442 \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b\u0443 \u043d\u0435 \u0432\u0434\u0430\u0432\u0441\u044f \u043f\u0456\u0441\u043b\u044f \u043a\u0456\u043b\u044c\u043a\u043e\u0445 \u0441\u043f\u0440\u043e\u0431.",
+  materialImportStatusTitle: "\u0421\u0442\u0430\u0442\u0443\u0441 \u0456\u043c\u043f\u043e\u0440\u0442\u0443 \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b\u0443",
+  materialImportArticle: "\u0410\u0440\u0442\u0438\u043a\u0443\u043b",
+  materialImportState: "\u0421\u0442\u0430\u043d",
+  materialImportAttempts: "\u0421\u043f\u0440\u043e\u0431\u0438",
+  materialImportNextRetry: "\u041d\u0430\u0441\u0442\u0443\u043f\u043d\u0430 \u0441\u043f\u0440\u043e\u0431\u0430",
+  materialImportLastError: "\u041e\u0441\u0442\u0430\u043d\u043d\u044f \u043f\u043e\u043c\u0438\u043b\u043a\u0430",
+  materialImportStateQueued: "\u0423 \u0447\u0435\u0440\u0437\u0456",
+  materialImportStateRunning: "\u0412 \u0440\u043e\u0431\u043e\u0442\u0456",
+  materialImportStateRetry: "\u041f\u043e\u0432\u0442\u043e\u0440 \u0437\u0430\u043f\u043b\u0430\u043d\u043e\u0432\u0430\u043d\u043e",
+  materialImportStateSuccess: "\u0417\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u043e",
+  materialImportStateError: "\u041f\u043e\u043c\u0438\u043b\u043a\u0430",
+  materialPriceForCity: "\u0426\u0456\u043d\u0430 \u0434\u043b\u044f \u043c\u0456\u0441\u0442\u0430",
+  materialsCount: "\u041c\u0430\u0442\u0435\u0440\u0456\u0430\u043b\u0438",
+  deleteMaterial: "\u0412\u0438\u0434\u0430\u043b\u0438\u0442\u0438 \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b",
+  deleteMaterialConfirm: "\u0412\u0438\u0434\u0430\u043b\u0438\u0442\u0438 \u043a\u043e\u0440\u0438\u0441\u0442\u0443\u0432\u0430\u0446\u044c\u043a\u0438\u0439 \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b",
+  materialDeleted: "\u041c\u0430\u0442\u0435\u0440\u0456\u0430\u043b \u0432\u0438\u0434\u0430\u043b\u0435\u043d\u043e",
+  saveCity: "\u0417\u0431\u0435\u0440\u0435\u0433\u0442\u0438 \u043c\u0456\u0441\u0442\u043e",
+  dsp: "\u0414\u0421\u041f",
+  mdf: "\u041c\u0414\u0424",
+  dvp: "\u0414\u0412\u041f",
+  kyiv: "\u041a\u0438\u0457\u0432",
+  lviv: "\u041b\u044c\u0432\u0456\u0432",
+  odessa: "\u041e\u0434\u0435\u0441\u0430",
+  dnipro: "\u0414\u043d\u0456\u043f\u0440\u043e",
+  kharkiv: "\u0425\u0430\u0440\u043a\u0456\u0432",
+  khmelnytskyi: "\u0425\u043c\u0435\u043b\u044c\u043d\u0438\u0446\u044c\u043a\u0438\u0439",
+  rivne: "\u0420\u0456\u0432\u043d\u0435",
 });
 
 function buildProjectPayload(form) {
@@ -651,6 +1460,47 @@ function formatCatalogLabel(value, t) {
   return t[value] || value;
 }
 
+function buildMaterialImageCandidates(item) {
+  const candidates = [];
+  const article = String(item?.article || "").trim();
+  const baseImage = String(item?.image || "").trim();
+
+  if (baseImage) {
+    candidates.push(baseImage);
+  }
+
+  if (article) {
+    candidates.push(`https://viyar.ua/upload/resize_cache/photos/512_512_1/ph${article}.jpg`);
+    candidates.push(`https://www.viyar.ua/store/Items/photos/ph${article}.jpg`);
+    candidates.push(`https://viyar.ua/store/Items/photos/ph${article}.jpg`);
+    candidates.push(`https://www.viyar.ua/upload/resize_cache/photos/512_512_1/ph${article}.jpg`);
+  }
+
+  return [...new Set(candidates.filter(Boolean))];
+}
+
+function handleMaterialImageError(event, item) {
+  const candidates = buildMaterialImageCandidates(item);
+  const currentIndex = Number(event.currentTarget.dataset.fallbackIndex || "0");
+  const nextIndex = currentIndex + 1;
+
+  if (nextIndex >= candidates.length) {
+    event.currentTarget.style.display = "none";
+    const placeholder = event.currentTarget.parentElement?.querySelector(".material-card-placeholder");
+    if (placeholder) {
+      placeholder.hidden = false;
+    }
+    return;
+  }
+
+  event.currentTarget.dataset.fallbackIndex = String(nextIndex);
+  event.currentTarget.src = candidates[nextIndex];
+}
+
+function canManageMaterialCatalog(user) {
+  return user?.role === "admin" || user?.role === "pro";
+}
+
 function canEditProject(project, user) {
   if (!project || !user) {
     return false;
@@ -660,7 +1510,7 @@ function canEditProject(project, user) {
     return true;
   }
 
-  if (user.role === "manager") {
+  if (user.role === "user" || user.role === "pro") {
     return project.created_by_user_id === user.id;
   }
 
@@ -676,7 +1526,7 @@ function canRollbackProject(user) {
 }
 
 function canCreateProject(user) {
-  return user?.role === "admin" || user?.role === "manager";
+  return user?.role === "admin" || user?.role === "user" || user?.role === "pro";
 }
 
 const EDGE_SIDES = ["top", "right", "bottom", "left"];
@@ -1543,27 +2393,69 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [ownProfileForm, setOwnProfileForm] = useState({
+    username: "",
+    phone: "",
+    city: "",
+  });
+  const [emailChangeForm, setEmailChangeForm] = useState({
+    newEmail: "",
+  });
   const [ownPasswordForm, setOwnPasswordForm] = useState({
     currentPassword: "",
     newPassword: "",
   });
+  const [viyarAuth, setViyarAuth] = useState(null);
+  const [viyarAuthForm, setViyarAuthForm] = useState({
+    email: "",
+    password: "",
+  });
+  const [viyarAction, setViyarAction] = useState("");
   const [newUserForm, setNewUserForm] = useState({
     email: "",
     password: "",
-    role: "manager",
+    role: "user",
   });
   const [newCatalogItemForm, setNewCatalogItemForm] = useState({
     category: "project_type",
     value: "",
     sortOrder: 0,
   });
+  const [newManualServiceForm, setNewManualServiceForm] = useState({
+    article: "",
+    base_price: "",
+    description: "",
+    is_active: true,
+    is_calculable: true,
+    name: "",
+    unit: "service",
+  });
   const [newProjectForm, setNewProjectForm] = useState(DEFAULT_PROJECT_FORM);
   const [projectFilters, setProjectFilters] = useState(DEFAULT_PROJECT_FILTERS);
   const [resetPasswordForms, setResetPasswordForms] = useState({});
   const [projects, setProjects] = useState([]);
   const [users, setUsers] = useState([]);
+  const [userChangeRequests, setUserChangeRequests] = useState([]);
+  const [selectedUserDetails, setSelectedUserDetails] = useState(null);
   const [auditLogs, setAuditLogs] = useState([]);
   const [catalogItems, setCatalogItems] = useState([]);
+  const [viyarServiceTree, setViyarServiceTree] = useState([]);
+  const [manualServiceItems, setManualServiceItems] = useState([]);
+  const [materialItems, setMaterialItems] = useState([]);
+  const [materialCategories, setMaterialCategories] = useState([]);
+  const [materialCityOptions, setMaterialCityOptions] = useState(DEFAULT_CITY_OPTIONS);
+  const [materialSelectedCity, setMaterialSelectedCity] = useState("");
+  const [materialSearch, setMaterialSearch] = useState("");
+  const [materialCategoryFilter, setMaterialCategoryFilter] = useState("dsp");
+  const [newMaterialArticle, setNewMaterialArticle] = useState("");
+  const [newMaterialSourceUrl, setNewMaterialSourceUrl] = useState("");
+  const [activeMaterialImportJobId, setActiveMaterialImportJobId] = useState("");
+  const [activeMaterialImportJob, setActiveMaterialImportJob] = useState(null);
+  const [openMaterialMenuId, setOpenMaterialMenuId] = useState("");
+  const [viyarServiceSource, setViyarServiceSource] = useState("viyar");
+  const [viyarPriceSyncSummary, setViyarPriceSyncSummary] = useState(null);
+  const [viyarServiceSearch, setViyarServiceSearch] = useState("");
+  const [collapsedViyarFolders, setCollapsedViyarFolders] = useState({});
   const [specificationCatalog, setSpecificationCatalog] = useState(
     DEFAULT_SPECIFICATION_CATALOG,
   );
@@ -1576,11 +2468,16 @@ export default function App() {
   const [selectedProject, setSelectedProject] = useState(null);
   const [historyItems, setHistoryItems] = useState([]);
   const [cuttingItems, setCuttingItems] = useState([]);
+  const [cuttingAssembly, setCuttingAssembly] = useState({});
   const [cuttingSummary, setCuttingSummary] = useState(null);
   const [selectedPartDetail, setSelectedPartDetail] = useState(null);
   const [selectedCuttingPartCode, setSelectedCuttingPartCode] = useState(null);
+  const [hoveredCuttingPartCode, setHoveredCuttingPartCode] = useState(null);
+  const [collapsedCuttingGroups, setCollapsedCuttingGroups] = useState({});
+  const [cuttingSearch, setCuttingSearch] = useState("");
   const [selectedEdgeSide, setSelectedEdgeSide] = useState(null);
   const [activeProjectTab, setActiveProjectTab] = useState("data");
+  const [projectOverviewOpen, setProjectOverviewOpen] = useState(false);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [productionLoaded, setProductionLoaded] = useState(false);
   const [form, setForm] = useState(projectToForm(null));
@@ -1588,8 +2485,45 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [confirmAction, setConfirmAction] = useState(null);
   const [activeView, setActiveView] = useState("projects");
+  const [isCatalogMenuOpen, setIsCatalogMenuOpen] = useState(false);
 
   const t = TRANSLATIONS[language] || TRANSLATIONS.en;
+  const viyarServicesCache = user?.id ? readViyarServicesCache(user.id) : null;
+  const normalizedViyarEmail = viyarAuthForm.email.trim();
+  const viyarHasSavedPassword = Boolean(viyarAuth?.has_password);
+  const viyarHasSavedSession = Boolean(viyarAuth?.has_cookie);
+  const viyarEmailChanged = normalizedViyarEmail !== (viyarAuth?.email || "");
+  const viyarHasUnsavedPassword = Boolean(viyarAuthForm.password);
+  const canSaveViyarAuth =
+    Boolean(normalizedViyarEmail) &&
+    (!viyarAuth?.email || viyarEmailChanged || viyarHasUnsavedPassword);
+  const canConnectViyar =
+    Boolean(normalizedViyarEmail) &&
+    (viyarHasSavedPassword || viyarHasUnsavedPassword);
+  const canSyncViyar = viyarHasSavedSession;
+  const viyarActionLabel =
+    viyarAction === "saving"
+      ? t.viyarSavingCredentials
+      : viyarAction === "connecting"
+        ? t.viyarConnectingNow
+        : viyarAction === "syncing"
+          ? t.viyarSyncingPricesNow
+          : "";
+  const hasProfileChanges =
+    (ownProfileForm.username || "") !== (user?.username || "") ||
+    (ownProfileForm.phone || "") !== (user?.phone || "") ||
+    (ownProfileForm.city || "") !== (user?.city || "");
+  const viyarNextStep = !viyarHasSavedPassword || canSaveViyarAuth
+    ? "save"
+    : !viyarHasSavedSession
+      ? "connect"
+      : "sync";
+  const viyarNextStepLabel =
+    viyarNextStep === "save"
+      ? t.viyarStepSave
+      : viyarNextStep === "connect"
+        ? t.viyarStepConnect
+        : t.viyarStepSync;
 
   const canGoBack = offset > 0;
   const canGoForward = offset + PAGE_SIZE < total;
@@ -1602,7 +2536,355 @@ export default function App() {
   const canEditSelectedProject = canEditProject(selectedProject, user);
   const canDeleteSelectedProject = canDeleteProject(user);
   const canRollbackSelectedProject = canRollbackProject(user);
+  const effectiveSelectedPartCode =
+    selectedCuttingPartCode || selectedPartDetail?.part?.export_code || "";
+  const filteredCuttingItems = useMemo(() => {
+    const normalizedQuery = cuttingSearch.trim().toLowerCase();
+
+    if (!normalizedQuery) {
+      return cuttingItems;
+    }
+
+    return cuttingItems.filter((item) =>
+      String(item.part_name || "").toLowerCase().includes(normalizedQuery),
+    );
+  }, [cuttingItems, cuttingSearch]);
+  const expandedCuttingItems = useMemo(
+    () =>
+      filteredCuttingItems.flatMap((item) => {
+        const quantity = Math.max(Number(item.quantity) || 1, 1);
+
+        return Array.from({ length: quantity }, (_, index) => ({
+          ...item,
+          row_key: `${item.export_code}-${index + 1}`,
+          row_title:
+            quantity > 1
+              ? `${item.part_name} #${index + 1}`
+              : item.part_name,
+        }));
+      }),
+    [filteredCuttingItems],
+  );
+  const groupedCuttingItems = useMemo(() => {
+    const groups = new Map();
+
+    expandedCuttingItems.forEach((item) => {
+      const materialName = item.material || t.notSet;
+
+      if (!groups.has(materialName)) {
+        groups.set(materialName, []);
+      }
+
+      groups.get(materialName).push(item);
+    });
+
+    return Array.from(groups.entries());
+  }, [expandedCuttingItems, t]);
+  const selectedCuttingItem = useMemo(
+    () =>
+      effectiveSelectedPartCode
+        ? cuttingItems.find((item) => item.export_code === effectiveSelectedPartCode) || null
+        : null,
+    [cuttingItems, effectiveSelectedPartCode],
+  );
+  const viyarServiceCounts = useMemo(() => {
+    function walk(nodes) {
+      return nodes.reduce(
+        (accumulator, node) => {
+          if (node.item_type === "folder") {
+            accumulator.folders += 1;
+          }
+
+          if (node.item_type === "service") {
+            accumulator.services += 1;
+          }
+
+          if (node.children?.length) {
+            const nested = walk(node.children);
+            accumulator.folders += nested.folders;
+            accumulator.services += nested.services;
+          }
+
+          return accumulator;
+        },
+        { folders: 0, services: 0 },
+      );
+    }
+
+    return walk(viyarServiceTree);
+  }, [viyarServiceTree]);
+  const filteredViyarServiceTree = useMemo(
+    () => filterServiceCatalogTree(viyarServiceTree, viyarServiceSearch),
+    [viyarServiceSearch, viyarServiceTree],
+  );
+  const viyarFolderCodes = useMemo(
+    () => collectServiceFolderCodes(viyarServiceTree),
+    [viyarServiceTree],
+  );
+  const viyarTopFolders = useMemo(
+    () =>
+      flattenServiceTree(viyarServiceTree).filter(
+        (item) =>
+          item.item_type === "folder" &&
+          item.parent_external_code === "viyar-services",
+      ),
+    [viyarServiceTree],
+  );
+  const viyarSyncOverview = useMemo(() => {
+    const serviceItems = flattenServiceTree(viyarServiceTree).filter(
+      (item) => item.item_type === "service",
+    );
+    const syncedItems = serviceItems.filter(
+      (item) => item.user_last_synced_at || item.user_price_sync_status,
+    );
+    const latestSyncedAt = syncedItems.reduce((latest, item) => {
+      if (!item.user_last_synced_at) {
+        return latest;
+      }
+
+      if (!latest || new Date(item.user_last_synced_at) > new Date(latest)) {
+        return item.user_last_synced_at;
+      }
+
+      return latest;
+    }, null);
+
+    return syncedItems.reduce(
+      (accumulator, item) => {
+        const status = item.user_price_sync_status || "unknown";
+
+        accumulator.total += 1;
+        accumulator.statuses[status] = (accumulator.statuses[status] || 0) + 1;
+
+        if (item.user_price !== null && item.user_price !== undefined) {
+          accumulator.priced += 1;
+        }
+
+        return accumulator;
+      },
+      {
+        latestSyncedAt,
+        priced: 0,
+        statuses: {},
+        total: 0,
+      },
+    );
+  }, [viyarServiceTree]);
+  const materialImportStateLabel = useMemo(() => {
+    if (!activeMaterialImportJob?.status) {
+      return "";
+    }
+
+    const labels = {
+      error: t.materialImportStateError,
+      queued: t.materialImportStateQueued,
+      retry: t.materialImportStateRetry,
+      running: t.materialImportStateRunning,
+      success: t.materialImportStateSuccess,
+    };
+
+    return labels[activeMaterialImportJob.status] || activeMaterialImportJob.status;
+  }, [
+    activeMaterialImportJob?.status,
+    t.materialImportStateError,
+    t.materialImportStateQueued,
+    t.materialImportStateRetry,
+    t.materialImportStateRunning,
+    t.materialImportStateSuccess,
+  ]);
+
+  function hydrateViyarServicesFromCache(options = {}) {
+    const cached = viyarServicesCache;
+
+    if (!cached?.items?.length) {
+      return false;
+    }
+
+    setViyarServiceSource(cached.source || "viyar");
+    setViyarServiceTree(cached.items || []);
+    setViyarPriceSyncSummary(cached.priceSyncSummary || null);
+
+    if (options.withStatus) {
+      setStatus(t.viyarLoadedFromCache);
+    }
+
+    return true;
+  }
+
+  useEffect(() => {
+    setProjectOverviewOpen(false);
+  }, [selectedProjectId]);
+  useEffect(() => {
+    setCollapsedCuttingGroups({});
+  }, [selectedProjectId]);
+  useEffect(() => {
+    setCuttingSearch("");
+  }, [selectedProjectId]);
+  useEffect(() => {
+    setViyarServiceSearch("");
+    setCollapsedViyarFolders({});
+  }, [activeView]);
+  useEffect(() => {
+    if (!user?.id || user.role !== "admin" || viyarServiceTree.length > 0) {
+      return;
+    }
+
+    hydrateViyarServicesFromCache();
+  }, [user?.id, user?.role]);
+  useEffect(() => {
+    if (!user?.id || user.role !== "admin" || viyarServiceTree.length === 0) {
+      return;
+    }
+
+    writeViyarServicesCache(user.id, {
+      items: viyarServiceTree,
+      priceSyncSummary: viyarPriceSyncSummary,
+      source: viyarServiceSource,
+    });
+  }, [user?.id, user?.role, viyarPriceSyncSummary, viyarServiceSource, viyarServiceTree]);
+  useEffect(() => {
+    setOwnProfileForm({
+      username: user?.username || "",
+      phone: user?.phone || "",
+      city: user?.city || "",
+    });
+    setEmailChangeForm({
+      newEmail: "",
+    });
+  }, [user?.city, user?.id, user?.phone, user?.username]);
+  useEffect(() => {
+    if (!activeMaterialImportJobId || !token) {
+      setActiveMaterialImportJob(null);
+      return undefined;
+    }
+
+    let isCancelled = false;
+
+    async function pollMaterialImportJob() {
+      const result = await getMaterialImportJob(token, activeMaterialImportJobId);
+
+      if (isCancelled || !result.success || !result.job) {
+        return;
+      }
+
+      setActiveMaterialImportJob(result.job);
+
+      if (result.job.status === "success") {
+        setActiveMaterialImportJobId("");
+        setStatus(t.materialImportSuccess);
+        await loadMaterialsCatalog(token);
+        return;
+      }
+
+      if (result.job.status === "error") {
+        setActiveMaterialImportJobId("");
+        setStatus(result.job.last_error || t.materialImportFailed);
+        return;
+      }
+
+      if (result.job.status === "running") {
+        setStatus(t.materialImportRunning);
+      } else {
+        setStatus(t.materialImportRetry);
+      }
+    }
+
+    pollMaterialImportJob();
+    const intervalId = window.setInterval(pollMaterialImportJob, 10000);
+
+    return () => {
+      isCancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [activeMaterialImportJobId, token, t.materialImportFailed, t.materialImportRetry, t.materialImportRunning, t.materialImportSuccess]);
+  useEffect(() => {
+    if (!effectiveSelectedPartCode || activeProjectTab !== "production") {
+      return;
+    }
+
+    const row = document.querySelector(
+      `[data-export-code="${effectiveSelectedPartCode}"]`,
+    );
+
+    if (row && typeof row.scrollIntoView === "function") {
+      row.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }, [activeProjectTab, effectiveSelectedPartCode]);
+
+  function toggleCuttingGroup(materialName) {
+    setCollapsedCuttingGroups((current) => ({
+      ...current,
+      [materialName]: !current[materialName],
+    }));
+  }
+
+  function collapseAllCuttingGroups() {
+    setCollapsedCuttingGroups(
+      groupedCuttingItems.reduce((accumulator, [materialName]) => {
+        accumulator[materialName] = true;
+        return accumulator;
+      }, {}),
+    );
+  }
+
+  function expandAllCuttingGroups() {
+    setCollapsedCuttingGroups({});
+  }
+
+  function toggleViyarFolder(externalCode) {
+    setCollapsedViyarFolders((current) => ({
+      ...current,
+      [externalCode]: !current[externalCode],
+    }));
+  }
+
+  function collapseAllViyarFolders() {
+    setCollapsedViyarFolders(
+      viyarFolderCodes.reduce((accumulator, code) => {
+        accumulator[code] = true;
+        return accumulator;
+      }, {}),
+    );
+  }
+
+  function expandAllViyarFolders() {
+    setCollapsedViyarFolders({});
+  }
+
+  async function openViyarFolderCatalog(folderCode) {
+    setCollapsedViyarFolders({});
+    setViyarServiceSearch("");
+    setActiveView("catalogViyar");
+    await loadViyarServices(token);
+    requestAnimationFrame(() => {
+      const target = document.querySelector(
+        `[data-folder-code="${folderCode}"]`,
+      );
+
+      if (target && typeof target.scrollIntoView === "function") {
+        target.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    });
+  }
   const canCreateNewProject = canCreateProject(user);
+  const canEditMaterialCatalog = canManageMaterialCatalog(user);
+  const isCatalogMaterialsView = activeView === "catalogMaterials";
+  const isCatalogValuesView = activeView === "catalogValues";
+  const isCatalogViyarView = activeView === "catalogViyar";
+  const isCatalogManualView = activeView === "catalogManual";
+  const isCatalogHubView = activeView === "catalogHub";
+  const isCatalogView =
+    isCatalogHubView ||
+    isCatalogMaterialsView ||
+    isCatalogValuesView ||
+    isCatalogViyarView ||
+    isCatalogManualView;
+
+  useEffect(() => {
+    if (isCatalogView) {
+      setIsCatalogMenuOpen(true);
+    }
+  }, [isCatalogView]);
 
   const pageLabel = useMemo(() => {
     if (total === 0) {
@@ -1651,8 +2933,28 @@ export default function App() {
       return usersPageLabel;
     }
 
-    if (activeView === "catalog") {
+    if (isCatalogHubView) {
+      return t.catalogHubTitle;
+    }
+
+    if (isCatalogMaterialsView) {
+      return `${materialItems.length} ${t.of} ${materialItems.length}`;
+    }
+
+    if (isCatalogValuesView) {
       return `${catalogItems.length} ${t.of} ${catalogItems.length}`;
+    }
+
+    if (isCatalogViyarView) {
+      return `${viyarServiceCounts.services} ${t.of} ${viyarServiceCounts.services}`;
+    }
+
+    if (isCatalogManualView) {
+      return `${manualServiceItems.length} ${t.of} ${manualServiceItems.length}`;
+    }
+
+    if (activeView === "settings") {
+      return t.myData;
     }
 
     return auditPageLabel;
@@ -1660,10 +2962,18 @@ export default function App() {
     activeView,
     auditPageLabel,
     catalogItems.length,
+    isCatalogHubView,
+    isCatalogMaterialsView,
+    isCatalogManualView,
+    isCatalogValuesView,
+    isCatalogViyarView,
+    materialItems.length,
+    manualServiceItems.length,
     pageLabel,
     selectedProject,
     t,
     usersPageLabel,
+    viyarServiceCounts.services,
   ]);
 
   function changeLanguage(nextLanguage) {
@@ -1751,6 +3061,36 @@ export default function App() {
     setUsersOffset(result.offset);
   }
 
+  async function loadUserChangeRequests(activeToken = token) {
+    if (!activeToken || user?.role !== "admin") {
+      return;
+    }
+
+    setLoading(true);
+    const result = await listUserChangeRequests(activeToken, "pending");
+    setLoading(false);
+
+    if (!result.success) {
+      setStatus(result.error || t.noPendingRequests);
+      return;
+    }
+
+    setUserChangeRequests(result.requests || []);
+  }
+
+  async function openUserDetails(targetUser) {
+    setLoading(true);
+    const result = await getUserDetails(token, targetUser.id);
+    setLoading(false);
+
+    if (!result.success) {
+      setStatus(result.error || t.unableToLoadUsers);
+      return;
+    }
+
+    setSelectedUserDetails(result.details);
+  }
+
   async function loadAuditLogs(activeToken = token, nextOffset = auditOffset) {
     if (!activeToken || user?.role !== "admin") {
       return;
@@ -1787,6 +3127,154 @@ export default function App() {
     setCatalogItems(result.items);
   }
 
+  async function loadViyarServices(activeToken = token) {
+    if (!activeToken || user?.role !== "admin") {
+      return;
+    }
+
+    hydrateViyarServicesFromCache();
+
+    setLoading(true);
+    const result = await getViyarServicesTree(activeToken);
+    setLoading(false);
+
+    if (!result.success) {
+      if (hydrateViyarServicesFromCache({ withStatus: true })) {
+        return;
+      }
+
+      setStatus(result.error || t.unableToLoadViyarServices);
+      return;
+    }
+
+    if (!result.items?.length && hydrateViyarServicesFromCache({ withStatus: true })) {
+      return;
+    }
+
+    setViyarServiceSource(result.source || "viyar");
+    setViyarServiceTree(result.items || []);
+  }
+
+  async function loadMaterialsCatalog(
+    activeToken = token,
+    options = {},
+  ) {
+    if (!activeToken) {
+      return;
+    }
+
+    setLoading(true);
+    const result = await getMaterialsCatalog(activeToken, {
+      category: options.category ?? materialCategoryFilter ?? "dsp",
+      city:
+        options.city ??
+        materialSelectedCity ??
+        ownProfileForm.city ??
+        user?.city ??
+        "",
+      search: options.search ?? materialSearch,
+    });
+    setLoading(false);
+
+    if (!result.success) {
+      setStatus(result.error || t.unableToLoadCatalog);
+      return;
+    }
+
+    setMaterialItems(result.items || []);
+    setMaterialCategories(result.categories || []);
+    setMaterialCityOptions(result.city_options?.length ? result.city_options : DEFAULT_CITY_OPTIONS);
+    setMaterialSelectedCity(result.selected_city || "");
+  }
+
+  async function handleMaterialCitySave(event) {
+    event.preventDefault();
+
+    if (!token) {
+      return;
+    }
+
+    const profilePayload = {
+      phone: ownProfileForm.phone.trim(),
+      city: materialSelectedCity,
+    };
+
+    if (ownProfileForm.username.trim()) {
+      profilePayload.username = ownProfileForm.username.trim();
+    }
+
+    setLoading(true);
+    const result = await updateMyProfile(token, profilePayload);
+    setLoading(false);
+
+    if (!result.success) {
+      setStatus(result.error || t.unableToLoadCatalog);
+      return;
+    }
+
+    setUser(result.user);
+    setOwnProfileForm((current) => ({
+      ...current,
+      city: result.user.city || "",
+    }));
+    setStatus(t.citySaved);
+    await loadMaterialsCatalog(token, {
+      category: materialCategoryFilter,
+      city: result.user.city || "",
+      search: materialSearch,
+    });
+  }
+
+  async function loadManualServices(activeToken = token) {
+    if (!activeToken) {
+      return;
+    }
+
+    setLoading(true);
+    const result = await getManualServicesTree(activeToken);
+    setLoading(false);
+
+    if (!result.success) {
+      setStatus(result.error || t.unableToLoadManualServices);
+      return;
+    }
+
+    setManualServiceItems(result.items || []);
+  }
+
+  async function loadOwnViyarAuth(activeToken = token) {
+    if (!activeToken) {
+      return;
+    }
+
+    setLoading(true);
+    const result = await getMyViyarAuthStatus(activeToken);
+    setLoading(false);
+
+    if (!result.success) {
+      setStatus(result.error || t.unableToLoadViyarAuth);
+      return;
+    }
+
+    setViyarAuth(result.viyar || null);
+    setViyarAuthForm((current) => ({
+      ...current,
+      email: result.viyar?.email || "",
+      password: "",
+    }));
+  }
+
+  async function loadCatalogView(activeToken = token) {
+    await loadCatalogItems(activeToken);
+    await loadMaterialsCatalog(activeToken, { category: "dsp", search: "" });
+    await loadViyarServices(activeToken);
+    await loadManualServices(activeToken);
+  }
+
+  async function loadSettingsView(activeToken = token) {
+    await loadOwnViyarAuth(activeToken);
+  }
+
   async function loadProject(projectId) {
     const projectResult = await getProject(token, projectId);
 
@@ -1799,6 +3287,7 @@ export default function App() {
     setForm(projectToForm(projectResult.project));
     setHistoryItems([]);
     setCuttingItems([]);
+    setCuttingAssembly({});
     setCuttingSummary(null);
     setSelectedPartDetail(null);
     setSelectedEdgeSide(null);
@@ -1846,10 +3335,12 @@ export default function App() {
     }
 
     setCuttingItems(result.items || []);
+    setCuttingAssembly(result.assembly || {});
     setCuttingSummary(result.summary || null);
     if (clearSelectedPart) {
       setSelectedPartDetail(null);
       setSelectedCuttingPartCode(null);
+      setHoveredCuttingPartCode(null);
       setSelectedEdgeSide(null);
     }
     setProductionLoaded(true);
@@ -1896,14 +3387,36 @@ export default function App() {
     setUsers([]);
     setAuditLogs([]);
     setCatalogItems([]);
+    setViyarServiceTree([]);
+    setManualServiceItems([]);
+    setViyarServiceSource("viyar");
+    setViyarPriceSyncSummary(null);
+    setViyarServiceSearch("");
+    setCollapsedViyarFolders({});
     setResetPasswordForms({});
+    setNewManualServiceForm({
+      article: "",
+      base_price: "",
+      description: "",
+      is_active: true,
+      is_calculable: true,
+      name: "",
+      unit: "service",
+    });
     setOwnPasswordForm({
       currentPassword: "",
       newPassword: "",
     });
+    setViyarAuth(null);
+    setViyarAuthForm({
+      email: "",
+      password: "",
+    });
+    setViyarAction("");
     setSelectedProject(null);
     setHistoryItems([]);
     setCuttingItems([]);
+    setCuttingAssembly({});
     setCuttingSummary(null);
     setSelectedPartDetail(null);
     setSelectedCuttingPartCode(null);
@@ -1957,6 +3470,7 @@ export default function App() {
 
   function handleClearCuttingPartSelection() {
     setSelectedCuttingPartCode(null);
+    setHoveredCuttingPartCode(null);
     setStatus("");
   }
 
@@ -2114,29 +3628,57 @@ export default function App() {
   }
 
   async function switchView(view) {
-    setActiveView(view);
+    const nextView = view === "catalog" ? "catalogViyar" : view;
+
+    setActiveView(nextView);
     setStatus("");
 
-    if (view === "projects") {
+    if (nextView === "projects") {
       await loadProjects(token, offset);
       return;
     }
 
-    if (view === "createProject") {
+    if (nextView === "createProject") {
       return;
     }
 
-    if (view === "users") {
+    if (nextView === "users") {
       await loadUsers(token, usersOffset);
+      await loadUserChangeRequests(token);
       return;
     }
 
-    if (view === "catalog") {
+    if (nextView === "catalogValues") {
       await loadCatalogItems(token);
       return;
     }
 
-    if (view === "audit") {
+    if (nextView === "catalogHub") {
+      await loadCatalogView(token);
+      return;
+    }
+
+    if (nextView === "catalogMaterials") {
+      await loadMaterialsCatalog(token);
+      return;
+    }
+
+    if (nextView === "catalogViyar") {
+      await loadViyarServices(token);
+      return;
+    }
+
+    if (nextView === "catalogManual") {
+      await loadManualServices(token);
+      return;
+    }
+
+    if (nextView === "settings") {
+      await loadSettingsView(token);
+      return;
+    }
+
+    if (nextView === "audit") {
       await loadAuditLogs(token, auditOffset);
     }
   }
@@ -2169,11 +3711,72 @@ export default function App() {
     await loadUsers(token, usersOffset);
   }
 
+  async function handleUserChangeRequestReview(changeRequest, decision) {
+    setLoading(true);
+    const result = await reviewUserChangeRequest(token, changeRequest.id, decision);
+    setLoading(false);
+
+    if (!result.success) {
+      setStatus(result.error || t.requestReviewed);
+      return;
+    }
+
+    setStatus(t.requestReviewed);
+    await loadUsers(token, usersOffset);
+    await loadUserChangeRequests(token);
+  }
+
   function setResetPasswordValue(userId, passwordValue) {
     setResetPasswordForms({
       ...resetPasswordForms,
       [userId]: passwordValue,
     });
+  }
+
+  async function handleOwnProfileSave(event) {
+    event.preventDefault();
+
+    const profilePayload = {
+      phone: ownProfileForm.phone.trim(),
+      city: ownProfileForm.city.trim(),
+    };
+
+    if (ownProfileForm.username.trim()) {
+      profilePayload.username = ownProfileForm.username.trim();
+    }
+
+    setLoading(true);
+    const result = await updateMyProfile(token, profilePayload);
+    setLoading(false);
+
+    if (!result.success) {
+      setStatus(result.error || t.usernameChangeWeekly);
+      return;
+    }
+
+    setUser(result.user);
+    setStatus(t.profileSaved);
+  }
+
+  async function handleOwnEmailChangeRequest(event) {
+    event.preventDefault();
+
+    setLoading(true);
+    const result = await createMyEmailChangeRequest(
+      token,
+      emailChangeForm.newEmail.trim(),
+    );
+    setLoading(false);
+
+    if (!result.success) {
+      setStatus(result.error || t.requestEmailChange);
+      return;
+    }
+
+    setEmailChangeForm({
+      newEmail: "",
+    });
+    setStatus(t.emailChangeRequested);
   }
 
   async function handleOwnPasswordChange(event) {
@@ -2197,6 +3800,86 @@ export default function App() {
       newPassword: "",
     });
     setStatus(t.passwordChanged);
+  }
+
+  async function handleSaveViyarAuth(event) {
+    event.preventDefault();
+
+    setViyarAction("saving");
+    setStatus(t.viyarSavingCredentials);
+    setLoading(true);
+    const result = await updateMyViyarAuth(
+      token,
+      normalizedViyarEmail,
+      viyarAuthForm.password || null,
+    );
+    setLoading(false);
+
+    if (!result.success) {
+      setViyarAction("");
+      setStatus(result.error || t.unableToSaveViyarAuth);
+      return;
+    }
+
+    setViyarAuth(result.viyar || null);
+    setViyarAuthForm((current) => ({
+      ...current,
+      email: result.viyar?.email || current.email,
+        password: "",
+      }));
+    setViyarAction("");
+    setStatus(t.viyarCredentialsSaved);
+  }
+
+  async function handleRefreshViyarSession() {
+    if (!normalizedViyarEmail) {
+      setStatus(t.viyarStepSave);
+      return;
+    }
+
+    if (viyarEmailChanged || viyarHasUnsavedPassword || !viyarHasSavedPassword) {
+      setViyarAction("saving");
+      setStatus(t.viyarSavingCredentials);
+      setLoading(true);
+      const saveResult = await updateMyViyarAuth(
+        token,
+        normalizedViyarEmail,
+        viyarAuthForm.password || null,
+      );
+      setLoading(false);
+
+      if (!saveResult.success) {
+        setViyarAction("");
+        setStatus(saveResult.error || t.unableToSaveViyarAuth);
+        return;
+      }
+
+      setViyarAuth(saveResult.viyar || null);
+      setViyarAuthForm((current) => ({
+        ...current,
+        email: saveResult.viyar?.email || normalizedViyarEmail,
+          password: "",
+        }));
+    }
+
+    setViyarAction("connecting");
+    setStatus(t.viyarConnectingNow);
+    setLoading(true);
+    const result = await refreshMyViyarSession(token);
+    setLoading(false);
+
+    if (!result.success) {
+      if (result.viyar) {
+        setViyarAuth(result.viyar);
+      }
+      setViyarAction("");
+      setStatus(result.error || t.unableToRefreshViyarSession);
+      return;
+    }
+
+    setViyarAuth(result.viyar || null);
+    setViyarAction("");
+    setStatus(t.viyarConnected);
   }
 
   async function handleResetPassword(targetUser) {
@@ -2248,7 +3931,7 @@ export default function App() {
     setNewUserForm({
       email: "",
       password: "",
-      role: "manager",
+      role: "user",
     });
     setStatus(t.userCreated);
     await loadUsers(token, 0);
@@ -2318,6 +4001,255 @@ export default function App() {
     setStatus(t.catalogStatusUpdated);
     await loadCatalogItems(token);
     await loadSpecificationCatalog();
+  }
+
+  async function handleImportViyarServices() {
+    setLoading(true);
+    const result = await importViyarServices(token);
+    setLoading(false);
+
+    if (!result.success) {
+      setStatus(result.error || t.unableToImportViyarServices);
+      return;
+    }
+
+    setViyarServiceSource(result.source || "viyar");
+    setViyarServiceTree(result.items || []);
+    setViyarPriceSyncSummary(null);
+    setStatus(
+      result.fallback_only_import
+        ? t.viyarFallbackImportNotice
+        : t.viyarImported,
+    );
+  }
+
+  async function handleSyncViyarPrices() {
+    setViyarAction("syncing");
+    setStatus(t.viyarSyncingPricesNow);
+    setLoading(true);
+    const result = await syncViyarServicePrices(token);
+    setLoading(false);
+
+    if (!result.success) {
+      setViyarAction("");
+      setStatus(result.error || t.unableToSyncViyarPrices);
+      return;
+    }
+
+    setViyarServiceSource(result.source || "viyar");
+    setViyarServiceTree(result.items || []);
+    setViyarPriceSyncSummary({
+      auth_required: Boolean(result.auth_required),
+      priced_count: Number(result.priced_count || 0),
+      skipped_count: Number(result.skipped_count || 0),
+      total_count: Number(result.priced_count || 0) + Number(result.skipped_count || 0),
+    });
+    if (activeView === "settings") {
+      await loadOwnViyarAuth(token);
+    }
+    setViyarAction("");
+    setStatus(
+      result.auth_required
+        ? `${t.viyarAuthRequired} (${Number(result.priced_count || 0)}/${Number(result.priced_count || 0) + Number(result.skipped_count || 0)})`
+        : `${t.viyarPricesSynced}: ${Number(result.priced_count || 0)} / ${Number(result.priced_count || 0) + Number(result.skipped_count || 0)}`,
+    );
+  }
+
+  function handleViyarServiceFieldChange(itemId, field, value) {
+    setViyarServiceTree((current) =>
+      updateServiceTreeNode(current, itemId, (node) => ({
+        ...node,
+        [field]: value,
+      })),
+    );
+  }
+
+  async function handleSaveViyarService(node) {
+    setLoading(true);
+    const result = await updateViyarService(token, node.id, {
+      base_price:
+        node.base_price === "" || node.base_price === null
+          ? null
+          : Number(node.base_price),
+      is_active: Boolean(node.is_active),
+      is_calculable: Boolean(node.is_calculable),
+      unit: node.unit || null,
+    });
+    setLoading(false);
+
+    if (!result.success) {
+      setStatus(result.error || t.unableToSaveCatalogItem);
+      return;
+    }
+
+    setViyarServiceTree((current) =>
+      updateServiceTreeNode(current, node.id, () => ({
+        ...node,
+        ...result.item,
+      })),
+    );
+    setStatus(t.catalogItemUpdated);
+  }
+
+  function handleManualServiceFieldChange(itemId, field, value) {
+    setManualServiceItems((current) =>
+      current.map((item) =>
+        item.id === itemId
+          ? {
+              ...item,
+              [field]: value,
+            }
+          : item,
+      ),
+    );
+  }
+
+  async function handleCreateManualService(event) {
+    event.preventDefault();
+
+    setLoading(true);
+    const result = await createManualService(token, {
+      article: newManualServiceForm.article || null,
+      base_price:
+        newManualServiceForm.base_price === "" || newManualServiceForm.base_price === null
+          ? null
+          : Number(newManualServiceForm.base_price),
+      description: newManualServiceForm.description || null,
+      is_active: Boolean(newManualServiceForm.is_active),
+      is_calculable: Boolean(newManualServiceForm.is_calculable),
+      name: newManualServiceForm.name.trim(),
+      unit: newManualServiceForm.unit || null,
+    });
+    setLoading(false);
+
+    if (!result.success) {
+      setStatus(result.error || t.unableToSaveManualService);
+      return;
+    }
+
+    setNewManualServiceForm({
+      article: "",
+      base_price: "",
+      description: "",
+      is_active: true,
+      is_calculable: true,
+      name: "",
+      unit: "service",
+    });
+    setStatus(t.manualServiceCreated);
+    await loadManualServices(token);
+  }
+
+  async function handleSaveManualService(item) {
+    setLoading(true);
+    const result = await updateManualService(token, item.id, {
+      article: item.article || null,
+      base_price:
+        item.base_price === "" || item.base_price === null
+          ? null
+          : Number(item.base_price),
+      description: item.description || null,
+      is_active: Boolean(item.is_active),
+      is_calculable: Boolean(item.is_calculable),
+      name: item.name.trim(),
+      unit: item.unit || null,
+    });
+    setLoading(false);
+
+    if (!result.success) {
+      setStatus(result.error || t.unableToSaveManualService);
+      return;
+    }
+
+    setManualServiceItems((current) =>
+      current.map((serviceItem) =>
+        serviceItem.id === item.id
+          ? {
+              ...serviceItem,
+              ...result.item,
+            }
+          : serviceItem,
+      ),
+    );
+    setStatus(t.manualServiceUpdated);
+  }
+
+  async function handleImportMaterial(event) {
+    event.preventDefault();
+
+    if (!ownProfileForm.city.trim()) {
+      setStatus(t.cityRequiredForMaterialImport);
+      return;
+    }
+
+    setLoading(true);
+    const result = await importMaterialFromViyar(
+      token,
+      newMaterialArticle.trim(),
+      materialCategoryFilter || "dsp",
+      newMaterialSourceUrl.trim(),
+    );
+    setLoading(false);
+
+    if (!result.success) {
+      setStatus(result.error || t.unableToLoadCatalog);
+      return;
+    }
+
+    setNewMaterialArticle("");
+    setNewMaterialSourceUrl("");
+
+    if (result.item) {
+      if (result.job) {
+        setActiveMaterialImportJob(result.job);
+      }
+      setStatus(t.materialImportSuccess);
+      await loadMaterialsCatalog(token);
+      return;
+    }
+
+    if (result.job?.id) {
+      setActiveMaterialImportJobId(result.job.id);
+      setActiveMaterialImportJob(result.job);
+      setStatus(t.materialImportQueued);
+      return;
+    }
+
+    setStatus(result.error || t.materialImportQueued);
+  }
+
+  function openDeleteMaterialConfirm(item) {
+    if (!item || item.is_default) {
+      return;
+    }
+
+    setOpenMaterialMenuId("");
+    setConfirmAction({
+      type: "deleteMaterial",
+      title: t.deleteMaterial,
+      message: `${t.deleteMaterialConfirm}: ${item.name || item.article}?`,
+      confirmLabel: t.delete,
+      targetId: item.article,
+    });
+  }
+
+  async function handleDeleteMaterial(article) {
+    if (!article) {
+      return;
+    }
+
+    setLoading(true);
+    const result = await deleteMaterial(token, article);
+    setLoading(false);
+
+    if (!result.success) {
+      setStatus(result.error || t.deleteFailed);
+      return;
+    }
+
+    setMaterialItems((current) => current.filter((item) => item.article !== article));
+    setStatus(t.materialDeleted);
+    closeConfirm();
   }
 
   async function handleApplyProjectFilters(event) {
@@ -2445,6 +4377,11 @@ export default function App() {
 
     if (confirmAction.type === "delete") {
       await handleDelete();
+      return;
+    }
+
+    if (confirmAction.type === "deleteMaterial") {
+      await handleDeleteMaterial(confirmAction.targetId);
     }
   }
 
@@ -2499,6 +4436,7 @@ export default function App() {
     setSelectedProject(null);
     setHistoryItems([]);
     setCuttingItems([]);
+    setCuttingAssembly({});
     setCuttingSummary(null);
     setSelectedPartDetail(null);
     setHistoryLoaded(false);
@@ -2548,12 +4486,44 @@ export default function App() {
   }, [token, user, activeView]);
 
   useEffect(() => {
-    if (!token || user?.role !== "admin" || activeView !== "catalog") {
+    if (!token || user?.role !== "admin" || !isCatalogValuesView) {
       return;
     }
 
     loadCatalogItems(token);
-  }, [token, user, activeView]);
+  }, [token, user, isCatalogValuesView]);
+
+  useEffect(() => {
+    if (!token || !isCatalogMaterialsView) {
+      return;
+    }
+
+    loadMaterialsCatalog(token);
+  }, [token, user?.city, isCatalogMaterialsView, materialCategoryFilter, materialSearch]);
+
+  useEffect(() => {
+    if (!token || user?.role !== "admin" || !isCatalogViyarView) {
+      return;
+    }
+
+    loadViyarServices(token);
+  }, [token, user, isCatalogViyarView]);
+
+  useEffect(() => {
+    if (!token || user?.role !== "admin" || !isCatalogHubView) {
+      return;
+    }
+
+    loadCatalogView(token);
+  }, [token, user, isCatalogHubView]);
+
+  useEffect(() => {
+    if (!token || !isCatalogManualView) {
+      return;
+    }
+
+    loadManualServices(token);
+  }, [token, user, isCatalogManualView]);
 
   if (!token || !user) {
     return (
@@ -2563,7 +4533,7 @@ export default function App() {
             <img
               alt={t.furniturePlatform}
               className="brand-logo"
-              src="/brand/mproject-logo-flat.svg"
+              src="/brand/mproject-logo-reference.jpg"
             />
             <div className="auth-heading">
               <p>{t.brandTagline}</p>
@@ -2608,34 +4578,42 @@ export default function App() {
   return (
     <main className="app-shell">
       <aside className="sidebar">
-        <div className="brand-block brand-lockup">
-          <img alt="" className="brand-mark" src="/brand/mp-symbol-flat.svg" />
+        <div className="brand-block sidebar-brand-block">
+          <img
+            alt={t.furniturePlatform}
+            className="sidebar-brand-logo"
+            src="/brand/mproject-logo-reference.jpg"
+          />
           <div className="brand-copy">
-            <p className="eyebrow">{t.furniturePlatform}</p>
-            <h1>{t.admin}</h1>
+            <p className="eyebrow">{t.brandTagline}</p>
+            <div className="brand-copy-header">
+              <h1>{t.admin}</h1>
+              <div className="language-switcher compact" aria-label="Language">
+                <button
+                  className={language === "en" ? "active" : ""}
+                  onClick={() => changeLanguage("en")}
+                  type="button"
+                >
+                  EN
+                </button>
+                <button
+                  className={language === "uk" ? "active" : ""}
+                  onClick={() => changeLanguage("uk")}
+                  type="button"
+                >
+                  UA
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
-
-        <div className="language-switcher" aria-label="Language">
-          <button
-            className={language === "en" ? "active" : ""}
-            onClick={() => changeLanguage("en")}
-            type="button"
-          >
-            EN
-          </button>
-          <button
-            className={language === "uk" ? "active" : ""}
-            onClick={() => changeLanguage("uk")}
-            type="button"
-          >
-            UA
-          </button>
         </div>
 
         <div className="user-block">
           <span>{user.email}</span>
           <strong>{user.role}</strong>
+          <small>
+            {t.currentCity}: {formatCatalogLabel(user.city, t)}
+          </small>
         </div>
 
         <nav className="nav-tabs" aria-label="Admin sections">
@@ -2669,13 +4647,6 @@ export default function App() {
                 {t.users}
               </button>
               <button
-                className={activeView === "catalog" ? "active" : ""}
-                onClick={() => switchView("catalog")}
-                type="button"
-              >
-                {t.catalog}
-              </button>
-              <button
                 className={activeView === "audit" ? "active" : ""}
                 onClick={() => switchView("audit")}
                 type="button"
@@ -2684,42 +4655,72 @@ export default function App() {
               </button>
             </>
           ) : null}
-        </nav>
-
-        <form className="password-panel" onSubmit={handleOwnPasswordChange}>
-          <p className="eyebrow">{t.password}</p>
-          <input
-            autoComplete="current-password"
-            minLength={8}
-            onChange={(event) =>
-              setOwnPasswordForm({
-                ...ownPasswordForm,
-                currentPassword: event.target.value,
-              })
-            }
-            placeholder={t.currentPassword}
-            required
-            type="password"
-            value={ownPasswordForm.currentPassword}
-          />
-          <input
-            autoComplete="new-password"
-            minLength={8}
-            onChange={(event) =>
-              setOwnPasswordForm({
-                ...ownPasswordForm,
-                newPassword: event.target.value,
-              })
-            }
-            placeholder={t.newPassword}
-            required
-            type="password"
-            value={ownPasswordForm.newPassword}
-          />
-          <button className="ghost-button" disabled={loading} type="submit">
-            {t.changePassword}
+          <div className={`nav-group${isCatalogView ? " active" : ""}`}>
+            <div className={`nav-group-header${isCatalogView ? " active" : ""}`}>
+              <button
+                className={`nav-group-link${isCatalogHubView || isCatalogMaterialsView ? " active" : ""}`}
+                onClick={() => switchView(user.role === "admin" ? "catalogHub" : "catalogMaterials")}
+                type="button"
+              >
+                <span className="nav-group-title">{t.catalog}</span>
+              </button>
+              <button
+                aria-expanded={isCatalogMenuOpen}
+                className={`nav-group-toggle${isCatalogView ? " active" : ""}`}
+                onClick={() => setIsCatalogMenuOpen((current) => !current)}
+                type="button"
+              >
+                <ChevronRight
+                  className={`nav-group-icon${isCatalogMenuOpen ? " expanded" : ""}`}
+                  size={16}
+                />
+              </button>
+            </div>
+            {isCatalogMenuOpen ? (
+              <div className="nav-subtabs">
+                <button
+                  className={isCatalogMaterialsView ? "active" : ""}
+                  onClick={() => switchView("catalogMaterials")}
+                  type="button"
+                >
+                  {t.catalogMaterials}
+                </button>
+                {user.role === "admin" ? (
+                  <>
+                    <button
+                      className={isCatalogViyarView ? "active" : ""}
+                      onClick={() => switchView("catalogViyar")}
+                      type="button"
+                    >
+                      {t.catalogViyar}
+                    </button>
+                    <button
+                      className={isCatalogManualView ? "active" : ""}
+                      onClick={() => switchView("catalogManual")}
+                      type="button"
+                    >
+                      {t.catalogManual}
+                    </button>
+                    <button
+                      className={isCatalogValuesView ? "active" : ""}
+                      onClick={() => switchView("catalogValues")}
+                      type="button"
+                    >
+                      {t.catalogValues}
+                    </button>
+                  </>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+          <button
+            className={activeView === "settings" ? "active" : ""}
+            onClick={() => switchView("settings")}
+            type="button"
+          >
+            {t.settings}
           </button>
-        </form>
+        </nav>
 
         <button className="ghost-button" onClick={handleLogout} type="button">
           <LogOut size={18} />
@@ -2728,8 +4729,10 @@ export default function App() {
       </aside>
 
       <section className="workspace">
-        <header className="toolbar">
-          <div>
+        <header
+          className={`toolbar${activeView === "projectDetails" ? " project-toolbar" : ""}`}
+        >
+          <div className="toolbar-heading">
             <h2>
               {activeView === "projects"
                 ? t.projects
@@ -2739,11 +4742,37 @@ export default function App() {
                   ? t.projectDetails
                 : activeView === "users"
                   ? t.users
-                : activeView === "catalog"
+                : isCatalogHubView
                   ? t.catalog
+                : isCatalogMaterialsView
+                  ? t.catalogMaterials
+                : isCatalogValuesView
+                  ? t.catalogValues
+                : isCatalogViyarView
+                  ? t.catalogViyar
+                : isCatalogManualView
+                  ? t.catalogManual
+                : activeView === "settings"
+                  ? t.settings
                   : t.audit}
             </h2>
-            <p>{activePageLabel}</p>
+            {activeView === "projectDetails" && selectedProject ? (
+              <div className="toolbar-project-meta">
+                <span>{selectedProject.project_name || t.newProjectDefault}</span>
+                <button
+                  aria-label={t.showProjectOverview}
+                  className="ghost-button compact-button detail-info-button"
+                  disabled={loading}
+                  onClick={() => setProjectOverviewOpen(true)}
+                  title={t.showProjectOverview}
+                  type="button"
+                >
+                  <Info size={16} />
+                </button>
+              </div>
+            ) : (
+              <p>{activePageLabel}</p>
+            )}
           </div>
 
           <div className="toolbar-actions">
@@ -2779,16 +4808,61 @@ export default function App() {
                   <RefreshCw size={18} />
                 </button>
               </>
-            ) : activeView === "projectDetails" ? (
-              <button
-                className="ghost-button"
-                disabled={loading}
-                onClick={() => switchView("projects")}
-                type="button"
-              >
-                <ChevronLeft size={18} />
-                {t.projects}
-              </button>
+            ) : activeView === "projectDetails" && selectedProject ? (
+              <div className="toolbar-project-controls">
+                <div className="detail-tabs toolbar-project-tabs" role="tablist">
+                  <button
+                    className={activeProjectTab === "data" ? "active" : ""}
+                    onClick={() => handleProjectTabChange("data")}
+                    type="button"
+                  >
+                    {t.dataProject}
+                  </button>
+                  <button
+                    className={activeProjectTab === "production" ? "active" : ""}
+                    onClick={() => handleProjectTabChange("production")}
+                    type="button"
+                  >
+                    {t.production}
+                  </button>
+                  {selectedPartDetail ? (
+                    <button
+                      className={activeProjectTab === "partDetail" ? "active" : ""}
+                      onClick={() => setActiveProjectTab("partDetail")}
+                      type="button"
+                    >
+                      {t.productionPartViewer}
+                    </button>
+                  ) : null}
+                  <button
+                    className={activeProjectTab === "history" ? "active" : ""}
+                    onClick={() => handleProjectTabChange("history")}
+                    type="button"
+                  >
+                    {t.history}
+                  </button>
+                </div>
+                {canDeleteSelectedProject ? (
+                  <button
+                    className="danger-button"
+                    disabled={loading}
+                    onClick={openDeleteConfirm}
+                    type="button"
+                  >
+                    <Trash2 size={18} />
+                    {t.delete}
+                  </button>
+                ) : null}
+                <button
+                  className="ghost-button"
+                  disabled={loading}
+                  onClick={() => switchView("projects")}
+                  type="button"
+                >
+                  <ChevronLeft size={18} />
+                  {t.projects}
+                </button>
+              </div>
             ) : activeView === "users" ? (
               <>
                 <button
@@ -2821,12 +4895,29 @@ export default function App() {
                   <RefreshCw size={18} />
                 </button>
               </>
-            ) : activeView === "catalog" ? (
+            ) : isCatalogView ? (
               <button
                 aria-label="Refresh catalog"
                 className="icon-button"
                 disabled={loading}
-                onClick={() => loadCatalogItems(token)}
+                onClick={() => {
+                  if (isCatalogHubView) {
+                    loadCatalogView(token);
+                    return;
+                  }
+
+                  if (isCatalogValuesView) {
+                    loadCatalogItems(token);
+                    return;
+                  }
+
+                  if (isCatalogViyarView) {
+                    loadViyarServices(token);
+                    return;
+                  }
+
+                  loadManualServices(token);
+                }}
                 type="button"
               >
                 <RefreshCw size={18} />
@@ -3060,76 +5151,73 @@ export default function App() {
                 ))}
               </tbody>
             </table>
+            <section className="user-change-requests-panel">
+              <div className="settings-card-header">
+                <h3>{t.pendingRequests}</h3>
+              </div>
+              {userChangeRequests.length ? (
+                <table>
+                  <thead>
+                    <tr>
+                      <th>{t.email}</th>
+                      <th>{t.changeType}</th>
+                      <th>{t.oldValue}</th>
+                      <th>{t.newValue}</th>
+                      <th>{t.requestedAt}</th>
+                      <th>{t.action}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {userChangeRequests.map((changeRequest) => {
+                      const targetUser = users.find((item) => item.id === changeRequest.user_id);
+                      return (
+                        <tr key={changeRequest.id}>
+                          <td>{targetUser?.email || changeRequest.user_id}</td>
+                          <td>{changeRequest.change_type}</td>
+                          <td>{changeRequest.old_value || t.notSet}</td>
+                          <td>{changeRequest.new_value}</td>
+                          <td>{formatDateTime(changeRequest.created_at, t)}</td>
+                          <td>
+                            <div className="request-actions">
+                              <button
+                                className="ghost-button"
+                                disabled={loading}
+                                onClick={() => handleUserChangeRequestReview(changeRequest, "approved")}
+                                type="button"
+                              >
+                                {t.approve}
+                              </button>
+                              <button
+                                className="ghost-button"
+                                disabled={loading}
+                                onClick={() => handleUserChangeRequestReview(changeRequest, "rejected")}
+                                type="button"
+                              >
+                                {t.reject}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              ) : (
+                <p className="empty-inline-note">{t.noPendingRequests}</p>
+              )}
+            </section>
           </section>
 
         ) : activeView === "projectDetails" ? (
           <section className="detail-panel full-panel">
             {selectedProject ? (
               <>
-                <div className="detail-header">
-                  <div>
-                    <p className="eyebrow">{t.selectedProject}</p>
-                    <h2>{selectedProject.project_name || t.newProjectDefault}</h2>
-                    <div className="meta-grid">
-                      <span>
-                        {t.projectType}: {formatCatalogLabel(selectedProject.project_type, t)}
-                      </span>
-                      <span>{t.created}: {formatDateTime(selectedProject.created_at, t)}</span>
-                      <span>{t.updated}: {formatDateTime(selectedProject.updated_at, t)}</span>
-                    </div>
-                  </div>
-                  {canDeleteSelectedProject ? (
-                    <button
-                      className="danger-button"
-                      disabled={loading}
-                      onClick={openDeleteConfirm}
-                      type="button"
-                    >
-                      <Trash2 size={18} />
-                      {t.delete}
-                    </button>
-                  ) : null}
-                </div>
-
                 {!canEditSelectedProject ? (
                   <div className="readonly-note">
                     <strong>{t.readOnlyProject}</strong>
                     <span>{t.readOnlyProjectDescription}</span>
                   </div>
                 ) : null}
-
-                <div className="detail-tabs" role="tablist">
-                  <button
-                    className={activeProjectTab === "data" ? "active" : ""}
-                    onClick={() => handleProjectTabChange("data")}
-                    type="button"
-                  >
-                    {t.dataProject}
-                  </button>
-                  <button
-                    className={activeProjectTab === "production" ? "active" : ""}
-                    onClick={() => handleProjectTabChange("production")}
-                    type="button"
-                  >
-                    {t.production}
-                  </button>
-                  {selectedPartDetail ? (
-                    <button
-                      className={activeProjectTab === "partDetail" ? "active" : ""}
-                      onClick={() => setActiveProjectTab("partDetail")}
-                      type="button"
-                    >
-                      {t.productionPartViewer}
-                    </button>
-                  ) : null}
-                  <button
-                    className={activeProjectTab === "history" ? "active" : ""}
-                    onClick={() => handleProjectTabChange("history")}
-                    type="button"
-                  >
-                    {t.history}
-                  </button>
-                </div>
 
                 {activeProjectTab === "data" ? (
                 <form className="edit-grid" onSubmit={handleUpdate}>
@@ -3396,70 +5484,142 @@ export default function App() {
                     <h3>{t.production}</h3>
                   </div>
 
-                  <article className="production-card">
-                    <h4>{t.productionAssembly3d}</h4>
-                    {cuttingItems.length > 0 ? (
-                      <Suspense fallback={<div className="part-three-viewer part-three-viewer-loading">Loading 3D assembly...</div>}>
-                        <ProjectThreeViewer
-                          items={cuttingItems}
-                          onClearSelection={handleClearCuttingPartSelection}
-                          onOpenPart={handleSelectCuttingPart}
-                          onSelectPart={handlePreviewCuttingPart}
-                          selectedPartDetail={selectedPartDetail}
-                          selectedPartCode={selectedCuttingPartCode || selectedPartDetail?.part?.export_code}
+                  <section className="production-assembly-workspace">
+                    <article className="production-card production-card-sticky">
+                      <h4>{t.productionAssembly3d}</h4>
+                      {selectedCuttingItem ? (
+                        <div className="production-selected-part-summary">
+                          <strong>{selectedCuttingItem.part_name}</strong>
+                          <span>
+                            {selectedCuttingItem.width} x {selectedCuttingItem.height} x {selectedCuttingItem.thickness || 18}
+                          </span>
+                          <span>{selectedCuttingItem.material || t.notSet}</span>
+                        </div>
+                      ) : null}
+                      {cuttingItems.length > 0 ? (
+                        <ProductionViewerBoundary
+                          itemCount={cuttingItems.length}
+                          selectedPartCode={effectiveSelectedPartCode}
                           t={t}
+                        >
+                          <Suspense fallback={<div className="part-three-viewer part-three-viewer-loading">Loading 3D assembly...</div>}>
+                            <ProjectThreeViewer
+                              hoveredPartCode={hoveredCuttingPartCode}
+                              items={cuttingItems}
+                              onClearSelection={handleClearCuttingPartSelection}
+                              onHoverPartChange={setHoveredCuttingPartCode}
+                              onOpenPart={handleSelectCuttingPart}
+                              onSelectPart={handlePreviewCuttingPart}
+                              projectMeta={{
+                                cuttingAssembly: cuttingAssembly || {},
+                                assemblyLayout: selectedProject?.assembly_layout || {},
+                                drawers: selectedProject?.drawers || [],
+                                projectType: selectedProject?.project_type || "dresser",
+                                sections: selectedProject?.sections || 1,
+                              }}
+                              selectedPartDetail={selectedPartDetail}
+                              selectedPartCode={effectiveSelectedPartCode}
+                              t={t}
+                            />
+                          </Suspense>
+                        </ProductionViewerBoundary>
+                      ) : (
+                        <p>{t.noCuttingItems}</p>
+                      )}
+                    </article>
+
+                    <article className="production-card production-parts-list-card">
+                      <h4>{t.productionCutting}</h4>
+                      {cuttingSummary ? (
+                        <div className="summary-row">
+                          <span>{t.cuttingSummary}</span>
+                          <strong>
+                            {expandedCuttingItems.length} {language === "uk" ? "шт" : "pcs"} / {cuttingSummary.total_area_m2} {t.cuttingArea}
+                          </strong>
+                        </div>
+                      ) : null}
+
+                      <label className="production-parts-search">
+                        <span>{t.search}</span>
+                        <input
+                          onChange={(event) => setCuttingSearch(event.target.value)}
+                          placeholder={t.search}
+                          type="text"
+                          value={cuttingSearch}
                         />
-                      </Suspense>
-                    ) : (
-                      <p>{t.noCuttingItems}</p>
-                    )}
-                  </article>
+                      </label>
+                      {groupedCuttingItems.length > 0 ? (
+                        <div className="production-parts-search-actions">
+                          <button onClick={collapseAllCuttingGroups} type="button">
+                            {language === "uk" ? "Згорнути все" : "Collapse all"}
+                          </button>
+                          <button onClick={expandAllCuttingGroups} type="button">
+                            {language === "uk" ? "Розгорнути все" : "Expand all"}
+                          </button>
+                        </div>
+                      ) : null}
 
-                  <article className="production-card">
-                    <h4>{t.productionCutting}</h4>
-                    {cuttingSummary ? (
-                      <div className="summary-row">
-                        <span>{t.cuttingSummary}</span>
-                        <strong>
-                          {cuttingSummary.total_parts} {t.details} / {cuttingSummary.total_area_m2} {t.cuttingArea} / {cuttingSummary.total_cut_length_m} {t.cuttingLength} / {cuttingSummary.total_edge_length_m} {t.cuttingEdge}
-                        </strong>
-                      </div>
-                    ) : null}
+                      {cuttingItems.length > 0 ? (
+                        <div className="production-parts-groups">
+                          {groupedCuttingItems.map(([materialName, materialItems]) => (
+                            <section className="production-parts-group" key={materialName}>
+                              <button
+                                className={`production-parts-group-head${collapsedCuttingGroups[materialName] ? " collapsed" : ""}`}
+                                onClick={() => toggleCuttingGroup(materialName)}
+                                type="button"
+                              >
+                                <h5>{materialName}</h5>
+                                <span className="production-parts-group-meta">
+                                  <span className="production-parts-group-count">{materialItems.length}</span>
+                                  <span className="production-parts-group-caret" aria-hidden="true">
+                                    {collapsedCuttingGroups[materialName] ? "+" : "-"}
+                                  </span>
+                                </span>
+                              </button>
+                              {!collapsedCuttingGroups[materialName] ? (
+                              <table className="cutting-table production-parts-table">
+                                <thead>
+                                  <tr>
+                                    <th className="production-parts-number-cell">№</th>
+                                    <th>{t.details}</th>
+                                    <th>{t.cuttingSize}</th>
+                                    <th>{t.materialThickness}</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {materialItems.map((item, index) => {
+                                    const isSelected =
+                                      selectedPartDetail?.part?.export_code === item.export_code ||
+                                      selectedCuttingPartCode === item.export_code;
+                                    const isHovered = hoveredCuttingPartCode === item.export_code;
 
-                    {cuttingItems.length > 0 ? (
-                      <table className="cutting-table">
-                        <thead>
-                          <tr>
-                            <th>{t.cuttingExportCode}</th>
-                            <th>{t.details}</th>
-                            <th>{t.cuttingSize}</th>
-                            <th>{t.cuttingGrain}</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {cuttingItems.map((item) => (
-                            <tr
-                              className={
-                                selectedPartDetail?.part?.export_code === item.export_code
-                                  || selectedCuttingPartCode === item.export_code
-                                  ? "selected"
-                                  : ""
-                              }
-                              key={item.export_code}
-                              onClick={() => handlePreviewCuttingPart(item.export_code)}
-                            >
-                              <td>{item.export_code}</td>
-                              <td>{item.part_name}</td>
-                              <td>{item.width} x {item.height}</td>
-                              <td>{item.grain_direction || t.notSet}</td>
-                            </tr>
+                                    return (
+                                      <tr
+                                        className={`${isSelected ? "selected" : ""}${isHovered ? " hovered" : ""}`}
+                                        data-export-code={item.export_code}
+                                        key={item.row_key}
+                                        onClick={() => handlePreviewCuttingPart(item.export_code)}
+                                        onMouseEnter={() => setHoveredCuttingPartCode(item.export_code)}
+                                        onMouseLeave={() => setHoveredCuttingPartCode(null)}
+                                      >
+                                        <td className="production-parts-number-cell">{index + 1}</td>
+                                        <td>{item.row_title}</td>
+                                        <td>{item.width} x {item.height}</td>
+                                        <td>{item.thickness || 18}</td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                              ) : null}
+                            </section>
                           ))}
-                        </tbody>
-                      </table>
-                    ) : (
-                      <p>{t.noCuttingItems}</p>
-                    )}
-                  </article>
+                        </div>
+                      ) : (
+                        <p>{t.noCuttingItems}</p>
+                      )}
+                    </article>
+                  </section>
 
                 </section>
                 ) : null}
@@ -3817,6 +5977,281 @@ export default function App() {
               </button>
             </form>
           </section>
+        ) : activeView === "settings" ? (
+          <section className="settings-panel full-panel">
+            <div className="settings-grid">
+              <article className="settings-card">
+                <div className="settings-card-header">
+                  <h3>{t.myData}</h3>
+                </div>
+                <form className="settings-password-form" onSubmit={handleOwnProfileSave}>
+                  <div className="settings-info-grid">
+                    <label>
+                      {t.email}
+                      <input disabled readOnly type="text" value={user.email} />
+                    </label>
+                    <label>
+                      {t.role}
+                      <input disabled readOnly type="text" value={user.role} />
+                    </label>
+                    <label>
+                      {t.username}
+                      <input
+                        onChange={(event) =>
+                          setOwnProfileForm({
+                            ...ownProfileForm,
+                            username: event.target.value,
+                          })
+                        }
+                        required
+                        type="text"
+                        value={ownProfileForm.username}
+                      />
+                    </label>
+                    <label>
+                      {t.phone}
+                      <input
+                        onChange={(event) =>
+                          setOwnProfileForm({
+                            ...ownProfileForm,
+                            phone: event.target.value,
+                          })
+                        }
+                        type="text"
+                        value={ownProfileForm.phone}
+                      />
+                    </label>
+                    <label>
+                      {t.city}
+                      <select
+                        onChange={(event) =>
+                          setOwnProfileForm({
+                            ...ownProfileForm,
+                            city: event.target.value,
+                          })
+                        }
+                        value={ownProfileForm.city}
+                      >
+                        <option value="">{t.notSet}</option>
+                        {(materialCityOptions.length ? materialCityOptions : DEFAULT_CITY_OPTIONS).map((city) => (
+                          <option key={city} value={city}>
+                            {formatCatalogLabel(city, t)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                  <div className="settings-actions">
+                    <button className="ghost-button" disabled={loading || !hasProfileChanges} type="submit">
+                      {t.saveProfile}
+                    </button>
+                  </div>
+                </form>
+                <form className="settings-password-form settings-subform" onSubmit={handleOwnEmailChangeRequest}>
+                  <label>
+                    {t.newEmail}
+                    <input
+                      autoComplete="email"
+                      onChange={(event) =>
+                        setEmailChangeForm({
+                          newEmail: event.target.value,
+                        })
+                      }
+                      placeholder={t.newEmail}
+                      required
+                      type="email"
+                      value={emailChangeForm.newEmail}
+                    />
+                  </label>
+                  <div className="settings-actions">
+                    <button className="ghost-button" disabled={loading || !emailChangeForm.newEmail.trim()} type="submit">
+                      {t.requestEmailChange}
+                    </button>
+                  </div>
+                </form>
+              </article>
+
+              <article className="settings-card">
+                <div className="settings-card-header">
+                  <h3>{t.password}</h3>
+                </div>
+                <form className="settings-password-form" onSubmit={handleOwnPasswordChange}>
+                  <label>
+                    {t.currentPassword}
+                    <input
+                      autoComplete="current-password"
+                      minLength={8}
+                      onChange={(event) =>
+                        setOwnPasswordForm({
+                          ...ownPasswordForm,
+                          currentPassword: event.target.value,
+                        })
+                      }
+                      placeholder={t.currentPassword}
+                      required
+                      type="password"
+                      value={ownPasswordForm.currentPassword}
+                    />
+                  </label>
+                  <label>
+                    {t.newPassword}
+                    <input
+                      autoComplete="new-password"
+                      minLength={8}
+                      onChange={(event) =>
+                        setOwnPasswordForm({
+                          ...ownPasswordForm,
+                          newPassword: event.target.value,
+                        })
+                      }
+                      placeholder={t.newPassword}
+                      required
+                      type="password"
+                      value={ownPasswordForm.newPassword}
+                    />
+                  </label>
+                  <div className="settings-actions">
+                    <button className="ghost-button" disabled={loading} type="submit">
+                      {t.changePassword}
+                    </button>
+                  </div>
+                </form>
+              </article>
+
+              <article className="settings-card">
+                <div className="settings-card-header">
+                  <h3>{t.viyarSettingsTitle}</h3>
+                </div>
+                <form className="settings-password-form" onSubmit={handleSaveViyarAuth}>
+                  {viyarAuth?.has_password ? (
+                    <div className="settings-inline-status success">
+                      <strong>{t.viyarHasSavedPassword}:</strong> {t.viyarSavedState}
+                    </div>
+                  ) : null}
+                  <label>
+                    {t.viyarEmail}
+                    <input
+                      autoComplete="username"
+                      onChange={(event) =>
+                        setViyarAuthForm({
+                          ...viyarAuthForm,
+                          email: event.target.value,
+                        })
+                      }
+                      placeholder={t.viyarEmail}
+                      required
+                      type="email"
+                      value={viyarAuthForm.email}
+                    />
+                  </label>
+                  <label>
+                    {t.viyarPassword}
+                    <input
+                      autoComplete="new-password"
+                      onChange={(event) =>
+                        setViyarAuthForm({
+                          ...viyarAuthForm,
+                          password: event.target.value,
+                        })
+                      }
+                      placeholder={
+                        viyarAuth?.has_password
+                          ? t.viyarPasswordSavedHint
+                          : t.viyarPassword
+                      }
+                      type="password"
+                      value={viyarAuthForm.password}
+                    />
+                    <small className="settings-hint">{t.viyarPasswordHint}</small>
+                  </label>
+                  <div className="settings-info-grid viyar-status-grid">
+                    <label>
+                      {t.viyarHasSavedPassword}
+                      <input
+                        disabled
+                        readOnly
+                        type="text"
+                        value={viyarAuth?.has_password ? t.enabled : t.notSet}
+                      />
+                    </label>
+                    <label>
+                      {t.viyarHasSavedSession}
+                      <input
+                        disabled
+                        readOnly
+                        type="text"
+                        value={viyarAuth?.has_cookie ? t.enabled : t.viyarNotConnected}
+                      />
+                    </label>
+                    <label>
+                      {t.viyarLastAuthStatus}
+                      <input
+                        disabled
+                        readOnly
+                        type="text"
+                        value={viyarAuth?.last_auth_status || t.viyarNotConnected}
+                      />
+                    </label>
+                    <label>
+                      {t.viyarLastAuthAt}
+                      <input
+                        disabled
+                        readOnly
+                        type="text"
+                        value={
+                          viyarAuth?.last_auth_at
+                            ? formatDateTime(viyarAuth.last_auth_at, t)
+                            : t.notSet
+                        }
+                      />
+                    </label>
+                    <label className="settings-full-row">
+                      {t.viyarLastAuthError}
+                      <textarea
+                        disabled
+                        readOnly
+                        rows={3}
+                        value={viyarAuth?.last_auth_error || t.notSet}
+                      />
+                    </label>
+                    </div>
+                    <div className="settings-inline-status info">
+                      {viyarNextStepLabel}
+                    </div>
+                    {viyarActionLabel ? (
+                      <div className="settings-inline-status progress">
+                        {viyarActionLabel}
+                      </div>
+                    ) : null}
+                    <div className="settings-actions">
+                      <button
+                        className={`ghost-button ${viyarNextStep === "save" ? "recommended-action" : ""}`}
+                        disabled={loading || !canSaveViyarAuth}
+                        type="submit"
+                      >
+                        {viyarAction === "saving" ? t.viyarSavingCredentials : t.viyarSaveCredentials}
+                      </button>
+                      <button
+                        className={`primary-button ${viyarNextStep === "connect" ? "recommended-action" : ""}`}
+                        disabled={loading || !canConnectViyar}
+                        onClick={handleRefreshViyarSession}
+                        type="button"
+                      >
+                        {viyarAction === "connecting" ? t.viyarConnectingNow : t.viyarConnect}
+                      </button>
+                      <button
+                        className={`ghost-button ${viyarNextStep === "sync" ? "recommended-action" : ""}`}
+                        disabled={loading || !canSyncViyar}
+                        onClick={handleSyncViyarPrices}
+                        type="button"
+                      >
+                        {viyarAction === "syncing" ? t.viyarSyncingPricesNow : t.viyarSyncPrices}
+                      </button>
+                    </div>
+                </form>
+              </article>
+            </div>
+          </section>
         ) : activeView === "users" ? (
           <section className="table-panel full-panel">
             <form className="create-user-form" onSubmit={handleCreateUser}>
@@ -3863,8 +6298,9 @@ export default function App() {
                   value={newUserForm.role}
                 >
                   <option value="admin">admin</option>
-                  <option value="manager">manager</option>
-                  <option value="viewer">viewer</option>
+                  <option value="pro">pro</option>
+                  <option value="user">user</option>
+                  <option value="guest">guest</option>
                 </select>
               </label>
               <button
@@ -3879,8 +6315,11 @@ export default function App() {
               <thead>
                 <tr>
                   <th>{t.email}</th>
+                  <th>{t.userProfile}</th>
                   <th>{t.role}</th>
                   <th>{t.status}</th>
+                  <th>{t.viyarConnection}</th>
+                  <th>{t.action}</th>
                   <th>{t.access}</th>
                   <th>{t.password}</th>
                 </tr>
@@ -3890,6 +6329,23 @@ export default function App() {
                   <tr key={targetUser.id}>
                     <td>{targetUser.email}</td>
                     <td>
+                      <div className="user-data-cell">
+                        <span>
+                          <strong>{t.username}:</strong> {targetUser.username || t.notSet}
+                        </span>
+                        <span>
+                          <strong>{t.phone}:</strong> {targetUser.phone || t.notSet}
+                        </span>
+                        <span>
+                          <strong>{t.telegram}:</strong> {targetUser.telegram_id || t.notSet}
+                        </span>
+                        <span>
+                          <strong>{t.lastUsernameChange}:</strong>{" "}
+                          {formatDateTime(targetUser.last_username_change_at, t)}
+                        </span>
+                      </div>
+                    </td>
+                    <td>
                       <select
                         disabled={loading || targetUser.id === user.id}
                         onChange={(event) =>
@@ -3898,11 +6354,45 @@ export default function App() {
                         value={targetUser.role}
                       >
                         <option value="admin">admin</option>
-                        <option value="manager">manager</option>
-                        <option value="viewer">viewer</option>
+                        <option value="pro">pro</option>
+                        <option value="user">user</option>
+                        <option value="guest">guest</option>
                       </select>
                     </td>
                     <td>{targetUser.is_active ? t.active : t.inactive}</td>
+                    <td>
+                      <div className="user-data-cell">
+                        <span>
+                          <strong>{t.email}:</strong> {targetUser.viyar_email || t.notSet}
+                        </span>
+                        <span>
+                          <strong>{t.session}:</strong>{" "}
+                          {targetUser.viyar_has_cookie ? t.connected : t.notConnected}
+                        </span>
+                        <span>
+                          <strong>{t.authStatus}:</strong>{" "}
+                          {targetUser.viyar_last_auth_status || t.notSet}
+                        </span>
+                        <span>
+                          <strong>{t.lastAuth}:</strong>{" "}
+                          {formatDateTime(targetUser.viyar_last_auth_at, t)}
+                        </span>
+                        <span>
+                          <strong>{t.authError}:</strong>{" "}
+                          {targetUser.viyar_last_auth_error || t.noError}
+                        </span>
+                      </div>
+                    </td>
+                    <td>
+                      <button
+                        className="ghost-button"
+                        disabled={loading}
+                        onClick={() => openUserDetails(targetUser)}
+                        type="button"
+                      >
+                        {t.openUserCard}
+                      </button>
+                    </td>
                     <td>
                       <label className="toggle-label">
                         <input
@@ -3950,123 +6440,827 @@ export default function App() {
               </tbody>
             </table>
           </section>
-        ) : activeView === "catalog" ? (
+        ) : isCatalogHubView ? (
           <section className="table-panel full-panel">
-            <form className="catalog-form" onSubmit={handleCreateCatalogItem}>
-              <label>
-                {t.catalogCategory}
-                <select
-                  onChange={(event) =>
-                    setNewCatalogItemForm({
-                      ...newCatalogItemForm,
-                      category: event.target.value,
-                    })
-                  }
-                  value={newCatalogItemForm.category}
+            <div className="catalog-hub-layout">
+              <article className="catalog-hub-card catalog-hub-card-hero">
+                <div className="service-catalog-title">
+                  <h3>{t.catalogHubTitle}</h3>
+                  <p>{t.catalogHubDescription}</p>
+                </div>
+                <div className="catalog-hub-quick-grid">
+                  {[
+                    {
+                      key: "materials",
+                      count: materialItems.length,
+                      description: t.catalogMaterialsDescription,
+                      label: t.catalogMaterials,
+                      onClick: () => switchView("catalogMaterials"),
+                    },
+                    {
+                      key: "viyar",
+                      count: viyarServiceCounts.services,
+                      description: t.viyarServicesDescription,
+                      label: t.catalogViyar,
+                      onClick: () => switchView("catalogViyar"),
+                    },
+                    {
+                      key: "manual",
+                      count: manualServiceItems.length,
+                      description: t.catalogManualDescription,
+                      label: t.catalogManual,
+                      onClick: () => switchView("catalogManual"),
+                    },
+                    {
+                      key: "values",
+                      count: catalogItems.length,
+                      description: t.catalogValuesDescription,
+                      label: t.catalogValues,
+                      onClick: () => switchView("catalogValues"),
+                    },
+                  ].map((item) => {
+                    const visual = CATALOG_TILE_VISUALS[item.key];
+                    const Icon = visual.icon;
+
+                    return (
+                      <button
+                        className="catalog-choice-card"
+                        key={item.key}
+                        onClick={item.onClick}
+                        type="button"
+                      >
+                        <span
+                          className="catalog-choice-art"
+                          style={{ "--catalog-accent": visual.accent }}
+                        >
+                          <Icon size={34} />
+                        </span>
+                        <div className="catalog-choice-copy">
+                          <strong>{item.label}</strong>
+                          <span>{item.description}</span>
+                        </div>
+                        <div className="catalog-choice-meta">
+                          <span className="service-tree-badge subtle">{item.count}</span>
+                          <span>{t.openDirectory}</span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </article>
+
+              <article className="catalog-hub-card">
+                <div className="service-catalog-header">
+                  <div className="service-catalog-title">
+                    <h3>{t.catalogBrowseCategories}</h3>
+                    <p>{t.viyarServicesDescription}</p>
+                  </div>
+                </div>
+                <div className="catalog-category-grid">
+                  {viyarTopFolders.map((folder) => {
+                    const visual = VIYAR_FOLDER_TILE_VISUALS[folder.external_code] || {
+                      accent: "#2f8ecb",
+                      icon: FolderTree,
+                    };
+                    const Icon = visual.icon;
+
+                    return (
+                      <button
+                        className="catalog-category-card"
+                        key={folder.external_code}
+                        onClick={() => openViyarFolderCatalog(folder.external_code)}
+                        type="button"
+                      >
+                        <span
+                          className="catalog-category-art"
+                          style={{ "--catalog-accent": visual.accent }}
+                        >
+                          <Icon size={44} />
+                        </span>
+                        <div className="catalog-category-copy">
+                          <strong>{folder.name}</strong>
+                          <span>{folder.description}</span>
+                        </div>
+                        <span className="service-tree-badge subtle">
+                          {countServiceTreeItems(folder.children || [])}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </article>
+            </div>
+          </section>
+        ) : isCatalogMaterialsView ? (
+          <section className="table-panel full-panel">
+            <article className="catalog-card service-catalog-card service-catalog-card-full">
+              <div className="service-catalog-header">
+                <div className="service-catalog-title">
+                  <h3>{t.catalogMaterials}</h3>
+                  <p>{t.catalogMaterialsDescription}</p>
+                </div>
+                <div className="service-catalog-header-actions">
+                  <span className="service-tree-badge subtle">
+                    {t.currentCity}: {formatCatalogLabel(materialSelectedCity || user?.city, t)}
+                  </span>
+                  <span className="service-tree-badge subtle">
+                    {materialItems.length} {t.materialsCount}
+                  </span>
+                </div>
+              </div>
+
+              <div className="materials-toolbar">
+                <label className="service-catalog-search">
+                  <Search size={16} />
+                  <input
+                    onChange={(event) => setMaterialSearch(event.target.value)}
+                    placeholder={t.viyarSearch}
+                    type="search"
+                    value={materialSearch}
+                  />
+                </label>
+                <label className="materials-filter">
+                  <span>{t.materialCategory}</span>
+                  <select
+                    onChange={(event) => setMaterialCategoryFilter(event.target.value)}
+                    value={materialCategoryFilter}
+                  >
+                    {materialCategories.map((category) => (
+                      <option key={category.code} value={category.code}>
+                        {formatCatalogLabel(category.code, t)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <form className="materials-city-form" onSubmit={handleMaterialCitySave}>
+                  <label className="materials-filter">
+                    <span>{t.city}</span>
+                    <select
+                      onChange={(event) => setMaterialSelectedCity(event.target.value)}
+                      value={materialSelectedCity}
+                    >
+                      <option value="">{t.notSet}</option>
+                      {(materialCityOptions.length ? materialCityOptions : DEFAULT_CITY_OPTIONS).map((city) => (
+                        <option key={city} value={city}>
+                          {formatCatalogLabel(city, t)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <button
+                    className="ghost-button"
+                    disabled={loading || materialSelectedCity === (user?.city || "")}
+                    type="submit"
+                  >
+                    {t.saveCity}
+                  </button>
+                </form>
+                <button
+                  className="ghost-button"
+                  disabled={loading}
+                  onClick={() => loadMaterialsCatalog(token)}
+                  type="button"
                 >
-                  {CATALOG_CATEGORIES.map((category) => (
-                    <option key={category} value={category}>
-                      {formatCatalogLabel(category, t)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                {t.catalogItemValue}
-                <input
-                  onChange={(event) =>
-                    setNewCatalogItemForm({
-                      ...newCatalogItemForm,
-                      value: event.target.value,
-                    })
-                  }
-                  required
-                  type="text"
-                  value={newCatalogItemForm.value}
-                />
-              </label>
-              <label>
-                {t.catalogSortOrder}
-                <input
-                  onChange={(event) =>
-                    setNewCatalogItemForm({
-                      ...newCatalogItemForm,
-                      sortOrder: event.target.value,
-                    })
-                  }
-                  type="number"
-                  value={newCatalogItemForm.sortOrder}
-                />
-              </label>
-              <button
-                className="primary-button"
-                disabled={loading}
-                type="submit"
-              >
-                <Plus size={18} />
-                {t.create}
-              </button>
-            </form>
-            <table>
-              <thead>
-                <tr>
-                  <th>{t.catalogCategory}</th>
-                  <th>{t.catalogItemValue}</th>
-                  <th>{t.catalogSortOrder}</th>
-                  <th>{t.status}</th>
-                  <th>{t.action}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {catalogItems.map((item) => (
-                  <tr key={item.id}>
-                    <td>{formatCatalogLabel(item.category, t)}</td>
-                    <td>
+                  <RefreshCw size={16} />
+                  {t.refresh}
+                </button>
+              </div>
+
+              {canEditMaterialCatalog ? (
+                <>
+                  <form className="materials-import-form" onSubmit={handleImportMaterial}>
+                    <label>
+                      {t.materialAddArticle}
                       <input
-                        onChange={(event) =>
-                          setCatalogItems(
-                            catalogItems.map((catalogItem) =>
-                              catalogItem.id === item.id
-                                ? {
-                                    ...catalogItem,
-                                    value: event.target.value,
-                                  }
-                                : catalogItem,
-                            ),
-                          )
-                        }
+                        onChange={(event) => setNewMaterialArticle(event.target.value)}
+                        placeholder={t.materialAddArticlePlaceholder}
                         type="text"
-                        value={item.value}
+                        value={newMaterialArticle}
                       />
-                    </td>
-                    <td>
+                    </label>
+                    <label>
+                      {t.materialAddUrl}
                       <input
-                        onChange={(event) =>
-                          setCatalogItems(
-                            catalogItems.map((catalogItem) =>
-                              catalogItem.id === item.id
-                                ? {
-                                    ...catalogItem,
-                                    sort_order: event.target.value,
-                                  }
-                                : catalogItem,
-                            ),
-                          )
-                        }
-                        type="number"
-                        value={item.sort_order}
+                        onChange={(event) => setNewMaterialSourceUrl(event.target.value)}
+                        placeholder={t.materialAddUrlPlaceholder}
+                        type="url"
+                        value={newMaterialSourceUrl}
                       />
-                    </td>
-                    <td>{item.is_active ? t.active : t.inactive}</td>
-                    <td>
-                      <div className="catalog-actions">
+                    </label>
+                    <button
+                      className="primary-button"
+                      disabled={loading || !newMaterialArticle.trim()}
+                      type="submit"
+                    >
+                      <Plus size={16} />
+                      {t.materialAdd}
+                    </button>
+                  </form>
+                  {activeMaterialImportJob ? (
+                    <div className={`material-import-status material-import-status-${activeMaterialImportJob.status || "queued"}`}>
+                      <div className="material-import-status-header">
+                        <strong>{t.materialImportStatusTitle}</strong>
+                        <span className={`service-tree-badge subtle material-import-state-badge material-import-state-badge-${activeMaterialImportJob.status || "queued"}`}>
+                          <span className="material-import-state-dot" />
+                          {materialImportStateLabel}
+                        </span>
+                      </div>
+                      <div className="material-import-status-grid">
+                        <div>
+                          <span>{t.materialImportArticle}</span>
+                          <b>{activeMaterialImportJob.article}</b>
+                        </div>
+                        <div>
+                          <span>{t.materialImportAttempts}</span>
+                          <b>
+                            {activeMaterialImportJob.attempt_count} / {activeMaterialImportJob.max_attempts}
+                          </b>
+                        </div>
+                        <div>
+                          <span>{t.materialImportNextRetry}</span>
+                          <b>
+                            {activeMaterialImportJob.next_retry_at
+                              ? formatDateTimeValue(activeMaterialImportJob.next_retry_at)
+                              : t.notSet}
+                          </b>
+                        </div>
+                        <div>
+                          <span>{t.materialImportStrategy || "Стратегія"}</span>
+                          <b>{activeMaterialImportJob.last_strategy || t.notSet}</b>
+                        </div>
+                        <div>
+                          <span>{t.materialImportSourceUrl || "Сторінка"}</span>
+                          <b className="material-import-source-url">
+                            {activeMaterialImportJob.last_source_url || t.notSet}
+                          </b>
+                        </div>
+                      </div>
+                      {activeMaterialImportJob.last_error ? (
+                        <div className="material-import-status-error">
+                          <span>{t.materialImportLastError}</span>
+                          <p>{activeMaterialImportJob.last_error}</p>
+                        </div>
+                      ) : null}
+                      {Array.isArray(activeMaterialImportJob.debug_trace) && activeMaterialImportJob.debug_trace.length ? (
+                        <div className="material-import-status-trace">
+                          <span>{t.materialImportTrace || "Журнал спроб"}</span>
+                          <ul>
+                            {activeMaterialImportJob.debug_trace.map((entry, index) => (
+                              <li key={`${entry.stage || "trace"}-${index}`}>
+                                <b>{entry.stage || "step"}</b>
+                                {entry.message ? `: ${entry.message}` : ""}
+                                {!entry.message && entry.url ? `: ${entry.url}` : ""}
+                                {!entry.message && !entry.url && entry.product_url ? `: ${entry.product_url}` : ""}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </>
+              ) : null}
+
+              {materialItems.length ? (
+                <div className="material-card-grid">
+                  {materialItems.map((item) => (
+                    <article className="material-card" key={item.id}>
+                      {canEditMaterialCatalog && !item.is_default ? (
+                        <div className="material-card-menu">
+                          <button
+                            aria-label={t.deleteMaterial}
+                            className="icon-button material-card-menu-trigger"
+                            onClick={() =>
+                              setOpenMaterialMenuId((current) =>
+                                current === item.id ? "" : item.id,
+                              )
+                            }
+                            type="button"
+                          >
+                            <MoreHorizontal size={16} />
+                          </button>
+                          {openMaterialMenuId === item.id ? (
+                            <div className="material-card-menu-dropdown">
+                              <button
+                                className="material-card-menu-action danger"
+                                onClick={() => openDeleteMaterialConfirm(item)}
+                                type="button"
+                              >
+                                <Trash2 size={14} />
+                                {t.deleteMaterial}
+                              </button>
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
+                      <div className="material-card-media">
+                        {buildMaterialImageCandidates(item).length ? (
+                          <>
+                            <img
+                              alt={item.name || item.article}
+                              data-fallback-index="0"
+                              onError={(event) => handleMaterialImageError(event, item)}
+                              src={buildMaterialImageCandidates(item)[0]}
+                            />
+                            <div className="material-card-placeholder" hidden>
+                              {formatCatalogLabel(item.category, t)}
+                            </div>
+                          </>
+                        ) : (
+                          <div className="material-card-placeholder">{formatCatalogLabel(item.category, t)}</div>
+                        )}
+                      </div>
+                      <div className="material-card-body">
+                        <div className="material-card-topline">
+                          <span className="service-tree-badge subtle">
+                            {formatCatalogLabel(item.category, t)}
+                          </span>
+                          <span className="material-card-article">{item.article}</span>
+                        </div>
+                        <strong>{item.name || item.article}</strong>
+                        <div className="material-card-price">
+                          <span>{t.materialPriceForCity}</span>
+                          <b>
+                            {item.current_price !== null && item.current_price !== undefined
+                              ? `${item.current_price} UAH`
+                              : t.notSet}
+                          </b>
+                        </div>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <div className="empty-state compact-empty-state">
+                  <span>{t.catalogMaterialsDescription}</span>
+                </div>
+              )}
+            </article>
+          </section>
+        ) : isCatalogValuesView ? (
+          <section className="table-panel full-panel">
+            <article className="catalog-card">
+              <div className="catalog-page-header">
+                <div className="service-catalog-title">
+                  <h3>{t.catalogValues}</h3>
+                  <p>{t.catalogValuesDescription}</p>
+                </div>
+                <div className="service-catalog-header-actions">
+                  <span className="service-tree-badge subtle">
+                    {catalogItems.length} {t.catalog}
+                  </span>
+                  <span className="service-tree-badge subtle">
+                    {CATALOG_CATEGORIES.length} {t.catalogValuesGroups}
+                  </span>
+                </div>
+              </div>
+              <form className="catalog-form" onSubmit={handleCreateCatalogItem}>
+                <label>
+                  {t.catalogCategory}
+                  <select
+                    onChange={(event) =>
+                      setNewCatalogItemForm({
+                        ...newCatalogItemForm,
+                        category: event.target.value,
+                      })
+                    }
+                    value={newCatalogItemForm.category}
+                  >
+                    {CATALOG_CATEGORIES.map((category) => (
+                      <option key={category} value={category}>
+                        {formatCatalogLabel(category, t)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  {t.catalogItemValue}
+                  <input
+                    onChange={(event) =>
+                      setNewCatalogItemForm({
+                        ...newCatalogItemForm,
+                        value: event.target.value,
+                      })
+                    }
+                    required
+                    type="text"
+                    value={newCatalogItemForm.value}
+                  />
+                </label>
+                <label>
+                  {t.catalogSortOrder}
+                  <input
+                    onChange={(event) =>
+                      setNewCatalogItemForm({
+                        ...newCatalogItemForm,
+                        sortOrder: event.target.value,
+                      })
+                    }
+                    type="number"
+                    value={newCatalogItemForm.sortOrder}
+                  />
+                </label>
+                <button
+                  className="primary-button"
+                  disabled={loading}
+                  type="submit"
+                >
+                  <Plus size={18} />
+                  {t.create}
+                </button>
+              </form>
+              <table>
+                <thead>
+                  <tr>
+                    <th>{t.catalogCategory}</th>
+                    <th>{t.catalogItemValue}</th>
+                    <th>{t.catalogSortOrder}</th>
+                    <th>{t.status}</th>
+                    <th>{t.action}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {catalogItems.map((item) => (
+                    <tr key={item.id}>
+                      <td>{formatCatalogLabel(item.category, t)}</td>
+                      <td>
+                        <input
+                          onChange={(event) =>
+                            setCatalogItems(
+                              catalogItems.map((catalogItem) =>
+                                catalogItem.id === item.id
+                                  ? {
+                                      ...catalogItem,
+                                      value: event.target.value,
+                                    }
+                                  : catalogItem,
+                              ),
+                            )
+                          }
+                          type="text"
+                          value={item.value}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          onChange={(event) =>
+                            setCatalogItems(
+                              catalogItems.map((catalogItem) =>
+                                catalogItem.id === item.id
+                                  ? {
+                                      ...catalogItem,
+                                      sort_order: event.target.value,
+                                    }
+                                  : catalogItem,
+                              ),
+                            )
+                          }
+                          type="number"
+                          value={item.sort_order}
+                        />
+                      </td>
+                      <td>{item.is_active ? t.active : t.inactive}</td>
+                      <td>
+                        <div className="catalog-actions">
+                          <label className="toggle-label">
+                            <input
+                              checked={item.is_active}
+                              disabled={loading}
+                              onChange={(event) =>
+                                handleCatalogItemActiveChange(
+                                  item,
+                                  event.target.checked,
+                                )
+                              }
+                              type="checkbox"
+                            />
+                            {t.enabled}
+                          </label>
+                          <button
+                            className="ghost-button"
+                            disabled={loading}
+                            onClick={() =>
+                              handleCatalogItemUpdate(
+                                item,
+                                item.value,
+                                item.sort_order,
+                              )
+                            }
+                            type="button"
+                          >
+                            <Save size={16} />
+                            {t.save}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </article>
+          </section>
+        ) : isCatalogViyarView ? (
+          <section className="table-panel full-panel">
+            <article className="catalog-card service-catalog-card service-catalog-card-full">
+              <div className="service-catalog-header">
+                <div className="service-catalog-title">
+                  <h3>{t.viyarServicesTitle}</h3>
+                  <p>{t.viyarServicesDescription}</p>
+                </div>
+                <div className="service-catalog-header-actions">
+                  <span className="service-tree-badge subtle">
+                    {t.viyarSource}: {viyarServiceSource}
+                  </span>
+                  <span className="service-tree-badge subtle">
+                    {viyarServiceCounts.folders} / {viyarServiceCounts.services}
+                  </span>
+                  {viyarPriceSyncSummary ? (
+                    <span className="service-tree-badge subtle">
+                      {viyarPriceSyncSummary.priced_count} / {viyarPriceSyncSummary.total_count}
+                    </span>
+                  ) : null}
+                  <button
+                    className="ghost-button"
+                    disabled={loading}
+                    onClick={handleImportViyarServices}
+                    type="button"
+                  >
+                    <RefreshCw size={16} />
+                    {t.viyarRefresh}
+                  </button>
+                  <button
+                    className="ghost-button"
+                    disabled={loading}
+                    onClick={handleSyncViyarPrices}
+                    type="button"
+                  >
+                    <RefreshCw size={16} />
+                    {t.viyarSyncPrices}
+                  </button>
+                </div>
+              </div>
+              <div className="service-catalog-toolbar">
+                <label className="service-catalog-search">
+                  <Search size={16} />
+                  <input
+                    onChange={(event) => setViyarServiceSearch(event.target.value)}
+                    placeholder={t.viyarSearch}
+                    type="search"
+                    value={viyarServiceSearch}
+                  />
+                </label>
+                <div className="service-catalog-tree-actions">
+                  <button
+                    className="ghost-button compact-button"
+                    disabled={loading || !viyarFolderCodes.length}
+                    onClick={collapseAllViyarFolders}
+                    type="button"
+                  >
+                    {t.viyarCollapseAll}
+                  </button>
+                  <button
+                    className="ghost-button compact-button"
+                    disabled={loading || !viyarFolderCodes.length}
+                    onClick={expandAllViyarFolders}
+                    type="button"
+                  >
+                    {t.viyarExpandAll}
+                  </button>
+                  </div>
+                </div>
+              <div className="service-sync-overview">
+                <span className="service-tree-badge subtle">
+                  {t.viyarService}: {viyarServiceCounts.services}
+                </span>
+                <span className="service-tree-badge subtle">
+                  {t.viyarCurrentPrice}: {viyarSyncOverview.priced}
+                </span>
+                {Object.entries(viyarSyncOverview.statuses).map(([status, count]) => (
+                  <span className="service-tree-badge subtle" key={status}>
+                    {t.viyarSyncStatus}: {status} ({count})
+                  </span>
+                ))}
+                {viyarSyncOverview.latestSyncedAt ? (
+                  <span className="service-tree-badge subtle">
+                    {t.viyarLastSynced}: {formatDateTime(viyarSyncOverview.latestSyncedAt, t)}
+                  </span>
+                ) : null}
+              </div>
+              <div className="service-tree-table-head">
+                <span>{t.viyarService}</span>
+                <span>{t.viyarArticle}</span>
+                <span>{t.serviceUnit}</span>
+                <span>{t.basePrice}</span>
+                <span>{t.showDescription}</span>
+                <span>{t.viyarCalculable}</span>
+                <span>{t.enabled}</span>
+                <span>{t.save}</span>
+              </div>
+              {filteredViyarServiceTree.length ? (
+                <ul className="service-tree-root">
+                  {filteredViyarServiceTree.map((node) => (
+                    <ServiceCatalogTreeNode
+                      collapsedFolders={collapsedViyarFolders}
+                      key={node.external_code}
+                      loading={loading}
+                      node={node}
+                      onSaveService={handleSaveViyarService}
+                      onServiceFieldChange={handleViyarServiceFieldChange}
+                      onToggleCollapse={toggleViyarFolder}
+                      searchQuery={viyarServiceSearch}
+                      t={t}
+                    />
+                  ))}
+                </ul>
+              ) : (
+                <div className="empty-state compact-empty-state">
+                  <span>{t.unableToLoadViyarServices}</span>
+                </div>
+              )}
+            </article>
+          </section>
+        ) : isCatalogManualView ? (
+          <section className="table-panel full-panel">
+            <article className="catalog-card service-catalog-card service-catalog-card-full">
+              <div className="service-catalog-header nested-service-catalog-header">
+                <div className="service-catalog-title">
+                  <h3>{t.catalogManual}</h3>
+                  <p>{t.catalogManualDescription}</p>
+                </div>
+                <div className="service-catalog-header-actions">
+                  <span className="service-tree-badge subtle">
+                    {manualServiceItems.length} {t.viyarService}
+                  </span>
+                </div>
+              </div>
+
+              <form className="manual-service-form" onSubmit={handleCreateManualService}>
+                <input
+                  onChange={(event) =>
+                    setNewManualServiceForm((current) => ({
+                      ...current,
+                      name: event.target.value,
+                    }))
+                  }
+                  placeholder={t.manualServiceNamePlaceholder}
+                  type="text"
+                  value={newManualServiceForm.name}
+                />
+                <input
+                  onChange={(event) =>
+                    setNewManualServiceForm((current) => ({
+                      ...current,
+                      article: event.target.value,
+                    }))
+                  }
+                  placeholder={t.manualServiceArticlePlaceholder}
+                  type="text"
+                  value={newManualServiceForm.article}
+                />
+                <input
+                  onChange={(event) =>
+                    setNewManualServiceForm((current) => ({
+                      ...current,
+                      unit: event.target.value,
+                    }))
+                  }
+                  placeholder={t.serviceUnit}
+                  type="text"
+                  value={newManualServiceForm.unit}
+                />
+                <input
+                  min="0"
+                  onChange={(event) =>
+                    setNewManualServiceForm((current) => ({
+                      ...current,
+                      base_price: event.target.value,
+                    }))
+                  }
+                  placeholder={t.basePrice}
+                  step="0.01"
+                  type="number"
+                  value={newManualServiceForm.base_price}
+                />
+                <input
+                  onChange={(event) =>
+                    setNewManualServiceForm((current) => ({
+                      ...current,
+                      description: event.target.value,
+                    }))
+                  }
+                  placeholder={t.manualServiceDescriptionPlaceholder}
+                  type="text"
+                  value={newManualServiceForm.description}
+                />
+                <label className="toggle-label">
+                  <input
+                    checked={newManualServiceForm.is_calculable}
+                    onChange={(event) =>
+                      setNewManualServiceForm((current) => ({
+                        ...current,
+                        is_calculable: event.target.checked,
+                      }))
+                    }
+                    type="checkbox"
+                  />
+                  {t.viyarCalculable}
+                </label>
+                <label className="toggle-label">
+                  <input
+                    checked={newManualServiceForm.is_active}
+                    onChange={(event) =>
+                      setNewManualServiceForm((current) => ({
+                        ...current,
+                        is_active: event.target.checked,
+                      }))
+                    }
+                    type="checkbox"
+                  />
+                  {t.enabled}
+                </label>
+                <button
+                  className="primary-button"
+                  disabled={loading || !newManualServiceForm.name.trim()}
+                  type="submit"
+                >
+                  <Plus size={16} />
+                  {t.create}
+                </button>
+              </form>
+
+              {manualServiceItems.length ? (
+                <div className="manual-service-list">
+                  {manualServiceItems.map((item) => (
+                    <div className="manual-service-item" key={item.id}>
+                      <div className="manual-service-item-head">
+                        <strong>{item.name}</strong>
+                        <span className="service-tree-badge subtle">
+                          {item.article || t.notSet}
+                        </span>
+                      </div>
+                      <div className="manual-service-editor">
+                        <input
+                          onChange={(event) =>
+                            handleManualServiceFieldChange(item.id, "name", event.target.value)
+                          }
+                          type="text"
+                          value={item.name || ""}
+                        />
+                        <input
+                          onChange={(event) =>
+                            handleManualServiceFieldChange(item.id, "article", event.target.value)
+                          }
+                          type="text"
+                          value={item.article || ""}
+                        />
+                        <input
+                          onChange={(event) =>
+                            handleManualServiceFieldChange(item.id, "unit", event.target.value)
+                          }
+                          type="text"
+                          value={item.unit || ""}
+                        />
+                        <input
+                          min="0"
+                          onChange={(event) =>
+                            handleManualServiceFieldChange(item.id, "base_price", event.target.value)
+                          }
+                          step="0.01"
+                          type="number"
+                          value={item.base_price ?? ""}
+                        />
+                        <input
+                          onChange={(event) =>
+                            handleManualServiceFieldChange(
+                              item.id,
+                              "description",
+                              event.target.value,
+                            )
+                          }
+                          type="text"
+                          value={item.description || ""}
+                        />
                         <label className="toggle-label">
                           <input
-                            checked={item.is_active}
-                            disabled={loading}
+                            checked={Boolean(item.is_calculable)}
                             onChange={(event) =>
-                              handleCatalogItemActiveChange(
-                                item,
+                              handleManualServiceFieldChange(
+                                item.id,
+                                "is_calculable",
+                                event.target.checked,
+                              )
+                            }
+                            type="checkbox"
+                          />
+                          {t.viyarCalculable}
+                        </label>
+                        <label className="toggle-label">
+                          <input
+                            checked={Boolean(item.is_active)}
+                            onChange={(event) =>
+                              handleManualServiceFieldChange(
+                                item.id,
+                                "is_active",
                                 event.target.checked,
                               )
                             }
@@ -4075,26 +7269,465 @@ export default function App() {
                           {t.enabled}
                         </label>
                         <button
-                          className="ghost-button"
-                          disabled={loading}
-                          onClick={() =>
-                            handleCatalogItemUpdate(
-                              item,
-                              item.value,
-                              item.sort_order,
-                            )
-                          }
+                          className="ghost-button compact-button"
+                          disabled={loading || !String(item.name || "").trim()}
+                          onClick={() => handleSaveManualService(item)}
                           type="button"
                         >
                           <Save size={16} />
                           {t.save}
                         </button>
                       </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="empty-state compact-empty-state">
+                  <span>{t.manualServicesDescription}</span>
+                </div>
+              )}
+            </article>
+          </section>
+        ) : activeView === "catalog" ? (
+          <section className="table-panel full-panel">
+            <div className="catalog-layout">
+              <article className="catalog-card">
+                <form className="catalog-form" onSubmit={handleCreateCatalogItem}>
+                  <label>
+                    {t.catalogCategory}
+                    <select
+                      onChange={(event) =>
+                        setNewCatalogItemForm({
+                          ...newCatalogItemForm,
+                          category: event.target.value,
+                        })
+                      }
+                      value={newCatalogItemForm.category}
+                    >
+                      {CATALOG_CATEGORIES.map((category) => (
+                        <option key={category} value={category}>
+                          {formatCatalogLabel(category, t)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    {t.catalogItemValue}
+                    <input
+                      onChange={(event) =>
+                        setNewCatalogItemForm({
+                          ...newCatalogItemForm,
+                          value: event.target.value,
+                        })
+                      }
+                      required
+                      type="text"
+                      value={newCatalogItemForm.value}
+                    />
+                  </label>
+                  <label>
+                    {t.catalogSortOrder}
+                    <input
+                      onChange={(event) =>
+                        setNewCatalogItemForm({
+                          ...newCatalogItemForm,
+                          sortOrder: event.target.value,
+                        })
+                      }
+                      type="number"
+                      value={newCatalogItemForm.sortOrder}
+                    />
+                  </label>
+                  <button
+                    className="primary-button"
+                    disabled={loading}
+                    type="submit"
+                  >
+                    <Plus size={18} />
+                    {t.create}
+                  </button>
+                </form>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>{t.catalogCategory}</th>
+                      <th>{t.catalogItemValue}</th>
+                      <th>{t.catalogSortOrder}</th>
+                      <th>{t.status}</th>
+                      <th>{t.action}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {catalogItems.map((item) => (
+                      <tr key={item.id}>
+                        <td>{formatCatalogLabel(item.category, t)}</td>
+                        <td>
+                          <input
+                            onChange={(event) =>
+                              setCatalogItems(
+                                catalogItems.map((catalogItem) =>
+                                  catalogItem.id === item.id
+                                    ? {
+                                        ...catalogItem,
+                                        value: event.target.value,
+                                      }
+                                    : catalogItem,
+                                ),
+                              )
+                            }
+                            type="text"
+                            value={item.value}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            onChange={(event) =>
+                              setCatalogItems(
+                                catalogItems.map((catalogItem) =>
+                                  catalogItem.id === item.id
+                                    ? {
+                                        ...catalogItem,
+                                        sort_order: event.target.value,
+                                      }
+                                    : catalogItem,
+                                ),
+                              )
+                            }
+                            type="number"
+                            value={item.sort_order}
+                          />
+                        </td>
+                        <td>{item.is_active ? t.active : t.inactive}</td>
+                        <td>
+                          <div className="catalog-actions">
+                            <label className="toggle-label">
+                              <input
+                                checked={item.is_active}
+                                disabled={loading}
+                                onChange={(event) =>
+                                  handleCatalogItemActiveChange(
+                                    item,
+                                    event.target.checked,
+                                  )
+                                }
+                                type="checkbox"
+                              />
+                              {t.enabled}
+                            </label>
+                            <button
+                              className="ghost-button"
+                              disabled={loading}
+                              onClick={() =>
+                                handleCatalogItemUpdate(
+                                  item,
+                                  item.value,
+                                  item.sort_order,
+                                )
+                              }
+                              type="button"
+                            >
+                              <Save size={16} />
+                              {t.save}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </article>
+              <article className="catalog-card service-catalog-card">
+                <div className="service-catalog-header">
+                  <div className="service-catalog-title">
+                    <h3>{t.viyarServicesTitle}</h3>
+                    <p>{t.viyarServicesDescription}</p>
+                  </div>
+                  <div className="service-catalog-header-actions">
+                    <span className="service-tree-badge subtle">
+                      {t.viyarSource}: {viyarServiceSource}
+                    </span>
+                    <span className="service-tree-badge subtle">
+                      {viyarServiceCounts.folders} / {viyarServiceCounts.services}
+                    </span>
+                    {viyarPriceSyncSummary ? (
+                      <span className="service-tree-badge subtle">
+                        {viyarPriceSyncSummary.priced_count} / {viyarPriceSyncSummary.total_count}
+                      </span>
+                    ) : null}
+                    <button
+                      className="ghost-button"
+                      disabled={loading}
+                      onClick={handleImportViyarServices}
+                      type="button"
+                    >
+                      <RefreshCw size={16} />
+                      {t.viyarRefresh}
+                    </button>
+                    <button
+                      className="ghost-button"
+                      disabled={loading}
+                      onClick={handleSyncViyarPrices}
+                      type="button"
+                    >
+                      <RefreshCw size={16} />
+                      {t.viyarSyncPrices}
+                    </button>
+                  </div>
+                </div>
+                <div className="service-catalog-toolbar">
+                  <label className="service-catalog-search">
+                    <Search size={16} />
+                    <input
+                      onChange={(event) => setViyarServiceSearch(event.target.value)}
+                      placeholder={t.viyarSearch}
+                      type="search"
+                      value={viyarServiceSearch}
+                    />
+                  </label>
+                  <div className="service-catalog-tree-actions">
+                    <button
+                      className="ghost-button compact-button"
+                      disabled={loading || !viyarFolderCodes.length}
+                      onClick={collapseAllViyarFolders}
+                      type="button"
+                    >
+                      {t.viyarCollapseAll}
+                    </button>
+                    <button
+                      className="ghost-button compact-button"
+                      disabled={loading || !viyarFolderCodes.length}
+                      onClick={expandAllViyarFolders}
+                      type="button"
+                    >
+                      {t.viyarExpandAll}
+                    </button>
+                  </div>
+                </div>
+                {filteredViyarServiceTree.length ? (
+                  <ul className="service-tree-root">
+                    {filteredViyarServiceTree.map((node) => (
+                      <ServiceCatalogTreeNode
+                        collapsedFolders={collapsedViyarFolders}
+                        key={node.external_code}
+                        loading={loading}
+                        node={node}
+                        onSaveService={handleSaveViyarService}
+                        onServiceFieldChange={handleViyarServiceFieldChange}
+                        onToggleCollapse={toggleViyarFolder}
+                        searchQuery={viyarServiceSearch}
+                        t={t}
+                      />
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="empty-state compact-empty-state">
+                    <span>{t.unableToLoadViyarServices}</span>
+                  </div>
+                )}
+
+                <div className="service-catalog-divider" />
+
+                <div className="service-catalog-header nested-service-catalog-header">
+                  <div className="service-catalog-title">
+                    <h3>{t.manualServicesTitle}</h3>
+                    <p>{t.manualServicesDescription}</p>
+                  </div>
+                </div>
+
+                <form className="manual-service-form" onSubmit={handleCreateManualService}>
+                  <input
+                    onChange={(event) =>
+                      setNewManualServiceForm((current) => ({
+                        ...current,
+                        name: event.target.value,
+                      }))
+                    }
+                    placeholder={t.manualServiceNamePlaceholder}
+                    type="text"
+                    value={newManualServiceForm.name}
+                  />
+                  <input
+                    onChange={(event) =>
+                      setNewManualServiceForm((current) => ({
+                        ...current,
+                        article: event.target.value,
+                      }))
+                    }
+                    placeholder={t.manualServiceArticlePlaceholder}
+                    type="text"
+                    value={newManualServiceForm.article}
+                  />
+                  <input
+                    onChange={(event) =>
+                      setNewManualServiceForm((current) => ({
+                        ...current,
+                        unit: event.target.value,
+                      }))
+                    }
+                    placeholder={t.serviceUnit}
+                    type="text"
+                    value={newManualServiceForm.unit}
+                  />
+                  <input
+                    min="0"
+                    onChange={(event) =>
+                      setNewManualServiceForm((current) => ({
+                        ...current,
+                        base_price: event.target.value,
+                      }))
+                    }
+                    placeholder={t.basePrice}
+                    step="0.01"
+                    type="number"
+                    value={newManualServiceForm.base_price}
+                  />
+                  <input
+                    onChange={(event) =>
+                      setNewManualServiceForm((current) => ({
+                        ...current,
+                        description: event.target.value,
+                      }))
+                    }
+                    placeholder={t.manualServiceDescriptionPlaceholder}
+                    type="text"
+                    value={newManualServiceForm.description}
+                  />
+                  <label className="toggle-label">
+                    <input
+                      checked={newManualServiceForm.is_calculable}
+                      onChange={(event) =>
+                        setNewManualServiceForm((current) => ({
+                          ...current,
+                          is_calculable: event.target.checked,
+                        }))
+                      }
+                      type="checkbox"
+                    />
+                    {t.viyarCalculable}
+                  </label>
+                  <label className="toggle-label">
+                    <input
+                      checked={newManualServiceForm.is_active}
+                      onChange={(event) =>
+                        setNewManualServiceForm((current) => ({
+                          ...current,
+                          is_active: event.target.checked,
+                        }))
+                      }
+                      type="checkbox"
+                    />
+                    {t.enabled}
+                  </label>
+                  <button
+                    className="primary-button"
+                    disabled={loading || !newManualServiceForm.name.trim()}
+                    type="submit"
+                  >
+                    <Plus size={16} />
+                    {t.create}
+                  </button>
+                </form>
+
+                {manualServiceItems.length ? (
+                  <div className="manual-service-list">
+                    {manualServiceItems.map((item) => (
+                      <div className="manual-service-item" key={item.id}>
+                        <div className="manual-service-item-head">
+                          <strong>{item.name}</strong>
+                          <span className="service-tree-badge subtle">
+                            {item.article || t.notSet}
+                          </span>
+                        </div>
+                        <div className="manual-service-editor">
+                          <input
+                            onChange={(event) =>
+                              handleManualServiceFieldChange(item.id, "name", event.target.value)
+                            }
+                            type="text"
+                            value={item.name || ""}
+                          />
+                          <input
+                            onChange={(event) =>
+                              handleManualServiceFieldChange(item.id, "article", event.target.value)
+                            }
+                            type="text"
+                            value={item.article || ""}
+                          />
+                          <input
+                            onChange={(event) =>
+                              handleManualServiceFieldChange(item.id, "unit", event.target.value)
+                            }
+                            type="text"
+                            value={item.unit || ""}
+                          />
+                          <input
+                            min="0"
+                            onChange={(event) =>
+                              handleManualServiceFieldChange(item.id, "base_price", event.target.value)
+                            }
+                            step="0.01"
+                            type="number"
+                            value={item.base_price ?? ""}
+                          />
+                          <input
+                            onChange={(event) =>
+                              handleManualServiceFieldChange(
+                                item.id,
+                                "description",
+                                event.target.value,
+                              )
+                            }
+                            type="text"
+                            value={item.description || ""}
+                          />
+                          <label className="toggle-label">
+                            <input
+                              checked={Boolean(item.is_calculable)}
+                              onChange={(event) =>
+                                handleManualServiceFieldChange(
+                                  item.id,
+                                  "is_calculable",
+                                  event.target.checked,
+                                )
+                              }
+                              type="checkbox"
+                            />
+                            {t.viyarCalculable}
+                          </label>
+                          <label className="toggle-label">
+                            <input
+                              checked={Boolean(item.is_active)}
+                              onChange={(event) =>
+                                handleManualServiceFieldChange(
+                                  item.id,
+                                  "is_active",
+                                  event.target.checked,
+                                )
+                              }
+                              type="checkbox"
+                            />
+                            {t.enabled}
+                          </label>
+                          <button
+                            className="ghost-button compact-button"
+                            disabled={loading || !String(item.name || "").trim()}
+                            onClick={() => handleSaveManualService(item)}
+                            type="button"
+                          >
+                            <Save size={16} />
+                            {t.save}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="empty-state compact-empty-state">
+                    <span>{t.manualServicesDescription}</span>
+                  </div>
+                )}
+              </article>
+            </div>
           </section>
         ) : (
           <section className="table-panel full-panel">
@@ -4127,6 +7760,181 @@ export default function App() {
           </section>
         )}
       </section>
+
+      {selectedProject && projectOverviewOpen ? (
+        <div
+          aria-modal="true"
+          className="modal-backdrop"
+          onClick={() => setProjectOverviewOpen(false)}
+          role="dialog"
+        >
+          <section
+            className="confirm-modal project-info-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="confirm-header">
+              <div>
+                <strong>{t.selectedProject}</strong>
+                <p>{selectedProject.project_name || t.newProjectDefault}</p>
+              </div>
+              <button
+                aria-label={t.cancel}
+                className="ghost-button compact-button detail-info-button"
+                onClick={() => setProjectOverviewOpen(false)}
+                type="button"
+              >
+                <X size={16} />
+              </button>
+            </header>
+            <div className="project-info-grid">
+              <span>{t.projectType}</span>
+              <strong>{formatCatalogLabel(selectedProject.project_type, t)}</strong>
+              <span>{t.client}</span>
+              <strong>{selectedProject.client_name || t.notSet}</strong>
+              <span>{t.room}</span>
+              <strong>{selectedProject.room_name || t.notSet}</strong>
+              <span>{t.width} x {t.height} x {t.depth}</span>
+              <strong>{selectedProject.width} x {selectedProject.height} x {selectedProject.depth}</strong>
+              <span>{t.sections}</span>
+              <strong>{selectedProject.sections}</strong>
+              <span>{t.drawers}</span>
+              <strong>{formatDrawers(selectedProject.drawers, t)}</strong>
+              <span>{t.created}</span>
+              <strong>{formatDateTime(selectedProject.created_at, t)}</strong>
+              <span>{t.updated}</span>
+              <strong>{formatDateTime(selectedProject.updated_at, t)}</strong>
+              <span>{t.notes}</span>
+              <strong>{selectedProject.notes || t.notSet}</strong>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {selectedUserDetails ? (
+        <div
+          aria-modal="true"
+          className="modal-backdrop"
+          onClick={() => setSelectedUserDetails(null)}
+          role="dialog"
+        >
+          <section
+            className="confirm-modal user-details-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="confirm-header">
+              <div>
+                <strong>{selectedUserDetails.user.email}</strong>
+                <p>{t.openUserCard}</p>
+              </div>
+              <button
+                aria-label={t.cancel}
+                className="ghost-button compact-button detail-info-button"
+                onClick={() => setSelectedUserDetails(null)}
+                type="button"
+              >
+                <X size={16} />
+              </button>
+            </header>
+            <div className="user-details-modal-grid">
+              <section className="user-details-section">
+                <h4>{t.userProfile}</h4>
+                <div className="project-info-grid">
+                  <span>{t.email}</span>
+                  <strong>{selectedUserDetails.user.email}</strong>
+                  <span>{t.username}</span>
+                  <strong>{selectedUserDetails.user.username || t.notSet}</strong>
+                  <span>{t.phone}</span>
+                  <strong>{selectedUserDetails.user.phone || t.notSet}</strong>
+                  <span>{t.telegram}</span>
+                  <strong>{selectedUserDetails.user.telegram_id || t.notSet}</strong>
+                  <span>{t.role}</span>
+                  <strong>{selectedUserDetails.user.role}</strong>
+                  <span>{t.status}</span>
+                  <strong>{selectedUserDetails.user.is_active ? t.active : t.inactive}</strong>
+                  <span>{t.lastUsernameChange}</span>
+                  <strong>{formatDateTime(selectedUserDetails.user.last_username_change_at, t)}</strong>
+                </div>
+              </section>
+
+              <section className="user-details-section">
+                <h4>{t.viyarConnection}</h4>
+                <div className="project-info-grid">
+                  <span>{t.email}</span>
+                  <strong>{selectedUserDetails.user.viyar_email || t.notSet}</strong>
+                  <span>{t.session}</span>
+                  <strong>{selectedUserDetails.user.viyar_has_cookie ? t.connected : t.notConnected}</strong>
+                  <span>{t.authStatus}</span>
+                  <strong>{selectedUserDetails.user.viyar_last_auth_status || t.notSet}</strong>
+                  <span>{t.lastAuth}</span>
+                  <strong>{formatDateTime(selectedUserDetails.user.viyar_last_auth_at, t)}</strong>
+                  <span>{t.authError}</span>
+                  <strong>{selectedUserDetails.user.viyar_last_auth_error || t.noError}</strong>
+                </div>
+              </section>
+
+              <section className="user-details-section">
+                <h4>{t.pendingRequests}</h4>
+                {selectedUserDetails.change_requests.length ? (
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>{t.changeType}</th>
+                        <th>{t.oldValue}</th>
+                        <th>{t.newValue}</th>
+                        <th>{t.status}</th>
+                        <th>{t.requestedAt}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedUserDetails.change_requests.map((request) => (
+                        <tr key={request.id}>
+                          <td>{request.change_type}</td>
+                          <td>{request.old_value || t.notSet}</td>
+                          <td>{request.new_value}</td>
+                          <td>{request.status}</td>
+                          <td>{formatDateTime(request.created_at, t)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <p className="empty-inline-note">{t.noRequestsHistory}</p>
+                )}
+              </section>
+
+              <section className="user-details-section">
+                <h4>{t.createdProjects}</h4>
+                {selectedUserDetails.projects.length ? (
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>ID</th>
+                        <th>{t.projectName}</th>
+                        <th>{t.projectType}</th>
+                        <th>{t.client}</th>
+                        <th>{t.updated}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedUserDetails.projects.map((project) => (
+                        <tr key={project.id}>
+                          <td>{project.id}</td>
+                          <td>{project.project_name || t.newProjectDefault}</td>
+                          <td>{formatCatalogLabel(project.project_type, t)}</td>
+                          <td>{project.client_name || t.notSet}</td>
+                          <td>{formatDateTime(project.updated_at, t)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <p className="empty-inline-note">{t.noProjectsYet}</p>
+                )}
+              </section>
+            </div>
+          </section>
+        </div>
+      ) : null}
 
       {confirmAction ? (
         <div

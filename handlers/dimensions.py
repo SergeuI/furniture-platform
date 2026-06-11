@@ -8,6 +8,9 @@ from aiogram.fsm.context import FSMContext
 from forms.user import Form
 
 import logging
+from services.telegram_access_service import (
+    ensure_calculator_access_for_message,
+)
 
 router = Router()
 
@@ -41,6 +44,8 @@ async def start_dimensions_flow(
     message: Message,
     state: FSMContext
 ):
+    if not await ensure_calculator_access_for_message(message):
+        return
 
     photo = FSInputFile(
         "images/dresser_hint.jpg"
@@ -90,6 +95,8 @@ async def process_width(
     message: Message,
     state: FSMContext
 ):
+    if not await ensure_calculator_access_for_message(message):
+        return
 
     await cleanup_dimension_messages(
         message,
@@ -169,6 +176,8 @@ async def process_height(
     message: Message,
     state: FSMContext
 ):
+    if not await ensure_calculator_access_for_message(message):
+        return
 
     await cleanup_dimension_messages(
         message,
@@ -248,6 +257,8 @@ async def process_depth(
     message: Message,
     state: FSMContext
 ):
+    if not await ensure_calculator_access_for_message(message):
+        return
 
     await cleanup_dimension_messages(
         message,

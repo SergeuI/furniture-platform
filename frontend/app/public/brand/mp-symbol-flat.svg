@@ -1,9 +1,38 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
   <title id="title">MProject flat MP symbol</title>
-  <desc id="desc">Flat compact MP symbol for small UI surfaces.</desc>
-  <g transform="translate(40 82) scale(.66)">
-    <path d="M0 248V0h78l98 123L274 0h72v248h-80V108l-76 114h-28L82 108v140z" fill="#202932"/>
-    <path d="M365 304V0h152c82 0 136 48 136 124s-54 124-136 124h-72v56zm80-126h66c38 0 62-20 62-54s-24-54-62-54h-66z" fill="#202932"/>
-    <path d="M0 310l76-44v70L0 380z" fill="#39d353"/>
+  <desc id="desc">Technical MP symbol with panel-line construction and green furniture accent.</desc>
+  <defs>
+    <linearGradient id="mpDark" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#3a3b46"/>
+      <stop offset="55%" stop-color="#292b34"/>
+      <stop offset="100%" stop-color="#171a21"/>
+    </linearGradient>
+    <linearGradient id="greenFace" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#9dff4f"/>
+      <stop offset="100%" stop-color="#39d353"/>
+    </linearGradient>
+    <filter id="greenGlow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="10" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="1 0 0 0 0.22  0 1 0 0 0.83  0 0 1 0 0.33  0 0 0 0.7 0"/>
+    </filter>
+  </defs>
+  <ellipse cx="148" cy="420" rx="64" ry="24" fill="#1e3f1d" opacity=".55"/>
+  <ellipse cx="234" cy="432" rx="136" ry="30" fill="#173018" opacity=".45"/>
+  <g transform="translate(56 54)">
+    <path d="M0 0h112l46 86 48-86h109v343h-93V138l-56 103h-21L93 139v204H0z" fill="url(#mpDark)"/>
+    <path d="M235 0h118c48 0 79 10 97 30 15 17 22 39 22 70 0 63-41 99-120 105v139h-117zM352 94v110h42c43 0 64-18 64-53 0-38-24-57-70-57z" fill="url(#mpDark)"/>
+    <g stroke="#eef2f5" stroke-opacity=".65" stroke-width="3" fill="none">
+      <rect x="0" y="0" width="315" height="343" opacity=".28"/>
+      <path d="M0 0l93 139M112 0l54 103M221 0l-56 103M315 0l-93 139"/>
+      <path d="M0 343l93-204M112 343l54-240M221 343l-56-240M315 343l-94-205"/>
+      <path d="M235 0h237M352 0v343M470 0v204M235 94h223M352 204h120"/>
+    </g>
+    <g transform="translate(14 278)">
+      <path d="M0 40l48-28h73l-48 28z" fill="#cfff63" filter="url(#greenGlow)" opacity=".85"/>
+      <path d="M0 40h73v78H0z" fill="url(#greenFace)"/>
+      <path d="M73 40l48-28v78L73 118z" fill="#2cbf40"/>
+      <path d="M0 40l48-28h73l-48 28z" fill="#a8ff5b"/>
+      <path d="M0 40l48-28M73 40l48-28" stroke="#ebffcf" stroke-opacity=".7" stroke-width="2" fill="none"/>
+    </g>
   </g>
 </svg>

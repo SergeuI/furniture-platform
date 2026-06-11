@@ -26,6 +26,10 @@ from core.validation.drawers import (
 )
 import logging
 import os
+from services.telegram_access_service import (
+    ensure_calculator_access_for_message,
+    ensure_calculator_access_for_callback,
+)
 
 router = Router()
 
@@ -78,6 +82,8 @@ def get_available_drawers(height: int):
     return result
 
 async def show_drawers(message, state, index=0):
+    if not await ensure_calculator_access_for_message(message):
+        return
 
     data = await state.get_data()
 
@@ -177,6 +183,8 @@ async def show_drawers(message, state, index=0):
 
 @router.callback_query(F.data.startswith("draw_prev_"))
 async def prev_drawer(callback: CallbackQuery, state: FSMContext):
+    if not await ensure_calculator_access_for_callback(callback):
+        return
 
     data = await state.get_data()
 
@@ -233,6 +241,8 @@ async def prev_drawer(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data.startswith("draw_next_"))
 async def next_drawer(callback: CallbackQuery, state: FSMContext):
+    if not await ensure_calculator_access_for_callback(callback):
+        return
 
     data = await state.get_data()
 
@@ -293,6 +303,8 @@ async def select_drawers(
     callback: CallbackQuery,
     state: FSMContext
 ):
+    if not await ensure_calculator_access_for_callback(callback):
+        return
 
     data = await state.get_data()
 

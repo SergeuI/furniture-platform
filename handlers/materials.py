@@ -45,6 +45,10 @@ from services.material_db import (
     get_user_city,
     get_material_with_price
 )
+from services.telegram_access_service import (
+    ensure_calculator_access_for_message,
+    ensure_calculator_access_for_callback,
+)
 
 
 router = Router()
@@ -61,6 +65,9 @@ HANDLES_ARTICLES = [
 
 # ОКРЕМА ФУНКЦІЯ
 async def show_material_types(message: Message, state: FSMContext):
+    if not await ensure_calculator_access_for_message(message):
+        return
+
     index = 0
     mat = MATERIAL_TYPES[index]
     photo = FSInputFile(mat["img"])
@@ -76,6 +83,8 @@ async def show_material_types(message: Message, state: FSMContext):
 
 
 async def show_materials(message: Message, state: FSMContext):
+    if not await ensure_calculator_access_for_message(message):
+        return
 
     index = 0
 
@@ -181,6 +190,8 @@ async def material_navigation(
     callback: CallbackQuery,
     state: FSMContext
 ):
+    if not await ensure_calculator_access_for_callback(callback):
+        return
 
     data = callback.data.split("_")
 
@@ -464,6 +475,8 @@ async def material_type_navigation(
     callback: CallbackQuery,
     state: FSMContext
 ):
+    if not await ensure_calculator_access_for_callback(callback):
+        return
 
     data = callback.data.split("_")
 
@@ -576,6 +589,9 @@ async def material_type_navigation(
 
 
 async def show_handles_carousel(message, state):
+    if not await ensure_calculator_access_for_message(message):
+        return
+
     index = 0
     city_raw = await get_user_city(message.from_user.id)
     city = CITY_MAP.get(city_raw, "kyiv")
@@ -614,6 +630,9 @@ async def show_handles_carousel(message, state):
 # Обробник каруселі ручек для комода
 @router.callback_query(F.data.startswith("handle_"))
 async def handles_navigation(callback: CallbackQuery, state: FSMContext):
+    if not await ensure_calculator_access_for_callback(callback):
+        return
+
     data = callback.data.split("_")
     action = data[1]
     index = int(data[2])

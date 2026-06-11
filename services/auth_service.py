@@ -11,7 +11,13 @@ from database.repositories.user_repository import (
     create_user,
     get_user_by_email,
     get_user_by_id,
+    get_user_by_username,
     update_user_password
+)
+from services.user_roles import (
+    ROLE_ADMIN,
+    ROLE_USER,
+    normalize_user_role,
 )
 
 
@@ -136,7 +142,7 @@ def create_access_token(
 
         "sub": user_id,
 
-        "role": role,
+        "role": normalize_user_role(role),
 
         "exp": int(time.time()) + TOKEN_TTL_SECONDS
     }
@@ -236,7 +242,7 @@ def register_user(
 
         return None
 
-    role = "admin" if count_users() == 0 else "manager"
+    role = ROLE_ADMIN if count_users() == 0 else ROLE_USER
 
     return create_user(
 
@@ -246,7 +252,7 @@ def register_user(
             password
         ),
 
-        role=role
+        role=normalize_user_role(role)
     )
 
 
@@ -275,7 +281,7 @@ def create_managed_user(
             password
         ),
 
-        role=role
+        role=normalize_user_role(role)
     )
 
 
@@ -369,6 +375,24 @@ def authenticate_user(
         return None
 
     return user
+
+
+def username_is_available(
+
+    username: str,
+
+    current_user_id: str | None = None
+):
+
+    existing_user = get_user_by_username(
+        username.strip().lower()
+    )
+
+    if not existing_user:
+
+        return True
+
+    return existing_user.id == current_user_id
 
 
 def get_user_from_token(

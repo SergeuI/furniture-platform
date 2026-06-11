@@ -11,6 +11,10 @@ from fastapi.security import (
 from services.auth_service import (
     get_user_from_token
 )
+from services.user_roles import (
+    normalize_allowed_roles,
+    normalize_user_role,
+)
 
 
 # =====================================================
@@ -106,7 +110,15 @@ def require_roles(
         current_user = Depends(require_current_user)
     ):
 
-        if current_user.role not in allowed_roles:
+        normalized_user_role = normalize_user_role(
+            current_user.role
+        )
+
+        normalized_allowed_roles = normalize_allowed_roles(
+            allowed_roles
+        )
+
+        if normalized_user_role not in normalized_allowed_roles:
 
             raise HTTPException(
 

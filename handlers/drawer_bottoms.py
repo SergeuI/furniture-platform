@@ -17,6 +17,9 @@ from keyboards.inline import (
 from handlers.materials import (
     show_material_types
 )
+from services.telegram_access_service import (
+    ensure_calculator_access_for_callback,
+)
 
 router = Router()
 
@@ -34,6 +37,8 @@ async def bottom_prev(
     callback: CallbackQuery,
     state: FSMContext
 ):
+    if not await ensure_calculator_access_for_callback(callback):
+        return
 
     index = int(
         callback.data.split("_")[-1]
@@ -86,6 +91,8 @@ async def bottom_next(
     callback: CallbackQuery,
     state: FSMContext
 ):
+    if not await ensure_calculator_access_for_callback(callback):
+        return
 
     index = int(
         callback.data.split("_")[-1]
@@ -140,6 +147,8 @@ async def choose_drawer_bottom(
 
     state: FSMContext
 ):
+    if not await ensure_calculator_access_for_callback(callback):
+        return
 
     index = int(
         callback.data.split("_")[-1]

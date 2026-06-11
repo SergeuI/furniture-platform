@@ -66,6 +66,10 @@ class ProjectResponseItemSchema(BaseModel):
 
     updated_by_user_id: Optional[str] = None
 
+    assembly_layout: Dict[str, Any] = Field(
+        default_factory=dict
+    )
+
     created_at: Optional[datetime] = None
 
     updated_at: Optional[datetime] = None
@@ -195,6 +199,103 @@ class ProjectBomItemResponseSchema(BaseModel):
     notes: Optional[str] = None
 
 
+class ProjectBomServicePriceItemResponseSchema(BaseModel):
+
+    id: str
+
+    source: str
+
+    name: str
+
+    article: Optional[str] = None
+
+    folder_path: Optional[str] = None
+
+    unit: Optional[str] = None
+
+    base_price: Optional[float] = None
+
+    effective_price: Optional[float] = None
+
+    currency: Optional[str] = None
+
+    effective_currency: Optional[str] = None
+
+    user_price: Optional[float] = None
+
+    user_currency: Optional[str] = None
+
+    user_last_synced_at: Optional[datetime] = None
+
+    user_price_sync_status: Optional[str] = None
+
+
+class ProjectBomPricingCatalogResponseSchema(BaseModel):
+
+    viyar_services: List[ProjectBomServicePriceItemResponseSchema] = Field(
+        default_factory=list
+    )
+
+    manual_services: List[ProjectBomServicePriceItemResponseSchema] = Field(
+        default_factory=list
+    )
+
+    total_services: int = 0
+
+    priced_services: int = 0
+
+
+class ProjectBomRequirementItemResponseSchema(BaseModel):
+
+    category: str
+
+    code: str
+
+    name: str
+
+    unit: Optional[str] = None
+
+    quantity: float | int
+
+    meta: Dict[str, Any] = Field(
+        default_factory=dict
+    )
+
+    match_terms: List[str] = Field(
+        default_factory=list
+    )
+
+
+class ProjectBomRequirementsSummaryResponseSchema(BaseModel):
+
+    operations_count: int = 0
+
+    fittings_count: int = 0
+
+    total_cut_area_m2: float = 0
+
+    total_cut_length_m: float = 0
+
+    total_edge_length_m: float = 0
+
+    total_parts: int = 0
+
+
+class ProjectBomRequirementsResponseSchema(BaseModel):
+
+    operations: List[ProjectBomRequirementItemResponseSchema] = Field(
+        default_factory=list
+    )
+
+    fittings: List[ProjectBomRequirementItemResponseSchema] = Field(
+        default_factory=list
+    )
+
+    summary: ProjectBomRequirementsSummaryResponseSchema = Field(
+        default_factory=ProjectBomRequirementsSummaryResponseSchema
+    )
+
+
 class ProjectBomResponseSchema(BaseModel):
 
     success: bool
@@ -203,6 +304,14 @@ class ProjectBomResponseSchema(BaseModel):
 
     items: List[ProjectBomItemResponseSchema] = Field(
         default_factory=list
+    )
+
+    pricing_catalog: ProjectBomPricingCatalogResponseSchema = Field(
+        default_factory=ProjectBomPricingCatalogResponseSchema
+    )
+
+    service_requirements: ProjectBomRequirementsResponseSchema = Field(
+        default_factory=ProjectBomRequirementsResponseSchema
     )
 
     error: Optional[str] = None
@@ -258,6 +367,10 @@ class ProjectCuttingResponseSchema(BaseModel):
 
     items: List[ProjectCuttingItemResponseSchema] = Field(
         default_factory=list
+    )
+
+    assembly: Dict[str, Any] = Field(
+        default_factory=dict
     )
 
     summary: Optional[ProjectCuttingSummaryResponseSchema] = None

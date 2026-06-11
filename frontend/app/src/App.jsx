@@ -5,15 +5,19 @@ import {
   RotateCcw,
   Download,
   Eye,
+  Info,
   LogOut,
   Plus,
   RefreshCw,
   Save,
   Search,
+  X,
 } from "lucide-react";
-import { Suspense, lazy, useEffect, useMemo, useState } from "react";
+import { Component, Suspense, lazy, useEffect, useMemo, useState } from "react";
 
 import {
+  changeOwnPassword,
+  createMyEmailChangeRequest,
   generateProject,
   getCuttingExportFormats,
   getCuttingJsonExport,
@@ -25,6 +29,7 @@ import {
   getSpecificationCatalog,
   listProjects,
   login,
+  updateMyProfile,
   updateProjectPartEdges,
   updateProjectPartMachining,
 } from "./api";
@@ -73,6 +78,48 @@ const DEFAULT_SPECIFICATION_CATALOG = {
   edge_bandings: ["abs_0_5", "abs_1", "abs_2", "pvc_0_5", "pvc_1", "pvc_2"],
   handle_positions: ["top", "center", "bottom", "left", "right", "integrated"],
 };
+
+class ProductionViewerBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { errorMessage: "", hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error) {
+    this.setState({
+      errorMessage: error?.message || "Unknown production viewer error",
+    });
+  }
+
+  componentDidUpdate(prevProps) {
+    if (
+      prevProps.selectedPartCode !== this.props.selectedPartCode ||
+      prevProps.itemCount !== this.props.itemCount
+    ) {
+      if (this.state.hasError) {
+        this.setState({ errorMessage: "", hasError: false });
+      }
+    }
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="project-three-viewer-error">
+          <strong>{this.props.t?.productionAssembly3d || "3D assembly"}</strong>
+          <span>{this.props.t?.productionAssemblyHint || "3D preview is temporarily unavailable."}</span>
+          {this.state.errorMessage ? <code>{this.state.errorMessage}</code> : null}
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 
 const TRANSLATIONS = {
   en: {
@@ -303,6 +350,38 @@ Object.assign(TRANSLATIONS.en, {
   preview3dHint: "3D перегляд для візуальної оцінки. Для точного редагування крайки й координат обробки використовуйте режим 2D.",
 });
 
+Object.assign(TRANSLATIONS.en, {
+  assemblyAssembled: "Assembled",
+  assemblyClearSelection: "Clear selection",
+  assemblyExploded: "Exploded",
+  assemblyFocusSelected: "Focus selected",
+  assemblyGroupBack: "Back panel",
+  assemblyGroupCarcass: "Carcass",
+  assemblyGroupDrawers: "Drawers",
+  assemblyGroupFacades: "Facades",
+  assemblyGroupOther: "Other panels",
+  assemblyLayerGrooves: "Grooves",
+  assemblyLayerHoles: "Holes",
+  assemblyLayerQuarters: "Quarters",
+  assemblyModeSolid: "Solid",
+  assemblyModeTransparent: "Transparent + holes",
+  assemblyOpenWorkspace: "Open detail workspace",
+  assemblyResetCamera: "Reset camera",
+  assemblyShowAll: "Show all",
+  assemblyShowFull: "Show full assembly",
+  preview2d: "2D map",
+  preview3d: "3D panel",
+  preview3dHint:
+    "3D preview for visual inspection. Use 2D mode for precise edge editing and machining coordinates.",
+  preview3dInteractiveHint: "LMB rotate, RMB move, wheel zoom.",
+  productionAssembly3d: "3D assembly",
+  productionAssemblyHint:
+    "This 3D assembly is based on the cutting map. Click a panel to open its detail workspace.",
+  resetView: "Reset",
+  rotateLeft: "Left",
+  rotateRight: "Right",
+});
+
 Object.assign(TRANSLATIONS.uk, {
   preview3dInteractiveHint: "Перетягуйте для обертання. Колесо миші або жест масштабування змінює зум. У 3D моделі показані крайка, отвори, пази та чверті.",
   productionAssembly3d: "3D збірка",
@@ -342,6 +421,8 @@ Object.assign(TRANSLATIONS.en, {
   assemblyOpenWorkspace: "Open detail workspace",
   assemblyResetCamera: "Reset camera",
   assemblyShowFull: "Show full assembly",
+  hideProjectOverview: "Hide project overview",
+  showProjectOverview: "Show project overview",
 });
 
 Object.assign(TRANSLATIONS.uk, {
@@ -355,6 +436,48 @@ Object.assign(TRANSLATIONS.uk, {
   assemblyOpenWorkspace: "\u0412\u0456\u0434\u043a\u0440\u0438\u0442\u0438 \u043a\u0430\u0440\u0442\u0443 \u0434\u0435\u0442\u0430\u043b\u0456",
   assemblyResetCamera: "\u0421\u043a\u0438\u043d\u0443\u0442\u0438 \u043a\u0430\u043c\u0435\u0440\u0443",
   assemblyShowFull: "\u041f\u043e\u043a\u0430\u0437\u0430\u0442\u0438 \u0432\u0441\u044e \u0437\u0431\u0456\u0440\u043a\u0443",
+  hideProjectOverview: "\u0421\u0445\u043e\u0432\u0430\u0442\u0438 \u0434\u0430\u043d\u0456 \u043f\u0440\u043e\u0435\u043a\u0442\u0443",
+  showProjectOverview: "\u041f\u043e\u043a\u0430\u0437\u0430\u0442\u0438 \u0434\u0430\u043d\u0456 \u043f\u0440\u043e\u0435\u043a\u0442\u0443",
+});
+
+Object.assign(TRANSLATIONS.en, {
+  changePassword: "Change password",
+  currentPassword: "Current password",
+  emailChangeRequested: "Email change request created",
+  myData: "My data",
+  newEmail: "New email",
+  newPassword: "New password",
+  passwordChanged: "Password changed",
+  phone: "Phone",
+  profileUpdated: "Profile updated",
+  requestEmailChange: "Request email change",
+  role: "Role",
+  saveProfile: "Save profile",
+  settings: "Settings",
+  unableToChangePassword: "Unable to change password",
+  unableToRequestEmailChange: "Unable to request email change",
+  unableToUpdateProfile: "Unable to update profile",
+  username: "Username",
+});
+
+Object.assign(TRANSLATIONS.uk, {
+  changePassword: "\u0417\u043c\u0456\u043d\u0438\u0442\u0438 \u043f\u0430\u0440\u043e\u043b\u044c",
+  currentPassword: "\u041f\u043e\u0442\u043e\u0447\u043d\u0438\u0439 \u043f\u0430\u0440\u043e\u043b\u044c",
+  emailChangeRequested: "\u0417\u0430\u043f\u0438\u0442 \u043d\u0430 \u0437\u043c\u0456\u043d\u0443 email \u0441\u0442\u0432\u043e\u0440\u0435\u043d\u043e",
+  myData: "\u041c\u043e\u0457 \u0434\u0430\u043d\u0456",
+  newEmail: "\u041d\u043e\u0432\u0438\u0439 email",
+  newPassword: "\u041d\u043e\u0432\u0438\u0439 \u043f\u0430\u0440\u043e\u043b\u044c",
+  passwordChanged: "\u041f\u0430\u0440\u043e\u043b\u044c \u043e\u043d\u043e\u0432\u043b\u0435\u043d\u043e",
+  phone: "\u0422\u0435\u043b\u0435\u0444\u043e\u043d",
+  profileUpdated: "\u041f\u0440\u043e\u0444\u0456\u043b\u044c \u043e\u043d\u043e\u0432\u043b\u0435\u043d\u043e",
+  requestEmailChange: "\u0417\u0430\u043f\u0438\u0442\u0438 \u0437\u043c\u0456\u043d\u0443 email",
+  role: "\u0420\u043e\u043b\u044c",
+  saveProfile: "\u0417\u0431\u0435\u0440\u0435\u0433\u0442\u0438 \u043f\u0440\u043e\u0444\u0456\u043b\u044c",
+  settings: "\u041d\u0430\u043b\u0430\u0448\u0442\u0443\u0432\u0430\u043d\u043d\u044f",
+  unableToChangePassword: "\u041d\u0435 \u0432\u0434\u0430\u043b\u043e\u0441\u044f \u0437\u043c\u0456\u043d\u0438\u0442\u0438 \u043f\u0430\u0440\u043e\u043b\u044c",
+  unableToRequestEmailChange: "\u041d\u0435 \u0432\u0434\u0430\u043b\u043e\u0441\u044f \u0441\u0442\u0432\u043e\u0440\u0438\u0442\u0438 \u0437\u0430\u043f\u0438\u0442 \u043d\u0430 \u0437\u043c\u0456\u043d\u0443 email",
+  unableToUpdateProfile: "\u041d\u0435 \u0432\u0434\u0430\u043b\u043e\u0441\u044f \u043e\u043d\u043e\u0432\u0438\u0442\u0438 \u043f\u0440\u043e\u0444\u0456\u043b\u044c",
+  username: "\u041b\u043e\u0433\u0456\u043d",
 });
 
 function buildProjectPayload(form) {
@@ -1291,15 +1414,30 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [ownProfileForm, setOwnProfileForm] = useState({
+    username: "",
+    phone: "",
+  });
+  const [emailChangeForm, setEmailChangeForm] = useState({
+    newEmail: "",
+  });
+  const [ownPasswordForm, setOwnPasswordForm] = useState({
+    currentPassword: "",
+    newPassword: "",
+  });
   const [projects, setProjects] = useState([]);
   const [selectedProject, setSelectedProject] = useState(null);
   const [bomItems, setBomItems] = useState([]);
   const [cuttingItems, setCuttingItems] = useState([]);
+  const [cuttingAssembly, setCuttingAssembly] = useState({});
   const [cuttingSummary, setCuttingSummary] = useState(null);
   const [cuttingExportFormats, setCuttingExportFormats] = useState([]);
   const [cuttingJsonExport, setCuttingJsonExport] = useState(null);
   const [selectedPartDetail, setSelectedPartDetail] = useState(null);
   const [selectedCuttingPartCode, setSelectedCuttingPartCode] = useState(null);
+  const [hoveredCuttingPartCode, setHoveredCuttingPartCode] = useState(null);
+  const [collapsedCuttingGroups, setCollapsedCuttingGroups] = useState({});
+  const [cuttingSearch, setCuttingSearch] = useState("");
   const [selectedEdgeSide, setSelectedEdgeSide] = useState(null);
   const [projectForm, setProjectForm] = useState(DEFAULT_PROJECT_FORM);
   const [projectFilters, setProjectFilters] = useState(DEFAULT_PROJECT_FILTERS);
@@ -1308,6 +1446,7 @@ export default function App() {
   );
   const [activeView, setActiveView] = useState("projects");
   const [activeProjectTab, setActiveProjectTab] = useState("general");
+  const [projectOverviewOpen, setProjectOverviewOpen] = useState(false);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
   const [status, setStatus] = useState("");
@@ -1316,6 +1455,103 @@ export default function App() {
   const t = TRANSLATIONS[language] || TRANSLATIONS.en;
   const canGoBack = offset > 0;
   const canGoForward = offset + PAGE_SIZE < total;
+  const effectiveSelectedPartCode =
+    selectedCuttingPartCode || selectedPartDetail?.part?.export_code || "";
+  const hasProfileChanges =
+    (ownProfileForm.username || "") !== (user?.username || "") ||
+    (ownProfileForm.phone || "") !== (user?.phone || "");
+  const filteredCuttingItems = useMemo(() => {
+    const normalizedQuery = cuttingSearch.trim().toLowerCase();
+
+    if (!normalizedQuery) {
+      return cuttingItems;
+    }
+
+    return cuttingItems.filter((item) =>
+      String(item.part_name || "").toLowerCase().includes(normalizedQuery),
+    );
+  }, [cuttingItems, cuttingSearch]);
+  const expandedCuttingItems = useMemo(
+    () =>
+      filteredCuttingItems.flatMap((item) => {
+        const quantity = Math.max(Number(item.quantity) || 1, 1);
+
+        return Array.from({ length: quantity }, (_, index) => ({
+          ...item,
+          row_key: `${item.export_code}-${index + 1}`,
+          row_title:
+            quantity > 1
+              ? `${item.part_name} #${index + 1}`
+              : item.part_name,
+        }));
+      }),
+    [filteredCuttingItems],
+  );
+  const groupedCuttingItems = useMemo(() => {
+    const groups = new Map();
+
+    expandedCuttingItems.forEach((item) => {
+      const materialName = item.material || t.notSet;
+
+      if (!groups.has(materialName)) {
+        groups.set(materialName, []);
+      }
+
+      groups.get(materialName).push(item);
+    });
+
+    return Array.from(groups.entries());
+  }, [expandedCuttingItems, t]);
+  const selectedCuttingItem = useMemo(
+    () =>
+      effectiveSelectedPartCode
+        ? cuttingItems.find((item) => item.export_code === effectiveSelectedPartCode) || null
+        : null,
+    [cuttingItems, effectiveSelectedPartCode],
+  );
+
+  useEffect(() => {
+    setProjectOverviewOpen(false);
+  }, [selectedProject?.id]);
+  useEffect(() => {
+    setCollapsedCuttingGroups({});
+  }, [selectedProject?.id]);
+  useEffect(() => {
+    setCuttingSearch("");
+  }, [selectedProject?.id]);
+  useEffect(() => {
+    if (!effectiveSelectedPartCode || activeProjectTab !== "production") {
+      return;
+    }
+
+    const row = document.querySelector(
+      `[data-export-code="${effectiveSelectedPartCode}"]`,
+    );
+
+    if (row && typeof row.scrollIntoView === "function") {
+      row.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }, [activeProjectTab, effectiveSelectedPartCode]);
+
+  function toggleCuttingGroup(materialName) {
+    setCollapsedCuttingGroups((current) => ({
+      ...current,
+      [materialName]: !current[materialName],
+    }));
+  }
+
+  function collapseAllCuttingGroups() {
+    setCollapsedCuttingGroups(
+      groupedCuttingItems.reduce((accumulator, [materialName]) => {
+        accumulator[materialName] = true;
+        return accumulator;
+      }, {}),
+    );
+  }
+
+  function expandAllCuttingGroups() {
+    setCollapsedCuttingGroups({});
+  }
 
   const pageLabel = useMemo(() => {
     if (total === 0) {
@@ -1341,6 +1577,10 @@ export default function App() {
     }
 
     setUser(result.user);
+    setOwnProfileForm({
+      username: result.user?.username || "",
+      phone: result.user?.phone || "",
+    });
   }
 
   async function loadSpecificationCatalog() {
@@ -1414,6 +1654,7 @@ export default function App() {
     setSelectedProject(result.project);
     setBomItems(bomResult.success ? bomResult.items : []);
     setCuttingItems(cuttingResult.success ? cuttingResult.items : []);
+    setCuttingAssembly(cuttingResult.success ? cuttingResult.assembly || {} : {});
     setCuttingSummary(cuttingResult.success ? cuttingResult.summary : null);
     setSelectedPartDetail(null);
     setSelectedEdgeSide(null);
@@ -1461,10 +1702,22 @@ export default function App() {
     localStorage.removeItem(TOKEN_STORAGE_KEY);
     setToken("");
     setUser(null);
+    setOwnProfileForm({
+      username: "",
+      phone: "",
+    });
+    setEmailChangeForm({
+      newEmail: "",
+    });
+    setOwnPasswordForm({
+      currentPassword: "",
+      newPassword: "",
+    });
     setProjects([]);
     setSelectedProject(null);
     setBomItems([]);
     setCuttingItems([]);
+    setCuttingAssembly({});
     setCuttingSummary(null);
     setCuttingExportFormats([]);
     setCuttingJsonExport(null);
@@ -1473,6 +1726,71 @@ export default function App() {
     setSelectedEdgeSide(null);
     setActiveProjectTab("general");
     setStatus("");
+  }
+
+  async function handleOwnProfileSave(event) {
+    event.preventDefault();
+
+    setLoading(true);
+    const result = await updateMyProfile(token, {
+      username: ownProfileForm.username.trim(),
+      phone: ownProfileForm.phone.trim(),
+    });
+    setLoading(false);
+
+    if (!result.success) {
+      setStatus(result.error || t.unableToUpdateProfile);
+      return;
+    }
+
+    setUser(result.user);
+    setOwnProfileForm({
+      username: result.user?.username || "",
+      phone: result.user?.phone || "",
+    });
+    setStatus(t.profileUpdated);
+  }
+
+  async function handleOwnEmailChangeRequest(event) {
+    event.preventDefault();
+
+    setLoading(true);
+    const result = await createMyEmailChangeRequest(
+      token,
+      emailChangeForm.newEmail.trim(),
+    );
+    setLoading(false);
+
+    if (!result.success) {
+      setStatus(result.error || t.unableToRequestEmailChange);
+      return;
+    }
+
+    setEmailChangeForm({ newEmail: "" });
+    setStatus(t.emailChangeRequested);
+  }
+
+  async function handleOwnPasswordChange(event) {
+    event.preventDefault();
+
+    setLoading(true);
+    const result = await changeOwnPassword(
+      token,
+      ownPasswordForm.currentPassword,
+      ownPasswordForm.newPassword,
+    );
+    setLoading(false);
+
+    if (!result.success) {
+      setStatus(result.error || t.unableToChangePassword);
+      return;
+    }
+
+    setOwnPasswordForm({
+      currentPassword: "",
+      newPassword: "",
+    });
+    setStatus(t.passwordChanged);
   }
 
   async function handlePreviewCuttingPart(partCode) {
@@ -1522,6 +1840,7 @@ export default function App() {
 
   function handleClearCuttingPartSelection() {
     setSelectedCuttingPartCode(null);
+    setHoveredCuttingPartCode(null);
     setStatus("");
   }
 
@@ -1576,6 +1895,7 @@ export default function App() {
     setSelectedPartDetail(result);
     if (cuttingResult.success) {
       setCuttingItems(cuttingResult.items || []);
+      setCuttingAssembly(cuttingResult.assembly || {});
       setCuttingSummary(cuttingResult.summary || null);
     }
     if (jsonExportResult.success) {
@@ -1767,7 +2087,7 @@ export default function App() {
             <img
               alt={t.furniturePlatform}
               className="brand-logo"
-              src="/brand/mproject-logo-flat.svg"
+              src="/brand/mproject-logo-reference.jpg"
             />
             <div className="auth-heading">
               <p>{t.brandTagline}</p>
@@ -1813,7 +2133,7 @@ export default function App() {
     <main className="app-shell">
       <aside className="sidebar">
         <div className="brand-block brand-lockup">
-          <img alt="" className="brand-mark" src="/brand/mp-symbol-flat.svg" />
+          <img alt="" className="brand-mark" src="/brand/mp-symbol-reference.jpg" />
           <div className="brand-copy">
             <p className="eyebrow">{t.furniturePlatform}</p>
             <h1>{t.app}</h1>
@@ -1868,6 +2188,14 @@ export default function App() {
             <Eye size={18} />
             {t.view}
           </button>
+          <button
+            className={activeView === "settings" ? "active" : ""}
+            onClick={() => setActiveView("settings")}
+            type="button"
+          >
+            <Info size={18} />
+            {t.settings}
+          </button>
         </nav>
 
         <button className="ghost-button logout-button" onClick={handleLogout} type="button">
@@ -1877,16 +2205,36 @@ export default function App() {
       </aside>
 
       <section className="workspace">
-        <header className="toolbar">
-          <div>
+        <header className={`toolbar${activeView === "details" ? " project-toolbar" : ""}`}>
+          <div className="toolbar-heading">
             <h2>
               {activeView === "create"
                 ? t.createProject
                 : activeView === "details"
                   ? t.projectDetails
+                  : activeView === "settings"
+                    ? t.settings
                   : t.projects}
             </h2>
-            <p>{activeView === "projects" ? pageLabel : t.furniturePlatform}</p>
+            {activeView === "details" && selectedProject ? (
+              <div className="toolbar-project-meta">
+                <span>{selectedProject.project_name || t.newProject}</span>
+                <button
+                  aria-label={t.showProjectOverview}
+                  className="ghost-button compact-button detail-info-button"
+                  disabled={loading}
+                  onClick={() => setProjectOverviewOpen(true)}
+                  title={t.showProjectOverview}
+                  type="button"
+                >
+                  <Info size={16} />
+                </button>
+              </div>
+            ) : (
+              <p>
+                {activeView === "projects" ? pageLabel : t.furniturePlatform}
+              </p>
+            )}
           </div>
 
           <div className="toolbar-actions">
@@ -1922,6 +2270,63 @@ export default function App() {
                   <RefreshCw size={18} />
                 </button>
               </>
+            ) : activeView === "details" && selectedProject ? (
+              <div className="toolbar-project-controls">
+                <div className="detail-tabs toolbar-project-tabs" role="tablist">
+                  <button
+                    className={activeProjectTab === "general" ? "active" : ""}
+                    onClick={() => setActiveProjectTab("general")}
+                    type="button"
+                  >
+                    {t.general}
+                  </button>
+                  <button
+                    className={activeProjectTab === "materials" ? "active" : ""}
+                    onClick={() => setActiveProjectTab("materials")}
+                    type="button"
+                  >
+                    {t.materials}
+                  </button>
+                  <button
+                    className={activeProjectTab === "fittings" ? "active" : ""}
+                    onClick={() => setActiveProjectTab("fittings")}
+                    type="button"
+                  >
+                    {t.fittings}
+                  </button>
+                  <button
+                    className={activeProjectTab === "production" ? "active" : ""}
+                    onClick={() => setActiveProjectTab("production")}
+                    type="button"
+                  >
+                    {t.production}
+                  </button>
+                  {selectedPartDetail ? (
+                    <button
+                      className={activeProjectTab === "partDetail" ? "active" : ""}
+                      onClick={() => setActiveProjectTab("partDetail")}
+                      type="button"
+                    >
+                      {t.detailViewer}
+                    </button>
+                  ) : null}
+                  <button
+                    className={activeProjectTab === "validation" ? "active" : ""}
+                    onClick={() => setActiveProjectTab("validation")}
+                    type="button"
+                  >
+                    {t.validation}
+                  </button>
+                </div>
+                <button
+                  className="ghost-button"
+                  onClick={() => setActiveView("projects")}
+                  type="button"
+                >
+                  <ChevronLeft size={18} />
+                  {t.projects}
+                </button>
+              </div>
             ) : null}
           </div>
         </header>
@@ -2295,70 +2700,185 @@ export default function App() {
               </button>
             </form>
           </section>
+        ) : activeView === "settings" ? (
+          <section className="settings-panel full-panel">
+            <div className="settings-grid">
+              <article className="settings-card">
+                <div className="settings-card-header">
+                  <h3>{t.myData}</h3>
+                </div>
+                <form className="settings-password-form" onSubmit={handleOwnProfileSave}>
+                  <div className="settings-info-grid">
+                    <label>
+                      {t.email}
+                      <input disabled readOnly type="text" value={user.email} />
+                    </label>
+                    <label>
+                      {t.role}
+                      <input disabled readOnly type="text" value={user.role} />
+                    </label>
+                    <label>
+                      {t.username}
+                      <input
+                        onChange={(event) =>
+                          setOwnProfileForm({
+                            ...ownProfileForm,
+                            username: event.target.value,
+                          })
+                        }
+                        required
+                        type="text"
+                        value={ownProfileForm.username}
+                      />
+                    </label>
+                    <label>
+                      {t.phone}
+                      <input
+                        onChange={(event) =>
+                          setOwnProfileForm({
+                            ...ownProfileForm,
+                            phone: event.target.value,
+                          })
+                        }
+                        type="text"
+                        value={ownProfileForm.phone}
+                      />
+                    </label>
+                  </div>
+                  <div className="settings-actions">
+                    <button className="ghost-button" disabled={loading || !hasProfileChanges} type="submit">
+                      {t.saveProfile}
+                    </button>
+                  </div>
+                </form>
+                <form className="settings-password-form settings-subform" onSubmit={handleOwnEmailChangeRequest}>
+                  <label>
+                    {t.newEmail}
+                    <input
+                      autoComplete="email"
+                      onChange={(event) =>
+                        setEmailChangeForm({
+                          newEmail: event.target.value,
+                        })
+                      }
+                      placeholder={t.newEmail}
+                      required
+                      type="email"
+                      value={emailChangeForm.newEmail}
+                    />
+                  </label>
+                  <div className="settings-actions">
+                    <button className="ghost-button" disabled={loading || !emailChangeForm.newEmail.trim()} type="submit">
+                      {t.requestEmailChange}
+                    </button>
+                  </div>
+                </form>
+              </article>
+
+              <article className="settings-card">
+                <div className="settings-card-header">
+                  <h3>{t.password}</h3>
+                </div>
+                <form className="settings-password-form" onSubmit={handleOwnPasswordChange}>
+                  <label>
+                    {t.currentPassword}
+                    <input
+                      autoComplete="current-password"
+                      minLength={8}
+                      onChange={(event) =>
+                        setOwnPasswordForm({
+                          ...ownPasswordForm,
+                          currentPassword: event.target.value,
+                        })
+                      }
+                      placeholder={t.currentPassword}
+                      required
+                      type="password"
+                      value={ownPasswordForm.currentPassword}
+                    />
+                  </label>
+                  <label>
+                    {t.newPassword}
+                    <input
+                      autoComplete="new-password"
+                      minLength={8}
+                      onChange={(event) =>
+                        setOwnPasswordForm({
+                          ...ownPasswordForm,
+                          newPassword: event.target.value,
+                        })
+                      }
+                      placeholder={t.newPassword}
+                      required
+                      type="password"
+                      value={ownPasswordForm.newPassword}
+                    />
+                  </label>
+                  <div className="settings-actions">
+                    <button className="ghost-button" disabled={loading} type="submit">
+                      {t.changePassword}
+                    </button>
+                  </div>
+                </form>
+              </article>
+            </div>
+          </section>
         ) : (
           <section className="detail-panel">
             {selectedProject ? (
               <>
-                <header className="detail-header">
-                  <div>
-                    <p className="eyebrow">{t.projectDetails}</p>
-                    <h2>{selectedProject.id}</h2>
-                  </div>
-                  <button
-                    className="ghost-button"
-                    onClick={() => setActiveView("projects")}
-                    type="button"
+                {projectOverviewOpen ? (
+                  <div
+                    aria-modal="true"
+                    className="modal-backdrop"
+                    onClick={() => setProjectOverviewOpen(false)}
+                    role="dialog"
                   >
-                    {t.projects}
-                  </button>
-                </header>
-
-                <div className="detail-tabs" role="tablist">
-                  <button
-                    className={activeProjectTab === "general" ? "active" : ""}
-                    onClick={() => setActiveProjectTab("general")}
-                    type="button"
-                  >
-                    {t.general}
-                  </button>
-                  <button
-                    className={activeProjectTab === "materials" ? "active" : ""}
-                    onClick={() => setActiveProjectTab("materials")}
-                    type="button"
-                  >
-                    {t.materials}
-                  </button>
-                  <button
-                    className={activeProjectTab === "fittings" ? "active" : ""}
-                    onClick={() => setActiveProjectTab("fittings")}
-                    type="button"
-                  >
-                    {t.fittings}
-                  </button>
-                  <button
-                    className={activeProjectTab === "production" ? "active" : ""}
-                    onClick={() => setActiveProjectTab("production")}
-                    type="button"
-                  >
-                    {t.production}
-                  </button>
-                  {selectedPartDetail ? (
-                    <button
-                      className={activeProjectTab === "partDetail" ? "active" : ""}
-                      onClick={() => setActiveProjectTab("partDetail")}
-                      type="button"
+                    <section
+                      className="confirm-modal project-info-modal"
+                      onClick={(event) => event.stopPropagation()}
                     >
-                      {t.detailViewer}
-                    </button>
-                  ) : null}
-                  <button
-                    className={activeProjectTab === "validation" ? "active" : ""}
-                    onClick={() => setActiveProjectTab("validation")}
-                    type="button"
-                  >
-                    {t.validation}
-                  </button>
-                </div>
+                      <header className="confirm-header">
+                        <div>
+                          <strong>{t.projectDetails}</strong>
+                          <p>{selectedProject.project_name || t.newProject}</p>
+                        </div>
+                        <button
+                          aria-label={t.hideProjectOverview}
+                          className="ghost-button compact-button detail-info-button"
+                          onClick={() => setProjectOverviewOpen(false)}
+                          type="button"
+                        >
+                          <X size={16} />
+                        </button>
+                      </header>
+                      <div className="project-info-grid">
+                        <span>{t.projectName}</span>
+                        <strong>{selectedProject.project_name || t.notSet}</strong>
+                        <span>{t.projectType}</span>
+                        <strong>{formatCatalogLabel(selectedProject.project_type, t)}</strong>
+                        <span>{t.client}</span>
+                        <strong>{selectedProject.client_name || t.notSet}</strong>
+                        <span>{t.room}</span>
+                        <strong>{selectedProject.room_name || t.notSet}</strong>
+                        <span>{t.width} x {t.height} x {t.depth}</span>
+                        <strong>
+                          {selectedProject.width} x {selectedProject.height} x {selectedProject.depth}
+                        </strong>
+                        <span>{t.sections}</span>
+                        <strong>{selectedProject.sections}</strong>
+                        <span>{t.drawers}</span>
+                        <strong>{formatDrawers(selectedProject.drawers, t)}</strong>
+                        <span>{t.created}</span>
+                        <strong>{formatDateTime(selectedProject.created_at, t)}</strong>
+                        <span>{t.updated}</span>
+                        <strong>{formatDateTime(selectedProject.updated_at, t)}</strong>
+                        <span>{t.notes}</span>
+                        <strong>{selectedProject.notes || t.notSet}</strong>
+                      </div>
+                    </section>
+                  </div>
+                ) : null}
 
                 {activeProjectTab === "general" ? (
                   <div className="detail-grid">
@@ -2446,80 +2966,139 @@ export default function App() {
                         <p>{t.noBomItems}</p>
                       )}
                     </article>
-                    <article className="wide-production-section">
-                      <h3>{t.productionAssembly3d}</h3>
-                      {cuttingItems.length > 0 ? (
-                        <Suspense fallback={<div className="part-three-viewer part-three-viewer-loading">Loading 3D assembly...</div>}>
-                          <ProjectThreeViewer
-                            items={cuttingItems}
-                            onClearSelection={handleClearCuttingPartSelection}
-                            onOpenPart={handleSelectCuttingPart}
-                            onSelectPart={handlePreviewCuttingPart}
-                            selectedPartDetail={selectedPartDetail}
-                            selectedPartCode={selectedCuttingPartCode || selectedPartDetail?.part?.export_code}
+                    <section className="wide-production-section production-assembly-workspace">
+                      <article className="production-card production-card-sticky">
+                        <h3>{t.productionAssembly3d}</h3>
+                        {selectedCuttingItem ? (
+                          <div className="production-selected-part-summary">
+                            <strong>{selectedCuttingItem.part_name}</strong>
+                            <span>
+                              {selectedCuttingItem.width} x {selectedCuttingItem.height} x {selectedCuttingItem.thickness || 18}
+                            </span>
+                            <span>{selectedCuttingItem.material || t.notSet}</span>
+                          </div>
+                        ) : null}
+                        {cuttingItems.length > 0 ? (
+                          <ProductionViewerBoundary
+                            itemCount={cuttingItems.length}
+                            selectedPartCode={effectiveSelectedPartCode}
                             t={t}
+                          >
+                            <Suspense fallback={<div className="part-three-viewer part-three-viewer-loading">Loading 3D assembly...</div>}>
+                              <ProjectThreeViewer
+                                hoveredPartCode={hoveredCuttingPartCode}
+                                items={cuttingItems}
+                                onClearSelection={handleClearCuttingPartSelection}
+                                onHoverPartChange={setHoveredCuttingPartCode}
+                              onOpenPart={handleSelectCuttingPart}
+                              onSelectPart={handlePreviewCuttingPart}
+                              projectMeta={{
+                                cuttingAssembly: cuttingAssembly || {},
+                                assemblyLayout: selectedProject?.assembly_layout || {},
+                                drawers: selectedProject?.drawers || [],
+                                projectType: selectedProject?.project_type || "dresser",
+                                sections: selectedProject?.sections || 1,
+                              }}
+                                selectedPartDetail={selectedPartDetail}
+                                selectedPartCode={effectiveSelectedPartCode}
+                                t={t}
+                              />
+                            </Suspense>
+                          </ProductionViewerBoundary>
+                        ) : (
+                          <p>{t.noCuttingItems}</p>
+                        )}
+                      </article>
+                      <article className="production-card production-parts-list-card">
+                        <h3>{t.productionCutting}</h3>
+                        {cuttingSummary ? (
+                          <div className="summary-row">
+                            <span>{t.cuttingSummary}</span>
+                            <strong>
+                              {expandedCuttingItems.length} {language === "uk" ? "шт" : "pcs"} / {cuttingSummary.total_area_m2} {t.cuttingArea}
+                            </strong>
+                          </div>
+                        ) : null}
+                        <label className="production-parts-search">
+                          <span>{t.search}</span>
+                          <input
+                            onChange={(event) => setCuttingSearch(event.target.value)}
+                            placeholder={t.search}
+                            type="text"
+                            value={cuttingSearch}
                           />
-                        </Suspense>
-                      ) : (
-                        <p>{t.noCuttingItems}</p>
-                      )}
-                    </article>
-                    <article className="wide-production-section">
-                      <h3>{t.productionCutting}</h3>
-                      {cuttingSummary ? (
-                        <div className="summary-row">
-                          <span>{t.cuttingSummary}</span>
-                          <strong>
-                            {cuttingSummary.total_parts} {t.bomQuantity} / {cuttingSummary.total_area_m2} {t.cuttingArea} / {cuttingSummary.total_cut_length_m} {t.cuttingLength} / {cuttingSummary.total_edge_length_m} {t.cuttingEdge}
-                          </strong>
-                        </div>
-                      ) : null}
-                      {cuttingItems.length > 0 ? (
-                        <table className="cutting-table">
-                          <thead>
-                            <tr>
-                              <th>{t.cuttingExportCode}</th>
-                              <th>{t.bomPartName}</th>
-                              <th>{t.cuttingSize}</th>
-                              <th>{t.bomQuantity}</th>
-                              <th>{t.bomMaterial}</th>
-                              <th>{t.bomThickness}</th>
-                              <th>{t.bomEdgeBanding}</th>
-                              <th>{t.cuttingGrain}</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {cuttingItems.map((item) => (
-                              <tr
-                                className={
-                                selectedPartDetail?.part?.export_code === item.export_code
-                                  || selectedCuttingPartCode === item.export_code
-                                  ? "selected"
-                                  : ""
-                              }
-                              key={item.export_code}
-                              onClick={() => handlePreviewCuttingPart(item.export_code)}
-                            >
-                                <td>{item.export_code}</td>
-                                <td>{item.part_name}</td>
-                                <td>{item.width} x {item.height}</td>
-                                <td>{item.quantity}</td>
-                                <td>{item.material || t.notSet}</td>
-                                <td>{item.thickness || t.notSet}</td>
-                                <td>
-                                  {[item.edge_top, item.edge_bottom, item.edge_left, item.edge_right]
-                                    .filter(Boolean)
-                                    .join(", ") || t.notSet}
-                                </td>
-                                <td>{item.grain_direction || t.notSet}</td>
-                              </tr>
+                        </label>
+                        {groupedCuttingItems.length > 0 ? (
+                          <div className="production-parts-search-actions">
+                            <button onClick={collapseAllCuttingGroups} type="button">
+                              {language === "uk" ? "Згорнути все" : "Collapse all"}
+                            </button>
+                            <button onClick={expandAllCuttingGroups} type="button">
+                              {language === "uk" ? "Розгорнути все" : "Expand all"}
+                            </button>
+                          </div>
+                        ) : null}
+                        {cuttingItems.length > 0 ? (
+                          <div className="production-parts-groups">
+                            {groupedCuttingItems.map(([materialName, materialItems]) => (
+                              <section className="production-parts-group" key={materialName}>
+                                <button
+                                  className={`production-parts-group-head${collapsedCuttingGroups[materialName] ? " collapsed" : ""}`}
+                                  onClick={() => toggleCuttingGroup(materialName)}
+                                  type="button"
+                                >
+                                  <h5>{materialName}</h5>
+                                  <span className="production-parts-group-meta">
+                                    <span className="production-parts-group-count">{materialItems.length}</span>
+                                    <span className="production-parts-group-caret" aria-hidden="true">
+                                      {collapsedCuttingGroups[materialName] ? "+" : "-"}
+                                    </span>
+                                  </span>
+                                </button>
+                                {!collapsedCuttingGroups[materialName] ? (
+                                <table className="cutting-table production-parts-table">
+                                  <thead>
+                                    <tr>
+                                      <th className="production-parts-number-cell">№</th>
+                                      <th>{t.details}</th>
+                                      <th>{t.cuttingSize}</th>
+                                      <th>{t.bomThickness}</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {materialItems.map((item, index) => {
+                                      const isSelected =
+                                        selectedPartDetail?.part?.export_code === item.export_code ||
+                                        selectedCuttingPartCode === item.export_code;
+                                      const isHovered = hoveredCuttingPartCode === item.export_code;
+
+                                      return (
+                                        <tr
+                                          className={`${isSelected ? "selected" : ""}${isHovered ? " hovered" : ""}`}
+                                          data-export-code={item.export_code}
+                                          key={item.row_key}
+                                          onClick={() => handlePreviewCuttingPart(item.export_code)}
+                                          onMouseEnter={() => setHoveredCuttingPartCode(item.export_code)}
+                                          onMouseLeave={() => setHoveredCuttingPartCode(null)}
+                                        >
+                                          <td className="production-parts-number-cell">{index + 1}</td>
+                                          <td>{item.row_title}</td>
+                                          <td>{item.width} x {item.height}</td>
+                                          <td>{item.thickness || 18}</td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+                                ) : null}
+                              </section>
                             ))}
-                          </tbody>
-                        </table>
-                      ) : (
-                        <p>{t.noCuttingItems}</p>
-                      )}
-                    </article>
+                          </div>
+                        ) : (
+                          <p>{t.noCuttingItems}</p>
+                        )}
+                      </article>
+                    </section>
                     <article>
                       <h3>{t.productionDrilling}</h3>
                       <p>{t.productionPlaceholder}</p>
@@ -2562,7 +3141,7 @@ export default function App() {
 
                 {activeProjectTab === "partDetail" && selectedPartDetail ? (
                   <PartDetailWorkspace
-                    canEdit={user?.role !== "viewer"}
+                    canEdit={user?.role !== "guest"}
                     detail={selectedPartDetail}
                     edgeBandings={specificationCatalog.edge_bandings}
                     loading={loading}

@@ -93,6 +93,13 @@ async def create_operator_command(
 
     state: FSMContext
 ):
+    if not is_admin(
+        message.from_user.id
+    ):
+        await message.answer(
+            "❌ Доступ заборонений"
+        )
+        return
 
     await state.set_state(
         Form.create_operator_id

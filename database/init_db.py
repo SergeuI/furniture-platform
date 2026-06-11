@@ -1,3 +1,5 @@
+from sqlalchemy import text
+
 from database.base import Base
 
 from database.session import engine
@@ -11,6 +13,9 @@ from database.models.project_version import (
 from database.models.user import (
     UserModel
 )
+from database.models.user_change_request import (
+    UserChangeRequestModel
+)
 from database.models.audit_log import (
     AuditLogModel
 )
@@ -19,6 +24,18 @@ from database.models.catalog_item import (
 )
 from database.models.service_catalog_item import (
     ServiceCatalogItemModel
+)
+from database.models.material import (
+    MaterialModel
+)
+from database.models.material_price import (
+    MaterialPriceModel
+)
+from database.models.material_import_job import (
+    MaterialImportJobModel
+)
+from database.models.fitting import (
+    FittingModel
 )
 from database.models.user_service_catalog_price import (
     UserServiceCatalogPriceModel
@@ -209,6 +226,7 @@ def upgrade_sqlite_schema():
             "last_synced_at": "DATETIME",
             "price_sync_status": "VARCHAR",
             "price_source_label": "VARCHAR",
+            "owner_user_id": "VARCHAR",
         }
 
         for column_name, column_type in service_catalog_columns.items():
@@ -225,6 +243,11 @@ def upgrade_sqlite_schema():
             )
 
         user_columns = {
+            "username": "VARCHAR",
+            "phone": "VARCHAR",
+            "city": "VARCHAR",
+            "telegram_id": "VARCHAR",
+            "last_username_change_at": "DATETIME",
             "viyar_email": "VARCHAR",
             "viyar_password_secret": "VARCHAR",
             "viyar_cookie": "VARCHAR",
@@ -246,6 +269,66 @@ def upgrade_sqlite_schema():
 
                 column_type
             )
+
+        material_import_job_columns = {
+            "article": "VARCHAR",
+            "category": "VARCHAR",
+            "city": "VARCHAR",
+            "owner_user_id": "VARCHAR",
+            "status": "VARCHAR",
+            "attempt_count": "INTEGER",
+            "max_attempts": "INTEGER",
+            "next_retry_at": "DATETIME",
+            "last_error": "VARCHAR",
+            "last_strategy": "VARCHAR",
+            "last_source_url": "VARCHAR",
+            "preferred_url": "VARCHAR",
+            "debug_trace": "TEXT",
+            "created_at": "DATETIME",
+            "updated_at": "DATETIME",
+            "completed_at": "DATETIME",
+        }
+
+        for column_name, column_type in material_import_job_columns.items():
+
+            _add_column_if_missing(
+
+                connection,
+
+                "material_import_jobs",
+
+                column_name,
+
+                column_type
+            )
+
+        material_columns = {
+            "source_url": "VARCHAR",
+            "is_default": "BOOLEAN NOT NULL DEFAULT 0",
+        }
+
+        for column_name, column_type in material_columns.items():
+
+            _add_column_if_missing(
+
+                connection,
+
+                "materials",
+
+                column_name,
+
+                column_type
+            )
+
+        connection.execute(
+            text(
+                """
+                UPDATE materials
+                SET is_default = 1
+                WHERE article IN ('215557', '43102', '45791', '77792')
+                """
+            )
+        )
 
 
 def init_database():
