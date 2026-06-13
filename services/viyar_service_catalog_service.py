@@ -127,6 +127,36 @@ PRICE_WORKER_PATH = Path(__file__).with_name("viyar_price_worker.py")
 PRICE_WORKER_TIMEOUT_SECONDS = 120
 
 
+def _normalize_viyar_numeric_article(value: str | None) -> str | None:
+
+    normalized = _normalize_text(value).strip()
+
+    if not normalized:
+        return None
+
+    digits_only = re.sub(r"\D+", "", normalized)
+
+    if len(digits_only) < 4:
+        return None
+
+    return digits_only
+
+
+def _fallback_article_from_external_code(external_code: str | None) -> str | None:
+
+    normalized = _normalize_text(external_code).strip()
+
+    if not normalized:
+        return None
+
+    match = re.search(r"(\d{4,})$", normalized)
+
+    if not match:
+        return None
+
+    return match.group(1)
+
+
 FALLBACK_SERVICE_FOLDERS = [
     {
         "code": group["code"],
@@ -609,31 +639,13 @@ def _normalize_service_source_url(
 
 
 def _is_valid_article(value: str | None) -> bool:
-
-    normalized = _normalize_text(value).strip()
-
-    if not normalized:
-        return False
-
-    if normalized.lower() in ARTICLE_BANNED_VALUES:
-        return False
-
-    if len(normalized) < 3:
-        return False
-
-    has_letters = bool(re.search(r"[A-Za-z\u0410-\u042f\u0430-\u044f]", normalized))
-    has_digits = bool(re.search(r"\d", normalized))
-
-    if not has_letters:
-        return False
-
-    return has_digits or any(token in normalized for token in ("-", "_", "/"))
+    return _normalize_viyar_numeric_article(value) is not None
 
 
 def _extract_article_from_html(
     html: str,
     source_url: str,
-) -> str:
+) -> str | None:
 
     soup = BeautifulSoup(html, "html.parser")
 
@@ -653,8 +665,9 @@ def _extract_article_from_html(
         else:
             value = _normalize_text(candidate.get_text(" ", strip=True))
 
-        if _is_valid_article(value):
-            return value
+        normalized_value = _normalize_viyar_numeric_article(value)
+        if normalized_value:
+            return normalized_value
 
     text = soup.get_text(" ", strip=True)
 
@@ -662,16 +675,17 @@ def _extract_article_from_html(
         match = pattern.search(text)
         if match:
             article = _normalize_text(match.group(1))
-            if _is_valid_article(article):
-                return article
+            normalized_article = _normalize_viyar_numeric_article(article)
+            if normalized_article:
+                return normalized_article
 
-    return _fallback_article_from_url(source_url)
+    return None
 
 
 def _extract_article_from_text(
     text: str,
     source_url: str,
-) -> str:
+) -> str | None:
 
     normalized = _normalize_text(text)
 
@@ -680,10 +694,11 @@ def _extract_article_from_text(
             match = pattern.search(normalized)
             if match:
                 article = _normalize_text(match.group(1))
-                if _is_valid_article(article):
-                    return article
+                normalized_article = _normalize_viyar_numeric_article(article)
+                if normalized_article:
+                    return normalized_article
 
-    return _fallback_article_from_url(source_url)
+    return None
 
 
 def _fetch_rendered_price_pages(
@@ -847,32 +862,6 @@ def build_viyar_service_catalog_records(
                             "sort_order": page_index * 1000 + discovered_index,
                         }
                     )
-                continue
-
-            fallback_name = page["name"]
-            if len(folder.get("pages") or []) > 1:
-                fallback_name = page["name"]
-
-            records.append(
-                {
-                    "source": "viyar",
-                    "external_code": f"viyar-service-{page['code']}",
-                    "parent_external_code": folder_code,
-                    "name": fallback_name,
-                    "slug": page["slug"],
-                    "item_type": "service",
-                    "folder_path": folder_path,
-                    "description": page_description,
-                    "article": None,
-                    "unit": "service",
-                    "base_price": None,
-                    "currency": "UAH",
-                    "source_url": page["url"],
-                    "is_calculable": True,
-                    "sort_order": page_index,
-                    "is_active": True,
-                }
-            )
 
     return records
 
@@ -919,7 +908,9 @@ def fetch_viyar_service_price_updates(
             page_requires_auth = rendered_login_required
 
         article = (
-            _extract_article_from_html(html, source_url) if html else _fallback_article_from_url(source_url)
+            _extract_article_from_html(html, source_url)
+            if html
+            else _fallback_article_from_external_code(item.get("external_code"))
         )
 
         if rendered_text:
@@ -930,7 +921,11 @@ def fetch_viyar_service_price_updates(
         if not html or page_requires_auth:
             updates.append(
                 {
-                    "article": article or item.get("article") or _fallback_article_from_url(source_url),
+                    "article": (
+                        article
+                        or _normalize_viyar_numeric_article(item.get("article"))
+                        or _fallback_article_from_external_code(item.get("external_code"))
+                    ),
                     "external_code": item["external_code"],
                     "status": "auth_required" if page_requires_auth else "skipped",
                     "price_source_label": None,

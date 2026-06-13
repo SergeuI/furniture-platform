@@ -240,6 +240,132 @@ def _fetch_html(
         return response.read().decode("utf-8", errors="ignore")
 
 
+def _fetch_binary(
+    url: str,
+    city: str | None = None,
+    cookie_override: str | None = None,
+) -> tuple[bytes, str | None, str]:
+
+    request = Request(
+        url,
+        headers={
+            **_build_request_headers(
+                city=city,
+                cookie_override=cookie_override,
+            ),
+            "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        },
+    )
+
+    with urlopen(request, timeout=20) as response:
+        return (
+            response.read(),
+            response.headers.get("Content-Type"),
+            response.geturl(),
+        )
+
+
+def resolve_material_image_payload(
+    article: str,
+    stored_image: str | None = None,
+    source_url: str | None = None,
+    city: str | None = None,
+    cookie_override: str | None = None,
+) -> dict | None:
+
+    normalized_article = _normalize_article(article)
+    candidates: list[str] = []
+
+    for value in [
+        stored_image,
+        f"https://viyar.ua/upload/resize_cache/photos/512_512_1/ph{normalized_article}.jpg" if normalized_article else None,
+        f"https://www.viyar.ua/upload/resize_cache/photos/512_512_1/ph{normalized_article}.jpg" if normalized_article else None,
+        f"https://www.viyar.ua/store/Items/photos/ph{normalized_article}.jpg" if normalized_article else None,
+        f"https://viyar.ua/store/Items/photos/ph{normalized_article}.jpg" if normalized_article else None,
+    ]:
+        normalized_value = _normalize_asset_url(value)
+        if normalized_value and normalized_value not in candidates:
+            candidates.append(normalized_value)
+
+    if source_url:
+        try:
+            material = _extract_material_from_product_html(
+                _fetch_html(
+                    source_url,
+                    city=city,
+                    cookie_override=cookie_override,
+                ),
+                normalized_article or article,
+                source_url,
+            )
+            candidate = _normalize_asset_url(material.get("image") if material else None)
+            if candidate and candidate not in candidates:
+                candidates.insert(0, candidate)
+        except Exception:
+            pass
+
+    for candidate in candidates:
+        try:
+            image_bytes, content_type, resolved_url = _fetch_binary(
+                candidate,
+                city=city,
+                cookie_override=cookie_override,
+            )
+        except Exception:
+            continue
+
+        if not image_bytes:
+            continue
+
+        normalized_content_type = (content_type or "").split(";")[0].strip().lower()
+
+        if normalized_content_type and not normalized_content_type.startswith("image/"):
+            continue
+
+        return {
+            "bytes": image_bytes,
+            "content_type": normalized_content_type or "image/jpeg",
+            "resolved_url": resolved_url,
+        }
+
+    return None
+
+
+def prefetch_material_image_cache(
+    article: str,
+    stored_image: str | None = None,
+    source_url: str | None = None,
+    city: str | None = None,
+    cookie_override: str | None = None,
+) -> dict | None:
+
+    return resolve_material_image_payload(
+        article=article,
+        stored_image=stored_image,
+        source_url=source_url,
+        city=city,
+        cookie_override=cookie_override,
+    )
+
+
+def warm_material_image_cache_for_item(
+    material: dict,
+    city: str | None = None,
+    cookie_override: str | None = None,
+) -> dict | None:
+
+    if not material or material.get("image_cached_bytes"):
+        return None
+
+    return prefetch_material_image_cache(
+        article=material.get("article", ""),
+        stored_image=material.get("image"),
+        source_url=material.get("source_url"),
+        city=city,
+        cookie_override=cookie_override,
+    )
+
+
 def _resolve_product_url(
     article: str,
     city: str | None = None,
@@ -975,12 +1101,14 @@ def _fetch_viyar_material_by_article_subprocess(
     article: str,
     city: str | None = None,
     cookie_override: str | None = None,
+    preferred_url: str | None = None,
 ) -> tuple[dict, dict]:
 
     payload = {
         "article": article,
         "city": city,
         "cookie": cookie_override,
+        "preferred_url": preferred_url,
     }
 
     try:
@@ -1224,6 +1352,7 @@ async def fetch_viyar_material_by_article_live_traced(
                 normalized_article,
                 city=city,
                 cookie_override=cookie_override,
+                preferred_url=preferred_url,
             )
             for entry in debug_payload.get("trace") or []:
                 trace.append(entry)

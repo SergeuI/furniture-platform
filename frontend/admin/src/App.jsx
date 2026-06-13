@@ -6,6 +6,7 @@ import {
   FileSliders,
   FolderTree,
   History,
+  House,
   Info,
   LayoutGrid,
   MoreHorizontal,
@@ -18,22 +19,29 @@ import {
   Scissors,
   Search,
   Settings2,
+  Eye,
+  EyeOff,
   X,
   Trash2,
+  Users,
   Wrench,
 } from "lucide-react";
 import { Component, Suspense, lazy, useEffect, useMemo, useState } from "react";
 
 import {
   changeOwnPassword,
+  createFitting,
   createManualService,
   createMyEmailChangeRequest,
   createCatalogItem,
   createUser,
+  deleteFitting,
   deleteMaterial,
   deleteProject,
   generateProject,
+  getCatalogAutoRefreshStatus,
   getCurrentUser,
+  getFittingsCatalog,
   getMaterialImportJob,
   getMaterialsCatalog,
   getMyViyarAuthStatus,
@@ -76,7 +84,13 @@ const ProjectThreeViewer = lazy(() => import("./components/ProjectThreeViewer"))
 
 const TOKEN_STORAGE_KEY = "furniture_admin_token";
 const LANGUAGE_STORAGE_KEY = "furniture_admin_language";
+const ACTIVE_VIEW_STORAGE_KEY = "furniture_admin_active_view";
+const ACTIVE_PROJECT_ID_STORAGE_KEY = "furniture_admin_active_project_id";
+const ACTIVE_PROJECT_TAB_STORAGE_KEY = "furniture_admin_active_project_tab";
 const VIYAR_SERVICES_CACHE_PREFIX = "furniture_admin_viyar_services_cache";
+const API_BASE_URL = (
+  import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000"
+);
 const PAGE_SIZE = 20;
 const DEFAULT_PROJECT_NAME = "Новий проект";
 const DEFAULT_PROJECT_FORM = {
@@ -161,6 +175,88 @@ const DEFAULT_CITY_OPTIONS = [
   "khmelnytskyi",
   "rivne",
 ];
+
+const CATALOG_SERVICE_VIEWS = new Set([
+  "catalogHub",
+  "catalogViyar",
+  "catalogManual",
+  "catalogMaterials",
+  "catalogFittings",
+  "catalogFasteners",
+  "catalogValues",
+]);
+
+const DEFAULT_FITTING_FORM = {
+  article: "",
+  city: "",
+  code: "",
+  fitting_group: "fittings",
+  fitting_type: "drawer_slides",
+  image_url: "",
+  source_url: "",
+  is_active: true,
+  is_system: false,
+  name: "",
+  price: "",
+  sort_order: 0,
+  stock: "",
+};
+
+function detectFittingSourceSite(sourceUrl) {
+  if (!sourceUrl) {
+    return "manual";
+  }
+
+  const normalized = String(sourceUrl).trim().toLowerCase();
+
+  if (!normalized) {
+    return "manual";
+  }
+
+  if (normalized.includes("viyar")) {
+    return "viyar";
+  }
+
+  if (normalized.includes("kronas")) {
+    return "kronas";
+  }
+
+  if (normalized.includes("blum") || normalized.includes("mt")) {
+    return "blum";
+  }
+
+  return "manual";
+}
+
+function compressImageFileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onerror = () => reject(new Error("Unable to read image"));
+    reader.onload = () => {
+      const image = new Image();
+      image.onerror = () => reject(new Error("Unable to open image"));
+      image.onload = () => {
+        const maxSize = 900;
+        const scale = Math.min(maxSize / image.width, maxSize / image.height, 1);
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(image.width * scale));
+        canvas.height = Math.max(1, Math.round(image.height * scale));
+        const context = canvas.getContext("2d");
+
+        if (!context) {
+          reject(new Error("Canvas is not supported"));
+          return;
+        }
+
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", 0.82));
+      };
+      image.src = String(reader.result || "");
+    };
+    reader.readAsDataURL(file);
+  });
+}
 
 function buildViyarServicesCacheKey(userId) {
   return `${VIYAR_SERVICES_CACHE_PREFIX}:${userId}`;
@@ -331,10 +427,111 @@ function formatDateTimeValue(value) {
   return parsed.toLocaleString("uk-UA");
 }
 
+function isFastenerFitting(item) {
+  if (item?.fitting_group) {
+    return item.fitting_group === "fasteners";
+  }
+
+  const haystack = [
+    item?.name,
+    item?.article,
+    item?.code,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  return /(самор|стяж|конфирм|шуруп|гвинт|болт|гайк|дюб|метиз|screw|confirmat)/i.test(
+    haystack,
+  );
+}
+
+function normalizeCatalogView(view) {
+  return view === "catalogFasteners" ? "catalogFittings" : view;
+}
+
+const FITTING_CATEGORY_VISUALS = {
+  connectors_fasteners: {
+    accent: "#f59e0b",
+    icon: Blocks,
+    image: "/catalog/fittings/connectors-fasteners.png",
+  },
+  drawer_slides: {
+    accent: "#0f766e",
+    icon: ChevronRight,
+    image: "/catalog/fittings/drawer-slides.png",
+  },
+  handles_hooks: {
+    accent: "#2563eb",
+    icon: Wrench,
+    image: "/catalog/fittings/handles-hooks.png",
+  },
+  profiles_gola: {
+    accent: "#1f6b34",
+    icon: LayoutGrid,
+    image: "/catalog/fittings/profiles-gola.png",
+  },
+  plinth_vents: {
+    accent: "#2f8ecb",
+    icon: LayoutGrid,
+    image: "/catalog/fittings/plinth-vents.png",
+  },
+  legs_wheels: {
+    accent: "#8b5cf6",
+    icon: LayoutGrid,
+    image: "/catalog/fittings/legs-wheels.png",
+  },
+  locks_magnets: {
+    accent: "#f97316",
+    icon: Settings2,
+    image: "/catalog/fittings/locks-magnets.png",
+  },
+  wardrobe_systems: {
+    accent: "#14b8a6",
+    icon: LayoutGrid,
+    image: "/catalog/fittings/wardrobe-systems.png",
+  },
+  hinges: {
+    accent: "#ec4899",
+    icon: LayoutGrid,
+    image: "/catalog/fittings/hinges.png",
+  },
+  bathroom: {
+    accent: "#0ea5e9",
+    icon: House,
+    image: "/catalog/fittings/bathroom.png",
+  },
+  packaging: {
+    accent: "#f97316",
+    icon: Package,
+    image: "/catalog/fittings/packaging.png",
+  },
+  bed_components: {
+    accent: "#6366f1",
+    icon: LayoutGrid,
+    image: "/catalog/fittings/bed-components.png",
+  },
+  wardrobe_fillings: {
+    accent: "#10b981",
+    icon: LayoutGrid,
+    image: "/catalog/fittings/wardrobe-fillings.png",
+  },
+  other_fittings: { accent: "#64748b", icon: Package },
+  other_fasteners: { accent: "#92400e", icon: Blocks },
+};
+
 const CATALOG_TILE_VISUALS = {
   materials: {
     accent: "#2563eb",
     icon: LayoutGrid,
+  },
+  fittings: {
+    accent: "#0f766e",
+    icon: Wrench,
+  },
+  fasteners: {
+    accent: "#f59e0b",
+    icon: Blocks,
   },
   manual: {
     accent: "var(--brand-green)",
@@ -345,6 +542,25 @@ const CATALOG_TILE_VISUALS = {
     icon: FileSliders,
   },
   viyar: {
+    accent: "#1f6b34",
+    icon: FolderTree,
+  },
+};
+
+const HOME_QUICK_TILE_VISUALS = {
+  materials: {
+    accent: "#2563eb",
+    icon: LayoutGrid,
+  },
+  fittings: {
+    accent: "#0f766e",
+    icon: Wrench,
+  },
+  fasteners: {
+    accent: "#f59e0b",
+    icon: Blocks,
+  },
+  services: {
     accent: "#1f6b34",
     icon: FolderTree,
   },
@@ -381,6 +597,7 @@ function updateServiceTreeNode(nodes, itemId, updater) {
 function ServiceCatalogTreeNode({
   collapsedFolders,
   level = 0,
+  mutationLoading = false,
   node,
   loading = false,
   onSaveService,
@@ -438,7 +655,21 @@ function ServiceCatalogTreeNode({
                     </span>
                   ) : null}
                 </div>
-                {node.description ? <span>{node.description}</span> : null}
+                {node.description && isDescriptionOpen ? <span>{node.description}</span> : null}
+              </div>
+            </div>
+            <div className="service-tree-meta">
+              {node.description ? (
+                <button
+                  className="ghost-button compact-button service-tree-folder-action"
+                  onClick={() => setIsDescriptionOpen((current) => !current)}
+                  type="button"
+                >
+                  {isDescriptionOpen ? t.hideDescription : t.showDescription}
+                </button>
+              ) : null}
+              <div className="service-tree-folder-meta">
+                <span className="service-tree-badge subtle">{t.folder}</span>
               </div>
             </div>
           </>
@@ -459,7 +690,7 @@ function ServiceCatalogTreeNode({
             <label>
               <span>{t.serviceUnit}</span>
               <input
-                disabled={loading}
+                disabled={mutationLoading}
                 onChange={(event) =>
                   onServiceFieldChange(node.id, "unit", event.target.value)
                 }
@@ -470,7 +701,7 @@ function ServiceCatalogTreeNode({
             <label>
               <span>{t.basePrice}</span>
               <input
-                disabled={loading}
+                disabled={mutationLoading}
                 min="0"
                 onChange={(event) =>
                   onServiceFieldChange(node.id, "base_price", event.target.value)
@@ -491,7 +722,7 @@ function ServiceCatalogTreeNode({
             <label className="toggle-label">
               <input
                 checked={Boolean(node.is_calculable)}
-                disabled={loading}
+                disabled={mutationLoading}
                 onChange={(event) =>
                   onServiceFieldChange(node.id, "is_calculable", event.target.checked)
                 }
@@ -502,7 +733,7 @@ function ServiceCatalogTreeNode({
             <label className="toggle-label">
               <input
                 checked={Boolean(node.is_active)}
-                disabled={loading}
+                disabled={mutationLoading}
                 onChange={(event) =>
                   onServiceFieldChange(node.id, "is_active", event.target.checked)
                 }
@@ -512,7 +743,7 @@ function ServiceCatalogTreeNode({
             </label>
             <button
               className="ghost-button compact-button"
-              disabled={loading}
+              disabled={mutationLoading}
               onClick={() => onSaveService(node)}
               type="button"
             >
@@ -522,8 +753,11 @@ function ServiceCatalogTreeNode({
           </div>
         )}
       </div>
-      {!isFolder && node.description && isDescriptionOpen ? (
-        <div className="service-tree-description-panel" style={{ marginLeft: `${Math.max(0, (level - 1) * 18) + 32}px` }}>
+      {node.description && isDescriptionOpen ? (
+        <div
+          className={`service-tree-description-panel${isFolder ? " folder-description-panel" : ""}`}
+          style={{ marginLeft: `${Math.max(0, (level - 1) * 18) + (isFolder ? 18 : 32)}px` }}
+        >
           <strong>{t.showDescription}</strong>
           <p>{node.description}</p>
         </div>
@@ -536,6 +770,7 @@ function ServiceCatalogTreeNode({
               key={child.external_code}
               level={level + 1}
               loading={loading}
+              mutationLoading={mutationLoading}
               node={child}
               onSaveService={onSaveService}
               onServiceFieldChange={onServiceFieldChange}
@@ -643,6 +878,8 @@ const TRANSLATIONS = {
     machiningEditor: "Machining editor",
     machiningSaved: "Part machining updated",
     enabled: "Enabled",
+    disabled: "Disabled",
+    forCalculation: "For calculation",
     entity: "Entity",
     edge_banding: "Edge banding",
     facadeMaterial: "Facade material",
@@ -673,6 +910,8 @@ const TRANSLATIONS = {
     of: "of",
     onlyMine: "Only mine",
     password: "Password",
+    showPassword: "Show password",
+    hidePassword: "Hide password",
     passwordChanged: "Password changed",
     passwordMustBeLong: "Password must be at least 8 characters",
     passwordReset: "Password reset",
@@ -860,6 +1099,8 @@ const TRANSLATIONS = {
     of: "з",
     onlyMine: "Тільки мої",
     password: "Пароль",
+    showPassword: "Показати пароль",
+    hidePassword: "Сховати пароль",
     passwordChanged: "Пароль змінено",
     passwordMustBeLong: "Пароль має містити мінімум 8 символів",
     passwordReset: "Пароль скинуто",
@@ -1184,9 +1425,79 @@ Object.assign(TRANSLATIONS.uk, {
 });
 
 Object.assign(TRANSLATIONS.en, {
+  home: "Home",
+  homeDescription: "Quick overview of catalogs, prices, and system activity.",
+  homeHeroTitle: "Admin dashboard",
+  homeHeroDescription:
+    "Key catalogs, current city pricing, and automatic sync status in one place.",
+  homeOpenProjects: "Open projects",
+  homeOpenSettings: "Profile settings",
+  homeAutoRefreshTitle: "Auto refresh",
+  homeAutoRefreshDescription:
+    "Background refresh of Viyar services and parsed material prices.",
+  autoRefreshRunning: "Running",
+  autoRefreshStopped: "Stopped",
+  autoRefreshLastSuccess: "Last successful update",
+  autoRefreshLastCycle: "Last cycle",
+  autoRefreshQueuedMaterials: "Queued materials",
+  autoRefreshSyncedUsers: "Synced users",
+  autoRefreshCatalogSync: "Service catalog",
+  autoRefreshCatalogUpdated: "Updated in this cycle",
+  autoRefreshCatalogWaiting: "Waiting for next cycle",
+  autoRefreshLastError: "Last error",
+  homeCatalogMenuTitle: "Catalogs",
+  homeCatalogMenuDescription:
+    "Navigate to the main reference sections without going through the side menu.",
+  homeMetricsTitle: "Current workspace",
+  homeMetricsDescription:
+    "A compact snapshot of projects, users, and reference catalogs.",
+  projectsCount: "Projects",
+  usersCount: "Users",
+  fittingsCount: "Fittings",
+  fastenersCount: "Fasteners",
+  catalogFittings: "Fittings catalog",
+  catalogFittingsDescription:
+    "Main fitting assortment for calculations, filtered by city and article.",
+  catalogFasteners: "Fasteners",
+  catalogFastenersDescription:
+    "Technical fasteners such as confirmats, screws, connectors, and related items.",
+  fittingName: "Name",
+  fittingType: "Fitting type",
+  fittingGroup: "Catalog section",
+  fittingArticle: "Article",
+  fittingCode: "Code",
+  fittingSource: "Source",
+  fittingSourceUrl: "Source link",
+  fittingPrice: "Price",
+  fittingStock: "Availability",
+  fittingSystemToggle: "Default in system",
+  fittingAddSystem: "Add default fitting",
+  fittingAddCustom: "Add fitting for calculation",
+  fittingCreateSuccess: "Fitting added",
+  fittingDelete: "Delete fitting",
+  fittingDeleteConfirm: "Delete fitting",
+  fittingCustomScope: "My fitting",
+  fittingSystemScope: "System fitting",
+  fittingNamePrompt: "Enter fitting name",
+  fittingTypePrompt: "Select fitting type",
+  fittingArticlePrompt: "Enter fitting article",
+  fittingSourceUrlPrompt: "Paste source link for the fitting",
+  fittingImage: "Image",
+  fittingImageUpload: "Upload image",
+  fittingImageSelected: "Image selected",
+  fittingSystemHint: "Default fitting is saved for all users from the source link.",
+  fittingCustomHint: "Your fitting is saved for calculation with your own name, price, and optional image.",
+  fittingRowsView: "Rows",
+  fittingCardsView: "Cards",
+  fittingManualSource: "Manual",
+  fittingNoItems: "No fittings yet in this section.",
+  fittingsManageDescription:
+    "Group fittings by type, keep system defaults, and add personal calculation items.",
   viyarFallbackImportNotice:
     "Viyar returned only a simplified catalog. Existing full service list was kept unchanged.",
   catalogBrowseCategories: "Browse categories",
+  backToFittingCategories: "Back to categories",
+  fittingCategoriesCount: "categories",
   catalogHubDescription:
     "Quick access to service directories and reference catalogs in a visual category view.",
   catalogHubTitle: "Directories overview",
@@ -1217,10 +1528,82 @@ Object.assign(TRANSLATIONS.en, {
 });
 
 Object.assign(TRANSLATIONS.uk, {
+  home: "\u0413\u043e\u043b\u043e\u0432\u043d\u0430",
+  homeDescription:
+    "\u0428\u0432\u0438\u0434\u043a\u0438\u0439 \u043e\u0433\u043b\u044f\u0434 \u043a\u0430\u0442\u0430\u043b\u043e\u0433\u0456\u0432, \u0446\u0456\u043d \u0456 \u0441\u0442\u0430\u043d\u0443 \u0441\u0438\u0441\u0442\u0435\u043c\u0438.",
+  homeHeroTitle: "\u0413\u043e\u043b\u043e\u0432\u043d\u0430 \u043f\u0430\u043d\u0435\u043b\u044c",
+  homeHeroDescription:
+    "\u041e\u0441\u043d\u043e\u0432\u043d\u0456 \u043a\u0430\u0442\u0430\u043b\u043e\u0433\u0438, \u0446\u0456\u043d\u0438 \u0437\u0430 \u043c\u0456\u0441\u0442\u043e\u043c \u0456 \u0441\u0442\u0430\u0442\u0443\u0441 \u0430\u0432\u0442\u043e\u043e\u043d\u043e\u0432\u043b\u0435\u043d\u043d\u044f \u0432 \u043e\u0434\u043d\u043e\u043c\u0443 \u043c\u0456\u0441\u0446\u0456.",
+  homeOpenProjects: "\u0412\u0456\u0434\u043a\u0440\u0438\u0442\u0438 \u043f\u0440\u043e\u0454\u043a\u0442\u0438",
+  homeOpenSettings: "\u041d\u0430\u043b\u0430\u0448\u0442\u0443\u0432\u0430\u043d\u043d\u044f \u043f\u0440\u043e\u0444\u0456\u043b\u044e",
+  homeAutoRefreshTitle: "\u0410\u0432\u0442\u043e\u043e\u043d\u043e\u0432\u043b\u0435\u043d\u043d\u044f",
+  homeAutoRefreshDescription:
+    "\u0424\u043e\u043d\u043e\u0432\u0435 \u043e\u043d\u043e\u0432\u043b\u0435\u043d\u043d\u044f \u043f\u043e\u0441\u043b\u0443\u0433 Viyar \u0442\u0430 \u0446\u0456\u043d \u043d\u0430 \u0440\u043e\u0437\u043f\u0430\u0440\u0441\u0435\u043d\u0456 \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b\u0438.",
+  autoRefreshRunning: "\u041f\u0440\u0430\u0446\u044e\u0454",
+  autoRefreshStopped: "\u0417\u0443\u043f\u0438\u043d\u0435\u043d\u043e",
+  autoRefreshLastSuccess: "\u041e\u0441\u0442\u0430\u043d\u043d\u0454 \u0432\u0434\u0430\u043b\u0435 \u043e\u043d\u043e\u0432\u043b\u0435\u043d\u043d\u044f",
+  autoRefreshLastCycle: "\u041e\u0441\u0442\u0430\u043d\u043d\u0456\u0439 \u0446\u0438\u043a\u043b",
+  autoRefreshQueuedMaterials: "\u041c\u0430\u0442\u0435\u0440\u0456\u0430\u043b\u0456\u0432 \u0443 \u0447\u0435\u0440\u0437\u0456",
+  autoRefreshSyncedUsers: "\u041a\u043e\u0440\u0438\u0441\u0442\u0443\u0432\u0430\u0447\u0456\u0432 \u0441\u0438\u043d\u0445\u0440\u043e\u043d\u0456\u0437\u043e\u0432\u0430\u043d\u043e",
+  autoRefreshCatalogSync: "\u041a\u0430\u0442\u0430\u043b\u043e\u0433 \u043f\u043e\u0441\u043b\u0443\u0433",
+  autoRefreshCatalogUpdated: "\u041e\u043d\u043e\u0432\u043b\u0435\u043d\u043e \u0432 \u0446\u044c\u043e\u043c\u0443 \u0446\u0438\u043a\u043b\u0456",
+  autoRefreshCatalogWaiting: "\u041e\u0447\u0456\u043a\u0443\u0454 \u043d\u0430\u0441\u0442\u0443\u043f\u043d\u043e\u0433\u043e \u0446\u0438\u043a\u043b\u0443",
+  autoRefreshLastError: "\u041e\u0441\u0442\u0430\u043d\u043d\u044f \u043f\u043e\u043c\u0438\u043b\u043a\u0430",
+  homeCatalogMenuTitle: "\u041a\u0430\u0442\u0430\u043b\u043e\u0433\u0438",
+  homeCatalogMenuDescription:
+    "\u041f\u0435\u0440\u0435\u0445\u0456\u0434 \u0434\u043e \u0433\u043e\u043b\u043e\u0432\u043d\u0438\u0445 \u0434\u043e\u0432\u0456\u0434\u043d\u0438\u043a\u0456\u0432 \u0431\u0435\u0437 \u043f\u043e\u0448\u0443\u043a\u0443 \u0457\u0445 \u0432 \u0431\u043e\u043a\u043e\u0432\u043e\u043c\u0443 \u043c\u0435\u043d\u044e.",
+  homeMetricsTitle: "\u0421\u0442\u0430\u043d \u0440\u043e\u0431\u043e\u0447\u043e\u0457 \u0437\u043e\u043d\u0438",
+  homeMetricsDescription:
+    "\u041a\u043e\u043c\u043f\u0430\u043a\u0442\u043d\u0438\u0439 \u0437\u0440\u0456\u0437 \u043f\u043e \u043f\u0440\u043e\u0454\u043a\u0442\u0430\u0445, \u043a\u043e\u0440\u0438\u0441\u0442\u0443\u0432\u0430\u0447\u0430\u0445 \u0456 \u0434\u043e\u0432\u0456\u0434\u043d\u0438\u043a\u0430\u0445.",
+  projectsCount: "\u041f\u0440\u043e\u0454\u043a\u0442\u0438",
+  usersCount: "\u041a\u043e\u0440\u0438\u0441\u0442\u0443\u0432\u0430\u0447\u0456",
+  fittingsCount: "\u0424\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0430",
+  fastenersCount: "\u041c\u0435\u0442\u0438\u0437\u043d\u0430 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0430",
+  catalogFittings: "\u041a\u0430\u0442\u0430\u043b\u043e\u0433 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0438",
+  catalogFittingsDescription:
+    "\u041e\u0441\u043d\u043e\u0432\u043d\u0438\u0439 \u0430\u0441\u043e\u0440\u0442\u0438\u043c\u0435\u043d\u0442 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0438 \u0434\u043b\u044f \u043f\u0440\u043e\u0440\u0430\u0445\u0443\u043d\u043a\u0456\u0432 \u0437 \u0444\u0456\u043b\u044c\u0442\u0440\u0430\u043c\u0438 \u043f\u043e \u043c\u0456\u0441\u0442\u0443 \u0442\u0430 \u0430\u0440\u0442\u0438\u043a\u0443\u043b\u0443.",
+  catalogFasteners: "\u041c\u0435\u0442\u0438\u0437\u043d\u0430 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0430",
+  catalogFastenersDescription:
+    "\u0422\u0435\u0445\u043d\u0456\u0447\u043d\u0430 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0430: \u0441\u0442\u044f\u0436\u043a\u0438, \u0441\u0430\u043c\u043e\u0440\u0456\u0437\u0438, \u043a\u0440\u0456\u043f\u0438\u043b\u044c\u043d\u0456 \u0435\u043b\u0435\u043c\u0435\u043d\u0442\u0438 \u0442\u0430 \u0441\u0443\u043f\u0443\u0442\u043d\u0456 \u043f\u043e\u0437\u0438\u0446\u0456\u0457.",
+  fittingName: "\u041d\u0430\u0437\u0432\u0430",
+  fittingType: "\u0422\u0438\u043f \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0438",
+  fittingGroup: "\u0420\u043e\u0437\u0434\u0456\u043b \u043a\u0430\u0442\u0430\u043b\u043e\u0433\u0443",
+  fittingArticle: "\u0410\u0440\u0442\u0438\u043a\u0443\u043b",
+  fittingCode: "\u041a\u043e\u0434",
+  fittingSource: "\u0414\u0436\u0435\u0440\u0435\u043b\u043e",
+  fittingSourceUrl: "\u041f\u043e\u0441\u0438\u043b\u0430\u043d\u043d\u044f \u043d\u0430 \u0434\u0436\u0435\u0440\u0435\u043b\u043e",
+  fittingPrice: "\u0426\u0456\u043d\u0430",
+  fittingStock: "\u041d\u0430\u044f\u0432\u043d\u0456\u0441\u0442\u044c",
+  fittingSystemToggle: "\u0417\u0430\u043c\u043e\u0432\u0447\u0443\u0432\u0430\u043d\u043d\u044f \u0432 \u0441\u0438\u0441\u0442\u0435\u043c\u0456",
+  fittingAddSystem: "\u0414\u043e\u0434\u0430\u0442\u0438 \u0431\u0430\u0437\u043e\u0432\u0443 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0443",
+  fittingAddCustom: "\u0414\u043e\u0434\u0430\u0442\u0438 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0443 \u0434\u043b\u044f \u043f\u0440\u043e\u0440\u0430\u0445\u0443\u043d\u043a\u0443",
+  fittingCreateSuccess: "\u0424\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0443 \u0434\u043e\u0434\u0430\u043d\u043e",
+  fittingDelete: "\u0412\u0438\u0434\u0430\u043b\u0438\u0442\u0438 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0443",
+  fittingDeleteConfirm: "\u0412\u0438\u0434\u0430\u043b\u0438\u0442\u0438 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0443",
+  fittingCustomScope: "\u041c\u043e\u044f \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0430",
+  fittingSystemScope: "\u0421\u0438\u0441\u0442\u0435\u043c\u043d\u0430 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0430",
+  fittingNamePrompt: "\u0412\u043a\u0430\u0436\u0456\u0442\u044c \u043d\u0430\u0437\u0432\u0443 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0438",
+  fittingTypePrompt: "\u041e\u0431\u0435\u0440\u0456\u0442\u044c \u0442\u0438\u043f \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0438",
+  fittingArticlePrompt: "\u0412\u043a\u0430\u0436\u0456\u0442\u044c \u0430\u0440\u0442\u0438\u043a\u0443\u043b \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0438",
+  fittingSourceUrlPrompt: "\u0412\u0441\u0442\u0430\u0432\u0442\u0435 \u043f\u043e\u0441\u0438\u043b\u0430\u043d\u043d\u044f \u043d\u0430 \u0434\u0436\u0435\u0440\u0435\u043b\u043e \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0438",
+  fittingImage: "\u041a\u0430\u0440\u0442\u0438\u043d\u043a\u0430",
+  fittingImageUpload: "\u0417\u0430\u0432\u0430\u043d\u0442\u0430\u0436\u0438\u0442\u0438 \u043a\u0430\u0440\u0442\u0438\u043d\u043a\u0443",
+  fittingImageSelected: "\u041a\u0430\u0440\u0442\u0438\u043d\u043a\u0443 \u0432\u0438\u0431\u0440\u0430\u043d\u043e",
+  fittingSystemHint: "\u0421\u0438\u0441\u0442\u0435\u043c\u043d\u0430 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0430 \u0437\u0431\u0435\u0440\u0456\u0433\u0430\u0454\u0442\u044c\u0441\u044f \u0434\u043b\u044f \u0432\u0441\u0456\u0445 \u043a\u043e\u0440\u0438\u0441\u0442\u0443\u0432\u0430\u0447\u0456\u0432 \u0437 \u0434\u0436\u0435\u0440\u0435\u043b\u0430.",
+  fittingCustomHint: "\u0412\u0430\u0448\u0430 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0430 \u0437\u0431\u0435\u0440\u0456\u0433\u0430\u0454\u0442\u044c\u0441\u044f \u0434\u043b\u044f \u043f\u0440\u043e\u0440\u0430\u0445\u0443\u043d\u043a\u0443 \u0437 \u0432\u043b\u0430\u0441\u043d\u043e\u044e \u043d\u0430\u0437\u0432\u043e\u044e, \u0446\u0456\u043d\u043e\u044e \u0442\u0430 \u043d\u0435\u043e\u0431\u043e\u0432'\u044f\u0437\u043a\u043e\u0432\u043e\u044e \u043a\u0430\u0440\u0442\u0438\u043d\u043a\u043e\u044e.",
+  fittingRowsView: "\u0421\u043f\u0438\u0441\u043e\u043a",
+  fittingCardsView: "\u041a\u0430\u0440\u0442\u043a\u0438",
+  fittingManualSource: "\u0412\u0440\u0443\u0447\u043d\u0443",
+  fittingNoItems: "\u0423 \u0446\u044c\u043e\u043c\u0443 \u0440\u043e\u0437\u0434\u0456\u043b\u0456 \u0449\u0435 \u043d\u0435\u043c\u0430\u0454 \u043f\u043e\u0437\u0438\u0446\u0456\u0439.",
+  fittingsManageDescription:
+    "\u0417\u0433\u0440\u0443\u043f\u0443\u0439\u0442\u0435 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0443 \u043f\u043e \u0442\u0438\u043f\u0430\u0445, \u0442\u0440\u0438\u043c\u0430\u0439\u0442\u0435 \u0441\u0438\u0441\u0442\u0435\u043c\u043d\u0456 \u043f\u043e\u0437\u0438\u0446\u0456\u0457 \u0456 \u0434\u043e\u0434\u0430\u0432\u0430\u0439\u0442\u0435 \u0432\u043b\u0430\u0441\u043d\u0456 \u043f\u043e\u0437\u0438\u0446\u0456\u0457 \u0434\u043b\u044f \u043f\u0440\u043e\u0440\u0430\u0445\u0443\u043d\u043a\u0443.",
   viyarFallbackImportNotice:
     "\u0412\u0456\u0434 Viyar \u043e\u0442\u0440\u0438\u043c\u0430\u043d\u043e \u043b\u0438\u0448\u0435 \u0441\u043f\u0440\u043e\u0449\u0435\u043d\u0438\u0439 \u043a\u0430\u0442\u0430\u043b\u043e\u0433. \u041f\u043e\u043f\u0435\u0440\u0435\u0434\u043d\u0456\u0439 \u043f\u043e\u0432\u043d\u0438\u0439 \u0441\u043f\u0438\u0441\u043e\u043a \u043f\u043e\u0441\u043b\u0443\u0433 \u0437\u0431\u0435\u0440\u0435\u0436\u0435\u043d\u043e.",
   catalogBrowseCategories:
     "\u041f\u0435\u0440\u0435\u0433\u043b\u044f\u043d\u0443\u0442\u0438 \u043a\u0430\u0442\u0435\u0433\u043e\u0440\u0456\u0457",
+  backToFittingCategories:
+    "\u041d\u0430\u0437\u0430\u0434 \u0434\u043e \u043a\u0430\u0442\u0435\u0433\u043e\u0440\u0456\u0439",
+  fittingCategoriesCount: "\u043a\u0430\u0442\u0435\u0433\u043e\u0440\u0456\u0439",
   catalogHubDescription:
     "\u0428\u0432\u0438\u0434\u043a\u0438\u0439 \u0434\u043e\u0441\u0442\u0443\u043f \u0434\u043e \u0434\u043e\u0432\u0456\u0434\u043d\u0438\u043a\u0456\u0432 \u043f\u043e\u0441\u043b\u0443\u0433 \u0442\u0430 \u0434\u043e\u0432\u0456\u0434\u043a\u043e\u0432\u0438\u0445 \u0437\u043d\u0430\u0447\u0435\u043d\u044c \u0443 \u0432\u0438\u0433\u043b\u044f\u0434\u0456 \u043a\u0430\u0442\u0435\u0433\u043e\u0440\u0456\u0439.",
   catalogHubTitle:
@@ -1271,6 +1654,7 @@ Object.assign(TRANSLATIONS.en, {
   materialImportRunning: "Material import is in progress.",
   materialImportRetry: "Material import is waiting for the next retry.",
   materialImportFailed: "Material import failed after several attempts.",
+  materialPriceFallback: "Latest available price",
   materialImportStatusTitle: "Material import status",
   materialImportArticle: "Article",
   materialImportState: "State",
@@ -1287,6 +1671,11 @@ Object.assign(TRANSLATIONS.en, {
   deleteMaterial: "Delete material",
   deleteMaterialConfirm: "Delete custom material",
   materialDeleted: "Material deleted",
+  refreshFromViyar: "Refresh from Viyar",
+  materialRefreshQueued: "Material refresh queued.",
+  materialRefreshStarted: "Refreshing material from Viyar.",
+  materialCacheReady: "Image cached",
+  materialCachePending: "Image warming",
   saveCity: "Save city",
   dsp: "DSP",
   mdf: "MDF",
@@ -1322,6 +1711,7 @@ Object.assign(TRANSLATIONS.uk, {
   materialImportRunning: "\u0406\u043c\u043f\u043e\u0440\u0442 \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b\u0443 \u0432\u0438\u043a\u043e\u043d\u0443\u0454\u0442\u044c\u0441\u044f.",
   materialImportRetry: "\u0406\u043c\u043f\u043e\u0440\u0442 \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b\u0443 \u0447\u0435\u043a\u0430\u0454 \u043d\u0430 \u043d\u0430\u0441\u0442\u0443\u043f\u043d\u0443 \u0441\u043f\u0440\u043e\u0431\u0443.",
   materialImportFailed: "\u0406\u043c\u043f\u043e\u0440\u0442 \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b\u0443 \u043d\u0435 \u0432\u0434\u0430\u0432\u0441\u044f \u043f\u0456\u0441\u043b\u044f \u043a\u0456\u043b\u044c\u043a\u043e\u0445 \u0441\u043f\u0440\u043e\u0431.",
+  materialPriceFallback: "\u041e\u0441\u0442\u0430\u043d\u043d\u044f \u0434\u043e\u0441\u0442\u0443\u043f\u043d\u0430 \u0446\u0456\u043d\u0430",
   materialImportStatusTitle: "\u0421\u0442\u0430\u0442\u0443\u0441 \u0456\u043c\u043f\u043e\u0440\u0442\u0443 \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b\u0443",
   materialImportArticle: "\u0410\u0440\u0442\u0438\u043a\u0443\u043b",
   materialImportState: "\u0421\u0442\u0430\u043d",
@@ -1338,6 +1728,11 @@ Object.assign(TRANSLATIONS.uk, {
   deleteMaterial: "\u0412\u0438\u0434\u0430\u043b\u0438\u0442\u0438 \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b",
   deleteMaterialConfirm: "\u0412\u0438\u0434\u0430\u043b\u0438\u0442\u0438 \u043a\u043e\u0440\u0438\u0441\u0442\u0443\u0432\u0430\u0446\u044c\u043a\u0438\u0439 \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b",
   materialDeleted: "\u041c\u0430\u0442\u0435\u0440\u0456\u0430\u043b \u0432\u0438\u0434\u0430\u043b\u0435\u043d\u043e",
+  refreshFromViyar: "\u041e\u043d\u043e\u0432\u0438\u0442\u0438 \u0437 Viyar",
+  materialRefreshQueued: "\u041e\u043d\u043e\u0432\u043b\u0435\u043d\u043d\u044f \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b\u0443 \u043f\u043e\u0441\u0442\u0430\u0432\u043b\u0435\u043d\u043e \u0432 \u0447\u0435\u0440\u0433\u0443.",
+  materialRefreshStarted: "\u041e\u043d\u043e\u0432\u043b\u044e\u0454\u043c\u043e \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b \u0437 Viyar.",
+  materialCacheReady: "\u041a\u0430\u0440\u0442\u0438\u043d\u043a\u0430 \u0432 \u043a\u0435\u0448\u0456",
+  materialCachePending: "\u041a\u0435\u0448 \u043f\u0440\u043e\u0433\u0440\u0456\u0432\u0430\u0454\u0442\u044c\u0441\u044f",
   saveCity: "\u0417\u0431\u0435\u0440\u0435\u0433\u0442\u0438 \u043c\u0456\u0441\u0442\u043e",
   dsp: "\u0414\u0421\u041f",
   mdf: "\u041c\u0414\u0424",
@@ -1349,6 +1744,16 @@ Object.assign(TRANSLATIONS.uk, {
   kharkiv: "\u0425\u0430\u0440\u043a\u0456\u0432",
   khmelnytskyi: "\u0425\u043c\u0435\u043b\u044c\u043d\u0438\u0446\u044c\u043a\u0438\u0439",
   rivne: "\u0420\u0456\u0432\u043d\u0435",
+});
+
+Object.assign(TRANSLATIONS.en, {
+  disabled: "Disabled",
+  forCalculation: "For calculation",
+});
+
+Object.assign(TRANSLATIONS.uk, {
+  disabled: "\u0412\u0438\u043c\u043a\u043d\u0435\u043d\u043e",
+  forCalculation: "\u0414\u043b\u044f \u043f\u0440\u043e\u0440\u0430\u0445\u0443\u043d\u043a\u0443",
 });
 
 function buildProjectPayload(form) {
@@ -1460,13 +1865,21 @@ function formatCatalogLabel(value, t) {
   return t[value] || value;
 }
 
-function buildMaterialImageCandidates(item) {
+function buildMaterialImageCandidates(item, token = "") {
   const candidates = [];
   const article = String(item?.article || "").trim();
   const baseImage = String(item?.image || "").trim();
+  const hasCachedImage = Boolean(item?.has_cached_image);
+  const tokenQuery = token ? `?access_token=${encodeURIComponent(token)}` : "";
 
   if (baseImage) {
     candidates.push(baseImage);
+  }
+
+  if (article && hasCachedImage) {
+    candidates.unshift(`${API_BASE_URL}/catalog/materials/${encodeURIComponent(article)}/image${tokenQuery}`);
+  } else if (article) {
+    candidates.push(`${API_BASE_URL}/catalog/materials/${encodeURIComponent(article)}/image${tokenQuery}`);
   }
 
   if (article) {
@@ -1479,8 +1892,8 @@ function buildMaterialImageCandidates(item) {
   return [...new Set(candidates.filter(Boolean))];
 }
 
-function handleMaterialImageError(event, item) {
-  const candidates = buildMaterialImageCandidates(item);
+function handleMaterialImageError(event, item, token = "") {
+  const candidates = buildMaterialImageCandidates(item, token);
   const currentIndex = Number(event.currentTarget.dataset.fallbackIndex || "0");
   const nextIndex = currentIndex + 1;
 
@@ -1499,6 +1912,26 @@ function handleMaterialImageError(event, item) {
 
 function canManageMaterialCatalog(user) {
   return user?.role === "admin" || user?.role === "pro";
+}
+
+function canManageSystemFittings(user) {
+  return user?.role === "admin";
+}
+
+function canManageOwnFittings(user) {
+  return user?.role === "admin" || user?.role === "pro";
+}
+
+function canDeleteFittingItem(user, item) {
+  if (!user || !item) {
+    return false;
+  }
+
+  if (user.role === "admin") {
+    return true;
+  }
+
+  return !item.is_system && item.owner_user_id === user.id;
 }
 
 function canEditProject(project, user) {
@@ -2393,6 +2826,7 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [ownProfileForm, setOwnProfileForm] = useState({
     username: "",
     phone: "",
@@ -2452,7 +2886,9 @@ export default function App() {
   const [activeMaterialImportJobId, setActiveMaterialImportJobId] = useState("");
   const [activeMaterialImportJob, setActiveMaterialImportJob] = useState(null);
   const [openMaterialMenuId, setOpenMaterialMenuId] = useState("");
+  const [openFittingMenuId, setOpenFittingMenuId] = useState("");
   const [viyarServiceSource, setViyarServiceSource] = useState("viyar");
+  const [viyarTreeLoading, setViyarTreeLoading] = useState(false);
   const [viyarPriceSyncSummary, setViyarPriceSyncSummary] = useState(null);
   const [viyarServiceSearch, setViyarServiceSearch] = useState("");
   const [collapsedViyarFolders, setCollapsedViyarFolders] = useState({});
@@ -2484,8 +2920,19 @@ export default function App() {
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
   const [confirmAction, setConfirmAction] = useState(null);
-  const [activeView, setActiveView] = useState("projects");
+  const [activeView, setActiveView] = useState(
+    () => normalizeCatalogView(localStorage.getItem(ACTIVE_VIEW_STORAGE_KEY) || "home"),
+  );
   const [isCatalogMenuOpen, setIsCatalogMenuOpen] = useState(false);
+  const [fittingItems, setFittingItems] = useState([]);
+  const [fittingCategories, setFittingCategories] = useState([]);
+  const [fittingSearch, setFittingSearch] = useState("");
+  const [selectedFittingCategory, setSelectedFittingCategory] = useState("");
+  const [fittingViewMode, setFittingViewMode] = useState("rows");
+  const [newFittingForm, setNewFittingForm] = useState(DEFAULT_FITTING_FORM);
+  const [autoRefreshStatus, setAutoRefreshStatus] = useState(null);
+  const storedProjectId = localStorage.getItem(ACTIVE_PROJECT_ID_STORAGE_KEY) || "";
+  const storedProjectTab = localStorage.getItem(ACTIVE_PROJECT_TAB_STORAGE_KEY) || "data";
 
   const t = TRANSLATIONS[language] || TRANSLATIONS.en;
   const viyarServicesCache = user?.id ? readViyarServicesCache(user.id) : null;
@@ -2868,7 +3315,12 @@ export default function App() {
   }
   const canCreateNewProject = canCreateProject(user);
   const canEditMaterialCatalog = canManageMaterialCatalog(user);
+  const canEditSystemFittings = canManageSystemFittings(user);
+  const canEditOwnFittings = canManageOwnFittings(user);
+  const isHomeView = activeView === "home";
   const isCatalogMaterialsView = activeView === "catalogMaterials";
+  const isCatalogFittingsView = activeView === "catalogFittings";
+  const isCatalogFastenersView = activeView === "catalogFasteners";
   const isCatalogValuesView = activeView === "catalogValues";
   const isCatalogViyarView = activeView === "catalogViyar";
   const isCatalogManualView = activeView === "catalogManual";
@@ -2876,15 +3328,99 @@ export default function App() {
   const isCatalogView =
     isCatalogHubView ||
     isCatalogMaterialsView ||
+    isCatalogFittingsView ||
+    isCatalogFastenersView ||
     isCatalogValuesView ||
     isCatalogViyarView ||
     isCatalogManualView;
+  const fastenerItems = useMemo(
+    () => fittingItems.filter((item) => isFastenerFitting(item)),
+    [fittingItems],
+  );
+  const visibleFittingCategories = useMemo(() => fittingCategories, [fittingCategories]);
+  const activeFittingCategory = useMemo(() => {
+    if (
+      selectedFittingCategory &&
+      visibleFittingCategories.some((item) => item.code === selectedFittingCategory)
+    ) {
+      return selectedFittingCategory;
+    }
+
+    return "";
+  }, [selectedFittingCategory, visibleFittingCategories]);
+  const currentFittingCategoryMeta = useMemo(
+    () =>
+      visibleFittingCategories.find((item) => item.code === activeFittingCategory) ||
+      null,
+    [activeFittingCategory, visibleFittingCategories],
+  );
+  const visibleFittingItems = useMemo(
+    () =>
+      activeFittingCategory
+        ? fittingItems.filter((item) => item.fitting_type === activeFittingCategory)
+        : [],
+    [activeFittingCategory, fittingItems],
+  );
+  const getFittingSourceMeta = (item) => {
+    const sourceSite = item?.source_site || detectFittingSourceSite(item?.source_url);
+
+    if (sourceSite === "viyar") {
+      return {
+        code: "viyar",
+        label: "Viyar",
+        shortLabel: "viyar",
+      };
+    }
+
+    if (sourceSite === "blum") {
+      return {
+        code: "blum",
+        label: "BLUM",
+        shortLabel: "blum",
+      };
+    }
+
+    if (sourceSite === "kronas") {
+      return {
+        code: "kronas",
+        label: "Kronas",
+        shortLabel: "kronas",
+      };
+    }
+
+    return {
+      code: "manual",
+      label: t.fittingManualSource,
+      shortLabel: t.fittingManualSource,
+    };
+  };
 
   useEffect(() => {
     if (isCatalogView) {
       setIsCatalogMenuOpen(true);
     }
   }, [isCatalogView]);
+
+  useEffect(() => {
+    setOpenFittingMenuId("");
+    const defaultCategory =
+      visibleFittingCategories.find((item) => item.code === selectedFittingCategory) ||
+      visibleFittingCategories[0] ||
+      null;
+    setNewFittingForm((current) => ({
+      ...current,
+      city: materialSelectedCity || user?.city || "",
+      fitting_group: defaultCategory?.group || current.fitting_group,
+      fitting_type: defaultCategory?.code || current.fitting_type,
+      is_system: canEditSystemFittings ? current.is_system : false,
+    }));
+  }, [
+    canEditSystemFittings,
+    materialSelectedCity,
+    selectedFittingCategory,
+    user?.city,
+    visibleFittingCategories,
+  ]);
 
   const pageLabel = useMemo(() => {
     if (total === 0) {
@@ -2917,6 +3453,10 @@ export default function App() {
   }, [auditOffset, auditTotal, t]);
 
   const activePageLabel = useMemo(() => {
+    if (isHomeView) {
+      return t.homeDescription;
+    }
+
     if (activeView === "projects") {
       return pageLabel;
     }
@@ -2941,6 +3481,14 @@ export default function App() {
       return `${materialItems.length} ${t.of} ${materialItems.length}`;
     }
 
+    if (isCatalogFittingsView) {
+      return `${fittingItems.length} ${t.of} ${fittingItems.length}`;
+    }
+
+    if (isCatalogFastenersView) {
+      return `${fastenerItems.length} ${t.of} ${fastenerItems.length}`;
+    }
+
     if (isCatalogValuesView) {
       return `${catalogItems.length} ${t.of} ${catalogItems.length}`;
     }
@@ -2962,8 +3510,13 @@ export default function App() {
     activeView,
     auditPageLabel,
     catalogItems.length,
+    fastenerItems.length,
+    fittingItems.length,
+    isHomeView,
     isCatalogHubView,
     isCatalogMaterialsView,
+    isCatalogFittingsView,
+    isCatalogFastenersView,
     isCatalogManualView,
     isCatalogValuesView,
     isCatalogViyarView,
@@ -2988,10 +3541,11 @@ export default function App() {
       localStorage.removeItem(TOKEN_STORAGE_KEY);
       setToken("");
       setUser(null);
-      return;
+      return null;
     }
 
     setUser(result.user);
+    return result.user;
   }
 
   async function loadProjects(
@@ -3042,8 +3596,8 @@ export default function App() {
     });
   }
 
-  async function loadUsers(activeToken = token, nextOffset = usersOffset) {
-    if (!activeToken || user?.role !== "admin") {
+  async function loadUsers(activeToken = token, nextOffset = usersOffset, viewer = user) {
+    if (!activeToken || viewer?.role !== "admin") {
       return;
     }
 
@@ -3061,8 +3615,8 @@ export default function App() {
     setUsersOffset(result.offset);
   }
 
-  async function loadUserChangeRequests(activeToken = token) {
-    if (!activeToken || user?.role !== "admin") {
+  async function loadUserChangeRequests(activeToken = token, viewer = user) {
+    if (!activeToken || viewer?.role !== "admin") {
       return;
     }
 
@@ -3091,8 +3645,8 @@ export default function App() {
     setSelectedUserDetails(result.details);
   }
 
-  async function loadAuditLogs(activeToken = token, nextOffset = auditOffset) {
-    if (!activeToken || user?.role !== "admin") {
+  async function loadAuditLogs(activeToken = token, nextOffset = auditOffset, viewer = user) {
+    if (!activeToken || viewer?.role !== "admin") {
       return;
     }
 
@@ -3110,8 +3664,8 @@ export default function App() {
     setAuditOffset(result.offset);
   }
 
-  async function loadCatalogItems(activeToken = token) {
-    if (!activeToken || user?.role !== "admin") {
+  async function loadCatalogItems(activeToken = token, viewer = user) {
+    if (!activeToken || viewer?.role !== "admin") {
       return;
     }
 
@@ -3127,16 +3681,22 @@ export default function App() {
     setCatalogItems(result.items);
   }
 
-  async function loadViyarServices(activeToken = token) {
-    if (!activeToken || user?.role !== "admin") {
+  async function loadViyarServices(activeToken = token, viewer = user) {
+    if (!activeToken || viewer?.role !== "admin") {
       return;
     }
 
-    hydrateViyarServicesFromCache();
+    const hasCachedTree = hydrateViyarServicesFromCache();
 
-    setLoading(true);
+    setViyarTreeLoading(true);
+    if (!hasCachedTree) {
+      setLoading(true);
+    }
     const result = await getViyarServicesTree(activeToken);
-    setLoading(false);
+    setViyarTreeLoading(false);
+    if (!hasCachedTree) {
+      setLoading(false);
+    }
 
     if (!result.success) {
       if (hydrateViyarServicesFromCache({ withStatus: true })) {
@@ -3177,6 +3737,10 @@ export default function App() {
     setLoading(false);
 
     if (!result.success) {
+      const timeoutError = String(result.error || "").includes("Request timed out after");
+      if (timeoutError && materialItems.length) {
+        return;
+      }
       setStatus(result.error || t.unableToLoadCatalog);
       return;
     }
@@ -3185,6 +3749,44 @@ export default function App() {
     setMaterialCategories(result.categories || []);
     setMaterialCityOptions(result.city_options?.length ? result.city_options : DEFAULT_CITY_OPTIONS);
     setMaterialSelectedCity(result.selected_city || "");
+    setStatus((current) =>
+      String(current || "").includes("Request timed out after") ? "" : current,
+    );
+  }
+
+  async function loadFittingsCatalog(
+    activeToken = token,
+    options = {},
+  ) {
+    if (!activeToken) {
+      return;
+    }
+
+    setLoading(true);
+    const result = await getFittingsCatalog(activeToken, {
+      city:
+        options.city ??
+        materialSelectedCity ??
+        ownProfileForm.city ??
+        user?.city ??
+        "",
+      search: options.search ?? fittingSearch,
+    });
+    setLoading(false);
+
+    if (!result.success) {
+      setStatus(result.error || t.unableToLoadCatalog);
+      return;
+    }
+
+    setFittingItems(result.items || []);
+    setFittingCategories(result.categories || []);
+    if (result.city_options?.length) {
+      setMaterialCityOptions(result.city_options);
+    }
+    if (result.selected_city) {
+      setMaterialSelectedCity(result.selected_city);
+    }
   }
 
   async function handleMaterialCitySave(event) {
@@ -3225,7 +3827,7 @@ export default function App() {
     });
   }
 
-  async function loadManualServices(activeToken = token) {
+  async function loadManualServices(activeToken = token, viewer = user) {
     if (!activeToken) {
       return;
     }
@@ -3264,18 +3866,48 @@ export default function App() {
     }));
   }
 
-  async function loadCatalogView(activeToken = token) {
-    await loadCatalogItems(activeToken);
+  async function loadCatalogView(activeToken = token, viewer = user) {
+    await loadCatalogItems(activeToken, viewer);
     await loadMaterialsCatalog(activeToken, { category: "dsp", search: "" });
-    await loadViyarServices(activeToken);
-    await loadManualServices(activeToken);
+    await loadViyarServices(activeToken, viewer);
+    await loadManualServices(activeToken, viewer);
+  }
+
+  async function loadAutoRefreshStatus(activeToken = token) {
+    if (!activeToken) {
+      return;
+    }
+
+    const result = await getCatalogAutoRefreshStatus(activeToken);
+
+    if (!result.success) {
+      return;
+    }
+
+    setAutoRefreshStatus(result.status || null);
+  }
+
+  async function loadHomeView(activeToken = token, viewer = user) {
+    await loadProjects(activeToken, 0);
+    await loadMaterialsCatalog(activeToken, { category: "dsp", search: "" });
+    await loadFittingsCatalog(activeToken, {
+      city: materialSelectedCity ?? ownProfileForm.city ?? viewer?.city ?? "",
+      search: "",
+    });
+    await loadAutoRefreshStatus(activeToken);
+
+    if (viewer?.role === "admin") {
+      await loadUsers(activeToken, 0, viewer);
+      await loadViyarServices(activeToken, viewer);
+    }
   }
 
   async function loadSettingsView(activeToken = token) {
     await loadOwnViyarAuth(activeToken);
   }
 
-  async function loadProject(projectId) {
+  async function loadProject(projectId, options = {}) {
+    const requestedTab = options.projectTab || "data";
     const projectResult = await getProject(token, projectId);
 
     if (!projectResult.success) {
@@ -3293,9 +3925,18 @@ export default function App() {
     setSelectedEdgeSide(null);
     setHistoryLoaded(false);
     setProductionLoaded(false);
-    setActiveProjectTab("data");
+    setActiveProjectTab(requestedTab === "partDetail" ? "production" : requestedTab);
     setStatus("");
     setActiveView("projectDetails");
+
+    if (requestedTab === "history") {
+      await loadProjectHistory(projectId);
+      return;
+    }
+
+    if (requestedTab === "production" || requestedTab === "partDetail") {
+      await loadProjectProduction(projectId);
+    }
   }
 
   async function loadProjectHistory(projectId = selectedProjectId) {
@@ -3375,12 +4016,13 @@ export default function App() {
     setToken(result.access_token);
     setUser(result.user);
     setStatus("");
-    await loadSpecificationCatalog();
-    await loadProjects(result.access_token, 0);
   }
 
   function handleLogout() {
     localStorage.removeItem(TOKEN_STORAGE_KEY);
+    localStorage.removeItem(ACTIVE_VIEW_STORAGE_KEY);
+    localStorage.removeItem(ACTIVE_PROJECT_ID_STORAGE_KEY);
+    localStorage.removeItem(ACTIVE_PROJECT_TAB_STORAGE_KEY);
     setToken("");
     setUser(null);
     setProjects([]);
@@ -3627,11 +4269,20 @@ export default function App() {
     setStatus(t.machiningSaved);
   }
 
-  async function switchView(view) {
-    const nextView = view === "catalog" ? "catalogViyar" : view;
+  async function switchView(view, viewer = user) {
+    const nextView = normalizeCatalogView(view === "catalog" ? "catalogViyar" : view);
 
     setActiveView(nextView);
     setStatus("");
+
+    if (nextView === "catalogFittings") {
+      setSelectedFittingCategory("");
+    }
+
+    if (nextView === "home") {
+      await loadHomeView(token, viewer);
+      return;
+    }
 
     if (nextView === "projects") {
       await loadProjects(token, offset);
@@ -3643,18 +4294,18 @@ export default function App() {
     }
 
     if (nextView === "users") {
-      await loadUsers(token, usersOffset);
-      await loadUserChangeRequests(token);
+      await loadUsers(token, usersOffset, viewer);
+      await loadUserChangeRequests(token, viewer);
       return;
     }
 
     if (nextView === "catalogValues") {
-      await loadCatalogItems(token);
+      await loadCatalogItems(token, viewer);
       return;
     }
 
     if (nextView === "catalogHub") {
-      await loadCatalogView(token);
+      await loadCatalogView(token, viewer);
       return;
     }
 
@@ -3663,13 +4314,18 @@ export default function App() {
       return;
     }
 
+    if (nextView === "catalogFittings") {
+      await loadFittingsCatalog(token);
+      return;
+    }
+
     if (nextView === "catalogViyar") {
-      await loadViyarServices(token);
+      await loadViyarServices(token, viewer);
       return;
     }
 
     if (nextView === "catalogManual") {
-      await loadManualServices(token);
+      await loadManualServices(token, viewer);
       return;
     }
 
@@ -3679,7 +4335,7 @@ export default function App() {
     }
 
     if (nextView === "audit") {
-      await loadAuditLogs(token, auditOffset);
+      await loadAuditLogs(token, auditOffset, viewer);
     }
   }
 
@@ -4252,6 +4908,168 @@ export default function App() {
     closeConfirm();
   }
 
+  async function handleRefreshMaterial(item) {
+    if (!item?.article) {
+      return;
+    }
+
+    setOpenMaterialMenuId("");
+    setStatus(t.materialRefreshStarted);
+    setLoading(true);
+    const result = await importMaterialFromViyar(
+      token,
+      item.article,
+      item.category || materialCategoryFilter || "dsp",
+      item.source_url || "",
+      true,
+    );
+    setLoading(false);
+
+    if (!result.success) {
+      setStatus(result.error || t.unableToLoadCatalog);
+      return;
+    }
+
+    if (result.job?.id) {
+      setActiveMaterialImportJobId(result.job.id);
+      setActiveMaterialImportJob(result.job);
+      setStatus(t.materialRefreshQueued);
+      return;
+    }
+
+    if (result.item) {
+      setStatus(t.materialImportSuccess);
+      await loadMaterialsCatalog(token);
+    }
+  }
+
+  function openDeleteFittingConfirm(item) {
+    if (!canDeleteFittingItem(user, item)) {
+      return;
+    }
+
+    setOpenFittingMenuId("");
+    setConfirmAction({
+      type: "deleteFitting",
+      title: t.fittingDelete,
+      message: `${t.fittingDeleteConfirm}: ${item.name || item.article}?`,
+      confirmLabel: t.delete,
+      targetId: item.id,
+    });
+  }
+
+  async function handleDeleteFitting(itemId) {
+    if (!itemId) {
+      return;
+    }
+
+    setLoading(true);
+    const result = await deleteFitting(token, itemId);
+    setLoading(false);
+
+    if (!result.success) {
+      setStatus(result.error || t.deleteFailed);
+      return;
+    }
+
+    setFittingItems((current) => current.filter((item) => item.id !== itemId));
+    setStatus(t.fittingDelete);
+    closeConfirm();
+  }
+
+  async function handleFittingImageSelected(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file) {
+      return;
+    }
+
+    try {
+      const imageUrl = await compressImageFileToDataUrl(file);
+      setNewFittingForm((current) => ({
+        ...current,
+        image_url: imageUrl,
+      }));
+      setStatus(t.fittingImageSelected);
+    } catch (error) {
+      setStatus(error?.message || t.unableToLoadCatalog);
+    }
+  }
+
+  async function handleCreateFitting(event) {
+    event.preventDefault();
+
+    if (!token || !canEditOwnFittings) {
+      return;
+    }
+
+    const isSystemFitting = canEditSystemFittings ? Boolean(newFittingForm.is_system) : false;
+    const normalizedArticle = newFittingForm.article.trim();
+    const normalizedSourceUrl = newFittingForm.source_url.trim();
+    const normalizedName = newFittingForm.name.trim();
+
+    const payload = {
+      article: normalizedArticle || null,
+      city: (newFittingForm.city || materialSelectedCity || user?.city || "").trim() || null,
+      code: null,
+      fitting_group: newFittingForm.fitting_group,
+      fitting_type: newFittingForm.fitting_type,
+      image_url: isSystemFitting ? null : newFittingForm.image_url.trim() || null,
+      source_url: isSystemFitting ? normalizedSourceUrl || null : null,
+      is_active: Boolean(newFittingForm.is_active),
+      is_system: isSystemFitting,
+      name: isSystemFitting ? normalizedArticle : normalizedName,
+      price:
+        isSystemFitting || newFittingForm.price === "" || newFittingForm.price === null
+          ? null
+          : Number(String(newFittingForm.price).replace(",", ".")),
+      sort_order: Number(newFittingForm.sort_order || 0),
+      stock: null,
+    };
+
+    if (!payload.fitting_type) {
+      setStatus(t.fittingTypePrompt);
+      return;
+    }
+
+    if (!payload.article) {
+      setStatus(t.fittingArticlePrompt);
+      return;
+    }
+
+    if (isSystemFitting && !payload.source_url) {
+      setStatus(t.fittingSourceUrlPrompt);
+      return;
+    }
+
+    if (!isSystemFitting && !payload.name) {
+      setStatus(t.fittingNamePrompt);
+      return;
+    }
+
+    setLoading(true);
+    const result = await createFitting(token, payload);
+    setLoading(false);
+
+    if (!result.success) {
+      setStatus(result.error || t.unableToLoadCatalog);
+      return;
+    }
+
+    setStatus(t.fittingCreateSuccess);
+    setNewFittingForm((current) => ({
+      ...DEFAULT_FITTING_FORM,
+      city: current.city || materialSelectedCity || user?.city || "",
+      fitting_group: current.fitting_group,
+      fitting_type: current.fitting_type,
+      is_system: canEditSystemFittings ? current.is_system : false,
+    }));
+    await loadFittingsCatalog(token, {
+      city: materialSelectedCity || user?.city || "",
+    });
+  }
+
   async function handleApplyProjectFilters(event) {
     event.preventDefault();
 
@@ -4382,6 +5200,11 @@ export default function App() {
 
     if (confirmAction.type === "deleteMaterial") {
       await handleDeleteMaterial(confirmAction.targetId);
+      return;
+    }
+
+    if (confirmAction.type === "deleteFitting") {
+      await handleDeleteFitting(confirmAction.targetId);
     }
   }
 
@@ -4451,10 +5274,76 @@ export default function App() {
       return;
     }
 
-    loadUser(token);
-    loadSpecificationCatalog();
-    loadProjects(token, 0);
+    async function bootstrapAuthorizedApp() {
+      const loadedUser = await loadUser(token);
+
+      if (!loadedUser) {
+        return;
+      }
+
+      await loadSpecificationCatalog();
+
+      if (activeView === "projectDetails" && storedProjectId) {
+        await loadProject(storedProjectId, {
+          projectTab: storedProjectTab,
+        });
+        return;
+      }
+
+      if (activeView === "home") {
+        await loadHomeView(token, loadedUser);
+        return;
+      }
+
+      if (activeView === "settings") {
+        await loadSettingsView(token);
+        return;
+      }
+
+      if (activeView && activeView !== "projects") {
+        if (CATALOG_SERVICE_VIEWS.has(activeView) || activeView === "users" || activeView === "audit") {
+          return;
+        }
+
+        await switchView(activeView, loadedUser);
+        return;
+      }
+
+      await loadProjects(token, 0);
+    }
+
+    bootstrapAuthorizedApp();
   }, [token]);
+
+  useEffect(() => {
+    localStorage.setItem(ACTIVE_VIEW_STORAGE_KEY, activeView);
+  }, [activeView]);
+
+  useEffect(() => {
+    if (activeView === "projectDetails" && selectedProject?.id) {
+      localStorage.setItem(ACTIVE_PROJECT_ID_STORAGE_KEY, selectedProject.id);
+      localStorage.setItem(ACTIVE_PROJECT_TAB_STORAGE_KEY, activeProjectTab);
+      return;
+    }
+
+    localStorage.removeItem(ACTIVE_PROJECT_ID_STORAGE_KEY);
+    localStorage.removeItem(ACTIVE_PROJECT_TAB_STORAGE_KEY);
+  }, [activeProjectTab, activeView, selectedProject?.id]);
+
+  useEffect(() => {
+    if (!token || activeView !== "home") {
+      return;
+    }
+
+    loadAutoRefreshStatus(token);
+    const timerId = window.setInterval(() => {
+      loadAutoRefreshStatus(token);
+    }, 60000);
+
+    return () => {
+      window.clearInterval(timerId);
+    };
+  }, [activeView, token]);
 
   useEffect(() => {
     function handleUnauthorized() {
@@ -4500,6 +5389,14 @@ export default function App() {
 
     loadMaterialsCatalog(token);
   }, [token, user?.city, isCatalogMaterialsView, materialCategoryFilter, materialSearch]);
+
+  useEffect(() => {
+    if (!token || (!isCatalogFittingsView && !isCatalogFastenersView)) {
+      return;
+    }
+
+    loadFittingsCatalog(token);
+  }, [token, user?.city, isCatalogFittingsView, isCatalogFastenersView, fittingSearch]);
 
   useEffect(() => {
     if (!token || user?.role !== "admin" || !isCatalogViyarView) {
@@ -4554,14 +5451,25 @@ export default function App() {
 
           <label>
             {t.password}
-            <input
-              autoComplete="current-password"
-              minLength={8}
-              onChange={(event) => setPassword(event.target.value)}
-              required
-              type="password"
-              value={password}
-            />
+            <div className="password-field">
+              <input
+                autoComplete="current-password"
+                minLength={8}
+                onChange={(event) => setPassword(event.target.value)}
+                required
+                type={showLoginPassword ? "text" : "password"}
+                value={password}
+              />
+              <button
+                aria-label={showLoginPassword ? t.hidePassword : t.showPassword}
+                className="password-toggle-button"
+                onClick={() => setShowLoginPassword((current) => !current)}
+                title={showLoginPassword ? t.hidePassword : t.showPassword}
+                type="button"
+              >
+                {showLoginPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
           </label>
 
           {status ? <p className="status error">{status}</p> : null}
@@ -4579,11 +5487,17 @@ export default function App() {
     <main className="app-shell">
       <aside className="sidebar">
         <div className="brand-block sidebar-brand-block">
-          <img
-            alt={t.furniturePlatform}
-            className="sidebar-brand-logo"
-            src="/brand/mproject-logo-reference.jpg"
-          />
+          <button
+            className="sidebar-brand-link"
+            onClick={() => switchView("home")}
+            type="button"
+          >
+            <img
+              alt={t.furniturePlatform}
+              className="sidebar-brand-logo"
+              src="/brand/mproject-logo-reference.jpg"
+            />
+          </button>
           <div className="brand-copy">
             <p className="eyebrow">{t.brandTagline}</p>
             <div className="brand-copy-header">
@@ -4617,6 +5531,13 @@ export default function App() {
         </div>
 
         <nav className="nav-tabs" aria-label="Admin sections">
+          <button
+            className={isHomeView ? "active" : ""}
+            onClick={() => switchView("home")}
+            type="button"
+          >
+            {t.home}
+          </button>
           <button
             className={
               activeView === "projects" || activeView === "projectDetails"
@@ -4658,7 +5579,7 @@ export default function App() {
           <div className={`nav-group${isCatalogView ? " active" : ""}`}>
             <div className={`nav-group-header${isCatalogView ? " active" : ""}`}>
               <button
-                className={`nav-group-link${isCatalogHubView || isCatalogMaterialsView ? " active" : ""}`}
+                className={`nav-group-link${isCatalogHubView || isCatalogMaterialsView || isCatalogFittingsView || isCatalogFastenersView ? " active" : ""}`}
                 onClick={() => switchView(user.role === "admin" ? "catalogHub" : "catalogMaterials")}
                 type="button"
               >
@@ -4684,6 +5605,13 @@ export default function App() {
                   type="button"
                 >
                   {t.catalogMaterials}
+                </button>
+                <button
+                  className={isCatalogFittingsView ? "active" : ""}
+                  onClick={() => switchView("catalogFittings")}
+                  type="button"
+                >
+                  {t.catalogFittings}
                 </button>
                 {user.role === "admin" ? (
                   <>
@@ -4734,7 +5662,9 @@ export default function App() {
         >
           <div className="toolbar-heading">
             <h2>
-              {activeView === "projects"
+              {isHomeView
+                ? t.home
+                : activeView === "projects"
                 ? t.projects
                 : activeView === "createProject"
                   ? t.createProject
@@ -4746,6 +5676,10 @@ export default function App() {
                   ? t.catalog
                 : isCatalogMaterialsView
                   ? t.catalogMaterials
+                : isCatalogFittingsView
+                  ? t.catalogFittings
+                : isCatalogFastenersView
+                  ? t.catalogFasteners
                 : isCatalogValuesView
                   ? t.catalogValues
                 : isCatalogViyarView
@@ -4895,6 +5829,16 @@ export default function App() {
                   <RefreshCw size={18} />
                 </button>
               </>
+            ) : isHomeView ? (
+              <button
+                aria-label="Refresh dashboard"
+                className="icon-button"
+                disabled={loading}
+                onClick={() => loadHomeView(token)}
+                type="button"
+              >
+                <RefreshCw size={18} />
+              </button>
             ) : isCatalogView ? (
               <button
                 aria-label="Refresh catalog"
@@ -4908,6 +5852,16 @@ export default function App() {
 
                   if (isCatalogValuesView) {
                     loadCatalogItems(token);
+                    return;
+                  }
+
+                  if (isCatalogMaterialsView) {
+                    loadMaterialsCatalog(token);
+                    return;
+                  }
+
+                  if (isCatalogFittingsView || isCatalogFastenersView) {
+                    loadFittingsCatalog(token);
                     return;
                   }
 
@@ -4960,7 +5914,184 @@ export default function App() {
 
         {status ? <p className="status">{status}</p> : null}
 
-        {activeView === "projects" ? (
+        {isHomeView ? (
+          <section className="dashboard-layout">
+            <article className="dashboard-hero-card">
+              <div className="dashboard-hero-copy">
+                <span className="dashboard-eyebrow">{t.home}</span>
+                <h3>{t.homeHeroTitle}</h3>
+                <p>{t.homeHeroDescription}</p>
+                <div className="dashboard-hero-actions">
+                  <button
+                    className="primary-button"
+                    onClick={() => switchView("projects")}
+                    type="button"
+                  >
+                    <House size={18} />
+                    {t.homeOpenProjects}
+                  </button>
+                  <button
+                    className="ghost-button"
+                    onClick={() => switchView("settings")}
+                    type="button"
+                  >
+                    <Settings2 size={18} />
+                    {t.homeOpenSettings}
+                  </button>
+                </div>
+              </div>
+              <div className="dashboard-status-card">
+                <div className="dashboard-status-head">
+                  <div className="dashboard-status-title">
+                    <strong>{t.homeAutoRefreshTitle}</strong>
+                    <p>{t.homeAutoRefreshDescription}</p>
+                  </div>
+                  <span className={`dashboard-status-badge${autoRefreshStatus?.loop_running ? " live" : ""}`}>
+                    {autoRefreshStatus?.loop_running ? t.autoRefreshRunning : t.autoRefreshStopped}
+                  </span>
+                </div>
+                <div className="dashboard-status-grid">
+                  <div className="dashboard-status-item">
+                    <span>{t.autoRefreshLastSuccess}</span>
+                    <strong>{formatDateTimeValue(autoRefreshStatus?.last_success_at) || t.notSet}</strong>
+                  </div>
+                  <div className="dashboard-status-item">
+                    <span>{t.autoRefreshLastCycle}</span>
+                    <strong>{formatDateTimeValue(autoRefreshStatus?.last_cycle_finished_at) || t.notSet}</strong>
+                  </div>
+                  <div className="dashboard-status-item">
+                    <span>{t.autoRefreshQueuedMaterials}</span>
+                    <strong>{autoRefreshStatus?.material_jobs_queued ?? 0}</strong>
+                  </div>
+                  <div className="dashboard-status-item">
+                    <span>{t.autoRefreshSyncedUsers}</span>
+                    <strong>{autoRefreshStatus?.service_users_synced ?? 0}</strong>
+                  </div>
+                </div>
+                <div className="dashboard-status-meta">
+                  <span>
+                    {t.autoRefreshCatalogSync}:{" "}
+                    {autoRefreshStatus?.service_catalog_synced
+                      ? t.autoRefreshCatalogUpdated
+                      : t.autoRefreshCatalogWaiting}
+                  </span>
+                  {autoRefreshStatus?.last_error ? (
+                    <small>
+                      {t.autoRefreshLastError}: {autoRefreshStatus.last_error}
+                    </small>
+                  ) : null}
+                </div>
+              </div>
+            </article>
+
+            <article className="dashboard-panel">
+              <div className="dashboard-panel-head">
+                <div>
+                  <h3>{t.homeMetricsTitle}</h3>
+                  <p>{t.homeMetricsDescription}</p>
+                </div>
+              </div>
+              <div className="dashboard-stats-grid">
+                {[
+                  {
+                    key: "projects",
+                    label: t.projectsCount,
+                    value: total,
+                    icon: LayoutGrid,
+                  },
+                  {
+                    key: "users",
+                    label: t.usersCount,
+                    value: user.role === "admin" ? usersTotal : 1,
+                    icon: Users,
+                  },
+                  {
+                    key: "materials",
+                    label: t.materialsCount,
+                    value: materialItems.length,
+                    icon: Package,
+                  },
+                  {
+                    key: "fittings",
+                    label: t.fittingsCount,
+                    value: fittingItems.length,
+                    icon: Wrench,
+                  },
+                ].map((item) => {
+                  const Icon = item.icon;
+
+                  return (
+                    <div className="dashboard-stat-card" key={item.key}>
+                      <span className="dashboard-stat-icon">
+                        <Icon size={18} />
+                      </span>
+                      <strong>{item.value}</strong>
+                      <span>{item.label}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </article>
+
+            <article className="dashboard-panel">
+              <div className="dashboard-panel-head">
+                <div>
+                  <h3>{t.homeCatalogMenuTitle}</h3>
+                  <p>{t.homeCatalogMenuDescription}</p>
+                </div>
+              </div>
+              <div className="dashboard-tile-grid">
+                {[
+                  {
+                    key: "materials",
+                    label: t.catalogMaterials,
+                    description: t.catalogMaterialsDescription,
+                    count: materialItems.length,
+                    onClick: () => switchView("catalogMaterials"),
+                  },
+                  {
+                    key: "fittings",
+                    label: t.catalogFittings,
+                    description: t.catalogFittingsDescription,
+                    count: fittingItems.length,
+                    onClick: () => switchView("catalogFittings"),
+                  },
+                  {
+                    key: "services",
+                    label: t.catalog,
+                    description: t.catalogHubDescription,
+                    count: viyarServiceCounts.services,
+                    onClick: () => switchView(user.role === "admin" ? "catalogHub" : "catalogMaterials"),
+                  },
+                ].map((item) => {
+                  const visual = HOME_QUICK_TILE_VISUALS[item.key];
+                  const Icon = visual.icon;
+
+                  return (
+                    <button
+                      className="dashboard-tile-card"
+                      key={item.key}
+                      onClick={item.onClick}
+                      type="button"
+                    >
+                      <span
+                        className="dashboard-tile-art"
+                        style={{ "--catalog-accent": visual.accent }}
+                      >
+                        <Icon size={30} />
+                      </span>
+                      <div className="dashboard-tile-copy">
+                        <strong>{item.label}</strong>
+                        <span>{item.description}</span>
+                      </div>
+                      <span className="service-tree-badge subtle">{item.count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </article>
+          </section>
+        ) : activeView === "projects" ? (
           <section className="table-panel full-panel">
             <form
               className="project-filter-form"
@@ -6725,10 +7856,10 @@ export default function App() {
                 <div className="material-card-grid">
                   {materialItems.map((item) => (
                     <article className="material-card" key={item.id}>
-                      {canEditMaterialCatalog && !item.is_default ? (
+                      {canEditMaterialCatalog ? (
                         <div className="material-card-menu">
                           <button
-                            aria-label={t.deleteMaterial}
+                            aria-label={t.refreshFromViyar}
                             className="icon-button material-card-menu-trigger"
                             onClick={() =>
                               setOpenMaterialMenuId((current) =>
@@ -6742,6 +7873,15 @@ export default function App() {
                           {openMaterialMenuId === item.id ? (
                             <div className="material-card-menu-dropdown">
                               <button
+                                className="material-card-menu-action"
+                                onClick={() => handleRefreshMaterial(item)}
+                                type="button"
+                              >
+                                <RefreshCw size={14} />
+                                {t.refreshFromViyar}
+                              </button>
+                              {!item.is_default ? (
+                              <button
                                 className="material-card-menu-action danger"
                                 onClick={() => openDeleteMaterialConfirm(item)}
                                 type="button"
@@ -6749,6 +7889,7 @@ export default function App() {
                                 <Trash2 size={14} />
                                 {t.deleteMaterial}
                               </button>
+                              ) : null}
                             </div>
                           ) : null}
                         </div>
@@ -6759,8 +7900,8 @@ export default function App() {
                             <img
                               alt={item.name || item.article}
                               data-fallback-index="0"
-                              onError={(event) => handleMaterialImageError(event, item)}
-                              src={buildMaterialImageCandidates(item)[0]}
+                              onError={(event) => handleMaterialImageError(event, item, token)}
+                              src={buildMaterialImageCandidates(item, token)[0]}
                             />
                             <div className="material-card-placeholder" hidden>
                               {formatCatalogLabel(item.category, t)}
@@ -6779,12 +7920,23 @@ export default function App() {
                         </div>
                         <strong>{item.name || item.article}</strong>
                         <div className="material-card-price">
-                          <span>{t.materialPriceForCity}</span>
+                          <span>
+                            {item.current_price_exact === false && item.current_price_city
+                              ? `${t.materialPriceFallback} (${formatCatalogLabel(item.current_price_city, t)})`
+                              : t.materialPriceForCity}
+                          </span>
                           <b>
                             {item.current_price !== null && item.current_price !== undefined
                               ? `${item.current_price} UAH`
                               : t.notSet}
                           </b>
+                        </div>
+                        <div className="material-card-meta">
+                          <span
+                            className={`service-tree-badge material-cache-badge ${item.has_cached_image ? "success" : "pending"}`}
+                          >
+                            {item.has_cached_image ? t.materialCacheReady : t.materialCachePending}
+                          </span>
                         </div>
                       </div>
                     </article>
@@ -6795,6 +7947,445 @@ export default function App() {
                   <span>{t.catalogMaterialsDescription}</span>
                 </div>
               )}
+            </article>
+          </section>
+        ) : isCatalogFittingsView || isCatalogFastenersView ? (
+          <section className="table-panel full-panel">
+            <article className="catalog-card service-catalog-card service-catalog-card-full">
+              <div className="catalog-page-header">
+                <div className="service-catalog-title">
+                  <h3>{t.catalogFittings}</h3>
+                  <p>
+                    {t.fittingsManageDescription}
+                  </p>
+                </div>
+                <div className="service-catalog-header-actions">
+                  <span className="service-tree-badge subtle">
+                    {t.currentCity}: {formatCatalogLabel(materialSelectedCity || user?.city, t)}
+                  </span>
+                  <span className="service-tree-badge subtle">
+                    {activeFittingCategory ? visibleFittingItems.length : visibleFittingCategories.length}{" "}
+                    {activeFittingCategory ? t.fittingsCount : t.fittingCategoriesCount}
+                  </span>
+                </div>
+              </div>
+
+              <div className="materials-toolbar fittings-toolbar">
+                <label className="service-catalog-search">
+                  <Search size={16} />
+                  <input
+                    onChange={(event) => setFittingSearch(event.target.value)}
+                    placeholder={t.viyarSearch}
+                    type="search"
+                    value={fittingSearch}
+                  />
+                </label>
+                <label>
+                  <span>{t.city}</span>
+                  <select
+                    onChange={(event) => {
+                      const nextCity = event.target.value;
+                      setMaterialSelectedCity(nextCity);
+                      loadFittingsCatalog(token, { city: nextCity });
+                    }}
+                    value={materialSelectedCity || user?.city || ""}
+                  >
+                    <option value="">{t.notSet}</option>
+                    {materialCityOptions.map((cityOption) => (
+                      <option key={cityOption} value={cityOption}>
+                        {formatCatalogLabel(cityOption, t)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  className="ghost-button"
+                  disabled={loading}
+                  onClick={() => loadFittingsCatalog(token)}
+                  type="button"
+                >
+                  <RefreshCw size={16} />
+                  {t.refresh}
+                </button>
+              </div>
+
+              {!activeFittingCategory ? (
+                <div className="fitting-category-grid">
+                  {visibleFittingCategories.map((category) => {
+                    const visual = FITTING_CATEGORY_VISUALS[category.code] || {
+                      accent: "#64748b",
+                      icon: Package,
+                    };
+                    const Icon = visual.icon;
+                    const hasPreviewImage = Boolean(visual.image);
+
+                    return (
+                      <button
+                        className="catalog-choice-card fitting-category-card"
+                        key={category.code}
+                        onClick={() => {
+                          setSelectedFittingCategory(category.code);
+                          setFittingViewMode("rows");
+                          setNewFittingForm((current) => ({
+                            ...current,
+                            fitting_group: category.group,
+                            fitting_type: category.code,
+                          }));
+                        }}
+                        type="button"
+                      >
+                        {hasPreviewImage ? (
+                          <span
+                            className="catalog-choice-media"
+                            style={{ "--catalog-accent": visual.accent }}
+                          >
+                            <img
+                              alt={category.name}
+                              loading="lazy"
+                              src={visual.image}
+                            />
+                          </span>
+                        ) : (
+                          <span
+                            className="catalog-choice-art"
+                            style={{ "--catalog-accent": visual.accent }}
+                          >
+                            <Icon size={30} />
+                          </span>
+                        )}
+                        <div className="fitting-category-content">
+                          <div className="catalog-choice-copy">
+                            <strong>{category.name}</strong>
+                            <span>{category.description}</span>
+                          </div>
+                          <div className="catalog-choice-meta">
+                            <span className="service-tree-badge subtle">{category.item_count}</span>
+                            <span>{category.group_name}</span>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="fitting-category-detail-head">
+                  <button
+                    className="ghost-button"
+                    onClick={() => {
+                      setSelectedFittingCategory("");
+                      setFittingViewMode("rows");
+                    }}
+                    type="button"
+                  >
+                    <ChevronLeft size={16} />
+                    {t.backToFittingCategories}
+                  </button>
+                  <div className="service-catalog-title compact">
+                    <strong>{currentFittingCategoryMeta?.name || t.catalogFittings}</strong>
+                    <span>{currentFittingCategoryMeta?.description || ""}</span>
+                  </div>
+                  <div className="fittings-view-toggle" role="tablist" aria-label={t.catalogBrowseCategories}>
+                    <button
+                      className={`icon-button${fittingViewMode === "rows" ? " active" : ""}`}
+                      onClick={() => setFittingViewMode("rows")}
+                      title={t.fittingRowsView}
+                      type="button"
+                    >
+                      <Blocks size={16} />
+                    </button>
+                    <button
+                      className={`icon-button${fittingViewMode === "cards" ? " active" : ""}`}
+                      onClick={() => setFittingViewMode("cards")}
+                      title={t.fittingCardsView}
+                      type="button"
+                    >
+                      <LayoutGrid size={16} />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {activeFittingCategory && canEditOwnFittings ? (
+                <form className="fitting-create-form" onSubmit={handleCreateFitting}>
+                  <label>
+                    <span>{t.fittingType}</span>
+                    <select
+                      onChange={(event) =>
+                        setNewFittingForm((current) => {
+                          const category = visibleFittingCategories.find(
+                            (item) => item.code === event.target.value,
+                          );
+
+                          return {
+                            ...current,
+                            fitting_group: category?.group || current.fitting_group,
+                            fitting_type: event.target.value,
+                          };
+                        })
+                      }
+                      value={newFittingForm.fitting_type}
+                    >
+                      {(visibleFittingCategories.length ? visibleFittingCategories : fittingCategories).map((category) => (
+                        <option key={category.code} value={category.code}>
+                          {category.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    <span>{t.fittingArticle}</span>
+                    <input
+                      onChange={(event) =>
+                        setNewFittingForm((current) => ({ ...current, article: event.target.value }))
+                      }
+                      type="text"
+                      value={newFittingForm.article}
+                    />
+                  </label>
+                  <label>
+                    <span>{t.city}</span>
+                    <select
+                      onChange={(event) =>
+                        setNewFittingForm((current) => ({ ...current, city: event.target.value }))
+                      }
+                      value={newFittingForm.city}
+                    >
+                      <option value="">{t.notSet}</option>
+                      {materialCityOptions.map((cityOption) => (
+                        <option key={cityOption} value={cityOption}>
+                          {formatCatalogLabel(cityOption, t)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {canEditSystemFittings ? (
+                    <label className="toggle-label">
+                      <input
+                        checked={Boolean(newFittingForm.is_system)}
+                        onChange={(event) =>
+                          setNewFittingForm((current) => ({
+                            ...current,
+                            image_url: event.target.checked ? "" : current.image_url,
+                            is_system: event.target.checked,
+                            name: event.target.checked ? "" : current.name,
+                            price: event.target.checked ? "" : current.price,
+                            source_url: event.target.checked ? current.source_url : "",
+                          }))
+                        }
+                        type="checkbox"
+                      />
+                      {newFittingForm.is_system ? t.fittingSystemScope : t.fittingCustomScope}
+                    </label>
+                  ) : null}
+                  {newFittingForm.is_system ? (
+                    <>
+                      <label>
+                        <span>{t.fittingSourceUrl}</span>
+                        <input
+                          onChange={(event) =>
+                            setNewFittingForm((current) => ({ ...current, source_url: event.target.value }))
+                          }
+                          placeholder="https://..."
+                          type="url"
+                          value={newFittingForm.source_url}
+                        />
+                      </label>
+                      <div className="fitting-form-note">
+                        {t.fittingSystemHint}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <label>
+                        <span>{t.fittingName}</span>
+                        <input
+                          onChange={(event) =>
+                            setNewFittingForm((current) => ({ ...current, name: event.target.value }))
+                          }
+                          placeholder={t.fittingName}
+                          type="text"
+                          value={newFittingForm.name}
+                        />
+                      </label>
+                      <label>
+                        <span>{t.fittingPrice}</span>
+                        <input
+                          min="0"
+                          onChange={(event) =>
+                            setNewFittingForm((current) => ({ ...current, price: event.target.value }))
+                          }
+                          step="0.01"
+                          type="number"
+                          value={newFittingForm.price}
+                        />
+                      </label>
+                      <label>
+                        <span>{t.fittingImage}</span>
+                        <input
+                          accept="image/*"
+                          onChange={handleFittingImageSelected}
+                          type="file"
+                        />
+                      </label>
+                      <div className="fitting-form-note">
+                        {newFittingForm.image_url ? t.fittingImageSelected : t.fittingCustomHint}
+                      </div>
+                    </>
+                  )}
+                  <button className="primary-button" disabled={loading} type="submit">
+                    <Plus size={16} />
+                    {newFittingForm.is_system ? t.fittingAddSystem : t.fittingAddCustom}
+                  </button>
+                </form>
+              ) : null}
+
+              {activeFittingCategory ? (
+              <div className="fittings-table-shell">
+                {visibleFittingItems.length ? (
+                  fittingViewMode === "cards" ? (
+                    <div className="fittings-card-grid">
+                      {visibleFittingItems.map((item) => {
+                        const sourceMeta = getFittingSourceMeta(item);
+                        return (
+                          <article className="fitting-item-card" key={item.id}>
+                            <div className="fitting-item-card-head">
+                              <div className="fitting-item-card-preview">
+                                {item.image_url ? (
+                                  <img alt={item.name || item.article || t.catalogFittings} loading="lazy" src={item.image_url} />
+                                ) : (
+                                  <Package size={24} />
+                                )}
+                              </div>
+                              {canDeleteFittingItem(user, item) ? (
+                                <div className="material-card-menu fitting-row-menu">
+                                  <button
+                                    className="icon-button material-card-menu-trigger"
+                                    onClick={() =>
+                                      setOpenFittingMenuId((current) => (current === item.id ? "" : item.id))
+                                    }
+                                    type="button"
+                                  >
+                                    <MoreHorizontal size={16} />
+                                  </button>
+                                  {openFittingMenuId === item.id ? (
+                                    <div className="material-card-menu-dropdown">
+                                      <button
+                                        className="material-card-menu-action danger"
+                                        onClick={() => openDeleteFittingConfirm(item)}
+                                        type="button"
+                                      >
+                                        <Trash2 size={14} />
+                                        {t.fittingDelete}
+                                      </button>
+                                    </div>
+                                  ) : null}
+                                </div>
+                              ) : null}
+                            </div>
+                            <div className="fitting-item-card-copy">
+                              <strong>{item.name || item.code || item.article}</strong>
+                              <div className="fittings-table-badges">
+                                <span className={`service-tree-badge ${item.is_system ? "success" : "subtle"}`}>
+                                  {item.is_system ? t.fittingSystemScope : t.fittingCustomScope}
+                                </span>
+                                <span className={`fitting-source-logo ${sourceMeta.code}`}>{sourceMeta.label}</span>
+                              </div>
+                            </div>
+                            <div className="fitting-item-card-meta">
+                              <span>{t.fittingArticle}: {item.article || t.notSet}</span>
+                              <span>{t.fittingCode}: {item.code || t.notSet}</span>
+                              <span>{t.city}: {formatCatalogLabel(item.city, t)}</span>
+                              <span>{t.fittingPrice}: {item.price ?? t.notSet}</span>
+                              <span>{t.fittingStock}: {item.stock || t.notSet}</span>
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <>
+                      <div className="fittings-table-header">
+                        <span>{currentFittingCategoryMeta?.name || t.catalogFittings}</span>
+                        <span>{t.fittingArticle}</span>
+                        <span>{t.fittingCode}</span>
+                        <span>{t.city}</span>
+                        <span>{t.fittingPrice}</span>
+                        <span>{t.fittingStock}</span>
+                        <span>{t.fittingSource}</span>
+                      </div>
+
+                      <div className="fittings-table-list">
+                        {visibleFittingItems.map((item) => {
+                          const sourceMeta = getFittingSourceMeta(item);
+
+                          return (
+                            <article className="fittings-table-row" key={item.id}>
+                              <div className="fittings-table-name">
+                                <div className="fittings-table-name-main">
+                                  <div className="fittings-table-thumb">
+                                    {item.image_url ? (
+                                      <img alt={item.name || item.article || t.catalogFittings} loading="lazy" src={item.image_url} />
+                                    ) : (
+                                      <Package size={18} />
+                                    )}
+                                  </div>
+                                  <div className="fittings-table-name-copy">
+                                    <strong>{item.name || item.code || item.article}</strong>
+                                    <div className="fittings-table-badges">
+                                      <span className={`service-tree-badge ${item.is_system ? "success" : "subtle"}`}>
+                                        {item.is_system ? t.fittingSystemScope : t.fittingCustomScope}
+                                      </span>
+                                      {item.owner_user_id && !item.is_system ? (
+                                        <span className="service-tree-badge subtle">{t.forCalculation}</span>
+                                      ) : null}
+                                    </div>
+                                  </div>
+                                </div>
+                                {canDeleteFittingItem(user, item) ? (
+                                  <div className="material-card-menu fitting-row-menu">
+                                    <button
+                                      className="icon-button material-card-menu-trigger"
+                                      onClick={() =>
+                                        setOpenFittingMenuId((current) => (current === item.id ? "" : item.id))
+                                      }
+                                      type="button"
+                                    >
+                                      <MoreHorizontal size={16} />
+                                    </button>
+                                    {openFittingMenuId === item.id ? (
+                                      <div className="material-card-menu-dropdown">
+                                        <button
+                                          className="material-card-menu-action danger"
+                                          onClick={() => openDeleteFittingConfirm(item)}
+                                          type="button"
+                                        >
+                                          <Trash2 size={14} />
+                                          {t.fittingDelete}
+                                        </button>
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                ) : null}
+                              </div>
+                              <span>{item.article || t.notSet}</span>
+                              <span>{item.code || t.notSet}</span>
+                              <span>{formatCatalogLabel(item.city, t)}</span>
+                              <span>{item.price ?? t.notSet}</span>
+                              <span>{item.stock || t.notSet}</span>
+                              <span className={`fitting-source-logo ${sourceMeta.code}`}>{sourceMeta.label}</span>
+                            </article>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )
+                ) : (
+                  <div className="empty-state compact-empty-state">
+                    <span>{t.fittingNoItems}</span>
+                  </div>
+                )}
+              </div>
+              ) : null}
             </article>
           </section>
         ) : isCatalogValuesView ? (
@@ -7012,7 +8603,7 @@ export default function App() {
                 <div className="service-catalog-tree-actions">
                   <button
                     className="ghost-button compact-button"
-                    disabled={loading || !viyarFolderCodes.length}
+                    disabled={viyarTreeLoading || !viyarFolderCodes.length}
                     onClick={collapseAllViyarFolders}
                     type="button"
                   >
@@ -7020,7 +8611,7 @@ export default function App() {
                   </button>
                   <button
                     className="ghost-button compact-button"
-                    disabled={loading || !viyarFolderCodes.length}
+                    disabled={viyarTreeLoading || !viyarFolderCodes.length}
                     onClick={expandAllViyarFolders}
                     type="button"
                   >
@@ -7063,6 +8654,7 @@ export default function App() {
                       collapsedFolders={collapsedViyarFolders}
                       key={node.external_code}
                       loading={loading}
+                      mutationLoading={loading}
                       node={node}
                       onSaveService={handleSaveViyarService}
                       onServiceFieldChange={handleViyarServiceFieldChange}
@@ -7456,7 +9048,7 @@ export default function App() {
                     ) : null}
                     <button
                       className="ghost-button"
-                      disabled={loading}
+                      disabled={viyarTreeLoading}
                       onClick={handleImportViyarServices}
                       type="button"
                     >
@@ -7465,7 +9057,7 @@ export default function App() {
                     </button>
                     <button
                       className="ghost-button"
-                      disabled={loading}
+                      disabled={viyarTreeLoading}
                       onClick={handleSyncViyarPrices}
                       type="button"
                     >
@@ -7487,7 +9079,7 @@ export default function App() {
                   <div className="service-catalog-tree-actions">
                     <button
                       className="ghost-button compact-button"
-                      disabled={loading || !viyarFolderCodes.length}
+                      disabled={viyarTreeLoading || !viyarFolderCodes.length}
                       onClick={collapseAllViyarFolders}
                       type="button"
                     >
@@ -7495,7 +9087,7 @@ export default function App() {
                     </button>
                     <button
                       className="ghost-button compact-button"
-                      disabled={loading || !viyarFolderCodes.length}
+                      disabled={viyarTreeLoading || !viyarFolderCodes.length}
                       onClick={expandAllViyarFolders}
                       type="button"
                     >
@@ -7510,6 +9102,7 @@ export default function App() {
                         collapsedFolders={collapsedViyarFolders}
                         key={node.external_code}
                         loading={loading}
+                        mutationLoading={loading}
                         node={node}
                         onSaveService={handleSaveViyarService}
                         onServiceFieldChange={handleViyarServiceFieldChange}

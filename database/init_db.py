@@ -305,6 +305,8 @@ def upgrade_sqlite_schema():
         material_columns = {
             "source_url": "VARCHAR",
             "is_default": "BOOLEAN NOT NULL DEFAULT 0",
+            "image_cached_bytes": "BLOB",
+            "image_cached_content_type": "VARCHAR",
         }
 
         for column_name, column_type in material_columns.items():
@@ -320,6 +322,31 @@ def upgrade_sqlite_schema():
                 column_type
             )
 
+        material_price_columns = {
+            "updated_at": "DATETIME",
+        }
+
+        for column_name, column_type in material_price_columns.items():
+
+            _add_column_if_missing(
+
+                connection,
+
+                "material_prices",
+
+                column_name,
+
+                column_type
+            )
+
+        connection.exec_driver_sql(
+            """
+            UPDATE material_prices
+            SET updated_at = CURRENT_TIMESTAMP
+            WHERE updated_at IS NULL
+            """
+        )
+
         connection.execute(
             text(
                 """
@@ -328,6 +355,67 @@ def upgrade_sqlite_schema():
                 WHERE article IN ('215557', '43102', '45791', '77792')
                 """
             )
+        )
+
+        connection.execute(
+            text(
+                """
+                DELETE FROM material_prices
+                WHERE
+                    (article = '215557' AND city = 'kyiv' AND CAST(price AS TEXT) IN ('850', '850.0'))
+                    OR (article = '215557' AND city = 'lviv' AND CAST(price AS TEXT) IN ('870', '870.0'))
+                    OR (article = '43102' AND city = 'kyiv' AND CAST(price AS TEXT) IN ('620', '620.0'))
+                    OR (article = '43102' AND city = 'lviv' AND CAST(price AS TEXT) IN ('640', '640.0'))
+                """
+            )
+        )
+
+        fitting_columns = {
+            "fitting_type": "VARCHAR",
+            "fitting_group": "VARCHAR",
+            "image_url": "VARCHAR",
+            "source_url": "VARCHAR",
+            "owner_user_id": "VARCHAR",
+            "is_system": "BOOLEAN NOT NULL DEFAULT 1",
+            "is_active": "BOOLEAN NOT NULL DEFAULT 1",
+            "sort_order": "INTEGER NOT NULL DEFAULT 0",
+        }
+
+        for column_name, column_type in fitting_columns.items():
+
+            _add_column_if_missing(
+
+                connection,
+
+                "fittings",
+
+                column_name,
+
+                column_type
+            )
+
+        connection.exec_driver_sql(
+            """
+            UPDATE fittings
+            SET is_system = 1
+            WHERE is_system IS NULL
+            """
+        )
+
+        connection.exec_driver_sql(
+            """
+            UPDATE fittings
+            SET is_active = 1
+            WHERE is_active IS NULL
+            """
+        )
+
+        connection.exec_driver_sql(
+            """
+            UPDATE fittings
+            SET sort_order = 0
+            WHERE sort_order IS NULL
+            """
         )
 
 

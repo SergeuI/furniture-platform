@@ -1,4 +1,5 @@
 import json
+import os
 import re
 import sys
 import traceback
@@ -585,6 +586,7 @@ def _fetch_material(
     cookie: str | None = None,
     trace: list[dict] | None = None,
     headless: bool = True,
+    preferred_url: str | None = None,
 ) -> tuple[dict, list[dict]]:
 
     search_url = f"{VIYAR_BASE_URL}/ua/search/?q={article}"
@@ -621,9 +623,10 @@ def _fetch_material(
             _push_trace(trace, "worker.cookies", count=len(cookies), city=city)
 
         page = context.new_page()
-        _push_trace(trace, "worker.search", url=search_url)
+        target_search_url = preferred_url or search_url
+        _push_trace(trace, "worker.search", url=target_search_url, preferred=bool(preferred_url))
 
-        if not _goto_with_retry(page, search_url):
+        if not _goto_with_retry(page, target_search_url):
             if not _search_from_homepage(page, article, trace):
                 context.close()
                 browser.close()
@@ -736,12 +739,17 @@ def _fetch_material(
 def main() -> int:
 
     trace: list[dict] = []
+    allow_headful_fallback = (
+        os.getenv("MATERIAL_WORKER_HEADFUL_FALLBACK", "").strip().lower()
+        in {"1", "true", "yes", "on"}
+    )
 
     try:
         payload = json.loads(sys.stdin.read() or "{}")
         article = _normalize_text(payload.get("article"))
         city = _normalize_text(payload.get("city"))
         cookie = payload.get("cookie")
+        preferred_url = _normalize_text(payload.get("preferred_url"))
 
         if not article:
             print(json.dumps({"success": False, "error": "Article is required"}))
@@ -754,6 +762,7 @@ def main() -> int:
                 cookie=cookie,
                 trace=trace,
                 headless=True,
+                preferred_url=preferred_url or None,
             )
             strategy = "worker_playwright"
         except Exception as first_error:
@@ -762,13 +771,18 @@ def main() -> int:
                 "worker.headless_fallback",
                 error=type(first_error).__name__,
                 message=_normalize_text(str(first_error)),
+                allowed=allow_headful_fallback,
             )
+            if not allow_headful_fallback:
+                raise first_error
+
             material, trace = _fetch_material(
                 article,
                 city=city or None,
                 cookie=cookie,
                 trace=trace,
                 headless=False,
+                preferred_url=preferred_url or None,
             )
             strategy = "worker_playwright_headful"
 

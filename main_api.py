@@ -26,6 +26,10 @@ from services.material_import_queue_service import (
     start_material_import_queue_loop,
     stop_material_import_queue_loop,
 )
+from services.catalog_auto_refresh_service import (
+    start_catalog_auto_refresh_loop,
+    stop_catalog_auto_refresh_loop,
+)
 
 load_dotenv()
 init_database()
@@ -40,12 +44,14 @@ app = FastAPI(
 async def startup_background_services():
 
     start_material_import_queue_loop()
+    start_catalog_auto_refresh_loop()
 
 
 @app.on_event("shutdown")
 async def shutdown_background_services():
 
     stop_material_import_queue_loop()
+    stop_catalog_auto_refresh_loop()
 
 frontend_origins = [
 

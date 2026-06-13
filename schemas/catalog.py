@@ -188,7 +188,10 @@ class MaterialCatalogItemSchema(BaseModel):
     source_url: str | None = None
     tg_file_id: str | None = None
     is_default: bool = False
+    has_cached_image: bool = False
     current_price: float | None = None
+    current_price_city: str | None = None
+    current_price_exact: bool = True
     prices: List[MaterialPriceSchema] = Field(default_factory=list)
 
 
@@ -220,6 +223,7 @@ class MaterialImportFromViyarSchema(BaseModel):
         default=None,
         max_length=1000,
     )
+    force_refresh: bool = False
 
 
 class MaterialImportJobSchema(BaseModel):
@@ -258,11 +262,110 @@ class FittingCatalogItemSchema(BaseModel):
     name: str | None = None
     price: float | None = None
     stock: str | None = None
+    fitting_type: str | None = None
+    fitting_type_name: str | None = None
+    fitting_group: str | None = None
+    fitting_group_name: str | None = None
+    fitting_description: str | None = None
+    image_url: str | None = None
+    source_url: str | None = None
+    source_site: str | None = None
+    owner_user_id: str | None = None
+    is_system: bool = True
+    is_active: bool = True
+    sort_order: int = 0
+
+
+class FittingCategorySchema(BaseModel):
+    code: str
+    name: str
+    group: str
+    group_name: str
+    description: str | None = None
+    icon_key: str | None = None
+    item_count: int = 0
+
+
+class FittingCatalogCreateSchema(BaseModel):
+    name: str = Field(
+        min_length=1,
+        max_length=255,
+    )
+    article: str | None = Field(
+        default=None,
+        max_length=128,
+    )
+    code: str | None = Field(
+        default=None,
+        max_length=128,
+    )
+    city: str | None = Field(
+        default=None,
+        max_length=128,
+    )
+    price: float | None = None
+    stock: str | None = Field(
+        default=None,
+        max_length=255,
+    )
+    fitting_type: str = Field(
+        min_length=2,
+        max_length=64,
+    )
+    fitting_group: str = Field(
+        min_length=2,
+        max_length=64,
+    )
+    image_url: str | None = Field(
+        default=None,
+        max_length=500000,
+    )
+    source_url: str | None = Field(
+        default=None,
+        max_length=1000,
+    )
+    is_active: bool = True
+    sort_order: int = 0
+    is_system: bool = False
+
+
+class FittingCatalogUpdateSchema(FittingCatalogCreateSchema):
+    pass
+
+
+class FittingCatalogOperationResponseSchema(BaseModel):
+    success: bool
+    item: FittingCatalogItemSchema | None = None
+    error: str | None = None
 
 
 class FittingCatalogListResponseSchema(BaseModel):
     success: bool
+    city_options: List[str] = Field(default_factory=list)
+    selected_city: str | None = None
+    categories: List[FittingCategorySchema] = Field(default_factory=list)
     items: List[FittingCatalogItemSchema] = Field(default_factory=list)
+    error: str | None = None
+
+
+class CatalogAutoRefreshStatusSchema(BaseModel):
+    loop_running: bool = False
+    interval_seconds: int = 0
+    stale_hours: int = 0
+    service_catalog_hours: int = 0
+    last_cycle_started_at: datetime | None = None
+    last_cycle_finished_at: datetime | None = None
+    last_success_at: datetime | None = None
+    last_error: str | None = None
+    last_service_catalog_sync_at: datetime | None = None
+    material_jobs_queued: int = 0
+    service_users_synced: int = 0
+    service_catalog_synced: bool = False
+
+
+class CatalogAutoRefreshStatusResponseSchema(BaseModel):
+    success: bool
+    status: CatalogAutoRefreshStatusSchema
     error: str | None = None
 
 

@@ -132,32 +132,7 @@ async def seed_materials():
         ),
     ]
 
-    prices = [
-
-        (
-            "215557",
-            "kyiv",
-            850
-        ),
-
-        (
-            "215557",
-            "lviv",
-            870
-        ),
-
-        (
-            "43102",
-            "kyiv",
-            620
-        ),
-
-        (
-            "43102",
-            "lviv",
-            640
-        ),
-    ]
+    prices = []
 
     async with aiosqlite.connect(
         DB_NAME

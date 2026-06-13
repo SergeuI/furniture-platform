@@ -1,6 +1,9 @@
 from datetime import datetime
 import re
 import uuid
+from datetime import timedelta
+
+from sqlalchemy import and_, func
 
 from database.session import (
     SessionLocal,
@@ -12,11 +15,27 @@ from database.models.service_catalog_item import (
 from database.models.user_service_catalog_price import (
     UserServiceCatalogPriceModel,
 )
+from database.models.user import (
+    UserModel,
+)
 
 from services.viyar_service_catalog_service import (
     build_viyar_service_catalog_records,
     fetch_viyar_service_price_updates,
 )
+
+
+def _normalize_viyar_article(value: str | None) -> str | None:
+
+    normalized = (value or "").strip()
+
+    if not normalized:
+        return None
+
+    if re.fullmatch(r"\d{4,}", normalized):
+        return normalized
+
+    return None
 
 
 def _serialize_service_catalog_item(
@@ -139,7 +158,13 @@ def sync_viyar_service_catalog(
             item.item_type = record["item_type"]
             item.folder_path = record["folder_path"]
             item.description = record["description"] or item.description
-            item.article = record.get("article") or item.article
+            next_article = _normalize_viyar_article(record.get("article"))
+            current_article = _normalize_viyar_article(item.article)
+
+            if record["item_type"] == "service":
+                item.article = next_article or current_article
+            else:
+                item.article = None
             item.unit = record["unit"] or item.unit
             item.base_price = (
                 record["base_price"]
@@ -618,6 +643,70 @@ def sync_viyar_service_prices(
             "skipped_count": skipped_count,
             "source": result.get("source", "viyar"),
         }
+
+    finally:
+
+        db.close()
+
+
+def list_users_needing_viyar_service_price_sync(
+    stale_hours: int = 24,
+    limit: int = 10,
+) -> list[dict]:
+
+    db = SessionLocal()
+
+    try:
+
+        cutoff = datetime.utcnow() - timedelta(hours=max(1, stale_hours))
+        rows = (
+            db.query(
+                UserModel.id,
+                UserModel.email,
+                UserModel.viyar_email,
+                UserModel.viyar_password_secret,
+                UserModel.viyar_cookie,
+                func.max(UserServiceCatalogPriceModel.last_synced_at).label("last_synced_at"),
+            )
+            .outerjoin(
+                UserServiceCatalogPriceModel,
+                UserServiceCatalogPriceModel.user_id == UserModel.id,
+            )
+            .filter(UserModel.is_active.is_(True))
+            .filter(
+                (UserModel.viyar_cookie.isnot(None))
+                | and_(
+                    UserModel.viyar_email.isnot(None),
+                    UserModel.viyar_password_secret.isnot(None),
+                )
+            )
+            .group_by(
+                UserModel.id,
+                UserModel.email,
+                UserModel.viyar_email,
+                UserModel.viyar_password_secret,
+                UserModel.viyar_cookie,
+            )
+            .having(
+                (func.max(UserServiceCatalogPriceModel.last_synced_at).is_(None))
+                | (func.max(UserServiceCatalogPriceModel.last_synced_at) <= cutoff)
+            )
+            .order_by(func.max(UserServiceCatalogPriceModel.last_synced_at).asc().nullsfirst(), UserModel.email.asc())
+            .limit(limit)
+            .all()
+        )
+
+        return [
+            {
+                "id": row.id,
+                "email": row.email,
+                "viyar_email": row.viyar_email,
+                "viyar_password_secret": row.viyar_password_secret,
+                "viyar_cookie": row.viyar_cookie,
+                "last_synced_at": row.last_synced_at,
+            }
+            for row in rows
+        ]
 
     finally:
 

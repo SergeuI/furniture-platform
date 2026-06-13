@@ -6,6 +6,7 @@ from database.repositories.inventory_repository import (
     list_materials,
     upsert_material,
     upsert_material_price,
+    update_material_image_cache,
 )
 from database.repositories.material_import_job_repository import (
     create_material_import_job,
@@ -21,7 +22,10 @@ from database.repositories.user_repository import (
     update_user_viyar_session,
 )
 from services.credential_cipher import decrypt_secret
-from services.material_catalog_service import fetch_viyar_material_by_article_live_traced
+from services.material_catalog_service import (
+    fetch_viyar_material_by_article_live_traced,
+    prefetch_material_image_cache,
+)
 from services.viyar_auth_service import login_viyar_and_get_cookie
 
 
@@ -133,6 +137,23 @@ async def process_material_import_job(job_id: int, cookie_override: str | None =
                 city=running_job["city"],
                 price=material.get("price"),
             )
+
+            try:
+                image_payload = prefetch_material_image_cache(
+                    article=material["article"],
+                    stored_image=material.get("image"),
+                    source_url=material.get("source_url"),
+                    city=running_job["city"],
+                    cookie_override=effective_cookie,
+                )
+                if image_payload:
+                    update_material_image_cache(
+                        article=material["article"],
+                        image_bytes=image_payload["bytes"],
+                        content_type=image_payload["content_type"],
+                    )
+            except Exception:
+                pass
 
             mark_material_import_job_success(
                 job_id,

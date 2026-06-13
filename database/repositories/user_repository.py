@@ -1,3 +1,5 @@
+from sqlalchemy import and_
+
 from database.session import (
     SessionLocal
 )
@@ -140,6 +142,34 @@ def list_users(
 
             .limit(limit)
 
+            .all()
+        )
+
+    finally:
+
+        db.close()
+
+
+def list_viyar_autosync_users(
+    limit: int = 20,
+):
+
+    db = SessionLocal()
+
+    try:
+
+        return (
+            db.query(UserModel)
+            .filter(UserModel.is_active.is_(True))
+            .filter(
+                (UserModel.viyar_cookie.isnot(None))
+                | and_(
+                    UserModel.viyar_email.isnot(None),
+                    UserModel.viyar_password_secret.isnot(None),
+                )
+            )
+            .order_by(UserModel.email.asc())
+            .limit(limit)
             .all()
         )
 

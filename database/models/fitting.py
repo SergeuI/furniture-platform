@@ -1,4 +1,5 @@
 from sqlalchemy import (
+    Boolean,
     Column,
     Float,
     Integer,
@@ -49,4 +50,50 @@ class FittingModel(Base):
     stock = Column(
         String,
         nullable=True,
+    )
+
+    fitting_type = Column(
+        String,
+        index=True,
+        nullable=True,
+    )
+
+    fitting_group = Column(
+        String,
+        index=True,
+        nullable=True,
+    )
+
+    image_url = Column(
+        String,
+        nullable=True,
+    )
+
+    source_url = Column(
+        String,
+        nullable=True,
+    )
+
+    owner_user_id = Column(
+        String,
+        index=True,
+        nullable=True,
+    )
+
+    is_system = Column(
+        Boolean,
+        nullable=False,
+        default=True,
+    )
+
+    is_active = Column(
+        Boolean,
+        nullable=False,
+        default=True,
+    )
+
+    sort_order = Column(
+        Integer,
+        nullable=False,
+        default=0,
     )

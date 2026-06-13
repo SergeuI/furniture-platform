@@ -98,10 +98,72 @@ export async function getMaterialsCatalog(token, params = {}) {
 
   return request(`/catalog/materials${query ? `?${query}` : ""}`, {
     headers: authHeaders(token),
+    timeoutMs: 60000,
   });
 }
 
-export async function importMaterialFromViyar(token, article, category = "dsp", sourceUrl = "") {
+export async function getFittingsCatalog(token, params = {}) {
+  const searchParams = new URLSearchParams();
+
+  if (params.search) {
+    searchParams.set("search", params.search);
+  }
+
+  if (params.city) {
+    searchParams.set("city", params.city);
+  }
+
+  if (params.fitting_group) {
+    searchParams.set("fitting_group", params.fitting_group);
+  }
+
+  if (params.fitting_type) {
+    searchParams.set("fitting_type", params.fitting_type);
+  }
+
+  const query = searchParams.toString();
+
+  return request(`/catalog/fittings${query ? `?${query}` : ""}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function createFitting(token, payload) {
+  return request("/catalog/fittings", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateFitting(token, itemId, payload) {
+  return request(`/catalog/fittings/${itemId}`, {
+    method: "PUT",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteFitting(token, itemId) {
+  return request(`/catalog/fittings/${itemId}`, {
+    method: "DELETE",
+    headers: authHeaders(token),
+  });
+}
+
+export async function getCatalogAutoRefreshStatus(token) {
+  return request("/catalog/auto-refresh/status", {
+    headers: authHeaders(token),
+  });
+}
+
+export async function importMaterialFromViyar(
+  token,
+  article,
+  category = "dsp",
+  sourceUrl = "",
+  forceRefresh = false,
+) {
   return request("/catalog/materials/import-viyar", {
     method: "POST",
     headers: authHeaders(token),
@@ -109,6 +171,7 @@ export async function importMaterialFromViyar(token, article, category = "dsp", 
       article,
       category,
       source_url: sourceUrl || null,
+      force_refresh: Boolean(forceRefresh),
     }),
     timeoutMs: 120000,
   });

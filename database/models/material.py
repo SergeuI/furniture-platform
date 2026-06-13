@@ -1,5 +1,6 @@
 from sqlalchemy import (
     Boolean,
+    LargeBinary,
     Column,
     Integer,
     String,
@@ -55,4 +56,14 @@ class MaterialModel(Base):
         Boolean,
         nullable=False,
         default=False,
+    )
+
+    image_cached_bytes = Column(
+        LargeBinary,
+        nullable=True,
+    )
+
+    image_cached_content_type = Column(
+        String,
+        nullable=True,
     )

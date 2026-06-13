@@ -1,5 +1,6 @@
 from sqlalchemy import (
     Column,
+    DateTime,
     Float,
     Integer,
     String,
@@ -32,5 +33,10 @@ class MaterialPriceModel(Base):
 
     price = Column(
         Float,
+        nullable=True,
+    )
+
+    updated_at = Column(
+        DateTime,
         nullable=True,
     )
