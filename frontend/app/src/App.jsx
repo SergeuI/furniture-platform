@@ -2478,11 +2478,8 @@ export default function App() {
     setUser(result.user);
     setAuthModalOpen(false);
     setPublicProfileMenuOpen(false);
-    setActiveView("projects");
-    setWorkspaceOpen(true);
+    setWorkspaceOpen(false);
     setStatus("");
-    await loadSpecificationCatalog();
-    await loadProjects(result.access_token, 0);
   }
 
   async function handleRegister(event) {
@@ -2507,16 +2504,13 @@ export default function App() {
     setUser(result.user);
     setAuthModalOpen(false);
     setPublicProfileMenuOpen(false);
-    setActiveView("projects");
-    setWorkspaceOpen(true);
+    setWorkspaceOpen(false);
     setRegisterForm({
       email: "",
       password: "",
       confirmPassword: "",
     });
     setStatus({ message: t.landingRegistrationSuccess, tone: "success" });
-    await loadSpecificationCatalog();
-    await loadProjects(result.access_token, 0);
   }
 
   async function handlePasswordResetRequest(event) {
@@ -3135,31 +3129,10 @@ export default function App() {
                         <span>{userCityLabel}</span>
                       </div>
                     </div>
-                    <button
-                      onClick={() => {
-                        setWorkspaceOpen(true);
-                        setPublicProfileMenuOpen(false);
-                      }}
-                      type="button"
-                    >
-                      <LayoutDashboard size={16} />
-                      {t.app}
-                    </button>
                     <a href={adminUrl} rel="noreferrer noopener" target="_blank">
                       <ShieldCheck size={16} />
                       {t.landingOpenAdmin}
                     </a>
-                    <button
-                      onClick={() => {
-                        setWorkspaceOpen(true);
-                        setActiveView("settings");
-                        setPublicProfileMenuOpen(false);
-                      }}
-                      type="button"
-                    >
-                      <Info size={16} />
-                      {t.settings}
-                    </button>
                     <button
                       onClick={() => {
                         setOwnPasswordForm({
@@ -3235,18 +3208,30 @@ export default function App() {
             </div>
 
             <div className="public-hero-actions">
-              <button
-                className="primary-button"
-                onClick={() => {
-                  setAuthMode("login");
-                  setStatus("");
-                  setAuthModalOpen(true);
-                }}
-                type="button"
-              >
-                <Rocket size={18} />
-                {t.landingStartCta}
-              </button>
+              {user ? (
+                <a
+                  className="primary-button public-link-button"
+                  href={adminUrl}
+                  rel="noreferrer noopener"
+                  target="_blank"
+                >
+                  <ExternalLink size={18} />
+                  {t.landingOpenAdmin}
+                </a>
+              ) : (
+                <button
+                  className="primary-button"
+                  onClick={() => {
+                    setAuthMode("login");
+                    setStatus("");
+                    setAuthModalOpen(true);
+                  }}
+                  type="button"
+                >
+                  <Rocket size={18} />
+                  {t.landingStartCta}
+                </button>
+              )}
               <a
                 className="ghost-button public-link-button"
                 href="#capabilities"
@@ -3316,15 +3301,6 @@ export default function App() {
               <div className="public-module-copy">
                 <strong>{t.landingModuleAdminTitle}</strong>
                 <p>{t.landingModuleAdminDescription}</p>
-              </div>
-            </article>
-            <article className="public-module-card">
-              <div className="public-module-icon">
-                <Cpu size={18} />
-              </div>
-              <div className="public-module-copy">
-                <strong>{t.landingModuleAppTitle}</strong>
-                <p>{t.landingModuleAppDescription}</p>
               </div>
             </article>
             <article className="public-module-card">
@@ -3533,11 +3509,6 @@ export default function App() {
               <Sparkles size={18} />
               <h3>{t.landingSiteCardTitle}</h3>
               <p>{t.landingSiteCardDescription}</p>
-            </article>
-            <article className="public-entry-card">
-              <Rocket size={18} />
-              <h3>{t.landingAppCardTitle}</h3>
-              <p>{t.landingAppCardDescription}</p>
             </article>
             <article className="public-entry-card">
               <ShieldCheck size={18} />
