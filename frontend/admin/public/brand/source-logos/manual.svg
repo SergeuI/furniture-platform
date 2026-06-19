@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="88" height="28" viewBox="0 0 88 28" fill="none">
+  <rect width="88" height="28" rx="14" fill="#F4F7F9"/>
+  <rect x="8" y="7" width="14" height="14" rx="4" fill="#52606D"/>
+  <path d="M11 15.5L13.2 17.7L19 11.9" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="28" y="18" fill="#52606D" font-family="Arial, Helvetica, sans-serif" font-size="10.5" font-weight="700">Manual</text>
+</svg>

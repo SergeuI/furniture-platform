@@ -232,10 +232,6 @@ def register_user(
 
     normalized_email = email.strip().lower()
 
-    if count_users() > 0:
-
-        return None
-
     if get_user_by_email(
         normalized_email
     ):
@@ -353,9 +349,13 @@ def authenticate_user(
     password: str
 ):
 
-    user = get_user_by_email(
-        email.strip().lower()
-    )
+    identifier = email.strip().lower()
+
+    user = get_user_by_email(identifier)
+
+    if not user:
+
+        user = get_user_by_username(identifier)
 
     if not user:
 

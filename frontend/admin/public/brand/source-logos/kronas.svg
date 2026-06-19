@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="88" height="28" viewBox="0 0 88 28" fill="none">
+  <rect width="88" height="28" rx="14" fill="#EDF8EF"/>
+  <circle cx="18" cy="14" r="7" fill="#1B5A2B"/>
+  <path d="M15 10H17V13L20 10H22.6L19.3 13.3L22.76 18H20.3L17.96 14.76L17 15.72V18H15V10Z" fill="white"/>
+  <text x="31" y="18" fill="#1B5A2B" font-family="Arial, Helvetica, sans-serif" font-size="11" font-weight="700">Kronas</text>
+</svg>

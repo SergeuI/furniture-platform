@@ -1,4 +1,4 @@
-from sqlalchemy import and_
+from sqlalchemy import and_, func
 
 from database.session import (
     SessionLocal
@@ -23,7 +23,7 @@ def create_user(
 
     password_hash: str,
 
-    role: str = "user"
+    role: str = "free"
 ):
 
     db = SessionLocal()
@@ -450,6 +450,8 @@ def get_user_by_username(
     username: str
 ):
 
+    normalized_username = username.strip().lower()
+
     db = SessionLocal()
 
     try:
@@ -460,7 +462,7 @@ def get_user_by_username(
 
             .filter(
 
-                UserModel.username == username
+                func.lower(UserModel.username) == normalized_username
             )
 
             .first()

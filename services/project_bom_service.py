@@ -69,7 +69,10 @@ def build_project_bom(project):
         inside_material
     )
 
-    material_thickness = project.material_thickness or 18
+    inside_thickness = project.inside_thickness or project.material_thickness or 18
+    facade_thickness = project.facade_thickness or inside_thickness
+    inside_edge_banding = project.inside_edge_banding or project.edge_banding
+    facade_edge_banding = project.facade_edge_banding or inside_edge_banding
 
     items = [
         _bom_item(
@@ -77,16 +80,16 @@ def build_project_bom(project):
             "cabinet",
             2,
             inside_material,
-            material_thickness,
-            project.edge_banding
+            inside_thickness,
+            inside_edge_banding
         ),
         _bom_item(
             "Top and bottom panels",
             "cabinet",
             2,
             inside_material,
-            material_thickness,
-            project.edge_banding
+            inside_thickness,
+            inside_edge_banding
         ),
         _bom_item(
             "Vertical dividers",
@@ -96,8 +99,8 @@ def build_project_bom(project):
                 0
             ),
             inside_material,
-            material_thickness,
-            project.edge_banding
+            inside_thickness,
+            inside_edge_banding
         ),
         _bom_item(
             "Back panel",
@@ -112,16 +115,16 @@ def build_project_bom(project):
             "drawers",
             drawer_count,
             inside_material,
-            material_thickness,
-            project.edge_banding
+            inside_thickness,
+            inside_edge_banding
         ),
         _bom_item(
             "Drawer fronts",
             "facades",
             drawer_count,
             facade_material,
-            material_thickness,
-            project.edge_banding
+            facade_thickness,
+            facade_edge_banding
         ),
         _bom_item(
             "Drawer slides",

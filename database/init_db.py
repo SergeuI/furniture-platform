@@ -10,6 +10,9 @@ from database.models.project import (
 from database.models.project_version import (
     ProjectVersionModel
 )
+from database.models.project_scan_session import (
+    ProjectScanSessionModel
+)
 from database.models.user import (
     UserModel
 )
@@ -31,6 +34,12 @@ from database.models.material import (
 from database.models.material_price import (
     MaterialPriceModel
 )
+from database.models.material_edge import (
+    MaterialEdgeModel
+)
+from database.models.material_edge_price import (
+    MaterialEdgePriceModel
+)
 from database.models.material_import_job import (
     MaterialImportJobModel
 )
@@ -45,6 +54,12 @@ from database.repositories.catalog_repository import (
 )
 from database.repositories.service_catalog_repository import (
     seed_default_viyar_service_catalog
+)
+from database.repositories.user_repository import (
+    get_user_by_email
+)
+from services.auth_service import (
+    create_managed_user
 )
 from services.legacy_db_config import (
     ensure_unified_legacy_schema,
@@ -107,9 +122,13 @@ def upgrade_sqlite_schema():
             "room_name": "VARCHAR",
             "facade_material": "VARCHAR",
             "inside_material": "VARCHAR",
+            "facade_edge_banding": "VARCHAR",
+            "inside_edge_banding": "VARCHAR",
             "edge_banding": "VARCHAR",
             "edge_overrides": "JSON",
             "machining_overrides": "JSON",
+            "facade_thickness": "INTEGER",
+            "inside_thickness": "INTEGER",
             "material_thickness": "INTEGER",
             "slide_type": "VARCHAR",
             "bottom_type": "VARCHAR",
@@ -270,6 +289,31 @@ def upgrade_sqlite_schema():
                 column_type
             )
 
+        connection.exec_driver_sql(
+            """
+            UPDATE users
+            SET username = lower(substr(email, 1, instr(email, '@') - 1))
+            WHERE (username IS NULL OR trim(username) = '')
+              AND instr(email, '@') > 1
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM users AS existing_users
+                  WHERE existing_users.id != users.id
+                    AND lower(existing_users.username) = lower(substr(users.email, 1, instr(users.email, '@') - 1))
+              )
+            """
+        )
+
+        connection.exec_driver_sql(
+            """
+            UPDATE users
+            SET role = 'free'
+            WHERE role IS NULL
+               OR trim(role) = ''
+               OR lower(role) IN ('user', 'guest', 'manager', 'viewer')
+            """
+        )
+
         material_import_job_columns = {
             "article": "VARCHAR",
             "category": "VARCHAR",
@@ -303,7 +347,12 @@ def upgrade_sqlite_schema():
             )
 
         material_columns = {
+            "description": "VARCHAR",
+            "color": "VARCHAR",
+            "dimensions": "VARCHAR",
+            "thickness": "VARCHAR",
             "source_url": "VARCHAR",
+            "owner_user_id": "VARCHAR",
             "is_default": "BOOLEAN NOT NULL DEFAULT 0",
             "image_cached_bytes": "BLOB",
             "image_cached_content_type": "VARCHAR",
@@ -370,10 +419,25 @@ def upgrade_sqlite_schema():
             )
         )
 
+        material_edge_columns = {
+            "image_cached_bytes": "BLOB",
+            "image_cached_content_type": "VARCHAR",
+        }
+
+        for column_name, column_type in material_edge_columns.items():
+            _add_column_if_missing(
+                connection,
+                "material_edge_options",
+                column_name,
+                column_type,
+            )
+
         fitting_columns = {
             "fitting_type": "VARCHAR",
             "fitting_group": "VARCHAR",
             "image_url": "VARCHAR",
+            "image_cached_bytes": "BLOB",
+            "image_cached_content_type": "VARCHAR",
             "source_url": "VARCHAR",
             "owner_user_id": "VARCHAR",
             "is_system": "BOOLEAN NOT NULL DEFAULT 1",
@@ -419,6 +483,31 @@ def upgrade_sqlite_schema():
         )
 
 
+def seed_demo_access_users():
+
+    demo_password = "Demo12345!"
+
+    demo_users = [
+        ("admin@example.com", "admin"),
+        ("free@example.com", "free"),
+        ("pro@example.com", "pro"),
+        ("premium@example.com", "premium"),
+        ("manager@example.com", "free"),
+    ]
+
+    for email, role in demo_users:
+
+        if get_user_by_email(email):
+
+            continue
+
+        create_managed_user(
+            email=email,
+            password=demo_password,
+            role=role
+        )
+
+
 def init_database():
 
     Base.metadata.create_all(
@@ -429,6 +518,7 @@ def init_database():
     migrate_legacy_sqlite_to_unified_db()
 
     upgrade_sqlite_schema()
+    seed_demo_access_users()
 
     seed_default_catalog_items()
     seed_default_viyar_service_catalog()

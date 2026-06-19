@@ -40,6 +40,10 @@ class ProjectResponseItemSchema(BaseModel):
 
     inside_material: Optional[str] = None
 
+    facade_edge_banding: Optional[str] = None
+
+    inside_edge_banding: Optional[str] = None
+
     edge_banding: Optional[str] = None
 
     edge_overrides: Dict[str, Any] = Field(
@@ -49,6 +53,10 @@ class ProjectResponseItemSchema(BaseModel):
     machining_overrides: Dict[str, Any] = Field(
         default_factory=dict
     )
+
+    facade_thickness: Optional[int] = None
+
+    inside_thickness: Optional[int] = None
 
     material_thickness: Optional[int] = None
 
@@ -101,6 +109,10 @@ class ProjectVersionResponseItemSchema(BaseModel):
 
     inside_material: Optional[str] = None
 
+    facade_edge_banding: Optional[str] = None
+
+    inside_edge_banding: Optional[str] = None
+
     edge_banding: Optional[str] = None
 
     edge_overrides: Dict[str, Any] = Field(
@@ -110,6 +122,10 @@ class ProjectVersionResponseItemSchema(BaseModel):
     machining_overrides: Dict[str, Any] = Field(
         default_factory=dict
     )
+
+    facade_thickness: Optional[int] = None
+
+    inside_thickness: Optional[int] = None
 
     material_thickness: Optional[int] = None
 

@@ -3,6 +3,7 @@ from sqlalchemy import (
     Column,
     Float,
     Integer,
+    LargeBinary,
     String,
 )
 
@@ -65,6 +66,16 @@ class FittingModel(Base):
     )
 
     image_url = Column(
+        String,
+        nullable=True,
+    )
+
+    image_cached_bytes = Column(
+        LargeBinary,
+        nullable=True,
+    )
+
+    image_cached_content_type = Column(
         String,
         nullable=True,
     )

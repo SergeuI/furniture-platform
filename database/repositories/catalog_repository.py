@@ -16,7 +16,10 @@ DEFAULT_CATALOG_ITEMS = {
         "wardrobe",
         "cabinet",
         "kitchen",
-        "drawer_unit"
+        "drawer_unit",
+        "wall_unit",
+        "bathroom_vanity",
+        "bathroom_shelf"
     ],
     "slide_type": [
         "tandem",
@@ -411,6 +414,41 @@ def get_specification_catalog() -> dict:
     db = SessionLocal()
 
     try:
+
+        seeded = False
+
+        for category, values in DEFAULT_CATALOG_ITEMS.items():
+
+            existing_values = {
+                item.value
+                for item in (
+                    db.query(CatalogItemModel)
+                    .filter(
+                        CatalogItemModel.category == category
+                    )
+                    .all()
+                )
+            }
+
+            for sort_order, value in enumerate(values):
+
+                if value in existing_values:
+
+                    continue
+
+                db.add(
+                    CatalogItemModel(
+                        category=category,
+                        value=value,
+                        sort_order=sort_order,
+                        is_active=True
+                    )
+                )
+                seeded = True
+
+        if seeded:
+
+            db.commit()
 
         items = (
 

@@ -15,6 +15,7 @@ from services.auth_service import (
 from services.user_roles import (
     ROLE_ADMIN,
     ROLE_GUEST,
+    ROLE_PREMIUM,
     ROLE_PRO,
     ROLE_USER,
     normalize_user_role,
@@ -25,7 +26,8 @@ ROLE_PRIORITY = {
     ROLE_GUEST: 0,
     ROLE_USER: 1,
     ROLE_PRO: 2,
-    ROLE_ADMIN: 3,
+    ROLE_PREMIUM: 3,
+    ROLE_ADMIN: 4,
 }
 
 

@@ -31,6 +31,26 @@ class MaterialModel(Base):
         nullable=True,
     )
 
+    description = Column(
+        String,
+        nullable=True,
+    )
+
+    color = Column(
+        String,
+        nullable=True,
+    )
+
+    dimensions = Column(
+        String,
+        nullable=True,
+    )
+
+    thickness = Column(
+        String,
+        nullable=True,
+    )
+
     image = Column(
         String,
         nullable=True,
@@ -38,6 +58,12 @@ class MaterialModel(Base):
 
     source_url = Column(
         String,
+        nullable=True,
+    )
+
+    owner_user_id = Column(
+        String,
+        index=True,
         nullable=True,
     )
 

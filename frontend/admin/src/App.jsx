@@ -1,5 +1,6 @@
 import {
   Blocks,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Drill,
@@ -11,6 +12,7 @@ import {
   LayoutGrid,
   MoreHorizontal,
   Package,
+  CircleAlert,
   LogOut,
   Plus,
   RefreshCw,
@@ -26,10 +28,12 @@ import {
   Users,
   Wrench,
 } from "lucide-react";
-import { Component, Suspense, lazy, useEffect, useMemo, useState } from "react";
+import { Component, Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
+  attachMaterialEdge,
   changeOwnPassword,
+  createMaterial,
   createFitting,
   createManualService,
   createMyEmailChangeRequest,
@@ -39,9 +43,11 @@ import {
   deleteMaterial,
   deleteProject,
   generateProject,
+  confirmProjectScan,
   getCatalogAutoRefreshStatus,
   getCurrentUser,
   getFittingsCatalog,
+  getMaterialDetails,
   getMaterialImportJob,
   getMaterialsCatalog,
   getMyViyarAuthStatus,
@@ -57,6 +63,7 @@ import {
   importMaterialFromViyar,
   listAuditLogs,
   listCatalogItems,
+  listProjectScans,
   listUsers,
   listUserChangeRequests,
   listProjects,
@@ -77,6 +84,7 @@ import {
   updateUserActive,
   updateUserRole,
   refreshMyViyarSession,
+  scanProjectFile,
 } from "./api";
 const PartThreeViewer = lazy(() => import("./components/PartThreeViewer"));
 const ProjectThreeViewer = lazy(() => import("./components/ProjectThreeViewer"));
@@ -87,11 +95,66 @@ const LANGUAGE_STORAGE_KEY = "furniture_admin_language";
 const ACTIVE_VIEW_STORAGE_KEY = "furniture_admin_active_view";
 const ACTIVE_PROJECT_ID_STORAGE_KEY = "furniture_admin_active_project_id";
 const ACTIVE_PROJECT_TAB_STORAGE_KEY = "furniture_admin_active_project_tab";
+const ADMIN_TOKEN_HASH_KEY = "mproject_token";
+const ADMIN_LOGOUT_HASH_KEY = "mproject_logout";
 const VIYAR_SERVICES_CACHE_PREFIX = "furniture_admin_viyar_services_cache";
 const API_BASE_URL = (
-  import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000"
+  import.meta.env.VITE_API_BASE_URL || ""
 );
 const PAGE_SIZE = 20;
+
+function consumeAdminTokenHandoff() {
+  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+  const searchParams = new URLSearchParams(window.location.search);
+  const shouldLogout =
+    hashParams.get(ADMIN_LOGOUT_HASH_KEY) === "1" ||
+    searchParams.get(ADMIN_LOGOUT_HASH_KEY) === "1";
+  const handoffToken = (
+    hashParams.get(ADMIN_TOKEN_HASH_KEY) ||
+    searchParams.get(ADMIN_TOKEN_HASH_KEY) ||
+    ""
+  ).trim();
+
+  if (shouldLogout && !handoffToken) {
+    localStorage.removeItem(TOKEN_STORAGE_KEY);
+    localStorage.setItem(ACTIVE_VIEW_STORAGE_KEY, "home");
+    localStorage.removeItem(ACTIVE_PROJECT_ID_STORAGE_KEY);
+    localStorage.removeItem(ACTIVE_PROJECT_TAB_STORAGE_KEY);
+  }
+
+  if (!handoffToken) {
+    hashParams.delete(ADMIN_LOGOUT_HASH_KEY);
+    searchParams.delete(ADMIN_LOGOUT_HASH_KEY);
+
+    const cleanHash = hashParams.toString();
+    const cleanSearch = searchParams.toString();
+    const nextUrl = `${window.location.pathname}${cleanSearch ? `?${cleanSearch}` : ""}${cleanHash ? `#${cleanHash}` : ""}`;
+    window.history.replaceState({}, document.title, nextUrl);
+
+    return localStorage.getItem(TOKEN_STORAGE_KEY) || "";
+  }
+
+  const previousToken = localStorage.getItem(TOKEN_STORAGE_KEY) || "";
+  localStorage.setItem(TOKEN_STORAGE_KEY, handoffToken);
+
+  if (handoffToken !== previousToken) {
+    localStorage.setItem(ACTIVE_VIEW_STORAGE_KEY, "home");
+    localStorage.removeItem(ACTIVE_PROJECT_ID_STORAGE_KEY);
+    localStorage.removeItem(ACTIVE_PROJECT_TAB_STORAGE_KEY);
+  }
+
+  hashParams.delete(ADMIN_TOKEN_HASH_KEY);
+  hashParams.delete(ADMIN_LOGOUT_HASH_KEY);
+  searchParams.delete(ADMIN_TOKEN_HASH_KEY);
+  searchParams.delete(ADMIN_LOGOUT_HASH_KEY);
+
+  const nextSearch = searchParams.toString();
+  const nextHash = hashParams.toString();
+  const nextUrl = `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ""}${nextHash ? `#${nextHash}` : ""}`;
+  window.history.replaceState(null, document.title, nextUrl);
+
+  return handoffToken;
+}
 const DEFAULT_PROJECT_NAME = "Новий проект";
 const DEFAULT_PROJECT_FORM = {
   projectName: DEFAULT_PROJECT_NAME,
@@ -105,14 +168,41 @@ const DEFAULT_PROJECT_FORM = {
   drawers: "1, 2",
   facadeMaterial: "",
   insideMaterial: "",
-  edgeBanding: "",
-  materialThickness: 18,
+  facadeEdgeBanding: "",
+  insideEdgeBanding: "",
+  facadeThickness: 18,
+  insideThickness: 18,
   slideType: "tandem",
   bottomType: "hdf",
   handleType: "",
   handlePosition: "",
   notes: "",
 };
+
+const DRAWER_SLIDE_LENGTHS = [250, 300, 350, 400, 450, 500, 550, 600];
+
+const PROJECT_DRAWER_TYPE_PRESETS = [
+  {
+    id: "drawer-type-dsp",
+    image_url: "/static/project-drawers/drawer-dsp.jpg",
+    pickerSubtitleUk: "Дно шухляди з ДСП 18 мм для більш жорсткої конструкції.",
+    pickerSubtitleEn: "Drawer bottom made from 18 mm board for a more rigid build.",
+    pickerTitleEn: "Drawer bottom DSP",
+    pickerTitleUk: "Шухляда з ДСП",
+    pickerValue: "dsp_18",
+    search: "dsp dsp_18 drawer bottom board",
+  },
+  {
+    id: "drawer-type-hdf",
+    image_url: "/static/project-drawers/drawer-hdf.jpg",
+    pickerSubtitleUk: "Класичне дно HDF / ДВП для легкої шухляди.",
+    pickerSubtitleEn: "Classic HDF drawer bottom for a lighter drawer box.",
+    pickerTitleEn: "Drawer bottom HDF",
+    pickerTitleUk: "Шухляда з HDF",
+    pickerValue: "hdf",
+    search: "hdf hdf_3 drawer bottom fiberboard",
+  },
+];
 const DEFAULT_PROJECT_FILTERS = {
   search: "",
   project_type: "",
@@ -130,7 +220,9 @@ const DEFAULT_SPECIFICATION_CATALOG = {
     "wardrobe",
     "cabinet",
     "kitchen",
-    "drawer_unit",
+    "wall_unit",
+    "bathroom_vanity",
+    "bathroom_shelf",
   ],
   slide_types: [
     "tandem",
@@ -166,6 +258,144 @@ const DEFAULT_SPECIFICATION_CATALOG = {
   ],
 };
 
+const PROJECT_TYPE_OPTIONS = DEFAULT_SPECIFICATION_CATALOG.project_types;
+
+function normalizeProjectTypes(projectTypes) {
+  const allowed = new Set(PROJECT_TYPE_OPTIONS);
+  const incoming = Array.isArray(projectTypes)
+    ? projectTypes.filter((item) => allowed.has(item))
+    : [];
+  return [...new Set([...PROJECT_TYPE_OPTIONS, ...incoming])];
+}
+const PROJECT_TEMPLATE_PRESETS = [
+  {
+    descriptionKey: "projectTemplateDresserDescription",
+    fields: {
+      projectType: "dresser",
+      width: 1000,
+      height: 800,
+      depth: 500,
+      sections: 2,
+      drawers: "1, 2",
+      facadeThickness: 18,
+      insideThickness: 18,
+      slideType: "tandem",
+      bottomType: "hdf",
+    },
+    image: "/static/project-start/dresser.jpg",
+    titleKey: "projectTemplateDresserTitle",
+    visual: "dresser",
+  },
+  {
+    descriptionKey: "projectTemplateWardrobeDescription",
+    fields: {
+      projectType: "wardrobe",
+      width: 1200,
+      height: 2200,
+      depth: 600,
+      sections: 3,
+      drawers: "1",
+      facadeThickness: 18,
+      insideThickness: 18,
+      slideType: "tandem",
+      bottomType: "dsp_18",
+    },
+    image: "/static/project-start/wardrobe.jpg",
+    titleKey: "projectTemplateWardrobeTitle",
+    visual: "wardrobe",
+  },
+  {
+    descriptionKey: "projectTemplateCabinetDescription",
+    fields: {
+      projectType: "cabinet",
+      width: 600,
+      height: 720,
+      depth: 450,
+      sections: 1,
+      drawers: "",
+      facadeThickness: 18,
+      insideThickness: 18,
+      slideType: "telescopic",
+      bottomType: "hdf",
+    },
+    image: "/static/project-start/cabinet.jpg",
+    titleKey: "projectTemplateCabinetTitle",
+    visual: "cabinet",
+  },
+  {
+    descriptionKey: "projectTemplateKitchenDescription",
+    fields: {
+      projectType: "kitchen",
+      width: 2400,
+      height: 850,
+      depth: 600,
+      sections: 4,
+      drawers: "2, 3",
+      facadeThickness: 18,
+      insideThickness: 18,
+      slideType: "tandem",
+      bottomType: "dsp_18",
+    },
+    image: "/static/project-start/hero-scene.png",
+    titleKey: "projectTemplateKitchenTitle",
+    visual: "kitchen",
+  },
+  {
+    descriptionKey: "projectTemplateWallUnitDescription",
+    fields: {
+      projectType: "wall_unit",
+      width: 2200,
+      height: 1800,
+      depth: 450,
+      sections: 3,
+      drawers: "1",
+      facadeThickness: 18,
+      insideThickness: 18,
+      slideType: "telescopic",
+      bottomType: "dsp_18",
+    },
+    image: "/static/project-start/hero-scene.png",
+    titleKey: "projectTemplateWallUnitTitle",
+    visual: "wall-unit",
+  },
+  {
+    descriptionKey: "projectTemplateBathroomVanityDescription",
+    fields: {
+      projectType: "bathroom_vanity",
+      width: 800,
+      height: 650,
+      depth: 460,
+      sections: 2,
+      drawers: "1, 2",
+      facadeThickness: 18,
+      insideThickness: 18,
+      slideType: "tandem",
+      bottomType: "dsp_18",
+    },
+    image: "/static/project-start/dresser.jpg",
+    titleKey: "projectTemplateBathroomVanityTitle",
+    visual: "bathroom-vanity",
+  },
+  {
+    descriptionKey: "projectTemplateBathroomShelfDescription",
+    fields: {
+      projectType: "bathroom_shelf",
+      width: 600,
+      height: 900,
+      depth: 250,
+      sections: 3,
+      drawers: "",
+      facadeThickness: 18,
+      insideThickness: 18,
+      slideType: "telescopic",
+      bottomType: "dsp_18",
+    },
+    image: "/static/project-start/wardrobe.jpg",
+    titleKey: "projectTemplateBathroomShelfTitle",
+    visual: "bathroom-shelf",
+  },
+];
+
 const DEFAULT_CITY_OPTIONS = [
   "kyiv",
   "lviv",
@@ -174,6 +404,13 @@ const DEFAULT_CITY_OPTIONS = [
   "kharkiv",
   "khmelnytskyi",
   "rivne",
+];
+
+const MATERIAL_EDGE_SLOTS = [
+  { key: "edge_04", label: "0,4 мм" },
+  { key: "edge_08", label: "0,8 мм" },
+  { key: "edge_1", label: "1 мм" },
+  { key: "edge_2", label: "2 мм" },
 ];
 
 const CATALOG_SERVICE_VIEWS = new Set([
@@ -454,67 +691,67 @@ const FITTING_CATEGORY_VISUALS = {
   connectors_fasteners: {
     accent: "#f59e0b",
     icon: Blocks,
-    image: "/catalog/fittings/connectors-fasteners.png",
+    image: "/static/fittings/connectors-fasteners.png",
   },
   drawer_slides: {
     accent: "#0f766e",
     icon: ChevronRight,
-    image: "/catalog/fittings/drawer-slides.png",
+    image: "/static/fittings/drawer-slides.png",
   },
   handles_hooks: {
     accent: "#2563eb",
     icon: Wrench,
-    image: "/catalog/fittings/handles-hooks.png",
+    image: "/static/fittings/handles-hooks.png",
   },
   profiles_gola: {
     accent: "#1f6b34",
     icon: LayoutGrid,
-    image: "/catalog/fittings/profiles-gola.png",
+    image: "/static/fittings/profiles-gola.png",
   },
   plinth_vents: {
     accent: "#2f8ecb",
     icon: LayoutGrid,
-    image: "/catalog/fittings/plinth-vents.png",
+    image: "/static/fittings/plinth-vents.png",
   },
   legs_wheels: {
     accent: "#8b5cf6",
     icon: LayoutGrid,
-    image: "/catalog/fittings/legs-wheels.png",
+    image: "/static/fittings/legs-wheels.png",
   },
   locks_magnets: {
     accent: "#f97316",
     icon: Settings2,
-    image: "/catalog/fittings/locks-magnets.png",
+    image: "/static/fittings/locks-magnets.png",
   },
   wardrobe_systems: {
     accent: "#14b8a6",
     icon: LayoutGrid,
-    image: "/catalog/fittings/wardrobe-systems.png",
+    image: "/static/fittings/wardrobe-systems.png",
   },
   hinges: {
     accent: "#ec4899",
     icon: LayoutGrid,
-    image: "/catalog/fittings/hinges.png",
+    image: "/static/fittings/hinges.png",
   },
   bathroom: {
     accent: "#0ea5e9",
     icon: House,
-    image: "/catalog/fittings/bathroom.png",
+    image: "/static/fittings/bathroom.png",
   },
   packaging: {
     accent: "#f97316",
     icon: Package,
-    image: "/catalog/fittings/packaging.png",
+    image: "/static/fittings/packaging.png",
   },
   bed_components: {
     accent: "#6366f1",
     icon: LayoutGrid,
-    image: "/catalog/fittings/bed-components.png",
+    image: "/static/fittings/bed-components.png",
   },
   wardrobe_fillings: {
     accent: "#10b981",
     icon: LayoutGrid,
-    image: "/catalog/fittings/wardrobe-fillings.png",
+    image: "/static/fittings/wardrobe-fillings.png",
   },
   other_fittings: { accent: "#64748b", icon: Package },
   other_fasteners: { accent: "#92400e", icon: Blocks },
@@ -898,6 +1135,7 @@ const TRANSLATIONS = {
     left: "Left",
     invalidCurrentPassword: "Invalid current password",
     loginFailed: "Login failed",
+    loginOrEmail: "Login or email",
     logout: "Logout",
     noDetails: "No details",
     noCuttingItems: "No cutting items yet.",
@@ -1087,6 +1325,7 @@ const TRANSLATIONS = {
     left: "Зліва",
     invalidCurrentPassword: "Невірний поточний пароль",
     loginFailed: "Не вдалося увійти",
+    loginOrEmail: "\u041b\u043e\u0433\u0456\u043d \u0430\u0431\u043e email",
     logout: "Вийти",
     noDetails: "Без деталей",
     noCuttingItems: "Карта розкрою ще порожня.",
@@ -1425,6 +1664,7 @@ Object.assign(TRANSLATIONS.uk, {
 });
 
 Object.assign(TRANSLATIONS.en, {
+  loading: "Loading",
   home: "Home",
   homeDescription: "Quick overview of catalogs, prices, and system activity.",
   homeHeroTitle: "Admin dashboard",
@@ -1528,6 +1768,7 @@ Object.assign(TRANSLATIONS.en, {
 });
 
 Object.assign(TRANSLATIONS.uk, {
+  loading: "Завантаження",
   home: "\u0413\u043e\u043b\u043e\u0432\u043d\u0430",
   homeDescription:
     "\u0428\u0432\u0438\u0434\u043a\u0438\u0439 \u043e\u0433\u043b\u044f\u0434 \u043a\u0430\u0442\u0430\u043b\u043e\u0433\u0456\u0432, \u0446\u0456\u043d \u0456 \u0441\u0442\u0430\u043d\u0443 \u0441\u0438\u0441\u0442\u0435\u043c\u0438.",
@@ -1644,11 +1885,20 @@ Object.assign(TRANSLATIONS.en, {
   catalogMaterialsDescription:
     "Board materials shown as cards with image and city-based price.",
   materialAdd: "Add material from Viyar",
+  materialModeLinked: "From link",
+  materialModeManual: "Manual",
   materialAddArticle: "Viyar article",
   materialAddArticlePlaceholder: "Enter article and add",
   materialAddUrl: "Viyar product URL (optional)",
   materialAddUrlPlaceholder: "Paste direct product link if search fails",
+  materialDefaultForAll: "Default for all users",
   materialCategory: "Material type",
+  materialManualAdd: "Add manual material",
+  materialManualName: "Material name",
+  materialManualNamePlaceholder: "Enter material name",
+  materialManualPrice: "Price",
+  materialManualImage: "Material image",
+  materialManualImageHint: "Optional image for your own material",
   materialImportSuccess: "Material added from Viyar",
   materialImportQueued: "Material import queued. The system will retry automatically.",
   materialImportRunning: "Material import is in progress.",
@@ -1667,7 +1917,21 @@ Object.assign(TRANSLATIONS.en, {
   materialImportStateSuccess: "Completed",
   materialImportStateError: "Failed",
   materialPriceForCity: "Price for city",
+  materialCardOpen: "Open material",
+  materialDetails: "Material details",
+  materialDescription: "Description",
+  materialColor: "Color",
+  materialDimensions: "Dimensions",
+  materialThickness: "Thickness",
+  materialEdgeBands: "Edge bands",
+  materialEdgeAttach: "Add edge",
+  materialEdgeAttachConfirm: "Attach",
+  materialEdgeAttachPlaceholder: "Paste edge link",
+  materialEdgeSlotEmpty: "No edge attached yet",
+  materialEdgeAdded: "Edge attached to material",
   materialsCount: "Materials",
+  materialSystemScope: "System",
+  materialCustomScope: "Custom",
   deleteMaterial: "Delete material",
   deleteMaterialConfirm: "Delete custom material",
   materialDeleted: "Material deleted",
@@ -1699,13 +1963,24 @@ Object.assign(TRANSLATIONS.uk, {
   catalogMaterialsDescription:
     "\u041f\u043b\u0438\u0442\u043d\u0456 \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b\u0438 \u0443 \u0432\u0438\u0433\u043b\u044f\u0434\u0456 \u043a\u0430\u0440\u0442\u043e\u043a \u0456\u0437 \u0437\u043e\u0431\u0440\u0430\u0436\u0435\u043d\u043d\u044f\u043c \u0442\u0430 \u0446\u0456\u043d\u043e\u044e \u0437\u0430 \u043c\u0456\u0441\u0442\u043e\u043c.",
   materialAdd: "\u0414\u043e\u0434\u0430\u0442\u0438 \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b \u0437 Viyar",
+  materialModeLinked: "\u0417\u0430 \u043f\u043e\u0441\u0438\u043b\u0430\u043d\u043d\u044f\u043c",
+  materialModeManual: "\u0412\u0440\u0443\u0447\u043d\u0443",
   materialAddArticle: "\u0410\u0440\u0442\u0438\u043a\u0443\u043b Viyar",
   materialAddArticlePlaceholder:
     "\u0412\u0432\u0435\u0434\u0456\u0442\u044c \u0430\u0440\u0442\u0438\u043a\u0443\u043b \u0456 \u0434\u043e\u0434\u0430\u0439\u0442\u0435",
   materialAddUrl: "\u041f\u0440\u044f\u043c\u0435 \u043f\u043e\u0441\u0438\u043b\u0430\u043d\u043d\u044f Viyar (\u043d\u0435\u043e\u0431\u043e\u0432'\u044f\u0437\u043a\u043e\u0432\u043e)",
   materialAddUrlPlaceholder:
     "\u0412\u0441\u0442\u0430\u0432\u0442\u0435 \u043f\u0440\u044f\u043c\u0438\u0439 URL \u0442\u043e\u0432\u0430\u0440\u0443, \u044f\u043a\u0449\u043e \u043f\u043e\u0448\u0443\u043a \u043d\u0435 \u0441\u043f\u0440\u0430\u0446\u044e\u0432\u0430\u0432",
+  materialDefaultForAll: "\u041c\u0430\u0442\u0435\u0440\u0456\u0430\u043b \u0437\u0430 \u0437\u0430\u043c\u043e\u0432\u0447\u0443\u0432\u0430\u043d\u043d\u044f\u043c \u0434\u043b\u044f \u0432\u0441\u0456\u0445",
   materialCategory: "\u0422\u0438\u043f \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b\u0443",
+  materialManualAdd: "\u0414\u043e\u0434\u0430\u0442\u0438 \u0441\u0432\u0456\u0439 \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b",
+  materialManualName: "\u041d\u0430\u0437\u0432\u0430 \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b\u0443",
+  materialManualNamePlaceholder:
+    "\u0412\u0432\u0435\u0434\u0456\u0442\u044c \u043d\u0430\u0437\u0432\u0443 \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b\u0443",
+  materialManualPrice: "\u0426\u0456\u043d\u0430",
+  materialManualImage: "\u0417\u043e\u0431\u0440\u0430\u0436\u0435\u043d\u043d\u044f \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b\u0443",
+  materialManualImageHint:
+    "\u041c\u043e\u0436\u043d\u0430 \u0434\u043e\u0434\u0430\u0442\u0438 \u0441\u0432\u043e\u0454 \u0437\u043e\u0431\u0440\u0430\u0436\u0435\u043d\u043d\u044f",
   materialImportSuccess: "\u041c\u0430\u0442\u0435\u0440\u0456\u0430\u043b \u0434\u043e\u0434\u0430\u043d\u043e \u0437 Viyar",
   materialImportQueued: "\u0406\u043c\u043f\u043e\u0440\u0442 \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b\u0443 \u043f\u043e\u0441\u0442\u0430\u0432\u043b\u0435\u043d\u043e \u0432 \u0447\u0435\u0440\u0433\u0443. \u0421\u0438\u0441\u0442\u0435\u043c\u0430 \u0441\u0430\u043c\u0430 \u043f\u043e\u0432\u0442\u043e\u0440\u0438\u0442\u044c \u0441\u043f\u0440\u043e\u0431\u0438.",
   materialImportRunning: "\u0406\u043c\u043f\u043e\u0440\u0442 \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b\u0443 \u0432\u0438\u043a\u043e\u043d\u0443\u0454\u0442\u044c\u0441\u044f.",
@@ -1724,7 +1999,21 @@ Object.assign(TRANSLATIONS.uk, {
   materialImportStateSuccess: "\u0417\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u043e",
   materialImportStateError: "\u041f\u043e\u043c\u0438\u043b\u043a\u0430",
   materialPriceForCity: "\u0426\u0456\u043d\u0430 \u0434\u043b\u044f \u043c\u0456\u0441\u0442\u0430",
+  materialCardOpen: "\u0412\u0456\u0434\u043a\u0440\u0438\u0442\u0438 \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b",
+  materialDetails: "\u0414\u0435\u0442\u0430\u043b\u0456 \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b\u0443",
+  materialDescription: "\u041e\u043f\u0438\u0441",
+  materialColor: "\u041a\u043e\u043b\u0456\u0440",
+  materialDimensions: "\u0413\u0430\u0431\u0430\u0440\u0438\u0442",
+  materialThickness: "\u0422\u043e\u0432\u0449\u0438\u043d\u0430",
+  materialEdgeBands: "\u041a\u0440\u0430\u0439\u043a\u0430",
+  materialEdgeAttach: "\u0414\u043e\u0434\u0430\u0442\u0438",
+  materialEdgeAttachConfirm: "\u041f\u0440\u0438\u0454\u0434\u043d\u0430\u0442\u0438",
+  materialEdgeAttachPlaceholder: "\u0412\u0441\u0442\u0430\u0432\u0442\u0435 \u043f\u043e\u0441\u0438\u043b\u0430\u043d\u043d\u044f \u043d\u0430 \u043a\u0440\u0430\u0439\u043a\u0443",
+  materialEdgeSlotEmpty: "\u041a\u0440\u0430\u0439\u043a\u0443 \u0449\u0435 \u043d\u0435 \u043f\u0440\u0438\u0432'\u044f\u0437\u0430\u043d\u043e",
+  materialEdgeAdded: "\u041a\u0440\u0430\u0439\u043a\u0443 \u043f\u0440\u0438\u0432'\u044f\u0437\u0430\u043d\u043e \u0434\u043e \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b\u0443",
   materialsCount: "\u041c\u0430\u0442\u0435\u0440\u0456\u0430\u043b\u0438",
+  materialSystemScope: "\u0421\u0438\u0441\u0442\u0435\u043c\u043d\u0438\u0439",
+  materialCustomScope: "\u0412\u043b\u0430\u0441\u043d\u0438\u0439",
   deleteMaterial: "\u0412\u0438\u0434\u0430\u043b\u0438\u0442\u0438 \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b",
   deleteMaterialConfirm: "\u0412\u0438\u0434\u0430\u043b\u0438\u0442\u0438 \u043a\u043e\u0440\u0438\u0441\u0442\u0443\u0432\u0430\u0446\u044c\u043a\u0438\u0439 \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b",
   materialDeleted: "\u041c\u0430\u0442\u0435\u0440\u0456\u0430\u043b \u0432\u0438\u0434\u0430\u043b\u0435\u043d\u043e",
@@ -1756,14 +2045,164 @@ Object.assign(TRANSLATIONS.uk, {
   forCalculation: "\u0414\u043b\u044f \u043f\u0440\u043e\u0440\u0430\u0445\u0443\u043d\u043a\u0443",
 });
 
+Object.assign(TRANSLATIONS.en, {
+  aiScanApply: "Apply to form",
+  aiScanConfirmed: "Recognition confirmed",
+  aiScanDescription: "Upload a photo, sketch, or PDF. The system will try to detect furniture type and dimensions.",
+  aiScanFound: "Draft result",
+  aiScanHistory: "Recent recognition drafts",
+  aiScanNeedsConfirmation: "Needs confirmation",
+  aiScanProOnly: "AI recognition is available for PRO, Premium, and admins.",
+  aiScanRawText: "OCR text",
+  aiScanTitle: "AI recognition",
+  aiScanUnsupported: "Recognition failed",
+  aiScanUpload: "Analyze file",
+  projectPremiumOpenUpload: "Open upload",
+  projectPremiumOptionBatch: "Batch start",
+  projectPremiumOptionBatchDescription: "Reserved for future import of several products at once.",
+  projectPremiumOptionRecognition: "File or sketch",
+  projectPremiumOptionRecognitionDescription: "Photo, drawing, or PDF for initial recognition.",
+  projectPremiumOptionTemplates: "Smart templates",
+  projectPremiumOptionTemplatesDescription: "Fast construction presets with base parameters.",
+  projectSpecificationTitle: "Project specification",
+  projectStartAiDescription: "Upload a sketch, photo, or PDF and confirm detected project data.",
+  projectStartAiTitle: "PRO AI scan",
+  projectStartDescription: "Choose a start scenario: template, PRO scan, or extended Premium start.",
+  projectStartFreeBadge: "Free",
+  projectStartManualDescription: "Free start: choose a prepared construction template and adjust fields.",
+  projectStartManualTitle: "Prepared templates",
+  projectStartPremiumBadge: "Premium",
+  projectStartPremiumDescription: "Maximum start with templates, scan, PDF, and future batch imports.",
+  projectStartPremiumOnly: "Premium start is available for Premium users and admins.",
+  projectStartPremiumTitle: "Premium start",
+  projectStartProBadge: "PRO / Premium",
+  projectStartTitle: "Project start",
+  projectTemplateApplied: "Template applied to the form",
+  projectTemplateCabinetDescription: "Compact cabinet for quick manual calculation.",
+  projectTemplateCabinetTitle: "Cabinet",
+  projectTemplateDrawerUnitDescription: "Drawer unit with base slide settings.",
+  projectTemplateDrawerUnitTitle: "Drawer unit",
+  projectTemplateDresserDescription: "Dresser with sections and drawers by a base scenario.",
+  projectTemplateDresserTitle: "Dresser",
+  projectTemplateWardrobeDescription: "Tall wardrobe with sections and one drawer.",
+  projectTemplateWardrobeTitle: "Wardrobe",
+});
+
+Object.assign(TRANSLATIONS.uk, {
+  aiScanApply: "\u0417\u0430\u0441\u0442\u043e\u0441\u0443\u0432\u0430\u0442\u0438 \u0434\u043e \u0444\u043e\u0440\u043c\u0438",
+  aiScanConfirmed: "\u0420\u043e\u0437\u043f\u0456\u0437\u043d\u0430\u0432\u0430\u043d\u043d\u044f \u043f\u0456\u0434\u0442\u0432\u0435\u0440\u0434\u0436\u0435\u043d\u043e",
+  aiScanDescription:
+    "\u0417\u0430\u0432\u0430\u043d\u0442\u0430\u0436\u0442\u0435 \u0444\u043e\u0442\u043e, \u0435\u0441\u043a\u0456\u0437 \u0430\u0431\u043e PDF. \u0421\u0438\u0441\u0442\u0435\u043c\u0430 \u0441\u043f\u0440\u043e\u0431\u0443\u0454 \u0432\u0438\u0437\u043d\u0430\u0447\u0438\u0442\u0438 \u0442\u0438\u043f \u043c\u0435\u0431\u043b\u0456\u0432 \u0456 \u0440\u043e\u0437\u043c\u0456\u0440\u0438.",
+  aiScanFound: "\u041f\u043e\u043f\u0435\u0440\u0435\u0434\u043d\u0456\u0439 \u0440\u0435\u0437\u0443\u043b\u044c\u0442\u0430\u0442",
+  aiScanHistory: "\u041e\u0441\u0442\u0430\u043d\u043d\u0456 \u0447\u0435\u0440\u043d\u0435\u0442\u043a\u0438 \u0440\u043e\u0437\u043f\u0456\u0437\u043d\u0430\u0432\u0430\u043d\u044c",
+  aiScanNeedsConfirmation: "\u041f\u043e\u0442\u0440\u0456\u0431\u043d\u0435 \u043f\u0456\u0434\u0442\u0432\u0435\u0440\u0434\u0436\u0435\u043d\u043d\u044f",
+  aiScanProOnly: "AI-\u0440\u043e\u0437\u043f\u0456\u0437\u043d\u0430\u0432\u0430\u043d\u043d\u044f \u0434\u043e\u0441\u0442\u0443\u043f\u043d\u0435 \u0434\u043b\u044f PRO, Premium \u0442\u0430 \u0430\u0434\u043c\u0456\u043d\u0430.",
+  aiScanRawText: "OCR-\u0442\u0435\u043a\u0441\u0442",
+  aiScanTitle: "AI-\u0440\u043e\u0437\u043f\u0456\u0437\u043d\u0430\u0432\u0430\u043d\u043d\u044f",
+  aiScanUnsupported: "\u0420\u043e\u0437\u043f\u0456\u0437\u043d\u0430\u0432\u0430\u043d\u043d\u044f \u043d\u0435 \u0432\u0434\u0430\u043b\u043e\u0441\u044f",
+  aiScanUpload: "\u041f\u0440\u043e\u0430\u043d\u0430\u043b\u0456\u0437\u0443\u0432\u0430\u0442\u0438 \u0444\u0430\u0439\u043b",
+  projectPremiumOpenUpload: "\u0412\u0456\u0434\u043a\u0440\u0438\u0442\u0438 \u0437\u0430\u0432\u0430\u043d\u0442\u0430\u0436\u0435\u043d\u043d\u044f",
+  projectPremiumOptionBatch: "\u041f\u0430\u043a\u0435\u0442\u043d\u0438\u0439 \u0441\u0442\u0430\u0440\u0442",
+  projectPremiumOptionBatchDescription:
+    "\u041c\u0456\u0441\u0446\u0435 \u0434\u043b\u044f \u043c\u0430\u0439\u0431\u0443\u0442\u043d\u044c\u043e\u0433\u043e \u0456\u043c\u043f\u043e\u0440\u0442\u0443 \u043d\u0430\u0431\u043e\u0440\u0443 \u0432\u0438\u0440\u043e\u0431\u0456\u0432.",
+  projectPremiumOptionRecognition: "\u0424\u0430\u0439\u043b \u0430\u0431\u043e \u0435\u0441\u043a\u0456\u0437",
+  projectPremiumOptionRecognitionDescription:
+    "\u0424\u043e\u0442\u043e, \u043c\u0430\u043b\u044e\u043d\u043e\u043a \u0430\u0431\u043e PDF \u0434\u043b\u044f \u043f\u0435\u0440\u0432\u0438\u043d\u043d\u043e\u0433\u043e \u0440\u043e\u0437\u043f\u0456\u0437\u043d\u0430\u0432\u0430\u043d\u043d\u044f.",
+  projectPremiumOptionTemplates: "\u0420\u043e\u0437\u0443\u043c\u043d\u0456 \u0448\u0430\u0431\u043b\u043e\u043d\u0438",
+  projectPremiumOptionTemplatesDescription:
+    "\u0428\u0432\u0438\u0434\u043a\u0438\u0439 \u0432\u0438\u0431\u0456\u0440 \u043a\u043e\u043d\u0441\u0442\u0440\u0443\u043a\u0446\u0456\u0439 \u0437 \u0431\u0430\u0437\u043e\u0432\u0438\u043c\u0438 \u043f\u0430\u0440\u0430\u043c\u0435\u0442\u0440\u0430\u043c\u0438.",
+  projectSpecificationTitle: "\u0421\u043f\u0435\u0446\u0438\u0444\u0456\u043a\u0430\u0446\u0456\u044f \u043f\u0440\u043e\u0435\u043a\u0442\u0443",
+  projectStartAiDescription:
+    "\u0417\u0430\u0432\u0430\u043d\u0442\u0430\u0436\u0442\u0435 \u0435\u0441\u043a\u0456\u0437, \u0444\u043e\u0442\u043e \u0430\u0431\u043e PDF \u0456 \u043f\u0456\u0434\u0442\u0432\u0435\u0440\u0434\u0456\u0442\u044c \u0437\u043d\u0430\u0439\u0434\u0435\u043d\u0456 \u0434\u0430\u043d\u0456.",
+  projectStartAiTitle: "PRO AI-\u0441\u043a\u0430\u043d",
+  projectStartDescription:
+    "\u041e\u0431\u0435\u0440\u0456\u0442\u044c \u0441\u0446\u0435\u043d\u0430\u0440\u0456\u0439: \u0448\u0430\u0431\u043b\u043e\u043d, PRO-\u0441\u043a\u0430\u043d \u0430\u0431\u043e \u0440\u043e\u0437\u0448\u0438\u0440\u0435\u043d\u0438\u0439 Premium-\u0441\u0442\u0430\u0440\u0442.",
+  projectStartFreeBadge: "\u0411\u0435\u0437\u043a\u043e\u0448\u0442\u043e\u0432\u043d\u043e",
+  projectStartManualDescription:
+    "\u0411\u0435\u0437\u043a\u043e\u0448\u0442\u043e\u0432\u043d\u0438\u0439 \u0441\u0442\u0430\u0440\u0442: \u0432\u0438\u0431\u0435\u0440\u0456\u0442\u044c \u0433\u043e\u0442\u043e\u0432\u0438\u0439 \u0448\u0430\u0431\u043b\u043e\u043d \u0456 \u0434\u043e\u043f\u0440\u0430\u0446\u044e\u0439\u0442\u0435 \u043f\u043e\u043b\u044f.",
+  projectStartManualTitle: "\u0413\u043e\u0442\u043e\u0432\u0456 \u0448\u0430\u0431\u043b\u043e\u043d\u0438",
+  projectStartPremiumBadge: "Premium",
+  projectStartPremiumDescription:
+    "\u041c\u0430\u043a\u0441\u0438\u043c\u0430\u043b\u044c\u043d\u0438\u0439 \u0441\u0442\u0430\u0440\u0442: \u0448\u0430\u0431\u043b\u043e\u043d\u0438, \u0441\u043a\u0430\u043d, PDF \u0442\u0430 \u043c\u0430\u0439\u0431\u0443\u0442\u043d\u0456 \u043f\u0430\u043a\u0435\u0442\u043d\u0456 \u0456\u043c\u043f\u043e\u0440\u0442\u0438.",
+  projectStartPremiumOnly: "Premium-\u0441\u0442\u0430\u0440\u0442 \u0434\u043e\u0441\u0442\u0443\u043f\u043d\u0438\u0439 \u0434\u043b\u044f Premium \u0442\u0430 \u0430\u0434\u043c\u0456\u043d\u0430.",
+  projectStartPremiumTitle: "Premium \u0441\u0442\u0430\u0440\u0442",
+  projectStartProBadge: "PRO / Premium",
+  projectStartTitle: "\u041f\u043e\u0447\u0430\u0442\u043e\u043a \u043f\u0440\u043e\u0435\u043a\u0442\u0443",
+  projectTemplateApplied: "\u0428\u0430\u0431\u043b\u043e\u043d \u0437\u0430\u0441\u0442\u043e\u0441\u043e\u0432\u0430\u043d\u043e \u0434\u043e \u0444\u043e\u0440\u043c\u0438",
+  projectTemplateCabinetDescription: "\u041a\u043e\u043c\u043f\u0430\u043a\u0442\u043d\u0430 \u0442\u0443\u043c\u0431\u0430 \u0434\u043b\u044f \u0448\u0432\u0438\u0434\u043a\u043e\u0433\u043e \u0440\u0443\u0447\u043d\u043e\u0433\u043e \u043f\u0440\u043e\u0440\u0430\u0445\u0443\u043d\u043a\u0443.",
+  projectTemplateCabinetTitle: "\u0422\u0443\u043c\u0431\u0430",
+  projectTemplateDrawerUnitDescription: "\u0411\u043b\u043e\u043a \u0448\u0443\u0445\u043b\u044f\u0434 \u0437 \u0431\u0430\u0437\u043e\u0432\u0438\u043c\u0438 \u043d\u0430\u043f\u0440\u0430\u0432\u043b\u044f\u044e\u0447\u0438\u043c\u0438.",
+  projectTemplateDrawerUnitTitle: "\u0411\u043b\u043e\u043a \u0448\u0443\u0445\u043b\u044f\u0434",
+  projectTemplateDresserDescription: "\u041a\u043e\u043c\u043e\u0434 \u0437 \u0441\u0435\u043a\u0446\u0456\u044f\u043c\u0438 \u0442\u0430 \u0448\u0443\u0445\u043b\u044f\u0434\u0430\u043c\u0438 \u0437\u0430 \u0431\u0430\u0437\u043e\u0432\u0438\u043c \u0441\u0446\u0435\u043d\u0430\u0440\u0456\u0454\u043c.",
+  projectTemplateDresserTitle: "\u041a\u043e\u043c\u043e\u0434",
+  projectTemplateWardrobeDescription: "\u0412\u0438\u0441\u043e\u043a\u0430 \u0448\u0430\u0444\u0430 \u0437 \u0441\u0435\u043a\u0446\u0456\u044f\u043c\u0438 \u0442\u0430 \u043e\u0434\u043d\u0456\u0454\u044e \u0448\u0443\u0445\u043b\u044f\u0434\u043e\u044e.",
+  projectTemplateWardrobeTitle: "\u0428\u0430\u0444\u0430",
+});
+
+Object.assign(TRANSLATIONS.en, {
+  bathroom_shelf: "Bathroom shelf",
+  bathroom_vanity: "Bathroom vanity",
+  wall_unit: "Wall unit",
+  projectStartPremiumBadge: "Business",
+  projectStartPremiumDescription:
+    "Business start: templates, scan, PDF, and extended import scenarios for larger workflows.",
+  projectStartPremiumOnly: "Business start is available for Premium users and admins.",
+  projectStartPremiumTitle: "Business start",
+  projectTemplateBathroomShelfDescription: "Compact bathroom shelf with shallow depth and vertical storage.",
+  projectTemplateBathroomShelfTitle: "Bathroom shelf",
+  projectTemplateBathroomVanityDescription: "Vanity unit for a bathroom with a cabinet body and front.",
+  projectTemplateBathroomVanityTitle: "Bathroom vanity",
+  projectTemplateKitchenDescription: "Base kitchen module with countertop depth and working height.",
+  projectTemplateKitchenTitle: "Kitchen",
+  projectTemplateWallUnitDescription: "Living-room wall unit with wide body and storage zones.",
+  projectTemplateWallUnitTitle: "Wall unit",
+});
+
+Object.assign(TRANSLATIONS.uk, {
+  bathroom_shelf: "Санвузлова полка",
+  bathroom_vanity: "Санвузлова тумба",
+  wall_unit: "Стінка",
+  projectStartPremiumBadge: "Business",
+  projectStartPremiumDescription:
+    "Business-старт: шаблони, скан, PDF та розширені сценарії імпорту для більших робочих процесів.",
+  projectStartPremiumOnly: "Business-старт доступний для Premium-користувачів та адміна.",
+  projectStartPremiumTitle: "Business старт",
+  projectTemplateBathroomShelfDescription: "Компактна санвузлова полка з малою глибиною та вертикальним зберіганням.",
+  projectTemplateBathroomShelfTitle: "Санвузлова полка",
+  projectTemplateBathroomVanityDescription: "Тумба для санвузла з корпусом, фасадом і базовими параметрами.",
+  projectTemplateBathroomVanityTitle: "Санвузлова тумба",
+  projectTemplateKitchenDescription: "Базовий кухонний модуль з робочою висотою та глибиною стільниці.",
+  projectTemplateKitchenTitle: "Кухня",
+  projectTemplateWallUnitDescription: "Стінка для кімнати з широким корпусом і зонами зберігання.",
+  projectTemplateWallUnitTitle: "Стінка",
+});
+
 function buildProjectPayload(form) {
+  const normalizeText = (value) => {
+    const trimmed = String(value || "").trim();
+    return trimmed || null;
+  };
+  const normalizeNumber = (value) => {
+    if (value === null || value === undefined || value === "") {
+      return null;
+    }
+
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+
+  const drawerConfig = String(form.drawers || "")
+    .split(",")
+    .map((value) => Number(value.trim()))
+    .filter((value) => Number.isFinite(value) && value > 0);
+
   return {
     metadata: {
-      name: form.projectName || DEFAULT_PROJECT_NAME,
-      type: form.projectType || null,
-      client: form.clientName || null,
-      room: form.roomName || null,
-      notes: form.notes || null,
+      name: normalizeText(form.projectName) || DEFAULT_PROJECT_NAME,
+      type: normalizeText(form.projectType),
+      client: normalizeText(form.clientName),
+      room: normalizeText(form.roomName),
+      notes: normalizeText(form.notes),
     },
     dimensions: {
       width: Number(form.width),
@@ -1775,23 +2214,23 @@ function buildProjectPayload(form) {
       config: [],
     },
     drawers: {
-      config: form.drawers
-        .split(",")
-        .map((value) => value.trim())
-        .filter(Boolean)
-        .map(Number),
+      config: drawerConfig,
     },
     materials: {
-      facade: form.facadeMaterial || null,
-      inside: form.insideMaterial || null,
-      edge_banding: form.edgeBanding || null,
-      thickness: form.materialThickness ? Number(form.materialThickness) : null,
+      facade: normalizeText(form.facadeMaterial),
+      inside: normalizeText(form.insideMaterial),
+      facade_edge_banding: normalizeText(form.facadeEdgeBanding),
+      inside_edge_banding: normalizeText(form.insideEdgeBanding),
+      edge_banding: normalizeText(form.insideEdgeBanding || form.facadeEdgeBanding),
+      facade_thickness: normalizeNumber(form.facadeThickness),
+      inside_thickness: normalizeNumber(form.insideThickness),
+      thickness: normalizeNumber(form.insideThickness || form.facadeThickness),
     },
     fittings: {
-      slide_type: form.slideType || "tandem",
-      bottom_type: form.bottomType || "hdf",
-      handle_type: form.handleType || null,
-      handle_position: form.handlePosition || null,
+      slide_type: normalizeText(form.slideType) || "tandem",
+      bottom_type: normalizeText(form.bottomType) || "hdf",
+      handle_type: normalizeText(form.handleType),
+      handle_position: normalizeText(form.handlePosition),
     },
   };
 }
@@ -1809,8 +2248,10 @@ function projectToForm(project) {
     drawers: Array.isArray(project?.drawers) ? project.drawers.join(", ") : "",
     facadeMaterial: project?.facade_material || "",
     insideMaterial: project?.inside_material || "",
-    edgeBanding: project?.edge_banding || "",
-    materialThickness: project?.material_thickness || 18,
+    facadeEdgeBanding: project?.facade_edge_banding || project?.edge_banding || "",
+    insideEdgeBanding: project?.inside_edge_banding || project?.edge_banding || "",
+    facadeThickness: project?.facade_thickness || project?.material_thickness || 18,
+    insideThickness: project?.inside_thickness || project?.material_thickness || 18,
     slideType: project?.slide_type || "tandem",
     bottomType: project?.bottom_type || "hdf",
     handleType: project?.handle_type || "",
@@ -1825,6 +2266,122 @@ function formatDrawers(drawers, t) {
   }
 
   return drawers.join(", ");
+}
+
+function buildProjectMaterialOption(item) {
+  const name = String(item?.name || "").trim();
+  const article = String(item?.display_article || item?.article || "").trim();
+  const dimensions = String(item?.dimensions || "").trim();
+  const thickness = String(item?.thickness || "").trim();
+
+  const suffix = [dimensions, thickness].filter(Boolean).join(" / ");
+  const primary = name || article;
+
+  if (!primary) {
+    return "";
+  }
+
+  if (suffix) {
+    return `${primary} (${suffix})`;
+  }
+
+  return primary;
+}
+
+function buildProjectHandleOption(item) {
+  const name = String(item?.name || "").trim();
+  const article = String(item?.article || "").trim();
+  const code = String(item?.code || "").trim();
+  const primary = name || code || article;
+
+  if (!primary) {
+    return "";
+  }
+
+  if (article && article !== primary) {
+    return `${primary} [${article}]`;
+  }
+
+  return primary;
+}
+
+function parseProjectMaterialThicknessValue(value) {
+  const normalized = String(value || "").replace(",", ".").trim();
+  const match = normalized.match(/(\d+(?:\.\d+)?)/);
+
+  if (!match) {
+    return null;
+  }
+
+  const parsed = Number(match[1]);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function findProjectMaterialItemByValue(items, value) {
+  const normalizedValue = String(value || "").trim();
+
+  if (!normalizedValue) {
+    return null;
+  }
+
+  return (
+    items.find((item) => String(item.pickerValue || "").trim() === normalizedValue) ||
+    items.find((item) => String(item.name || "").trim() === normalizedValue) ||
+    items.find((item) => String(item.article || "").trim() === normalizedValue) ||
+    null
+  );
+}
+
+function buildProjectEdgeBandingOption(materialItem, edgeItem, slotLabel) {
+  if (!edgeItem) {
+    return null;
+  }
+
+  const name = String(edgeItem.name || "").trim();
+  const article = String(edgeItem.article || "").trim();
+  const thickness = String(edgeItem.thickness || "").trim();
+  const materialName = getMaterialShortName(materialItem);
+
+  return {
+    ...edgeItem,
+    id: `${materialItem?.article || materialItem?.id || "material"}-${edgeItem.edge_key || article || name}`,
+    pickerValue: name || article || slotLabel,
+    pickerTitle: name || article || slotLabel,
+    pickerSubtitle: [slotLabel, thickness, materialName].filter(Boolean).join(" / "),
+    pickerSearch: [name, article, thickness, materialName, slotLabel].filter(Boolean).join(" ").toLowerCase(),
+  };
+}
+
+function getProjectMaterialDependencyConfig(field) {
+  if (
+    field === "facadeMaterial" ||
+    field === "facadeEdgeBanding" ||
+    field === "facadeThickness"
+  ) {
+    return {
+      edgeField: "facadeEdgeBanding",
+      materialField: "facadeMaterial",
+      thicknessField: "facadeThickness",
+    };
+  }
+
+  if (
+    field === "insideMaterial" ||
+    field === "insideEdgeBanding" ||
+    field === "insideThickness"
+  ) {
+    return {
+      edgeField: "insideEdgeBanding",
+      materialField: "insideMaterial",
+      thicknessField: "insideThickness",
+    };
+  }
+
+  return {
+    edgeField: "",
+    materialField: "",
+    thicknessField: "",
+  };
 }
 
 function formatDateTime(value, t) {
@@ -1865,21 +2422,73 @@ function formatCatalogLabel(value, t) {
   return t[value] || value;
 }
 
+function getSlideLengthForDepth(depth) {
+  const value = Number(depth);
+
+  if (!Number.isFinite(value) || value <= 0) {
+    return 500;
+  }
+
+  if (value >= 290 && value < 340) return 250;
+  if (value >= 340 && value < 390) return 300;
+  if (value >= 390 && value < 440) return 350;
+  if (value >= 440 && value < 490) return 400;
+  if (value >= 490 && value < 540) return 450;
+  if (value >= 540 && value < 590) return 500;
+  if (value >= 590 && value < 640) return 550;
+  return 600;
+}
+
+function detectProjectSlideFamily(value) {
+  const haystack = String(value || "").toLowerCase();
+
+  if (haystack.includes("movento")) {
+    return "movento";
+  }
+
+  if (haystack.includes("tandem")) {
+    return "tandem";
+  }
+
+  if (haystack.includes("telescopic") || haystack.includes("телескоп")) {
+    return "telescopic";
+  }
+
+  return "";
+}
+
+function detectProjectSlideLength(value) {
+  const haystack = String(value || "");
+
+  for (const length of DRAWER_SLIDE_LENGTHS) {
+    const matcher = new RegExp(`(^|[^0-9])${length}([^0-9]|$)`);
+    if (matcher.test(haystack)) {
+      return length;
+    }
+  }
+
+  return null;
+}
+
 function buildMaterialImageCandidates(item, token = "") {
   const candidates = [];
   const article = String(item?.article || "").trim();
   const baseImage = String(item?.image || "").trim();
   const hasCachedImage = Boolean(item?.has_cached_image);
-  const tokenQuery = token ? `?access_token=${encodeURIComponent(token)}` : "";
+  // The image endpoint is cacheable and resolves the already stored database
+  // image. Keep its URL stable so browser cache survives token refreshes.
+  const imageEndpoint = article
+    ? `${API_BASE_URL}/catalog/materials/${encodeURIComponent(article)}/image`
+    : "";
 
   if (baseImage) {
     candidates.push(baseImage);
   }
 
   if (article && hasCachedImage) {
-    candidates.unshift(`${API_BASE_URL}/catalog/materials/${encodeURIComponent(article)}/image${tokenQuery}`);
+    candidates.unshift(imageEndpoint);
   } else if (article) {
-    candidates.push(`${API_BASE_URL}/catalog/materials/${encodeURIComponent(article)}/image${tokenQuery}`);
+    candidates.push(imageEndpoint);
   }
 
   if (article) {
@@ -1890,6 +2499,69 @@ function buildMaterialImageCandidates(item, token = "") {
   }
 
   return [...new Set(candidates.filter(Boolean))];
+}
+
+function buildMaterialEdgeImageCandidates(materialItem, edgeItem, token = "") {
+  const candidates = [];
+  const article = String(materialItem?.article || "").trim();
+  const edgeKey = String(edgeItem?.edge_key || "").trim();
+  const baseImage = String(edgeItem?.image || "").trim();
+  const edgeArticle = String(edgeItem?.article || "").trim();
+  const cachedImage = article && edgeKey
+    ? `${API_BASE_URL}/catalog/materials/${encodeURIComponent(article)}/edges/${encodeURIComponent(edgeKey)}/image`
+    : "";
+
+  if (cachedImage) {
+    candidates.push(cachedImage);
+  }
+
+  if (baseImage) {
+    candidates.push(baseImage);
+  }
+
+  if (edgeArticle) {
+    candidates.push(`https://viyar.ua/upload/resize_cache/photos/512_512_1/ph${edgeArticle}.jpg`);
+    candidates.push(`https://www.viyar.ua/store/Items/photos/ph${edgeArticle}.jpg`);
+    candidates.push(`https://viyar.ua/store/Items/photos/ph${edgeArticle}.jpg`);
+    candidates.push(`https://www.viyar.ua/upload/resize_cache/photos/512_512_1/ph${edgeArticle}.jpg`);
+  }
+
+  return [...new Set(candidates.filter(Boolean))];
+}
+
+function buildFittingImageCandidates(item) {
+  const candidates = [];
+  const itemId = String(item?.id || "").trim();
+  const sourceImage = String(item?.image_url || "").trim();
+  const cachedImage = itemId ? `${API_BASE_URL}/catalog/fittings/${encodeURIComponent(itemId)}/image` : "";
+
+  if (item?.has_cached_image && cachedImage) {
+    candidates.push(cachedImage);
+  }
+
+  if (sourceImage) {
+    candidates.push(sourceImage);
+  }
+
+  if (!item?.has_cached_image && cachedImage) {
+    candidates.push(cachedImage);
+  }
+
+  return [...new Set(candidates.filter(Boolean))];
+}
+
+function handleFittingImageError(event, item) {
+  const candidates = buildFittingImageCandidates(item);
+  const currentIndex = Number(event.currentTarget.dataset.fallbackIndex || "0");
+  const nextIndex = currentIndex + 1;
+
+  if (nextIndex >= candidates.length) {
+    event.currentTarget.style.display = "none";
+    return;
+  }
+
+  event.currentTarget.dataset.fallbackIndex = String(nextIndex);
+  event.currentTarget.src = candidates[nextIndex];
 }
 
 function handleMaterialImageError(event, item, token = "") {
@@ -1910,8 +2582,139 @@ function handleMaterialImageError(event, item, token = "") {
   event.currentTarget.src = candidates[nextIndex];
 }
 
+function handleMaterialEdgeImageError(event, materialItem, edgeItem, token = "") {
+  const candidates = buildMaterialEdgeImageCandidates(materialItem, edgeItem, token);
+  const currentIndex = Number(event.currentTarget.dataset.fallbackIndex || "0");
+  const nextIndex = currentIndex + 1;
+
+  if (nextIndex >= candidates.length) {
+    event.currentTarget.style.display = "none";
+    const placeholder = event.currentTarget.parentElement?.querySelector(".material-edge-card-preview-placeholder");
+    if (placeholder) {
+      placeholder.hidden = false;
+    }
+    return;
+  }
+
+  event.currentTarget.dataset.fallbackIndex = String(nextIndex);
+  event.currentTarget.src = candidates[nextIndex];
+}
+
+function hasProCatalogAccess(user) {
+  return user?.role === "admin" || user?.role === "premium" || user?.role === "pro";
+}
+
 function canManageMaterialCatalog(user) {
-  return user?.role === "admin" || user?.role === "pro";
+  return hasProCatalogAccess(user);
+}
+
+function canManageSystemMaterials(user) {
+  return hasProCatalogAccess(user);
+}
+
+function canEditMaterialItem(user, item) {
+  if (!user || !item) {
+    return false;
+  }
+
+  if (!hasProCatalogAccess(user)) {
+    return false;
+  }
+
+  if (item.is_default) {
+    return true;
+  }
+
+  return item.owner_user_id === String(user.id);
+}
+
+function canDeleteMaterialItem(user, item) {
+  return canEditMaterialItem(user, item);
+}
+
+function getMaterialSourceMeta(item, t) {
+  const sourceSite = item?.source_site || detectFittingSourceSite(item?.source_url);
+
+  if (sourceSite === "viyar") {
+    return { code: "viyar", label: "Viyar", logo: "/brand/source-logos/viyar.svg" };
+  }
+
+  if (sourceSite === "blum") {
+    return { code: "blum", label: "BLUM", logo: "/brand/source-logos/blum.svg" };
+  }
+
+  if (sourceSite === "kronas") {
+    return { code: "kronas", label: "Kronas", logo: "/brand/source-logos/kronas.svg" };
+  }
+
+  return { code: "manual", label: t.fittingManualSource, logo: "/brand/source-logos/manual.svg" };
+}
+
+function stripMaterialSizeSuffix(value) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  if (!text) {
+    return "";
+  }
+
+  return text
+    .replace(/\s+\d{2,4}\s*[xXхХ×]\s*\d{2,4}\s*[xXхХ×]\s*\d{1,3}\s*(?:мм|mm)?\b.*$/iu, "")
+    .trim();
+}
+
+function getMaterialShortName(item) {
+  const shortName = stripMaterialSizeSuffix(item?.name || "");
+  return shortName || item?.name || item?.article || "";
+}
+
+function getMaterialDescriptionText(item, t) {
+  const description = String(item?.description || "").replace(/\s+/g, " ").trim();
+  const shortName = getMaterialShortName(item);
+
+  if (!description) {
+    return shortName || t.notSet;
+  }
+
+  const normalizedDescription = description.toLowerCase();
+  const promoMarkers = [
+    "інтернет-магазин",
+    "пропонує замовити",
+    "з доставкою по україні",
+    "телефонуйте",
+    "купити",
+  ];
+
+  if (promoMarkers.some((marker) => normalizedDescription.includes(marker))) {
+    return shortName || t.notSet;
+  }
+
+  return description;
+}
+
+function getMaterialColorText(item, t) {
+  const color = String(item?.color || "").replace(/\s+/g, " ").trim();
+  if (!color) {
+    return t.notSet;
+  }
+  return stripMaterialSizeSuffix(color) || color;
+}
+
+function renderSourceBadge(sourceMeta, withLabel = false) {
+  if (!sourceMeta) {
+    return null;
+  }
+
+  return (
+    <span className={`fitting-source-logo ${sourceMeta.code}`} title={sourceMeta.label}>
+      {sourceMeta.logo ? (
+        <img alt={sourceMeta.label} className="fitting-source-logo-image" src={sourceMeta.logo} />
+      ) : null}
+      {withLabel ? <span className="fitting-source-logo-text">{sourceMeta.label}</span> : null}
+    </span>
+  );
+}
+
+function getMaterialEdgeItem(item, edgeKey) {
+  return (item?.edge_options || []).find((edge) => edge.edge_key === edgeKey) || null;
 }
 
 function canManageSystemFittings(user) {
@@ -1919,7 +2722,7 @@ function canManageSystemFittings(user) {
 }
 
 function canManageOwnFittings(user) {
-  return user?.role === "admin" || user?.role === "pro";
+  return hasProCatalogAccess(user);
 }
 
 function canDeleteFittingItem(user, item) {
@@ -1943,7 +2746,7 @@ function canEditProject(project, user) {
     return true;
   }
 
-  if (user.role === "user" || user.role === "pro") {
+  if (user.role === "free" || user.role === "pro" || user.role === "premium") {
     return project.created_by_user_id === user.id;
   }
 
@@ -1959,7 +2762,7 @@ function canRollbackProject(user) {
 }
 
 function canCreateProject(user) {
-  return user?.role === "admin" || user?.role === "user" || user?.role === "pro";
+  return Boolean(user);
 }
 
 const EDGE_SIDES = ["top", "right", "bottom", "left"];
@@ -2821,9 +3624,11 @@ export default function App() {
     () => localStorage.getItem(LANGUAGE_STORAGE_KEY) || "en",
   );
   const [token, setToken] = useState(
-    () => localStorage.getItem(TOKEN_STORAGE_KEY) || "",
+    () => consumeAdminTokenHandoff(),
   );
+  const tokenRef = useRef(token);
   const [user, setUser] = useState(null);
+  const [authChecking, setAuthChecking] = useState(Boolean(token));
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showLoginPassword, setShowLoginPassword] = useState(false);
@@ -2848,7 +3653,7 @@ export default function App() {
   const [newUserForm, setNewUserForm] = useState({
     email: "",
     password: "",
-    role: "user",
+    role: "free",
   });
   const [newCatalogItemForm, setNewCatalogItemForm] = useState({
     category: "project_type",
@@ -2865,6 +3670,11 @@ export default function App() {
     unit: "service",
   });
   const [newProjectForm, setNewProjectForm] = useState(DEFAULT_PROJECT_FORM);
+  const [projectStartMode, setProjectStartMode] = useState("templates");
+  const [aiScanFile, setAiScanFile] = useState(null);
+  const [aiScanResult, setAiScanResult] = useState(null);
+  const [aiScanSession, setAiScanSession] = useState(null);
+  const [aiScanHistory, setAiScanHistory] = useState([]);
   const [projectFilters, setProjectFilters] = useState(DEFAULT_PROJECT_FILTERS);
   const [resetPasswordForms, setResetPasswordForms] = useState({});
   const [projects, setProjects] = useState([]);
@@ -2879,14 +3689,30 @@ export default function App() {
   const [materialCategories, setMaterialCategories] = useState([]);
   const [materialCityOptions, setMaterialCityOptions] = useState(DEFAULT_CITY_OPTIONS);
   const [materialSelectedCity, setMaterialSelectedCity] = useState("");
+  const [materialCreateMode, setMaterialCreateMode] = useState("source");
   const [materialSearch, setMaterialSearch] = useState("");
   const [materialCategoryFilter, setMaterialCategoryFilter] = useState("dsp");
   const [newMaterialArticle, setNewMaterialArticle] = useState("");
   const [newMaterialSourceUrl, setNewMaterialSourceUrl] = useState("");
+  const [newMaterialName, setNewMaterialName] = useState("");
+  const [newMaterialPrice, setNewMaterialPrice] = useState("");
+  const [newMaterialImageUrl, setNewMaterialImageUrl] = useState("");
+  const [newMaterialIsDefault, setNewMaterialIsDefault] = useState(false);
   const [activeMaterialImportJobId, setActiveMaterialImportJobId] = useState("");
   const [activeMaterialImportJob, setActiveMaterialImportJob] = useState(null);
   const [openMaterialMenuId, setOpenMaterialMenuId] = useState("");
+  const [selectedMaterialDetail, setSelectedMaterialDetail] = useState(null);
+  const [materialDetailLoading, setMaterialDetailLoading] = useState(false);
+  const [materialEdgeForms, setMaterialEdgeForms] = useState({});
   const [openFittingMenuId, setOpenFittingMenuId] = useState("");
+  const [projectOptionPicker, setProjectOptionPicker] = useState({
+    open: false,
+    target: "create",
+    field: "",
+    mode: "materials",
+    title: "",
+  });
+  const [projectOptionPickerSearch, setProjectOptionPickerSearch] = useState("");
   const [viyarServiceSource, setViyarServiceSource] = useState("viyar");
   const [viyarTreeLoading, setViyarTreeLoading] = useState(false);
   const [viyarPriceSyncSummary, setViyarPriceSyncSummary] = useState(null);
@@ -2917,8 +3743,9 @@ export default function App() {
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [productionLoaded, setProductionLoaded] = useState(false);
   const [form, setForm] = useState(projectToForm(null));
-  const [status, setStatus] = useState("");
+  const [status, setStatusState] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [loginLoading, setLoginLoading] = useState(false);
   const [confirmAction, setConfirmAction] = useState(null);
   const [activeView, setActiveView] = useState(
     () => normalizeCatalogView(localStorage.getItem(ACTIVE_VIEW_STORAGE_KEY) || "home"),
@@ -2935,6 +3762,69 @@ export default function App() {
   const storedProjectTab = localStorage.getItem(ACTIVE_PROJECT_TAB_STORAGE_KEY) || "data";
 
   const t = TRANSLATIONS[language] || TRANSLATIONS.en;
+  const userLoginName = user?.username || user?.email?.split("@")[0] || "";
+  const canUseAiScan = user?.role === "admin" || user?.role === "premium" || user?.role === "pro";
+  const canUsePremiumStart = user?.role === "admin" || user?.role === "premium";
+  const inferStatusTone = useCallback((message) => {
+    const normalizedMessage = String(message || "").toLowerCase();
+
+    if (!normalizedMessage) {
+      return "info";
+    }
+
+    if (
+      /unable|failed|invalid|error|restricted|not found|�� �������|�������|����������|��������|�� ��������/.test(normalizedMessage)
+    ) {
+      return "error";
+    }
+
+    if (
+      /saved|updated|created|connected|queued|synced|deleted|confirmed|requested|loaded from cache|applied|success|working|������|����|�����|������|����|�������|�����|������|������|����|�������/.test(normalizedMessage)
+    ) {
+      return "success";
+    }
+
+    return "info";
+  }, []);
+  const normalizeStatusPayload = useCallback(
+    (value, previous = null) => {
+      if (!value) {
+        return null;
+      }
+
+      if (typeof value === "function") {
+        const resolved = value(previous?.message || "");
+        return normalizeStatusPayload(resolved, previous);
+      }
+
+      if (typeof value === "string") {
+        const message = value.trim();
+        return message ? { message, tone: inferStatusTone(message) } : null;
+      }
+
+      if (typeof value === "object") {
+        const message = String(value.message || "").trim();
+        if (!message) {
+          return null;
+        }
+
+        return {
+          message,
+          tone: value.tone || inferStatusTone(message),
+        };
+      }
+
+      return null;
+    },
+    [inferStatusTone],
+  );
+  const setStatus = useCallback((value) => {
+    setStatusState((current) => normalizeStatusPayload(value, current));
+  }, [normalizeStatusPayload]);
+  const statusTone = status?.tone || "info";
+  const statusMessage = status?.message || "";
+  const StatusIcon =
+    statusTone === "error" ? CircleAlert : statusTone === "success" ? CheckCircle2 : Info;
   const viyarServicesCache = user?.id ? readViyarServicesCache(user.id) : null;
   const normalizedViyarEmail = viyarAuthForm.email.trim();
   const viyarHasSavedPassword = Boolean(viyarAuth?.has_password);
@@ -2942,12 +3832,16 @@ export default function App() {
   const viyarEmailChanged = normalizedViyarEmail !== (viyarAuth?.email || "");
   const viyarHasUnsavedPassword = Boolean(viyarAuthForm.password);
   const canSaveViyarAuth =
-    Boolean(normalizedViyarEmail) &&
-    (!viyarAuth?.email || viyarEmailChanged || viyarHasUnsavedPassword);
+      Boolean(normalizedViyarEmail) &&
+      (!viyarAuth?.email || viyarEmailChanged || viyarHasUnsavedPassword);
   const canConnectViyar =
-    Boolean(normalizedViyarEmail) &&
-    (viyarHasSavedPassword || viyarHasUnsavedPassword);
+      Boolean(normalizedViyarEmail) &&
+      (viyarHasSavedPassword || viyarHasUnsavedPassword);
   const canSyncViyar = viyarHasSavedSession;
+
+  useEffect(() => {
+    tokenRef.current = token;
+  }, [token]);
   const viyarActionLabel =
     viyarAction === "saving"
       ? t.viyarSavingCredentials
@@ -2978,6 +3872,33 @@ export default function App() {
   const canUsersGoForward = usersOffset + PAGE_SIZE < usersTotal;
   const canAuditGoBack = auditOffset > 0;
   const canAuditGoForward = auditOffset + PAGE_SIZE < auditTotal;
+  const statusNotice = statusMessage ? (
+    <button
+      className="status-overlay"
+      onClick={() => setStatus("")}
+      type="button"
+    >
+      <span
+        className={`status-toast ${statusTone}`}
+        onClick={(event) => event.stopPropagation()}
+        role="status"
+      >
+        <span className={`status-toast-icon ${statusTone}`}>
+          <StatusIcon size={18} />
+        </span>
+        <span className="status-toast-copy">{statusMessage}</span>
+        <span
+          aria-label={t.close}
+          className="status-toast-close"
+          onClick={() => setStatus("")}
+          role="button"
+          tabIndex={0}
+        >
+          <X size={16} />
+        </span>
+      </span>
+    </button>
+  ) : null;
 
   const selectedProjectId = selectedProject?.id || "";
   const canEditSelectedProject = canEditProject(selectedProject, user);
@@ -3218,7 +4139,7 @@ export default function App() {
 
       if (result.job.status === "success") {
         setActiveMaterialImportJobId("");
-        setStatus(t.materialImportSuccess);
+        setStatus({ message: t.materialImportSuccess, tone: "success" });
         await loadMaterialsCatalog(token);
         return;
       }
@@ -3361,6 +4282,247 @@ export default function App() {
         : [],
     [activeFittingCategory, fittingItems],
   );
+  const projectMaterialPickerItems = useMemo(
+    () =>
+      materialItems
+        .map((item) => ({
+          ...item,
+          pickerValue: buildProjectMaterialOption(item),
+          pickerTitle: getMaterialShortName(item) || buildProjectMaterialOption(item),
+          pickerSubtitle: [item.dimensions, item.thickness].filter(Boolean).join(" / "),
+          pickerSearch: [
+            item.name,
+            item.article,
+            item.display_article,
+            item.dimensions,
+            item.thickness,
+            item.color_name,
+          ]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase(),
+        }))
+        .filter((item) => item.pickerValue),
+    [materialItems],
+  );
+  const projectHandlePickerItems = useMemo(
+    () =>
+      fittingItems
+        .filter((item) =>
+          ["handles_hooks", "profiles_gola"].includes(item.fitting_type),
+        )
+        .map((item) => ({
+          ...item,
+          pickerValue: buildProjectHandleOption(item),
+          pickerTitle: item.name || item.code || item.article,
+          pickerSubtitle: [item.article, item.code].filter(Boolean).join(" / "),
+          pickerSearch: [
+            item.name,
+            item.article,
+            item.code,
+            item.city,
+            item.source_url,
+          ]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase(),
+        }))
+        .filter((item) => item.pickerValue),
+    [fittingItems],
+  );
+  const activeProjectDraft = projectOptionPicker.target === "edit" ? form : newProjectForm;
+  const buildProjectSlidePickerItems = useCallback(
+    (depthValue) => {
+      const targetLength = getSlideLengthForDepth(depthValue);
+      const drawerSlideItems = fittingItems.filter((item) => item.fitting_type === "drawer_slides");
+
+      return drawerSlideItems
+        .map((item) => {
+          const slideLength = detectProjectSlideLength(
+            [item.name, item.article, item.code, item.source_url].filter(Boolean).join(" "),
+          );
+          const slideFamily = detectProjectSlideFamily(
+            [item.name, item.article, item.code, item.source_url].filter(Boolean).join(" "),
+          );
+          const familyLabel =
+            slideFamily === "movento"
+              ? "Movento"
+              : slideFamily === "telescopic"
+                ? language === "uk"
+                  ? "Телескопічні"
+                  : "Telescopic"
+                : slideFamily === "tandem"
+                  ? "Tandem"
+                  : language === "uk"
+                    ? "Напрямні"
+                    : "Slides";
+
+          return {
+            ...item,
+            image_url: item.image_url || "/static/fittings/drawer-slides.png",
+            pickerLength: slideLength,
+            pickerRecommended: slideLength === targetLength,
+            pickerSubtitle: [
+              familyLabel,
+              slideLength ? `${slideLength} мм` : "",
+              item.article || item.code || "",
+            ]
+              .filter(Boolean)
+              .join(" / "),
+            pickerTitle: item.name || item.code || item.article || familyLabel,
+            pickerSearch: [
+              item.name,
+              item.article,
+              item.code,
+              item.city,
+              item.source_url,
+              familyLabel,
+              slideLength,
+            ]
+              .filter(Boolean)
+              .join(" ")
+              .toLowerCase(),
+            pickerValue: String(item.code || item.article || item.name || ""),
+            slideFamily,
+          };
+        })
+        .filter((item) => item.pickerValue)
+        .sort((left, right) => {
+          if (Number(Boolean(right.pickerRecommended)) !== Number(Boolean(left.pickerRecommended))) {
+            return Number(Boolean(right.pickerRecommended)) - Number(Boolean(left.pickerRecommended));
+          }
+
+          const leftDistance = Math.abs((left.pickerLength || targetLength) - targetLength);
+          const rightDistance = Math.abs((right.pickerLength || targetLength) - targetLength);
+
+          if (leftDistance !== rightDistance) {
+            return leftDistance - rightDistance;
+          }
+
+          return String(left.pickerTitle || "").localeCompare(
+            String(right.pickerTitle || ""),
+            language === "uk" ? "uk" : "en",
+          );
+        });
+    },
+    [fittingItems, language],
+  );
+  const createProjectSlideTypePickerItems = useMemo(
+    () => buildProjectSlidePickerItems(newProjectForm.depth),
+    [buildProjectSlidePickerItems, newProjectForm.depth],
+  );
+  const editProjectSlideTypePickerItems = useMemo(
+    () => buildProjectSlidePickerItems(form.depth),
+    [buildProjectSlidePickerItems, form.depth],
+  );
+  const activeProjectPickerMaterial = useMemo(() => {
+    const dependencyConfig = getProjectMaterialDependencyConfig(projectOptionPicker.field);
+    const preferredMaterialValue = dependencyConfig.materialField
+      ? activeProjectDraft[dependencyConfig.materialField]
+      : activeProjectDraft.facadeMaterial || activeProjectDraft.insideMaterial;
+
+    return findProjectMaterialItemByValue(projectMaterialPickerItems, preferredMaterialValue);
+  }, [
+    activeProjectDraft,
+    projectMaterialPickerItems,
+    projectOptionPicker.field,
+  ]);
+  const activeProjectEdgeBandingItems = useMemo(() => {
+    if (!activeProjectPickerMaterial) {
+      return [];
+    }
+
+    return MATERIAL_EDGE_SLOTS.map((slot) =>
+      buildProjectEdgeBandingOption(
+        activeProjectPickerMaterial,
+        getMaterialEdgeItem(activeProjectPickerMaterial, slot.key),
+        slot.label,
+      ),
+    ).filter(Boolean);
+  }, [activeProjectPickerMaterial]);
+  const projectTypePickerItems = useMemo(
+    () =>
+      specificationCatalog.project_types.map((value) => ({
+        id: `project-type-${value}`,
+        pickerValue: value,
+        pickerTitle: formatCatalogLabel(value, t),
+        pickerSubtitle:
+          language === "uk"
+            ? "Тип виробу для старту проекту."
+            : "Project construction type.",
+        pickerSearch: `${value} ${formatCatalogLabel(value, t)}`.toLowerCase(),
+      })),
+    [language, specificationCatalog.project_types, t],
+  );
+  const legacyProjectThicknessPickerItems = useMemo(
+    () =>
+      specificationCatalog.material_thicknesses.map((value) => ({
+        id: `thickness-${value}`,
+        pickerValue: String(value),
+        pickerTitle: `${value}`,
+        pickerSubtitle:
+          language === "uk" ? "Товщина плитного матеріалу." : "Board material thickness.",
+        pickerSearch: `${value} ${t.materialThickness}`.toLowerCase(),
+      })),
+    [language, specificationCatalog.material_thicknesses, t],
+  );
+  const legacyProjectSlideTypePickerItems = useMemo(
+    () =>
+      specificationCatalog.slide_types.map((value) => ({
+        id: `slide-${value}`,
+        pickerValue: value,
+        pickerTitle: formatCatalogLabel(value, t),
+        pickerSubtitle:
+          language === "uk" ? "Тип направляючих для шухляд." : "Drawer slide type.",
+        pickerSearch: `${value} ${formatCatalogLabel(value, t)}`.toLowerCase(),
+      })),
+    [language, specificationCatalog.slide_types, t],
+  );
+  const legacyProjectBottomTypePickerItems = useMemo(
+    () =>
+      specificationCatalog.bottom_types.map((value) => ({
+        id: `bottom-${value}`,
+        pickerValue: value,
+        pickerTitle: formatCatalogLabel(value, t),
+        pickerSubtitle:
+          language === "uk" ? "Матеріал або тип дна." : "Bottom material or type.",
+        pickerSearch: `${value} ${formatCatalogLabel(value, t)}`.toLowerCase(),
+      })),
+    [language, specificationCatalog.bottom_types, t],
+  );
+  const projectSlideTypePickerItems = useMemo(
+    () =>
+      projectOptionPicker.target === "edit"
+        ? editProjectSlideTypePickerItems
+        : createProjectSlideTypePickerItems,
+    [
+      createProjectSlideTypePickerItems,
+      editProjectSlideTypePickerItems,
+      projectOptionPicker.target,
+    ],
+  );
+  const projectBottomTypePickerItems = useMemo(
+    () =>
+      PROJECT_DRAWER_TYPE_PRESETS.map((item) => ({
+        ...item,
+        pickerSearch: `${item.search} ${item.pickerTitleUk} ${item.pickerTitleEn}`.toLowerCase(),
+        pickerSubtitle: language === "uk" ? item.pickerSubtitleUk : item.pickerSubtitleEn,
+        pickerTitle: language === "uk" ? item.pickerTitleUk : item.pickerTitleEn,
+      })),
+    [language],
+  );
+  const projectHandlePositionPickerItems = useMemo(
+    () =>
+      ["", ...specificationCatalog.handle_positions].map((value) => ({
+        id: `handle-position-${value || "not-set"}`,
+        pickerValue: value,
+        pickerTitle: formatCatalogLabel(value, t),
+        pickerSubtitle:
+          language === "uk" ? "Положення ручки на фасаді." : "Handle position on the facade.",
+        pickerSearch: `${value || ""} ${formatCatalogLabel(value, t)}`.toLowerCase(),
+      })),
+    [language, specificationCatalog.handle_positions, t],
+  );
   const getFittingSourceMeta = (item) => {
     const sourceSite = item?.source_site || detectFittingSourceSite(item?.source_url);
 
@@ -3369,6 +4531,7 @@ export default function App() {
         code: "viyar",
         label: "Viyar",
         shortLabel: "viyar",
+        logo: "/brand/source-logos/viyar.svg",
       };
     }
 
@@ -3377,6 +4540,7 @@ export default function App() {
         code: "blum",
         label: "BLUM",
         shortLabel: "blum",
+        logo: "/brand/source-logos/blum.svg",
       };
     }
 
@@ -3385,6 +4549,7 @@ export default function App() {
         code: "kronas",
         label: "Kronas",
         shortLabel: "kronas",
+        logo: "/brand/source-logos/kronas.svg",
       };
     }
 
@@ -3392,8 +4557,367 @@ export default function App() {
       code: "manual",
       label: t.fittingManualSource,
       shortLabel: t.fittingManualSource,
+      logo: "/brand/source-logos/manual.svg",
     };
   };
+
+  const closeProjectOptionPicker = useCallback(() => {
+    setProjectOptionPicker({
+      open: false,
+      target: "create",
+      field: "",
+      mode: "materials",
+      title: "",
+    });
+    setProjectOptionPickerSearch("");
+  }, []);
+
+  const openProjectOptionPicker = useCallback((config) => {
+    setProjectOptionPicker({
+      open: true,
+      target: config.target,
+      field: config.field,
+      mode: config.mode,
+      title: config.title,
+    });
+    setProjectOptionPickerSearch("");
+  }, []);
+
+  const applyProjectOptionValue = useCallback(
+    (value) => {
+      if (!projectOptionPicker.field) {
+        return;
+      }
+
+      const applyMaterialDependencies = (draft, materialValue) => {
+        if (projectOptionPicker.mode !== "materials") {
+          return draft;
+        }
+
+        const dependencyConfig = getProjectMaterialDependencyConfig(projectOptionPicker.field);
+
+        if (!dependencyConfig.materialField) {
+          return draft;
+        }
+
+        const selectedMaterial = findProjectMaterialItemByValue(
+          projectMaterialPickerItems,
+          materialValue,
+        );
+
+        if (!selectedMaterial) {
+          return draft;
+        }
+
+        const nextDraft = { ...draft };
+        const parsedThickness = parseProjectMaterialThicknessValue(selectedMaterial.thickness);
+        if (parsedThickness !== null) {
+          nextDraft[dependencyConfig.thicknessField] = String(parsedThickness);
+        }
+
+        const materialEdgeOptions = MATERIAL_EDGE_SLOTS.map((slot) =>
+          buildProjectEdgeBandingOption(
+            selectedMaterial,
+            getMaterialEdgeItem(selectedMaterial, slot.key),
+            slot.label,
+          ),
+        ).filter(Boolean);
+
+        if (materialEdgeOptions.length) {
+          const hasCurrentEdge = materialEdgeOptions.some(
+            (item) =>
+              String(item.pickerValue || "").trim() ===
+              String(nextDraft[dependencyConfig.edgeField] || "").trim(),
+          );
+
+          if (!hasCurrentEdge) {
+            nextDraft[dependencyConfig.edgeField] = materialEdgeOptions[0].pickerValue;
+          }
+        }
+
+        return nextDraft;
+      };
+
+      if (projectOptionPicker.target === "edit") {
+        setForm((current) =>
+          applyMaterialDependencies(
+            {
+              ...current,
+              [projectOptionPicker.field]: value,
+            },
+            value,
+          ),
+        );
+      } else {
+        setNewProjectForm((current) =>
+          applyMaterialDependencies(
+            {
+              ...current,
+              [projectOptionPicker.field]: value,
+            },
+            value,
+          ),
+        );
+      }
+
+      closeProjectOptionPicker();
+    },
+    [
+      closeProjectOptionPicker,
+      projectMaterialPickerItems,
+      projectOptionPicker.field,
+      projectOptionPicker.mode,
+      projectOptionPicker.target,
+    ],
+  );
+
+  const projectOptionPickerConfig = useMemo(() => {
+    if (projectOptionPicker.mode === "projectType") {
+      return {
+        description:
+          language === "uk"
+            ? "Виберіть тип виробу, з якого почнеться проект."
+            : "Choose the product type your project starts from.",
+        empty:
+          language === "uk" ? "Типи проектів ще не завантажені." : "Project types are not loaded yet.",
+        items: projectTypePickerItems,
+        placeholder: language === "uk" ? "Пошук типу проекту" : "Search project type",
+      };
+    }
+
+    if (projectOptionPicker.mode === "edgeBanding") {
+      return {
+        description:
+          language === "uk"
+            ? "Виберіть крайку, яка прив’язана до вибраного матеріалу."
+            : "Choose edge banding linked to the selected material.",
+        empty:
+          activeProjectPickerMaterial
+            ? language === "uk"
+              ? "Для цього матеріалу ще не прив’язано крайку."
+              : "No edge banding is attached to this material yet."
+            : language === "uk"
+              ? "Спочатку виберіть матеріал фасаду або корпусу."
+              : "Select facade or inside material first.",
+        items: activeProjectEdgeBandingItems,
+        placeholder: language === "uk" ? "Пошук крайки" : "Search edge banding",
+      };
+    }
+
+    if (projectOptionPicker.mode === "materialThickness") {
+      return {
+        description:
+          language === "uk"
+            ? "Виберіть товщину матеріалу."
+            : "Choose material thickness.",
+        empty:
+          language === "uk" ? "Немає товщин у довіднику." : "No thickness values are available.",
+        items: legacyProjectThicknessPickerItems,
+        placeholder: language === "uk" ? "Пошук товщини" : "Search thickness",
+      };
+    }
+
+    if (projectOptionPicker.mode === "slideType") {
+      return {
+        description:
+          language === "uk"
+            ? "Виберіть тип направляючих."
+            : "Choose the drawer slide type.",
+        empty:
+          language === "uk" ? "Типи направляючих ще не заповнені." : "No slide types are available.",
+        items: projectSlideTypePickerItems,
+        placeholder: language === "uk" ? "Пошук направляючих" : "Search slide type",
+      };
+    }
+
+    if (projectOptionPicker.mode === "bottomType") {
+      return {
+        description:
+          language === "uk"
+            ? "Виберіть тип дна."
+            : "Choose bottom type.",
+        empty:
+          language === "uk" ? "Типи дна ще не заповнені." : "No bottom types are available.",
+        items: projectBottomTypePickerItems,
+        placeholder: language === "uk" ? "Пошук типу дна" : "Search bottom type",
+      };
+    }
+
+    if (projectOptionPicker.mode === "handlePosition") {
+      return {
+        description:
+          language === "uk"
+            ? "Виберіть положення ручки."
+            : "Choose handle position.",
+        empty:
+          language === "uk" ? "Положення ручок ще не заповнені." : "No handle positions are available.",
+        items: projectHandlePositionPickerItems,
+        placeholder: language === "uk" ? "Пошук позиції ручки" : "Search handle position",
+      };
+    }
+
+    if (projectOptionPicker.mode === "handles") {
+      return {
+        description:
+          language === "uk"
+            ? "Виберіть ручку або профіль із зображенням, ціною та короткими даними."
+            : "Choose a handle or profile with image, price, and short details.",
+        empty:
+          language === "uk"
+            ? "Для цього параметра ще немає доступних позицій."
+            : "No items are available for this parameter yet.",
+        items: projectHandlePickerItems,
+        placeholder: language === "uk" ? "Пошук ручки" : "Search handle",
+      };
+    }
+
+    return {
+      description:
+        language === "uk"
+          ? "Виберіть матеріал по картці з фото, ціною та основними характеристиками."
+          : "Choose a material card with image, price, and main specifications.",
+      empty:
+        language === "uk"
+          ? "Для цього параметра ще немає доступних матеріалів."
+          : "No materials are available for this parameter yet.",
+      items: projectMaterialPickerItems,
+      placeholder: language === "uk" ? "Пошук матеріалу" : "Search material",
+    };
+  }, [
+    language,
+    projectBottomTypePickerItems,
+    projectHandlePickerItems,
+    projectHandlePositionPickerItems,
+    projectMaterialPickerItems,
+    projectOptionPicker.mode,
+    activeProjectEdgeBandingItems,
+    activeProjectPickerMaterial,
+    projectSlideTypePickerItems,
+    legacyProjectThicknessPickerItems,
+    projectTypePickerItems,
+  ]);
+
+  const filteredProjectOptionItems = useMemo(() => {
+    const query = projectOptionPickerSearch.trim().toLowerCase();
+
+    if (!query) {
+      return projectOptionPickerConfig.items;
+    }
+
+    return projectOptionPickerConfig.items.filter((item) =>
+      String(item.pickerSearch || "").includes(query),
+    );
+  }, [projectOptionPickerConfig.items, projectOptionPickerSearch]);
+
+  const getProjectOptionTitleByValue = useCallback((items, value, fallback = "") => {
+    const normalizedValue = String(value || "").trim();
+
+    if (!normalizedValue) {
+      return fallback || t.notSet;
+    }
+
+    return (
+      items.find((item) => String(item.pickerValue || "").trim() === normalizedValue)?.pickerTitle ||
+      fallback ||
+      normalizedValue
+    );
+  }, [t.notSet]);
+
+  const formatProjectSlideValue = useCallback(
+    (value, target) =>
+      getProjectOptionTitleByValue(
+        target === "edit" ? editProjectSlideTypePickerItems : createProjectSlideTypePickerItems,
+        value,
+        formatCatalogLabel(detectProjectSlideFamily(value) || value, t),
+      ),
+    [
+      createProjectSlideTypePickerItems,
+      editProjectSlideTypePickerItems,
+      getProjectOptionTitleByValue,
+      t,
+    ],
+  );
+
+  const formatProjectBottomValue = useCallback(
+    (value) =>
+      getProjectOptionTitleByValue(
+        projectBottomTypePickerItems,
+        value,
+        formatCatalogLabel(value, t),
+      ),
+    [getProjectOptionTitleByValue, projectBottomTypePickerItems, t],
+  );
+
+  useEffect(() => {
+    if (!createProjectSlideTypePickerItems.length) {
+      return;
+    }
+
+    setNewProjectForm((current) => {
+      const currentValue = String(current.slideType || "").trim();
+      if (
+        currentValue &&
+        createProjectSlideTypePickerItems.some(
+          (item) => String(item.pickerValue || "").trim() === currentValue,
+        )
+      ) {
+        return current;
+      }
+
+      return {
+        ...current,
+        slideType: createProjectSlideTypePickerItems[0].pickerValue,
+      };
+    });
+  }, [createProjectSlideTypePickerItems]);
+
+  useEffect(() => {
+    if (!editProjectSlideTypePickerItems.length) {
+      return;
+    }
+
+    setForm((current) => {
+      const currentValue = String(current.slideType || "").trim();
+      if (
+        currentValue &&
+        editProjectSlideTypePickerItems.some(
+          (item) => String(item.pickerValue || "").trim() === currentValue,
+        )
+      ) {
+        return current;
+      }
+
+      return {
+        ...current,
+        slideType: editProjectSlideTypePickerItems[0].pickerValue,
+      };
+    });
+  }, [editProjectSlideTypePickerItems]);
+
+  const renderProjectOptionField = ({ disabled = false, field, mode, target, title, value }) => (
+    <label>
+      {title}
+      <button
+        className={`project-option-trigger${value ? "" : " is-placeholder"}`}
+        disabled={disabled}
+        onClick={() =>
+          openProjectOptionPicker({
+            field,
+            mode,
+            target,
+            title,
+          })
+        }
+        type="button"
+      >
+        <span className="project-option-trigger-text">{value || title}</span>
+        <span className="project-option-trigger-action">
+          <Search size={16} />
+          {language === "uk" ? "Вибрати" : "Choose"}
+        </span>
+      </button>
+    </label>
+  );
 
   useEffect(() => {
     if (isCatalogView) {
@@ -3537,7 +5061,15 @@ export default function App() {
   async function loadUser(activeToken) {
     const result = await getCurrentUser(activeToken);
 
+    if (tokenRef.current !== activeToken) {
+      return null;
+    }
+
     if (!result.success) {
+      if (result.status && result.status !== 401) {
+        setStatus(result.error || t.loginFailed);
+        return null;
+      }
       localStorage.removeItem(TOKEN_STORAGE_KEY);
       setToken("");
       setUser(null);
@@ -3584,7 +5116,7 @@ export default function App() {
     }
 
     setSpecificationCatalog({
-      project_types: result.project_types || DEFAULT_SPECIFICATION_CATALOG.project_types,
+      project_types: normalizeProjectTypes(result.project_types),
       slide_types: result.slide_types || DEFAULT_SPECIFICATION_CATALOG.slide_types,
       bottom_types: result.bottom_types || DEFAULT_SPECIFICATION_CATALOG.bottom_types,
       material_thicknesses:
@@ -3674,7 +5206,7 @@ export default function App() {
     setLoading(false);
 
     if (!result.success) {
-      setStatus(result.error || t.unableToLoadCatalog);
+      setStatus({ message: result.error || t.unableToLoadCatalog, tone: "error" });
       return;
     }
 
@@ -3741,7 +5273,7 @@ export default function App() {
       if (timeoutError && materialItems.length) {
         return;
       }
-      setStatus(result.error || t.unableToLoadCatalog);
+      setStatus({ message: result.error || t.unableToLoadCatalog, tone: "error" });
       return;
     }
 
@@ -3752,6 +5284,38 @@ export default function App() {
     setStatus((current) =>
       String(current || "").includes("Request timed out after") ? "" : current,
     );
+  }
+
+  async function openMaterialDetails(item) {
+    if (!token || !item?.article) {
+      return;
+    }
+
+    setMaterialDetailLoading(true);
+    setSelectedMaterialDetail((current) => current || item);
+
+    const result = await getMaterialDetails(
+      token,
+      item.article,
+      materialSelectedCity || ownProfileForm.city || user?.city || "",
+    );
+
+    setMaterialDetailLoading(false);
+
+    if (!result.success) {
+      setStatus({ message: result.error || t.unableToLoadCatalog, tone: "error" });
+      setSelectedMaterialDetail(item);
+      return;
+    }
+
+    setSelectedMaterialDetail(result.item || item);
+    setMaterialEdgeForms({});
+  }
+
+  function closeMaterialDetails() {
+    setSelectedMaterialDetail(null);
+    setMaterialDetailLoading(false);
+    setMaterialEdgeForms({});
   }
 
   async function loadFittingsCatalog(
@@ -3775,7 +5339,7 @@ export default function App() {
     setLoading(false);
 
     if (!result.success) {
-      setStatus(result.error || t.unableToLoadCatalog);
+      setStatus({ message: result.error || t.unableToLoadCatalog, tone: "error" });
       return;
     }
 
@@ -3796,13 +5360,17 @@ export default function App() {
       return;
     }
 
+    const trimmedPhone = ownProfileForm.phone.trim();
+    const trimmedUsername = ownProfileForm.username.trim();
+    const trimmedCity = materialSelectedCity.trim();
+
     const profilePayload = {
-      phone: ownProfileForm.phone.trim(),
-      city: materialSelectedCity,
+      phone: trimmedPhone || null,
+      city: trimmedCity || null,
     };
 
-    if (ownProfileForm.username.trim()) {
-      profilePayload.username = ownProfileForm.username.trim();
+    if (trimmedUsername) {
+      profilePayload.username = trimmedUsername;
     }
 
     setLoading(true);
@@ -3810,7 +5378,7 @@ export default function App() {
     setLoading(false);
 
     if (!result.success) {
-      setStatus(result.error || t.unableToLoadCatalog);
+      setStatus({ message: result.error || t.unableToLoadCatalog, tone: "error" });
       return;
     }
 
@@ -4003,9 +5571,11 @@ export default function App() {
 
   async function handleLogin(event) {
     event.preventDefault();
-    setLoading(true);
-    const result = await login(email, password);
-    setLoading(false);
+    setLoginLoading(true);
+    setStatus("");
+
+    const result = await login(email.trim(), password);
+    setLoginLoading(false);
 
     if (!result.success) {
       setStatus(result.error || t.loginFailed);
@@ -4013,8 +5583,13 @@ export default function App() {
     }
 
     localStorage.setItem(TOKEN_STORAGE_KEY, result.access_token);
+    localStorage.setItem(ACTIVE_VIEW_STORAGE_KEY, "home");
+    localStorage.removeItem(ACTIVE_PROJECT_ID_STORAGE_KEY);
+    localStorage.removeItem(ACTIVE_PROJECT_TAB_STORAGE_KEY);
     setToken(result.access_token);
     setUser(result.user);
+    setActiveView("home");
+    setSelectedProject(null);
     setStatus("");
   }
 
@@ -4024,6 +5599,7 @@ export default function App() {
     localStorage.removeItem(ACTIVE_PROJECT_ID_STORAGE_KEY);
     localStorage.removeItem(ACTIVE_PROJECT_TAB_STORAGE_KEY);
     setToken("");
+    setAuthChecking(false);
     setUser(null);
     setProjects([]);
     setUsers([]);
@@ -4392,13 +5968,17 @@ export default function App() {
   async function handleOwnProfileSave(event) {
     event.preventDefault();
 
+    const trimmedPhone = ownProfileForm.phone.trim();
+    const trimmedUsername = ownProfileForm.username.trim();
+    const trimmedCity = ownProfileForm.city.trim();
+
     const profilePayload = {
-      phone: ownProfileForm.phone.trim(),
-      city: ownProfileForm.city.trim(),
+      phone: trimmedPhone || null,
+      city: trimmedCity || null,
     };
 
-    if (ownProfileForm.username.trim()) {
-      profilePayload.username = ownProfileForm.username.trim();
+    if (trimmedUsername) {
+      profilePayload.username = trimmedUsername;
     }
 
     setLoading(true);
@@ -4462,7 +6042,7 @@ export default function App() {
     event.preventDefault();
 
     setViyarAction("saving");
-    setStatus(t.viyarSavingCredentials);
+    setStatus({ message: t.viyarSavingCredentials, tone: "info" });
     setLoading(true);
     const result = await updateMyViyarAuth(
       token,
@@ -4473,7 +6053,7 @@ export default function App() {
 
     if (!result.success) {
       setViyarAction("");
-      setStatus(result.error || t.unableToSaveViyarAuth);
+      setStatus({ message: result.error || t.unableToSaveViyarAuth, tone: "error" });
       return;
     }
 
@@ -4484,18 +6064,18 @@ export default function App() {
         password: "",
       }));
     setViyarAction("");
-    setStatus(t.viyarCredentialsSaved);
+    setStatus({ message: t.viyarCredentialsSaved, tone: "success" });
   }
 
   async function handleRefreshViyarSession() {
     if (!normalizedViyarEmail) {
-      setStatus(t.viyarStepSave);
+      setStatus({ message: t.viyarStepSave, tone: "info" });
       return;
     }
 
     if (viyarEmailChanged || viyarHasUnsavedPassword || !viyarHasSavedPassword) {
       setViyarAction("saving");
-      setStatus(t.viyarSavingCredentials);
+      setStatus({ message: t.viyarSavingCredentials, tone: "info" });
       setLoading(true);
       const saveResult = await updateMyViyarAuth(
         token,
@@ -4506,7 +6086,7 @@ export default function App() {
 
       if (!saveResult.success) {
         setViyarAction("");
-        setStatus(saveResult.error || t.unableToSaveViyarAuth);
+        setStatus({ message: saveResult.error || t.unableToSaveViyarAuth, tone: "error" });
         return;
       }
 
@@ -4519,7 +6099,7 @@ export default function App() {
     }
 
     setViyarAction("connecting");
-    setStatus(t.viyarConnectingNow);
+    setStatus({ message: t.viyarConnectingNow, tone: "info" });
     setLoading(true);
     const result = await refreshMyViyarSession(token);
     setLoading(false);
@@ -4529,20 +6109,20 @@ export default function App() {
         setViyarAuth(result.viyar);
       }
       setViyarAction("");
-      setStatus(result.error || t.unableToRefreshViyarSession);
+      setStatus({ message: result.error || t.unableToRefreshViyarSession, tone: "error" });
       return;
     }
 
     setViyarAuth(result.viyar || null);
     setViyarAction("");
-    setStatus(t.viyarConnected);
+    setStatus({ message: t.viyarConnected, tone: "success" });
   }
 
   async function handleResetPassword(targetUser) {
     const passwordValue = resetPasswordForms[targetUser.id] || "";
 
     if (passwordValue.length < 8) {
-      setStatus(t.passwordMustBeLong);
+      setStatus({ message: t.passwordMustBeLong, tone: "error" });
       return;
     }
 
@@ -4555,7 +6135,7 @@ export default function App() {
     setLoading(false);
 
     if (!result.success) {
-      setStatus(result.error || t.unableToResetPassword);
+      setStatus({ message: result.error || t.unableToResetPassword, tone: "error" });
       return;
     }
 
@@ -4563,7 +6143,7 @@ export default function App() {
       ...resetPasswordForms,
       [targetUser.id]: "",
     });
-    setStatus(t.passwordReset);
+    setStatus({ message: t.passwordReset, tone: "success" });
     await loadUsers(token, usersOffset);
   }
 
@@ -4580,16 +6160,16 @@ export default function App() {
     setLoading(false);
 
     if (!result.success) {
-      setStatus(result.error || t.unableToCreateUser);
+      setStatus({ message: result.error || t.unableToCreateUser, tone: "error" });
       return;
     }
 
     setNewUserForm({
       email: "",
       password: "",
-      role: "user",
+      role: "free",
     });
-    setStatus(t.userCreated);
+    setStatus({ message: t.userCreated, tone: "success" });
     await loadUsers(token, 0);
   }
 
@@ -4833,33 +6413,47 @@ export default function App() {
   async function handleImportMaterial(event) {
     event.preventDefault();
 
-    if (!ownProfileForm.city.trim()) {
-      setStatus(t.cityRequiredForMaterialImport);
+    const effectiveCity = materialSelectedCity || ownProfileForm.city || user?.city || "";
+
+    if (!String(effectiveCity).trim()) {
+      setStatus({ message: t.cityRequiredForMaterialImport, tone: "error" });
       return;
     }
 
+    const isSourceMode = materialCreateMode === "source";
+    const payload = {
+      category: materialCategoryFilter || "dsp",
+      city: effectiveCity,
+      article: newMaterialArticle.trim() || null,
+      source_url: isSourceMode ? newMaterialSourceUrl.trim() || null : null,
+      name: isSourceMode ? null : newMaterialName.trim() || null,
+      price: isSourceMode ? null : (newMaterialPrice === "" ? null : Number(newMaterialPrice)),
+      image_url: isSourceMode ? null : newMaterialImageUrl || null,
+      is_default: isSourceMode ? Boolean(newMaterialIsDefault && canManageSystemMaterials(user)) : false,
+    };
+
     setLoading(true);
-    const result = await importMaterialFromViyar(
-      token,
-      newMaterialArticle.trim(),
-      materialCategoryFilter || "dsp",
-      newMaterialSourceUrl.trim(),
-    );
+    const result = await createMaterial(token, payload);
     setLoading(false);
 
     if (!result.success) {
-      setStatus(result.error || t.unableToLoadCatalog);
+      setStatus({ message: result.error || t.unableToLoadCatalog, tone: "error" });
       return;
     }
 
     setNewMaterialArticle("");
     setNewMaterialSourceUrl("");
+    setNewMaterialName("");
+    setNewMaterialPrice("");
+    setNewMaterialImageUrl("");
+    setNewMaterialIsDefault(false);
 
     if (result.item) {
       if (result.job) {
+        setActiveMaterialImportJobId(result.job.id);
         setActiveMaterialImportJob(result.job);
       }
-      setStatus(t.materialImportSuccess);
+      setStatus({ message: result.error || t.materialImportSuccess, tone: "success" });
       await loadMaterialsCatalog(token);
       return;
     }
@@ -4867,15 +6461,32 @@ export default function App() {
     if (result.job?.id) {
       setActiveMaterialImportJobId(result.job.id);
       setActiveMaterialImportJob(result.job);
-      setStatus(t.materialImportQueued);
+      setStatus({ message: t.materialImportQueued, tone: "info" });
       return;
     }
 
-    setStatus(result.error || t.materialImportQueued);
+    setStatus({ message: result.error || t.materialImportQueued, tone: "info" });
+  }
+
+  async function handleMaterialImageUpload(event) {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    try {
+      const imageUrl = await compressImageFileToDataUrl(file);
+      setNewMaterialImageUrl(imageUrl);
+    } catch {
+      setStatus({ message: t.unableToLoadCatalog, tone: "error" });
+    } finally {
+      event.target.value = "";
+    }
   }
 
   function openDeleteMaterialConfirm(item) {
-    if (!item || item.is_default) {
+    if (!canDeleteMaterialItem(user, item)) {
       return;
     }
 
@@ -4883,7 +6494,7 @@ export default function App() {
     setConfirmAction({
       type: "deleteMaterial",
       title: t.deleteMaterial,
-      message: `${t.deleteMaterialConfirm}: ${item.name || item.article}?`,
+      message: `${t.deleteMaterial}: ${item.name || item.article}?`,
       confirmLabel: t.delete,
       targetId: item.article,
     });
@@ -4899,12 +6510,15 @@ export default function App() {
     setLoading(false);
 
     if (!result.success) {
-      setStatus(result.error || t.deleteFailed);
+      setStatus({ message: result.error || t.deleteFailed, tone: "error" });
       return;
     }
 
     setMaterialItems((current) => current.filter((item) => item.article !== article));
-    setStatus(t.materialDeleted);
+    if (selectedMaterialDetail?.article === article) {
+      closeMaterialDetails();
+    }
+    setStatus({ message: t.materialDeleted, tone: "success" });
     closeConfirm();
   }
 
@@ -4914,7 +6528,7 @@ export default function App() {
     }
 
     setOpenMaterialMenuId("");
-    setStatus(t.materialRefreshStarted);
+    setStatus({ message: t.materialRefreshStarted, tone: "info" });
     setLoading(true);
     const result = await importMaterialFromViyar(
       token,
@@ -4926,21 +6540,84 @@ export default function App() {
     setLoading(false);
 
     if (!result.success) {
-      setStatus(result.error || t.unableToLoadCatalog);
+      setStatus({ message: result.error || t.unableToLoadCatalog, tone: "error" });
       return;
     }
 
     if (result.job?.id) {
       setActiveMaterialImportJobId(result.job.id);
       setActiveMaterialImportJob(result.job);
-      setStatus(t.materialRefreshQueued);
+      setStatus({ message: t.materialRefreshQueued, tone: "info" });
       return;
     }
 
     if (result.item) {
-      setStatus(t.materialImportSuccess);
+      setStatus({ message: t.materialImportSuccess, tone: "success" });
       await loadMaterialsCatalog(token);
     }
+  }
+
+  function toggleMaterialEdgeForm(edgeKey) {
+    setMaterialEdgeForms((current) => {
+      const next = { ...current };
+      if (next[edgeKey]?.open) {
+        delete next[edgeKey];
+        return next;
+      }
+      next[edgeKey] = { open: true, source_url: "" };
+      return next;
+    });
+  }
+
+  function updateMaterialEdgeForm(edgeKey, value) {
+    setMaterialEdgeForms((current) => ({
+      ...current,
+      [edgeKey]: {
+        ...(current[edgeKey] || { open: true }),
+        source_url: value,
+      },
+    }));
+  }
+
+  async function handleAttachMaterialEdge(edgeKey) {
+    if (!token || !selectedMaterialDetail?.article) {
+      return;
+    }
+
+    const sourceUrl = String(materialEdgeForms[edgeKey]?.source_url || "").trim();
+
+    if (!sourceUrl) {
+      setStatus({ message: t.materialEdgeAttachPlaceholder, tone: "error" });
+      return;
+    }
+
+    setLoading(true);
+    const result = await attachMaterialEdge(token, selectedMaterialDetail.article, {
+      edge_key: edgeKey,
+      source_url: sourceUrl,
+      city: materialSelectedCity || ownProfileForm.city || user?.city || "",
+    });
+    setLoading(false);
+
+    if (!result.success) {
+      setStatus({ message: result.error || t.unableToLoadCatalog, tone: "error" });
+      return;
+    }
+
+    setSelectedMaterialDetail(result.item || selectedMaterialDetail);
+    setMaterialItems((current) =>
+      current.map((item) =>
+        item.article === selectedMaterialDetail.article
+          ? { ...item, ...(result.item || {}) }
+          : item,
+      ),
+    );
+    setMaterialEdgeForms((current) => {
+      const next = { ...current };
+      delete next[edgeKey];
+      return next;
+    });
+    setStatus({ message: t.materialEdgeAdded, tone: "success" });
   }
 
   function openDeleteFittingConfirm(item) {
@@ -4968,12 +6645,12 @@ export default function App() {
     setLoading(false);
 
     if (!result.success) {
-      setStatus(result.error || t.deleteFailed);
+      setStatus({ message: result.error || t.deleteFailed, tone: "error" });
       return;
     }
 
     setFittingItems((current) => current.filter((item) => item.id !== itemId));
-    setStatus(t.fittingDelete);
+    setStatus({ message: t.fittingDelete, tone: "success" });
     closeConfirm();
   }
 
@@ -4991,9 +6668,9 @@ export default function App() {
         ...current,
         image_url: imageUrl,
       }));
-      setStatus(t.fittingImageSelected);
+      setStatus({ message: t.fittingImageSelected, tone: "success" });
     } catch (error) {
-      setStatus(error?.message || t.unableToLoadCatalog);
+      setStatus({ message: error?.message || t.unableToLoadCatalog, tone: "error" });
     }
   }
 
@@ -5029,22 +6706,22 @@ export default function App() {
     };
 
     if (!payload.fitting_type) {
-      setStatus(t.fittingTypePrompt);
+      setStatus({ message: t.fittingTypePrompt, tone: "error" });
       return;
     }
 
     if (!payload.article) {
-      setStatus(t.fittingArticlePrompt);
+      setStatus({ message: t.fittingArticlePrompt, tone: "error" });
       return;
     }
 
     if (isSystemFitting && !payload.source_url) {
-      setStatus(t.fittingSourceUrlPrompt);
+      setStatus({ message: t.fittingSourceUrlPrompt, tone: "error" });
       return;
     }
 
     if (!isSystemFitting && !payload.name) {
-      setStatus(t.fittingNamePrompt);
+      setStatus({ message: t.fittingNamePrompt, tone: "error" });
       return;
     }
 
@@ -5053,11 +6730,11 @@ export default function App() {
     setLoading(false);
 
     if (!result.success) {
-      setStatus(result.error || t.unableToLoadCatalog);
+      setStatus({ message: result.error || t.unableToLoadCatalog, tone: "error" });
       return;
     }
 
-    setStatus(t.fittingCreateSuccess);
+    setStatus({ message: t.fittingCreateSuccess, tone: "success" });
     setNewFittingForm((current) => ({
       ...DEFAULT_FITTING_FORM,
       city: current.city || materialSelectedCity || user?.city || "",
@@ -5081,6 +6758,100 @@ export default function App() {
     await loadProjects(token, 0, DEFAULT_PROJECT_FILTERS);
   }
 
+  function handleApplyProjectTemplate(template) {
+    setProjectStartMode("templates");
+    setNewProjectForm((current) => ({
+      ...current,
+      ...template.fields,
+      projectName:
+        current.projectName && current.projectName !== DEFAULT_PROJECT_NAME
+          ? current.projectName
+          : t[template.titleKey] || current.projectName,
+      notes: current.notes || t[template.descriptionKey] || current.notes,
+    }));
+    setStatus(t.projectTemplateApplied);
+  }
+
+  async function loadAiScanHistory(activeToken) {
+    const result = await listProjectScans(activeToken, 5);
+
+    if (result.success) {
+      setAiScanHistory(result.items || []);
+    }
+  }
+
+  async function handleScanProjectFile(event) {
+    event.preventDefault();
+
+    if (!canUseAiScan) {
+      setStatus({ message: t.aiScanProOnly, tone: "info" });
+      return;
+    }
+
+    if (!aiScanFile) {
+      setStatus({ message: t.aiScanUnsupported, tone: "error" });
+      return;
+    }
+
+    setLoading(true);
+    const result = await scanProjectFile(token, aiScanFile);
+    setLoading(false);
+
+    if (!result.success) {
+      setAiScanResult(null);
+      setAiScanSession(null);
+      setStatus({ message: result.error || t.aiScanUnsupported, tone: "error" });
+      return;
+    }
+
+    setAiScanResult(result.scan?.project_data || null);
+    setAiScanSession(result.scan_session || null);
+    await loadAiScanHistory(token);
+    setStatus({ message: t.aiScanNeedsConfirmation, tone: "info" });
+  }
+
+  async function handleApplyAiScanResult() {
+    if (!aiScanResult) {
+      return;
+    }
+
+    const defaults = aiScanResult.form_defaults || {};
+    const detectedProjectType = defaults.projectType || aiScanResult.type;
+    const nextProjectType = specificationCatalog.project_types.includes(detectedProjectType)
+      ? detectedProjectType
+      : newProjectForm.projectType;
+    const scanNotes = defaults.notes || aiScanResult.raw_text || "";
+
+    setNewProjectForm({
+      ...newProjectForm,
+      projectName:
+        newProjectForm.projectName && newProjectForm.projectName !== DEFAULT_PROJECT_NAME
+          ? newProjectForm.projectName
+          : defaults.projectName || newProjectForm.projectName,
+      projectType: nextProjectType,
+      width: defaults.width || aiScanResult.width || newProjectForm.width,
+      height: defaults.height || aiScanResult.height || newProjectForm.height,
+      depth: defaults.depth || aiScanResult.depth || newProjectForm.depth,
+      notes: [
+        newProjectForm.notes,
+        scanNotes ? `${t.aiScanRawText}: ${scanNotes}` : "",
+      ]
+        .filter(Boolean)
+        .join(" | "),
+    });
+
+    if (aiScanSession?.id) {
+      const result = await confirmProjectScan(token, aiScanSession.id);
+
+      if (result.success) {
+        setAiScanSession(result.scan_session || aiScanSession);
+        await loadAiScanHistory(token);
+      }
+    }
+
+    setStatus({ message: t.aiScanConfirmed, tone: "success" });
+  }
+
   async function handleCreateProject(event) {
     event.preventDefault();
 
@@ -5096,17 +6867,30 @@ export default function App() {
     setLoading(false);
 
     if (!result.success) {
-      setStatus(
-        result.errors?.join(", ") || result.error || t.unableToCreateProject,
-      );
+      setStatus({
+        message: result.errors?.join(", ") || result.error || t.unableToCreateProject,
+        tone: "error",
+      });
       return;
     }
 
     const projectId = result.result?.project_id;
 
+    if (projectId && aiScanSession?.id) {
+      const confirmResult = await confirmProjectScan(token, aiScanSession.id, projectId);
+
+      if (confirmResult.success) {
+        setAiScanSession(confirmResult.scan_session || aiScanSession);
+        await loadAiScanHistory(token);
+      }
+    }
+
     setNewProjectForm(DEFAULT_PROJECT_FORM);
+    setAiScanFile(null);
+    setAiScanResult(null);
+    setAiScanSession(null);
     setProjectFilters(DEFAULT_PROJECT_FILTERS);
-    setStatus(t.projectCreated);
+    setStatus({ message: t.projectCreated, tone: "success" });
     setActiveView("projects");
     await loadProjects(token, 0, DEFAULT_PROJECT_FILTERS);
 
@@ -5123,7 +6907,7 @@ export default function App() {
     }
 
     if (!canEditSelectedProject) {
-      setStatus(t.projectEditRestricted);
+      setStatus({ message: t.projectEditRestricted, tone: "info" });
       return;
     }
 
@@ -5136,18 +6920,18 @@ export default function App() {
     setLoading(false);
 
     if (!result.success) {
-      setStatus(result.error || t.updateFailed);
+      setStatus({ message: result.error || t.updateFailed, tone: "error" });
       return;
     }
 
-    setStatus(t.projectUpdated);
+    setStatus({ message: t.projectUpdated, tone: "success" });
     await loadProject(selectedProjectId);
     await loadProjects(token, offset);
   }
 
   function openRollbackConfirm(version) {
     if (!canRollbackSelectedProject) {
-      setStatus(t.projectRollbackRestricted);
+      setStatus({ message: t.projectRollbackRestricted, tone: "info" });
       return;
     }
 
@@ -5166,7 +6950,7 @@ export default function App() {
     }
 
     if (!canDeleteSelectedProject) {
-      setStatus(t.projectDeleteRestricted);
+      setStatus({ message: t.projectDeleteRestricted, tone: "info" });
       return;
     }
 
@@ -5214,7 +6998,7 @@ export default function App() {
     }
 
     if (!canRollbackSelectedProject) {
-      setStatus(t.projectRollbackRestricted);
+      setStatus({ message: t.projectRollbackRestricted, tone: "info" });
       return;
     }
 
@@ -5223,11 +7007,11 @@ export default function App() {
     setLoading(false);
 
     if (!result.success) {
-      setStatus(result.error || t.rollbackFailed);
+      setStatus({ message: result.error || t.rollbackFailed, tone: "error" });
       return;
     }
 
-    setStatus(t.projectRolledBack);
+    setStatus({ message: t.projectRolledBack, tone: "success" });
     closeConfirm();
     await loadProject(selectedProjectId);
     setActiveProjectTab("history");
@@ -5241,7 +7025,7 @@ export default function App() {
     }
 
     if (!canDeleteSelectedProject) {
-      setStatus(t.projectDeleteRestricted);
+      setStatus({ message: t.projectDeleteRestricted, tone: "info" });
       return;
     }
 
@@ -5250,11 +7034,11 @@ export default function App() {
     setLoading(false);
 
     if (!result.success) {
-      setStatus(result.error || t.deleteFailed);
+      setStatus({ message: result.error || t.deleteFailed, tone: "error" });
       return;
     }
 
-    setStatus(t.projectDeleted);
+    setStatus({ message: t.projectDeleted, tone: "success" });
     closeConfirm();
     setSelectedProject(null);
     setHistoryItems([]);
@@ -5271,48 +7055,62 @@ export default function App() {
 
   useEffect(() => {
     if (!token) {
+      setAuthChecking(false);
       return;
     }
 
     async function bootstrapAuthorizedApp() {
-      const loadedUser = await loadUser(token);
+      setAuthChecking(true);
+      try {
+        const loadedUser = await loadUser(token);
 
-      if (!loadedUser) {
-        return;
-      }
-
-      await loadSpecificationCatalog();
-
-      if (activeView === "projectDetails" && storedProjectId) {
-        await loadProject(storedProjectId, {
-          projectTab: storedProjectTab,
-        });
-        return;
-      }
-
-      if (activeView === "home") {
-        await loadHomeView(token, loadedUser);
-        return;
-      }
-
-      if (activeView === "settings") {
-        await loadSettingsView(token);
-        return;
-      }
-
-      if (activeView && activeView !== "projects") {
-        if (CATALOG_SERVICE_VIEWS.has(activeView) || activeView === "users" || activeView === "audit") {
+        if (!loadedUser) {
           return;
         }
 
-        await switchView(activeView, loadedUser);
-        return;
-      }
+        await loadSpecificationCatalog();
 
-      await loadProjects(token, 0);
+        if (activeView === "projectDetails" && storedProjectId) {
+          await loadProject(storedProjectId, {
+            projectTab: storedProjectTab,
+          });
+          return;
+        }
+
+        if (activeView === "home") {
+          await loadHomeView(token, loadedUser);
+          return;
+        }
+
+        if (activeView === "settings") {
+          await loadSettingsView(token);
+          return;
+        }
+
+        if (activeView && activeView !== "projects") {
+          if (CATALOG_SERVICE_VIEWS.has(activeView) || activeView === "users" || activeView === "audit") {
+            return;
+          }
+
+          await switchView(activeView, loadedUser);
+          return;
+        }
+
+        await loadProjects(token, 0);
+      } finally {
+        if (tokenRef.current === token) {
+          setAuthChecking(false);
+        }
+      }
     }
 
     bootstrapAuthorizedApp();
+  }, [token]);
+
+  useEffect(() => {
+    if (!token) {
+      setAuthChecking(false);
+    }
   }, [token]);
 
   useEffect(() => {
@@ -5346,9 +7144,19 @@ export default function App() {
   }, [activeView, token]);
 
   useEffect(() => {
-    function handleUnauthorized() {
+    function handleUnauthorized(event) {
+      const eventToken = String(event?.detail?.token || "").trim();
+
+      if (!eventToken || !tokenRef.current) {
+        return;
+      }
+
+      if (eventToken !== tokenRef.current) {
+        return;
+      }
+
       handleLogout();
-      setStatus(t.loginFailed);
+      setStatus({ message: t.loginFailed, tone: "error" });
     }
 
     window.addEventListener("furniture-admin-unauthorized", handleUnauthorized);
@@ -5373,6 +7181,61 @@ export default function App() {
 
     loadAuditLogs(token, 0);
   }, [token, user, activeView]);
+
+  useEffect(() => {
+    if (!token || !canUseAiScan || activeView !== "createProject") {
+      return;
+    }
+
+    loadAiScanHistory(token);
+  }, [token, canUseAiScan, activeView]);
+
+  useEffect(() => {
+    if (!token) {
+      return;
+    }
+
+    const needsProjectOptionData =
+      activeView === "createProject" ||
+      (activeView === "projectDetails" && activeProjectTab === "data");
+
+    if (!needsProjectOptionData) {
+      return;
+    }
+
+    if (!materialItems.length) {
+      loadMaterialsCatalog(token, {
+        category: "dsp",
+        city: materialSelectedCity || ownProfileForm.city || user?.city || "",
+        search: "",
+      });
+    }
+
+    if (!fittingItems.length) {
+      loadFittingsCatalog(token, {
+        city: materialSelectedCity || ownProfileForm.city || user?.city || "",
+        search: "",
+      });
+    }
+  }, [
+    activeProjectTab,
+    activeView,
+    fittingItems.length,
+    materialItems.length,
+    materialSelectedCity,
+    ownProfileForm.city,
+    token,
+    user?.city,
+  ]);
+
+  useEffect(() => {
+    if (
+      (projectStartMode === "ai" && !canUseAiScan) ||
+      (projectStartMode === "premium" && !canUsePremiumStart)
+    ) {
+      setProjectStartMode("templates");
+    }
+  }, [projectStartMode, canUseAiScan, canUsePremiumStart]);
 
   useEffect(() => {
     if (!token || user?.role !== "admin" || !isCatalogValuesView) {
@@ -5422,9 +7285,31 @@ export default function App() {
     loadManualServices(token);
   }, [token, user, isCatalogManualView]);
 
+  if (token && authChecking && !user) {
+    return (
+      <main className="auth-screen">
+        <div className="login-panel">
+          <div className="auth-brand">
+            <img
+              alt={t.furniturePlatform}
+              className="brand-logo"
+              src="/brand/mproject-logo-reference.jpg"
+            />
+            <div className="auth-heading">
+              <p>{t.brandTagline}</p>
+              <h1>{t.admin}</h1>
+            </div>
+          </div>
+          <p>{t.loading}</p>
+        </div>
+      </main>
+    );
+  }
+
   if (!token || !user) {
     return (
       <main className="auth-screen">
+        {statusNotice}
         <form className="login-panel" onSubmit={handleLogin}>
           <div className="auth-brand">
             <img
@@ -5439,12 +7324,12 @@ export default function App() {
           </div>
 
           <label>
-            {t.email}
+            {t.loginOrEmail}
             <input
-              autoComplete="email"
+              autoComplete="username"
               onChange={(event) => setEmail(event.target.value)}
               required
-              type="email"
+              type="text"
               value={email}
             />
           </label>
@@ -5472,11 +7357,9 @@ export default function App() {
             </div>
           </label>
 
-          {status ? <p className="status error">{status}</p> : null}
-
-          <button className="primary-button" disabled={loading} type="submit">
+          <button className="primary-button" disabled={loginLoading} type="submit">
             <Search size={18} />
-            {t.signIn}
+            {loginLoading ? t.loading : t.signIn}
           </button>
         </form>
       </main>
@@ -5485,6 +7368,7 @@ export default function App() {
 
   return (
     <main className="app-shell">
+      {statusNotice}
       <aside className="sidebar">
         <div className="brand-block sidebar-brand-block">
           <button
@@ -5523,7 +7407,7 @@ export default function App() {
         </div>
 
         <div className="user-block">
-          <span>{user.email}</span>
+          <span>{userLoginName}</span>
           <strong>{user.role}</strong>
           <small>
             {t.currentCity}: {formatCatalogLabel(user.city, t)}
@@ -5911,8 +7795,6 @@ export default function App() {
             ) : null}
           </div>
         </header>
-
-        {status ? <p className="status">{status}</p> : null}
 
         {isHomeView ? (
           <section className="dashboard-layout">
@@ -6339,6 +8221,384 @@ export default function App() {
             </section>
           </section>
 
+        ) : activeView === "createProject" ? (
+          <section className="table-panel full-panel create-project-panel">
+            <div className="project-start-shell">
+              <div className="project-start-heading">
+                <div>
+                  <strong>{t.projectStartTitle}</strong>
+                  <span>{t.projectStartDescription}</span>
+                </div>
+                <span className="project-start-current-tier">
+                  {(user?.role || "free").toUpperCase()}
+                </span>
+              </div>
+
+              <div className="project-start-grid">
+                <article className="project-start-card free">
+                  <div className="project-start-card-head">
+                    <span className="project-start-icon">
+                      <FileSliders size={20} />
+                    </span>
+                    <div>
+                      <strong>{t.projectStartManualTitle}</strong>
+                      <small>{t.projectStartManualDescription}</small>
+                    </div>
+                    <em>{t.projectStartFreeBadge}</em>
+                  </div>
+
+                  <div className="project-template-scroll">
+                    <div className="project-template-grid">
+                      {PROJECT_TEMPLATE_PRESETS.map((template) => (
+                        <button
+                          className="project-template-card"
+                          key={template.titleKey}
+                          onClick={() => handleApplyProjectTemplate(template)}
+                          type="button"
+                        >
+                          <span className={`project-template-visual ${template.visual || ""}`}>
+                            <img
+                              alt={t[template.titleKey]}
+                              loading="lazy"
+                              src={template.image}
+                            />
+                          </span>
+                          <span>
+                            <strong>{t[template.titleKey]}</strong>
+                            <small>{t[template.descriptionKey]}</small>
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </article>
+
+                <button
+                  className={`project-start-card action${projectStartMode === "ai" ? " active" : ""}${!canUseAiScan ? " locked" : ""}`}
+                  onClick={() => {
+                    if (!canUseAiScan) {
+                      setStatus({ message: t.aiScanProOnly, tone: "info" });
+                      return;
+                    }
+                    setProjectStartMode("ai");
+                  }}
+                  type="button"
+                >
+                  <span className="project-start-action-visual pro-scan">
+                    <img
+                      alt={t.projectStartAiTitle}
+                      loading="lazy"
+                      src="/static/project-start/hero-scene.png"
+                    />
+                  </span>
+                  <span className="project-start-icon pro">
+                    <Wrench size={20} />
+                  </span>
+                  <strong>{t.projectStartAiTitle}</strong>
+                  <small>{t.projectStartAiDescription}</small>
+                  <em>{t.projectStartProBadge}</em>
+                </button>
+
+                <button
+                  className={`project-start-card action${projectStartMode === "premium" ? " active" : ""}${!canUsePremiumStart ? " locked" : ""}`}
+                  onClick={() => {
+                    if (!canUsePremiumStart) {
+                      setStatus({ message: t.projectStartPremiumOnly, tone: "info" });
+                      return;
+                    }
+                    setProjectStartMode("premium");
+                  }}
+                  type="button"
+                >
+                  <span className="project-start-action-visual premium-power">
+                    <img
+                      alt={t.projectStartPremiumTitle}
+                      loading="lazy"
+                      src="/static/project-start/hero-scene.png"
+                    />
+                  </span>
+                  <span className="project-start-icon premium">
+                    <LayoutGrid size={20} />
+                  </span>
+                  <strong>{t.projectStartPremiumTitle}</strong>
+                  <small>{t.projectStartPremiumDescription}</small>
+                  <em>{t.projectStartPremiumBadge}</em>
+                </button>
+              </div>
+            </div>
+
+            {projectStartMode === "ai" ? (
+              <div className="ai-scan-panel">
+                <div className="ai-scan-copy">
+                  <h3>{t.aiScanTitle}</h3>
+                  <p>{t.aiScanDescription}</p>
+                  {!canUseAiScan ? (
+                    <span className="ai-scan-lock">{t.aiScanProOnly}</span>
+                  ) : null}
+                </div>
+
+                <form className="ai-scan-form" onSubmit={handleScanProjectFile}>
+                  <input
+                    accept=".jpg,.jpeg,.png,.pdf,.webp"
+                    disabled={!canUseAiScan || loading}
+                    onChange={(event) => setAiScanFile(event.target.files?.[0] || null)}
+                    type="file"
+                  />
+                  <button
+                    className="primary-button"
+                    disabled={!canUseAiScan || loading || !aiScanFile}
+                    type="submit"
+                  >
+                    {t.aiScanUpload}
+                  </button>
+                </form>
+
+                {aiScanResult ? (
+                  <div className="ai-scan-result">
+                    <div>
+                      <span>{t.projectType}</span>
+                      <strong>{formatCatalogLabel(aiScanResult.type || aiScanResult.form_defaults?.projectType, t)}</strong>
+                    </div>
+                    <div>
+                      <span>{t.size}</span>
+                      <strong>
+                        {(aiScanResult.width || aiScanResult.form_defaults?.width || "?")} x{" "}
+                        {(aiScanResult.height || aiScanResult.form_defaults?.height || "?")} x{" "}
+                        {(aiScanResult.depth || aiScanResult.form_defaults?.depth || "?")}
+                      </strong>
+                    </div>
+                    <div>
+                      <span>{t.aiScanFound}</span>
+                      <strong>{aiScanSession?.status || t.aiScanNeedsConfirmation}</strong>
+                    </div>
+                    <button
+                      className="ghost-button"
+                      disabled={loading}
+                      onClick={handleApplyAiScanResult}
+                      type="button"
+                    >
+                      <CheckCircle2 size={16} />
+                      {t.aiScanApply}
+                    </button>
+                  </div>
+                ) : null}
+
+                {aiScanHistory.length ? (
+                  <div className="service-sync-overview">
+                    <span className="service-tree-badge subtle">{t.aiScanHistory}: {aiScanHistory.length}</span>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
+            {projectStartMode === "premium" ? (
+              <div className="premium-start-panel">
+                <article>
+                  <Wrench size={18} />
+                  <strong>{t.projectPremiumOptionRecognition}</strong>
+                  <span>{t.projectPremiumOptionRecognitionDescription}</span>
+                </article>
+                <article>
+                  <FolderTree size={18} />
+                  <strong>{t.projectPremiumOptionBatch}</strong>
+                  <span>{t.projectPremiumOptionBatchDescription}</span>
+                </article>
+                <article>
+                  <Blocks size={18} />
+                  <strong>{t.projectPremiumOptionTemplates}</strong>
+                  <span>{t.projectPremiumOptionTemplatesDescription}</span>
+                </article>
+                <button
+                  className="primary-button"
+                  disabled={!canUsePremiumStart}
+                  onClick={() => setProjectStartMode("ai")}
+                  type="button"
+                >
+                  {t.projectPremiumOpenUpload}
+                </button>
+              </div>
+            ) : null}
+
+            <div className="project-form-caption">
+              <strong>{t.projectSpecificationTitle}</strong>
+              <span>
+                {projectStartMode === "premium"
+                  ? t.projectStartPremiumDescription
+                  : projectStartMode === "ai"
+                    ? t.projectStartAiDescription
+                    : t.projectStartManualDescription}
+              </span>
+            </div>
+
+            <form className="create-project-form standalone-create-project-form" onSubmit={handleCreateProject}>
+              <label>
+                {t.projectName}
+                <input
+                  onChange={(event) =>
+                    setNewProjectForm((current) => ({ ...current, projectName: event.target.value }))
+                  }
+                  type="text"
+                  value={newProjectForm.projectName}
+                />
+              </label>
+              {renderProjectOptionField({
+                field: "projectType",
+                mode: "projectType",
+                target: "create",
+                title: t.projectType,
+                value: formatCatalogLabel(newProjectForm.projectType, t),
+              })}
+              <label>
+                {t.client}
+                <input
+                  onChange={(event) =>
+                    setNewProjectForm((current) => ({ ...current, clientName: event.target.value }))
+                  }
+                  type="text"
+                  value={newProjectForm.clientName}
+                />
+              </label>
+              <label>
+                {t.room}
+                <input
+                  onChange={(event) =>
+                    setNewProjectForm((current) => ({ ...current, roomName: event.target.value }))
+                  }
+                  type="text"
+                  value={newProjectForm.roomName}
+                />
+              </label>
+              <label>
+                {t.width}
+                <input
+                  min="1"
+                  onChange={(event) =>
+                    setNewProjectForm((current) => ({ ...current, width: event.target.value }))
+                  }
+                  required
+                  type="number"
+                  value={newProjectForm.width}
+                />
+              </label>
+              <label>
+                {t.height}
+                <input
+                  min="1"
+                  onChange={(event) =>
+                    setNewProjectForm((current) => ({ ...current, height: event.target.value }))
+                  }
+                  required
+                  type="number"
+                  value={newProjectForm.height}
+                />
+              </label>
+              <label>
+                {t.depth}
+                <input
+                  min="1"
+                  onChange={(event) =>
+                    setNewProjectForm((current) => ({ ...current, depth: event.target.value }))
+                  }
+                  required
+                  type="number"
+                  value={newProjectForm.depth}
+                />
+              </label>
+              <label>
+                {t.sections}
+                <input
+                  min="1"
+                  onChange={(event) =>
+                    setNewProjectForm((current) => ({ ...current, sections: event.target.value }))
+                  }
+                  required
+                  type="number"
+                  value={newProjectForm.sections}
+                />
+              </label>
+              <label className="wide-field">
+                {t.drawers}
+                <input
+                  onChange={(event) =>
+                    setNewProjectForm((current) => ({ ...current, drawers: event.target.value }))
+                  }
+                  placeholder="1, 2, 3"
+                  type="text"
+                  value={newProjectForm.drawers}
+                />
+              </label>
+              {renderProjectOptionField({
+                field: "facadeMaterial",
+                mode: "materials",
+                target: "create",
+                title: t.facadeMaterial,
+                value: newProjectForm.facadeMaterial,
+              })}
+              {renderProjectOptionField({
+                field: "insideMaterial",
+                mode: "materials",
+                target: "create",
+                title: t.insideMaterial,
+                value: newProjectForm.insideMaterial,
+              })}
+              {renderProjectOptionField({
+                field: "facadeEdgeBanding",
+                mode: "edgeBanding",
+                target: "create",
+                title: language === "uk" ? "Крайка фасаду" : "Facade edge banding",
+                value: newProjectForm.facadeEdgeBanding || t.notSet,
+              })}
+              {renderProjectOptionField({
+                field: "insideEdgeBanding",
+                mode: "edgeBanding",
+                target: "create",
+                title: language === "uk" ? "Крайка корпусу" : "Inside edge banding",
+                value: newProjectForm.insideEdgeBanding || t.notSet,
+              })}
+              {renderProjectOptionField({
+                field: "slideType",
+                mode: "slideType",
+                target: "create",
+                title: t.slideType,
+                value: formatProjectSlideValue(newProjectForm.slideType, "create"),
+              })}
+              {renderProjectOptionField({
+                field: "bottomType",
+                mode: "bottomType",
+                target: "create",
+                title: language === "uk" ? "Вид шухлядки" : "Drawer type",
+                value: formatProjectBottomValue(newProjectForm.bottomType),
+              })}
+              {renderProjectOptionField({
+                field: "handleType",
+                mode: "handles",
+                target: "create",
+                title: t.handleType,
+                value: newProjectForm.handleType || t.notSet,
+              })}
+              {renderProjectOptionField({
+                field: "handlePosition",
+                mode: "handlePosition",
+                target: "create",
+                title: t.handlePosition,
+                value: formatCatalogLabel(newProjectForm.handlePosition, t),
+              })}
+              <label className="wide-field">
+                {t.notes}
+                <input
+                  onChange={(event) =>
+                    setNewProjectForm((current) => ({ ...current, notes: event.target.value }))
+                  }
+                  type="text"
+                  value={newProjectForm.notes}
+                />
+              </label>
+              <button className="primary-button wide-button" disabled={loading} type="submit">
+                <Plus size={18} />
+                {t.createProject}
+              </button>
+            </form>
+          </section>
         ) : activeView === "projectDetails" ? (
           <section className="detail-panel full-panel">
             {selectedProject ? (
@@ -6363,22 +8623,14 @@ export default function App() {
                       value={form.projectName}
                     />
                   </label>
-                  <label>
-                    {t.projectType}
-                    <select
-                      disabled={!canEditSelectedProject || loading}
-                      onChange={(event) =>
-                        setForm({ ...form, projectType: event.target.value })
-                      }
-                      value={form.projectType}
-                    >
-                      {specificationCatalog.project_types.map((projectType) => (
-                        <option key={projectType} value={projectType}>
-                          {formatCatalogLabel(projectType, t)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                  {renderProjectOptionField({
+                    disabled: !canEditSelectedProject || loading,
+                    field: "projectType",
+                    mode: "projectType",
+                    target: "edit",
+                    title: t.projectType,
+                    value: formatCatalogLabel(form.projectType, t),
+                  })}
                   <label>
                     {t.client}
                     <input
@@ -6465,128 +8717,70 @@ export default function App() {
                       value={form.drawers}
                     />
                   </label>
-                  <label>
-                    {t.facadeMaterial}
-                    <input
-                      disabled={!canEditSelectedProject || loading}
-                      onChange={(event) =>
-                        setForm({ ...form, facadeMaterial: event.target.value })
-                      }
-                      type="text"
-                      value={form.facadeMaterial}
-                    />
-                  </label>
-                  <label>
-                    {t.insideMaterial}
-                    <input
-                      disabled={!canEditSelectedProject || loading}
-                      onChange={(event) =>
-                        setForm({ ...form, insideMaterial: event.target.value })
-                      }
-                      type="text"
-                      value={form.insideMaterial}
-                    />
-                  </label>
-                  <label>
-                    {t.edgeBanding}
-                    <select
-                      disabled={!canEditSelectedProject || loading}
-                      onChange={(event) =>
-                        setForm({ ...form, edgeBanding: event.target.value })
-                      }
-                      value={form.edgeBanding}
-                    >
-                      <option value="">{t.notSet}</option>
-                      {specificationCatalog.edge_bandings.map((edgeBanding) => (
-                        <option key={edgeBanding} value={edgeBanding}>
-                          {edgeBanding}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    {t.materialThickness}
-                    <select
-                      disabled={!canEditSelectedProject || loading}
-                      onChange={(event) =>
-                        setForm({
-                          ...form,
-                          materialThickness: event.target.value,
-                        })
-                      }
-                      value={form.materialThickness}
-                    >
-                      {specificationCatalog.material_thicknesses.map(
-                        (thickness) => (
-                          <option key={thickness} value={thickness}>
-                            {thickness}
-                          </option>
-                        ),
-                      )}
-                    </select>
-                  </label>
-                  <label>
-                    {t.slideType}
-                    <select
-                      disabled={!canEditSelectedProject || loading}
-                      onChange={(event) =>
-                        setForm({ ...form, slideType: event.target.value })
-                      }
-                      value={form.slideType}
-                    >
-                      {specificationCatalog.slide_types.map((slideType) => (
-                        <option key={slideType} value={slideType}>
-                          {slideType}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    {t.bottomType}
-                    <select
-                      disabled={!canEditSelectedProject || loading}
-                      onChange={(event) =>
-                        setForm({ ...form, bottomType: event.target.value })
-                      }
-                      value={form.bottomType}
-                    >
-                      {specificationCatalog.bottom_types.map((bottomType) => (
-                        <option key={bottomType} value={bottomType}>
-                          {bottomType}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    {t.handleType}
-                    <input
-                      disabled={!canEditSelectedProject || loading}
-                      onChange={(event) =>
-                        setForm({ ...form, handleType: event.target.value })
-                      }
-                      type="text"
-                      value={form.handleType}
-                    />
-                  </label>
-                  <label>
-                    {t.handlePosition}
-                    <select
-                      disabled={!canEditSelectedProject || loading}
-                      onChange={(event) =>
-                        setForm({ ...form, handlePosition: event.target.value })
-                      }
-                      value={form.handlePosition}
-                    >
-                      <option value="">{t.notSet}</option>
-                      {specificationCatalog.handle_positions.map(
-                        (handlePosition) => (
-                          <option key={handlePosition} value={handlePosition}>
-                            {formatCatalogLabel(handlePosition, t)}
-                          </option>
-                        ),
-                      )}
-                    </select>
-                  </label>
+                  {renderProjectOptionField({
+                    disabled: !canEditSelectedProject || loading,
+                    field: "facadeMaterial",
+                    mode: "materials",
+                    target: "edit",
+                    title: t.facadeMaterial,
+                    value: form.facadeMaterial,
+                  })}
+                  {renderProjectOptionField({
+                    disabled: !canEditSelectedProject || loading,
+                    field: "facadeEdgeBanding",
+                    mode: "edgeBanding",
+                    target: "edit",
+                    title: language === "uk" ? "Крайка фасаду" : "Facade edge banding",
+                    value: form.facadeEdgeBanding || t.notSet,
+                  })}
+                  {renderProjectOptionField({
+                    disabled: !canEditSelectedProject || loading,
+                    field: "insideMaterial",
+                    mode: "materials",
+                    target: "edit",
+                    title: t.insideMaterial,
+                    value: form.insideMaterial,
+                  })}
+                  {renderProjectOptionField({
+                    disabled: !canEditSelectedProject || loading,
+                    field: "insideEdgeBanding",
+                    mode: "edgeBanding",
+                    target: "edit",
+                    title: language === "uk" ? "Крайка корпусу" : "Inside edge banding",
+                    value: form.insideEdgeBanding || t.notSet,
+                  })}
+                  {renderProjectOptionField({
+                    disabled: !canEditSelectedProject || loading,
+                    field: "slideType",
+                    mode: "slideType",
+                    target: "edit",
+                    title: t.slideType,
+                    value: formatProjectSlideValue(form.slideType, "edit"),
+                  })}
+                  {renderProjectOptionField({
+                    disabled: !canEditSelectedProject || loading,
+                    field: "bottomType",
+                    mode: "bottomType",
+                    target: "edit",
+                    title: language === "uk" ? "Вид шухлядки" : "Drawer type",
+                    value: formatProjectBottomValue(form.bottomType),
+                  })}
+                  {renderProjectOptionField({
+                    disabled: !canEditSelectedProject || loading,
+                    field: "handleType",
+                    mode: "handles",
+                    target: "edit",
+                    title: t.handleType,
+                    value: form.handleType,
+                  })}
+                  {renderProjectOptionField({
+                    disabled: !canEditSelectedProject || loading,
+                    field: "handlePosition",
+                    mode: "handlePosition",
+                    target: "edit",
+                    title: t.handlePosition,
+                    value: formatCatalogLabel(form.handlePosition, t),
+                  })}
                   <label className="wide-field">
                     {t.notes}
                     <input
@@ -6607,506 +8801,23 @@ export default function App() {
                     {t.save}
                   </button>
                 </form>
-                ) : null}
-
-                {activeProjectTab === "production" ? (
-                <section className="production-section">
-                  <div className="history-header production-header">
-                    <h3>{t.production}</h3>
-                  </div>
-
-                  <section className="production-assembly-workspace">
-                    <article className="production-card production-card-sticky">
-                      <h4>{t.productionAssembly3d}</h4>
-                      {selectedCuttingItem ? (
-                        <div className="production-selected-part-summary">
-                          <strong>{selectedCuttingItem.part_name}</strong>
-                          <span>
-                            {selectedCuttingItem.width} x {selectedCuttingItem.height} x {selectedCuttingItem.thickness || 18}
-                          </span>
-                          <span>{selectedCuttingItem.material || t.notSet}</span>
-                        </div>
-                      ) : null}
-                      {cuttingItems.length > 0 ? (
-                        <ProductionViewerBoundary
-                          itemCount={cuttingItems.length}
-                          selectedPartCode={effectiveSelectedPartCode}
-                          t={t}
-                        >
-                          <Suspense fallback={<div className="part-three-viewer part-three-viewer-loading">Loading 3D assembly...</div>}>
-                            <ProjectThreeViewer
-                              hoveredPartCode={hoveredCuttingPartCode}
-                              items={cuttingItems}
-                              onClearSelection={handleClearCuttingPartSelection}
-                              onHoverPartChange={setHoveredCuttingPartCode}
-                              onOpenPart={handleSelectCuttingPart}
-                              onSelectPart={handlePreviewCuttingPart}
-                              projectMeta={{
-                                cuttingAssembly: cuttingAssembly || {},
-                                assemblyLayout: selectedProject?.assembly_layout || {},
-                                drawers: selectedProject?.drawers || [],
-                                projectType: selectedProject?.project_type || "dresser",
-                                sections: selectedProject?.sections || 1,
-                              }}
-                              selectedPartDetail={selectedPartDetail}
-                              selectedPartCode={effectiveSelectedPartCode}
-                              t={t}
-                            />
-                          </Suspense>
-                        </ProductionViewerBoundary>
-                      ) : (
-                        <p>{t.noCuttingItems}</p>
-                      )}
-                    </article>
-
-                    <article className="production-card production-parts-list-card">
-                      <h4>{t.productionCutting}</h4>
-                      {cuttingSummary ? (
-                        <div className="summary-row">
-                          <span>{t.cuttingSummary}</span>
-                          <strong>
-                            {expandedCuttingItems.length} {language === "uk" ? "шт" : "pcs"} / {cuttingSummary.total_area_m2} {t.cuttingArea}
-                          </strong>
-                        </div>
-                      ) : null}
-
-                      <label className="production-parts-search">
-                        <span>{t.search}</span>
-                        <input
-                          onChange={(event) => setCuttingSearch(event.target.value)}
-                          placeholder={t.search}
-                          type="text"
-                          value={cuttingSearch}
-                        />
-                      </label>
-                      {groupedCuttingItems.length > 0 ? (
-                        <div className="production-parts-search-actions">
-                          <button onClick={collapseAllCuttingGroups} type="button">
-                            {language === "uk" ? "Згорнути все" : "Collapse all"}
-                          </button>
-                          <button onClick={expandAllCuttingGroups} type="button">
-                            {language === "uk" ? "Розгорнути все" : "Expand all"}
-                          </button>
-                        </div>
-                      ) : null}
-
-                      {cuttingItems.length > 0 ? (
-                        <div className="production-parts-groups">
-                          {groupedCuttingItems.map(([materialName, materialItems]) => (
-                            <section className="production-parts-group" key={materialName}>
-                              <button
-                                className={`production-parts-group-head${collapsedCuttingGroups[materialName] ? " collapsed" : ""}`}
-                                onClick={() => toggleCuttingGroup(materialName)}
-                                type="button"
-                              >
-                                <h5>{materialName}</h5>
-                                <span className="production-parts-group-meta">
-                                  <span className="production-parts-group-count">{materialItems.length}</span>
-                                  <span className="production-parts-group-caret" aria-hidden="true">
-                                    {collapsedCuttingGroups[materialName] ? "+" : "-"}
-                                  </span>
-                                </span>
-                              </button>
-                              {!collapsedCuttingGroups[materialName] ? (
-                              <table className="cutting-table production-parts-table">
-                                <thead>
-                                  <tr>
-                                    <th className="production-parts-number-cell">№</th>
-                                    <th>{t.details}</th>
-                                    <th>{t.cuttingSize}</th>
-                                    <th>{t.materialThickness}</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {materialItems.map((item, index) => {
-                                    const isSelected =
-                                      selectedPartDetail?.part?.export_code === item.export_code ||
-                                      selectedCuttingPartCode === item.export_code;
-                                    const isHovered = hoveredCuttingPartCode === item.export_code;
-
-                                    return (
-                                      <tr
-                                        className={`${isSelected ? "selected" : ""}${isHovered ? " hovered" : ""}`}
-                                        data-export-code={item.export_code}
-                                        key={item.row_key}
-                                        onClick={() => handlePreviewCuttingPart(item.export_code)}
-                                        onMouseEnter={() => setHoveredCuttingPartCode(item.export_code)}
-                                        onMouseLeave={() => setHoveredCuttingPartCode(null)}
-                                      >
-                                        <td className="production-parts-number-cell">{index + 1}</td>
-                                        <td>{item.row_title}</td>
-                                        <td>{item.width} x {item.height}</td>
-                                        <td>{item.thickness || 18}</td>
-                                      </tr>
-                                    );
-                                  })}
-                                </tbody>
-                              </table>
-                              ) : null}
-                            </section>
-                          ))}
-                        </div>
-                      ) : (
-                        <p>{t.noCuttingItems}</p>
-                      )}
-                    </article>
-                  </section>
-
-                </section>
-                ) : null}
-
-                {activeProjectTab === "partDetail" && selectedPartDetail ? (
-                  <PartDetailWorkspace
-                    canEdit={canEditSelectedProject}
-                    detail={selectedPartDetail}
-                    edgeBandings={specificationCatalog.edge_bandings}
-                    loading={loading}
-                    onAddMachining={handleAddMachiningRow}
-                    onBack={() => setActiveProjectTab("production")}
-                    onEdgeChange={handlePartEdgeChange}
-                    onEdgeSelect={setSelectedEdgeSide}
-                    onMachiningChange={handleMachiningChange}
-                    onRemoveMachining={handleRemoveMachiningRow}
-                    onSaveEdges={handleSavePartEdges}
-                    onSaveMachining={handleSavePartMachining}
-                    selectedEdgeSide={selectedEdgeSide}
-                    t={t}
-                  />
-                ) : null}
-
-                {activeProjectTab === "history" ? (
-                <>
-                <div className="history-header">
-                  <History size={18} />
-                  <h3>{t.history}</h3>
-                </div>
-                <div className="history-list">
-                  {historyItems.map((item) => (
-                    <article className="history-item" key={item.id}>
-                      <div>
-                        <strong>{formatDateTime(item.created_at, t)}</strong>
-                        <span>
-                          {item.width} x {item.height} x {item.depth}
-                        </span>
-                      </div>
-                      {canRollbackSelectedProject ? (
-                        <button
-                          className="ghost-button"
-                          disabled={loading}
-                          onClick={() => openRollbackConfirm(item)}
-                          type="button"
-                        >
-                          <RotateCcw size={16} />
-                          {t.rollback}
-                        </button>
-                      ) : null}
-                    </article>
-                  ))}
-                </div>
-                </>
-                ) : null}
+                ) : (
+                  <article className="settings-card">
+                    <div className="settings-card-header">
+                      <h3>{t.projectDetails}</h3>
+                      <p>{t.showProjectOverview}</p>
+                    </div>
+                  </article>
+                )}
               </>
             ) : (
-              <div className="empty-state">
-                <Search size={22} />
-                <p>{t.selectProject}</p>
-              </div>
+              <article className="settings-card">
+                <div className="settings-card-header">
+                  <h3>{t.selectProject}</h3>
+                  <p>{t.projectNotFound}</p>
+                </div>
+              </article>
             )}
-          </section>
-        ) : activeView === "createProject" ? (
-          <section className="table-panel full-panel create-project-panel">
-            <form
-              className="create-project-form standalone-create-project-form"
-              onSubmit={handleCreateProject}
-            >
-              <label>
-                {t.projectName}
-                <input
-                  onChange={(event) =>
-                    setNewProjectForm({
-                      ...newProjectForm,
-                      projectName: event.target.value,
-                    })
-                  }
-                  type="text"
-                  value={newProjectForm.projectName}
-                />
-              </label>
-              <label>
-                {t.projectType}
-                <select
-                  onChange={(event) =>
-                    setNewProjectForm({
-                      ...newProjectForm,
-                      projectType: event.target.value,
-                    })
-                  }
-                  value={newProjectForm.projectType}
-                >
-                  {specificationCatalog.project_types.map((projectType) => (
-                    <option key={projectType} value={projectType}>
-                      {formatCatalogLabel(projectType, t)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                {t.client}
-                <input
-                  onChange={(event) =>
-                    setNewProjectForm({
-                      ...newProjectForm,
-                      clientName: event.target.value,
-                    })
-                  }
-                  type="text"
-                  value={newProjectForm.clientName}
-                />
-              </label>
-              <label>
-                {t.room}
-                <input
-                  onChange={(event) =>
-                    setNewProjectForm({
-                      ...newProjectForm,
-                      roomName: event.target.value,
-                    })
-                  }
-                  type="text"
-                  value={newProjectForm.roomName}
-                />
-              </label>
-              <label>
-                {t.width}
-                <input
-                  min="1"
-                  onChange={(event) =>
-                    setNewProjectForm({
-                      ...newProjectForm,
-                      width: event.target.value,
-                    })
-                  }
-                  required
-                  type="number"
-                  value={newProjectForm.width}
-                />
-              </label>
-              <label>
-                {t.height}
-                <input
-                  min="1"
-                  onChange={(event) =>
-                    setNewProjectForm({
-                      ...newProjectForm,
-                      height: event.target.value,
-                    })
-                  }
-                  required
-                  type="number"
-                  value={newProjectForm.height}
-                />
-              </label>
-              <label>
-                {t.depth}
-                <input
-                  min="1"
-                  onChange={(event) =>
-                    setNewProjectForm({
-                      ...newProjectForm,
-                      depth: event.target.value,
-                    })
-                  }
-                  required
-                  type="number"
-                  value={newProjectForm.depth}
-                />
-              </label>
-              <label>
-                {t.sections}
-                <input
-                  min="1"
-                  onChange={(event) =>
-                    setNewProjectForm({
-                      ...newProjectForm,
-                      sections: event.target.value,
-                    })
-                  }
-                  required
-                  type="number"
-                  value={newProjectForm.sections}
-                />
-              </label>
-              <label>
-                {t.drawers}
-                <input
-                  onChange={(event) =>
-                    setNewProjectForm({
-                      ...newProjectForm,
-                      drawers: event.target.value,
-                    })
-                  }
-                  placeholder="1, 2"
-                  type="text"
-                  value={newProjectForm.drawers}
-                />
-              </label>
-              <label>
-                {t.facadeMaterial}
-                <input
-                  onChange={(event) =>
-                    setNewProjectForm({
-                      ...newProjectForm,
-                      facadeMaterial: event.target.value,
-                    })
-                  }
-                  type="text"
-                  value={newProjectForm.facadeMaterial}
-                />
-              </label>
-              <label>
-                {t.insideMaterial}
-                <input
-                  onChange={(event) =>
-                    setNewProjectForm({
-                      ...newProjectForm,
-                      insideMaterial: event.target.value,
-                    })
-                  }
-                  type="text"
-                  value={newProjectForm.insideMaterial}
-                />
-              </label>
-              <label>
-                {t.edgeBanding}
-                <select
-                  onChange={(event) =>
-                    setNewProjectForm({
-                      ...newProjectForm,
-                      edgeBanding: event.target.value,
-                    })
-                  }
-                  value={newProjectForm.edgeBanding}
-                >
-                  <option value="">{t.notSet}</option>
-                  {specificationCatalog.edge_bandings.map((edgeBanding) => (
-                    <option key={edgeBanding} value={edgeBanding}>
-                      {edgeBanding}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                {t.materialThickness}
-                <select
-                  onChange={(event) =>
-                    setNewProjectForm({
-                      ...newProjectForm,
-                      materialThickness: event.target.value,
-                    })
-                  }
-                  value={newProjectForm.materialThickness}
-                >
-                  {specificationCatalog.material_thicknesses.map(
-                    (thickness) => (
-                      <option key={thickness} value={thickness}>
-                        {thickness}
-                      </option>
-                    ),
-                  )}
-                </select>
-              </label>
-              <label>
-                {t.slideType}
-                <select
-                  onChange={(event) =>
-                    setNewProjectForm({
-                      ...newProjectForm,
-                      slideType: event.target.value,
-                    })
-                  }
-                  value={newProjectForm.slideType}
-                >
-                  {specificationCatalog.slide_types.map((slideType) => (
-                    <option key={slideType} value={slideType}>
-                      {slideType}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                {t.bottomType}
-                <select
-                  onChange={(event) =>
-                    setNewProjectForm({
-                      ...newProjectForm,
-                      bottomType: event.target.value,
-                    })
-                  }
-                  value={newProjectForm.bottomType}
-                >
-                  {specificationCatalog.bottom_types.map((bottomType) => (
-                    <option key={bottomType} value={bottomType}>
-                      {bottomType}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                {t.handleType}
-                <input
-                  onChange={(event) =>
-                    setNewProjectForm({
-                      ...newProjectForm,
-                      handleType: event.target.value,
-                    })
-                  }
-                  type="text"
-                  value={newProjectForm.handleType}
-                />
-              </label>
-              <label>
-                {t.handlePosition}
-                <select
-                  onChange={(event) =>
-                    setNewProjectForm({
-                      ...newProjectForm,
-                      handlePosition: event.target.value,
-                    })
-                  }
-                  value={newProjectForm.handlePosition}
-                >
-                  <option value="">{t.notSet}</option>
-                  {specificationCatalog.handle_positions.map(
-                    (handlePosition) => (
-                      <option key={handlePosition} value={handlePosition}>
-                        {formatCatalogLabel(handlePosition, t)}
-                      </option>
-                    ),
-                  )}
-                </select>
-              </label>
-              <label className="wide-field">
-                {t.notes}
-                <input
-                  onChange={(event) =>
-                    setNewProjectForm({
-                      ...newProjectForm,
-                      notes: event.target.value,
-                    })
-                  }
-                  type="text"
-                  value={newProjectForm.notes}
-                />
-              </label>
-              <button
-                className="primary-button wide-button"
-                disabled={loading}
-                type="submit"
-              >
-                <Plus size={18} />
-                {t.createProject}
-              </button>
-            </form>
           </section>
         ) : activeView === "settings" ? (
           <section className="settings-panel full-panel">
@@ -7115,111 +8826,99 @@ export default function App() {
                 <div className="settings-card-header">
                   <h3>{t.myData}</h3>
                 </div>
-                <form className="settings-password-form" onSubmit={handleOwnProfileSave}>
-                  <div className="settings-info-grid">
-                    <label>
-                      {t.email}
-                      <input disabled readOnly type="text" value={user.email} />
-                    </label>
-                    <label>
-                      {t.role}
-                      <input disabled readOnly type="text" value={user.role} />
-                    </label>
-                    <label>
-                      {t.username}
-                      <input
-                        onChange={(event) =>
-                          setOwnProfileForm({
-                            ...ownProfileForm,
-                            username: event.target.value,
-                          })
-                        }
-                        required
-                        type="text"
-                        value={ownProfileForm.username}
-                      />
-                    </label>
-                    <label>
-                      {t.phone}
-                      <input
-                        onChange={(event) =>
-                          setOwnProfileForm({
-                            ...ownProfileForm,
-                            phone: event.target.value,
-                          })
-                        }
-                        type="text"
-                        value={ownProfileForm.phone}
-                      />
-                    </label>
-                    <label>
-                      {t.city}
-                      <select
-                        onChange={(event) =>
-                          setOwnProfileForm({
-                            ...ownProfileForm,
-                            city: event.target.value,
-                          })
-                        }
-                        value={ownProfileForm.city}
-                      >
-                        <option value="">{t.notSet}</option>
-                        {(materialCityOptions.length ? materialCityOptions : DEFAULT_CITY_OPTIONS).map((city) => (
-                          <option key={city} value={city}>
-                            {formatCatalogLabel(city, t)}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  </div>
+                <form className="settings-info-grid" onSubmit={handleOwnProfileSave}>
+                  <label>
+                    {t.email}
+                    <input disabled readOnly type="email" value={user?.email || ""} />
+                  </label>
+                  <label>
+                    {t.role}
+                    <input disabled readOnly type="text" value={user?.role || ""} />
+                  </label>
+                  <label>
+                    {t.username}
+                    <input
+                      onChange={(event) =>
+                        setOwnProfileForm((current) => ({ ...current, username: event.target.value }))
+                      }
+                      type="text"
+                      value={ownProfileForm.username}
+                    />
+                  </label>
+                  <label>
+                    {t.phone}
+                    <input
+                      onChange={(event) =>
+                        setOwnProfileForm((current) => ({ ...current, phone: event.target.value }))
+                      }
+                      type="text"
+                      value={ownProfileForm.phone}
+                    />
+                  </label>
+                  <label>
+                    {t.city}
+                    <select
+                      onChange={(event) =>
+                        setOwnProfileForm((current) => ({ ...current, city: event.target.value }))
+                      }
+                      value={ownProfileForm.city}
+                    >
+                      {(materialCityOptions.length ? materialCityOptions : DEFAULT_CITY_OPTIONS).map((city) => (
+                        <option key={city} value={city}>
+                          {formatCatalogLabel(city, t)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                   <div className="settings-actions">
-                    <button className="ghost-button" disabled={loading || !hasProfileChanges} type="submit">
+                    <button
+                      className="ghost-button"
+                      disabled={loading || !hasProfileChanges}
+                      type="submit"
+                    >
                       {t.saveProfile}
                     </button>
                   </div>
                 </form>
-                <form className="settings-password-form settings-subform" onSubmit={handleOwnEmailChangeRequest}>
-                  <label>
+                <form className="settings-info-grid settings-subform" onSubmit={handleOwnEmailChangeRequest}>
+                  <label className="settings-full-row">
                     {t.newEmail}
                     <input
-                      autoComplete="email"
                       onChange={(event) =>
-                        setEmailChangeForm({
-                          newEmail: event.target.value,
-                        })
+                        setEmailChangeForm({ newEmail: event.target.value })
                       }
                       placeholder={t.newEmail}
-                      required
                       type="email"
                       value={emailChangeForm.newEmail}
                     />
                   </label>
                   <div className="settings-actions">
-                    <button className="ghost-button" disabled={loading || !emailChangeForm.newEmail.trim()} type="submit">
+                    <button
+                      className="ghost-button"
+                      disabled={loading || !emailChangeForm.newEmail.trim()}
+                      type="submit"
+                    >
                       {t.requestEmailChange}
                     </button>
                   </div>
                 </form>
               </article>
-
               <article className="settings-card">
                 <div className="settings-card-header">
-                  <h3>{t.password}</h3>
+                  <h3>{t.changePassword}</h3>
                 </div>
                 <form className="settings-password-form" onSubmit={handleOwnPasswordChange}>
                   <label>
                     {t.currentPassword}
                     <input
                       autoComplete="current-password"
-                      minLength={8}
                       onChange={(event) =>
-                        setOwnPasswordForm({
-                          ...ownPasswordForm,
+                        setOwnPasswordForm((current) => ({
+                          ...current,
                           currentPassword: event.target.value,
-                        })
+                        }))
                       }
                       placeholder={t.currentPassword}
-                      required
                       type="password"
                       value={ownPasswordForm.currentPassword}
                     />
@@ -7230,35 +8929,37 @@ export default function App() {
                       autoComplete="new-password"
                       minLength={8}
                       onChange={(event) =>
-                        setOwnPasswordForm({
-                          ...ownPasswordForm,
+                        setOwnPasswordForm((current) => ({
+                          ...current,
                           newPassword: event.target.value,
-                        })
+                        }))
                       }
                       placeholder={t.newPassword}
-                      required
                       type="password"
                       value={ownPasswordForm.newPassword}
                     />
                   </label>
                   <div className="settings-actions">
-                    <button className="ghost-button" disabled={loading} type="submit">
+                    <button
+                      className="ghost-button"
+                      disabled={
+                        loading ||
+                        !ownPasswordForm.currentPassword ||
+                        !ownPasswordForm.newPassword ||
+                        ownPasswordForm.newPassword.length < 8
+                      }
+                      type="submit"
+                    >
                       {t.changePassword}
                     </button>
                   </div>
                 </form>
               </article>
-
-              <article className="settings-card">
+              <article className="settings-card settings-full-row">
                 <div className="settings-card-header">
-                  <h3>{t.viyarSettingsTitle}</h3>
+                  <h3>{t.viyarAccountTitle}</h3>
                 </div>
-                <form className="settings-password-form" onSubmit={handleSaveViyarAuth}>
-                  {viyarAuth?.has_password ? (
-                    <div className="settings-inline-status success">
-                      <strong>{t.viyarHasSavedPassword}:</strong> {t.viyarSavedState}
-                    </div>
-                  ) : null}
+                <form className="settings-info-grid" onSubmit={handleSaveViyarAuth}>
                   <label>
                     {t.viyarEmail}
                     <input
@@ -7295,7 +8996,7 @@ export default function App() {
                     />
                     <small className="settings-hint">{t.viyarPasswordHint}</small>
                   </label>
-                  <div className="settings-info-grid viyar-status-grid">
+                  <div className="settings-info-grid viyar-status-grid settings-full-row">
                     <label>
                       {t.viyarHasSavedPassword}
                       <input
@@ -7345,40 +9046,40 @@ export default function App() {
                         value={viyarAuth?.last_auth_error || t.notSet}
                       />
                     </label>
+                  </div>
+                  <div className="settings-inline-status info settings-full-row">
+                    {viyarNextStepLabel}
+                  </div>
+                  {viyarActionLabel ? (
+                    <div className="settings-inline-status progress settings-full-row">
+                      {viyarActionLabel}
                     </div>
-                    <div className="settings-inline-status info">
-                      {viyarNextStepLabel}
-                    </div>
-                    {viyarActionLabel ? (
-                      <div className="settings-inline-status progress">
-                        {viyarActionLabel}
-                      </div>
-                    ) : null}
-                    <div className="settings-actions">
-                      <button
-                        className={`ghost-button ${viyarNextStep === "save" ? "recommended-action" : ""}`}
-                        disabled={loading || !canSaveViyarAuth}
-                        type="submit"
-                      >
-                        {viyarAction === "saving" ? t.viyarSavingCredentials : t.viyarSaveCredentials}
-                      </button>
-                      <button
-                        className={`primary-button ${viyarNextStep === "connect" ? "recommended-action" : ""}`}
-                        disabled={loading || !canConnectViyar}
-                        onClick={handleRefreshViyarSession}
-                        type="button"
-                      >
-                        {viyarAction === "connecting" ? t.viyarConnectingNow : t.viyarConnect}
-                      </button>
-                      <button
-                        className={`ghost-button ${viyarNextStep === "sync" ? "recommended-action" : ""}`}
-                        disabled={loading || !canSyncViyar}
-                        onClick={handleSyncViyarPrices}
-                        type="button"
-                      >
-                        {viyarAction === "syncing" ? t.viyarSyncingPricesNow : t.viyarSyncPrices}
-                      </button>
-                    </div>
+                  ) : null}
+                  <div className="settings-actions settings-full-row">
+                    <button
+                      className={`ghost-button ${viyarNextStep === "save" ? "recommended-action" : ""}`}
+                      disabled={loading || !canSaveViyarAuth}
+                      type="submit"
+                    >
+                      {viyarAction === "saving" ? t.viyarSavingCredentials : t.viyarSaveCredentials}
+                    </button>
+                    <button
+                      className={`primary-button ${viyarNextStep === "connect" ? "recommended-action" : ""}`}
+                      disabled={loading || !canConnectViyar}
+                      onClick={handleRefreshViyarSession}
+                      type="button"
+                    >
+                      {viyarAction === "connecting" ? t.viyarConnectingNow : t.viyarConnect}
+                    </button>
+                    <button
+                      className={`ghost-button ${viyarNextStep === "sync" ? "recommended-action" : ""}`}
+                      disabled={loading || !canSyncViyar}
+                      onClick={handleSyncViyarPrices}
+                      type="button"
+                    >
+                      {viyarAction === "syncing" ? t.viyarSyncingPricesNow : t.viyarSyncPrices}
+                    </button>
+                  </div>
                 </form>
               </article>
             </div>
@@ -7429,9 +9130,9 @@ export default function App() {
                   value={newUserForm.role}
                 >
                   <option value="admin">admin</option>
+                  <option value="premium">premium</option>
                   <option value="pro">pro</option>
-                  <option value="user">user</option>
-                  <option value="guest">guest</option>
+                  <option value="free">free</option>
                 </select>
               </label>
               <button
@@ -7485,9 +9186,9 @@ export default function App() {
                         value={targetUser.role}
                       >
                         <option value="admin">admin</option>
+                        <option value="premium">premium</option>
                         <option value="pro">pro</option>
-                        <option value="user">user</option>
-                        <option value="guest">guest</option>
+                        <option value="free">free</option>
                       </select>
                     </td>
                     <td>{targetUser.is_active ? t.active : t.inactive}</td>
@@ -7760,31 +9461,105 @@ export default function App() {
               {canEditMaterialCatalog ? (
                 <>
                   <form className="materials-import-form" onSubmit={handleImportMaterial}>
+                    <div className="materials-mode-switch" role="tablist" aria-label={t.catalogMaterials}>
+                      <button
+                        className={`ghost-button${materialCreateMode === "source" ? " active" : ""}`}
+                        onClick={() => setMaterialCreateMode("source")}
+                        type="button"
+                      >
+                        {t.materialModeLinked}
+                      </button>
+                      <button
+                        className={`ghost-button${materialCreateMode === "manual" ? " active" : ""}`}
+                        onClick={() => setMaterialCreateMode("manual")}
+                        type="button"
+                      >
+                        {t.materialModeManual}
+                      </button>
+                    </div>
+                    {materialCreateMode === "source" ? (
+                      <>
+                        <label>
+                          {t.materialAddArticle}
+                          <input
+                            onChange={(event) => setNewMaterialArticle(event.target.value)}
+                            placeholder={t.materialAddArticlePlaceholder}
+                            type="text"
+                            value={newMaterialArticle}
+                          />
+                        </label>
+                        <label>
+                          {t.materialAddUrl}
+                          <input
+                            onChange={(event) => setNewMaterialSourceUrl(event.target.value)}
+                            placeholder={t.materialAddUrlPlaceholder}
+                            type="url"
+                            value={newMaterialSourceUrl}
+                          />
+                        </label>
+                        {canManageSystemMaterials(user) ? (
+                          <label className="material-inline-check">
+                            <input
+                              checked={newMaterialIsDefault}
+                              onChange={(event) => setNewMaterialIsDefault(event.target.checked)}
+                              type="checkbox"
+                            />
+                            {t.materialDefaultForAll}
+                          </label>
+                        ) : null}
+                      </>
+                    ) : (
+                      <>
+                        <label>
+                          {t.materialManualName}
+                          <input
+                            onChange={(event) => setNewMaterialName(event.target.value)}
+                            placeholder={t.materialManualNamePlaceholder}
+                            type="text"
+                            value={newMaterialName}
+                          />
+                        </label>
+                        <label>
+                          {t.materialManualPrice}
+                          <input
+                            min="0"
+                            onChange={(event) => setNewMaterialPrice(event.target.value)}
+                            placeholder="0"
+                            step="0.01"
+                            type="number"
+                            value={newMaterialPrice}
+                          />
+                        </label>
+                        <label>
+                          {t.materialManualImage}
+                          <input
+                            accept="image/*"
+                            onChange={handleMaterialImageUpload}
+                            type="file"
+                          />
+                          <small className="settings-hint">
+                            {newMaterialImageUrl ? t.fittingImageSelected : t.materialManualImageHint}
+                          </small>
+                        </label>
+                      </>
+                    )}
                     <label>
-                      {t.materialAddArticle}
-                      <input
-                        onChange={(event) => setNewMaterialArticle(event.target.value)}
-                        placeholder={t.materialAddArticlePlaceholder}
-                        type="text"
-                        value={newMaterialArticle}
-                      />
-                    </label>
-                    <label>
-                      {t.materialAddUrl}
-                      <input
-                        onChange={(event) => setNewMaterialSourceUrl(event.target.value)}
-                        placeholder={t.materialAddUrlPlaceholder}
-                        type="url"
-                        value={newMaterialSourceUrl}
-                      />
+                      {t.city}
+                      <input disabled readOnly type="text" value={formatCatalogLabel(materialSelectedCity || user?.city, t)} />
                     </label>
                     <button
                       className="primary-button"
-                      disabled={loading || !newMaterialArticle.trim()}
+                      disabled={
+                        loading || (
+                          materialCreateMode === "source"
+                            ? (!newMaterialArticle.trim() || !newMaterialSourceUrl.trim())
+                            : (!newMaterialName.trim() || newMaterialPrice === "")
+                        )
+                      }
                       type="submit"
                     >
                       <Plus size={16} />
-                      {t.materialAdd}
+                      {materialCreateMode === "source" ? t.materialAdd : t.materialManualAdd}
                     </button>
                   </form>
                   {activeMaterialImportJob ? (
@@ -7854,42 +9629,65 @@ export default function App() {
 
               {materialItems.length ? (
                 <div className="material-card-grid">
-                  {materialItems.map((item) => (
-                    <article className="material-card" key={item.id}>
-                      {canEditMaterialCatalog ? (
+                  {materialItems.map((item) => {
+                    const sourceMeta = getMaterialSourceMeta(item, t);
+                    const canManageItem = canEditMaterialItem(user, item);
+
+                    return (
+                    <article
+                      className="material-card material-card-clickable"
+                      key={item.id}
+                      onClick={() => openMaterialDetails(item)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          openMaterialDetails(item);
+                        }
+                      }}
+                      role="button"
+                      tabIndex={0}
+                    >
+                      {canManageItem ? (
                         <div className="material-card-menu">
                           <button
                             aria-label={t.refreshFromViyar}
                             className="icon-button material-card-menu-trigger"
-                            onClick={() =>
+                            onClick={(event) => {
+                              event.stopPropagation();
                               setOpenMaterialMenuId((current) =>
                                 current === item.id ? "" : item.id,
-                              )
-                            }
+                              );
+                            }}
                             type="button"
                           >
                             <MoreHorizontal size={16} />
                           </button>
                           {openMaterialMenuId === item.id ? (
                             <div className="material-card-menu-dropdown">
+                              {item.source_url ? (
                               <button
                                 className="material-card-menu-action"
-                                onClick={() => handleRefreshMaterial(item)}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  handleRefreshMaterial(item);
+                                }}
                                 type="button"
                               >
                                 <RefreshCw size={14} />
                                 {t.refreshFromViyar}
                               </button>
-                              {!item.is_default ? (
+                              ) : null}
                               <button
                                 className="material-card-menu-action danger"
-                                onClick={() => openDeleteMaterialConfirm(item)}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  openDeleteMaterialConfirm(item);
+                                }}
                                 type="button"
                               >
                                 <Trash2 size={14} />
                                 {t.deleteMaterial}
                               </button>
-                              ) : null}
                             </div>
                           ) : null}
                         </div>
@@ -7900,6 +9698,8 @@ export default function App() {
                             <img
                               alt={item.name || item.article}
                               data-fallback-index="0"
+                              decoding="async"
+                              loading="lazy"
                               onError={(event) => handleMaterialImageError(event, item, token)}
                               src={buildMaterialImageCandidates(item, token)[0]}
                             />
@@ -7916,15 +9716,13 @@ export default function App() {
                           <span className="service-tree-badge subtle">
                             {formatCatalogLabel(item.category, t)}
                           </span>
-                          <span className="material-card-article">{item.article}</span>
+                          {item.display_article ? (
+                            <span className="material-card-article">{item.display_article}</span>
+                          ) : null}
                         </div>
                         <strong>{item.name || item.article}</strong>
                         <div className="material-card-price">
-                          <span>
-                            {item.current_price_exact === false && item.current_price_city
-                              ? `${t.materialPriceFallback} (${formatCatalogLabel(item.current_price_city, t)})`
-                              : t.materialPriceForCity}
-                          </span>
+                          <span>{t.materialPriceForCity}</span>
                           <b>
                             {item.current_price !== null && item.current_price !== undefined
                               ? `${item.current_price} UAH`
@@ -7932,15 +9730,11 @@ export default function App() {
                           </b>
                         </div>
                         <div className="material-card-meta">
-                          <span
-                            className={`service-tree-badge material-cache-badge ${item.has_cached_image ? "success" : "pending"}`}
-                          >
-                            {item.has_cached_image ? t.materialCacheReady : t.materialCachePending}
-                          </span>
+                          {renderSourceBadge(sourceMeta)}
                         </div>
                       </div>
                     </article>
-                  ))}
+                  )})}
                 </div>
               ) : (
                 <div className="empty-state compact-empty-state">
@@ -8250,8 +10044,15 @@ export default function App() {
                           <article className="fitting-item-card" key={item.id}>
                             <div className="fitting-item-card-head">
                               <div className="fitting-item-card-preview">
-                                {item.image_url ? (
-                                  <img alt={item.name || item.article || t.catalogFittings} loading="lazy" src={item.image_url} />
+                                {buildFittingImageCandidates(item).length ? (
+                                  <img
+                                    alt={item.name || item.article || t.catalogFittings}
+                                    data-fallback-index="0"
+                                    decoding="async"
+                                    loading="lazy"
+                                    onError={(event) => handleFittingImageError(event, item)}
+                                    src={buildFittingImageCandidates(item)[0]}
+                                  />
                                 ) : (
                                   <Package size={24} />
                                 )}
@@ -8285,10 +10086,7 @@ export default function App() {
                             <div className="fitting-item-card-copy">
                               <strong>{item.name || item.code || item.article}</strong>
                               <div className="fittings-table-badges">
-                                <span className={`service-tree-badge ${item.is_system ? "success" : "subtle"}`}>
-                                  {item.is_system ? t.fittingSystemScope : t.fittingCustomScope}
-                                </span>
-                                <span className={`fitting-source-logo ${sourceMeta.code}`}>{sourceMeta.label}</span>
+                                {renderSourceBadge(sourceMeta)}
                               </div>
                             </div>
                             <div className="fitting-item-card-meta">
@@ -8323,8 +10121,15 @@ export default function App() {
                               <div className="fittings-table-name">
                                 <div className="fittings-table-name-main">
                                   <div className="fittings-table-thumb">
-                                    {item.image_url ? (
-                                      <img alt={item.name || item.article || t.catalogFittings} loading="lazy" src={item.image_url} />
+                                    {buildFittingImageCandidates(item).length ? (
+                                      <img
+                                        alt={item.name || item.article || t.catalogFittings}
+                                        data-fallback-index="0"
+                                        decoding="async"
+                                        loading="lazy"
+                                        onError={(event) => handleFittingImageError(event, item)}
+                                        src={buildFittingImageCandidates(item)[0]}
+                                      />
                                     ) : (
                                       <Package size={18} />
                                     )}
@@ -8332,9 +10137,6 @@ export default function App() {
                                   <div className="fittings-table-name-copy">
                                     <strong>{item.name || item.code || item.article}</strong>
                                     <div className="fittings-table-badges">
-                                      <span className={`service-tree-badge ${item.is_system ? "success" : "subtle"}`}>
-                                        {item.is_system ? t.fittingSystemScope : t.fittingCustomScope}
-                                      </span>
                                       {item.owner_user_id && !item.is_system ? (
                                         <span className="service-tree-badge subtle">{t.forCalculation}</span>
                                       ) : null}
@@ -8372,7 +10174,7 @@ export default function App() {
                               <span>{formatCatalogLabel(item.city, t)}</span>
                               <span>{item.price ?? t.notSet}</span>
                               <span>{item.stock || t.notSet}</span>
-                              <span className={`fitting-source-logo ${sourceMeta.code}`}>{sourceMeta.label}</span>
+                              {renderSourceBadge(sourceMeta)}
                             </article>
                           );
                         })}
@@ -9392,6 +11194,14 @@ export default function App() {
               <strong>{selectedProject.sections}</strong>
               <span>{t.drawers}</span>
               <strong>{formatDrawers(selectedProject.drawers, t)}</strong>
+              <span>{t.facadeMaterial}</span>
+              <strong>{selectedProject.facade_material || t.notSet}</strong>
+              <span>{t.insideMaterial}</span>
+              <strong>{selectedProject.inside_material || t.notSet}</strong>
+              <span>{`${t.facadeMaterial} · ${t.edgeBanding}`}</span>
+              <strong>{selectedProject.facade_edge_banding || selectedProject.edge_banding || t.notSet}</strong>
+              <span>{`${t.insideMaterial} · ${t.edgeBanding}`}</span>
+              <strong>{selectedProject.inside_edge_banding || selectedProject.edge_banding || t.notSet}</strong>
               <span>{t.created}</span>
               <strong>{formatDateTime(selectedProject.created_at, t)}</strong>
               <span>{t.updated}</span>
@@ -9525,6 +11335,557 @@ export default function App() {
                 )}
               </section>
             </div>
+          </section>
+        </div>
+      ) : null}
+
+      {projectOptionPicker.open ? (
+        <div
+          aria-modal="true"
+          className="modal-backdrop"
+          onClick={closeProjectOptionPicker}
+          role="dialog"
+        >
+          <section
+            className="confirm-modal project-option-picker-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="confirm-header">
+              <div>
+                <strong>{projectOptionPicker.title}</strong>
+                <p>{projectOptionPickerConfig.description}</p>
+              </div>
+              <button
+                aria-label={t.cancel}
+                className="ghost-button compact-button detail-info-button"
+                onClick={closeProjectOptionPicker}
+                type="button"
+              >
+                <X size={16} />
+              </button>
+            </header>
+
+            <div className="project-option-picker-toolbar">
+              <label className="project-option-picker-search">
+                <Search size={16} />
+                <input
+                  autoFocus
+                  onChange={(event) => setProjectOptionPickerSearch(event.target.value)}
+                  placeholder={projectOptionPickerConfig.placeholder}
+                  type="search"
+                  value={projectOptionPickerSearch}
+                />
+              </label>
+              <span className="service-tree-badge subtle">
+                {filteredProjectOptionItems.length} {language === "uk" ? "позицій" : "items"}
+              </span>
+            </div>
+
+            {filteredProjectOptionItems.length ? (
+              <div className="project-option-picker-grid">
+                {filteredProjectOptionItems.map((item) => {
+                  if (
+                    projectOptionPicker.mode === "handles" ||
+                    projectOptionPicker.mode === "slideType"
+                  ) {
+                    const sourceMeta = getFittingSourceMeta(item);
+                    const badgeLabel =
+                      projectOptionPicker.mode === "slideType"
+                        ? item.pickerRecommended
+                          ? language === "uk"
+                            ? "Рекомендовано"
+                            : "Recommended"
+                          : item.pickerLength
+                            ? `${item.pickerLength} мм`
+                            : t.slideType
+                        : currentFittingCategoryMeta?.name || t.handleType;
+
+                    return (
+                      <article
+                        className="project-option-picker-card"
+                        key={`${projectOptionPicker.mode}-${item.id}`}
+                        onClick={() => applyProjectOptionValue(item.pickerValue)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            applyProjectOptionValue(item.pickerValue);
+                          }
+                        }}
+                        role="button"
+                        tabIndex={0}
+                      >
+                        <div className="project-option-picker-card-media">
+                          {buildFittingImageCandidates(item).length ? (
+                            <img
+                              alt={item.name || item.article || item.code || t.catalogFittings}
+                              data-fallback-index="0"
+                              decoding="async"
+                              loading="lazy"
+                              onError={(event) => handleFittingImageError(event, item)}
+                              src={buildFittingImageCandidates(item)[0]}
+                            />
+                          ) : (
+                            <div className="material-card-placeholder">
+                              <Package size={22} />
+                            </div>
+                          )}
+                        </div>
+                        <div className="project-option-picker-card-body">
+                          <div className="project-option-picker-card-topline">
+                            <span className="service-tree-badge subtle">
+                              {badgeLabel}
+                            </span>
+                            {item.article ? (
+                              <span className="project-option-picker-card-article">{item.article}</span>
+                            ) : null}
+                          </div>
+                          <strong>{item.pickerTitle || item.pickerValue}</strong>
+                          {item.pickerSubtitle ? (
+                            <p className="project-option-picker-card-subtitle">{item.pickerSubtitle}</p>
+                          ) : null}
+                          <div className="project-option-picker-card-price">
+                            <span>{t.fittingPrice}</span>
+                            <b>{item.price !== null && item.price !== undefined ? `${item.price} UAH` : t.notSet}</b>
+                          </div>
+                          <div className="project-option-picker-card-meta">
+                            <span>{t.city}: {formatCatalogLabel(item.city, t)}</span>
+                            {renderSourceBadge(sourceMeta)}
+                          </div>
+                        </div>
+                      </article>
+                    );
+                  }
+
+                  if (projectOptionPicker.mode === "bottomType") {
+                    return (
+                      <article
+                        className="project-option-picker-card"
+                        key={`${projectOptionPicker.mode}-${item.id}`}
+                        onClick={() => applyProjectOptionValue(item.pickerValue)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            applyProjectOptionValue(item.pickerValue);
+                          }
+                        }}
+                        role="button"
+                        tabIndex={0}
+                      >
+                        <div className="project-option-picker-card-media">
+                          {item.image_url ? (
+                            <img alt={item.pickerTitle || item.pickerValue} loading="lazy" src={item.image_url} />
+                          ) : (
+                            <div className="material-card-placeholder">
+                              <Package size={22} />
+                            </div>
+                          )}
+                        </div>
+                        <div className="project-option-picker-card-body">
+                          <div className="project-option-picker-card-topline">
+                            <span className="service-tree-badge subtle">
+                              {language === "uk" ? "2 варіанти" : "2 variants"}
+                            </span>
+                          </div>
+                          <strong>{item.pickerTitle || item.pickerValue || t.notSet}</strong>
+                          {item.pickerSubtitle ? (
+                            <p className="project-option-picker-card-subtitle">{item.pickerSubtitle}</p>
+                          ) : null}
+                        </div>
+                      </article>
+                    );
+                  }
+
+                  if (projectOptionPicker.mode === "edgeBanding") {
+                    return (
+                      <article
+                        className="project-option-picker-card"
+                        key={`${projectOptionPicker.mode}-${item.id}`}
+                        onClick={() => applyProjectOptionValue(item.pickerValue)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            applyProjectOptionValue(item.pickerValue);
+                          }
+                        }}
+                        role="button"
+                        tabIndex={0}
+                      >
+                        <div className="project-option-picker-card-body">
+                          <div className="project-option-picker-card-topline">
+                            <span className="service-tree-badge subtle">
+                              {item.edge_key
+                                ? MATERIAL_EDGE_SLOTS.find((slot) => slot.key === item.edge_key)?.label || t.edgeBanding
+                                : t.edgeBanding}
+                            </span>
+                            {item.article ? (
+                              <span className="project-option-picker-card-article">{item.article}</span>
+                            ) : null}
+                          </div>
+                          <strong>{item.pickerTitle || item.pickerValue}</strong>
+                          {item.pickerSubtitle ? (
+                            <p className="project-option-picker-card-subtitle">{item.pickerSubtitle}</p>
+                          ) : null}
+                          <div className="project-option-picker-card-price">
+                            <span>{t.materialPriceForCity}</span>
+                            <b>
+                              {item.price !== null && item.price !== undefined
+                                ? `${item.price} UAH`
+                                : t.notSet}
+                            </b>
+                          </div>
+                          <div className="project-option-picker-card-meta">
+                            <span>{t.materialThickness}: {item.thickness || t.notSet}</span>
+                          </div>
+                          <div className="project-option-picker-card-edge-preview">
+                            {buildMaterialEdgeImageCandidates(activeProjectPickerMaterial, item).length ? (
+                              <>
+                                <img
+                                  alt={item.name || item.article || t.edgeBanding}
+                                  data-fallback-index="0"
+                                  decoding="async"
+                                  loading="lazy"
+                                  onError={(event) =>
+                                    handleMaterialEdgeImageError(
+                                      event,
+                                      activeProjectPickerMaterial,
+                                      item,
+                                      token,
+                                    )
+                                  }
+                                  src={buildMaterialEdgeImageCandidates(activeProjectPickerMaterial, item, token)[0]}
+                                />
+                                <div className="material-card-placeholder" hidden>
+                                  {t.edgeBanding}
+                                </div>
+                              </>
+                            ) : (
+                              <div className="material-card-placeholder">{t.edgeBanding}</div>
+                            )}
+                          </div>
+                        </div>
+                      </article>
+                    );
+                  }
+
+                  if (projectOptionPicker.mode !== "materials") {
+                    return (
+                      <article
+                        className="project-option-picker-card compact"
+                        key={`${projectOptionPicker.mode}-${item.id}`}
+                        onClick={() => applyProjectOptionValue(item.pickerValue)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            applyProjectOptionValue(item.pickerValue);
+                          }
+                        }}
+                        role="button"
+                        tabIndex={0}
+                      >
+                        <div className="project-option-picker-card-body">
+                          <div className="project-option-picker-card-topline">
+                            <span className="service-tree-badge subtle">
+                              {projectOptionPicker.title}
+                            </span>
+                          </div>
+                          <strong>{item.pickerTitle || item.pickerValue || t.notSet}</strong>
+                          {item.pickerSubtitle ? (
+                            <p className="project-option-picker-card-subtitle">{item.pickerSubtitle}</p>
+                          ) : null}
+                        </div>
+                      </article>
+                    );
+                  }
+
+                  return (
+                    <article
+                      className="project-option-picker-card"
+                      key={`${projectOptionPicker.mode}-${item.id}`}
+                      onClick={() => applyProjectOptionValue(item.pickerValue)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          applyProjectOptionValue(item.pickerValue);
+                        }
+                      }}
+                      role="button"
+                      tabIndex={0}
+                    >
+                      <div className="project-option-picker-card-media">
+                        {buildMaterialImageCandidates(item).length ? (
+                          <>
+                            <img
+                              alt={item.name || item.article}
+                              data-fallback-index="0"
+                              decoding="async"
+                              loading="lazy"
+                              onError={(event) => handleMaterialImageError(event, item, token)}
+                              src={buildMaterialImageCandidates(item, token)[0]}
+                            />
+                            <div className="material-card-placeholder" hidden>
+                              {formatCatalogLabel(item.category, t)}
+                            </div>
+                          </>
+                        ) : (
+                          <div className="material-card-placeholder">
+                            {formatCatalogLabel(item.category, t)}
+                          </div>
+                        )}
+                      </div>
+                      <div className="project-option-picker-card-body">
+                        <div className="project-option-picker-card-topline">
+                          <span className="service-tree-badge subtle">
+                            {formatCatalogLabel(item.category, t)}
+                          </span>
+                          {item.display_article || item.article ? (
+                            <span className="project-option-picker-card-article">
+                              {item.display_article || item.article}
+                            </span>
+                          ) : null}
+                        </div>
+                        <strong>{item.pickerTitle || item.pickerValue}</strong>
+                        {item.pickerSubtitle ? (
+                          <p className="project-option-picker-card-subtitle">{item.pickerSubtitle}</p>
+                        ) : null}
+                        <div className="project-option-picker-card-price">
+                          <span>{t.materialPriceForCity}</span>
+                          <b>
+                            {item.current_price !== null && item.current_price !== undefined
+                              ? `${item.current_price} UAH`
+                              : t.notSet}
+                          </b>
+                        </div>
+                        <div className="project-option-picker-card-meta">
+                          <span>
+                            {t.city}: {formatCatalogLabel(item.current_price_city || materialSelectedCity || user?.city, t)}
+                          </span>
+                          {renderSourceBadge(getMaterialSourceMeta(item, t))}
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="empty-state compact-empty-state">
+                <p>{projectOptionPickerConfig.empty}</p>
+              </div>
+            )}
+          </section>
+        </div>
+      ) : null}
+
+      {selectedMaterialDetail ? (
+        <div
+          aria-modal="true"
+          className="modal-backdrop"
+          onClick={closeMaterialDetails}
+          role="dialog"
+        >
+          <section
+            className="confirm-modal material-details-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="confirm-header">
+              <div>
+                <strong>{t.materialDetails}</strong>
+                <p>{getMaterialShortName(selectedMaterialDetail)}</p>
+              </div>
+              <button
+                aria-label={t.cancel}
+                className="ghost-button compact-button detail-info-button"
+                onClick={closeMaterialDetails}
+                type="button"
+              >
+                <X size={16} />
+              </button>
+            </header>
+
+            <div className="material-details-layout">
+              <div className="material-details-media">
+                {buildMaterialImageCandidates(selectedMaterialDetail).length ? (
+                  <>
+                    <img
+                      alt={selectedMaterialDetail.name || selectedMaterialDetail.article}
+                      data-fallback-index="0"
+                      decoding="async"
+                      loading="eager"
+                      onError={(event) => handleMaterialImageError(event, selectedMaterialDetail, token)}
+                      src={buildMaterialImageCandidates(selectedMaterialDetail, token)[0]}
+                    />
+                    <div className="material-card-placeholder" hidden>
+                      {formatCatalogLabel(selectedMaterialDetail.category, t)}
+                    </div>
+                  </>
+                ) : (
+                  <div className="material-card-placeholder">
+                    {formatCatalogLabel(selectedMaterialDetail.category, t)}
+                  </div>
+                )}
+              </div>
+
+              <div className="material-details-content">
+                <div className="material-details-badges">
+                  <span className="service-tree-badge subtle">
+                    {formatCatalogLabel(selectedMaterialDetail.category, t)}
+                  </span>
+                  {selectedMaterialDetail.display_article ? (
+                    <span className="service-tree-badge subtle">
+                      {selectedMaterialDetail.display_article}
+                    </span>
+                  ) : null}
+                  {renderSourceBadge(getMaterialSourceMeta(selectedMaterialDetail, t), true)}
+                </div>
+
+                <div className="material-details-grid">
+                  <div>
+                    <span>{t.materialPriceForCity}</span>
+                    <strong>
+                      {selectedMaterialDetail.current_price !== null && selectedMaterialDetail.current_price !== undefined
+                        ? `${selectedMaterialDetail.current_price} UAH`
+                        : t.notSet}
+                    </strong>
+                  </div>
+                  <div>
+                    <span>{t.city}</span>
+                    <strong>
+                      {formatCatalogLabel(
+                        selectedMaterialDetail.current_price_city || materialSelectedCity || user?.city,
+                        t,
+                      )}
+                    </strong>
+                  </div>
+                  <div>
+                    <span>{t.materialColor}</span>
+                    <strong>{getMaterialColorText(selectedMaterialDetail, t)}</strong>
+                  </div>
+                  <div>
+                    <span>{t.materialDimensions}</span>
+                    <strong>{selectedMaterialDetail.dimensions || t.notSet}</strong>
+                  </div>
+                  <div>
+                    <span>{t.materialThickness}</span>
+                    <strong>{selectedMaterialDetail.thickness || t.notSet}</strong>
+                  </div>
+                </div>
+
+                <div className="material-details-description">
+                  <span>{t.materialDescription}</span>
+                  <p>{getMaterialDescriptionText(selectedMaterialDetail, t)}</p>
+                </div>
+              </div>
+            </div>
+
+            <section className="material-edge-section">
+              <div className="material-edge-section-header">
+                <h4>{t.materialEdgeBands}</h4>
+                {materialDetailLoading ? <span className="service-tree-badge subtle">{t.loading}</span> : null}
+              </div>
+              <div className="material-edge-grid">
+                {MATERIAL_EDGE_SLOTS.map((slot) => {
+                  const edgeItem = getMaterialEdgeItem(selectedMaterialDetail, slot.key);
+                  const edgeForm = materialEdgeForms[slot.key] || { open: false, source_url: "" };
+                  const canEditEdge = canEditMaterialItem(user, selectedMaterialDetail);
+
+                  return (
+                    <article className="material-edge-card" key={slot.key}>
+                      <div className="material-edge-card-head">
+                        <strong>{slot.label}</strong>
+                        {canEditEdge ? (
+                          <button
+                            className="ghost-button compact-button"
+                            onClick={() => toggleMaterialEdgeForm(slot.key)}
+                            type="button"
+                          >
+                            <Plus size={14} />
+                            {t.materialEdgeAttach}
+                          </button>
+                        ) : null}
+                      </div>
+
+                        {edgeItem ? (
+                          <div className="material-edge-card-body">
+                            <div className="material-edge-card-copy">
+                              <div className="material-edge-card-topline">
+                                <b>{edgeItem.name || edgeItem.article || slot.label}</b>
+                              </div>
+                              <div className="material-edge-card-details-row">
+                                <div className="material-edge-card-meta">
+                                  {edgeItem.article ? <span>{edgeItem.article}</span> : null}
+                                  <span>{t.materialThickness}: {edgeItem.thickness || slot.label}</span>
+                                  <span>
+                                    {t.materialPriceForCity}:{" "}
+                                    {edgeItem.current_price !== null && edgeItem.current_price !== undefined
+                                      ? `${edgeItem.current_price} UAH`
+                                      : t.notSet}
+                                  </span>
+                                </div>
+                                <div className="material-edge-card-preview material-edge-card-preview-rect">
+                                  {buildMaterialEdgeImageCandidates(
+                                    selectedMaterialDetail,
+                                    edgeItem,
+                                    token,
+                                  ).length ? (
+                                    <>
+                                      <img
+                                        alt={edgeItem.name || edgeItem.article || slot.label}
+                                        data-fallback-index="0"
+                                        decoding="async"
+                                        loading="lazy"
+                                        onError={(event) =>
+                                          handleMaterialEdgeImageError(
+                                            event,
+                                            selectedMaterialDetail,
+                                            edgeItem,
+                                            token,
+                                          )
+                                        }
+                                        src={buildMaterialEdgeImageCandidates(
+                                          selectedMaterialDetail,
+                                          edgeItem,
+                                          token,
+                                        )[0]}
+                                      />
+                                      <div className="material-edge-card-preview-placeholder" hidden>
+                                        {slot.label}
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <div className="material-edge-card-preview-placeholder">
+                                      {slot.label}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                        <p className="empty-inline-note">{t.materialEdgeSlotEmpty}</p>
+                      )}
+
+                      {edgeForm.open ? (
+                        <div className="material-edge-form">
+                          <input
+                            onChange={(event) => updateMaterialEdgeForm(slot.key, event.target.value)}
+                            placeholder={t.materialEdgeAttachPlaceholder}
+                            type="url"
+                            value={edgeForm.source_url}
+                          />
+                          <button
+                            className="primary-button compact-button"
+                            disabled={loading || !String(edgeForm.source_url || "").trim()}
+                            onClick={() => handleAttachMaterialEdge(slot.key)}
+                            type="button"
+                          >
+                            {t.materialEdgeAttachConfirm}
+                          </button>
+                        </div>
+                      ) : null}
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
           </section>
         </div>
       ) : null}

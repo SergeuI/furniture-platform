@@ -65,6 +65,14 @@ class MaterialsSchema(BaseModel):
 
     inside: Optional[str] = None
 
+    facade_edge_banding: Optional[str] = None
+
+    inside_edge_banding: Optional[str] = None
+
+    facade_thickness: Optional[int] = None
+
+    inside_thickness: Optional[int] = None
+
     edge_banding: Optional[str] = None
 
     thickness: Optional[int] = None
@@ -104,6 +112,23 @@ class ProjectInputSchema(BaseModel):
     materials: MaterialsSchema
 
     fittings: FittingsSchema
+
+
+class ProjectScanUploadSchema(BaseModel):
+
+    filename: str = Field(
+        min_length=1,
+        max_length=255
+    )
+
+    content_base64: str = Field(
+        min_length=1
+    )
+
+
+class ProjectScanConfirmSchema(BaseModel):
+
+    confirmed_project_id: Optional[str] = None
 
 
 # =====================================================

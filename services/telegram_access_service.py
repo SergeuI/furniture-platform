@@ -6,6 +6,7 @@ from database.repositories.user_repository import (
 from services.user_roles import (
     ROLE_ADMIN,
     ROLE_GUEST,
+    ROLE_PREMIUM,
     ROLE_PRO,
     ROLE_USER,
     normalize_user_role,
@@ -18,6 +19,7 @@ from aiogram.types import (
 
 CALCULATOR_ALLOWED_ROLES = {
     ROLE_ADMIN,
+    ROLE_PREMIUM,
     ROLE_PRO,
     ROLE_USER,
 }

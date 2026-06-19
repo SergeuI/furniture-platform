@@ -50,7 +50,11 @@ def build_cutting_json_export(project):
             "depth": project.depth,
             "sections": project.sections,
             "drawers": project.drawers,
-            "material_thickness": project.material_thickness
+            "material_thickness": project.material_thickness,
+            "facade_thickness": project.facade_thickness,
+            "inside_thickness": project.inside_thickness,
+            "facade_edge_banding": project.facade_edge_banding,
+            "inside_edge_banding": project.inside_edge_banding,
         },
         "cutting": {
             "items": cutting["items"],

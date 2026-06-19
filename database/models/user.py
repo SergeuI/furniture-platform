@@ -87,7 +87,7 @@ class UserModel(Base):
 
         nullable=False,
 
-        default="user"
+        default="free"
     )
 
     is_active = Column(

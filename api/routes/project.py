@@ -1,8 +1,12 @@
 from fastapi import (
     APIRouter,
     Depends,
-    Query
+    HTTPException,
+    Query,
+    status
 )
+import base64
+import binascii
 
 from api.dependencies.auth import (
     optional_current_user,
@@ -12,7 +16,9 @@ from api.dependencies.auth import (
 from schemas.project_input import (
     ProjectInputSchema,
     ProjectPartEdgesUpdateSchema,
-    ProjectPartMachiningUpdateSchema
+    ProjectPartMachiningUpdateSchema,
+    ProjectScanConfirmSchema,
+    ProjectScanUploadSchema
 )
 from schemas.project_response import (
     DeleteProjectResponseSchema,
@@ -74,6 +80,11 @@ from database.repositories.project_version_repository import (
 
     get_project_versions
 )
+from database.repositories.project_scan_repository import (
+    confirm_project_scan_session,
+    create_project_scan_session,
+    list_project_scan_sessions,
+)
 from database.repositories.audit_log_repository import (
 
     create_audit_log
@@ -82,7 +93,22 @@ from database.repositories.service_catalog_repository import (
     list_calculable_service_catalog_items,
 )
 from services.user_roles import (
+    ROLE_ADMIN,
+    ROLE_PREMIUM,
+    ROLE_PRO,
     normalize_user_role,
+)
+from services.upload_service import (
+    save_uploaded_bytes,
+)
+from services.ocr_service import (
+    extract_text_from_image,
+)
+from services.furniture_detector import (
+    detect_furniture_type,
+)
+from services.project_parser import (
+    build_project_from_scan,
 )
 router = APIRouter()
 
@@ -118,9 +144,9 @@ def _build_project_pricing_catalog(current_user) -> dict:
 require_project_reader = require_roles(
     [
         "admin",
+        "premium",
         "pro",
-        "user",
-        "guest"
+        "free",
     ]
 )
 
@@ -133,8 +159,9 @@ require_project_admin = require_roles(
 require_project_writer = require_roles(
     [
         "admin",
+        "premium",
         "pro",
-        "user"
+        "free",
     ]
 )
 
@@ -148,15 +175,13 @@ def _can_read_project(
 
     current_role = normalize_user_role(current_user.role)
 
-    if current_role in (
-        "admin",
-        "guest"
-    ):
+    if current_role == "admin":
 
         return True
 
     if current_role in (
-        "user",
+        "free",
+        "premium",
         "pro"
     ):
 
@@ -182,7 +207,8 @@ def _can_update_project(
         return True
 
     if current_role in (
-        "user",
+        "free",
+        "premium",
         "pro"
     ):
 
@@ -222,11 +248,19 @@ def _serialize_project(
 
         "inside_material": project.inside_material,
 
+        "facade_edge_banding": project.facade_edge_banding,
+
+        "inside_edge_banding": project.inside_edge_banding,
+
         "edge_banding": project.edge_banding,
 
         "edge_overrides": project.edge_overrides or {},
 
         "machining_overrides": project.machining_overrides or {},
+
+        "facade_thickness": project.facade_thickness,
+
+        "inside_thickness": project.inside_thickness,
 
         "material_thickness": project.material_thickness,
 
@@ -285,11 +319,19 @@ def _serialize_project_version(
 
         "inside_material": version.inside_material,
 
+        "facade_edge_banding": version.facade_edge_banding,
+
+        "inside_edge_banding": version.inside_edge_banding,
+
         "edge_banding": version.edge_banding,
 
         "edge_overrides": version.edge_overrides or {},
 
         "machining_overrides": version.machining_overrides or {},
+
+        "facade_thickness": version.facade_thickness,
+
+        "inside_thickness": version.inside_thickness,
 
         "material_thickness": version.material_thickness,
 
@@ -455,6 +497,158 @@ async def list_projects_route(
 # =====================================================
 # GENERATE PROJECT
 # =====================================================
+
+@router.post("/scan")
+async def scan_project_file_route(
+
+    payload: ProjectScanUploadSchema,
+
+    current_user = Depends(require_roles([ROLE_ADMIN, ROLE_PREMIUM, ROLE_PRO]))
+):
+
+    try:
+
+        file_content = base64.b64decode(
+
+            payload.content_base64,
+
+            validate=True
+        )
+
+    except (binascii.Error, ValueError) as exc:
+
+        raise HTTPException(
+
+            status_code=status.HTTP_400_BAD_REQUEST,
+
+            detail={
+
+                "success": False,
+
+                "error": "Invalid file payload"
+            }
+        ) from exc
+
+    try:
+
+        file_path = save_uploaded_bytes(
+
+            payload.filename,
+
+            file_content
+        )
+
+    except ValueError as exc:
+
+        raise HTTPException(
+
+            status_code=status.HTTP_400_BAD_REQUEST,
+
+            detail={
+
+                "success": False,
+
+                "error": str(exc)
+            }
+        ) from exc
+
+    ocr_result = extract_text_from_image(file_path)
+    detection_result = detect_furniture_type(
+
+        file_path,
+
+        ocr_result.get("raw_text", "")
+    )
+    project_data = build_project_from_scan(
+
+        {
+
+            "file_path": file_path,
+
+            "ocr": ocr_result,
+
+            "furniture_detection": detection_result
+        }
+    )
+    scan_session = create_project_scan_session(
+        owner_user_id=current_user.id,
+        filename=payload.filename,
+        file_path=file_path,
+        project_data=project_data,
+        ocr_data=ocr_result,
+        detection_data=detection_result,
+    )
+
+    return {
+
+        "success": True,
+
+        "file_path": file_path,
+
+        "scan_session": scan_session,
+
+        "scan": {
+
+            "ocr": ocr_result,
+
+            "furniture_detection": detection_result,
+
+            "project_data": project_data
+        }
+    }
+
+
+@router.get("/scans")
+async def list_project_scan_sessions_route(
+
+    limit: int = Query(default=10, ge=1, le=50),
+
+    current_user = Depends(require_roles([ROLE_ADMIN, ROLE_PREMIUM, ROLE_PRO]))
+):
+
+    return {
+
+        "success": True,
+
+        "items": list_project_scan_sessions(
+            owner_user_id=current_user.id,
+            limit=limit,
+        )
+    }
+
+
+@router.post("/scans/{scan_id}/confirm")
+async def confirm_project_scan_session_route(
+
+    scan_id: str,
+
+    payload: ProjectScanConfirmSchema,
+
+    current_user = Depends(require_roles([ROLE_ADMIN, ROLE_PREMIUM, ROLE_PRO]))
+):
+
+    scan_session = confirm_project_scan_session(
+        scan_id=scan_id,
+        owner_user_id=current_user.id,
+        confirmed_project_id=payload.confirmed_project_id,
+    )
+
+    if not scan_session:
+
+        return {
+
+            "success": False,
+
+            "error": "Scan session not found"
+        }
+
+    return {
+
+        "success": True,
+
+        "scan_session": scan_session
+    }
+
 
 @router.post(
     "/generate",
@@ -1122,7 +1316,15 @@ async def update_project_route(
 
         inside_material=project.materials.inside,
 
+        facade_edge_banding=project.materials.facade_edge_banding,
+
+        inside_edge_banding=project.materials.inside_edge_banding,
+
         edge_banding=project.materials.edge_banding,
+
+        facade_thickness=project.materials.facade_thickness,
+
+        inside_thickness=project.materials.inside_thickness,
 
         material_thickness=project.materials.thickness,
 

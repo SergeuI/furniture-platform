@@ -77,6 +77,16 @@ class ProjectVersionModel(Base):
         nullable=True
     )
 
+    facade_edge_banding = Column(
+        String,
+        nullable=True
+    )
+
+    inside_edge_banding = Column(
+        String,
+        nullable=True
+    )
+
     edge_banding = Column(
         String,
         nullable=True
@@ -89,6 +99,16 @@ class ProjectVersionModel(Base):
 
     machining_overrides = Column(
         JSON,
+        nullable=True
+    )
+
+    facade_thickness = Column(
+        Integer,
+        nullable=True
+    )
+
+    inside_thickness = Column(
+        Integer,
         nullable=True
     )
 

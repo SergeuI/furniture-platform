@@ -82,11 +82,19 @@ def _create_project_version_from_project(
 
         inside_material=project.inside_material,
 
+        facade_edge_banding=project.facade_edge_banding,
+
+        inside_edge_banding=project.inside_edge_banding,
+
         edge_banding=project.edge_banding,
 
         edge_overrides=project.edge_overrides,
 
         machining_overrides=project.machining_overrides,
+
+        facade_thickness=project.facade_thickness,
+
+        inside_thickness=project.inside_thickness,
 
         material_thickness=project.material_thickness,
 
@@ -115,14 +123,15 @@ def _apply_access_filter(
     role: str
 ):
 
-    if role in (
-        "admin",
-        "viewer"
-    ):
+    if role == "admin":
 
         return query
 
-    if role == "manager":
+    if role in (
+        "free",
+        "pro",
+        "premium",
+    ):
 
         return query.filter(
 
@@ -266,7 +275,15 @@ def create_project(
 
     inside_material: str | None = None,
 
+    facade_edge_banding: str | None = None,
+
+    inside_edge_banding: str | None = None,
+
     edge_banding: str | None = None,
+
+    facade_thickness: int | None = None,
+
+    inside_thickness: int | None = None,
 
     material_thickness: int | None = None,
 
@@ -311,13 +328,21 @@ def create_project(
 
             inside_material=inside_material,
 
-            edge_banding=edge_banding,
+            facade_edge_banding=facade_edge_banding,
+
+            inside_edge_banding=inside_edge_banding,
+
+            edge_banding=edge_banding or inside_edge_banding or facade_edge_banding,
 
             edge_overrides={},
 
             machining_overrides={},
 
-            material_thickness=material_thickness,
+            facade_thickness=facade_thickness,
+
+            inside_thickness=inside_thickness,
+
+            material_thickness=material_thickness or inside_thickness or facade_thickness,
 
             slide_type=slide_type,
 
@@ -636,7 +661,15 @@ def update_project(
 
     inside_material: str | None = None,
 
+    facade_edge_banding: str | None = None,
+
+    inside_edge_banding: str | None = None,
+
     edge_banding: str | None = None,
+
+    facade_thickness: int | None = None,
+
+    inside_thickness: int | None = None,
 
     material_thickness: int | None = None,
 
@@ -702,9 +735,17 @@ def update_project(
 
         project.inside_material = inside_material
 
-        project.edge_banding = edge_banding
+        project.facade_edge_banding = facade_edge_banding
 
-        project.material_thickness = material_thickness
+        project.inside_edge_banding = inside_edge_banding
+
+        project.edge_banding = edge_banding or inside_edge_banding or facade_edge_banding
+
+        project.facade_thickness = facade_thickness
+
+        project.inside_thickness = inside_thickness
+
+        project.material_thickness = material_thickness or inside_thickness or facade_thickness
 
         project.slide_type = slide_type
 
@@ -949,11 +990,19 @@ def rollback_project(
 
         project.inside_material = version.inside_material
 
+        project.facade_edge_banding = version.facade_edge_banding
+
+        project.inside_edge_banding = version.inside_edge_banding
+
         project.edge_banding = version.edge_banding
 
         project.edge_overrides = version.edge_overrides or {}
 
         project.machining_overrides = version.machining_overrides or {}
+
+        project.facade_thickness = version.facade_thickness
+
+        project.inside_thickness = version.inside_thickness
 
         project.material_thickness = version.material_thickness
 

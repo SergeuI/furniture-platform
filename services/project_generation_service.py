@@ -194,7 +194,15 @@ async def generate_project(
 
         inside_material=project.materials.inside,
 
+        facade_edge_banding=project.materials.facade_edge_banding,
+
+        inside_edge_banding=project.materials.inside_edge_banding,
+
         edge_banding=project.materials.edge_banding,
+
+        facade_thickness=project.materials.facade_thickness,
+
+        inside_thickness=project.materials.inside_thickness,
 
         material_thickness=project.materials.thickness,
 

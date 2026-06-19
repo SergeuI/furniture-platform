@@ -66,9 +66,18 @@ def ensure_unified_legacy_schema(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             article TEXT UNIQUE,
             name TEXT,
+            description TEXT,
+            color TEXT,
+            dimensions TEXT,
+            thickness TEXT,
             image TEXT,
+            source_url TEXT,
+            owner_user_id TEXT,
             category TEXT,
-            tg_file_id TEXT
+            tg_file_id TEXT,
+            is_default INTEGER NOT NULL DEFAULT 0,
+            image_cached_bytes BLOB,
+            image_cached_content_type TEXT
         )
         """
     )
@@ -81,6 +90,33 @@ def ensure_unified_legacy_schema(
             city TEXT,
             price REAL,
             UNIQUE(article, city)
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS material_edge_options (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            material_article TEXT,
+            edge_key TEXT,
+            article TEXT,
+            name TEXT,
+            thickness_label TEXT,
+            image TEXT,
+            source_url TEXT
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS material_edge_prices (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            edge_option_id INTEGER,
+            city TEXT,
+            price REAL,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """
     )
@@ -240,6 +276,20 @@ def ensure_unified_legacy_schema(
         """
         CREATE INDEX IF NOT EXISTS idx_material_prices
         ON material_prices(article, city)
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_material_edge_options_material
+        ON material_edge_options(material_article, edge_key)
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_material_edge_prices_lookup
+        ON material_edge_prices(edge_option_id, city)
         """
     )
 

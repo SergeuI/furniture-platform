@@ -18,6 +18,7 @@ from schemas.auth import (
     CreateUserSchema,
     CurrentUserResponseSchema,
     LoginUserSchema,
+    PasswordResetRequestSchema,
     RegisterUserSchema,
     ReviewUserChangeRequestSchema,
     AdminUserDetailsResponseSchema,
@@ -56,8 +57,12 @@ from database.repositories.audit_log_repository import (
     create_audit_log
 )
 from database.repositories.project_repository import (
+    count_projects,
     list_projects_created_by_user,
 )
+from database.session import SessionLocal
+from database.models.material import MaterialModel
+from database.models.fitting import FittingModel
 
 from services.auth_service import (
     authenticate_user,
@@ -176,6 +181,42 @@ def _normalize_route_error(error_text: str | None, fallback: str) -> str:
 
     text = str(error_text or "").strip()
     return text or fallback
+
+
+@router.get("/public-overview")
+async def public_overview_route():
+
+    db = SessionLocal()
+
+    try:
+
+        materials_total = (
+            db.query(MaterialModel)
+            .filter(MaterialModel.is_default.is_(True))
+            .count()
+        )
+
+        fittings_total = (
+            db.query(FittingModel)
+            .filter(FittingModel.is_system.is_(True))
+            .filter(FittingModel.is_active.is_(True))
+            .count()
+        )
+
+        return {
+            "success": True,
+            "registration_enabled": True,
+            "stats": {
+                "projects_total": count_projects(),
+                "materials_total": materials_total,
+                "fittings_total": fittings_total,
+                "users_total": count_users(),
+            },
+        }
+
+    finally:
+
+        db.close()
 
 
 # =====================================================
@@ -310,6 +351,34 @@ async def create_user_route(
         "user": _serialize_user(
             user
         )
+    }
+
+
+@router.post("/password-reset-request")
+async def password_reset_request_route(
+    payload: PasswordResetRequestSchema
+):
+
+    email = payload.email.strip().lower()
+    user = get_user_by_email(email)
+
+    if user:
+        pending_request = get_pending_change_request(
+            user.id,
+            "password_reset",
+        )
+
+        if not pending_request:
+            create_user_change_request(
+                user_id=user.id,
+                change_type="password_reset",
+                old_value=None,
+                new_value="Password reset requested from public site",
+            )
+
+    return {
+        "success": True,
+        "message": "If this email exists, a password reset request was sent to the administrator.",
     }
 
 

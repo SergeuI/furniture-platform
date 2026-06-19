@@ -57,9 +57,11 @@ def fit_text(value, limit):
 def normalize_role(role):
     value = (role or "").strip().lower()
     mapping = {
+        "free": ("FREE", (232, 249, 236), (186, 233, 195), ACCENT_DARK),
         "guest": ("Гість", (244, 247, 250), (196, 205, 214), TEXT_MUTED),
         "user": ("Користувач", (232, 249, 236), (186, 233, 195), ACCENT_DARK),
         "pro": ("PRO", (232, 244, 255), (180, 211, 244), (22, 94, 166)),
+        "premium": ("PREMIUM", (255, 247, 229), (244, 207, 128), (147, 88, 0)),
         "admin": ("ADMIN", (245, 239, 255), (219, 198, 255), (99, 44, 177)),
     }
     return mapping.get(value, ("Користувач", (232, 249, 236), (186, 233, 195), ACCENT_DARK))

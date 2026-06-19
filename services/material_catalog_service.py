@@ -1,3 +1,4 @@
+import asyncio
 import json
 import re
 import subprocess
@@ -109,8 +110,37 @@ def _normalize_asset_url(value: str | None) -> str | None:
     if not asset:
         return None
 
+    if asset.startswith(("data:", "blob:")):
+        return asset
+
+    # Responsive image sets are ordered inconsistently across providers.
+    # Pick the largest declared candidate instead of the first thumbnail.
     if "," in asset:
-        asset = asset.split(",")[0].split(" ")[0].strip()
+        srcset_candidates: list[tuple[float, str]] = []
+
+        for index, candidate in enumerate(asset.split(",")):
+            parts = candidate.strip().split()
+
+            if not parts:
+                continue
+
+            score = float(index)
+
+            if len(parts) > 1:
+                descriptor = parts[-1].lower()
+
+                try:
+                    if descriptor.endswith("w"):
+                        score = float(descriptor[:-1])
+                    elif descriptor.endswith("x"):
+                        score = float(descriptor[:-1]) * 10000
+                except ValueError:
+                    pass
+
+            srcset_candidates.append((score, parts[0]))
+
+        if srcset_candidates:
+            asset = max(srcset_candidates, key=lambda item: item[0])[1]
 
     if asset.startswith("//"):
         return f"https:{asset}"
@@ -127,6 +157,127 @@ def _normalize_asset_url(value: str | None) -> str | None:
 def _normalize_article(value: str | None) -> str:
 
     return "".join(re.findall(r"\d+", str(value or "")))
+
+
+def _extract_dimensions_from_text(value: str | None) -> str | None:
+
+    text = _normalize_text(value)
+
+    if not text:
+        return None
+
+    match = re.search(
+        r"(\d{2,4}\s*[xх×]\s*\d{2,4}\s*[xх×]\s*\d{1,3}\s*(?:мм|mm)?)",
+        text,
+        re.IGNORECASE,
+    )
+
+    if not match:
+        return None
+
+    return (
+        match.group(1)
+        .replace("х", "x")
+        .replace("×", "x")
+        .replace("mm", "мм")
+    )
+
+
+def _extract_thickness_from_text(value: str | None) -> str | None:
+
+    text = _normalize_text(value)
+
+    if not text:
+        return None
+
+    dimensions = _extract_dimensions_from_text(text)
+
+    if dimensions:
+        match = re.search(r"x\s*(\d{1,3})\s*(?:мм|mm)?$", dimensions, re.IGNORECASE)
+        if match:
+            return f"{match.group(1)} мм"
+
+    match = re.search(r"(\d{1,2}(?:[.,]\d)?)\s*(?:мм|mm)\b", text, re.IGNORECASE)
+    if match:
+        return f"{match.group(1).replace('.', ',')} мм"
+
+    return None
+
+
+def _extract_color_from_name(name: str | None) -> str | None:
+
+    text = _normalize_text(name)
+
+    if not text:
+        return None
+
+    dimensions = _extract_dimensions_from_text(text)
+    if dimensions:
+        text = text.replace(dimensions, "").strip(" -/,")
+
+    prefixes = [
+        "ДСП",
+        "ЛДСП",
+        "МДФ",
+        "ДВП",
+        "HDF",
+        "Kronospan",
+        "Swiss Krono",
+        "Egger",
+        "SAVIOLA",
+        "Vanguard",
+    ]
+
+    for prefix in prefixes:
+        text = re.sub(rf"^\s*{re.escape(prefix)}\s*", "", text, flags=re.IGNORECASE)
+
+    text = re.sub(r"^\s*[A-ZА-ЯІЇЄ0-9\-_/]+\s+", "", text, flags=re.IGNORECASE)
+    text = _normalize_text(text)
+
+    return text or None
+
+
+def _short_material_name(value: str | None) -> str | None:
+
+    text = _normalize_text(value)
+
+    if not text:
+        return None
+
+    text = re.sub(
+        r"\s+\d{2,4}\s*[xXхХ×]\s*\d{2,4}\s*[xXхХ×]\s*\d{1,3}\s*(?:мм|mm)?\b.*$",
+        "",
+        text,
+        flags=re.IGNORECASE,
+    ).strip(" -/,")
+
+    return text or None
+
+
+def _clean_material_description(description: str | None, name: str | None) -> str | None:
+
+    text = _normalize_text(description)
+    short_name = _short_material_name(name) or _normalize_text(name)
+
+    if not text:
+        return short_name or None
+
+    lowered = text.lower()
+    promo_markers = [
+        "інтернет-магазин",
+        "пропонує замовити",
+        "з доставкою по україні",
+        "телефонуйте",
+        "купити",
+    ]
+
+    if any(marker in lowered for marker in promo_markers):
+        return short_name or None
+
+    if short_name and lowered == short_name.lower():
+        return short_name
+
+    return text
 
 
 def _resolve_product_url_from_search_html(html: str, article: str) -> str | None:
@@ -278,31 +429,14 @@ def resolve_material_image_payload(
 
     for value in [
         stored_image,
-        f"https://viyar.ua/upload/resize_cache/photos/512_512_1/ph{normalized_article}.jpg" if normalized_article else None,
-        f"https://www.viyar.ua/upload/resize_cache/photos/512_512_1/ph{normalized_article}.jpg" if normalized_article else None,
         f"https://www.viyar.ua/store/Items/photos/ph{normalized_article}.jpg" if normalized_article else None,
         f"https://viyar.ua/store/Items/photos/ph{normalized_article}.jpg" if normalized_article else None,
+        f"https://viyar.ua/upload/resize_cache/photos/512_512_1/ph{normalized_article}.jpg" if normalized_article else None,
+        f"https://www.viyar.ua/upload/resize_cache/photos/512_512_1/ph{normalized_article}.jpg" if normalized_article else None,
     ]:
         normalized_value = _normalize_asset_url(value)
         if normalized_value and normalized_value not in candidates:
             candidates.append(normalized_value)
-
-    if source_url:
-        try:
-            material = _extract_material_from_product_html(
-                _fetch_html(
-                    source_url,
-                    city=city,
-                    cookie_override=cookie_override,
-                ),
-                normalized_article or article,
-                source_url,
-            )
-            candidate = _normalize_asset_url(material.get("image") if material else None)
-            if candidate and candidate not in candidates:
-                candidates.insert(0, candidate)
-        except Exception:
-            pass
 
     for candidate in candidates:
         try:
@@ -328,6 +462,41 @@ def resolve_material_image_payload(
             "resolved_url": resolved_url,
         }
 
+    # Product-page parsing is considerably slower and can be unavailable while
+    # the image CDN still works. Use it only after every known image URL failed.
+    if source_url:
+        try:
+            material = _extract_material_from_product_html(
+                _fetch_html(
+                    source_url,
+                    city=city,
+                    cookie_override=cookie_override,
+                ),
+                normalized_article or article,
+                source_url,
+            )
+            candidate = _normalize_asset_url(material.get("image") if material else None)
+
+            if candidate:
+                image_bytes, content_type, resolved_url = _fetch_binary(
+                    candidate,
+                    city=city,
+                    cookie_override=cookie_override,
+                )
+                normalized_content_type = (content_type or "").split(";")[0].strip().lower()
+
+                if image_bytes and (
+                    not normalized_content_type
+                    or normalized_content_type.startswith("image/")
+                ):
+                    return {
+                        "bytes": image_bytes,
+                        "content_type": normalized_content_type or "image/jpeg",
+                        "resolved_url": resolved_url,
+                    }
+        except Exception:
+            pass
+
     return None
 
 
@@ -346,6 +515,40 @@ def prefetch_material_image_cache(
         city=city,
         cookie_override=cookie_override,
     )
+
+
+def fetch_remote_image_payload(
+    image_url: str | None,
+    city: str | None = None,
+    cookie_override: str | None = None,
+) -> dict | None:
+    normalized_url = _normalize_asset_url(image_url)
+
+    if not normalized_url:
+        return None
+
+    try:
+        image_bytes, content_type, resolved_url = _fetch_binary(
+            normalized_url,
+            city=city,
+            cookie_override=cookie_override,
+        )
+    except Exception:
+        return None
+
+    normalized_content_type = (content_type or "").split(";")[0].strip().lower()
+
+    if not image_bytes or (
+        normalized_content_type
+        and not normalized_content_type.startswith("image/")
+    ):
+        return None
+
+    return {
+        "bytes": image_bytes,
+        "content_type": normalized_content_type or "image/jpeg",
+        "resolved_url": resolved_url,
+    }
 
 
 def warm_material_image_cache_for_item(
@@ -499,10 +702,40 @@ def _extract_material_from_product_html(
         ],
     )
     price = _extract_price(price_text)
+    description = (
+        _first_attr(
+            soup,
+            [
+                "meta[name='description']",
+                "meta[property='og:description']",
+            ],
+            "content",
+        )
+        or _first_text(
+            soup,
+            [
+                ".card-info-head_description",
+                ".vr-card-info__description",
+                ".product-about__description",
+            ],
+        )
+        or name
+    )
+    description = _clean_material_description(description, name)
+    dimensions = _extract_dimensions_from_text(name)
+    thickness = (
+        _extract_thickness_from_text(name)
+        or _extract_thickness_from_text(html)
+    )
+    color = _extract_color_from_name(name)
 
     return {
         "article": article,
         "name": name,
+        "description": description,
+        "color": color,
+        "dimensions": dimensions,
+        "thickness": thickness,
         "image": image,
         "price": price,
         "price_raw": price_text or None,
@@ -1218,20 +1451,22 @@ async def fetch_viyar_material_by_article_live(
     direct_error = None
 
     try:
-        product_url = _resolve_product_url(
+        product_url = await asyncio.to_thread(
+            _resolve_product_url,
             normalized_article,
-            city=city,
-            cookie_override=cookie_override,
+            city,
+            cookie_override,
         )
 
         if preferred_url:
             product_url = preferred_url
 
         if product_url:
-            html = _fetch_html(
+            html = await asyncio.to_thread(
+                _fetch_html,
                 product_url,
-                city=city,
-                cookie_override=cookie_override,
+                city,
+                cookie_override,
             )
             material = _extract_material_from_product_html(
                 html=html,
@@ -1253,11 +1488,13 @@ async def fetch_viyar_material_by_article_live(
         )
     except Exception as async_error:
         try:
-            return _fetch_viyar_material_by_article_subprocess(
+            material, _debug_payload = await asyncio.to_thread(
+                _fetch_viyar_material_by_article_subprocess,
                 normalized_article,
-                city=city,
-                cookie_override=cookie_override,
+                city,
+                cookie_override,
             )
+            return material
         except Exception as worker_error:
             final_error = direct_error or async_error or worker_error
             raise RuntimeError(_normalize_material_error(final_error)) from worker_error
@@ -1283,20 +1520,22 @@ async def fetch_viyar_material_by_article_live_traced(
 
         if not product_url:
             _push_trace(trace, "direct.resolve_search", article=normalized_article, city=city)
-            product_url = _resolve_product_url(
+            product_url = await asyncio.to_thread(
+                _resolve_product_url,
                 normalized_article,
-                city=city,
-                cookie_override=cookie_override,
+                city,
+                cookie_override,
             )
             _push_trace(trace, "direct.resolve_search.result", product_url=product_url)
         else:
             _push_trace(trace, "direct.preferred_url", product_url=product_url)
 
         if product_url:
-            html = _fetch_html(
+            html = await asyncio.to_thread(
+                _fetch_html,
                 product_url,
-                city=city,
-                cookie_override=cookie_override,
+                city,
+                cookie_override,
             )
             material = _extract_material_from_product_html(
                 html=html,
@@ -1348,11 +1587,12 @@ async def fetch_viyar_material_by_article_live_traced(
         )
         try:
             _push_trace(trace, "worker.start", article=normalized_article)
-            material, debug_payload = _fetch_viyar_material_by_article_subprocess(
+            material, debug_payload = await asyncio.to_thread(
+                _fetch_viyar_material_by_article_subprocess,
                 normalized_article,
-                city=city,
-                cookie_override=cookie_override,
-                preferred_url=preferred_url,
+                city,
+                cookie_override,
+                preferred_url,
             )
             for entry in debug_payload.get("trace") or []:
                 trace.append(entry)
@@ -1378,3 +1618,62 @@ async def fetch_viyar_material_by_article_live_traced(
                 strategy=getattr(worker_error, "strategy", "all_fallbacks_failed"),
                 source_url=getattr(worker_error, "source_url", preferred_url),
             ) from worker_error
+
+
+async def fetch_viyar_product_details_by_url_traced(
+    source_url: str,
+    city: str | None = None,
+    cookie_override: str | None = None,
+    article_hint: str | None = None,
+) -> tuple[dict, dict]:
+
+    normalized_url = _normalize_text(source_url)
+    trace: list[dict] = []
+
+    if not normalized_url:
+        raise ValueError("Source URL is required")
+
+    try:
+        _push_trace(trace, "direct.product_url", product_url=normalized_url, city=city)
+        html = await asyncio.to_thread(
+            _fetch_html,
+            normalized_url,
+            city,
+            cookie_override,
+        )
+        material = _extract_material_from_product_html(
+            html=html,
+            article=article_hint or normalized_url,
+            source_url=normalized_url,
+        )
+        is_error_page = _looks_like_error_page(html, material)
+        _push_trace(
+            trace,
+            "direct.extract",
+            product_url=normalized_url,
+            name=material.get("name") if material else None,
+            article=material.get("article") if material else None,
+            price=material.get("price") if material else None,
+            has_image=bool(material.get("image")) if material else False,
+            error_page=is_error_page,
+        )
+        if material and material.get("name") and not is_error_page:
+            return material, {
+                "strategy": "direct_url_html",
+                "source_url": normalized_url,
+                "trace": trace,
+            }
+    except Exception as error:
+        _push_trace(
+            trace,
+            "direct.error",
+            error=type(error).__name__,
+            message=_normalize_material_error_message(error),
+        )
+
+    raise MaterialImportError(
+        "Material details were not found by URL",
+        trace=trace,
+        strategy="direct_url_html",
+        source_url=normalized_url,
+    )

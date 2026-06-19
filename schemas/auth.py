@@ -96,6 +96,16 @@ class ResetUserPasswordSchema(BaseModel):
     )
 
 
+class PasswordResetRequestSchema(BaseModel):
+
+    email: str = Field(
+
+        min_length=3,
+
+        max_length=255
+    )
+
+
 class UpdateUserRoleSchema(BaseModel):
 
     role: str = Field(

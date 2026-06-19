@@ -1,18 +1,22 @@
 ROLE_ADMIN = "admin"
 ROLE_PRO = "pro"
-ROLE_USER = "user"
-ROLE_GUEST = "guest"
+ROLE_PREMIUM = "premium"
+ROLE_FREE = "free"
+ROLE_USER = ROLE_FREE
+ROLE_GUEST = ROLE_FREE
 
 LEGACY_ROLE_ALIASES = {
-    "manager": ROLE_USER,
-    "viewer": ROLE_GUEST,
+    "user": ROLE_FREE,
+    "guest": ROLE_FREE,
+    "manager": ROLE_FREE,
+    "viewer": ROLE_FREE,
 }
 
 ALLOWED_USER_ROLES = [
     ROLE_ADMIN,
+    ROLE_PREMIUM,
     ROLE_PRO,
-    ROLE_USER,
-    ROLE_GUEST,
+    ROLE_FREE,
 ]
 
 

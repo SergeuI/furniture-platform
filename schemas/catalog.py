@@ -179,20 +179,49 @@ class MaterialPriceSchema(BaseModel):
     price: float | None = None
 
 
+class MaterialEdgePriceSchema(BaseModel):
+    city: str | None = None
+    price: float | None = None
+
+
+class MaterialEdgeOptionSchema(BaseModel):
+    id: str
+    edge_key: str
+    label: str | None = None
+    article: str | None = None
+    name: str | None = None
+    thickness: str | None = None
+    image: str | None = None
+    has_cached_image: bool = False
+    source_url: str | None = None
+    source_site: str | None = None
+    current_price: float | None = None
+    current_price_city: str | None = None
+    prices: List[MaterialEdgePriceSchema] = Field(default_factory=list)
+
+
 class MaterialCatalogItemSchema(BaseModel):
     id: str
     article: str
+    display_article: str | None = None
     name: str | None = None
+    description: str | None = None
+    color: str | None = None
+    dimensions: str | None = None
+    thickness: str | None = None
     category: str | None = None
     image: str | None = None
     source_url: str | None = None
+    source_site: str | None = None
     tg_file_id: str | None = None
+    owner_user_id: str | None = None
     is_default: bool = False
     has_cached_image: bool = False
     current_price: float | None = None
     current_price_city: str | None = None
     current_price_exact: bool = True
     prices: List[MaterialPriceSchema] = Field(default_factory=list)
+    edge_options: List[MaterialEdgeOptionSchema] = Field(default_factory=list)
 
 
 class MaterialCategorySchema(BaseModel):
@@ -226,6 +255,36 @@ class MaterialImportFromViyarSchema(BaseModel):
     force_refresh: bool = False
 
 
+class MaterialCatalogCreateSchema(BaseModel):
+    article: str | None = Field(
+        default=None,
+        max_length=128,
+    )
+    name: str | None = Field(
+        default=None,
+        max_length=255,
+    )
+    category: str = Field(
+        default="dsp",
+        min_length=2,
+        max_length=64,
+    )
+    city: str | None = Field(
+        default=None,
+        max_length=128,
+    )
+    price: float | None = None
+    source_url: str | None = Field(
+        default=None,
+        max_length=1000,
+    )
+    image_url: str | None = Field(
+        default=None,
+        max_length=500000,
+    )
+    is_default: bool = False
+
+
 class MaterialImportJobSchema(BaseModel):
     id: str
     article: str
@@ -254,6 +313,27 @@ class MaterialCatalogOperationResponseSchema(BaseModel):
     error: str | None = None
 
 
+class MaterialEdgeAttachSchema(BaseModel):
+    edge_key: str = Field(
+        min_length=2,
+        max_length=32,
+    )
+    source_url: str = Field(
+        min_length=8,
+        max_length=1000,
+    )
+    city: str | None = Field(
+        default=None,
+        max_length=128,
+    )
+
+
+class MaterialEdgeOperationResponseSchema(BaseModel):
+    success: bool
+    item: MaterialCatalogItemSchema | None = None
+    error: str | None = None
+
+
 class FittingCatalogItemSchema(BaseModel):
     id: str
     city: str | None = None
@@ -268,6 +348,7 @@ class FittingCatalogItemSchema(BaseModel):
     fitting_group_name: str | None = None
     fitting_description: str | None = None
     image_url: str | None = None
+    has_cached_image: bool = False
     source_url: str | None = None
     source_site: str | None = None
     owner_user_id: str | None = None

@@ -8,6 +8,12 @@ from database.models.fitting import (
 from database.models.material import (
     MaterialModel,
 )
+from database.models.material_edge import (
+    MaterialEdgeModel,
+)
+from database.models.material_edge_price import (
+    MaterialEdgePriceModel,
+)
 from database.models.material_price import (
     MaterialPriceModel,
 )
@@ -335,6 +341,7 @@ def _serialize_fitting(item: FittingModel) -> dict:
         "fitting_group_name": FITTING_GROUP_LABELS.get(category["group"], category["group"]),
         "fitting_description": category.get("description"),
         "image_url": item.image_url,
+        "has_cached_image": bool(item.image_cached_bytes),
         "source_url": item.source_url,
         "source_site": source_site,
         "owner_user_id": item.owner_user_id,
@@ -344,7 +351,7 @@ def _serialize_fitting(item: FittingModel) -> dict:
     }
 
 
-def _detect_fitting_source_site(source_url: str | None) -> str:
+def _detect_source_site(source_url: str | None) -> str:
 
     if not source_url:
         return "manual"
@@ -376,6 +383,171 @@ def _detect_fitting_source_site(source_url: str | None) -> str:
         return "blum"
 
     return "manual"
+
+
+def _detect_fitting_source_site(source_url: str | None) -> str:
+    return _detect_source_site(source_url)
+
+
+MATERIAL_EDGE_LABELS = {
+    "edge_04": "0,4 мм",
+    "edge_08": "0,8 мм",
+    "edge_1": "1 мм",
+    "edge_2": "2 мм",
+}
+
+
+def _serialize_material_edge(
+    item: MaterialEdgeModel,
+    prices_by_edge_id: dict[int, list[MaterialEdgePriceModel]],
+    city: str | None = None,
+) -> dict:
+
+    sorted_prices = sorted(
+        prices_by_edge_id.get(item.id, []),
+        key=lambda row: ((row.city or ""), row.id),
+    )
+    normalized_prices = [
+        {
+            "city": price.city,
+            "price": _normalize_price_value(price.price),
+        }
+        for price in sorted_prices
+    ]
+    active_price_row = next(
+        (
+            price
+            for price in normalized_prices
+            if city and price["city"] == city and price["price"] is not None
+        ),
+        None,
+    ) or next(
+        (
+            price
+            for price in normalized_prices
+            if price["price"] is not None
+        ),
+        None,
+    )
+
+    return {
+        "id": str(item.id),
+        "edge_key": item.edge_key,
+        "label": MATERIAL_EDGE_LABELS.get(item.edge_key, item.edge_key),
+        "article": item.article,
+        "name": item.name,
+        "thickness": item.thickness_label,
+        "image": item.image,
+        "has_cached_image": bool(item.image_cached_bytes),
+        "source_url": item.source_url,
+        "source_site": _detect_source_site(item.source_url),
+        "current_price": active_price_row["price"] if active_price_row else None,
+        "current_price_city": active_price_row["city"] if active_price_row else None,
+        "prices": normalized_prices,
+    }
+
+
+def _load_material_edges_payload(
+    db,
+    material_articles: list[str],
+    city: str | None = None,
+) -> dict[str, list[dict]]:
+
+    if not material_articles:
+        return {}
+
+    edge_rows = (
+        db.query(MaterialEdgeModel)
+        .filter(MaterialEdgeModel.material_article.in_(material_articles))
+        .order_by(MaterialEdgeModel.material_article.asc(), MaterialEdgeModel.edge_key.asc(), MaterialEdgeModel.id.asc())
+        .all()
+    )
+
+    edge_prices = db.query(MaterialEdgePriceModel).all()
+    prices_by_edge_id: dict[int, list[MaterialEdgePriceModel]] = defaultdict(list)
+
+    for price in edge_prices:
+        prices_by_edge_id[price.edge_option_id].append(price)
+
+    payload: dict[str, list[dict]] = defaultdict(list)
+
+    for row in edge_rows:
+        payload[row.material_article].append(
+            _serialize_material_edge(
+                row,
+                prices_by_edge_id,
+                city=city,
+            )
+        )
+
+    return payload
+
+
+def get_material_edge_image(
+    material_article: str,
+    edge_key: str,
+) -> dict | None:
+    db = SessionLocal()
+
+    try:
+        item = (
+            db.query(MaterialEdgeModel)
+            .filter(
+                MaterialEdgeModel.material_article == material_article,
+                MaterialEdgeModel.edge_key == edge_key,
+            )
+            .first()
+        )
+
+        if not item:
+            return None
+
+        return {
+            "id": str(item.id),
+            "material_article": item.material_article,
+            "edge_key": item.edge_key,
+            "article": item.article,
+            "image": item.image,
+            "source_url": item.source_url,
+            "image_cached_bytes": item.image_cached_bytes,
+            "image_cached_content_type": item.image_cached_content_type,
+        }
+    finally:
+        db.close()
+
+
+def update_material_edge_image_cache(
+    material_article: str,
+    edge_key: str,
+    image_bytes: bytes | None,
+    content_type: str | None,
+) -> dict | None:
+    db = SessionLocal()
+
+    try:
+        item = (
+            db.query(MaterialEdgeModel)
+            .filter(
+                MaterialEdgeModel.material_article == material_article,
+                MaterialEdgeModel.edge_key == edge_key,
+            )
+            .first()
+        )
+
+        if not item:
+            return None
+
+        item.image_cached_bytes = image_bytes
+        item.image_cached_content_type = content_type
+        db.commit()
+
+        return {
+            "id": str(item.id),
+            "has_cached_image": bool(item.image_cached_bytes),
+            "image_cached_content_type": item.image_cached_content_type,
+        }
+    finally:
+        db.close()
 
 
 def list_fitting_categories(
@@ -482,6 +654,8 @@ def list_materials(
     search: str | None = None,
     category: str | None = None,
     city: str | None = None,
+    viewer_user_id: str | None = None,
+    viewer_role: str | None = None,
 ) -> list[dict]:
 
     db = SessionLocal()
@@ -494,6 +668,12 @@ def list_materials(
             query = query.filter(
                 MaterialModel.category == category,
             )
+
+        if viewer_role:
+            visible_filter = MaterialModel.is_default.is_(True)
+            if viewer_user_id:
+                visible_filter = visible_filter | (MaterialModel.owner_user_id == str(viewer_user_id))
+            query = query.filter(visible_filter)
 
         if search:
             search_value = f"%{search.strip()}%"
@@ -513,6 +693,11 @@ def list_materials(
 
         material_prices = db.query(MaterialPriceModel).all()
         prices_by_article: dict[str, list[MaterialPriceModel]] = defaultdict(list)
+        edges_by_article = _load_material_edges_payload(
+            db,
+            [item.article for item in materials if item.article],
+            city=city,
+        )
 
         for price in material_prices:
             prices_by_article[price.article].append(price)
@@ -547,23 +732,41 @@ def list_materials(
                 ),
                 None,
             )
-            active_price_row = exact_price_row or fallback_price_row
+            # When a city is explicitly selected, show only the price that
+            # belongs to that city. Do not silently substitute another city's
+            # price in the main card because it confuses the user-facing city
+            # context. Keep the fallback row separately for diagnostics/future UI.
+            active_price_row = exact_price_row if city else fallback_price_row
 
             serialized_items.append(
                 {
                     "id": str(item.id),
                     "article": item.article,
+                    "display_article": (
+                        None
+                        if (not item.source_url and str(item.article or "").startswith("manual-"))
+                        else item.article
+                    ),
                     "name": item.name,
+                    "description": item.description,
+                    "color": item.color,
+                    "dimensions": item.dimensions,
+                    "thickness": item.thickness,
                     "category": item.category,
                     "image": item.image,
                     "source_url": item.source_url,
+                    "source_site": _detect_source_site(item.source_url),
                     "tg_file_id": item.tg_file_id,
+                    "owner_user_id": item.owner_user_id,
                     "is_default": bool(item.is_default),
                     "has_cached_image": bool(item.image_cached_bytes),
                     "prices": normalized_prices,
                     "current_price": active_price_row["price"] if active_price_row else None,
                     "current_price_city": active_price_row["city"] if active_price_row else None,
                     "current_price_exact": bool(exact_price_row),
+                    "fallback_price": fallback_price_row["price"] if fallback_price_row else None,
+                    "fallback_price_city": fallback_price_row["city"] if fallback_price_row else None,
+                    "edge_options": edges_by_article.get(item.article, []),
                 }
             )
 
@@ -782,7 +985,13 @@ def update_fitting(
         item.stock = _normalize_fitting_value(stock)
         item.fitting_type = category["code"]
         item.fitting_group = category["group"]
-        item.image_url = _normalize_fitting_value(image_url)
+        normalized_image_url = _normalize_fitting_value(image_url)
+
+        if normalized_image_url != item.image_url:
+            item.image_cached_bytes = None
+            item.image_cached_content_type = None
+
+        item.image_url = normalized_image_url
         item.source_url = _normalize_fitting_value(source_url)
         item.owner_user_id = _normalize_fitting_value(owner_user_id)
         item.is_system = bool(is_system)
@@ -825,6 +1034,53 @@ def delete_fitting(item_id: str | int) -> dict | None:
         db.close()
 
 
+def get_fitting_image_by_id(item_id: str | int) -> dict | None:
+    db = SessionLocal()
+
+    try:
+        item = db.query(FittingModel).filter(FittingModel.id == int(item_id)).first()
+
+        if not item:
+            return None
+
+        return {
+            "id": str(item.id),
+            "image_url": item.image_url,
+            "source_url": item.source_url,
+            "city": item.city,
+            "image_cached_bytes": item.image_cached_bytes,
+            "image_cached_content_type": item.image_cached_content_type,
+        }
+    finally:
+        db.close()
+
+
+def update_fitting_image_cache(
+    item_id: str | int,
+    image_bytes: bytes | None,
+    content_type: str | None,
+) -> dict | None:
+    db = SessionLocal()
+
+    try:
+        item = db.query(FittingModel).filter(FittingModel.id == int(item_id)).first()
+
+        if not item:
+            return None
+
+        item.image_cached_bytes = image_bytes
+        item.image_cached_content_type = content_type
+        db.commit()
+
+        return {
+            "id": str(item.id),
+            "has_cached_image": bool(item.image_cached_bytes),
+            "image_cached_content_type": item.image_cached_content_type,
+        }
+    finally:
+        db.close()
+
+
 def get_material_by_article(article: str) -> dict | None:
 
     db = SessionLocal()
@@ -843,15 +1099,31 @@ def get_material_by_article(article: str) -> dict | None:
         return {
             "id": str(item.id),
             "article": item.article,
+            "display_article": (
+                None
+                if (not item.source_url and str(item.article or "").startswith("manual-"))
+                else item.article
+            ),
             "name": item.name,
+            "description": item.description,
+            "color": item.color,
+            "dimensions": item.dimensions,
+            "thickness": item.thickness,
             "category": item.category,
             "image": item.image,
             "source_url": item.source_url,
+            "source_site": _detect_source_site(item.source_url),
             "tg_file_id": item.tg_file_id,
+            "owner_user_id": item.owner_user_id,
             "is_default": bool(item.is_default),
             "has_cached_image": bool(item.image_cached_bytes),
             "image_cached_bytes": item.image_cached_bytes,
             "image_cached_content_type": item.image_cached_content_type,
+            "edge_options": _load_material_edges_payload(
+                db,
+                [item.article],
+                city=None,
+            ).get(item.article, []),
         }
 
     finally:
@@ -863,9 +1135,14 @@ def upsert_material(
     article: str,
     name: str,
     category: str,
+    description: str | None = None,
+    color: str | None = None,
+    dimensions: str | None = None,
+    thickness: str | None = None,
     image: str | None = None,
     source_url: str | None = None,
     tg_file_id: str | None = None,
+    owner_user_id: str | None = None,
     is_default: bool | None = None,
 ) -> dict:
 
@@ -886,12 +1163,27 @@ def upsert_material(
             db.add(item)
 
         item.name = name
+        item.description = description
+        item.color = color
+        item.dimensions = dimensions
+        item.thickness = thickness
         item.category = category
-        item.image = image
+        normalized_new_image = str(image or "").strip() or None
+        normalized_old_image = str(item.image or "").strip() or None
+
+        if normalized_new_image != normalized_old_image:
+            # The binary cache is derived from the parsed image URL. Never keep
+            # serving old bytes after the parser discovers a new source image.
+            item.image_cached_bytes = None
+            item.image_cached_content_type = None
+
+        item.image = normalized_new_image
         if source_url is not None:
             item.source_url = source_url
         if tg_file_id is not None:
             item.tg_file_id = tg_file_id
+        if owner_user_id is not None or is_default is True:
+            item.owner_user_id = owner_user_id
         if is_default is not None:
             item.is_default = bool(is_default)
 
@@ -901,11 +1193,22 @@ def upsert_material(
         return {
             "id": str(item.id),
             "article": item.article,
+            "display_article": (
+                None
+                if (not item.source_url and str(item.article or "").startswith("manual-"))
+                else item.article
+            ),
             "name": item.name,
+            "description": item.description,
+            "color": item.color,
+            "dimensions": item.dimensions,
+            "thickness": item.thickness,
             "category": item.category,
             "image": item.image,
             "source_url": item.source_url,
+            "source_site": _detect_source_site(item.source_url),
             "tg_file_id": item.tg_file_id,
+            "owner_user_id": item.owner_user_id,
             "is_default": bool(item.is_default),
             "has_cached_image": bool(item.image_cached_bytes),
             "image_cached_bytes": item.image_cached_bytes,
@@ -932,12 +1235,6 @@ def delete_material(article: str) -> dict | None:
         if not item:
             return None
 
-        if item.is_default:
-            return {
-                "deleted": False,
-                "is_default": True,
-            }
-
         (
             db.query(MaterialPriceModel)
             .filter(MaterialPriceModel.article == article)
@@ -948,7 +1245,7 @@ def delete_material(article: str) -> dict | None:
 
         return {
             "deleted": True,
-            "is_default": False,
+            "is_default": bool(item.is_default),
         }
 
     finally:
@@ -1029,6 +1326,108 @@ def upsert_material_price(
             "city": row.city,
             "price": row.price,
             "updated_at": row.updated_at,
+        }
+
+    finally:
+
+        db.close()
+
+
+def upsert_material_edge_option(
+    *,
+    material_article: str,
+    edge_key: str,
+    article: str | None,
+    name: str | None,
+    thickness_label: str | None,
+    image: str | None,
+    source_url: str | None,
+) -> dict:
+
+    db = SessionLocal()
+
+    try:
+
+        item = (
+            db.query(MaterialEdgeModel)
+            .filter(
+                MaterialEdgeModel.material_article == material_article,
+                MaterialEdgeModel.edge_key == edge_key,
+            )
+            .first()
+        )
+
+        if not item:
+            item = MaterialEdgeModel(
+                material_article=material_article,
+                edge_key=edge_key,
+            )
+            db.add(item)
+
+        item.article = article
+        item.name = name
+        item.thickness_label = thickness_label
+        normalized_image = str(image or "").strip() or None
+
+        if normalized_image != item.image:
+            item.image_cached_bytes = None
+            item.image_cached_content_type = None
+
+        item.image = normalized_image
+        item.source_url = source_url
+
+        db.commit()
+        db.refresh(item)
+
+        return {
+            "id": str(item.id),
+            "material_article": item.material_article,
+            "edge_key": item.edge_key,
+        }
+
+    finally:
+
+        db.close()
+
+
+def upsert_material_edge_price(
+    *,
+    edge_option_id: int | str,
+    city: str,
+    price: float | None,
+) -> dict:
+
+    db = SessionLocal()
+
+    try:
+
+        row = (
+            db.query(MaterialEdgePriceModel)
+            .filter(
+                MaterialEdgePriceModel.edge_option_id == int(edge_option_id),
+                MaterialEdgePriceModel.city == city,
+            )
+            .first()
+        )
+
+        if not row:
+            row = MaterialEdgePriceModel(
+                edge_option_id=int(edge_option_id),
+                city=city,
+            )
+            db.add(row)
+
+        row.price = _normalize_price_value(price)
+        row.updated_at = datetime.utcnow()
+
+        db.commit()
+        db.refresh(row)
+
+        return {
+            "id": str(row.id),
+            "edge_option_id": str(row.edge_option_id),
+            "city": row.city,
+            "price": row.price,
         }
 
     finally:

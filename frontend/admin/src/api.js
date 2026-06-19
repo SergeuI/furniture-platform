@@ -1,12 +1,29 @@
 const API_BASE_URL = (
-  import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000"
+  import.meta.env.VITE_API_BASE_URL || ""
 );
+
+function extractErrorMessage(payload) {
+  if (payload?.detail?.error) {
+    return payload.detail.error;
+  }
+
+  if (Array.isArray(payload?.detail)) {
+    return payload.detail
+      .map((item) => item?.msg || item?.message || item?.error)
+      .filter(Boolean)
+      .join(", ");
+  }
+
+  return payload?.error || "Request failed";
+}
 
 async function request(path, options = {}) {
   const headers = {
     "Content-Type": "application/json",
     ...(options.headers || {}),
   };
+  const authHeader = String(headers.Authorization || "");
+  const authToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
 
   const controller = new AbortController();
   const timeoutMs = options.timeoutMs || 30000;
@@ -39,13 +56,21 @@ async function request(path, options = {}) {
   clearTimeout(timeoutId);
 
   if (!response.ok) {
-    if (response.status === 401) {
-      window.dispatchEvent(new CustomEvent("furniture-admin-unauthorized"));
+    if (response.status === 401 && authToken) {
+      window.dispatchEvent(
+        new CustomEvent("furniture-admin-unauthorized", {
+          detail: {
+            token: authToken,
+            path,
+            status: response.status,
+          },
+        }),
+      );
     }
 
     return {
       success: false,
-      error: payload.detail?.error || payload.error || "Request failed",
+      error: extractErrorMessage(payload),
       status: response.status,
     };
   }
@@ -177,9 +202,42 @@ export async function importMaterialFromViyar(
   });
 }
 
+export async function createMaterial(token, payload) {
+  return request("/catalog/materials", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+    timeoutMs: 120000,
+  });
+}
+
 export async function getMaterialImportJob(token, jobId) {
   return request(`/catalog/materials/import-jobs/${jobId}`, {
     headers: authHeaders(token),
+  });
+}
+
+export async function getMaterialDetails(token, article, city = "") {
+  const searchParams = new URLSearchParams();
+
+  if (city) {
+    searchParams.set("city", city);
+  }
+
+  const query = searchParams.toString();
+
+  return request(`/catalog/materials/${encodeURIComponent(article)}${query ? `?${query}` : ""}`, {
+    headers: authHeaders(token),
+    timeoutMs: 60000,
+  });
+}
+
+export async function attachMaterialEdge(token, article, payload) {
+  return request(`/catalog/materials/${encodeURIComponent(article)}/edges`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+    timeoutMs: 120000,
   });
 }
 
@@ -377,6 +435,54 @@ export async function generateProject(token, project) {
     method: "POST",
     headers: authHeaders(token),
     body: JSON.stringify(project),
+  });
+}
+
+export async function scanProjectFile(token, file) {
+  let contentBase64 = "";
+
+  try {
+    const dataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    });
+    contentBase64 = dataUrl.split(",")[1] || "";
+  } catch (error) {
+    return {
+      success: false,
+      error: error?.message || "Unable to read file",
+      status: 0,
+    };
+  }
+
+  return request("/project/scan", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({
+      filename: file.name,
+      content_base64: contentBase64,
+    }),
+  });
+}
+
+export async function listProjectScans(token, limit = 5) {
+  const params = new URLSearchParams();
+  params.set("limit", String(limit));
+
+  return request(`/project/scans?${params.toString()}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function confirmProjectScan(token, scanId, confirmedProjectId = "") {
+  return request(`/project/scans/${encodeURIComponent(scanId)}/confirm`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({
+      confirmed_project_id: confirmedProjectId || null,
+    }),
   });
 }
 

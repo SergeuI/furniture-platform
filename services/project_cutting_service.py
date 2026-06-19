@@ -200,7 +200,10 @@ def build_project_cutting(project):
         project
     )
 
-    thickness = project.material_thickness or 18
+    inside_thickness = project.inside_thickness or project.material_thickness or 18
+    facade_thickness = project.facade_thickness or inside_thickness
+    inside_edge_banding = project.inside_edge_banding or project.edge_banding
+    facade_edge_banding = project.facade_edge_banding or inside_edge_banding
     inside_material = _safe_text(
         project.inside_material
     )
@@ -219,11 +222,11 @@ def build_project_cutting(project):
     )
 
     inner_width = max(
-        width - (thickness * 2),
+        width - (inside_thickness * 2),
         0
     )
     inner_height = max(
-        height - (thickness * 2),
+        height - (inside_thickness * 2),
         0
     )
     drawer_front_width = (
@@ -252,9 +255,9 @@ def build_project_cutting(project):
             height,
             2,
             inside_material,
-            thickness,
+            inside_thickness,
             _edge_map(
-                project.edge_banding,
+                inside_edge_banding,
                 top=True,
                 bottom=True,
                 left=True
@@ -269,9 +272,9 @@ def build_project_cutting(project):
             depth,
             2,
             inside_material,
-            thickness,
+            inside_thickness,
             _edge_map(
-                project.edge_banding,
+                inside_edge_banding,
                 top=True,
                 left=True,
                 right=True
@@ -286,9 +289,9 @@ def build_project_cutting(project):
             inner_height,
             divider_count,
             inside_material,
-            thickness,
+            inside_thickness,
             _edge_map(
-                project.edge_banding,
+                inside_edge_banding,
                 top=True
             ),
             "vertical"
@@ -315,9 +318,9 @@ def build_project_cutting(project):
             drawer_front_height,
             drawer_count,
             facade_material,
-            thickness,
+            facade_thickness,
             _edge_map(
-                project.edge_banding,
+                facade_edge_banding,
                 top=True,
                 bottom=True,
                 left=True,
@@ -336,9 +339,9 @@ def build_project_cutting(project):
             120,
             drawer_count * 2,
             inside_material,
-            thickness,
+            inside_thickness,
             _edge_map(
-                project.edge_banding,
+                inside_edge_banding,
                 top=True
             ),
             "horizontal"
@@ -354,9 +357,9 @@ def build_project_cutting(project):
             120,
             drawer_count * 2,
             inside_material,
-            thickness,
+            inside_thickness,
             _edge_map(
-                project.edge_banding,
+                inside_edge_banding,
                 top=True
             ),
             "horizontal"

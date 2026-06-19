@@ -60,11 +60,55 @@ def validate_project_catalog_values(
 
         errors=errors,
 
+        value=project.materials.facade_edge_banding,
+
+        allowed_values=catalog["edge_bandings"],
+
+        message="Invalid facade edge banding"
+    )
+
+    _validate_optional_catalog_value(
+
+        errors=errors,
+
+        value=project.materials.inside_edge_banding,
+
+        allowed_values=catalog["edge_bandings"],
+
+        message="Invalid inside edge banding"
+    )
+
+    _validate_optional_catalog_value(
+
+        errors=errors,
+
         value=project.materials.edge_banding,
 
         allowed_values=catalog["edge_bandings"],
 
         message="Invalid edge banding"
+    )
+
+    _validate_optional_catalog_value(
+
+        errors=errors,
+
+        value=project.materials.facade_thickness,
+
+        allowed_values=catalog["material_thicknesses"],
+
+        message="Invalid facade material thickness"
+    )
+
+    _validate_optional_catalog_value(
+
+        errors=errors,
+
+        value=project.materials.inside_thickness,
+
+        allowed_values=catalog["material_thicknesses"],
+
+        message="Invalid inside material thickness"
     )
 
     _validate_optional_catalog_value(
