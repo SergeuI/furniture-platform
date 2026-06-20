@@ -65,7 +65,8 @@ const TOKEN_STORAGE_KEY = "furniture_app_token";
 const LANGUAGE_STORAGE_KEY = "furniture_app_language";
 const PAGE_SIZE = 20;
 const ADMIN_BASE_URL = import.meta.env.VITE_ADMIN_BASE_URL || "http://127.0.0.1:5173";
-const TELEGRAM_BOT_URL = import.meta.env.VITE_TELEGRAM_BOT_URL || "https://t.me/";
+const TELEGRAM_BOT_URL =
+  import.meta.env.VITE_TELEGRAM_BOT_URL || "https://t.me/Mebli_calculator_bot";
 const YOUTUBE_CHANNEL_URL = import.meta.env.VITE_YOUTUBE_CHANNEL_URL || "https://www.youtube.com/";
 const ADMIN_TOKEN_HASH_KEY = "mproject_token";
 const ADMIN_LOGOUT_HASH_KEY = "mproject_logout";
