@@ -99,7 +99,7 @@ const ADMIN_TOKEN_HASH_KEY = "mproject_token";
 const ADMIN_LOGOUT_HASH_KEY = "mproject_logout";
 const VIYAR_SERVICES_CACHE_PREFIX = "furniture_admin_viyar_services_cache";
 const API_BASE_URL = (
-  import.meta.env.VITE_API_BASE_URL || ""
+  import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? "" : "/api")
 );
 const PAGE_SIZE = 20;
 
