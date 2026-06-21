@@ -1,3 +1,5 @@
+import os
+
 from sqlalchemy import text
 
 from database.base import Base
@@ -484,6 +486,20 @@ def upgrade_sqlite_schema():
 
 
 def seed_demo_access_users():
+
+    seed_enabled = os.getenv(
+        "SEED_DEMO_USERS",
+        "false",
+    ).strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+    if not seed_enabled:
+
+        return
 
     demo_password = "Demo12345!"
 
