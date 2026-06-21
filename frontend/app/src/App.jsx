@@ -3093,8 +3093,8 @@ export default function App() {
           <div className="public-site-brand">
             <img
               alt={t.furniturePlatform}
-              className="brand-logo"
-              src="/brand/logo-banner.png"
+              className="brand-logo brand-logo-mpfc"
+              src="/brand/logo-mpfc.png"
             />
             <div className="public-site-brand-copy">
               <p>{t.brandTagline}</p>
@@ -3560,8 +3560,8 @@ export default function App() {
           <div className="public-site-footer-brand">
             <img
               alt={t.furniturePlatform}
-              className="brand-logo"
-              src="/brand/logo-banner.png"
+              className="brand-logo brand-logo-mpfc"
+              src="/brand/logo-mpfc.png"
             />
             <div>
               <strong>{t.landingFooterTitle}</strong>

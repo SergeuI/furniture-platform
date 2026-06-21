@@ -1161,6 +1161,17 @@ tbody tr.selected {
   width: 100%;
 }
 
+.public-site-brand .brand-logo-mpfc {
+  height: 72px;
+  width: 120px;
+}
+
+.public-site-footer-brand .brand-logo-mpfc {
+  flex: 0 0 auto;
+  height: 68px;
+  width: 114px;
+}
+
 .public-site-brand-copy {
   display: none;
 }
@@ -1950,6 +1961,11 @@ tbody tr.selected {
   .public-site-brand .brand-logo {
     height: 46px;
     max-width: 220px;
+  }
+
+  .public-site-brand .brand-logo-mpfc {
+    height: 58px;
+    width: 97px;
   }
 
   .public-hero-copy h1 {
