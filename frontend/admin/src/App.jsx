@@ -28,7 +28,7 @@ import {
   Users,
   Wrench,
 } from "lucide-react";
-import { Component, Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Component, Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import {
   attachMaterialEdge,
@@ -101,7 +101,12 @@ const VIYAR_SERVICES_CACHE_PREFIX = "furniture_admin_viyar_services_cache";
 const API_BASE_URL = (
   import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? "" : "/api")
 );
+const ADMIN_ASSET_BASE_URL = import.meta.env.BASE_URL || "/";
 const PAGE_SIZE = 20;
+
+function buildAdminAssetUrl(path) {
+  return `${ADMIN_ASSET_BASE_URL}${String(path || "").replace(/^\/+/, "")}`;
+}
 
 function consumeAdminTokenHandoff() {
   const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
@@ -2604,18 +2609,18 @@ function getMaterialSourceMeta(item, t) {
   const sourceSite = item?.source_site || detectFittingSourceSite(item?.source_url);
 
   if (sourceSite === "viyar") {
-    return { code: "viyar", label: "Viyar", logo: "/brand/source-logos/viyar.svg" };
+    return { code: "viyar", label: "Viyar", logo: buildAdminAssetUrl("brand/source-logos/viyar.jpg") };
   }
 
   if (sourceSite === "blum") {
-    return { code: "blum", label: "BLUM", logo: "/brand/source-logos/blum.svg" };
+    return { code: "blum", label: "BLUM", logo: buildAdminAssetUrl("brand/source-logos/blum.jpg") };
   }
 
   if (sourceSite === "kronas") {
-    return { code: "kronas", label: "Kronas", logo: "/brand/source-logos/kronas.svg" };
+    return { code: "kronas", label: "Kronas", logo: buildAdminAssetUrl("brand/source-logos/kronas.jpg") };
   }
 
-  return { code: "manual", label: t.fittingManualSource, logo: "/brand/source-logos/manual.svg" };
+  return { code: "manual", label: t.fittingManualSource, logo: buildAdminAssetUrl("brand/source-logos/manual.svg") };
 }
 
 function stripMaterialSizeSuffix(value) {
@@ -3588,6 +3593,18 @@ function PartDetailWorkspace({
 }
 
 export default function App() {
+  useLayoutEffect(() => {
+    const previousScrollRestoration = window.history.scrollRestoration;
+    window.history.scrollRestoration = "manual";
+    window.scrollTo(0, 0);
+    const frameId = window.requestAnimationFrame(() => window.scrollTo(0, 0));
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      window.history.scrollRestoration = previousScrollRestoration;
+    };
+  }, []);
+
   const [language, setLanguage] = useState(
     () => localStorage.getItem(LANGUAGE_STORAGE_KEY) || "en",
   );
@@ -4084,6 +4101,7 @@ export default function App() {
       phone: user?.phone || "",
       city: user?.city || "",
     });
+    setMaterialSelectedCity(user?.city || "");
     setEmailChangeForm({
       newEmail: "",
     });
@@ -4499,7 +4517,7 @@ export default function App() {
         code: "viyar",
         label: "Viyar",
         shortLabel: "viyar",
-        logo: "/brand/source-logos/viyar.svg",
+        logo: buildAdminAssetUrl("brand/source-logos/viyar.jpg"),
       };
     }
 
@@ -4508,7 +4526,7 @@ export default function App() {
         code: "blum",
         label: "BLUM",
         shortLabel: "blum",
-        logo: "/brand/source-logos/blum.svg",
+        logo: buildAdminAssetUrl("brand/source-logos/blum.jpg"),
       };
     }
 
@@ -4517,7 +4535,7 @@ export default function App() {
         code: "kronas",
         label: "Kronas",
         shortLabel: "kronas",
-        logo: "/brand/source-logos/kronas.svg",
+        logo: buildAdminAssetUrl("brand/source-logos/kronas.jpg"),
       };
     }
 
@@ -4525,7 +4543,7 @@ export default function App() {
       code: "manual",
       label: t.fittingManualSource,
       shortLabel: t.fittingManualSource,
-      logo: "/brand/source-logos/manual.svg",
+      logo: buildAdminAssetUrl("brand/source-logos/manual.svg"),
     };
   };
 
@@ -5351,16 +5369,24 @@ export default function App() {
     }
 
     setUser(result.user);
+    const savedCity = result.user.city || "";
+    setMaterialSelectedCity(savedCity);
     setOwnProfileForm((current) => ({
       ...current,
-      city: result.user.city || "",
+      city: savedCity,
     }));
     setStatus(t.citySaved);
-    await loadMaterialsCatalog(token, {
-      category: materialCategoryFilter,
-      city: result.user.city || "",
-      search: materialSearch,
-    });
+    await Promise.all([
+      loadMaterialsCatalog(token, {
+        category: materialCategoryFilter,
+        city: savedCity,
+        search: materialSearch,
+      }),
+      loadFittingsCatalog(token, {
+        city: savedCity,
+        search: fittingSearch,
+      }),
+    ]);
   }
 
   async function loadManualServices(activeToken = token, viewer = user) {
@@ -5959,7 +5985,26 @@ export default function App() {
     }
 
     setUser(result.user);
+    const savedCity = result.user.city || "";
+    setMaterialSelectedCity(savedCity);
+    setOwnProfileForm({
+      username: result.user.username || "",
+      phone: result.user.phone || "",
+      city: savedCity,
+    });
     setStatus(t.profileSaved);
+
+    await Promise.all([
+      loadMaterialsCatalog(token, {
+        category: materialCategoryFilter,
+        city: savedCity,
+        search: materialSearch,
+      }),
+      loadFittingsCatalog(token, {
+        city: savedCity,
+        search: fittingSearch,
+      }),
+    ]);
   }
 
   async function handleOwnEmailChangeRequest(event) {

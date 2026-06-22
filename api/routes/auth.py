@@ -502,15 +502,20 @@ async def update_own_profile_route(
         else:
             username = requested_username
 
-    phone = None if payload.phone is None else payload.phone.strip()
-    city = None if payload.city is None else payload.city.strip()
+    supplied_fields = payload.model_fields_set
+    profile_updates = {}
+
+    if "phone" in supplied_fields:
+        profile_updates["phone"] = None if payload.phone is None else payload.phone.strip()
+
+    if "city" in supplied_fields:
+        profile_updates["city"] = None if payload.city is None else payload.city.strip()
 
     updated_user = update_user_profile(
         user_id=current_user.id,
-        phone=phone,
-        city=city,
         username=username,
         mark_username_changed=mark_username_changed,
+        **profile_updates,
     )
 
     if not updated_user:

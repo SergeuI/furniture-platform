@@ -414,14 +414,15 @@ def _serialize_material_edge(
         }
         for price in sorted_prices
     ]
-    active_price_row = next(
+    exact_price_row = next(
         (
             price
             for price in normalized_prices
             if city and price["city"] == city and price["price"] is not None
         ),
         None,
-    ) or next(
+    )
+    fallback_price_row = next(
         (
             price
             for price in normalized_prices
@@ -429,6 +430,7 @@ def _serialize_material_edge(
         ),
         None,
     )
+    active_price_row = exact_price_row if city else fallback_price_row
 
     return {
         "id": str(item.id),
@@ -443,6 +445,7 @@ def _serialize_material_edge(
         "source_site": _detect_source_site(item.source_url),
         "current_price": active_price_row["price"] if active_price_row else None,
         "current_price_city": active_price_row["city"] if active_price_row else None,
+        "current_price_exact": bool(exact_price_row),
         "prices": normalized_prices,
     }
 

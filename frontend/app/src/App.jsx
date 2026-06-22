@@ -31,7 +31,7 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { Component, Fragment, Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Component, Fragment, Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import {
   changeOwnPassword,
@@ -2183,6 +2183,18 @@ function PartDetailWorkspace({
 }
 
 export default function App() {
+  useLayoutEffect(() => {
+    const previousScrollRestoration = window.history.scrollRestoration;
+    window.history.scrollRestoration = "manual";
+    window.scrollTo(0, 0);
+    const frameId = window.requestAnimationFrame(() => window.scrollTo(0, 0));
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      window.history.scrollRestoration = previousScrollRestoration;
+    };
+  }, []);
+
   const [language, setLanguage] = useState(
     () => localStorage.getItem(LANGUAGE_STORAGE_KEY) || "uk",
   );
@@ -2219,6 +2231,7 @@ export default function App() {
   const [ownProfileForm, setOwnProfileForm] = useState({
     username: "",
     phone: "",
+    city: "",
   });
   const [emailChangeForm, setEmailChangeForm] = useState({
     newEmail: "",
@@ -2368,7 +2381,8 @@ export default function App() {
     selectedCuttingPartCode || selectedPartDetail?.part?.export_code || "";
   const hasProfileChanges =
     (ownProfileForm.username || "") !== (user?.username || "") ||
-    (ownProfileForm.phone || "") !== (user?.phone || "");
+    (ownProfileForm.phone || "") !== (user?.phone || "") ||
+    (ownProfileForm.city || "") !== (user?.city || "");
   const filteredCuttingItems = useMemo(() => {
     const normalizedQuery = cuttingSearch.trim().toLowerCase();
 
@@ -2510,6 +2524,7 @@ export default function App() {
     setOwnProfileForm({
       username: result.user?.username || "",
       phone: result.user?.phone || "",
+      city: result.user?.city || "",
     });
   }
 
@@ -2687,6 +2702,7 @@ export default function App() {
     setOwnProfileForm({
       username: "",
       phone: "",
+      city: "",
     });
     setEmailChangeForm({
       newEmail: "",
@@ -2717,11 +2733,13 @@ export default function App() {
 
     const trimmedUsername = ownProfileForm.username.trim();
     const trimmedPhone = ownProfileForm.phone.trim();
+    const trimmedCity = ownProfileForm.city.trim();
 
     setLoading(true);
     const result = await updateMyProfile(token, {
       username: trimmedUsername || null,
       phone: trimmedPhone || null,
+      city: trimmedCity || null,
     });
     setLoading(false);
 
@@ -2734,6 +2752,7 @@ export default function App() {
     setOwnProfileForm({
       username: result.user?.username || "",
       phone: result.user?.phone || "",
+      city: result.user?.city || "",
     });
     setStatus({ message: t.profileUpdated, tone: "success" });
   }
@@ -4887,6 +4906,33 @@ export default function App() {
                         type="text"
                         value={ownProfileForm.phone}
                       />
+                    </label>
+                    <label>
+                      {language === "uk" ? "Місто" : "City"}
+                      <select
+                        onChange={(event) =>
+                          setOwnProfileForm({
+                            ...ownProfileForm,
+                            city: event.target.value,
+                          })
+                        }
+                        value={ownProfileForm.city}
+                      >
+                        <option value="">{t.notSet}</option>
+                        {[
+                          ["kyiv", "Київ", "Kyiv"],
+                          ["lviv", "Львів", "Lviv"],
+                          ["odessa", "Одеса", "Odesa"],
+                          ["dnipro", "Дніпро", "Dnipro"],
+                          ["kharkiv", "Харків", "Kharkiv"],
+                          ["khmelnytskyi", "Хмельницький", "Khmelnytskyi"],
+                          ["rivne", "Рівне", "Rivne"],
+                        ].map(([value, ukLabel, enLabel]) => (
+                          <option key={value} value={value}>
+                            {language === "uk" ? ukLabel : enLabel}
+                          </option>
+                        ))}
+                      </select>
                     </label>
                   </div>
                   <div className="settings-actions">

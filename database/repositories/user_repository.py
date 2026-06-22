@@ -13,6 +13,9 @@ from services.user_roles import (
 )
 
 
+_UNSET = object()
+
+
 # =====================================================
 # CREATE USER
 # =====================================================
@@ -503,9 +506,9 @@ def update_user_profile(
 
     user_id: str,
 
-    phone: str | None = None,
+    phone: str | None | object = _UNSET,
 
-    city: str | None = None,
+    city: str | None | object = _UNSET,
 
     username: str | None = None,
 
@@ -534,8 +537,11 @@ def update_user_profile(
 
             return None
 
-        user.phone = phone
-        user.city = city
+        if phone is not _UNSET:
+            user.phone = phone
+
+        if city is not _UNSET:
+            user.city = city
 
         if username is not None:
 
