@@ -53,19 +53,26 @@ async def shutdown_background_services():
     stop_material_import_queue_loop()
     stop_catalog_auto_refresh_loop()
 
-frontend_origins = [
-
-    origin.strip()
-
-    for origin in os.getenv(
-
-        "FRONTEND_ORIGINS",
-
-        "http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174,http://localhost:5175,http://127.0.0.1:5175,http://localhost:4175,http://127.0.0.1:4175,http://localhost:3000,http://127.0.0.1:3000"
-    ).split(",")
-
+default_frontend_origins = {
+    "http://45.94.157.42",
+    "https://45.94.157.42",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
+    "http://localhost:5175",
+    "http://127.0.0.1:5175",
+    "http://localhost:4175",
+    "http://127.0.0.1:4175",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+}
+configured_frontend_origins = {
+    origin.strip().rstrip("/")
+    for origin in os.getenv("FRONTEND_ORIGINS", "").split(",")
     if origin.strip()
-]
+}
+frontend_origins = sorted(default_frontend_origins | configured_frontend_origins)
 
 app.add_middleware(
 
