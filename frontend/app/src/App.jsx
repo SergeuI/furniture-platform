@@ -31,7 +31,7 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { Component, Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Component, Fragment, Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   changeOwnPassword,
@@ -72,6 +72,149 @@ const TELEGRAM_BOT_URL =
 const YOUTUBE_CHANNEL_URL = import.meta.env.VITE_YOUTUBE_CHANNEL_URL || "https://www.youtube.com/";
 const ADMIN_TOKEN_HASH_KEY = "mproject_token";
 const ADMIN_LOGOUT_HASH_KEY = "mproject_logout";
+
+const TARIFF_CONTENT = {
+  uk: {
+    eyebrow: "Тарифи MP Furniture Calculator",
+    title: "Оберіть формат роботи",
+    description:
+      "Почніть безкоштовно, перевірте AI у Trial або підключіть інструменти для щоденної роботи й виробництва.",
+    recommended: "Рекомендований",
+    comparisonTitle: "Детальне порівняння",
+    comparisonDescription: "Усі ключові можливості та ліміти в одній таблиці.",
+    feature: "Можливість",
+    included: "Доступно",
+    unavailable: "Недоступно",
+    plans: [
+      {
+        id: "trial",
+        name: "Trial",
+        price: "Безкоштовно",
+        period: "14 днів або 20 AI-операцій",
+        audience: "Для знайомства з повною системою",
+        summary: "Тимчасовий повний доступ, щоб спроєктувати реальний виріб і перевірити автоматизацію.",
+        cta: "Спробувати Trial",
+      },
+      {
+        id: "free",
+        name: "Free",
+        price: "0 грн",
+        period: "Безстроково",
+        audience: "Для базових прорахунків",
+        summary: "Ручне проєктування, креслення та кошторис для невеликої кількості активних проєктів.",
+        cta: "Почати безкоштовно",
+      },
+      {
+        id: "pro",
+        name: "PRO",
+        price: "999 грн",
+        period: "на місяць",
+        audience: "Для конструкторів і майстрів",
+        summary: "AI-розпізнавання, автоматичний розкрій, виробничі експорти та більше робочих проєктів.",
+        cta: "Обрати PRO",
+        recommended: true,
+      },
+      {
+        id: "business",
+        name: "Business",
+        price: "2 999 грн",
+        period: "на місяць",
+        audience: "Для меблевих виробництв",
+        summary: "Безлімітна автоматизація, командна робота, власні бази, API та персональна підтримка.",
+        cta: "Обрати Business",
+      },
+    ],
+    groups: [
+      {
+        title: "Проєктування меблів",
+        rows: [
+          ["Створення меблів", true, true, true, true],
+          ["Прорахунок вартості", true, true, true, true],
+          ["Креслення та специфікація деталей", true, true, true, true],
+          ["Крайка, присадки та фурнітура", true, true, true, true],
+          ["Кількість проєктів", "Безліміт", "3", "20", "Безліміт"],
+          ["Історія проєктів", "Безліміт", "30 днів", "Безліміт", "Безліміт"],
+          ["Збереження шаблонів", true, false, true, true],
+          ["Клонування проєктів", true, false, true, true],
+        ],
+      },
+      {
+        title: "AI та автоматизація",
+        rows: [
+          ["Аналіз PDF-проєктів", "У межах Trial", false, "20/міс", "Безліміт"],
+          ["Розпізнавання ескізів і фото", "У межах Trial", false, "20/міс", "Безліміт"],
+          ["AI-генерація меблів", "У межах Trial", false, "20/міс", "Безліміт"],
+          ["Автопідбір матеріалів і фурнітури", "У межах Trial", false, "20/міс", "Безліміт"],
+          ["AI-консультант", "У межах Trial", "10/міс", "100/міс", "Безліміт"],
+        ],
+      },
+      {
+        title: "Виробництво та експорт",
+        rows: [
+          ["Автоматичний розкрій", "У межах Trial", false, "20/міс", "Безліміт"],
+          ["Експорт Viyar і Kronas", "У межах Trial", false, "20/міс", "Безліміт"],
+          ["Excel і PDF-звіти", "У межах Trial", "1/міс", "20/міс", "Безліміт"],
+          ["CSV-експорт", "У межах Trial", false, "20/міс", "Безліміт"],
+        ],
+      },
+      {
+        title: "Команда та власні налаштування",
+        rows: [
+          ["Співробітники", "До 10 у Trial", false, false, "До 10"],
+          ["Ролі та загальна база проєктів", true, false, false, true],
+          ["Статистика компанії та API", true, false, false, true],
+          ["Власна база й ціни матеріалів", true, false, false, true],
+          ["Власні ціни робіт і націнки", true, false, false, true],
+          ["Власні шаблони компанії", true, false, false, true],
+        ],
+      },
+      {
+        title: "Доступ і підтримка",
+        rows: [
+          ["Telegram-бот", true, true, true, true],
+          ["Веб-система", true, true, true, true],
+          ["Пріоритетна підтримка", true, false, true, true],
+          ["Персональний менеджер", false, false, false, true],
+        ],
+      },
+    ],
+  },
+  en: {
+    eyebrow: "MP Furniture Calculator plans",
+    title: "Choose how you want to work",
+    description:
+      "Start free, evaluate AI with Trial, or unlock daily production and team workflows.",
+    recommended: "Recommended",
+    comparisonTitle: "Detailed comparison",
+    comparisonDescription: "All major capabilities and limits in one table.",
+    feature: "Capability",
+    included: "Included",
+    unavailable: "Unavailable",
+    plans: [
+      { id: "trial", name: "Trial", price: "Free", period: "14 days or 20 AI operations", audience: "Evaluate the full system", summary: "Temporary full access for a real project and automation test.", cta: "Try Trial" },
+      { id: "free", name: "Free", price: "UAH 0", period: "No time limit", audience: "Basic calculations", summary: "Manual design, drawings, and estimates for a small project list.", cta: "Start free" },
+      { id: "pro", name: "PRO", price: "UAH 999", period: "per month", audience: "Designers and makers", summary: "AI recognition, automatic cutting, production exports, and more active projects.", cta: "Choose PRO", recommended: true },
+      { id: "business", name: "Business", price: "UAH 2,999", period: "per month", audience: "Furniture production teams", summary: "Unlimited automation, team workflows, own databases, API, and personal support.", cta: "Choose Business" },
+    ],
+    groups: [
+      { title: "Furniture design", rows: [["Furniture design", true, true, true, true], ["Cost calculation", true, true, true, true], ["Part drawings and specification", true, true, true, true], ["Edging, drilling, and fittings", true, true, true, true], ["Projects", "Unlimited", "3", "20", "Unlimited"], ["Project history", "Unlimited", "30 days", "Unlimited", "Unlimited"], ["Save templates", true, false, true, true], ["Clone projects", true, false, true, true]] },
+      { title: "AI and automation", rows: [["PDF project analysis", "Trial quota", false, "20/mo", "Unlimited"], ["Sketch and photo recognition", "Trial quota", false, "20/mo", "Unlimited"], ["AI furniture generation", "Trial quota", false, "20/mo", "Unlimited"], ["Automatic materials and fittings", "Trial quota", false, "20/mo", "Unlimited"], ["AI assistant", "Trial quota", "10/mo", "100/mo", "Unlimited"]] },
+      { title: "Production and export", rows: [["Automatic cutting", "Trial quota", false, "20/mo", "Unlimited"], ["Viyar and Kronas export", "Trial quota", false, "20/mo", "Unlimited"], ["Excel and PDF reports", "Trial quota", "1/mo", "20/mo", "Unlimited"], ["CSV export", "Trial quota", false, "20/mo", "Unlimited"]] },
+      { title: "Team and own settings", rows: [["Team members", "Up to 10 in Trial", false, false, "Up to 10"], ["Roles and shared projects", true, false, false, true], ["Company statistics and API", true, false, false, true], ["Own material database and prices", true, false, false, true], ["Own work prices and margins", true, false, false, true], ["Company templates", true, false, false, true]] },
+      { title: "Access and support", rows: [["Telegram bot", true, true, true, true], ["Web system", true, true, true, true], ["Priority support", true, false, true, true], ["Personal manager", false, false, false, true]] },
+    ],
+  },
+};
+
+function TariffValue({ value, labels }) {
+  if (value === true) {
+    return <CheckCircle2 aria-label={labels.included} className="tariff-value-icon included" size={19} />;
+  }
+  if (value === false) {
+    return <span aria-label={labels.unavailable} className="tariff-value-empty">—</span>;
+  }
+  return <span className="tariff-value-text">{value}</span>;
+}
 
 function buildAdminUrl(baseUrl, activeToken) {
   try {
@@ -2117,6 +2260,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
 
   const t = TRANSLATIONS[language] || TRANSLATIONS.en;
+  const tariffContent = TARIFF_CONTENT[language] || TARIFF_CONTENT.en;
   const canUseAiScan = user?.role === "admin" || user?.role === "premium" || user?.role === "pro";
   const canUsePremiumStart = user?.role === "admin" || user?.role === "premium";
   const userLoginName = user?.username || user?.email?.split("@")[0] || "";
@@ -3351,28 +3495,6 @@ export default function App() {
           </div>
         </section>
 
-        <section className="public-section public-visual-section">
-          <div className="public-visual-copy">
-            <div className="section-heading">
-              <h2>{t.landingVisualTitle}</h2>
-              <p>{t.landingVisualDescription}</p>
-            </div>
-            <div className="public-visual-captions">
-              <span>{t.landingVisualCaptionOne}</span>
-              <span>{t.landingVisualCaptionTwo}</span>
-              <span>{t.landingVisualCaptionThree}</span>
-            </div>
-          </div>
-          <div className="public-visual-assets">
-            <div className="public-visual-asset-card">
-              <img alt="" src="/brand/colors.png" />
-            </div>
-            <div className="public-visual-symbol-card">
-              <img alt="" src="/brand/mp-symbol-3d.png" />
-            </div>
-          </div>
-        </section>
-
         <section className="public-section">
           <div className="section-heading">
             <h2>{t.landingPublicStatsTitle}</h2>
@@ -3432,50 +3554,97 @@ export default function App() {
         </section>
 
         <section className="public-section" id="packages">
-          <div className="section-heading">
-            <h2>{t.landingPackagesTitle}</h2>
-            <p>{t.landingPackagesDescription}</p>
+          <div className="section-heading pricing-heading">
+            <span className="pricing-eyebrow">{tariffContent.eyebrow}</span>
+            <h2>{tariffContent.title}</h2>
+            <p>{tariffContent.description}</p>
           </div>
-          <div className="public-package-grid">
-            <article className="public-package-card public-package-banner public-package-free">
-              <span className="public-package-badge">{t.landingPricingGuestTitle}</span>
-              <h3>{t.landingPricingGuestTitle}</h3>
-              <p>{t.landingPricingGuestFeatures}</p>
-              <ul className="public-package-list">
-                {String(t.landingPricingGuestList || "")
-                  .split("|")
-                  .filter(Boolean)
-                  .map((item) => (
-                    <li key={item}>{item}</li>
+          <div className="pricing-plan-grid">
+            {tariffContent.plans.map((plan, planIndex) => {
+              const PlanIcon = [Sparkles, Package2, Rocket, Users][planIndex];
+              return (
+                <article
+                  className={`pricing-plan-card pricing-plan-${plan.id}${plan.recommended ? " recommended" : ""}`}
+                  key={plan.id}
+                >
+                  {plan.recommended ? (
+                    <span className="pricing-recommended">{tariffContent.recommended}</span>
+                  ) : null}
+                  <div className="pricing-plan-topline">
+                    <span className="pricing-plan-icon"><PlanIcon size={20} /></span>
+                    <span className="pricing-plan-name">{plan.name}</span>
+                  </div>
+                  <div className="pricing-plan-price">
+                    <strong>{plan.price}</strong>
+                    <span>{plan.period}</span>
+                  </div>
+                  <strong className="pricing-plan-audience">{plan.audience}</strong>
+                  <p>{plan.summary}</p>
+                  <button
+                    className={`pricing-plan-action${plan.recommended ? " primary" : ""}`}
+                    onClick={() => {
+                      if (token) {
+                        window.open(adminUrl, "_blank", "noopener,noreferrer");
+                        return;
+                      }
+                      setAuthMode("register");
+                      setAuthModalOpen(true);
+                    }}
+                    type="button"
+                  >
+                    {plan.cta}
+                    <ArrowRight size={16} />
+                  </button>
+                </article>
+              );
+            })}
+          </div>
+
+          <div className="pricing-comparison">
+            <div className="pricing-comparison-heading">
+              <div>
+                <h3>{tariffContent.comparisonTitle}</h3>
+                <p>{tariffContent.comparisonDescription}</p>
+              </div>
+              <span>{tariffContent.plans.length} {language === "uk" ? "тарифи" : "plans"}</span>
+            </div>
+            <div className="pricing-table-scroll">
+              <table className="pricing-table">
+                <thead>
+                  <tr>
+                    <th>{tariffContent.feature}</th>
+                    {tariffContent.plans.map((plan) => (
+                      <th className={plan.recommended ? "recommended" : ""} key={plan.id}>
+                        <span>{plan.name}</span>
+                        <small>{plan.price}</small>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {tariffContent.groups.map((group) => (
+                    <Fragment key={group.title}>
+                      <tr className="pricing-group-row">
+                        <th colSpan={5}>{group.title}</th>
+                      </tr>
+                      {group.rows.map(([feature, ...values]) => (
+                        <tr key={`${group.title}-${feature}`}>
+                          <th>{feature}</th>
+                          {values.map((value, valueIndex) => (
+                            <td
+                              className={tariffContent.plans[valueIndex]?.recommended ? "recommended" : ""}
+                              key={`${feature}-${tariffContent.plans[valueIndex]?.id}`}
+                            >
+                              <TariffValue labels={tariffContent} value={value} />
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </Fragment>
                   ))}
-              </ul>
-            </article>
-            <article className="public-package-card public-package-banner public-package-pro">
-              <span className="public-package-badge">{t.landingPricingUserTitle}</span>
-              <h3>{t.landingPricingUserTitle}</h3>
-              <p>{t.landingPricingUserFeatures}</p>
-              <ul className="public-package-list">
-                {String(t.landingPricingUserList || "")
-                  .split("|")
-                  .filter(Boolean)
-                  .map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-              </ul>
-            </article>
-            <article className="public-package-card public-package-banner public-package-premium public-package-card-pro">
-              <span className="public-package-badge">{t.landingPricingProTitle}</span>
-              <h3>{t.landingPricingProTitle}</h3>
-              <p>{t.landingPricingProFeatures}</p>
-              <ul className="public-package-list">
-                {String(t.landingPricingProList || "")
-                  .split("|")
-                  .filter(Boolean)
-                  .map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-              </ul>
-            </article>
+                </tbody>
+              </table>
+            </div>
           </div>
         </section>
 
