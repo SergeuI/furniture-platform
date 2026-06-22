@@ -2473,10 +2473,11 @@ function detectProjectSlideLength(value) {
 function buildMaterialImageCandidates(item, token = "") {
   const candidates = [];
   const article = String(item?.article || "").trim();
+  const cacheVersion = item?.has_cached_image ? "db" : "source";
   // Always use the stable API URL first. The endpoint serves the database BLOB
   // and fills that cache once when an older record has only a source URL.
   const imageEndpoint = article
-    ? `${API_BASE_URL}/catalog/materials/${encodeURIComponent(article)}/image`
+    ? `${API_BASE_URL}/catalog/materials/${encodeURIComponent(article)}/image?v=${cacheVersion}`
     : "";
 
   if (imageEndpoint) {
@@ -2490,8 +2491,9 @@ function buildMaterialEdgeImageCandidates(materialItem, edgeItem, token = "") {
   const candidates = [];
   const article = String(materialItem?.article || "").trim();
   const edgeKey = String(edgeItem?.edge_key || "").trim();
+  const cacheVersion = edgeItem?.has_cached_image ? "db" : "source";
   const cachedImage = article && edgeKey
-    ? `${API_BASE_URL}/catalog/materials/${encodeURIComponent(article)}/edges/${encodeURIComponent(edgeKey)}/image`
+    ? `${API_BASE_URL}/catalog/materials/${encodeURIComponent(article)}/edges/${encodeURIComponent(edgeKey)}/image?v=${cacheVersion}`
     : "";
 
   if (cachedImage) {
@@ -2504,7 +2506,10 @@ function buildMaterialEdgeImageCandidates(materialItem, edgeItem, token = "") {
 function buildFittingImageCandidates(item) {
   const candidates = [];
   const itemId = String(item?.id || "").trim();
-  const cachedImage = itemId ? `${API_BASE_URL}/catalog/fittings/${encodeURIComponent(itemId)}/image` : "";
+  const cacheVersion = item?.has_cached_image ? "db" : "source";
+  const cachedImage = itemId
+    ? `${API_BASE_URL}/catalog/fittings/${encodeURIComponent(itemId)}/image?v=${cacheVersion}`
+    : "";
 
   if (cachedImage) {
     candidates.push(cachedImage);
