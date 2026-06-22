@@ -1118,50 +1118,36 @@ async def get_material_route(
             or not item.get("description")
             or not item.get("dimensions")
             or not item.get("thickness")
+            or item.get("current_price") is None
+            or any(
+                marker in str(item.get("description") or "").lower()
+                for marker in (
+                    "купить",
+                    "купити",
+                    "лучшие цены",
+                    "кращі ціни",
+                    "доставка по",
+                    "доставка до",
+                )
+            )
         )
     )
 
     if needs_metadata_refresh:
-        try:
-            cookie_override = await _resolve_viyar_cookie_for_user(current_user)
-            parsed_material, _debug_payload = await fetch_viyar_product_details_by_url_traced(
-                item["source_url"],
-                city=selected_city,
-                cookie_override=cookie_override,
-                article_hint=item.get("article"),
-            )
-
-            upsert_material(
-                article=item["article"],
-                name=parsed_material.get("name") or item.get("name") or item["article"],
-                description=parsed_material.get("description"),
-                color=parsed_material.get("color"),
-                dimensions=parsed_material.get("dimensions"),
-                thickness=parsed_material.get("thickness"),
-                category=item.get("category") or "dsp",
-                image=parsed_material.get("image") or item.get("image"),
-                source_url=parsed_material.get("source_url") or item.get("source_url"),
-                owner_user_id=item.get("owner_user_id"),
-                is_default=item.get("is_default"),
-            )
-            if selected_city and parsed_material.get("price") is not None:
-                upsert_material_price(
-                    article=item["article"],
-                    city=selected_city,
-                    price=parsed_material.get("price"),
-                )
-            item = _resolve_material_with_city_context(
-                article.strip(),
-                selected_city,
-                current_user,
-                item.get("category"),
-            ) or item
-        except Exception:
-            pass
+        job = await enqueue_material_import_job(
+            article=item["article"],
+            category=item.get("category") or "dsp",
+            city=selected_city or "kyiv",
+            owner_user_id=str(current_user.id),
+            preferred_url=item.get("source_url"),
+        )
+    else:
+        job = None
 
     return {
         "success": True,
         "item": item,
+        "job": job,
         "selected_city": selected_city,
     }
 

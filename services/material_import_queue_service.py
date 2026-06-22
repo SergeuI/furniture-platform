@@ -155,7 +155,8 @@ async def process_material_import_job(job_id: int, cookie_override: str | None =
                 )
 
             try:
-                image_payload = prefetch_material_image_cache(
+                image_payload = await asyncio.to_thread(
+                    prefetch_material_image_cache,
                     article=material["article"],
                     stored_image=material.get("image"),
                     source_url=material.get("source_url"),

@@ -288,10 +288,18 @@ def _clean_material_description(description: str | None, name: str | None) -> st
     lowered = text.lower()
     promo_markers = [
         "інтернет-магазин",
+        "интернет-магазин",
         "пропонує замовити",
         "з доставкою по україні",
         "телефонуйте",
         "купити",
+        "купить",
+        "лучшие цены",
+        "кращі ціни",
+        "доставка по",
+        "доставка до",
+        "консультации по телефону",
+        "консультації за телефоном",
     ]
 
     if any(marker in lowered for marker in promo_markers):
@@ -410,7 +418,7 @@ def _fetch_html(
         ),
     )
 
-    with urlopen(request, timeout=20) as response:
+    with urlopen(request, timeout=10) as response:
         return response.read().decode("utf-8", errors="ignore")
 
 
@@ -420,18 +428,18 @@ def _fetch_binary(
     cookie_override: str | None = None,
 ) -> tuple[bytes, str | None, str]:
 
-    request = Request(
-        url,
-        headers={
-            **_build_request_headers(
-                city=city,
-                cookie_override=cookie_override,
-            ),
-            "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
-        },
+    headers = _build_request_headers(
+        city=city,
+        cookie_override=cookie_override,
     )
+    parsed_url = urlparse(url)
+    if parsed_url.scheme and parsed_url.netloc:
+        headers["Referer"] = f"{parsed_url.scheme}://{parsed_url.netloc}/"
+    headers["Accept"] = "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
 
-    with urlopen(request, timeout=20) as response:
+    request = Request(url, headers=headers)
+
+    with urlopen(request, timeout=10) as response:
         return (
             response.read(),
             response.headers.get("Content-Type"),
@@ -450,13 +458,28 @@ def resolve_material_image_payload(
     normalized_article = _normalize_article(article)
     candidates: list[str] = []
 
-    for value in [
-        stored_image,
-        f"https://www.viyar.ua/store/Items/photos/ph{normalized_article}.jpg" if normalized_article else None,
-        f"https://viyar.ua/store/Items/photos/ph{normalized_article}.jpg" if normalized_article else None,
-        f"https://viyar.ua/upload/resize_cache/photos/512_512_1/ph{normalized_article}.jpg" if normalized_article else None,
-        f"https://www.viyar.ua/upload/resize_cache/photos/512_512_1/ph{normalized_article}.jpg" if normalized_article else None,
-    ]:
+    source_site = detect_material_source_site(source_url)
+    kronas_image = (
+        f"https://kronas.com.ua/Media/images/catalog/medium/{normalized_article}.jpg"
+        if normalized_article and source_site == "kronas"
+        else None
+    )
+
+    source_candidates = [stored_image]
+
+    if source_site == "kronas":
+        source_candidates.append(kronas_image)
+    elif source_site == "viyar":
+        source_candidates.extend(
+            [
+                f"https://www.viyar.ua/store/Items/photos/ph{normalized_article}.jpg" if normalized_article else None,
+                f"https://viyar.ua/store/Items/photos/ph{normalized_article}.jpg" if normalized_article else None,
+                f"https://viyar.ua/upload/resize_cache/photos/512_512_1/ph{normalized_article}.jpg" if normalized_article else None,
+                f"https://www.viyar.ua/upload/resize_cache/photos/512_512_1/ph{normalized_article}.jpg" if normalized_article else None,
+            ]
+        )
+
+    for value in source_candidates:
         normalized_value = _normalize_asset_url(value)
         if normalized_value and normalized_value not in candidates:
             candidates.append(normalized_value)
@@ -487,7 +510,7 @@ def resolve_material_image_payload(
 
     # Product-page parsing is considerably slower and can be unavailable while
     # the image CDN still works. Use it only after every known image URL failed.
-    if source_url:
+    if source_url and source_site != "kronas":
         try:
             material = _extract_material_from_product_html(
                 _fetch_html(

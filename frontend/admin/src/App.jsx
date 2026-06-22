@@ -2489,6 +2489,11 @@ function buildMaterialImageCandidates(item, token = "") {
     candidates.push(imageEndpoint);
   }
 
+  const sourceSite = item?.source_site || detectFittingSourceSite(item?.source_url);
+  if (sourceSite === "kronas" && article) {
+    candidates.push(`https://kronas.com.ua/Media/images/catalog/medium/${encodeURIComponent(article)}.jpg`);
+  }
+
   return [...new Set(candidates.filter(Boolean))];
 }
 
@@ -2650,10 +2655,18 @@ function getMaterialDescriptionText(item, t) {
   const normalizedDescription = description.toLowerCase();
   const promoMarkers = [
     "інтернет-магазин",
+    "интернет-магазин",
     "пропонує замовити",
     "з доставкою по україні",
     "телефонуйте",
     "купити",
+    "купить",
+    "лучшие цены",
+    "кращі ціни",
+    "доставка по",
+    "доставка до",
+    "консультации по телефону",
+    "консультації за телефоном",
   ];
 
   if (promoMarkers.some((marker) => normalizedDescription.includes(marker))) {
@@ -4127,6 +4140,16 @@ export default function App() {
         setActiveMaterialImportJobId("");
         setStatus({ message: t.materialImportSuccess, tone: "success" });
         await loadMaterialsCatalog(token);
+        const detailResult = await getMaterialDetails(
+          token,
+          result.job.article,
+          result.job.city || "",
+        );
+        if (detailResult.success && detailResult.item) {
+          setSelectedMaterialDetail((current) =>
+            current?.article === result.job.article ? detailResult.item : current,
+          );
+        }
         return;
       }
 
@@ -5295,6 +5318,10 @@ export default function App() {
     }
 
     setSelectedMaterialDetail(result.item || item);
+    if (result.job?.id) {
+      setActiveMaterialImportJobId(result.job.id);
+      setActiveMaterialImportJob(result.job);
+    }
     setMaterialEdgeForms({});
   }
 
@@ -11749,7 +11776,7 @@ export default function App() {
                       {selectedMaterialDetail.display_article}
                     </span>
                   ) : null}
-                  {renderSourceBadge(getMaterialSourceMeta(selectedMaterialDetail, t), true)}
+                  {renderSourceBadge(getMaterialSourceMeta(selectedMaterialDetail, t))}
                 </div>
 
                 <div className="material-details-grid">
