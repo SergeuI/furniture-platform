@@ -70,11 +70,11 @@ def _render_pages(cookie_header: str, items: list[dict]) -> dict:
                 continue
 
             try:
-                page.goto(url, wait_until="domcontentloaded", timeout=30000)
+                page.goto(url, wait_until="domcontentloaded", timeout=15000)
                 try:
-                    page.wait_for_load_state("networkidle", timeout=12000)
+                    page.wait_for_selector(".vr-product__card", timeout=8000)
                 except Exception:
-                    page.wait_for_timeout(2500)
+                    page.wait_for_timeout(500)
 
                 html = page.content()
                 body_text = page.locator("body").inner_text()

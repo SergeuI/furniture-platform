@@ -706,7 +706,7 @@ def _fetch_rendered_price_pages(
     cookie_override: str | None,
 ) -> dict[str, dict[str, Any]]:
 
-    if not service_items or not (cookie_override or "").strip():
+    if not service_items:
         return {}
 
     payload = {

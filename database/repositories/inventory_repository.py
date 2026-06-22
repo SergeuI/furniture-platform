@@ -669,8 +669,15 @@ def list_materials(
                 MaterialModel.category == category,
             )
 
-        if viewer_role:
-            visible_filter = MaterialModel.is_default.is_(True)
+        if viewer_role and viewer_role != "admin":
+            visible_filter = (
+                MaterialModel.is_default.is_(True)
+                | (
+                    MaterialModel.owner_user_id.is_(None)
+                    & MaterialModel.source_url.isnot(None)
+                    & (MaterialModel.source_url != "")
+                )
+            )
             if viewer_user_id:
                 visible_filter = visible_filter | (MaterialModel.owner_user_id == str(viewer_user_id))
             query = query.filter(visible_filter)

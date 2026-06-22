@@ -2473,29 +2473,14 @@ function detectProjectSlideLength(value) {
 function buildMaterialImageCandidates(item, token = "") {
   const candidates = [];
   const article = String(item?.article || "").trim();
-  const baseImage = String(item?.image || "").trim();
-  const hasCachedImage = Boolean(item?.has_cached_image);
-  // The image endpoint is cacheable and resolves the already stored database
-  // image. Keep its URL stable so browser cache survives token refreshes.
+  // Always use the stable API URL first. The endpoint serves the database BLOB
+  // and fills that cache once when an older record has only a source URL.
   const imageEndpoint = article
     ? `${API_BASE_URL}/catalog/materials/${encodeURIComponent(article)}/image`
     : "";
 
-  if (baseImage) {
-    candidates.push(baseImage);
-  }
-
-  if (article && hasCachedImage) {
-    candidates.unshift(imageEndpoint);
-  } else if (article) {
+  if (imageEndpoint) {
     candidates.push(imageEndpoint);
-  }
-
-  if (article) {
-    candidates.push(`https://viyar.ua/upload/resize_cache/photos/512_512_1/ph${article}.jpg`);
-    candidates.push(`https://www.viyar.ua/store/Items/photos/ph${article}.jpg`);
-    candidates.push(`https://viyar.ua/store/Items/photos/ph${article}.jpg`);
-    candidates.push(`https://www.viyar.ua/upload/resize_cache/photos/512_512_1/ph${article}.jpg`);
   }
 
   return [...new Set(candidates.filter(Boolean))];
@@ -2505,8 +2490,6 @@ function buildMaterialEdgeImageCandidates(materialItem, edgeItem, token = "") {
   const candidates = [];
   const article = String(materialItem?.article || "").trim();
   const edgeKey = String(edgeItem?.edge_key || "").trim();
-  const baseImage = String(edgeItem?.image || "").trim();
-  const edgeArticle = String(edgeItem?.article || "").trim();
   const cachedImage = article && edgeKey
     ? `${API_BASE_URL}/catalog/materials/${encodeURIComponent(article)}/edges/${encodeURIComponent(edgeKey)}/image`
     : "";
@@ -2515,35 +2498,15 @@ function buildMaterialEdgeImageCandidates(materialItem, edgeItem, token = "") {
     candidates.push(cachedImage);
   }
 
-  if (baseImage) {
-    candidates.push(baseImage);
-  }
-
-  if (edgeArticle) {
-    candidates.push(`https://viyar.ua/upload/resize_cache/photos/512_512_1/ph${edgeArticle}.jpg`);
-    candidates.push(`https://www.viyar.ua/store/Items/photos/ph${edgeArticle}.jpg`);
-    candidates.push(`https://viyar.ua/store/Items/photos/ph${edgeArticle}.jpg`);
-    candidates.push(`https://www.viyar.ua/upload/resize_cache/photos/512_512_1/ph${edgeArticle}.jpg`);
-  }
-
   return [...new Set(candidates.filter(Boolean))];
 }
 
 function buildFittingImageCandidates(item) {
   const candidates = [];
   const itemId = String(item?.id || "").trim();
-  const sourceImage = String(item?.image_url || "").trim();
   const cachedImage = itemId ? `${API_BASE_URL}/catalog/fittings/${encodeURIComponent(itemId)}/image` : "";
 
-  if (item?.has_cached_image && cachedImage) {
-    candidates.push(cachedImage);
-  }
-
-  if (sourceImage) {
-    candidates.push(sourceImage);
-  }
-
-  if (!item?.has_cached_image && cachedImage) {
+  if (cachedImage) {
     candidates.push(cachedImage);
   }
 

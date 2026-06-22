@@ -89,13 +89,15 @@ def _serialize_service_catalog_item(
 def seed_default_viyar_service_catalog():
 
     sync_viyar_service_catalog(
-        use_remote=False
+        use_remote=False,
+        deactivate_missing=False,
     )
 
 
 def sync_viyar_service_catalog(
     use_remote: bool = True,
     cookie_override: str | None = None,
+    deactivate_missing: bool = False,
 ) -> dict:
 
     records = build_viyar_service_catalog_records(
@@ -183,7 +185,7 @@ def sync_viyar_service_catalog(
 
             imported_codes.add(record["external_code"])
 
-        if not fallback_only_import:
+        if deactivate_missing and not fallback_only_import:
             for item in existing_items:
                 if item.external_code not in imported_codes:
                     item.is_active = False
@@ -196,6 +198,7 @@ def sync_viyar_service_catalog(
                 include_inactive=False,
             ),
             "fallback_only_import": fallback_only_import,
+            "deactivated_missing": bool(deactivate_missing and not fallback_only_import),
             "folder_count": sum(
                 1
                 for record in records

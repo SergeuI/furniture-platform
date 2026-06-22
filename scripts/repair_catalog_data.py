@@ -1,0 +1,201 @@
+import argparse
+import shutil
+import sqlite3
+import sys
+from datetime import datetime
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from services.material_catalog_service import (
+    fetch_remote_image_payload,
+)
+
+
+def _backup_database(database_path: Path) -> Path:
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    backup_path = database_path.with_name(f"{database_path.name}.{timestamp}.bak")
+    shutil.copy2(database_path, backup_path)
+    return backup_path
+
+
+def _count(connection: sqlite3.Connection, query: str, parameters=()) -> int:
+    return int(connection.execute(query, parameters).fetchone()[0])
+
+
+def _restore_catalog_visibility(connection: sqlite3.Connection) -> dict:
+    service_filter = """
+        source = 'viyar'
+        AND is_active = 0
+        AND (
+            item_type = 'folder'
+            OR NULLIF(TRIM(COALESCE(article, '')), '') IS NOT NULL
+            OR base_price IS NOT NULL
+            OR NULLIF(TRIM(COALESCE(source_url, '')), '') IS NOT NULL
+        )
+    """
+    material_filter = """
+        owner_user_id IS NULL
+        AND is_default = 0
+        AND NULLIF(TRIM(COALESCE(source_url, '')), '') IS NOT NULL
+    """
+
+    result = {
+        "viyar_items_reactivated": _count(
+            connection,
+            f"SELECT COUNT(*) FROM service_catalog_items WHERE {service_filter}",
+        ),
+        "shared_materials_promoted": _count(
+            connection,
+            f"SELECT COUNT(*) FROM materials WHERE {material_filter}",
+        ),
+    }
+
+    connection.execute(
+        f"UPDATE service_catalog_items SET is_active = 1 WHERE {service_filter}"
+    )
+    connection.execute(
+        f"UPDATE materials SET is_default = 1 WHERE {material_filter}"
+    )
+    return result
+
+
+def _warm_material_images(
+    connection: sqlite3.Connection,
+    city: str | None,
+) -> dict:
+    result = {"materials": 0, "edges": 0, "fittings": 0, "failed": 0}
+
+    materials = connection.execute(
+        """
+        SELECT article, image, source_url
+        FROM materials
+        WHERE image_cached_bytes IS NULL
+          AND NULLIF(TRIM(COALESCE(article, '')), '') IS NOT NULL
+          AND (
+              NULLIF(TRIM(COALESCE(source_url, '')), '') IS NOT NULL
+              OR image LIKE 'http%'
+          )
+        """
+    ).fetchall()
+    for article, image, source_url in materials:
+        payload = fetch_remote_image_payload(image, city=city)
+        if not payload:
+            result["failed"] += 1
+            continue
+        connection.execute(
+            """
+            UPDATE materials
+            SET image_cached_bytes = ?, image_cached_content_type = ?
+            WHERE article = ?
+            """,
+            (payload["bytes"], payload["content_type"], article),
+        )
+        result["materials"] += 1
+
+    edges = connection.execute(
+        """
+        SELECT id, article, image, source_url
+        FROM material_edge_options
+        WHERE image_cached_bytes IS NULL
+          AND NULLIF(TRIM(COALESCE(article, '')), '') IS NOT NULL
+          AND (
+              NULLIF(TRIM(COALESCE(source_url, '')), '') IS NOT NULL
+              OR image LIKE 'http%'
+          )
+        """
+    ).fetchall()
+    for item_id, article, image, source_url in edges:
+        payload = fetch_remote_image_payload(image, city=city)
+        if not payload:
+            result["failed"] += 1
+            continue
+        connection.execute(
+            """
+            UPDATE material_edge_options
+            SET image_cached_bytes = ?, image_cached_content_type = ?
+            WHERE id = ?
+            """,
+            (payload["bytes"], payload["content_type"], item_id),
+        )
+        result["edges"] += 1
+
+    fittings = connection.execute(
+        """
+        SELECT id, image_url, city
+        FROM fittings
+        WHERE image_cached_bytes IS NULL
+          AND NULLIF(TRIM(COALESCE(image_url, '')), '') IS NOT NULL
+        """
+    ).fetchall()
+    for item_id, image_url, item_city in fittings:
+        payload = fetch_remote_image_payload(image_url, city=item_city or city)
+        if not payload:
+            result["failed"] += 1
+            continue
+        connection.execute(
+            """
+            UPDATE fittings
+            SET image_cached_bytes = ?, image_cached_content_type = ?
+            WHERE id = ?
+            """,
+            (payload["bytes"], payload["content_type"], item_id),
+        )
+        result["fittings"] += 1
+
+    return result
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="Repair persisted catalog visibility and optionally cache images in SQLite."
+    )
+    parser.add_argument("--database", default="furniture_platform.db")
+    parser.add_argument("--city", default=None)
+    parser.add_argument("--apply", action="store_true")
+    parser.add_argument("--warm-images", action="store_true")
+    args = parser.parse_args()
+
+    database_path = Path(args.database).resolve()
+    if not database_path.is_file():
+        raise SystemExit(f"Database was not found: {database_path}")
+
+    connection = sqlite3.connect(database_path)
+    try:
+        connection.execute("BEGIN")
+        visibility = _restore_catalog_visibility(connection)
+        image_result = None
+
+        if not args.apply:
+            connection.rollback()
+            print("DRY RUN - no database changes were saved")
+        else:
+            connection.rollback()
+            backup_path = _backup_database(database_path)
+            connection.execute("BEGIN")
+            visibility = _restore_catalog_visibility(connection)
+            if args.warm_images:
+                image_result = _warm_material_images(connection, args.city)
+            connection.commit()
+            print(f"Backup: {backup_path}")
+
+        print(f"Viyar items to reactivate: {visibility['viyar_items_reactivated']}")
+        print(f"Shared parsed materials to expose: {visibility['shared_materials_promoted']}")
+        if image_result is not None:
+            print(
+                "Image cache: "
+                f"materials={image_result['materials']}, "
+                f"edges={image_result['edges']}, "
+                f"fittings={image_result['fittings']}, "
+                f"failed={image_result['failed']}"
+            )
+    finally:
+        connection.close()
+
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
