@@ -131,6 +131,10 @@ async def process_material_import_job(job_id: int, cookie_override: str | None =
                 article=material["article"],
                 name=material["name"],
                 category=running_job["category"],
+                description=material.get("description"),
+                color=material.get("color"),
+                dimensions=material.get("dimensions"),
+                thickness=material.get("thickness"),
                 image=material.get("image"),
                 source_url=material.get("source_url"),
             )

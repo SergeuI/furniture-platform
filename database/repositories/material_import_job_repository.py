@@ -1,5 +1,7 @@
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
+
+from sqlalchemy import case
 
 from database.models.material_import_job import MaterialImportJobModel
 from database.session import SessionLocal
@@ -133,21 +135,43 @@ def get_material_import_job(job_id: int) -> dict | None:
         db.close()
 
 
-def list_due_material_import_jobs(limit: int = 10) -> list[dict]:
+def list_due_material_import_jobs(
+    limit: int = 10,
+    stale_running_after_seconds: int = 180,
+) -> list[dict]:
 
     db = SessionLocal()
 
     try:
 
         now = datetime.utcnow()
+        stale_running_before = now - timedelta(
+            seconds=max(30, int(stale_running_after_seconds or 180))
+        )
         rows = (
             db.query(MaterialImportJobModel)
-            .filter(MaterialImportJobModel.status.in_(["queued", "retry"]))
             .filter(
-                (MaterialImportJobModel.next_retry_at.is_(None))
-                | (MaterialImportJobModel.next_retry_at <= now)
+                (
+                    MaterialImportJobModel.status.in_(["queued", "retry"])
+                    & (
+                        (MaterialImportJobModel.next_retry_at.is_(None))
+                        | (MaterialImportJobModel.next_retry_at <= now)
+                    )
+                )
+                | (
+                    (MaterialImportJobModel.status == "running")
+                    & (MaterialImportJobModel.updated_at <= stale_running_before)
+                )
             )
-            .order_by(MaterialImportJobModel.created_at.asc(), MaterialImportJobModel.id.asc())
+            .order_by(
+                case(
+                    (MaterialImportJobModel.status == "queued", 0),
+                    (MaterialImportJobModel.status == "retry", 1),
+                    else_=2,
+                ).asc(),
+                MaterialImportJobModel.updated_at.desc(),
+                MaterialImportJobModel.id.desc(),
+            )
             .limit(limit)
             .all()
         )
