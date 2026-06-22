@@ -62,11 +62,54 @@ def _restore_catalog_visibility(connection: sqlite3.Connection) -> dict:
     return result
 
 
+def _reuse_cached_images(connection: sqlite3.Connection) -> dict:
+    result = {"materials": 0, "edges": 0, "fittings": 0}
+    definitions = (
+        ("materials", "image", "materials"),
+        ("material_edge_options", "image", "edges"),
+        ("fittings", "image_url", "fittings"),
+    )
+
+    for table_name, image_column, result_key in definitions:
+        rows = connection.execute(
+            f"""
+            SELECT target.id, source.image_cached_bytes, source.image_cached_content_type
+            FROM {table_name} AS target
+            JOIN {table_name} AS source
+              ON source.{image_column} = target.{image_column}
+             AND source.id != target.id
+             AND source.image_cached_bytes IS NOT NULL
+            WHERE target.image_cached_bytes IS NULL
+              AND NULLIF(TRIM(COALESCE(target.{image_column}, '')), '') IS NOT NULL
+            GROUP BY target.id
+            """
+        ).fetchall()
+        for item_id, image_bytes, content_type in rows:
+            connection.execute(
+                f"""
+                UPDATE {table_name}
+                SET image_cached_bytes = ?, image_cached_content_type = ?
+                WHERE id = ?
+                """,
+                (image_bytes, content_type, item_id),
+            )
+        result[result_key] = len(rows)
+
+    return result
+
+
 def _warm_material_images(
     connection: sqlite3.Connection,
     city: str | None,
 ) -> dict:
-    result = {"materials": 0, "edges": 0, "fittings": 0, "failed": 0}
+    reused = _reuse_cached_images(connection)
+    result = {
+        "materials": 0,
+        "edges": 0,
+        "fittings": 0,
+        "failed": 0,
+        "reused": reused,
+    }
 
     materials = connection.execute(
         """
@@ -167,6 +210,7 @@ def main() -> int:
         connection.execute("BEGIN")
         visibility = _restore_catalog_visibility(connection)
         image_result = None
+        reused_images = None
 
         if not args.apply:
             connection.rollback()
@@ -176,6 +220,7 @@ def main() -> int:
             backup_path = _backup_database(database_path)
             connection.execute("BEGIN")
             visibility = _restore_catalog_visibility(connection)
+            reused_images = _reuse_cached_images(connection)
             if args.warm_images:
                 image_result = _warm_material_images(connection, args.city)
             connection.commit()
@@ -183,6 +228,13 @@ def main() -> int:
 
         print(f"Viyar items to reactivate: {visibility['viyar_items_reactivated']}")
         print(f"Shared parsed materials to expose: {visibility['shared_materials_promoted']}")
+        if reused_images is not None:
+            print(
+                "Image cache reused before download: "
+                f"materials={reused_images['materials']}, "
+                f"edges={reused_images['edges']}, "
+                f"fittings={reused_images['fittings']}"
+            )
         if image_result is not None:
             print(
                 "Image cache: "
@@ -190,6 +242,12 @@ def main() -> int:
                 f"edges={image_result['edges']}, "
                 f"fittings={image_result['fittings']}, "
                 f"failed={image_result['failed']}"
+            )
+            print(
+                "Image cache reused: "
+                f"materials={image_result['reused']['materials']}, "
+                f"edges={image_result['reused']['edges']}, "
+                f"fittings={image_result['reused']['fittings']}"
             )
     finally:
         connection.close()
