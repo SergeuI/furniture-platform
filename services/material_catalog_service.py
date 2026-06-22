@@ -5,11 +5,13 @@ import subprocess
 import sys
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 from urllib.request import Request, urlopen
 
 from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright
+
+from services.fitting_source_parser import parse_fitting_source_metadata
 
 
 VIYAR_BASE_URL = "https://www.viyar.ua"
@@ -24,6 +26,27 @@ CITY_COOKIES = {
     "khmelnytskyi": "KHMELNYTSKYI",
     "rivne": "RIVNE",
 }
+
+
+def detect_material_source_site(source_url: str | None) -> str:
+
+    normalized_url = _normalize_text(source_url)
+
+    if not normalized_url:
+        return "viyar"
+
+    parsed = urlparse(
+        normalized_url if "://" in normalized_url else f"https://{normalized_url}"
+    )
+    host = (parsed.netloc or parsed.path or "").lower()
+
+    if "kronas" in host:
+        return "kronas"
+    if "mt.ua" in host:
+        return "mt"
+    if "viyar" in host:
+        return "viyar"
+    return "generic"
 
 
 class MaterialImportError(RuntimeError):
@@ -1618,6 +1641,108 @@ async def fetch_viyar_material_by_article_live_traced(
                 strategy=getattr(worker_error, "strategy", "all_fallbacks_failed"),
                 source_url=getattr(worker_error, "source_url", preferred_url),
             ) from worker_error
+
+
+def _material_from_source_metadata(
+    metadata: dict,
+    *,
+    article: str,
+    source_url: str,
+) -> dict:
+
+    normalized_article = _normalize_text(article)
+    name = _normalize_text(metadata.get("name"))
+    final_url = _normalize_text(metadata.get("final_url")) or source_url
+
+    if not name:
+        raise MaterialImportError(
+            "Source page did not contain a material name",
+            strategy=f"{metadata.get('source_site') or 'generic'}_product_page",
+            source_url=final_url,
+        )
+
+    if metadata.get("price") is None and not metadata.get("image_url"):
+        raise MaterialImportError(
+            "Source page did not contain material price or image",
+            strategy=f"{metadata.get('source_site') or 'generic'}_product_page",
+            source_url=final_url,
+        )
+
+    description = _clean_material_description(name, name)
+
+    return {
+        # A category number in a product URL can look like an article. The
+        # explicitly entered article is authoritative for external sources.
+        "article": normalized_article,
+        "name": name,
+        "description": description,
+        "color": _extract_color_from_name(name),
+        "dimensions": _extract_dimensions_from_text(name),
+        "thickness": _extract_thickness_from_text(name),
+        "image": metadata.get("image_url"),
+        "price": metadata.get("price"),
+        "price_raw": metadata.get("price_raw"),
+        "unit": metadata.get("unit"),
+        "source_url": final_url,
+        "source_site": metadata.get("source_site") or "generic",
+    }
+
+
+async def fetch_material_by_source_live_traced(
+    article: str,
+    city: str | None = None,
+    cookie_override: str | None = None,
+    preferred_url: str | None = None,
+) -> tuple[dict, dict]:
+
+    source_site = detect_material_source_site(preferred_url)
+
+    if source_site == "viyar":
+        return await fetch_viyar_material_by_article_live_traced(
+            article,
+            city=city,
+            cookie_override=cookie_override,
+            preferred_url=preferred_url,
+        )
+
+    metadata = await parse_fitting_source_metadata(preferred_url or "")
+
+    if not metadata.get("success"):
+        error_message = metadata.get("error") or "Unable to parse material source page"
+        raise MaterialImportError(
+            error_message,
+            trace=[
+                {
+                    "stage": "source.error",
+                    "source_site": source_site,
+                    "message": error_message,
+                }
+            ],
+            strategy=f"{source_site}_product_page",
+            source_url=preferred_url,
+        )
+
+    material = _material_from_source_metadata(
+        metadata,
+        article=article,
+        source_url=preferred_url or "",
+    )
+    trace = [
+        {
+            "stage": "source.extract",
+            "source_site": source_site,
+            "article": material["article"],
+            "name": material["name"],
+            "price": material.get("price"),
+            "has_image": bool(material.get("image")),
+        }
+    ]
+
+    return material, {
+        "strategy": f"{source_site}_product_page",
+        "source_url": material["source_url"],
+        "trace": trace,
+    }
 
 
 async def fetch_viyar_product_details_by_url_traced(

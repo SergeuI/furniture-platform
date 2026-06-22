@@ -107,7 +107,8 @@ from services.material_import_queue_service import (
 )
 from services.material_catalog_service import (
     CITY_COOKIES as MATERIAL_CITY_COOKIES,
-    fetch_viyar_material_by_article_live_traced,
+    detect_material_source_site,
+    fetch_material_by_source_live_traced,
     fetch_viyar_product_details_by_url_traced,
     fetch_remote_image_payload,
     prefetch_material_image_cache,
@@ -334,9 +335,21 @@ async def _collect_material_prices_for_all_cities(
     prices_by_city: dict[str, float | None] = {}
     primary_material = None
 
+    if detect_material_source_site(preferred_url) != "viyar":
+        material, _debug_payload = await fetch_material_by_source_live_traced(
+            normalized_article,
+            city=selected_city,
+            cookie_override=cookie_override,
+            preferred_url=preferred_url,
+        )
+        return material, {
+            city_code: material.get("price")
+            for city_code in ordered_cities
+        }
+
     for city_code in ordered_cities:
         try:
-            material, _debug_payload = await fetch_viyar_material_by_article_live_traced(
+            material, _debug_payload = await fetch_material_by_source_live_traced(
                 normalized_article,
                 city=city_code,
                 cookie_override=cookie_override,

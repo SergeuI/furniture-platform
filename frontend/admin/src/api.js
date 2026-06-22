@@ -40,7 +40,19 @@ async function request(path, options = {}) {
     });
 
     const responseText = await response.text();
-    payload = responseText ? JSON.parse(responseText) : {};
+
+    if (responseText) {
+      try {
+        payload = JSON.parse(responseText);
+      } catch {
+        payload = {
+          success: false,
+          error: responseText.trim().startsWith("<")
+            ? `Server returned an HTML error page (HTTP ${response.status})`
+            : `Server returned an invalid response (HTTP ${response.status})`,
+        };
+      }
+    }
   } catch (error) {
     clearTimeout(timeoutId);
     return {

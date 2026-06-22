@@ -23,7 +23,7 @@ from database.repositories.user_repository import (
 )
 from services.credential_cipher import decrypt_secret
 from services.material_catalog_service import (
-    fetch_viyar_material_by_article_live_traced,
+    fetch_material_by_source_live_traced,
     prefetch_material_image_cache,
 )
 from services.viyar_auth_service import login_viyar_and_get_cookie
@@ -118,7 +118,7 @@ async def process_material_import_job(job_id: int, cookie_override: str | None =
 
         try:
             effective_cookie = cookie_override or await _resolve_viyar_cookie_for_job(running_job)
-            material, debug_payload = await fetch_viyar_material_by_article_live_traced(
+            material, debug_payload = await fetch_material_by_source_live_traced(
                 running_job["article"],
                 city=running_job["city"],
                 cookie_override=effective_cookie,
