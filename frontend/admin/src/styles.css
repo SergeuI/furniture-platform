@@ -1310,9 +1310,12 @@ tbody tr.selected {
   padding-top: 12px;
 }
 
-.material-import-status-trace span {
+.material-import-status-trace summary {
   color: #5f6f82;
+  cursor: pointer;
   font-size: 12px;
+  font-weight: 700;
+  user-select: none;
 }
 
 .material-import-status-trace ul {

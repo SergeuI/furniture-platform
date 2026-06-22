@@ -669,6 +669,25 @@ function formatDateTimeValue(value) {
   return parsed.toLocaleString("uk-UA");
 }
 
+function formatMaterialImportDiagnostic(value, limit = 280) {
+  const normalized = String(value || "").replace(/\s+/g, " ").trim();
+
+  if (!normalized) {
+    return "";
+  }
+
+  if (
+    normalized.includes("libatk-1.0.so.0") ||
+    normalized.includes("error while loading shared libraries")
+  ) {
+    return "На сервері відсутні системні залежності Playwright Chromium. Встановіть залежності браузера та повторіть імпорт.";
+  }
+
+  return normalized.length > limit
+    ? `${normalized.slice(0, Math.max(0, limit - 3))}...`
+    : normalized;
+}
+
 function isFastenerFitting(item) {
   if (item?.fitting_group) {
     return item.fitting_group === "fasteners";
@@ -9646,23 +9665,23 @@ export default function App() {
                       {activeMaterialImportJob.last_error ? (
                         <div className="material-import-status-error">
                           <span>{t.materialImportLastError}</span>
-                          <p>{activeMaterialImportJob.last_error}</p>
+                          <p>{formatMaterialImportDiagnostic(activeMaterialImportJob.last_error, 420)}</p>
                         </div>
                       ) : null}
                       {Array.isArray(activeMaterialImportJob.debug_trace) && activeMaterialImportJob.debug_trace.length ? (
-                        <div className="material-import-status-trace">
-                          <span>{t.materialImportTrace || "Журнал спроб"}</span>
+                        <details className="material-import-status-trace">
+                          <summary>{t.materialImportTrace || "Технічні деталі"}</summary>
                           <ul>
-                            {activeMaterialImportJob.debug_trace.map((entry, index) => (
+                            {activeMaterialImportJob.debug_trace.slice(-8).map((entry, index) => (
                               <li key={`${entry.stage || "trace"}-${index}`}>
                                 <b>{entry.stage || "step"}</b>
-                                {entry.message ? `: ${entry.message}` : ""}
+                                {entry.message ? `: ${formatMaterialImportDiagnostic(entry.message)}` : ""}
                                 {!entry.message && entry.url ? `: ${entry.url}` : ""}
                                 {!entry.message && !entry.url && entry.product_url ? `: ${entry.product_url}` : ""}
                               </li>
                             ))}
                           </ul>
-                        </div>
+                        </details>
                       ) : null}
                     </div>
                   ) : null}

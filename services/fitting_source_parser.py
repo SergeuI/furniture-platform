@@ -21,6 +21,29 @@ DEFAULT_HEADERS = {
 MT_AUTH_PATH = Path(__file__).with_name("mt_auth.json")
 
 
+def _format_browser_runtime_error(error: Exception) -> str:
+    message = " ".join(str(error or type(error).__name__).split()).strip()
+    lowered = message.lower()
+
+    if "error while loading shared libraries" in lowered or "libatk-1.0.so.0" in lowered:
+        return (
+            "Браузерний парсер тимчасово недоступний: на сервері не встановлені "
+            "системні залежності Playwright Chromium. Виконайте "
+            "`sudo ./venv/bin/playwright install-deps chromium` і повторіть імпорт."
+        )
+
+    if "executable doesn't exist" in lowered or "browser executable" in lowered:
+        return (
+            "На сервері не встановлено Chromium для Playwright. Виконайте "
+            "`./venv/bin/playwright install chromium` і повторіть імпорт."
+        )
+
+    if len(message) > 600:
+        return f"{message[:597]}..."
+
+    return message
+
+
 def _clean_text(value: str | None) -> str:
     return " ".join(str(value or "").split()).strip()
 
@@ -632,6 +655,6 @@ async def parse_fitting_source_metadata(source_url: str) -> dict:
     except Exception as error:
         return {
             "success": False,
-            "error": str(error) or type(error).__name__,
+            "error": _format_browser_runtime_error(error),
             "source_site": source_site,
         }
