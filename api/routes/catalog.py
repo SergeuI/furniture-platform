@@ -720,6 +720,50 @@ async def create_material_route(
                 "error": "Article is required when adding material from a link",
             }
 
+        source_site = detect_material_source_site(effective_source_url)
+
+        if source_site != "viyar":
+            item = upsert_material(
+                article=effective_article,
+                name=effective_name or effective_article,
+                category=effective_category,
+                image=payload.image_url,
+                source_url=effective_source_url,
+                owner_user_id=effective_owner_user_id,
+                is_default=is_default,
+            )
+            primary_job = await enqueue_material_import_job(
+                article=effective_article,
+                category=effective_category,
+                city=selected_city,
+                owner_user_id=str(current_user.id),
+                preferred_url=effective_source_url,
+            )
+
+            create_audit_log(
+                actor_user_id=current_user.id,
+                actor_email=current_user.email,
+                action="catalog.material_import_queued",
+                entity_type="material_import_job",
+                entity_id=primary_job["id"],
+                details={
+                    "article": effective_article,
+                    "category": effective_category,
+                    "city": selected_city,
+                    "source_site": source_site,
+                    "source_url": effective_source_url,
+                    "is_default": is_default,
+                },
+            )
+
+            return {
+                "success": True,
+                "item": item,
+                "job": primary_job,
+                "selected_city": selected_city,
+                "error": "Material import queued. The system will update it in the background.",
+            }
+
         cookie_override = await _resolve_viyar_cookie_for_user(current_user)
 
         try:

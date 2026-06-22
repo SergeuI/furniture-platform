@@ -6465,8 +6465,10 @@ export default function App() {
       if (result.job) {
         setActiveMaterialImportJobId(result.job.id);
         setActiveMaterialImportJob(result.job);
+        setStatus({ message: t.materialImportQueued, tone: "info" });
+      } else {
+        setStatus({ message: result.error || t.materialImportSuccess, tone: "success" });
       }
-      setStatus({ message: result.error || t.materialImportSuccess, tone: "success" });
       await loadMaterialsCatalog(token);
       return;
     }

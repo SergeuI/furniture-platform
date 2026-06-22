@@ -23,6 +23,8 @@ from database.repositories.user_repository import (
 )
 from services.credential_cipher import decrypt_secret
 from services.material_catalog_service import (
+    CITY_COOKIES,
+    detect_material_source_site,
     fetch_material_by_source_live_traced,
     prefetch_material_image_cache,
 )
@@ -132,11 +134,21 @@ async def process_material_import_job(job_id: int, cookie_override: str | None =
                 image=material.get("image"),
                 source_url=material.get("source_url"),
             )
-            upsert_material_price(
-                article=material["article"],
-                city=running_job["city"],
-                price=material.get("price"),
+            source_site = detect_material_source_site(
+                material.get("source_url") or running_job.get("preferred_url")
             )
+            price_cities = (
+                CITY_COOKIES.keys()
+                if source_site != "viyar"
+                else [running_job["city"]]
+            )
+
+            for city_code in price_cities:
+                upsert_material_price(
+                    article=material["article"],
+                    city=city_code,
+                    price=material.get("price"),
+                )
 
             try:
                 image_payload = prefetch_material_image_cache(
@@ -174,6 +186,8 @@ async def process_material_import_job(job_id: int, cookie_override: str | None =
                     "category": running_job["category"],
                     "city": running_job["city"],
                     "price": material.get("price"),
+                    "price_cities": list(price_cities),
+                    "source_site": source_site,
                     "job_id": str(job_id),
                 },
             )
