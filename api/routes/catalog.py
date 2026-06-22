@@ -59,6 +59,7 @@ from database.repositories.service_catalog_repository import (
     update_service_catalog_item,
 )
 from database.repositories.inventory_repository import (
+    MATERIAL_EDGE_LABELS,
     create_fitting,
     delete_fitting,
     delete_material,
@@ -1159,6 +1160,7 @@ async def get_material_route(
 async def attach_material_edge_route(
     article: str,
     payload: MaterialEdgeAttachSchema,
+    background_tasks: BackgroundTasks,
     current_user = Depends(require_material_editor),
 ):
 
@@ -1207,21 +1209,39 @@ async def attach_material_edge_route(
 
     edge_material = None
     prices_by_city: dict[str, float | None] = {}
+    source_site = detect_material_source_site(source_url)
 
-    for city_code in ordered_cities:
-        try:
-            parsed_edge, _debug_payload = await fetch_viyar_product_details_by_url_traced(
-                source_url,
-                city=city_code,
-                cookie_override=cookie_override,
-            )
-        except Exception:
-            continue
+    if source_site == "viyar":
+        for city_code in ordered_cities:
+            try:
+                parsed_edge, _debug_payload = await fetch_viyar_product_details_by_url_traced(
+                    source_url,
+                    city=city_code,
+                    cookie_override=cookie_override,
+                )
+            except Exception:
+                continue
 
-        if not edge_material:
-            edge_material = parsed_edge
+            if not edge_material:
+                edge_material = parsed_edge
 
-        prices_by_city[city_code] = parsed_edge.get("price")
+            prices_by_city[city_code] = parsed_edge.get("price")
+    else:
+        metadata = await parse_fitting_source_metadata(source_url)
+        if metadata.get("success"):
+            edge_material = {
+                "article": metadata.get("article"),
+                "name": metadata.get("name"),
+                "thickness": MATERIAL_EDGE_LABELS.get(edge_key),
+                "image": metadata.get("image_url"),
+                "price": metadata.get("price"),
+                "source_url": metadata.get("final_url") or source_url,
+                "source_site": metadata.get("source_site") or source_site,
+            }
+            prices_by_city = {
+                city_code: edge_material.get("price")
+                for city_code in ordered_cities
+            }
 
     if not edge_material:
         return {
@@ -1234,12 +1254,7 @@ async def attach_material_edge_route(
         edge_key=edge_key,
         article=edge_material.get("article"),
         name=edge_material.get("name"),
-        thickness_label=edge_material.get("thickness") or material_item.get("thickness") or {
-            "edge_04": "0,4 мм",
-            "edge_08": "0,8 мм",
-            "edge_1": "1 мм",
-            "edge_2": "2 мм",
-        }.get(edge_key),
+        thickness_label=MATERIAL_EDGE_LABELS.get(edge_key),
         image=edge_material.get("image"),
         source_url=edge_material.get("source_url") or source_url,
     )
@@ -1249,6 +1264,22 @@ async def attach_material_edge_route(
             edge_option_id=edge_option["id"],
             city=city_code,
             price=price_value,
+        )
+
+    edge_cache_item = {
+        "edge_key": edge_key,
+        "article": edge_material.get("article"),
+        "image": edge_material.get("image"),
+        "source_url": edge_material.get("source_url") or source_url,
+    }
+    cache_key = f"edge:{normalized_article}:{edge_key}"
+    if _claim_material_image_warm(cache_key):
+        background_tasks.add_task(
+            _warm_material_edge_image_cache_task,
+            normalized_article,
+            edge_cache_item,
+            selected_city,
+            cookie_override,
         )
 
     create_audit_log(

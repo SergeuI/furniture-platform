@@ -324,6 +324,8 @@ def _parse_kronas_html(html: str, final_url: str) -> dict:
             _first_text(
                 soup,
                 [
+                    "[itemprop='sku']",
+                    "#artikul",
                     ".product-code",
                     ".sku",
                     "[class*='articul']",
@@ -385,6 +387,9 @@ def _parse_kronas_html(html: str, final_url: str) -> dict:
             final_url,
         )
     )
+
+    if not image_url and article:
+        image_url = f"https://kronas.com.ua/Media/images/catalog/medium/{article}.jpg"
 
     return {
         "success": True,
