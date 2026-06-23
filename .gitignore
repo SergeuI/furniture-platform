@@ -72,3 +72,15 @@ tmp_mproject_site/
 
 .DS_Store
 Thumbs.db
+
+# USER UPLOADS / AI SCANS
+data/uploads/
+data/ai_scan_logs/
+
+# TEMP GENERATED FILES
+tmp_*
+*.pdf
+*.jpg
+*.png
+pycache_files.txt
+profile_card.png
