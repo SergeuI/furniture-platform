@@ -1186,7 +1186,7 @@ async def attach_material_edge_route(
 
     edge_key = (payload.edge_key or "").strip()
 
-    if edge_key not in ("edge_04", "edge_08", "edge_1", "edge_2"):
+    if edge_key not in MATERIAL_EDGE_LABELS:
         return {
             "success": False,
             "error": "Unsupported edge type",

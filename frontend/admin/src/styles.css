@@ -4801,6 +4801,13 @@ tbody tr.selected {
   margin: 0;
 }
 
+.material-edge-section-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .material-edge-grid {
   display: grid;
   gap: 12px;
@@ -4891,8 +4898,28 @@ tbody tr.selected {
   gap: 8px;
 }
 
+.material-edge-create-form {
+  align-items: center;
+  display: grid;
+  grid-template-columns: minmax(150px, 190px) minmax(240px, 1fr) auto;
+}
+
 .material-edge-form input {
   flex: 1 1 auto;
+}
+
+.material-edge-form select {
+  background: #fff;
+  border: 1px solid #cbd8e3;
+  border-radius: 8px;
+  color: #102033;
+  min-height: 40px;
+  padding: 0 10px;
+}
+
+.material-edge-empty-note {
+  margin: 0;
+  padding: 10px 0;
 }
 
 .confirm-actions {
@@ -4947,6 +4974,7 @@ tbody tr.selected {
   }
 
   .material-details-layout,
+  .material-edge-create-form,
   .material-edge-grid,
   .material-details-grid {
     grid-template-columns: minmax(0, 1fr);

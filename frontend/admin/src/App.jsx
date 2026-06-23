@@ -415,7 +415,9 @@ const MATERIAL_EDGE_SLOTS = [
   { key: "edge_04", label: "0,4 мм" },
   { key: "edge_08", label: "0,8 мм" },
   { key: "edge_1", label: "1 мм" },
+  { key: "edge_1x43", label: "1х43 мм" },
   { key: "edge_2", label: "2 мм" },
+  { key: "edge_2x43", label: "2х43 мм" },
 ];
 
 const CATALOG_SERVICE_VIEWS = new Set([
@@ -1952,6 +1954,7 @@ Object.assign(TRANSLATIONS.en, {
   materialEdgeAttachConfirm: "Attach",
   materialEdgeAttachPlaceholder: "Paste edge link",
   materialEdgeSlotEmpty: "No edge attached yet",
+  materialEdgeTypeLabel: "Edge thickness",
   materialEdgeAdded: "Edge attached to material",
   materialsCount: "Materials",
   materialSystemScope: "System",
@@ -2034,6 +2037,7 @@ Object.assign(TRANSLATIONS.uk, {
   materialEdgeAttachConfirm: "\u041f\u0440\u0438\u0454\u0434\u043d\u0430\u0442\u0438",
   materialEdgeAttachPlaceholder: "\u0412\u0441\u0442\u0430\u0432\u0442\u0435 \u043f\u043e\u0441\u0438\u043b\u0430\u043d\u043d\u044f \u043d\u0430 \u043a\u0440\u0430\u0439\u043a\u0443",
   materialEdgeSlotEmpty: "\u041a\u0440\u0430\u0439\u043a\u0443 \u0449\u0435 \u043d\u0435 \u043f\u0440\u0438\u0432'\u044f\u0437\u0430\u043d\u043e",
+  materialEdgeTypeLabel: "\u0422\u043e\u0432\u0449\u0438\u043d\u0430 \u043a\u0440\u0430\u0439\u043a\u0438",
   materialEdgeAdded: "\u041a\u0440\u0430\u0439\u043a\u0443 \u043f\u0440\u0438\u0432'\u044f\u0437\u0430\u043d\u043e \u0434\u043e \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b\u0443",
   materialsCount: "\u041c\u0430\u0442\u0435\u0440\u0456\u0430\u043b\u0438",
   materialSystemScope: "\u0421\u0438\u0441\u0442\u0435\u043c\u043d\u0438\u0439",
@@ -2720,6 +2724,26 @@ function renderSourceBadge(sourceMeta, withLabel = false) {
 
 function getMaterialEdgeItem(item, edgeKey) {
   return (item?.edge_options || []).find((edge) => edge.edge_key === edgeKey) || null;
+}
+
+function getMaterialEdgeSlot(edgeKey) {
+  return MATERIAL_EDGE_SLOTS.find((slot) => slot.key === edgeKey) || null;
+}
+
+function getMaterialEdgeSlotIndex(edgeKey) {
+  const index = MATERIAL_EDGE_SLOTS.findIndex((slot) => slot.key === edgeKey);
+  return index === -1 ? MATERIAL_EDGE_SLOTS.length : index;
+}
+
+function getSortedMaterialEdgeItems(item) {
+  return [...(item?.edge_options || [])]
+    .filter(Boolean)
+    .sort((left, right) => getMaterialEdgeSlotIndex(left.edge_key) - getMaterialEdgeSlotIndex(right.edge_key));
+}
+
+function getDefaultMaterialEdgeKey(item) {
+  const existingKeys = new Set((item?.edge_options || []).map((edge) => edge.edge_key));
+  return MATERIAL_EDGE_SLOTS.find((slot) => !existingKeys.has(slot.key))?.key || MATERIAL_EDGE_SLOTS[0].key;
 }
 
 function canManageSystemFittings(user) {
@@ -3721,6 +3745,11 @@ export default function App() {
   const [selectedMaterialDetail, setSelectedMaterialDetail] = useState(null);
   const [materialDetailLoading, setMaterialDetailLoading] = useState(false);
   const [materialEdgeForms, setMaterialEdgeForms] = useState({});
+  const [materialEdgeCreateForm, setMaterialEdgeCreateForm] = useState({
+    open: false,
+    edge_key: "edge_08",
+    source_url: "",
+  });
   const [openFittingMenuId, setOpenFittingMenuId] = useState("");
   const [projectOptionPicker, setProjectOptionPicker] = useState({
     open: false,
@@ -5342,12 +5371,14 @@ export default function App() {
       setActiveMaterialImportJob(result.job);
     }
     setMaterialEdgeForms({});
+    setMaterialEdgeCreateForm({ open: false, edge_key: getDefaultMaterialEdgeKey(result.item || item), source_url: "" });
   }
 
   function closeMaterialDetails() {
     setSelectedMaterialDetail(null);
     setMaterialDetailLoading(false);
     setMaterialEdgeForms({});
+    setMaterialEdgeCreateForm({ open: false, edge_key: "edge_08", source_url: "" });
   }
 
   async function loadFittingsCatalog(
@@ -6640,12 +6671,32 @@ export default function App() {
     }));
   }
 
-  async function handleAttachMaterialEdge(edgeKey) {
+  function toggleMaterialEdgeCreateForm() {
+    setMaterialEdgeCreateForm((current) =>
+      current.open
+        ? { ...current, open: false, source_url: "" }
+        : {
+            open: true,
+            edge_key: getDefaultMaterialEdgeKey(selectedMaterialDetail),
+            source_url: "",
+          },
+    );
+  }
+
+  function updateMaterialEdgeCreateForm(field, value) {
+    setMaterialEdgeCreateForm((current) => ({
+      ...current,
+      open: true,
+      [field]: value,
+    }));
+  }
+
+  async function handleAttachMaterialEdge(edgeKey, sourceUrlOverride = null) {
     if (!token || !selectedMaterialDetail?.article) {
       return;
     }
 
-    const sourceUrl = String(materialEdgeForms[edgeKey]?.source_url || "").trim();
+    const sourceUrl = String(sourceUrlOverride ?? materialEdgeForms[edgeKey]?.source_url ?? "").trim();
 
     if (!sourceUrl) {
       setStatus({ message: t.materialEdgeAttachPlaceholder, tone: "error" });
@@ -6677,6 +6728,11 @@ export default function App() {
       const next = { ...current };
       delete next[edgeKey];
       return next;
+    });
+    setMaterialEdgeCreateForm({
+      open: false,
+      edge_key: getDefaultMaterialEdgeKey(result.item || selectedMaterialDetail),
+      source_url: "",
     });
     setStatus({ message: t.materialEdgeAdded, tone: "success" });
   }
@@ -11840,11 +11896,60 @@ export default function App() {
             <section className="material-edge-section">
               <div className="material-edge-section-header">
                 <h4>{t.materialEdgeBands}</h4>
-                {materialDetailLoading ? <span className="service-tree-badge subtle">{t.loading}</span> : null}
+                <div className="material-edge-section-actions">
+                  {materialDetailLoading ? <span className="service-tree-badge subtle">{t.loading}</span> : null}
+                  {canEditMaterialItem(user, selectedMaterialDetail) ? (
+                    <button
+                      className="ghost-button compact-button"
+                      onClick={toggleMaterialEdgeCreateForm}
+                      type="button"
+                    >
+                      <Plus size={14} />
+                      {t.materialEdgeAttach}
+                    </button>
+                  ) : null}
+                </div>
               </div>
-              <div className="material-edge-grid">
-                {MATERIAL_EDGE_SLOTS.map((slot) => {
-                  const edgeItem = getMaterialEdgeItem(selectedMaterialDetail, slot.key);
+
+              {materialEdgeCreateForm.open ? (
+                <div className="material-edge-form material-edge-create-form">
+                  <select
+                    aria-label={t.materialEdgeTypeLabel}
+                    onChange={(event) => updateMaterialEdgeCreateForm("edge_key", event.target.value)}
+                    value={materialEdgeCreateForm.edge_key}
+                  >
+                    {MATERIAL_EDGE_SLOTS.map((slot) => (
+                      <option key={slot.key} value={slot.key}>
+                        {slot.label}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    onChange={(event) => updateMaterialEdgeCreateForm("source_url", event.target.value)}
+                    placeholder={t.materialEdgeAttachPlaceholder}
+                    type="url"
+                    value={materialEdgeCreateForm.source_url}
+                  />
+                  <button
+                    className="primary-button compact-button"
+                    disabled={loading || !String(materialEdgeCreateForm.source_url || "").trim()}
+                    onClick={() =>
+                      handleAttachMaterialEdge(materialEdgeCreateForm.edge_key, materialEdgeCreateForm.source_url)
+                    }
+                    type="button"
+                  >
+                    {t.materialEdgeAttachConfirm}
+                  </button>
+                </div>
+              ) : null}
+
+              {getSortedMaterialEdgeItems(selectedMaterialDetail).length ? (
+                <div className="material-edge-grid">
+                  {getSortedMaterialEdgeItems(selectedMaterialDetail).map((edgeItem) => {
+                  const slot = getMaterialEdgeSlot(edgeItem.edge_key) || {
+                    key: edgeItem.edge_key || edgeItem.article || edgeItem.name,
+                    label: edgeItem.thickness || t.materialEdgeBands,
+                  };
                   const edgeForm = materialEdgeForms[slot.key] || { open: false, source_url: "" };
                   const canEditEdge = canEditMaterialItem(user, selectedMaterialDetail);
 
@@ -11864,65 +11969,61 @@ export default function App() {
                         ) : null}
                       </div>
 
-                        {edgeItem ? (
-                          <div className="material-edge-card-body">
-                            <div className="material-edge-card-copy">
-                              <div className="material-edge-card-topline">
-                                <b>{edgeItem.name || edgeItem.article || slot.label}</b>
-                              </div>
-                              <div className="material-edge-card-details-row">
-                                <div className="material-edge-card-meta">
-                                  {edgeItem.article ? <span>{edgeItem.article}</span> : null}
-                                  <span>{t.materialThickness}: {edgeItem.thickness || slot.label}</span>
-                                  <span>
-                                    {t.materialPriceForCity}:{" "}
-                                    {edgeItem.current_price !== null && edgeItem.current_price !== undefined
-                                      ? `${edgeItem.current_price} UAH`
-                                      : t.notSet}
-                                  </span>
+                      <div className="material-edge-card-body">
+                        <div className="material-edge-card-copy">
+                          <div className="material-edge-card-topline">
+                            <b>{edgeItem.name || edgeItem.article || slot.label}</b>
+                          </div>
+                          <div className="material-edge-card-details-row">
+                            <div className="material-edge-card-meta">
+                              {edgeItem.article ? <span>{edgeItem.article}</span> : null}
+                              <span>{t.materialThickness}: {edgeItem.thickness || slot.label}</span>
+                              <span>
+                                {t.materialPriceForCity}:{" "}
+                                {edgeItem.current_price !== null && edgeItem.current_price !== undefined
+                                  ? `${edgeItem.current_price} UAH`
+                                  : t.notSet}
+                              </span>
+                            </div>
+                            <div className="material-edge-card-preview material-edge-card-preview-rect">
+                              {buildMaterialEdgeImageCandidates(
+                                selectedMaterialDetail,
+                                edgeItem,
+                                token,
+                              ).length ? (
+                                <>
+                                  <img
+                                    alt={edgeItem.name || edgeItem.article || slot.label}
+                                    data-fallback-index="0"
+                                    decoding="async"
+                                    loading="lazy"
+                                    onError={(event) =>
+                                      handleMaterialEdgeImageError(
+                                        event,
+                                        selectedMaterialDetail,
+                                        edgeItem,
+                                        token,
+                                      )
+                                    }
+                                    src={buildMaterialEdgeImageCandidates(
+                                      selectedMaterialDetail,
+                                      edgeItem,
+                                      token,
+                                    )[0]}
+                                  />
+                                  <div className="material-edge-card-preview-placeholder" hidden>
+                                    {slot.label}
+                                  </div>
+                                </>
+                              ) : (
+                                <div className="material-edge-card-preview-placeholder">
+                                  {slot.label}
                                 </div>
-                                <div className="material-edge-card-preview material-edge-card-preview-rect">
-                                  {buildMaterialEdgeImageCandidates(
-                                    selectedMaterialDetail,
-                                    edgeItem,
-                                    token,
-                                  ).length ? (
-                                    <>
-                                      <img
-                                        alt={edgeItem.name || edgeItem.article || slot.label}
-                                        data-fallback-index="0"
-                                        decoding="async"
-                                        loading="lazy"
-                                        onError={(event) =>
-                                          handleMaterialEdgeImageError(
-                                            event,
-                                            selectedMaterialDetail,
-                                            edgeItem,
-                                            token,
-                                          )
-                                        }
-                                        src={buildMaterialEdgeImageCandidates(
-                                          selectedMaterialDetail,
-                                          edgeItem,
-                                          token,
-                                        )[0]}
-                                      />
-                                      <div className="material-edge-card-preview-placeholder" hidden>
-                                        {slot.label}
-                                      </div>
-                                    </>
-                                  ) : (
-                                    <div className="material-edge-card-preview-placeholder">
-                                      {slot.label}
-                                    </div>
-                                  )}
-                                </div>
+                              )}
                               </div>
                             </div>
                           </div>
-                        ) : (
-                        <p className="empty-inline-note">{t.materialEdgeSlotEmpty}</p>
-                      )}
+                        </div>
 
                       {edgeForm.open ? (
                         <div className="material-edge-form">
@@ -11944,8 +12045,11 @@ export default function App() {
                       ) : null}
                     </article>
                   );
-                })}
-              </div>
+                  })}
+                </div>
+              ) : (
+                <p className="empty-inline-note material-edge-empty-note">{t.materialEdgeSlotEmpty}</p>
+              )}
             </section>
           </section>
         </div>
