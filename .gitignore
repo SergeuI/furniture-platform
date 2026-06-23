@@ -80,7 +80,5 @@ data/ai_scan_logs/
 # TEMP GENERATED FILES
 tmp_*
 *.pdf
-*.jpg
-*.png
 pycache_files.txt
 profile_card.png
