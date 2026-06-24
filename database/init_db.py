@@ -46,7 +46,9 @@ from database.models.material_import_job import (
     MaterialImportJobModel
 )
 from database.models.fitting import (
-    FittingModel
+    FittingHolePointModel,
+    FittingHoleTemplateModel,
+    FittingModel,
 )
 from database.models.user_service_catalog_price import (
     UserServiceCatalogPriceModel
