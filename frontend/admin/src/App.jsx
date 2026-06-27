@@ -471,13 +471,24 @@ const DEFAULT_HOLE_POINT_FORM = {
   z_mm: "",
   diameter_mm: "",
   depth_mm: "",
-  side: "",
+  side: "front",
   operation: "drill",
   order_index: "0",
   quantity: "1",
   mirrored: false,
   notes: "",
 };
+
+const HOLE_POINT_SIDE_OPTIONS = [
+  { value: "front", labelKey: "holePointSideFront" },
+  { value: "back", labelKey: "holePointSideBack" },
+  { value: "left", labelKey: "holePointSideLeft" },
+  { value: "right", labelKey: "holePointSideRight" },
+  { value: "top", labelKey: "holePointSideTop" },
+  { value: "bottom", labelKey: "holePointSideBottom" },
+];
+
+const HOLE_POINT_OPERATION_OPTIONS = [{ value: "drill", labelKey: "holePointOperationDrill" }];
 
 function detectFittingSourceSite(sourceUrl) {
   if (!sourceUrl) {
@@ -1268,11 +1279,18 @@ const TRANSLATIONS = {
     holePointNotes: "Notes",
     holePointNumericInvalid: "Enter valid numeric values",
     holePointOperation: "Operation",
+    holePointOperationDrill: "Drilling",
     holePointOrderIndex: "Order index",
     holePointOrderIndexInvalid: "Order index must be a whole number",
     holePointQuantity: "Quantity",
     holePointQuantityInvalid: "Quantity must be at least 1",
     holePointSide: "Side",
+    holePointSideBack: "Back face",
+    holePointSideBottom: "Bottom edge",
+    holePointSideFront: "Front face",
+    holePointSideLeft: "Left edge",
+    holePointSideRight: "Right edge",
+    holePointSideTop: "Top edge",
     holePointTemplate: "Template",
     holePointTemplateRequired: "Select a template before creating a point",
     holePointX: "X, mm",
@@ -1634,11 +1652,18 @@ Object.assign(TRANSLATIONS.uk, {
   holePointNotes: "\u041f\u0440\u0438\u043c\u0456\u0442\u043a\u0438",
   holePointNumericInvalid: "\u0412\u0432\u0435\u0434\u0456\u0442\u044c \u043a\u043e\u0440\u0435\u043a\u0442\u043d\u0456 \u0447\u0438\u0441\u043b\u043e\u0432\u0456 \u0437\u043d\u0430\u0447\u0435\u043d\u043d\u044f",
   holePointOperation: "\u041e\u043f\u0435\u0440\u0430\u0446\u0456\u044f",
+  holePointOperationDrill: "\u0421\u0432\u0435\u0440\u0434\u043b\u0456\u043d\u043d\u044f",
   holePointOrderIndex: "\u041f\u043e\u0440\u044f\u0434\u043e\u043a",
   holePointOrderIndexInvalid: "\u041f\u043e\u0440\u044f\u0434\u043e\u043a \u043c\u0430\u0454 \u0431\u0443\u0442\u0438 \u0446\u0456\u043b\u0438\u043c \u0447\u0438\u0441\u043b\u043e\u043c",
   holePointQuantity: "\u041a\u0456\u043b\u044c\u043a\u0456\u0441\u0442\u044c",
   holePointQuantityInvalid: "\u041a\u0456\u043b\u044c\u043a\u0456\u0441\u0442\u044c \u043c\u0430\u0454 \u0431\u0443\u0442\u0438 \u0449\u043e\u043d\u0430\u0439\u043c\u0435\u043d\u0448\u0435 1",
   holePointSide: "\u0421\u0442\u043e\u0440\u043e\u043d\u0430",
+  holePointSideBack: "\u0417\u0430\u0434\u043d\u044f \u043f\u043b\u043e\u0449\u0438\u043d\u0430",
+  holePointSideBottom: "\u041d\u0438\u0436\u043d\u0456\u0439 \u0442\u043e\u0440\u0435\u0446\u044c",
+  holePointSideFront: "\u0424\u0430\u0441\u0430\u0434 / \u043f\u0435\u0440\u0435\u0434\u043d\u044f \u043f\u043b\u043e\u0449\u0438\u043d\u0430",
+  holePointSideLeft: "\u041b\u0456\u0432\u0438\u0439 \u0442\u043e\u0440\u0435\u0446\u044c",
+  holePointSideRight: "\u041f\u0440\u0430\u0432\u0438\u0439 \u0442\u043e\u0440\u0435\u0446\u044c",
+  holePointSideTop: "\u0412\u0435\u0440\u0445\u043d\u0456\u0439 \u0442\u043e\u0440\u0435\u0446\u044c",
   holePointTemplate: "\u0428\u0430\u0431\u043b\u043e\u043d",
   holePointTemplateRequired: "\u041e\u0431\u0435\u0440\u0456\u0442\u044c \u0448\u0430\u0431\u043b\u043e\u043d \u043f\u0435\u0440\u0435\u0434 \u0441\u0442\u0432\u043e\u0440\u0435\u043d\u043d\u044f\u043c \u0442\u043e\u0447\u043a\u0438",
   holePointX: "X, \u043c\u043c",
@@ -13206,7 +13231,7 @@ export default function App() {
 
                 <label>
                   {t.holePointSide}
-                  <input
+                  <select
                     disabled={loading}
                     onChange={(event) =>
                       setHolePointCreateForm((current) => ({
@@ -13214,16 +13239,21 @@ export default function App() {
                         side: event.target.value,
                       }))
                     }
-                    type="text"
                     value={holePointCreateForm.side}
-                  />
+                  >
+                    {HOLE_POINT_SIDE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {t[option.labelKey] || option.value}
+                      </option>
+                    ))}
+                  </select>
                 </label>
               </div>
 
               <div className="hole-template-form-grid">
                 <label>
                   {t.holePointOperation}
-                  <input
+                  <select
                     disabled={loading}
                     onChange={(event) =>
                       setHolePointCreateForm((current) => ({
@@ -13231,9 +13261,14 @@ export default function App() {
                         operation: event.target.value,
                       }))
                     }
-                    type="text"
                     value={holePointCreateForm.operation}
-                  />
+                  >
+                    {HOLE_POINT_OPERATION_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {t[option.labelKey] || option.value}
+                      </option>
+                    ))}
+                  </select>
                 </label>
 
                 <label>
