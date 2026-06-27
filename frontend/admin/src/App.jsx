@@ -490,6 +490,38 @@ const HOLE_POINT_SIDE_OPTIONS = [
 
 const HOLE_POINT_OPERATION_OPTIONS = [{ value: "drill", labelKey: "holePointOperationDrill" }];
 
+const HOLE_POINT_SIDE_LABEL_KEYS = {
+  front: "holePointSideFront",
+  back: "holePointSideBack",
+  left: "holePointSideLeft",
+  right: "holePointSideRight",
+  top: "holePointSideTop",
+  bottom: "holePointSideBottom",
+};
+
+const HOLE_POINT_OPERATION_LABEL_KEYS = {
+  drill: "holePointOperationDrill",
+};
+
+function formatHolePointValue(value, labelKeys, t) {
+  const rawValue = String(value || "").trim();
+
+  if (!rawValue) {
+    return "—";
+  }
+
+  const labelKey = labelKeys[rawValue];
+  return labelKey ? t[labelKey] || rawValue : rawValue;
+}
+
+function formatHolePointSide(value, t) {
+  return formatHolePointValue(value, HOLE_POINT_SIDE_LABEL_KEYS, t);
+}
+
+function formatHolePointOperation(value, t) {
+  return formatHolePointValue(value, HOLE_POINT_OPERATION_LABEL_KEYS, t);
+}
+
 function detectFittingSourceSite(sourceUrl) {
   if (!sourceUrl) {
     return "manual";
@@ -10971,7 +11003,7 @@ export default function App() {
                                 <span>{template.id}</span>
                                 <span>{template.name || "—"}</span>
                                 <span>{template.template_type || "—"}</span>
-                                <span>{template.side || "—"}</span>
+                                <span>{formatHolePointSide(template.side, t)}</span>
                                 <span>{template.coordinate_system || "—"}</span>
                                 <span>{template.is_default ? "Так" : "Ні"}</span>
                                 <span>{template.is_active ? "Так" : "Ні"}</span>
@@ -11104,8 +11136,8 @@ export default function App() {
                                     `${t.holePreviewCoordinates}: x=${formatMetricValue(point.x)} y=${formatMetricValue(point.y)} z=${formatMetricValue(point.z)}`,
                                     `${t.holePreviewDiameter}: ${formatMetricValue(point.diameter)}`,
                                     `${t.holePreviewDepth}: ${formatMetricValue(point.depth)}`,
-                                    `${t.holePreviewSide}: ${point.side || t.notSet}`,
-                                    `${t.holePreviewOperation}: ${point.operation || t.notSet}`,
+                                    `${t.holePreviewSide}: ${formatHolePointSide(point.side, t)}`,
+                                    `${t.holePreviewOperation}: ${formatHolePointOperation(point.operation, t)}`,
                                   ].join(" | ")}
                                 </title>
                                 <circle
@@ -11137,8 +11169,8 @@ export default function App() {
                               <strong>{point.label}</strong>
                               <span>{t.holePreviewCoordinates}: x {formatMetricValue(point.x)} · y {formatMetricValue(point.y)} · z {formatMetricValue(point.z)}</span>
                               <span>Ø {formatMetricValue(point.diameter)} · {t.holePreviewDepth} {formatMetricValue(point.depth)}</span>
-                              <span>{t.holePreviewSide}: {point.side || t.notSet}</span>
-                              <span>{t.holePreviewOperation}: {point.operation || t.notSet}</span>
+                              <span>{t.holePreviewSide}: {formatHolePointSide(point.side, t)}</span>
+                              <span>{t.holePreviewOperation}: {formatHolePointOperation(point.operation, t)}</span>
                             </article>
                           ))}
                         </div>
