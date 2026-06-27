@@ -1803,6 +1803,136 @@ tbody tr.selected {
   padding: 0 6px;
 }
 
+.holes-view-card {
+  display: grid;
+  gap: 16px;
+}
+
+.holes-selector-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(260px, 1.1fr) minmax(220px, 0.9fr) minmax(220px, 0.9fr);
+}
+
+.holes-search {
+  min-width: 0;
+}
+
+.holes-select {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.holes-select span {
+  color: #5c6875;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.holes-select select {
+  width: 100%;
+}
+
+.holes-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.holes-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.holes-panel-header {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.holes-panel-header h4 {
+  color: #24343d;
+  margin: 0;
+}
+
+.holes-table-shell {
+  border: 1px solid #dbe1e7;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.holes-table-list {
+  display: grid;
+}
+
+.holes-table-header,
+.holes-table-row,
+.holes-points-table-header,
+.holes-points-table-row {
+  align-items: center;
+  column-gap: 12px;
+  display: grid;
+  min-width: 0;
+  padding: 10px 14px;
+}
+
+.holes-table-header,
+.holes-points-table-header {
+  background: #f4f7f9;
+  border-bottom: 1px solid #dbe1e7;
+  color: #5c6875;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.holes-table-row,
+.holes-points-table-row {
+  background: #ffffff;
+  border-top: 1px solid #edf2f5;
+}
+
+.holes-table-row:first-child,
+.holes-points-table-row:first-child {
+  border-top: 0;
+}
+
+.holes-table-row.active {
+  background: #f0fdf4;
+}
+
+.holes-table-header,
+.holes-table-row {
+  grid-template-columns:
+    minmax(64px, 72px)
+    minmax(140px, 1.2fr)
+    minmax(110px, 0.9fr)
+    minmax(100px, 0.8fr)
+    minmax(120px, 0.9fr)
+    minmax(90px, 0.6fr)
+    minmax(90px, 0.6fr)
+    minmax(180px, 1.3fr);
+}
+
+.holes-points-table-header,
+.holes-points-table-row {
+  grid-template-columns:
+    minmax(64px, 72px)
+    minmax(120px, 1fr)
+    minmax(64px, 0.6fr)
+    minmax(64px, 0.6fr)
+    minmax(64px, 0.6fr)
+    minmax(72px, 0.65fr)
+    minmax(72px, 0.65fr)
+    minmax(80px, 0.7fr)
+    minmax(88px, 0.8fr)
+    minmax(72px, 0.7fr)
+    minmax(64px, 0.6fr)
+    minmax(82px, 0.7fr)
+    minmax(180px, 1.5fr);
+}
+
 .fitting-row-menu {
   justify-self: end;
   position: relative;
@@ -5073,6 +5203,11 @@ tbody tr.selected {
 
   .catalog-category-card {
     min-height: 0;
+  }
+
+  .holes-selector-grid,
+  .holes-grid {
+    grid-template-columns: 1fr;
   }
 
   .service-catalog-header,

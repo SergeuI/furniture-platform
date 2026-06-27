@@ -46,6 +46,7 @@ import {
   confirmProjectScan,
   getCatalogAutoRefreshStatus,
   getCurrentUser,
+  getFittingHoleTemplate,
   getFittingsCatalog,
   getMaterialDetails,
   getMaterialImportJob,
@@ -63,6 +64,8 @@ import {
   importMaterialFromViyar,
   listAuditLogs,
   listCatalogItems,
+  listFittingHolePoints,
+  listFittingHoleTemplatesByFitting,
   listProjectScans,
   listUsers,
   listUserChangeRequests,
@@ -426,6 +429,7 @@ const CATALOG_SERVICE_VIEWS = new Set([
   "catalogManual",
   "catalogMaterials",
   "catalogFittings",
+  "catalogHoles",
   "catalogFasteners",
   "catalogValues",
 ]);
@@ -3802,6 +3806,11 @@ export default function App() {
   const [fittingSearch, setFittingSearch] = useState("");
   const [selectedFittingCategory, setSelectedFittingCategory] = useState("");
   const [fittingViewMode, setFittingViewMode] = useState("rows");
+  const [holeTemplateItems, setHoleTemplateItems] = useState([]);
+  const [holeSelectedFittingId, setHoleSelectedFittingId] = useState("");
+  const [holeSelectedTemplateId, setHoleSelectedTemplateId] = useState("");
+  const [holeSelectedTemplate, setHoleSelectedTemplate] = useState(null);
+  const [holePoints, setHolePoints] = useState([]);
   const [newFittingForm, setNewFittingForm] = useState(DEFAULT_FITTING_FORM);
   const [autoRefreshStatus, setAutoRefreshStatus] = useState(null);
   const storedProjectId = localStorage.getItem(ACTIVE_PROJECT_ID_STORAGE_KEY) || "";
@@ -3811,6 +3820,7 @@ export default function App() {
   const userLoginName = user?.username || user?.email?.split("@")[0] || "";
   const canUseAiScan = user?.role === "admin" || user?.role === "premium" || user?.role === "pro";
   const canUsePremiumStart = user?.role === "admin" || user?.role === "premium";
+  const canViewFittingHoles = user?.role === "admin" || user?.role === "premium" || user?.role === "pro";
   const inferStatusTone = useCallback((message) => {
     const normalizedMessage = String(message || "").toLowerCase();
 
@@ -4299,6 +4309,7 @@ export default function App() {
   const isCatalogMaterialsView = activeView === "catalogMaterials";
   const isCatalogFittingsView = activeView === "catalogFittings";
   const isCatalogFastenersView = activeView === "catalogFasteners";
+  const isCatalogHolesView = activeView === "catalogHoles";
   const isCatalogValuesView = activeView === "catalogValues";
   const isCatalogViyarView = activeView === "catalogViyar";
   const isCatalogManualView = activeView === "catalogManual";
@@ -4308,6 +4319,7 @@ export default function App() {
     isCatalogMaterialsView ||
     isCatalogFittingsView ||
     isCatalogFastenersView ||
+    isCatalogHolesView ||
     isCatalogValuesView ||
     isCatalogViyarView ||
     isCatalogManualView;
@@ -5416,6 +5428,93 @@ export default function App() {
     }
   }
 
+  async function loadHoleTemplates(activeToken = token, fittingId = holeSelectedFittingId) {
+    if (!activeToken || !fittingId) {
+      setHoleTemplateItems([]);
+      setHoleSelectedTemplateId("");
+      setHoleSelectedTemplate(null);
+      setHolePoints([]);
+      return;
+    }
+
+    setLoading(true);
+    const result = await listFittingHoleTemplatesByFitting(activeToken, fittingId);
+    setLoading(false);
+
+    if (!result.success) {
+      setHoleTemplateItems([]);
+      setHoleSelectedTemplateId("");
+      setHoleSelectedTemplate(null);
+      setHolePoints([]);
+      setStatus({ message: result.error || "Unable to load fitting hole templates", tone: "error" });
+      return;
+    }
+
+    setHoleTemplateItems(result.templates || []);
+    setHoleSelectedTemplate(null);
+    setHolePoints([]);
+  }
+
+  async function loadHoleTemplateDetails(activeToken = token, templateId = holeSelectedTemplateId) {
+    if (!activeToken || !templateId) {
+      setHoleSelectedTemplate(null);
+      setHolePoints([]);
+      return;
+    }
+
+    setLoading(true);
+    const [templateResult, pointsResult] = await Promise.all([
+      getFittingHoleTemplate(activeToken, templateId),
+      listFittingHolePoints(activeToken, templateId),
+    ]);
+    setLoading(false);
+
+    if (!templateResult.success) {
+      setHoleSelectedTemplate(null);
+      setHolePoints([]);
+      setStatus({ message: templateResult.error || "Unable to load fitting hole template", tone: "error" });
+      return;
+    }
+
+    if (!pointsResult.success) {
+      setHoleSelectedTemplate(templateResult.template || null);
+      setHolePoints([]);
+      setStatus({ message: pointsResult.error || "Unable to load fitting hole points", tone: "error" });
+      return;
+    }
+
+    setHoleSelectedTemplate(templateResult.template || null);
+    setHolePoints(pointsResult.points || []);
+  }
+
+  async function handleHoleFittingChange(nextFittingId) {
+    setHoleSelectedFittingId(nextFittingId);
+    setHoleSelectedTemplateId("");
+    setHoleSelectedTemplate(null);
+    setHoleTemplateItems([]);
+    setHolePoints([]);
+    setStatus("");
+
+    if (!nextFittingId) {
+      return;
+    }
+
+    await loadHoleTemplates(token, nextFittingId);
+  }
+
+  async function handleHoleTemplateChange(nextTemplateId) {
+    setHoleSelectedTemplateId(nextTemplateId);
+    setHoleSelectedTemplate(null);
+    setHolePoints([]);
+    setStatus("");
+
+    if (!nextTemplateId) {
+      return;
+    }
+
+    await loadHoleTemplateDetails(token, nextTemplateId);
+  }
+
   async function handleMaterialCitySave(event) {
     event.preventDefault();
 
@@ -5682,6 +5781,11 @@ export default function App() {
     setViyarPriceSyncSummary(null);
     setViyarServiceSearch("");
     setCollapsedViyarFolders({});
+    setHoleTemplateItems([]);
+    setHoleSelectedFittingId("");
+    setHoleSelectedTemplateId("");
+    setHoleSelectedTemplate(null);
+    setHolePoints([]);
     setResetPasswordForms({});
     setNewManualServiceForm({
       article: "",
@@ -5963,6 +6067,16 @@ export default function App() {
 
     if (nextView === "catalogFittings") {
       await loadFittingsCatalog(token);
+      return;
+    }
+
+    if (nextView === "catalogHoles") {
+      await loadFittingsCatalog(token);
+      setHoleSelectedFittingId("");
+      setHoleSelectedTemplateId("");
+      setHoleSelectedTemplate(null);
+      setHoleTemplateItems([]);
+      setHolePoints([]);
       return;
     }
 
@@ -7379,6 +7493,14 @@ export default function App() {
   }, [token, user?.city, isCatalogFittingsView, isCatalogFastenersView, fittingSearch]);
 
   useEffect(() => {
+    if (!token || !isCatalogHolesView || fittingItems.length) {
+      return;
+    }
+
+    loadFittingsCatalog(token);
+  }, [token, user?.city, isCatalogHolesView, fittingItems.length, fittingSearch]);
+
+  useEffect(() => {
     if (!token || user?.role !== "admin" || !isCatalogViyarView) {
       return;
     }
@@ -7580,7 +7702,7 @@ export default function App() {
           <div className={`nav-group${isCatalogView ? " active" : ""}`}>
             <div className={`nav-group-header${isCatalogView ? " active" : ""}`}>
               <button
-                className={`nav-group-link${isCatalogHubView || isCatalogMaterialsView || isCatalogFittingsView || isCatalogFastenersView ? " active" : ""}`}
+                className={`nav-group-link${isCatalogHubView || isCatalogMaterialsView || isCatalogFittingsView || isCatalogFastenersView || isCatalogHolesView ? " active" : ""}`}
                 onClick={() => switchView(user.role === "admin" ? "catalogHub" : "catalogMaterials")}
                 type="button"
               >
@@ -7614,6 +7736,15 @@ export default function App() {
                 >
                   {t.catalogFittings}
                 </button>
+                {canViewFittingHoles ? (
+                  <button
+                    className={isCatalogHolesView ? "active" : ""}
+                    onClick={() => switchView("catalogHoles")}
+                    type="button"
+                  >
+                    Отвори
+                  </button>
+                ) : null}
                 {user.role === "admin" ? (
                   <>
                     <button
@@ -7681,6 +7812,8 @@ export default function App() {
                   ? t.catalogFittings
                 : isCatalogFastenersView
                   ? t.catalogFasteners
+                : isCatalogHolesView
+                  ? "Отвори"
                 : isCatalogValuesView
                   ? t.catalogValues
                 : isCatalogViyarView
@@ -10305,6 +10438,185 @@ export default function App() {
                 )}
               </div>
               ) : null}
+            </article>
+          </section>
+        ) : isCatalogHolesView ? (
+          <section className="table-panel full-panel">
+            <article className="catalog-card service-catalog-card service-catalog-card-full holes-view-card">
+              <div className="catalog-page-header">
+                <div className="service-catalog-title">
+                  <h3>Отвори</h3>
+                  <p>Перегляд шаблонів і точок отворів для вибраної фурнітури.</p>
+                </div>
+                <div className="service-catalog-header-actions">
+                  <span className="service-tree-badge subtle">
+                    read-only
+                  </span>
+                  <button
+                    className="ghost-button"
+                    disabled={loading || !holeSelectedFittingId}
+                    onClick={() => loadHoleTemplates(token, holeSelectedFittingId)}
+                    type="button"
+                  >
+                    <RefreshCw size={16} />
+                    Оновити
+                  </button>
+                </div>
+              </div>
+
+              <div className="holes-selector-grid">
+                <label className="service-catalog-search holes-search">
+                  <Search size={16} />
+                  <input
+                    onChange={(event) => setFittingSearch(event.target.value)}
+                    placeholder={t.viyarSearch}
+                    type="search"
+                    value={fittingSearch}
+                  />
+                </label>
+                <label className="holes-select">
+                  <span>Фурнітура</span>
+                  <select
+                    onChange={(event) => handleHoleFittingChange(event.target.value)}
+                    value={holeSelectedFittingId}
+                  >
+                    <option value="">Оберіть фурнітуру</option>
+                    {fittingItems.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name || item.article || item.code || item.id}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="holes-select">
+                  <span>Шаблон</span>
+                  <select
+                    disabled={!holeTemplateItems.length}
+                    onChange={(event) => handleHoleTemplateChange(event.target.value)}
+                    value={holeSelectedTemplateId}
+                  >
+                    <option value="">Оберіть шаблон</option>
+                    {holeTemplateItems.map((template) => (
+                      <option key={template.id} value={template.id}>
+                        {template.name || `Шаблон ${template.id}`}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <div className="holes-grid">
+                <section className="holes-panel">
+                  <div className="holes-panel-header">
+                    <h4>Шаблони</h4>
+                    <span className="service-tree-badge subtle">
+                      {holeTemplateItems.length}
+                    </span>
+                  </div>
+                  {holeSelectedFittingId ? (
+                    holeTemplateItems.length ? (
+                      <div className="holes-table-shell">
+                        <div className="holes-table-header">
+                          <span>ID</span>
+                          <span>Назва</span>
+                          <span>Тип</span>
+                          <span>Сторона</span>
+                          <span>Система</span>
+                          <span>Default</span>
+                          <span>Active</span>
+                          <span>Примітки</span>
+                        </div>
+                        <div className="holes-table-list">
+                          {holeTemplateItems.map((template) => {
+                            const isSelected = String(template.id) === String(holeSelectedTemplateId);
+
+                            return (
+                              <article
+                                className={`holes-table-row${isSelected ? " active" : ""}`}
+                                key={template.id}
+                              >
+                                <span>{template.id}</span>
+                                <span>{template.name || "—"}</span>
+                                <span>{template.template_type || "—"}</span>
+                                <span>{template.side || "—"}</span>
+                                <span>{template.coordinate_system || "—"}</span>
+                                <span>{template.is_default ? "Так" : "Ні"}</span>
+                                <span>{template.is_active ? "Так" : "Ні"}</span>
+                                <span>{template.notes || "—"}</span>
+                              </article>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="empty-state compact-empty-state">
+                        <span>Шаблони отворів ще не додані</span>
+                      </div>
+                    )
+                  ) : (
+                    <div className="empty-state compact-empty-state">
+                      <span>Оберіть фурнітуру</span>
+                    </div>
+                  )}
+                </section>
+
+                <section className="holes-panel">
+                  <div className="holes-panel-header">
+                    <h4>Точки</h4>
+                    <span className="service-tree-badge subtle">
+                      {holePoints.length}
+                    </span>
+                  </div>
+                  {holeSelectedTemplate ? (
+                    holePoints.length ? (
+                      <div className="holes-table-shell">
+                        <div className="holes-points-table-header">
+                          <span>ID</span>
+                          <span>Label</span>
+                          <span>x</span>
+                          <span>y</span>
+                          <span>z</span>
+                          <span>Ø</span>
+                          <span>Depth</span>
+                          <span>Side</span>
+                          <span>Operation</span>
+                          <span>Order</span>
+                          <span>Qty</span>
+                          <span>Mirrored</span>
+                          <span>Notes</span>
+                        </div>
+                        <div className="holes-table-list">
+                          {holePoints.map((point) => (
+                            <article className="holes-points-table-row" key={point.id}>
+                              <span>{point.id}</span>
+                              <span>{point.label || "—"}</span>
+                              <span>{point.x_mm ?? "—"}</span>
+                              <span>{point.y_mm ?? "—"}</span>
+                              <span>{point.z_mm ?? "—"}</span>
+                              <span>{point.diameter_mm ?? "—"}</span>
+                              <span>{point.depth_mm ?? "—"}</span>
+                              <span>{point.side || "—"}</span>
+                              <span>{point.operation || "—"}</span>
+                              <span>{point.order_index}</span>
+                              <span>{point.quantity}</span>
+                              <span>{point.mirrored ? "Так" : "Ні"}</span>
+                              <span>{point.notes || "—"}</span>
+                            </article>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="empty-state compact-empty-state">
+                        <span>Точки отворів ще не додані</span>
+                      </div>
+                    )
+                  ) : (
+                    <div className="empty-state compact-empty-state">
+                      <span>Оберіть шаблон</span>
+                    </div>
+                  )}
+                </section>
+              </div>
             </article>
           </section>
         ) : isCatalogValuesView ? (

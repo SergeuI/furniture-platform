@@ -188,6 +188,24 @@ export async function deleteFitting(token, itemId) {
   });
 }
 
+export async function listFittingHoleTemplatesByFitting(token, fittingId) {
+  return request(`/fitting-holes/fittings/${fittingId}/templates`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function getFittingHoleTemplate(token, templateId) {
+  return request(`/fitting-holes/templates/${templateId}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function listFittingHolePoints(token, templateId) {
+  return request(`/fitting-holes/templates/${templateId}/points`, {
+    headers: authHeaders(token),
+  });
+}
+
 export async function getCatalogAutoRefreshStatus(token) {
   return request("/catalog/auto-refresh/status", {
     headers: authHeaders(token),
