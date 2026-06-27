@@ -36,6 +36,7 @@ import {
   createMaterial,
   createFitting,
   createFittingHoleTemplate,
+  createFittingHolePoint,
   createManualService,
   createMyEmailChangeRequest,
   createCatalogItem,
@@ -459,6 +460,22 @@ const DEFAULT_HOLE_TEMPLATE_FORM = {
   coordinate_system: "2d",
   is_default: false,
   is_active: true,
+  notes: "",
+};
+
+const DEFAULT_HOLE_POINT_FORM = {
+  template_id: "",
+  label: "",
+  x_mm: "",
+  y_mm: "",
+  z_mm: "",
+  diameter_mm: "",
+  depth_mm: "",
+  side: "",
+  operation: "drill",
+  order_index: "0",
+  quantity: "1",
+  mirrored: false,
   notes: "",
 };
 
@@ -1212,6 +1229,31 @@ const TRANSLATIONS = {
     productionCutting: "Cutting list",
     productionGrooves: "Grooves",
     productionHoles: "Holes",
+    holePointsTitle: "Hole points",
+    holePointAdd: "Add point",
+    holePointCreateDescription: "Create a new hole point for the selected template.",
+    holePointCreateFailed: "Unable to create hole point",
+    holePointCreateSuccess: "Hole point created",
+    holePointCreateTitle: "Add hole point",
+    holePointDepth: "Depth, mm",
+    holePointDiameter: "Diameter, mm",
+    holePointDiameterInvalid: "Diameter must be a valid positive number",
+    holePointDiameterRequired: "Diameter is required",
+    holePointLabel: "Label",
+    holePointMirrored: "Mirrored",
+    holePointNotes: "Notes",
+    holePointNumericInvalid: "Enter valid numeric values",
+    holePointOperation: "Operation",
+    holePointOrderIndex: "Order index",
+    holePointOrderIndexInvalid: "Order index must be a whole number",
+    holePointQuantity: "Quantity",
+    holePointQuantityInvalid: "Quantity must be at least 1",
+    holePointSide: "Side",
+    holePointTemplate: "Template",
+    holePointTemplateRequired: "Select a template before creating a point",
+    holePointX: "X, mm",
+    holePointY: "Y, mm",
+    holePointZ: "Z, mm",
     productionPartBack: "Back to production",
     productionPartWorkspace: "Detail workspace",
     productionPartViewer: "Part map",
@@ -1545,6 +1587,31 @@ Object.assign(TRANSLATIONS.uk, {
   assemblyOpenWorkspace: "\u0412\u0456\u0434\u043a\u0440\u0438\u0442\u0438 \u043a\u0430\u0440\u0442\u0443 \u0434\u0435\u0442\u0430\u043b\u0456",
   assemblyResetCamera: "\u0421\u043a\u0438\u043d\u0443\u0442\u0438 \u043a\u0430\u043c\u0435\u0440\u0443",
   assemblyShowFull: "\u041f\u043e\u043a\u0430\u0437\u0430\u0442\u0438 \u0432\u0441\u044e \u0437\u0431\u0456\u0440\u043a\u0443",
+  holePointsTitle: "\u0422\u043e\u0447\u043a\u0438 \u043e\u0442\u0432\u043e\u0440\u0456\u0432",
+  holePointAdd: "\u0414\u043e\u0434\u0430\u0442\u0438 \u0442\u043e\u0447\u043a\u0443",
+  holePointCreateDescription: "\u0421\u0442\u0432\u043e\u0440\u0435\u043d\u043d\u044f \u043d\u043e\u0432\u043e\u0457 \u0442\u043e\u0447\u043a\u0438 \u0434\u043b\u044f \u0432\u0438\u0431\u0440\u0430\u043d\u043e\u0433\u043e \u0448\u0430\u0431\u043b\u043e\u043d\u0443.",
+  holePointCreateFailed: "\u041d\u0435 \u0432\u0434\u0430\u043b\u043e\u0441\u044f \u0441\u0442\u0432\u043e\u0440\u0438\u0442\u0438 \u0442\u043e\u0447\u043a\u0443 \u043e\u0442\u0432\u043e\u0440\u0443",
+  holePointCreateSuccess: "\u0422\u043e\u0447\u043a\u0443 \u043e\u0442\u0432\u043e\u0440\u0443 \u0441\u0442\u0432\u043e\u0440\u0435\u043d\u043e",
+  holePointCreateTitle: "\u0414\u043e\u0434\u0430\u0442\u0438 \u0442\u043e\u0447\u043a\u0443 \u043e\u0442\u0432\u043e\u0440\u0443",
+  holePointDepth: "\u0413\u043b\u0438\u0431\u0438\u043d\u0430, \u043c\u043c",
+  holePointDiameter: "\u0414\u0456\u0430\u043c\u0435\u0442\u0440, \u043c\u043c",
+  holePointDiameterInvalid: "\u0414\u0456\u0430\u043c\u0435\u0442\u0440 \u043c\u0430\u0454 \u0431\u0443\u0442\u0438 \u0434\u0456\u0439\u0441\u043d\u0438\u043c \u0434\u043e\u0434\u0430\u0442\u043d\u0438\u043c \u0447\u0438\u0441\u043b\u043e\u043c",
+  holePointDiameterRequired: "\u0414\u0456\u0430\u043c\u0435\u0442\u0440 \u043e\u0431\u043e\u0432'\u044f\u0437\u043a\u043e\u0432\u0438\u0439",
+  holePointLabel: "\u041c\u0456\u0442\u043a\u0430",
+  holePointMirrored: "\u0414\u0443\u0431\u043b\u044c\u043e\u0432\u0430\u043d\u0430",
+  holePointNotes: "\u041f\u0440\u0438\u043c\u0456\u0442\u043a\u0438",
+  holePointNumericInvalid: "\u0412\u0432\u0435\u0434\u0456\u0442\u044c \u043a\u043e\u0440\u0435\u043a\u0442\u043d\u0456 \u0447\u0438\u0441\u043b\u043e\u0432\u0456 \u0437\u043d\u0430\u0447\u0435\u043d\u043d\u044f",
+  holePointOperation: "\u041e\u043f\u0435\u0440\u0430\u0446\u0456\u044f",
+  holePointOrderIndex: "\u041f\u043e\u0440\u044f\u0434\u043e\u043a",
+  holePointOrderIndexInvalid: "\u041f\u043e\u0440\u044f\u0434\u043e\u043a \u043c\u0430\u0454 \u0431\u0443\u0442\u0438 \u0446\u0456\u043b\u0438\u043c \u0447\u0438\u0441\u043b\u043e\u043c",
+  holePointQuantity: "\u041a\u0456\u043b\u044c\u043a\u0456\u0441\u0442\u044c",
+  holePointQuantityInvalid: "\u041a\u0456\u043b\u044c\u043a\u0456\u0441\u0442\u044c \u043c\u0430\u0454 \u0431\u0443\u0442\u0438 \u0449\u043e\u043d\u0430\u0439\u043c\u0435\u043d\u0448\u0435 1",
+  holePointSide: "\u0421\u0442\u043e\u0440\u043e\u043d\u0430",
+  holePointTemplate: "\u0428\u0430\u0431\u043b\u043e\u043d",
+  holePointTemplateRequired: "\u041e\u0431\u0435\u0440\u0456\u0442\u044c \u0448\u0430\u0431\u043b\u043e\u043d \u043f\u0435\u0440\u0435\u0434 \u0441\u0442\u0432\u043e\u0440\u0435\u043d\u043d\u044f\u043c \u0442\u043e\u0447\u043a\u0438",
+  holePointX: "X, \u043c\u043c",
+  holePointY: "Y, \u043c\u043c",
+  holePointZ: "Z, \u043c\u043c",
 });
 
 Object.assign(TRANSLATIONS.en, {
@@ -3826,6 +3893,9 @@ export default function App() {
   const [holeTemplateCreateOpen, setHoleTemplateCreateOpen] = useState(false);
   const [holeTemplateCreateError, setHoleTemplateCreateError] = useState("");
   const [holeTemplateCreateForm, setHoleTemplateCreateForm] = useState(DEFAULT_HOLE_TEMPLATE_FORM);
+  const [holePointCreateOpen, setHolePointCreateOpen] = useState(false);
+  const [holePointCreateError, setHolePointCreateError] = useState("");
+  const [holePointCreateForm, setHolePointCreateForm] = useState(DEFAULT_HOLE_POINT_FORM);
   const [newFittingForm, setNewFittingForm] = useState(DEFAULT_FITTING_FORM);
   const [autoRefreshStatus, setAutoRefreshStatus] = useState(null);
   const storedProjectId = localStorage.getItem(ACTIVE_PROJECT_ID_STORAGE_KEY) || "";
@@ -3839,6 +3909,10 @@ export default function App() {
   const selectedHoleFitting = useMemo(
     () => fittingItems.find((item) => String(item.id) === String(holeSelectedFittingId)) || null,
     [fittingItems, holeSelectedFittingId],
+  );
+  const selectedHoleTemplate = useMemo(
+    () => holeTemplateItems.find((item) => String(item.id) === String(holeSelectedTemplateId)) || holeSelectedTemplate || null,
+    [holeSelectedTemplate, holeSelectedTemplateId, holeTemplateItems],
   );
   const inferStatusTone = useCallback((message) => {
     const normalizedMessage = String(message || "").toLowerCase();
@@ -5553,11 +5627,116 @@ export default function App() {
     setStatus({ message: "Шаблон отворів створено", tone: "success" });
   }
 
+  function openHolePointCreateForm() {
+    if (!holeSelectedTemplateId) {
+      setHolePointCreateError(t.holePointTemplateRequired);
+      return;
+    }
+
+    setHolePointCreateForm({
+      ...DEFAULT_HOLE_POINT_FORM,
+      template_id: holeSelectedTemplateId,
+    });
+    setHolePointCreateError("");
+    setHolePointCreateOpen(true);
+  }
+
+  function closeHolePointCreateForm() {
+    setHolePointCreateOpen(false);
+    setHolePointCreateError("");
+    setHolePointCreateForm(DEFAULT_HOLE_POINT_FORM);
+  }
+
+  function parseMaybeNumber(value, fieldName) {
+    const text = String(value ?? "").trim();
+
+    if (!text) {
+      return undefined;
+    }
+
+    const numericValue = Number(text.replace(",", "."));
+
+    if (!Number.isFinite(numericValue)) {
+      throw new Error(fieldName);
+    }
+
+    return numericValue;
+  }
+
+  async function handleHolePointCreate(event) {
+    event.preventDefault();
+
+    if (!holeSelectedTemplateId) {
+      setHolePointCreateError(t.holePointTemplateRequired);
+      return;
+    }
+
+    const diameterText = String(holePointCreateForm.diameter_mm || "").trim();
+    if (!diameterText) {
+      setHolePointCreateError(t.holePointDiameterRequired);
+      return;
+    }
+
+    const diameterValue = Number(diameterText.replace(",", "."));
+    if (!Number.isFinite(diameterValue) || diameterValue <= 0) {
+      setHolePointCreateError(t.holePointDiameterInvalid);
+      return;
+    }
+
+    let payload;
+    try {
+      payload = {
+        label: String(holePointCreateForm.label || "").trim() || null,
+        x_mm: parseMaybeNumber(holePointCreateForm.x_mm, t.holePointX),
+        y_mm: parseMaybeNumber(holePointCreateForm.y_mm, t.holePointY),
+        z_mm: parseMaybeNumber(holePointCreateForm.z_mm, t.holePointZ),
+        diameter_mm: diameterValue,
+        depth_mm: parseMaybeNumber(holePointCreateForm.depth_mm, t.holePointDepth),
+        side: String(holePointCreateForm.side || "").trim() || null,
+        operation: String(holePointCreateForm.operation || "").trim() || "drill",
+        order_index: Number.parseInt(String(holePointCreateForm.order_index || "0").trim(), 10),
+        quantity: Number.parseInt(String(holePointCreateForm.quantity || "1").trim(), 10),
+        mirrored: Boolean(holePointCreateForm.mirrored),
+        notes: String(holePointCreateForm.notes || "").trim() || null,
+      };
+    } catch (error) {
+      setHolePointCreateError(t.holePointNumericInvalid);
+      return;
+    }
+
+    if (!Number.isFinite(payload.order_index)) {
+      setHolePointCreateError(t.holePointOrderIndexInvalid);
+      return;
+    }
+
+    if (!Number.isFinite(payload.quantity) || payload.quantity <= 0) {
+      setHolePointCreateError(t.holePointQuantityInvalid);
+      return;
+    }
+
+    setLoading(true);
+    const result = await createFittingHolePoint(token, holeSelectedTemplateId, payload);
+    setLoading(false);
+
+    if (!result.success) {
+      const errorMessage = result.error || t.holePointCreateFailed;
+      setHolePointCreateError(errorMessage);
+      setStatus({ message: errorMessage, tone: "error" });
+      return;
+    }
+
+    closeHolePointCreateForm();
+    const reloaded = await loadHoleTemplateDetails(token, holeSelectedTemplateId);
+    if (reloaded) {
+      setStatus({ message: t.holePointCreateSuccess, tone: "success" });
+    }
+  }
+
   async function loadHoleTemplateDetails(activeToken = token, templateId = holeSelectedTemplateId) {
     if (!activeToken || !templateId) {
       setHoleSelectedTemplate(null);
       setHolePoints([]);
-      return;
+      return false;
     }
 
     setLoading(true);
@@ -5578,18 +5757,19 @@ export default function App() {
       setHoleSelectedTemplate(null);
       setHolePoints([]);
       setStatus({ message: templateResult.error || "Unable to load fitting hole template", tone: "error" });
-      return;
+      return false;
     }
 
     if (!pointsResult.success) {
       setHoleSelectedTemplate(templateResult.template || null);
       setHolePoints([]);
       setStatus({ message: pointsResult.error || "Unable to load fitting hole points", tone: "error" });
-      return;
+      return false;
     }
 
     setHoleSelectedTemplate(templateResult.template || null);
     setHolePoints(Array.isArray(pointsResult.points) ? pointsResult.points : []);
+    return true;
   }
 
   async function handleHoleFittingChange(nextFittingId) {
@@ -5602,6 +5782,7 @@ export default function App() {
     setHoleTemplateItems([]);
     setHolePoints([]);
     closeHoleTemplateCreateForm();
+    closeHolePointCreateForm();
     setStatus("");
 
     if (!nextFittingId) {
@@ -5615,6 +5796,7 @@ export default function App() {
     setHoleSelectedTemplateId(nextTemplateId);
     setHoleSelectedTemplate(null);
     setHolePoints([]);
+    closeHolePointCreateForm();
     setStatus("");
 
     if (!nextTemplateId) {
@@ -5896,6 +6078,7 @@ export default function App() {
     setHoleSelectedTemplate(null);
     setHolePoints([]);
     closeHoleTemplateCreateForm();
+    closeHolePointCreateForm();
     setResetPasswordForms({});
     setNewManualServiceForm({
       article: "",
@@ -6188,6 +6371,7 @@ export default function App() {
       setHoleTemplateItems([]);
       setHolePoints([]);
       closeHoleTemplateCreateForm();
+      closeHolePointCreateForm();
       return;
     }
 
@@ -10686,6 +10870,15 @@ export default function App() {
                     <span className="service-tree-badge subtle">
                       {holePoints.length}
                     </span>
+                    <button
+                      className="ghost-button compact-button"
+                      disabled={loading || !holeSelectedTemplateId}
+                      onClick={openHolePointCreateForm}
+                      type="button"
+                    >
+                      <Plus size={14} />
+                      {t.holePointAdd}
+                    </button>
                   </div>
                   {holeSelectedTemplate ? (
                     holePoints.length ? (
@@ -12665,6 +12858,271 @@ export default function App() {
                 <button className="primary-button" disabled={loading || !holeSelectedFittingId} type="submit">
                   <Plus size={16} />
                   Зберегти
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      ) : null}
+
+      {holePointCreateOpen ? (
+        <div
+          aria-modal="true"
+          className="modal-backdrop"
+          onClick={closeHolePointCreateForm}
+          role="dialog"
+        >
+          <section
+            className="confirm-modal hole-template-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="confirm-header">
+              <div>
+                <strong>{t.holePointCreateTitle}</strong>
+                <p>{t.holePointCreateDescription}</p>
+              </div>
+              <button
+                aria-label={t.cancel}
+                className="icon-button"
+                disabled={loading}
+                onClick={closeHolePointCreateForm}
+                type="button"
+              >
+                <X size={18} />
+              </button>
+            </header>
+
+            <form className="hole-template-form" onSubmit={handleHolePointCreate}>
+              <label>
+                {t.holePointTemplate}
+                <input
+                  disabled
+                  readOnly
+                  type="text"
+                  value={
+                    selectedHoleTemplate
+                      ? `${selectedHoleTemplate.id} · ${selectedHoleTemplate.name || t.notSet}`
+                      : holeSelectedTemplateId
+                  }
+                />
+              </label>
+
+              <label>
+                {t.holePointLabel}
+                <input
+                  disabled={loading}
+                  onChange={(event) =>
+                    setHolePointCreateForm((current) => ({
+                      ...current,
+                      label: event.target.value,
+                    }))
+                  }
+                  type="text"
+                  value={holePointCreateForm.label}
+                />
+              </label>
+
+              <div className="hole-template-form-grid">
+                <label>
+                  {t.holePointX}
+                  <input
+                    disabled={loading}
+                    onChange={(event) =>
+                      setHolePointCreateForm((current) => ({
+                        ...current,
+                        x_mm: event.target.value,
+                      }))
+                    }
+                    step="any"
+                    type="number"
+                    value={holePointCreateForm.x_mm}
+                  />
+                </label>
+
+                <label>
+                  {t.holePointY}
+                  <input
+                    disabled={loading}
+                    onChange={(event) =>
+                      setHolePointCreateForm((current) => ({
+                        ...current,
+                        y_mm: event.target.value,
+                      }))
+                    }
+                    step="any"
+                    type="number"
+                    value={holePointCreateForm.y_mm}
+                  />
+                </label>
+
+                <label>
+                  {t.holePointZ}
+                  <input
+                    disabled={loading}
+                    onChange={(event) =>
+                      setHolePointCreateForm((current) => ({
+                        ...current,
+                        z_mm: event.target.value,
+                      }))
+                    }
+                    step="any"
+                    type="number"
+                    value={holePointCreateForm.z_mm}
+                  />
+                </label>
+              </div>
+
+              <div className="hole-template-form-grid">
+                <label>
+                  {t.holePointDiameter}
+                  <input
+                    disabled={loading}
+                    min="0.01"
+                    onChange={(event) =>
+                      setHolePointCreateForm((current) => ({
+                        ...current,
+                        diameter_mm: event.target.value,
+                      }))
+                    }
+                    required
+                    step="any"
+                    type="number"
+                    value={holePointCreateForm.diameter_mm}
+                  />
+                </label>
+
+                <label>
+                  {t.holePointDepth}
+                  <input
+                    disabled={loading}
+                    min="0"
+                    onChange={(event) =>
+                      setHolePointCreateForm((current) => ({
+                        ...current,
+                        depth_mm: event.target.value,
+                      }))
+                    }
+                    step="any"
+                    type="number"
+                    value={holePointCreateForm.depth_mm}
+                  />
+                </label>
+
+                <label>
+                  {t.holePointSide}
+                  <input
+                    disabled={loading}
+                    onChange={(event) =>
+                      setHolePointCreateForm((current) => ({
+                        ...current,
+                        side: event.target.value,
+                      }))
+                    }
+                    type="text"
+                    value={holePointCreateForm.side}
+                  />
+                </label>
+              </div>
+
+              <div className="hole-template-form-grid">
+                <label>
+                  {t.holePointOperation}
+                  <input
+                    disabled={loading}
+                    onChange={(event) =>
+                      setHolePointCreateForm((current) => ({
+                        ...current,
+                        operation: event.target.value,
+                      }))
+                    }
+                    type="text"
+                    value={holePointCreateForm.operation}
+                  />
+                </label>
+
+                <label>
+                  {t.holePointOrderIndex}
+                  <input
+                    disabled={loading}
+                    min="0"
+                    onChange={(event) =>
+                      setHolePointCreateForm((current) => ({
+                        ...current,
+                        order_index: event.target.value,
+                      }))
+                    }
+                    step="1"
+                    type="number"
+                    value={holePointCreateForm.order_index}
+                  />
+                </label>
+
+                <label>
+                  {t.holePointQuantity}
+                  <input
+                    disabled={loading}
+                    min="1"
+                    onChange={(event) =>
+                      setHolePointCreateForm((current) => ({
+                        ...current,
+                        quantity: event.target.value,
+                      }))
+                    }
+                    step="1"
+                    type="number"
+                    value={holePointCreateForm.quantity}
+                  />
+                </label>
+              </div>
+
+              <div className="hole-template-checks">
+                <label className="material-inline-check">
+                  <input
+                    checked={holePointCreateForm.mirrored}
+                    disabled={loading}
+                    onChange={(event) =>
+                      setHolePointCreateForm((current) => ({
+                        ...current,
+                        mirrored: event.target.checked,
+                      }))
+                    }
+                    type="checkbox"
+                  />
+                  {t.holePointMirrored}
+                </label>
+              </div>
+
+              <label>
+                {t.holePointNotes}
+                <textarea
+                  disabled={loading}
+                  onChange={(event) =>
+                    setHolePointCreateForm((current) => ({
+                      ...current,
+                      notes: event.target.value,
+                    }))
+                  }
+                  rows="3"
+                  value={holePointCreateForm.notes}
+                />
+              </label>
+
+              {holePointCreateError ? (
+                <p className="hole-template-error">{holePointCreateError}</p>
+              ) : null}
+
+              <div className="confirm-actions hole-template-actions">
+                <button
+                  className="ghost-button"
+                  disabled={loading}
+                  onClick={closeHolePointCreateForm}
+                  type="button"
+                >
+                  {t.cancel}
+                </button>
+                <button className="primary-button" disabled={loading || !holeSelectedTemplateId} type="submit">
+                  <Plus size={16} />
+                  {t.save}
                 </button>
               </div>
             </form>

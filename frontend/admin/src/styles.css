@@ -1849,12 +1849,13 @@ tbody tr.selected {
   align-items: center;
   display: flex;
   gap: 12px;
+  flex-wrap: wrap;
   justify-content: space-between;
 }
 
 .holes-panel-header h4 {
   color: #24343d;
-  margin: 0;
+  margin: 0 auto 0 0;
 }
 
 .holes-table-shell {
