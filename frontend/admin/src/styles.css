@@ -4625,6 +4625,57 @@ tbody tr.selected {
   width: min(100%, 460px);
 }
 
+.hole-template-modal {
+  max-width: min(760px, calc(100vw - 48px));
+  width: 100%;
+}
+
+.hole-template-form {
+  display: grid;
+  gap: 14px;
+}
+
+.hole-template-form-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.hole-template-form textarea {
+  background: #ffffff;
+  border: 1px solid #c7d0d9;
+  border-radius: 6px;
+  color: #1f2933;
+  min-height: 88px;
+  padding: 10px;
+  resize: vertical;
+  width: 100%;
+}
+
+.hole-template-form select {
+  width: 100%;
+}
+
+.hole-template-form input[readonly] {
+  background: #f8fafb;
+}
+
+.hole-template-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.hole-template-error {
+  color: #b42318;
+  font-size: 13px;
+  margin: 0;
+}
+
+.hole-template-actions {
+  justify-content: flex-end;
+}
+
 .confirm-header {
   align-items: center;
   display: flex;

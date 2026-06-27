@@ -35,6 +35,7 @@ import {
   changeOwnPassword,
   createMaterial,
   createFitting,
+  createFittingHoleTemplate,
   createManualService,
   createMyEmailChangeRequest,
   createCatalogItem,
@@ -448,6 +449,17 @@ const DEFAULT_FITTING_FORM = {
   price: "",
   sort_order: 0,
   stock: "",
+};
+
+const DEFAULT_HOLE_TEMPLATE_FORM = {
+  fitting_id: "",
+  name: "",
+  template_type: "manual",
+  side: "left",
+  coordinate_system: "2d",
+  is_default: false,
+  is_active: true,
+  notes: "",
 };
 
 function detectFittingSourceSite(sourceUrl) {
@@ -3811,6 +3823,9 @@ export default function App() {
   const [holeSelectedTemplateId, setHoleSelectedTemplateId] = useState("");
   const [holeSelectedTemplate, setHoleSelectedTemplate] = useState(null);
   const [holePoints, setHolePoints] = useState([]);
+  const [holeTemplateCreateOpen, setHoleTemplateCreateOpen] = useState(false);
+  const [holeTemplateCreateError, setHoleTemplateCreateError] = useState("");
+  const [holeTemplateCreateForm, setHoleTemplateCreateForm] = useState(DEFAULT_HOLE_TEMPLATE_FORM);
   const [newFittingForm, setNewFittingForm] = useState(DEFAULT_FITTING_FORM);
   const [autoRefreshStatus, setAutoRefreshStatus] = useState(null);
   const storedProjectId = localStorage.getItem(ACTIVE_PROJECT_ID_STORAGE_KEY) || "";
@@ -3821,6 +3836,10 @@ export default function App() {
   const canUseAiScan = user?.role === "admin" || user?.role === "premium" || user?.role === "pro";
   const canUsePremiumStart = user?.role === "admin" || user?.role === "premium";
   const canViewFittingHoles = user?.role === "admin" || user?.role === "premium" || user?.role === "pro";
+  const selectedHoleFitting = useMemo(
+    () => fittingItems.find((item) => String(item.id) === String(holeSelectedFittingId)) || null,
+    [fittingItems, holeSelectedFittingId],
+  );
   const inferStatusTone = useCallback((message) => {
     const normalizedMessage = String(message || "").toLowerCase();
 
@@ -5462,6 +5481,78 @@ export default function App() {
     setHolePoints([]);
   }
 
+  function openHoleTemplateCreateForm() {
+    if (!holeSelectedFittingId) {
+      setHoleTemplateCreateError("Оберіть фурнітуру перед створенням шаблону");
+      return;
+    }
+
+    setHoleTemplateCreateForm({
+      ...DEFAULT_HOLE_TEMPLATE_FORM,
+      fitting_id: holeSelectedFittingId,
+    });
+    setHoleTemplateCreateError("");
+    setHoleTemplateCreateOpen(true);
+  }
+
+  function closeHoleTemplateCreateForm() {
+    setHoleTemplateCreateOpen(false);
+    setHoleTemplateCreateError("");
+    setHoleTemplateCreateForm(DEFAULT_HOLE_TEMPLATE_FORM);
+  }
+
+  async function handleHoleTemplateCreate(event) {
+    event.preventDefault();
+
+    if (!holeSelectedFittingId) {
+      setHoleTemplateCreateError("Оберіть фурнітуру перед створенням шаблону");
+      return;
+    }
+
+    const trimmedName = holeTemplateCreateForm.name.trim();
+
+    if (!trimmedName) {
+      setHoleTemplateCreateError("Назва шаблону є обов'язковою");
+      return;
+    }
+
+    const payload = {
+      fitting_id: Number(holeSelectedFittingId),
+      name: trimmedName,
+      template_type: holeTemplateCreateForm.template_type || "manual",
+      side: holeTemplateCreateForm.side || "left",
+      coordinate_system: holeTemplateCreateForm.coordinate_system || "2d",
+      is_default: Boolean(holeTemplateCreateForm.is_default),
+      is_active: Boolean(holeTemplateCreateForm.is_active),
+      notes: holeTemplateCreateForm.notes.trim() || null,
+    };
+
+    setLoading(true);
+    const result = await createFittingHoleTemplate(token, payload);
+    setLoading(false);
+
+    if (!result.success) {
+      const errorMessage = result.error || "Не вдалося створити шаблон отворів";
+      setHoleTemplateCreateError(errorMessage);
+      setStatus({ message: errorMessage, tone: "error" });
+      return;
+    }
+
+    const createdTemplate = result.template || result.item || result.data || null;
+    const createdTemplateId =
+      createdTemplate?.id || result.template_id || result.id || "";
+
+    closeHoleTemplateCreateForm();
+    await loadHoleTemplates(token, holeSelectedFittingId);
+
+    if (createdTemplateId) {
+      setHoleSelectedTemplateId(String(createdTemplateId));
+      await loadHoleTemplateDetails(token, createdTemplateId);
+    }
+
+    setStatus({ message: "Шаблон отворів створено", tone: "success" });
+  }
+
   async function loadHoleTemplateDetails(activeToken = token, templateId = holeSelectedTemplateId) {
     if (!activeToken || !templateId) {
       setHoleSelectedTemplate(null);
@@ -5510,6 +5601,7 @@ export default function App() {
     setHoleSelectedTemplate(null);
     setHoleTemplateItems([]);
     setHolePoints([]);
+    closeHoleTemplateCreateForm();
     setStatus("");
 
     if (!nextFittingId) {
@@ -5803,6 +5895,7 @@ export default function App() {
     setHoleSelectedTemplateId("");
     setHoleSelectedTemplate(null);
     setHolePoints([]);
+    closeHoleTemplateCreateForm();
     setResetPasswordForms({});
     setNewManualServiceForm({
       article: "",
@@ -6094,6 +6187,7 @@ export default function App() {
       setHoleSelectedTemplate(null);
       setHoleTemplateItems([]);
       setHolePoints([]);
+      closeHoleTemplateCreateForm();
       return;
     }
 
@@ -10470,6 +10564,15 @@ export default function App() {
                     read-only
                   </span>
                   <button
+                    className="primary-button compact-button"
+                    disabled={loading || !holeSelectedFittingId}
+                    onClick={openHoleTemplateCreateForm}
+                    type="button"
+                  >
+                    <Plus size={16} />
+                    + Додати шаблон
+                  </button>
+                  <button
                     className="ghost-button"
                     disabled={loading || !holeSelectedFittingId}
                     onClick={() => loadHoleTemplates(token, holeSelectedFittingId)}
@@ -12380,6 +12483,191 @@ export default function App() {
                 <p className="empty-inline-note material-edge-empty-note">{t.materialEdgeSlotEmpty}</p>
               )}
             </section>
+          </section>
+        </div>
+      ) : null}
+
+      {holeTemplateCreateOpen ? (
+        <div
+          aria-modal="true"
+          className="modal-backdrop"
+          onClick={closeHoleTemplateCreateForm}
+          role="dialog"
+        >
+          <section
+            className="confirm-modal hole-template-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="confirm-header">
+              <div>
+                <strong>Додати шаблон отворів</strong>
+                <p>Створення нового шаблону для вибраної фурнітури.</p>
+              </div>
+              <button
+                aria-label={t.cancel}
+                className="icon-button"
+                disabled={loading}
+                onClick={closeHoleTemplateCreateForm}
+                type="button"
+              >
+                <X size={18} />
+              </button>
+            </header>
+
+            <form className="hole-template-form" onSubmit={handleHoleTemplateCreate}>
+              <label>
+                Фурнітура
+                <input
+                  disabled
+                  readOnly
+                  type="text"
+                  value={
+                    selectedHoleFitting
+                      ? selectedHoleFitting.name || selectedHoleFitting.article || selectedHoleFitting.code || selectedHoleFitting.id
+                      : holeSelectedFittingId
+                  }
+                />
+              </label>
+
+              <label>
+                Назва шаблону
+                <input
+                  autoFocus
+                  disabled={loading}
+                  onChange={(event) =>
+                    setHoleTemplateCreateForm((current) => ({
+                      ...current,
+                      name: event.target.value,
+                    }))
+                  }
+                  required
+                  type="text"
+                  value={holeTemplateCreateForm.name}
+                />
+              </label>
+
+              <div className="hole-template-form-grid">
+                <label>
+                  Тип шаблону
+                  <select
+                    disabled={loading}
+                    onChange={(event) =>
+                      setHoleTemplateCreateForm((current) => ({
+                        ...current,
+                        template_type: event.target.value,
+                      }))
+                    }
+                    value={holeTemplateCreateForm.template_type}
+                  >
+                    <option value="manual">manual</option>
+                    <option value="auto">auto</option>
+                  </select>
+                </label>
+
+                <label>
+                  Сторона
+                  <select
+                    disabled={loading}
+                    onChange={(event) =>
+                      setHoleTemplateCreateForm((current) => ({
+                        ...current,
+                        side: event.target.value,
+                      }))
+                    }
+                    value={holeTemplateCreateForm.side}
+                  >
+                    <option value="left">left</option>
+                    <option value="right">right</option>
+                    <option value="top">top</option>
+                    <option value="bottom">bottom</option>
+                    <option value="front">front</option>
+                    <option value="back">back</option>
+                  </select>
+                </label>
+
+                <label>
+                  Система координат
+                  <select
+                    disabled={loading}
+                    onChange={(event) =>
+                      setHoleTemplateCreateForm((current) => ({
+                        ...current,
+                        coordinate_system: event.target.value,
+                      }))
+                    }
+                    value={holeTemplateCreateForm.coordinate_system}
+                  >
+                    <option value="2d">2d</option>
+                    <option value="3d">3d</option>
+                  </select>
+                </label>
+              </div>
+
+              <div className="hole-template-checks">
+                <label className="material-inline-check">
+                  <input
+                    checked={holeTemplateCreateForm.is_default}
+                    disabled={loading}
+                    onChange={(event) =>
+                      setHoleTemplateCreateForm((current) => ({
+                        ...current,
+                        is_default: event.target.checked,
+                      }))
+                    }
+                    type="checkbox"
+                  />
+                  Default
+                </label>
+                <label className="material-inline-check">
+                  <input
+                    checked={holeTemplateCreateForm.is_active}
+                    disabled={loading}
+                    onChange={(event) =>
+                      setHoleTemplateCreateForm((current) => ({
+                        ...current,
+                        is_active: event.target.checked,
+                      }))
+                    }
+                    type="checkbox"
+                  />
+                  Active
+                </label>
+              </div>
+
+              <label>
+                Примітки
+                <textarea
+                  disabled={loading}
+                  onChange={(event) =>
+                    setHoleTemplateCreateForm((current) => ({
+                      ...current,
+                      notes: event.target.value,
+                    }))
+                  }
+                  rows="3"
+                  value={holeTemplateCreateForm.notes}
+                />
+              </label>
+
+              {holeTemplateCreateError ? (
+                <p className="hole-template-error">{holeTemplateCreateError}</p>
+              ) : null}
+
+              <div className="confirm-actions hole-template-actions">
+                <button
+                  className="ghost-button"
+                  disabled={loading}
+                  onClick={closeHoleTemplateCreateForm}
+                  type="button"
+                >
+                  {t.cancel}
+                </button>
+                <button className="primary-button" disabled={loading || !holeSelectedFittingId} type="submit">
+                  <Plus size={16} />
+                  Зберегти
+                </button>
+              </div>
+            </form>
           </section>
         </div>
       ) : null}
