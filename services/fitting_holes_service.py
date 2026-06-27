@@ -116,6 +116,10 @@ class FittingHolesService:
             raise ValueError(f"Fitting with id={fitting_id} does not exist")
         return fitting
 
+    def get_fitting(self, fitting_id: int):
+        fitting_id = self._require_int(fitting_id, "fitting_id")
+        return self.session.get(FittingModel, fitting_id)
+
     def _ensure_template_exists(self, template_id: int) -> FittingHoleTemplateModel:
         template = self.session.get(FittingHoleTemplateModel, template_id)
         if template is None:

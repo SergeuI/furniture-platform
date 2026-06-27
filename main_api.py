@@ -22,6 +22,9 @@ from api.routes.audit import (
 from api.routes.catalog import (
     router as catalog_router
 )
+from api.routes.fitting_holes import (
+    router as fitting_holes_router
+)
 from services.material_import_queue_service import (
     start_material_import_queue_loop,
     stop_material_import_queue_loop,
@@ -121,4 +124,13 @@ app.include_router(
     prefix="/catalog",
 
     tags=["Catalog"]
+)
+
+app.include_router(
+
+    fitting_holes_router,
+
+    prefix="/fitting-holes",
+
+    tags=["Fitting Holes"]
 )
