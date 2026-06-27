@@ -5440,6 +5440,13 @@ export default function App() {
     setLoading(true);
     const result = await listFittingHoleTemplatesByFitting(activeToken, fittingId);
     setLoading(false);
+    if (import.meta.env.DEV) {
+      console.debug("fitting-holes templates", {
+        fittingId,
+        success: Boolean(result?.success),
+        count: Array.isArray(result?.templates) ? result.templates.length : 0,
+      });
+    }
 
     if (!result.success) {
       setHoleTemplateItems([]);
@@ -5450,7 +5457,7 @@ export default function App() {
       return;
     }
 
-    setHoleTemplateItems(result.templates || []);
+    setHoleTemplateItems(Array.isArray(result.templates) ? result.templates : []);
     setHoleSelectedTemplate(null);
     setHolePoints([]);
   }
@@ -5468,6 +5475,13 @@ export default function App() {
       listFittingHolePoints(activeToken, templateId),
     ]);
     setLoading(false);
+    if (import.meta.env.DEV) {
+      console.debug("fitting-holes points", {
+        templateId,
+        templateSuccess: Boolean(templateResult?.success),
+        pointCount: Array.isArray(pointsResult?.points) ? pointsResult.points.length : 0,
+      });
+    }
 
     if (!templateResult.success) {
       setHoleSelectedTemplate(null);
@@ -5484,10 +5498,13 @@ export default function App() {
     }
 
     setHoleSelectedTemplate(templateResult.template || null);
-    setHolePoints(pointsResult.points || []);
+    setHolePoints(Array.isArray(pointsResult.points) ? pointsResult.points : []);
   }
 
   async function handleHoleFittingChange(nextFittingId) {
+    if (import.meta.env.DEV) {
+      console.debug("selected fitting id", nextFittingId);
+    }
     setHoleSelectedFittingId(nextFittingId);
     setHoleSelectedTemplateId("");
     setHoleSelectedTemplate(null);
