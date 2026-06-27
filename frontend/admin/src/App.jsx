@@ -11069,8 +11069,8 @@ export default function App() {
                               <span>{point.z_mm ?? "—"}</span>
                               <span>{point.diameter_mm ?? "—"}</span>
                               <span>{point.depth_mm ?? "—"}</span>
-                              <span>{point.side || "—"}</span>
-                              <span>{point.operation || "—"}</span>
+                              <span>{formatHolePointSide(point.side, t)}</span>
+                              <span>{formatHolePointOperation(point.operation, t)}</span>
                               <span>{point.order_index}</span>
                               <span>{point.quantity}</span>
                               <span>{point.mirrored ? "Так" : "Ні"}</span>
