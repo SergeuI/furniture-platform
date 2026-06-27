@@ -704,6 +704,22 @@ function formatDateTimeValue(value) {
   return parsed.toLocaleString("uk-UA");
 }
 
+function formatMetricValue(value) {
+  if (value === null || value === undefined || value === "") {
+    return "0";
+  }
+
+  const numericValue = Number(String(value).replace(",", "."));
+
+  if (!Number.isFinite(numericValue)) {
+    return String(value);
+  }
+
+  return Number.isInteger(numericValue)
+    ? String(numericValue)
+    : numericValue.toFixed(1).replace(/\.0$/, "");
+}
+
 function formatMaterialImportDiagnostic(value, limit = 280) {
   const normalized = String(value || "").replace(/\s+/g, " ").trim();
 
@@ -1229,6 +1245,14 @@ const TRANSLATIONS = {
     productionCutting: "Cutting list",
     productionGrooves: "Grooves",
     productionHoles: "Holes",
+    holePreviewCoordinates: "Coordinates",
+    holePreviewDepth: "Depth",
+    holePreviewDiameter: "Diameter",
+    holePreviewEmpty: "No hole points added yet",
+    holePreviewHelper: "Preview uses the saved point coordinates and a scaled working plane.",
+    holePreviewOperation: "Operation",
+    holePreviewSide: "Side",
+    holePreviewTitle: "2D preview",
     holePointsTitle: "Hole points",
     holePointAdd: "Add point",
     holePointCreateDescription: "Create a new hole point for the selected template.",
@@ -1587,6 +1611,14 @@ Object.assign(TRANSLATIONS.uk, {
   assemblyOpenWorkspace: "\u0412\u0456\u0434\u043a\u0440\u0438\u0442\u0438 \u043a\u0430\u0440\u0442\u0443 \u0434\u0435\u0442\u0430\u043b\u0456",
   assemblyResetCamera: "\u0421\u043a\u0438\u043d\u0443\u0442\u0438 \u043a\u0430\u043c\u0435\u0440\u0443",
   assemblyShowFull: "\u041f\u043e\u043a\u0430\u0437\u0430\u0442\u0438 \u0432\u0441\u044e \u0437\u0431\u0456\u0440\u043a\u0443",
+  holePreviewCoordinates: "\u041a\u043e\u043e\u0440\u0434\u0438\u043d\u0430\u0442\u0438",
+  holePreviewDepth: "\u0413\u043b\u0438\u0431\u0438\u043d\u0430",
+  holePreviewDiameter: "\u0414\u0456\u0430\u043c\u0435\u0442\u0440",
+  holePreviewEmpty: "\u0422\u043e\u0447\u043a\u0438 \u043e\u0442\u0432\u043e\u0440\u0456\u0432 \u0449\u0435 \u043d\u0435 \u0434\u043e\u0434\u0430\u043d\u0456",
+  holePreviewHelper: "\u041f\u0440\u0435\u0432'\u044e \u043f\u043e\u043a\u0430\u0437\u0443\u0454 \u0437\u0431\u0435\u0440\u0435\u0436\u0435\u043d\u0456 \u043a\u043e\u043e\u0440\u0434\u0438\u043d\u0430\u0442\u0438 \u0442\u043e\u0447\u043e\u043a \u043d\u0430 \u043c\u0430\u0441\u0448\u0442\u0430\u0431\u043e\u0432\u0430\u043d\u0456\u0439 \u043f\u043b\u043e\u0449\u0438\u043d\u0456.",
+  holePreviewOperation: "\u041e\u043f\u0435\u0440\u0430\u0446\u0456\u044f",
+  holePreviewSide: "\u0421\u0442\u043e\u0440\u043e\u043d\u0430",
+  holePreviewTitle: "2D preview",
   holePointsTitle: "\u0422\u043e\u0447\u043a\u0438 \u043e\u0442\u0432\u043e\u0440\u0456\u0432",
   holePointAdd: "\u0414\u043e\u0434\u0430\u0442\u0438 \u0442\u043e\u0447\u043a\u0443",
   holePointCreateDescription: "\u0421\u0442\u0432\u043e\u0440\u0435\u043d\u043d\u044f \u043d\u043e\u0432\u043e\u0457 \u0442\u043e\u0447\u043a\u0438 \u0434\u043b\u044f \u0432\u0438\u0431\u0440\u0430\u043d\u043e\u0433\u043e \u0448\u0430\u0431\u043b\u043e\u043d\u0443.",
@@ -3914,6 +3946,78 @@ export default function App() {
     () => holeTemplateItems.find((item) => String(item.id) === String(holeSelectedTemplateId)) || holeSelectedTemplate || null,
     [holeSelectedTemplate, holeSelectedTemplateId, holeTemplateItems],
   );
+  const holePreviewData = useMemo(() => {
+    const numericValue = (value) => {
+      if (value === null || value === undefined || value === "") {
+        return null;
+      }
+
+      const parsed = Number(String(value).replace(",", "."));
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+
+    const previewPoints = (Array.isArray(holePoints) ? holePoints : []).map((point, index) => {
+      const x = numericValue(point?.x_mm) ?? 0;
+      const y = numericValue(point?.y_mm) ?? 0;
+      const z = numericValue(point?.z_mm);
+      const diameter = numericValue(point?.diameter_mm) ?? 0;
+      const depth = numericValue(point?.depth_mm);
+      const label = String(point?.label || "").trim() || `P${point?.id || index + 1}`;
+      const operation = String(point?.operation || "").trim() || "";
+      const side = String(point?.side || "").trim() || "";
+
+      return {
+        diameter,
+        depth,
+        fallbackLabel: label,
+        id: point?.id ?? index + 1,
+        label,
+        mirrored: Boolean(point?.mirrored),
+        notes: String(point?.notes || "").trim(),
+        operation,
+        orderIndex: point?.order_index ?? 0,
+        quantity: point?.quantity ?? 1,
+        side,
+        x,
+        y,
+        z,
+      };
+    });
+
+    if (!previewPoints.length) {
+      return {
+        hasPoints: false,
+        height: 240,
+        points: [],
+        width: 320,
+      };
+    }
+
+    const xValues = previewPoints.map((point) => point.x);
+    const yValues = previewPoints.map((point) => point.y);
+    const minX = Math.min(0, ...xValues);
+    const minY = Math.min(0, ...yValues);
+    const maxX = Math.max(0, ...xValues);
+    const maxY = Math.max(0, ...yValues);
+    const maxDiameter = Math.max(18, ...previewPoints.map((point) => point.diameter || 0));
+    const padding = 36;
+    const width = Math.max(260, (maxX - minX) + (padding * 2) + maxDiameter);
+    const height = Math.max(220, (maxY - minY) + (padding * 2) + maxDiameter);
+
+    return {
+      hasPoints: true,
+      height,
+      points: previewPoints.map((point) => ({
+        ...point,
+        labelX: point.x - minX + padding + Math.max(10, Math.min(18, point.diameter / 2 + 6)),
+        labelY: point.y - minY + padding - Math.max(10, Math.min(18, point.diameter / 2 + 6)),
+        previewX: point.x - minX + padding,
+        previewY: point.y - minY + padding,
+        radius: Math.max(6, Math.min(18, Math.round((point.diameter || 0) / 2) || 6)),
+      })),
+      width,
+    };
+  }, [holePoints]);
   const inferStatusTone = useCallback((message) => {
     const normalizedMessage = String(message || "").toLowerCase();
 
@@ -10928,6 +11032,98 @@ export default function App() {
                       <span>Оберіть шаблон</span>
                     </div>
                   )}
+                  <section className="holes-preview-card">
+                    <div className="holes-preview-header">
+                      <div>
+                        <h4>{t.holePreviewTitle}</h4>
+                        <p>{t.holePreviewHelper}</p>
+                      </div>
+                      <span className="service-tree-badge subtle">
+                        {holePreviewData.points.length}
+                      </span>
+                    </div>
+                    {holePreviewData.hasPoints ? (
+                      <>
+                        <div className="holes-preview-stage">
+                          <svg
+                            className="holes-preview-svg"
+                            preserveAspectRatio="xMinYMin meet"
+                            role="img"
+                            viewBox={`0 0 ${holePreviewData.width} ${holePreviewData.height}`}
+                          >
+                            <defs>
+                              <pattern id="holes-preview-grid" height="24" patternUnits="userSpaceOnUse" width="24">
+                                <path d="M 24 0 L 0 0 0 24" fill="none" stroke="#e6ecf1" strokeWidth="1" />
+                              </pattern>
+                            </defs>
+                            <rect
+                              fill="#fbfdfe"
+                              height={holePreviewData.height}
+                              width={holePreviewData.width}
+                              x="0"
+                              y="0"
+                            />
+                            <rect
+                              fill="url(#holes-preview-grid)"
+                              height={holePreviewData.height}
+                              opacity="0.92"
+                              width={holePreviewData.width}
+                              x="0"
+                              y="0"
+                            />
+                            {holePreviewData.points.map((point) => (
+                              <g key={point.id} transform={`translate(${point.previewX}, ${point.previewY})`}>
+                                <title>
+                                  {[
+                                    point.label,
+                                    `${t.holePreviewCoordinates}: x=${formatMetricValue(point.x)} y=${formatMetricValue(point.y)} z=${formatMetricValue(point.z)}`,
+                                    `${t.holePreviewDiameter}: ${formatMetricValue(point.diameter)}`,
+                                    `${t.holePreviewDepth}: ${formatMetricValue(point.depth)}`,
+                                    `${t.holePreviewSide}: ${point.side || t.notSet}`,
+                                    `${t.holePreviewOperation}: ${point.operation || t.notSet}`,
+                                  ].join(" | ")}
+                                </title>
+                                <circle
+                                  cx="0"
+                                  cy="0"
+                                  r={point.radius}
+                                  className="holes-preview-point"
+                                />
+                                <text
+                                  className="holes-preview-label"
+                                  x={point.labelX - point.previewX}
+                                  y={point.labelY - point.previewY}
+                                >
+                                  {point.label}
+                                </text>
+                              </g>
+                            ))}
+                          </svg>
+                        </div>
+                        <div className="holes-preview-legend">
+                          <span>Ø - {t.holePreviewDiameter}</span>
+                          <span>Depth - {t.holePreviewDepth}</span>
+                          <span>Side - {t.holePreviewSide}</span>
+                          <span>Operation - {t.holePreviewOperation}</span>
+                        </div>
+                        <div className="holes-preview-list">
+                          {holePreviewData.points.map((point) => (
+                            <article className="holes-preview-item" key={`preview-${point.id}`}>
+                              <strong>{point.label}</strong>
+                              <span>{t.holePreviewCoordinates}: x {formatMetricValue(point.x)} · y {formatMetricValue(point.y)} · z {formatMetricValue(point.z)}</span>
+                              <span>Ø {formatMetricValue(point.diameter)} · {t.holePreviewDepth} {formatMetricValue(point.depth)}</span>
+                              <span>{t.holePreviewSide}: {point.side || t.notSet}</span>
+                              <span>{t.holePreviewOperation}: {point.operation || t.notSet}</span>
+                            </article>
+                          ))}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="empty-state compact-empty-state">
+                        <span>{t.holePreviewEmpty}</span>
+                      </div>
+                    )}
+                  </section>
                 </section>
               </div>
             </article>

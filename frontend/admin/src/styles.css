@@ -1934,6 +1934,103 @@ tbody tr.selected {
     minmax(180px, 1.5fr);
 }
 
+.holes-preview-card {
+  display: grid;
+  gap: 12px;
+  padding-top: 4px;
+}
+
+.holes-preview-header {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.holes-preview-header h4 {
+  color: #24343d;
+  margin: 0;
+}
+
+.holes-preview-header p {
+  color: #5c6875;
+  font-size: 13px;
+  line-height: 1.45;
+  margin: 4px 0 0;
+}
+
+.holes-preview-stage {
+  background: #f8fbfd;
+  border: 1px solid #dbe1e7;
+  border-radius: 12px;
+  overflow: auto;
+  padding: 12px;
+}
+
+.holes-preview-svg {
+  display: block;
+  height: auto;
+  min-width: 100%;
+  width: 100%;
+}
+
+.holes-preview-point {
+  fill: #0f766e;
+  stroke: #ffffff;
+  stroke-width: 2;
+}
+
+.holes-preview-label {
+  fill: #24343d;
+  font-size: 12px;
+  font-weight: 700;
+  paint-order: stroke;
+  stroke: #ffffff;
+  stroke-linejoin: round;
+  stroke-width: 3px;
+}
+
+.holes-preview-legend {
+  color: #5c6875;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  font-size: 12px;
+}
+
+.holes-preview-legend span {
+  background: #f4f7f9;
+  border: 1px solid #dbe1e7;
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+
+.holes-preview-list {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+
+.holes-preview-item {
+  background: #ffffff;
+  border: 1px solid #dbe1e7;
+  border-radius: 10px;
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+}
+
+.holes-preview-item strong {
+  color: #24343d;
+}
+
+.holes-preview-item span {
+  color: #5c6875;
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
 .fitting-row-menu {
   justify-self: end;
   position: relative;
@@ -5259,6 +5356,10 @@ tbody tr.selected {
 
   .holes-selector-grid,
   .holes-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .holes-preview-list {
     grid-template-columns: 1fr;
   }
 
