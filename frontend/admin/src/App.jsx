@@ -11844,11 +11844,8 @@ export default function App() {
                         <h4>{t.holeWorkspacePreview3dTitle}</h4>
                         <p>{t.holeWorkspacePreview3dPlaceholder}</p>
                       </div>
-                      <span className="service-tree-badge subtle">
-                        {holePreviewData.points.length}
-                      </span>
                     </div>
-                    {holePreviewData.hasPoints ? (
+                    {true ? (
                       <>
                     <div
                       className="holes-preview-stage"
@@ -11939,7 +11936,7 @@ export default function App() {
                         {holePreviewData.points.length}
                       </span>
                     </div>
-                    {holePreviewData.hasPoints ? (
+                    {true ? (
                       <>
                         <div className="holes-preview-stage">
                           <svg

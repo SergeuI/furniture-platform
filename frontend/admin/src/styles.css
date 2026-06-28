@@ -1838,12 +1838,35 @@ tbody tr.selected {
   display: grid;
   gap: 16px;
   align-items: start;
-  grid-template-columns: minmax(0, 7fr) minmax(320px, 3fr);
+  grid-auto-flow: row;
+  grid-template-columns: minmax(0, 1.15fr) minmax(340px, 0.85fr);
+  grid-template-rows: auto auto;
 }
 
 .holes-left-column {
   display: grid;
   gap: 16px;
+  min-width: 0;
+  grid-column: 1;
+  grid-row: 1 / span 2;
+}
+
+.holes-preview-3d-card {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  min-width: 0;
+}
+
+.holes-preview-3d-card .holes-preview-stage {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  min-height: clamp(360px, 56vh, 760px);
+}
+
+.holes-preview-2d-card {
+  grid-column: 1;
+  grid-row: 2;
   min-width: 0;
 }
 
@@ -2097,7 +2120,7 @@ tbody tr.selected {
 }
 
 .holes-preview-3d-card .holes-preview-stage {
-  min-height: 260px;
+  min-height: clamp(360px, 56vh, 760px);
   position: relative;
 }
 
@@ -5092,6 +5115,40 @@ tbody tr.selected {
   .holes-connection-variant-grid,
   .holes-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 1080px) {
+  .holes-selector-grid,
+  .holes-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .holes-left-column,
+  .holes-preview-2d-card,
+  .holes-preview-3d-card {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .holes-preview-3d-card .holes-preview-stage {
+    min-height: 320px;
+  }
+
+  .holes-grid > * {
+    order: 0;
+  }
+
+  .holes-left-column {
+    order: 1;
+  }
+
+  .holes-preview-2d-card {
+    order: 2;
+  }
+
+  .holes-preview-3d-card {
+    order: 3;
   }
 }
 
