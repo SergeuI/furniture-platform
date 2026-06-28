@@ -1409,6 +1409,11 @@ const TRANSLATIONS = {
     holeTemplateDefault: "Default",
     holeTemplateFitting: "Fitting",
     holeTemplateFittingRequired: "Select a fitting before creating a template",
+    holeTemplateFittingInfoArticle: "Article",
+    holeTemplateFittingInfoDescription: "Description",
+    holeTemplateFittingInfoImageAlt: "Fitting image",
+    holeTemplateFittingInfoNoImage: "No image",
+    holeTemplateFittingInfoTitle: "Fitting",
     holeTemplateMountingSchemePlaceholder: "Choose the board side used by this hole template.",
     holeTemplateMountingSchemeTitle: "Template side",
     holeTemplateConnectionVariantPlaceholder:
@@ -1856,6 +1861,11 @@ Object.assign(TRANSLATIONS.uk, {
   holeTemplateDefault: "\u0417\u0430 \u0437\u0430\u043c\u043e\u0432\u0447\u0443\u0432\u0430\u043d\u043d\u044f\u043c",
   holeTemplateFitting: "\u0424\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0430",
   holeTemplateFittingRequired: "\u041e\u0431\u0435\u0440\u0456\u0442\u044c \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0443 \u043f\u0435\u0440\u0435\u0434 \u0441\u0442\u0432\u043e\u0440\u0435\u043d\u043d\u044f\u043c \u0448\u0430\u0431\u043b\u043e\u043d\u0443",
+  holeTemplateFittingInfoArticle: "\u0410\u0440\u0442\u0438\u043a\u0443\u043b",
+  holeTemplateFittingInfoDescription: "\u041e\u043f\u0438\u0441",
+  holeTemplateFittingInfoImageAlt: "\u0417\u043e\u0431\u0440\u0430\u0436\u0435\u043d\u043d\u044f \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0438",
+  holeTemplateFittingInfoNoImage: "\u0411\u0435\u0437 \u0437\u043e\u0431\u0440\u0430\u0436\u0435\u043d\u043d\u044f",
+  holeTemplateFittingInfoTitle: "\u0424\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0430",
   holeTemplateMountingSchemePlaceholder:
     "\u041e\u0431\u0435\u0440\u0456\u0442\u044c \u0441\u0442\u043e\u0440\u043e\u043d\u0443 \u0434\u0435\u0442\u0430\u043b\u0456, \u0434\u043e \u044f\u043a\u043e\u0457 \u043f\u0440\u0438\u0432'\u044f\u0437\u0430\u043d\u0438\u0439 \u0448\u0430\u0431\u043b\u043e\u043d \u043e\u0442\u0432\u043e\u0440\u0456\u0432.",
   holeTemplateMountingSchemeTitle: "\u0421\u0442\u043e\u0440\u043e\u043d\u0430 \u0448\u0430\u0431\u043b\u043e\u043d\u0443",
@@ -6031,6 +6041,70 @@ export default function App() {
       ...current,
       side: normalizedSide,
     }));
+  }
+
+  function renderHoleTemplateFittingInfo(fitting) {
+    if (!fitting) {
+      return null;
+    }
+
+    const fittingName = String(fitting.name || fitting.code || fitting.article || "").trim();
+    const fittingArticle = String(fitting.article || "").trim();
+    const fittingDescription = String(fitting.description || "").trim();
+    const fittingImageUrl = String(fitting.image_url || fitting.image || "").trim();
+
+    return (
+      <section
+        style={{
+          display: "grid",
+          gap: 10,
+          marginTop: 12,
+        }}
+      >
+        <div style={{ display: "grid", gap: 2 }}>
+          <strong>{t.holeTemplateFittingInfoTitle}</strong>
+          <div>{fittingName || t.holeTemplateFitting}</div>
+        </div>
+
+        <div
+          style={{
+            alignItems: "center",
+            display: "grid",
+            gap: 12,
+            gridTemplateColumns: fittingImageUrl ? "72px 1fr" : "1fr",
+          }}
+        >
+          {fittingImageUrl ? (
+            <img
+              alt={t.holeTemplateFittingInfoImageAlt}
+              src={fittingImageUrl}
+              style={{
+                borderRadius: 10,
+                display: "block",
+                height: 72,
+                objectFit: "cover",
+                width: 72,
+              }}
+            />
+          ) : (
+            <div>{t.holeTemplateFittingInfoNoImage}</div>
+          )}
+
+          <div style={{ display: "grid", gap: 4 }}>
+            {fittingArticle ? (
+              <div>
+                {t.holeTemplateFittingInfoArticle}: {fittingArticle}
+              </div>
+            ) : null}
+            {fittingDescription ? (
+              <div>
+                {t.holeTemplateFittingInfoDescription}: {fittingDescription}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </section>
+    );
   }
 
   function renderHoleTemplateMountingSchemePicker(selectedSide, onSelectSide) {
@@ -13514,6 +13588,8 @@ export default function App() {
                 />
               </label>
 
+              {renderHoleTemplateFittingInfo(selectedHoleFitting)}
+
               <label>
                 {t.holeTemplateName}
                 <input
@@ -13705,6 +13781,8 @@ export default function App() {
                   }
                 />
               </label>
+
+              {renderHoleTemplateFittingInfo(selectedHoleFitting)}
 
               <label>
                 {t.holeTemplateName}
