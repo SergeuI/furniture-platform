@@ -6189,7 +6189,7 @@ export default function App() {
       className: "holes-connection-variant-card-icon-frame",
       fill: "none",
       height: "72",
-      rx: "10",
+      rx: "4",
       width: "72",
       x: "4",
       y: "4",
@@ -6200,11 +6200,13 @@ export default function App() {
         case "surface_mount":
           return (
             <>
-              <rect className="holes-connection-variant-card-icon-plane" height="14" rx="5" width="48" x="12" y="12" />
-              <rect className="holes-connection-variant-card-icon-plane" height="14" rx="5" width="16" x="28" y="50" />
-              <path className="holes-connection-variant-card-icon-arrow" d="M 36 26 L 36 46" fill="none" />
-              <path className="holes-connection-variant-card-icon-arrow-head" d="M 30 40 L 36 46 L 42 40" fill="none" />
-              <circle className="holes-connection-variant-card-icon-point" cx="36" cy="26" r="2.5" />
+              <rect className="holes-connection-variant-card-icon-plane" height="14" rx="2" width="50" x="11" y="14" />
+              <rect className="holes-connection-variant-card-icon-plane" height="14" rx="2" width="50" x="11" y="48" />
+              <rect className="holes-connection-variant-card-icon-mount" height="10" rx="2" width="12" x="34" y="27" />
+              <path className="holes-connection-variant-card-icon-arrow" d="M 40 28 L 40 46" fill="none" />
+              <path className="holes-connection-variant-card-icon-arrow-head" d="M 35 40 L 40 46 L 45 40" fill="none" />
+              <circle className="holes-connection-variant-card-icon-point" cx="40" cy="28" r="2.1" />
+              <circle className="holes-connection-variant-card-icon-point" cx="40" cy="46" r="2.1" />
             </>
           );
         case "angled_two_planes":
@@ -6212,24 +6214,25 @@ export default function App() {
             <>
               <rect
                 className="holes-connection-variant-card-icon-plane angled-a"
-                height="14"
-                rx="5"
+                height="12"
+                rx="2"
                 transform="rotate(-28 34 22)"
-                width="50"
-                x="9"
-                y="15"
+                width="52"
+                x="8"
+                y="16"
               />
               <rect
                 className="holes-connection-variant-card-icon-plane angled-b"
-                height="14"
-                rx="5"
+                height="12"
+                rx="2"
                 transform="rotate(28 38 46)"
-                width="50"
-                x="11"
-                y="39"
+                width="52"
+                x="10"
+                y="40"
               />
-              <path className="holes-connection-variant-card-icon-arrow" d="M 26 30 L 38 38" fill="none" />
-              <path className="holes-connection-variant-card-icon-arrow-head" d="M 32 36 L 38 38 L 35 32" fill="none" />
+              <rect className="holes-connection-variant-card-icon-mount" height="9" rx="2" width="10" x="34" y="30" transform="rotate(30 39 34)" />
+              <path className="holes-connection-variant-card-icon-arrow" d="M 28 30 L 39 36" fill="none" />
+              <path className="holes-connection-variant-card-icon-arrow-head" d="M 34 34 L 39 36 L 36 31" fill="none" />
               <circle className="holes-connection-variant-card-icon-point" cx="26" cy="30" r="2.5" />
               <circle className="holes-connection-variant-card-icon-point" cx="38" cy="38" r="2.5" />
             </>
@@ -6237,10 +6240,11 @@ export default function App() {
         case "face_to_edge":
           return (
             <>
-              <rect className="holes-connection-variant-card-icon-plane" height="18" rx="5" width="50" x="10" y="12" />
-              <rect className="holes-connection-variant-card-icon-edge" height="30" rx="5" width="12" x="48" y="24" />
-              <path className="holes-connection-variant-card-icon-arrow" d="M 26 30 L 46 30" fill="none" />
-              <path className="holes-connection-variant-card-icon-arrow-head" d="M 40 24 L 46 30 L 40 36" fill="none" />
+              <rect className="holes-connection-variant-card-icon-plane" height="18" rx="2" width="48" x="10" y="14" />
+              <rect className="holes-connection-variant-card-icon-edge" height="30" rx="2" width="12" x="48" y="26" />
+              <rect className="holes-connection-variant-card-icon-mount" height="8" rx="2" width="10" x="40" y="30" />
+              <path className="holes-connection-variant-card-icon-arrow" d="M 28 30 L 40 30" fill="none" />
+              <path className="holes-connection-variant-card-icon-arrow-head" d="M 34 26 L 40 30 L 34 34" fill="none" />
               <circle className="holes-connection-variant-card-icon-point" cx="26" cy="30" r="2.5" />
               <circle className="holes-connection-variant-card-icon-point" cx="46" cy="30" r="2.5" />
             </>
@@ -6248,10 +6252,12 @@ export default function App() {
         case "edge_to_edge":
           return (
             <>
-              <rect className="holes-connection-variant-card-icon-edge" height="32" rx="5" width="12" x="14" y="22" />
-              <rect className="holes-connection-variant-card-icon-edge" height="32" rx="5" width="12" x="54" y="22" />
-              <path className="holes-connection-variant-card-icon-arrow" d="M 26 38 L 54 38" fill="none" />
-              <path className="holes-connection-variant-card-icon-arrow-head" d="M 48 32 L 54 38 L 48 44" fill="none" />
+              <rect className="holes-connection-variant-card-icon-edge" height="32" rx="2" width="10" x="16" y="22" />
+              <rect className="holes-connection-variant-card-icon-edge" height="32" rx="2" width="10" x="54" y="22" />
+              <rect className="holes-connection-variant-card-icon-mount" height="8" rx="2" width="20" x="30" y="36" />
+              <path className="holes-connection-variant-card-icon-arrow" d="M 26 38 L 30 38" fill="none" />
+              <path className="holes-connection-variant-card-icon-arrow" d="M 50 38 L 54 38" fill="none" />
+              <path className="holes-connection-variant-card-icon-arrow-head" d="M 42 32 L 46 38 L 42 44" fill="none" />
               <circle className="holes-connection-variant-card-icon-point" cx="26" cy="38" r="2.5" />
               <circle className="holes-connection-variant-card-icon-point" cx="54" cy="38" r="2.5" />
             </>
@@ -6259,10 +6265,12 @@ export default function App() {
         case "drawer_slides":
           return (
             <>
-              <rect className="holes-connection-variant-card-icon-plane" height="30" rx="5" width="40" x="10" y="18" />
-              <rect className="holes-connection-variant-card-icon-edge" height="8" rx="4" width="30" x="18" y="28" />
-              <path className="holes-connection-variant-card-icon-arrow" d="M 44 18 L 56 18" fill="none" />
-              <path className="holes-connection-variant-card-icon-arrow-head" d="M 50 12 L 56 18 L 50 24" fill="none" />
+              <rect className="holes-connection-variant-card-icon-edge" height="34" rx="2" width="10" x="16" y="20" />
+              <rect className="holes-connection-variant-card-icon-edge" height="34" rx="2" width="10" x="54" y="20" />
+              <rect className="holes-connection-variant-card-icon-plane" height="6" rx="2" width="34" x="23" y="34" />
+              <rect className="holes-connection-variant-card-icon-mount" height="6" rx="2" width="20" x="30" y="31" />
+              <path className="holes-connection-variant-card-icon-arrow" d="M 34 18 L 46 18" fill="none" />
+              <path className="holes-connection-variant-card-icon-arrow-head" d="M 40 12 L 46 18 L 40 24" fill="none" />
               <circle className="holes-connection-variant-card-icon-point" cx="44" cy="18" r="2.5" />
               <circle className="holes-connection-variant-card-icon-point" cx="56" cy="18" r="2.5" />
             </>
@@ -6270,8 +6278,8 @@ export default function App() {
         default:
           return (
             <>
-              <rect className="holes-connection-variant-card-icon-plane" height="18" rx="5" width="50" x="10" y="12" />
-              <rect className="holes-connection-variant-card-icon-edge" height="18" rx="5" width="18" x="42" y="34" />
+              <rect className="holes-connection-variant-card-icon-plane" height="18" rx="2" width="48" x="10" y="14" />
+              <rect className="holes-connection-variant-card-icon-edge" height="18" rx="2" width="18" x="42" y="34" />
             </>
           );
       }
