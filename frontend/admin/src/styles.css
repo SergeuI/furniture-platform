@@ -1922,9 +1922,15 @@ tbody tr.selected {
   width: 100%;
 }
 
+.holes-connection-variant-card-icon,
+.holes-connection-variant-card-icon * {
+  shape-rendering: geometricPrecision;
+}
+
 .holes-connection-variant-card-icon-frame {
   stroke: #232b33;
   stroke-width: 1;
+  vector-effect: non-scaling-stroke;
 }
 
 .holes-connection-variant-card-icon-plane,
@@ -1932,12 +1938,14 @@ tbody tr.selected {
   fill: #f7f9fb;
   stroke: #232b33;
   stroke-width: 1.2;
+  vector-effect: non-scaling-stroke;
 }
 
 .holes-connection-variant-card-icon-mount {
   fill: #dff8e7;
   stroke: #0f766e;
   stroke-width: 1.1;
+  vector-effect: non-scaling-stroke;
 }
 
 .holes-connection-variant-card-icon-arrow,
@@ -1946,6 +1954,7 @@ tbody tr.selected {
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 2.1;
+  vector-effect: non-scaling-stroke;
 }
 
 .holes-connection-variant-card-icon-arrow.reverse,
@@ -1955,6 +1964,7 @@ tbody tr.selected {
 
 .holes-connection-variant-card-icon-point {
   fill: #0f766e;
+  vector-effect: non-scaling-stroke;
 }
 
 .holes-connection-variant-card.active .holes-connection-variant-card-mark {
