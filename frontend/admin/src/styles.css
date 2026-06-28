@@ -1908,18 +1908,46 @@ tbody tr.selected {
   border: 1px solid #d3e0e7;
   border-radius: 10px;
   display: inline-flex;
-  gap: 5px;
-  height: 38px;
+  height: 56px;
   justify-content: center;
-  width: 38px;
+  overflow: hidden;
+  width: 56px;
+  flex: 0 0 auto;
 }
 
-.holes-connection-variant-card-mark span {
-  background: #93a3af;
-  border-radius: 999px;
+.holes-connection-variant-card-icon {
   display: block;
-  height: 4px;
-  width: 4px;
+  height: 100%;
+  width: 100%;
+}
+
+.holes-connection-variant-card-icon-frame {
+  stroke: #c7d3db;
+  stroke-width: 1;
+}
+
+.holes-connection-variant-card-icon-plane,
+.holes-connection-variant-card-icon-edge {
+  fill: #f9fcfd;
+  stroke: #92a1ad;
+  stroke-width: 1.4;
+}
+
+.holes-connection-variant-card-icon-arrow,
+.holes-connection-variant-card-icon-arrow-head {
+  stroke: #0f766e;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.1;
+}
+
+.holes-connection-variant-card-icon-arrow.reverse,
+.holes-connection-variant-card-icon-arrow-head.reverse {
+  stroke: #13672d;
+}
+
+.holes-connection-variant-card-icon-point {
+  fill: #0f766e;
 }
 
 .holes-connection-variant-card.active .holes-connection-variant-card-mark {
@@ -1927,8 +1955,23 @@ tbody tr.selected {
   border-color: #b7ecc8;
 }
 
-.holes-connection-variant-card.active .holes-connection-variant-card-mark span {
-  background: #13672d;
+.holes-connection-variant-card.active .holes-connection-variant-card-icon-frame {
+  stroke: #a6d7b3;
+}
+
+.holes-connection-variant-card.active .holes-connection-variant-card-icon-plane,
+.holes-connection-variant-card.active .holes-connection-variant-card-icon-edge {
+  fill: #f1fbf4;
+  stroke: #4fa56c;
+}
+
+.holes-connection-variant-card.active .holes-connection-variant-card-icon-arrow,
+.holes-connection-variant-card.active .holes-connection-variant-card-icon-arrow-head {
+  stroke: #13672d;
+}
+
+.holes-connection-variant-card.active .holes-connection-variant-card-icon-point {
+  fill: #13672d;
 }
 
 .holes-connection-variant-card-copy {
