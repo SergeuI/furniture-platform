@@ -1931,13 +1931,13 @@ tbody tr.selected {
 .holes-connection-variant-card-icon-edge {
   fill: #f7f9fb;
   stroke: #232b33;
-  stroke-width: 1.4;
+  stroke-width: 1.2;
 }
 
 .holes-connection-variant-card-icon-mount {
   fill: #dff8e7;
   stroke: #0f766e;
-  stroke-width: 1.2;
+  stroke-width: 1.1;
 }
 
 .holes-connection-variant-card-icon-arrow,
@@ -1975,6 +1975,11 @@ tbody tr.selected {
 .holes-connection-variant-card.active .holes-connection-variant-card-icon-mount {
   fill: #b7ecc8;
   stroke: #13672d;
+}
+
+.holes-connection-variant-card-icon-plane.angled-a,
+.holes-connection-variant-card-icon-plane.angled-b {
+  stroke-linecap: square;
 }
 
 .holes-connection-variant-card.active .holes-connection-variant-card-icon-arrow,
