@@ -1409,6 +1409,8 @@ const TRANSLATIONS = {
     holeTemplateDefault: "Default",
     holeTemplateFitting: "Fitting",
     holeTemplateFittingRequired: "Select a fitting before creating a template",
+    holeTemplateMountingSchemePlaceholder: "The scheme will be added in the next step.",
+    holeTemplateMountingSchemeTitle: "Mounting scheme",
     holeTemplateName: "Name",
     holeTemplateNameRequired: "Template name is required",
     holeTemplateNotes: "Notes",
@@ -1846,6 +1848,8 @@ Object.assign(TRANSLATIONS.uk, {
   holeTemplateDefault: "\u0417\u0430 \u0437\u0430\u043c\u043e\u0432\u0447\u0443\u0432\u0430\u043d\u043d\u044f\u043c",
   holeTemplateFitting: "\u0424\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0430",
   holeTemplateFittingRequired: "\u041e\u0431\u0435\u0440\u0456\u0442\u044c \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0443 \u043f\u0435\u0440\u0435\u0434 \u0441\u0442\u0432\u043e\u0440\u0435\u043d\u043d\u044f\u043c \u0448\u0430\u0431\u043b\u043e\u043d\u0443",
+  holeTemplateMountingSchemePlaceholder: "\u0421\u0445\u0435\u043c\u0430 \u0431\u0443\u0434\u0435 \u0434\u043e\u0434\u0430\u043d\u0430 \u043d\u0430 \u043d\u0430\u0441\u0442\u0443\u043f\u043d\u043e\u043c\u0443 \u0435\u0442\u0430\u043f\u0456.",
+  holeTemplateMountingSchemeTitle: "\u041c\u043e\u043d\u0442\u0430\u0436\u043d\u0430 \u0441\u0445\u0435\u043c\u0430",
   holeTemplateName: "\u041d\u0430\u0437\u0432\u0430",
   holeTemplateNameRequired: "\u041d\u0430\u0437\u0432\u0430 \u0448\u0430\u0431\u043b\u043e\u043d\u0443 \u0454 \u043e\u0431\u043e\u0432'\u044f\u0437\u043a\u043e\u0432\u043e\u044e",
   holeTemplateNotes: "\u041f\u0440\u0438\u043c\u0456\u0442\u043a\u0438",
@@ -13432,6 +13436,11 @@ export default function App() {
                 </label>
               </div>
 
+              <div>
+                <div>{t.holeTemplateMountingSchemeTitle}</div>
+                <p>{t.holeTemplateMountingSchemePlaceholder}</p>
+              </div>
+
               <div className="hole-template-checks">
                 <label className="material-inline-check">
                   <input
@@ -13615,6 +13624,11 @@ export default function App() {
                     <option value="3d">{t.holeTemplateCoordinateSystem3d}</option>
                   </select>
                 </label>
+              </div>
+
+              <div>
+                <div>{t.holeTemplateMountingSchemeTitle}</div>
+                <p>{t.holeTemplateMountingSchemePlaceholder}</p>
               </div>
 
               <div className="hole-template-checks">
