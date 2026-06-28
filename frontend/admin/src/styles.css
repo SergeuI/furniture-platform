@@ -1838,7 +1838,7 @@ tbody tr.selected {
   display: grid;
   gap: 16px;
   align-items: start;
-  grid-template-columns: minmax(0, 0.92fr) minmax(420px, 1.08fr);
+  grid-template-columns: minmax(0, 7fr) minmax(320px, 3fr);
 }
 
 .holes-left-column {
