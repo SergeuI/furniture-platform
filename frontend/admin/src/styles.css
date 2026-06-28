@@ -1877,16 +1877,17 @@ tbody tr.selected {
 }
 
 .holes-connection-variant-card {
-  align-items: start;
+  align-items: center;
   background: #ffffff;
   border: 1px solid #dbe1e7;
   border-radius: 10px;
   color: #0f2533;
   cursor: pointer;
   display: grid;
-  gap: 10px;
-  min-height: 92px;
-  padding: 12px;
+  gap: 12px;
+  grid-template-columns: 80px minmax(0, 1fr);
+  min-height: 108px;
+  padding: 14px;
   text-align: left;
   width: 100%;
 }
@@ -1908,10 +1909,10 @@ tbody tr.selected {
   border: 1px solid #d3e0e7;
   border-radius: 10px;
   display: inline-flex;
-  height: 56px;
+  height: 80px;
   justify-content: center;
   overflow: hidden;
-  width: 56px;
+  width: 80px;
   flex: 0 0 auto;
 }
 
@@ -1976,8 +1977,9 @@ tbody tr.selected {
 
 .holes-connection-variant-card-copy {
   display: grid;
-  gap: 4px;
+  gap: 6px;
   min-width: 0;
+  align-content: center;
 }
 
 .holes-connection-variant-card-copy strong {
