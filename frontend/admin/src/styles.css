@@ -1911,6 +1911,30 @@ tbody tr.selected {
   border-top: 0;
 }
 
+.holes-template-id-cell {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+}
+
+.holes-template-id-value {
+  flex: 0 0 auto;
+  font-weight: 700;
+  min-width: 0;
+}
+
+.holes-template-edit-button {
+  align-items: center;
+  flex: 0 0 auto;
+  height: 30px;
+  justify-content: center;
+  min-height: 30px;
+  min-width: 30px;
+  padding: 0;
+  width: 30px;
+}
+
 .holes-points-table-row.is-hovered {
   background: #ecf9f4;
   box-shadow: inset 3px 0 0 #0f766e;
@@ -1923,7 +1947,7 @@ tbody tr.selected {
 .holes-table-header,
 .holes-table-row {
   grid-template-columns:
-    minmax(56px, 64px)
+    minmax(88px, 120px)
     minmax(120px, 1.2fr)
     minmax(100px, 0.9fr)
     minmax(92px, 0.8fr)

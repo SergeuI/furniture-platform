@@ -78,6 +78,7 @@ import {
   rollbackProject,
   resetUserPassword,
   updateCatalogItem,
+  updateFittingHoleTemplate,
   updateCatalogItemActive,
   updateFittingHolePoint,
   updateMyViyarAuth,
@@ -496,6 +497,19 @@ function buildHolePointFormFromPoint(point) {
     quantity: point?.quantity ?? 1,
     mirrored: Boolean(point?.mirrored),
     notes: String(point?.notes ?? ""),
+  };
+}
+
+function buildHoleTemplateFormFromTemplate(template) {
+  return {
+    fitting_id: String(template?.fitting_id ?? ""),
+    name: String(template?.name ?? ""),
+    template_type: String(template?.template_type ?? "manual"),
+    side: String(template?.side ?? "left"),
+    coordinate_system: String(template?.coordinate_system ?? "2d"),
+    is_default: Boolean(template?.is_default),
+    is_active: Boolean(template?.is_active ?? true),
+    notes: String(template?.notes ?? ""),
   };
 }
 
@@ -1386,17 +1400,26 @@ const TRANSLATIONS = {
     holeTemplateCoordinateSystem: "System",
     holeTemplateCreateDescription: "Create a new template for the selected fitting.",
     holeTemplateCreateTitle: "Add template",
+    holeTemplateEdit: "Edit",
+    holeTemplateEditDescription: "Update the hole template for the selected fitting.",
+    holeTemplateEditFailed: "Unable to open hole template for editing",
+    holeTemplateEditTitle: "Edit hole template",
     holeTemplateCoordinateSystem2d: "2D",
     holeTemplateCoordinateSystem3d: "3D",
     holeTemplateDefault: "Default",
     holeTemplateFitting: "Fitting",
+    holeTemplateFittingRequired: "Select a fitting before creating a template",
     holeTemplateName: "Name",
+    holeTemplateNameRequired: "Template name is required",
     holeTemplateNotes: "Notes",
     holeTemplateRefresh: "Refresh",
     holeTemplateSave: "Save",
+    holeTemplateSaveChanges: "Save changes",
     holeTemplateSide: "Side",
     holeTemplateTitle: "Templates",
     holeTemplateType: "Type",
+    holeTemplateUpdateFailed: "Unable to update hole template",
+    holeTemplateUpdateSuccess: "Hole template updated",
     holeTemplateEmpty: "No templates added yet",
     holeTemplateSelectFitting: "Select fitting",
     holeTemplateSelectTemplate: "Select template",
@@ -1814,15 +1837,24 @@ Object.assign(TRANSLATIONS.uk, {
   holeTemplateCoordinateSystem: "\u0421\u0438\u0441\u0442\u0435\u043c\u0430",
   holeTemplateCreateDescription: "\u0421\u0442\u0432\u043e\u0440\u0435\u043d\u043d\u044f \u043d\u043e\u0432\u043e\u0433\u043e \u0448\u0430\u0431\u043b\u043e\u043d\u0443 \u0434\u043b\u044f \u0432\u0438\u0431\u0440\u0430\u043d\u043e\u0457 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0438.",
   holeTemplateCreateTitle: "\u0414\u043e\u0434\u0430\u0442\u0438 \u0448\u0430\u0431\u043b\u043e\u043d",
+  holeTemplateEdit: "\u0420\u0435\u0434\u0430\u0433\u0443\u0432\u0430\u0442\u0438",
+  holeTemplateEditDescription: "\u041e\u043d\u043e\u0432\u043b\u0435\u043d\u043d\u044f \u0448\u0430\u0431\u043b\u043e\u043d\u0443 \u043e\u0442\u0432\u043e\u0440\u0456\u0432 \u0434\u043b\u044f \u0432\u0438\u0431\u0440\u0430\u043d\u043e\u0457 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0438.",
+  holeTemplateEditFailed: "\u041d\u0435 \u0432\u0434\u0430\u043b\u043e\u0441\u044f \u0432\u0456\u0434\u043a\u0440\u0438\u0442\u0438 \u0448\u0430\u0431\u043b\u043e\u043d \u043e\u0442\u0432\u043e\u0440\u0456\u0432 \u0434\u043b\u044f \u0440\u0435\u0434\u0430\u0433\u0443\u0432\u0430\u043d\u043d\u044f",
+  holeTemplateEditTitle: "\u0420\u0435\u0434\u0430\u0433\u0443\u0432\u0430\u0442\u0438 \u0448\u0430\u0431\u043b\u043e\u043d \u043e\u0442\u0432\u043e\u0440\u0456\u0432",
   holeTemplateDefault: "\u0417\u0430 \u0437\u0430\u043c\u043e\u0432\u0447\u0443\u0432\u0430\u043d\u043d\u044f\u043c",
   holeTemplateFitting: "\u0424\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0430",
+  holeTemplateFittingRequired: "\u041e\u0431\u0435\u0440\u0456\u0442\u044c \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0443 \u043f\u0435\u0440\u0435\u0434 \u0441\u0442\u0432\u043e\u0440\u0435\u043d\u043d\u044f\u043c \u0448\u0430\u0431\u043b\u043e\u043d\u0443",
   holeTemplateName: "\u041d\u0430\u0437\u0432\u0430",
+  holeTemplateNameRequired: "\u041d\u0430\u0437\u0432\u0430 \u0448\u0430\u0431\u043b\u043e\u043d\u0443 \u0454 \u043e\u0431\u043e\u0432'\u044f\u0437\u043a\u043e\u0432\u043e\u044e",
   holeTemplateNotes: "\u041f\u0440\u0438\u043c\u0456\u0442\u043a\u0438",
   holeTemplateRefresh: "\u041e\u043d\u043e\u0432\u0438\u0442\u0438",
   holeTemplateSave: "\u0417\u0431\u0435\u0440\u0435\u0433\u0442\u0438",
+  holeTemplateSaveChanges: "\u0417\u0431\u0435\u0440\u0435\u0433\u0442\u0438 \u0437\u043c\u0456\u043d\u0438",
   holeTemplateSide: "\u0421\u0442\u043e\u0440\u043e\u043d\u0430",
   holeTemplateTitle: "\u0428\u0430\u0431\u043b\u043e\u043d\u0438",
   holeTemplateType: "\u0422\u0438\u043f",
+  holeTemplateUpdateFailed: "\u041d\u0435 \u0432\u0434\u0430\u043b\u043e\u0441\u044f \u043e\u043d\u043e\u0432\u0438\u0442\u0438 \u0448\u0430\u0431\u043b\u043e\u043d \u043e\u0442\u0432\u043e\u0440\u0456\u0432",
+  holeTemplateUpdateSuccess: "\u0428\u0430\u0431\u043b\u043e\u043d \u043e\u0442\u0432\u043e\u0440\u0456\u0432 \u043e\u043d\u043e\u0432\u043b\u0435\u043d\u043e",
   holeTemplateEmpty: "\u0428\u0430\u0431\u043b\u043e\u043d\u0438 \u0449\u0435 \u043d\u0435 \u0434\u043e\u0434\u0430\u043d\u0456",
   holeTemplateSelectFitting: "\u041e\u0431\u0435\u0440\u0456\u0442\u044c \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0443",
   holeTemplateSelectTemplate: "\u041e\u0431\u0435\u0440\u0456\u0442\u044c \u0448\u0430\u0431\u043b\u043e\u043d",
@@ -4128,6 +4160,11 @@ export default function App() {
   const [holeTemplateCreateOpen, setHoleTemplateCreateOpen] = useState(false);
   const [holeTemplateCreateError, setHoleTemplateCreateError] = useState("");
   const [holeTemplateCreateForm, setHoleTemplateCreateForm] = useState(DEFAULT_HOLE_TEMPLATE_FORM);
+  const [holeTemplateEditOpen, setHoleTemplateEditOpen] = useState(false);
+  const [holeTemplateEditError, setHoleTemplateEditError] = useState("");
+  const [holeTemplateEditForm, setHoleTemplateEditForm] = useState(DEFAULT_HOLE_TEMPLATE_FORM);
+  const [holeTemplateEditTemplateId, setHoleTemplateEditTemplateId] = useState("");
+  const [holeTemplateEditSaving, setHoleTemplateEditSaving] = useState(false);
   const [holePointCreateOpen, setHolePointCreateOpen] = useState(false);
   const [holePointCreateError, setHolePointCreateError] = useState("");
   const [holePointCreateForm, setHolePointCreateForm] = useState(DEFAULT_HOLE_POINT_FORM);
@@ -5887,6 +5924,26 @@ export default function App() {
     setHoleTemplateCreateForm(DEFAULT_HOLE_TEMPLATE_FORM);
   }
 
+  function openHoleTemplateEditForm(template) {
+    if (!template?.id) {
+      setHoleTemplateEditError(t.holeTemplateEditFailed);
+      return;
+    }
+
+    setHoleTemplateEditTemplateId(String(template.id));
+    setHoleTemplateEditForm(buildHoleTemplateFormFromTemplate(template));
+    setHoleTemplateEditError("");
+    setHoleTemplateEditOpen(true);
+  }
+
+  function closeHoleTemplateEditForm() {
+    setHoleTemplateEditOpen(false);
+    setHoleTemplateEditError("");
+    setHoleTemplateEditForm(DEFAULT_HOLE_TEMPLATE_FORM);
+    setHoleTemplateEditTemplateId("");
+    setHoleTemplateEditSaving(false);
+  }
+
   async function handleHoleTemplateCreate(event) {
     event.preventDefault();
 
@@ -5937,6 +5994,70 @@ export default function App() {
     }
 
     setStatus({ message: "Шаблон отворів створено", tone: "success" });
+  }
+
+  async function handleHoleTemplateEdit(event) {
+    event.preventDefault();
+
+    if (!holeSelectedFittingId || !holeTemplateEditTemplateId) {
+      setHoleTemplateEditError(t.holeTemplateEditFailed);
+      return;
+    }
+
+    const trimmedName = holeTemplateEditForm.name.trim();
+
+    if (!trimmedName) {
+      setHoleTemplateEditError(t.holeTemplateNameRequired);
+      return;
+    }
+
+    const payload = {
+      name: trimmedName,
+      template_type: holeTemplateEditForm.template_type || "manual",
+      side: holeTemplateEditForm.side || "left",
+      coordinate_system: holeTemplateEditForm.coordinate_system || "2d",
+      is_default: Boolean(holeTemplateEditForm.is_default),
+      is_active: Boolean(holeTemplateEditForm.is_active),
+      notes: holeTemplateEditForm.notes.trim() || null,
+    };
+
+    setHoleTemplateEditSaving(true);
+    try {
+      const result = await updateFittingHoleTemplate(token, holeTemplateEditTemplateId, payload);
+
+      if (!result.success) {
+        const errorMessage = result.error || t.holeTemplateUpdateFailed;
+        setHoleTemplateEditError(errorMessage);
+        setStatus({ message: errorMessage, tone: "error" });
+        return;
+      }
+
+      const updatedTemplate = result.template || result.item || result.data || null;
+      const updatedTemplateId = String(updatedTemplate?.id || holeTemplateEditTemplateId);
+
+      const templatesResult = await listFittingHoleTemplatesByFitting(token, holeSelectedFittingId);
+
+      if (!templatesResult.success) {
+        const errorMessage = templatesResult.error || t.holeTemplateUpdateFailed;
+        setHoleTemplateEditError(errorMessage);
+        setStatus({ message: errorMessage, tone: "error" });
+        return;
+      }
+
+      setHoleTemplateItems(Array.isArray(templatesResult.templates) ? templatesResult.templates : []);
+      setHoleSelectedTemplateId(updatedTemplateId);
+      const detailsLoaded = await loadHoleTemplateDetails(token, updatedTemplateId);
+
+      if (!detailsLoaded) {
+        setHoleTemplateEditError(t.holeTemplateUpdateFailed);
+        return;
+      }
+
+      closeHoleTemplateEditForm();
+      setStatus({ message: t.holeTemplateUpdateSuccess, tone: "success" });
+    } finally {
+      setHoleTemplateEditSaving(false);
+    }
   }
 
   function openHolePointCreateForm() {
@@ -11231,7 +11352,21 @@ export default function App() {
                                 className={`holes-table-row${isSelected ? " active" : ""}`}
                                 key={template.id}
                               >
-                                <span>{template.id}</span>
+                                <div className="holes-template-id-cell">
+                                  <span className="holes-template-id-value">{template.id}</span>
+                                  <button
+                                    aria-label={t.holeTemplateEdit}
+                                    className="ghost-button compact-button holes-template-edit-button"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      openHoleTemplateEditForm(template);
+                                    }}
+                                    title={t.holeTemplateEdit}
+                                    type="button"
+                                  >
+                                    <Pencil size={14} />
+                                  </button>
+                                </div>
                                 <span>{template.name || "—"}</span>
                                 <span>{formatHoleTemplateType(template.template_type, t)}</span>
                                 <span>{formatHolePointSide(template.side, t)}</span>
@@ -13355,6 +13490,195 @@ export default function App() {
                 <button className="primary-button" disabled={loading || !holeSelectedFittingId} type="submit">
                   <Plus size={16} />
                   {t.holeTemplateSave}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      ) : null}
+
+      {holeTemplateEditOpen ? (
+        <div
+          aria-modal="true"
+          className="modal-backdrop"
+          onClick={closeHoleTemplateEditForm}
+          role="dialog"
+        >
+          <section
+            className="confirm-modal hole-template-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="confirm-header">
+              <div>
+                <strong>{t.holeTemplateEditTitle}</strong>
+                <p>{t.holeTemplateEditDescription}</p>
+              </div>
+              <button
+                aria-label={t.cancel}
+                className="icon-button"
+                disabled={holeTemplateEditSaving}
+                onClick={closeHoleTemplateEditForm}
+                type="button"
+              >
+                <X size={18} />
+              </button>
+            </header>
+
+            <form className="hole-template-form" onSubmit={handleHoleTemplateEdit}>
+              <label>
+                {t.holeTemplateFitting}
+                <input
+                  disabled
+                  readOnly
+                  type="text"
+                  value={
+                    selectedHoleFitting
+                      ? selectedHoleFitting.name || selectedHoleFitting.article || selectedHoleFitting.code || selectedHoleFitting.id
+                      : holeSelectedFittingId
+                  }
+                />
+              </label>
+
+              <label>
+                {t.holeTemplateName}
+                <input
+                  autoFocus
+                  disabled={holeTemplateEditSaving}
+                  onChange={(event) =>
+                    setHoleTemplateEditForm((current) => ({
+                      ...current,
+                      name: event.target.value,
+                    }))
+                  }
+                  required
+                  type="text"
+                  value={holeTemplateEditForm.name}
+                />
+              </label>
+
+              <div className="hole-template-form-grid">
+                <label>
+                  {t.holeTemplateType}
+                  <select
+                    disabled={holeTemplateEditSaving}
+                    onChange={(event) =>
+                      setHoleTemplateEditForm((current) => ({
+                        ...current,
+                        template_type: event.target.value,
+                      }))
+                    }
+                    value={holeTemplateEditForm.template_type}
+                  >
+                    <option value="manual">{t.holePointTypeManual}</option>
+                    <option value="auto">{t.holePointTypeAuto}</option>
+                  </select>
+                </label>
+
+                <label>
+                  {t.holeTemplateSide}
+                  <select
+                    disabled={holeTemplateEditSaving}
+                    onChange={(event) =>
+                      setHoleTemplateEditForm((current) => ({
+                        ...current,
+                        side: event.target.value,
+                      }))
+                    }
+                    value={holeTemplateEditForm.side}
+                  >
+                    <option value="left">{t.holePointSideLeft}</option>
+                    <option value="right">{t.holePointSideRight}</option>
+                    <option value="top">{t.holePointSideTop}</option>
+                    <option value="bottom">{t.holePointSideBottom}</option>
+                    <option value="front">{t.holePointSideFront}</option>
+                    <option value="back">{t.holePointSideBack}</option>
+                  </select>
+                </label>
+
+                <label>
+                  {t.holeTemplateCoordinateSystem}
+                  <select
+                    disabled={holeTemplateEditSaving}
+                    onChange={(event) =>
+                      setHoleTemplateEditForm((current) => ({
+                        ...current,
+                        coordinate_system: event.target.value,
+                      }))
+                    }
+                    value={holeTemplateEditForm.coordinate_system}
+                  >
+                    <option value="2d">{t.holeTemplateCoordinateSystem2d}</option>
+                    <option value="3d">{t.holeTemplateCoordinateSystem3d}</option>
+                  </select>
+                </label>
+              </div>
+
+              <div className="hole-template-checks">
+                <label className="material-inline-check">
+                  <input
+                    checked={holeTemplateEditForm.is_default}
+                    disabled={holeTemplateEditSaving}
+                    onChange={(event) =>
+                      setHoleTemplateEditForm((current) => ({
+                        ...current,
+                        is_default: event.target.checked,
+                      }))
+                    }
+                    type="checkbox"
+                  />
+                  {t.holeTemplateDefault}
+                </label>
+                <label className="material-inline-check">
+                  <input
+                    checked={holeTemplateEditForm.is_active}
+                    disabled={holeTemplateEditSaving}
+                    onChange={(event) =>
+                      setHoleTemplateEditForm((current) => ({
+                        ...current,
+                        is_active: event.target.checked,
+                      }))
+                    }
+                    type="checkbox"
+                  />
+                  {t.holeTemplateActive}
+                </label>
+              </div>
+
+              <label>
+                {t.holeTemplateNotes}
+                <textarea
+                  disabled={holeTemplateEditSaving}
+                  onChange={(event) =>
+                    setHoleTemplateEditForm((current) => ({
+                      ...current,
+                      notes: event.target.value,
+                    }))
+                  }
+                  rows="3"
+                  value={holeTemplateEditForm.notes}
+                />
+              </label>
+
+              {holeTemplateEditError ? (
+                <p className="hole-template-error">{holeTemplateEditError}</p>
+              ) : null}
+
+              <div className="confirm-actions hole-template-actions">
+                <button
+                  className="ghost-button"
+                  disabled={holeTemplateEditSaving}
+                  onClick={closeHoleTemplateEditForm}
+                  type="button"
+                >
+                  {t.cancel}
+                </button>
+                <button
+                  className="primary-button"
+                  disabled={holeTemplateEditSaving || !holeTemplateEditTemplateId}
+                  type="submit"
+                >
+                  <Save size={16} />
+                  {t.holeTemplateSaveChanges}
                 </button>
               </div>
             </form>
