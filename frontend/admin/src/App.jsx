@@ -1356,6 +1356,19 @@ const TRANSLATIONS = {
     holeTabTitle: "Holes",
     holeReadOnlyBadge: "Read-only",
     holePointsTitle: "Hole points",
+    holeWorkspaceConnectionVariantTitle: "Connection variant",
+    holeWorkspaceFittingInfoArticle: "Article",
+    holeWorkspaceFittingInfoDescription: "Description",
+    holeWorkspaceFittingInfoTitle: "Fitting info",
+    holeWorkspaceNoImage: "No image",
+    holeWorkspacePreview3dPlaceholder:
+      "The 3D view of panels, faces and holes will be added here.",
+    holeWorkspacePreview3dTitle: "3D preview",
+    holeWorkspaceSelected: "Selected",
+    holeWorkspaceVariantEdgeToFace: "Edge → face",
+    holeWorkspaceVariantFaceToEdge: "Face → edge",
+    holeWorkspaceVariantHorizontalToVertical: "Horizontal → vertical",
+    holeWorkspaceVariantVerticalToHorizontal: "Vertical → horizontal",
     holePointAdd: "Add point",
     holePointCreateDescription: "Create a new hole point for the selected template.",
     holePointCreateFailed: "Unable to create hole point",
@@ -1810,6 +1823,19 @@ Object.assign(TRANSLATIONS.uk, {
   holeTabTitle: "\u041e\u0442\u0432\u043e\u0440\u0438",
   holeReadOnlyBadge: "\u041b\u0456\u0448\u0435 \u043f\u0435\u0440\u0435\u0433\u043b\u044f\u0434",
   holePointsTitle: "\u0422\u043e\u0447\u043a\u0438 \u043e\u0442\u0432\u043e\u0440\u0456\u0432",
+  holeWorkspaceConnectionVariantTitle: "\u0412\u0430\u0440\u0456\u0430\u043d\u0442 \u043a\u0440\u0456\u043f\u043b\u0435\u043d\u043d\u044f",
+  holeWorkspaceFittingInfoArticle: "\u0410\u0440\u0442\u0438\u043a\u0443\u043b",
+  holeWorkspaceFittingInfoDescription: "\u041e\u043f\u0438\u0441",
+  holeWorkspaceFittingInfoTitle: "\u0406\u043d\u0444\u043e\u0440\u043c\u0430\u0446\u0456\u044f \u043f\u0440\u043e \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0443",
+  holeWorkspaceNoImage: "\u0411\u0435\u0437 \u0437\u043e\u0431\u0440\u0430\u0436\u0435\u043d\u043d\u044f",
+  holeWorkspacePreview3dPlaceholder:
+    "\u0422\u0443\u0442 \u0431\u0443\u0434\u0435 3D \u043e\u0433\u043b\u044f\u0434 \u0434\u0435\u0442\u0430\u043b\u0435\u0439, \u043f\u043b\u043e\u0449\u0438\u043d \u0456 \u043e\u0442\u0432\u043e\u0440\u0456\u0432.",
+  holeWorkspacePreview3dTitle: "3D \u043f\u0435\u0440\u0435\u0433\u043b\u044f\u0434",
+  holeWorkspaceSelected: "\u041e\u0431\u0440\u0430\u043d\u043e",
+  holeWorkspaceVariantEdgeToFace: "\u0422\u043e\u0440\u0435\u0446\u044c \u2192 \u043f\u043b\u043e\u0449\u0438\u043d\u0430",
+  holeWorkspaceVariantFaceToEdge: "\u041f\u043b\u043e\u0449\u0438\u043d\u0430 \u2192 \u0442\u043e\u0440\u0435\u0446\u044c",
+  holeWorkspaceVariantHorizontalToVertical: "\u0413\u043e\u0440\u0438\u0437\u043e\u043d\u0442\u0430\u043b\u044c \u2192 \u0432\u0435\u0440\u0442\u0438\u043a\u0430\u043b\u044c",
+  holeWorkspaceVariantVerticalToHorizontal: "\u0412\u0435\u0440\u0442\u0438\u043a\u0430\u043b\u044c \u2192 \u0433\u043e\u0440\u0438\u0437\u043e\u043d\u0442\u0430\u043b\u044c",
   holePointAdd: "\u0414\u043e\u0434\u0430\u0442\u0438 \u0442\u043e\u0447\u043a\u0443",
   holePointCreateDescription: "\u0421\u0442\u0432\u043e\u0440\u0435\u043d\u043d\u044f \u043d\u043e\u0432\u043e\u0457 \u0442\u043e\u0447\u043a\u0438 \u0434\u043b\u044f \u0432\u0438\u0431\u0440\u0430\u043d\u043e\u0433\u043e \u0448\u0430\u0431\u043b\u043e\u043d\u0443.",
   holePointCreateFailed: "\u041d\u0435 \u0432\u0434\u0430\u043b\u043e\u0441\u044f \u0441\u0442\u0432\u043e\u0440\u0438\u0442\u0438 \u0442\u043e\u0447\u043a\u0443 \u043e\u0442\u0432\u043e\u0440\u0443",
@@ -4208,6 +4234,8 @@ export default function App() {
   const [holePointEditForm, setHolePointEditForm] = useState(DEFAULT_HOLE_POINT_FORM);
   const [holePointEditPointId, setHolePointEditPointId] = useState("");
   const [hoveredHolePointId, setHoveredHolePointId] = useState("");
+  const [holeWorkspaceConnectionVariantKey, setHoleWorkspaceConnectionVariantKey] =
+    useState("face_to_edge");
   const [newFittingForm, setNewFittingForm] = useState(DEFAULT_FITTING_FORM);
   const [autoRefreshStatus, setAutoRefreshStatus] = useState(null);
   const storedProjectId = localStorage.getItem(ACTIVE_PROJECT_ID_STORAGE_KEY) || "";
@@ -6083,6 +6111,122 @@ export default function App() {
               </div>
             ) : null}
           </div>
+        </div>
+      </section>
+    );
+  }
+
+  function normalizeHoleWorkspaceConnectionVariantKey(key) {
+    const allowedVariants = new Set([
+      "face_to_edge",
+      "edge_to_face",
+      "vertical_to_horizontal",
+      "horizontal_to_vertical",
+    ]);
+
+    return allowedVariants.has(key) ? key : "face_to_edge";
+  }
+
+  function renderHoleWorkspaceFittingInfo(fitting) {
+    if (!fitting) {
+      return (
+        <div className="empty-state compact-empty-state">
+          <span>{t.holeTemplateSelectFitting}</span>
+        </div>
+      );
+    }
+
+    const fittingName = String(fitting.name || fitting.code || fitting.article || "").trim();
+    const fittingArticle = String(fitting.article || "").trim();
+    const fittingDescription = String(fitting.description || "").trim();
+    const fittingImageUrl = String(fitting.image_url || "").trim();
+
+    return (
+      <section className="hole-template-fitting-info">
+        <div className="hole-template-fitting-info-head">
+          <strong>{t.holeWorkspaceFittingInfoTitle}</strong>
+          <div className="hole-template-fitting-info-name">{fittingName || t.holeTemplateFitting}</div>
+        </div>
+
+        <div className={`hole-template-fitting-info-body${fittingImageUrl ? "" : " no-image"}`}>
+          {fittingImageUrl ? (
+            <img
+              alt={t.holeWorkspaceFittingInfoImageAlt || t.holeTemplateFittingInfoImageAlt}
+              className="hole-template-fitting-info-image"
+              src={fittingImageUrl}
+            />
+          ) : (
+            <div className="hole-template-fitting-info-placeholder">{t.holeWorkspaceNoImage}</div>
+          )}
+
+          <div className="hole-template-fitting-info-meta">
+            {fittingArticle ? (
+              <div className="hole-template-fitting-info-line">
+                {t.holeWorkspaceFittingInfoArticle}: {fittingArticle}
+              </div>
+            ) : null}
+            {fittingDescription ? (
+              <div className="hole-template-fitting-info-line hole-template-fitting-info-description">
+                {t.holeWorkspaceFittingInfoDescription}: {fittingDescription}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  function renderHoleWorkspaceConnectionVariantCards(selectedVariantKey, onSelectVariant) {
+    const variants = [
+      {
+        key: "face_to_edge",
+        label: t.holeWorkspaceVariantFaceToEdge,
+      },
+      {
+        key: "edge_to_face",
+        label: t.holeWorkspaceVariantEdgeToFace,
+      },
+      {
+        key: "vertical_to_horizontal",
+        label: t.holeWorkspaceVariantVerticalToHorizontal,
+      },
+      {
+        key: "horizontal_to_vertical",
+        label: t.holeWorkspaceVariantHorizontalToVertical,
+      },
+    ];
+
+    const normalizedSelectedVariantKey = normalizeHoleWorkspaceConnectionVariantKey(selectedVariantKey);
+
+    return (
+      <section className="holes-panel holes-connection-variant-panel">
+        <div className="holes-panel-header">
+          <h4>{t.holeWorkspaceConnectionVariantTitle}</h4>
+          <span className="service-tree-badge subtle">{t.holeWorkspaceSelected}</span>
+        </div>
+        <div className="holes-connection-variant-grid">
+          {variants.map((variant) => {
+            const isActive = normalizedSelectedVariantKey === variant.key;
+
+            return (
+              <button
+                aria-pressed={isActive}
+                className={`holes-connection-variant-card${isActive ? " active" : ""}`}
+                key={variant.key}
+                onClick={() => onSelectVariant(variant.key)}
+                type="button"
+              >
+                <span className="holes-connection-variant-card-mark">
+                  <span />
+                  <span />
+                </span>
+                <span className="holes-connection-variant-card-copy">
+                  <strong>{variant.label}</strong>
+                  <span>{isActive ? t.holeWorkspaceSelected : "\u00A0"}</span>
+                </span>
+              </button>
+            );
+          })}
         </div>
       </section>
     );
@@ -11538,6 +11682,11 @@ export default function App() {
 
               <div className="holes-grid">
                 <div className="holes-left-column">
+                  {renderHoleWorkspaceFittingInfo(selectedHoleFitting)}
+                  {renderHoleWorkspaceConnectionVariantCards(
+                    holeWorkspaceConnectionVariantKey,
+                    setHoleWorkspaceConnectionVariantKey,
+                  )}
                   <section className="holes-panel">
                   <div className="holes-panel-header">
                     <h4>{t.holeTemplateTitle}</h4>
@@ -11689,7 +11838,98 @@ export default function App() {
                   </section>
                 </div>
 
-                <section className="holes-preview-card">
+                <section className="holes-preview-card holes-preview-3d-card">
+                    <div className="holes-preview-header">
+                      <div>
+                        <h4>{t.holeWorkspacePreview3dTitle}</h4>
+                        <p>{t.holeWorkspacePreview3dPlaceholder}</p>
+                      </div>
+                      <span className="service-tree-badge subtle">
+                        {holePreviewData.points.length}
+                      </span>
+                    </div>
+                    {holePreviewData.hasPoints ? (
+                      <>
+                    <div
+                      className="holes-preview-stage"
+                      data-placeholder={t.holeWorkspacePreview3dPlaceholder}
+                    >
+                          <svg
+                            className="holes-preview-svg"
+                            preserveAspectRatio="xMinYMin meet"
+                            role="img"
+                            viewBox={`0 0 ${holePreviewData.width} ${holePreviewData.height}`}
+                          >
+                            <defs>
+                              <pattern id="holes-preview-grid" height="24" patternUnits="userSpaceOnUse" width="24">
+                                <path d="M 24 0 L 0 0 0 24" fill="none" stroke="#e6ecf1" strokeWidth="1" />
+                              </pattern>
+                            </defs>
+                            <rect
+                              fill="#fbfdfe"
+                              height={holePreviewData.height}
+                              width={holePreviewData.width}
+                              x="0"
+                              y="0"
+                            />
+                            <rect
+                              fill="url(#holes-preview-grid)"
+                              height={holePreviewData.height}
+                              opacity="0.92"
+                              width={holePreviewData.width}
+                              x="0"
+                              y="0"
+                            />
+                            {holePreviewData.points.map((point) => (
+                              <g
+                                key={point.id}
+                                className={String(hoveredHolePointId) === String(point.id) ? "is-hovered" : ""}
+                                onMouseEnter={() => setHoveredHolePointId(String(point.id))}
+                                onMouseLeave={() => setHoveredHolePointId("")}
+                                transform={`translate(${point.previewX}, ${point.previewY})`}
+                              >
+                                <title>
+                                  {[
+                                    point.label,
+                                    `${t.holePreviewCoordinates}: x=${formatMetricValue(point.x)} y=${formatMetricValue(point.y)} z=${formatMetricValue(point.z)}`,
+                                    `${t.holePreviewDiameter}: ${formatMetricValue(point.diameter)}`,
+                                    `${t.holePreviewDepth}: ${formatMetricValue(point.depth)}`,
+                                    `${t.holePreviewSide}: ${formatHolePointSide(point.side, t)}`,
+                                    `${t.holePreviewOperation}: ${formatHolePointOperation(point.operation, t)}`,
+                                  ].join(" | ")}
+                                </title>
+                                <circle
+                                  cx="0"
+                                  cy="0"
+                                  r={point.radius}
+                                  className={`holes-preview-point${String(hoveredHolePointId) === String(point.id) ? " is-hovered" : ""}`}
+                                />
+                                <text
+                                  className={`holes-preview-label${String(hoveredHolePointId) === String(point.id) ? " is-hovered" : ""}`}
+                                  x={point.labelX - point.previewX}
+                                  y={point.labelY - point.previewY}
+                                >
+                                  {point.label}
+                                </text>
+                              </g>
+                            ))}
+                          </svg>
+                        </div>
+                        <div className="holes-preview-legend">
+                          <span>Ø - {t.holePreviewDiameter}</span>
+                          <span>{t.holePreviewDepth}</span>
+                          <span>{t.holePreviewSide}</span>
+                          <span>{t.holePreviewOperation}</span>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="empty-state compact-empty-state">
+                        <span>{t.holePreviewEmpty}</span>
+                      </div>
+                    )}
+                  </section>
+
+                  <section className="holes-preview-card holes-preview-2d-card">
                     <div className="holes-preview-header">
                       <div>
                         <h4>{t.holePreviewTitle}</h4>
