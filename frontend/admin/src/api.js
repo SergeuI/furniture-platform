@@ -222,6 +222,14 @@ export async function createFittingHolePoint(token, templateId, payload) {
   });
 }
 
+export async function updateFittingHolePoint(token, pointId, payload) {
+  return request(`/fitting-holes/points/${pointId}`, {
+    method: "PATCH",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function getCatalogAutoRefreshStatus(token) {
   return request("/catalog/auto-refresh/status", {
     headers: authHeaders(token),

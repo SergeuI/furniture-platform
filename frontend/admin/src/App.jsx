@@ -16,6 +16,7 @@ import {
   LogOut,
   Plus,
   RefreshCw,
+  Pencil,
   RotateCcw,
   Save,
   Scissors,
@@ -78,6 +79,7 @@ import {
   resetUserPassword,
   updateCatalogItem,
   updateCatalogItemActive,
+  updateFittingHolePoint,
   updateMyViyarAuth,
   updateManualService,
   updateProject,
@@ -478,6 +480,24 @@ const DEFAULT_HOLE_POINT_FORM = {
   mirrored: false,
   notes: "",
 };
+
+function buildHolePointFormFromPoint(point) {
+  return {
+    template_id: String(point?.template_id ?? ""),
+    label: String(point?.label ?? ""),
+    x_mm: point?.x_mm ?? "",
+    y_mm: point?.y_mm ?? "",
+    z_mm: point?.z_mm ?? "",
+    diameter_mm: point?.diameter_mm ?? "",
+    depth_mm: point?.depth_mm ?? "",
+    side: String(point?.side ?? "front"),
+    operation: String(point?.operation ?? "drill"),
+    order_index: point?.order_index ?? 0,
+    quantity: point?.quantity ?? 1,
+    mirrored: Boolean(point?.mirrored),
+    notes: String(point?.notes ?? ""),
+  };
+}
 
 const HOLE_POINT_SIDE_OPTIONS = [
   { value: "front", labelKey: "holePointSideFront" },
@@ -1333,10 +1353,15 @@ const TRANSLATIONS = {
     holePointDiameterRequired: "Diameter is required",
     holePointTypeAuto: "Auto",
     holePointTypeManual: "Manual",
+    holePointAction: "Action",
     holePointLabel: "Label",
     holePointMirrored: "Mirrored",
     holePointNotes: "Notes",
     holePointNumericInvalid: "Enter valid numeric values",
+    holePointEdit: "Edit",
+    holePointEditDescription: "Update the selected hole point.",
+    holePointEditFailed: "Unable to open hole point for editing",
+    holePointEditTitle: "Edit hole point",
     holePointOperation: "Operation",
     holePointOperationDrill: "Drilling",
     holePointOrderIndex: "Order index",
@@ -1345,6 +1370,9 @@ const TRANSLATIONS = {
     holePointQuantityInvalid: "Quantity must be at least 1",
     holePointSelectionNo: "No",
     holePointSelectionYes: "Yes",
+    holePointSaveChanges: "Save changes",
+    holePointUpdateFailed: "Unable to update hole point",
+    holePointUpdateSuccess: "Hole point updated",
     holePointSide: "Side",
     holePointSideBack: "Back face",
     holePointSideBottom: "Bottom edge",
@@ -1753,10 +1781,15 @@ Object.assign(TRANSLATIONS.uk, {
   holePointDiameterRequired: "\u0414\u0456\u0430\u043c\u0435\u0442\u0440 \u043e\u0431\u043e\u0432'\u044f\u0437\u043a\u043e\u0432\u0438\u0439",
   holePointTypeAuto: "Auto",
   holePointTypeManual: "Manual",
+  holePointAction: "\u0414\u0456\u044f",
   holePointLabel: "\u041c\u0456\u0442\u043a\u0430",
   holePointMirrored: "\u0414\u0443\u0431\u043b\u044c\u043e\u0432\u0430\u043d\u0430",
   holePointNotes: "\u041f\u0440\u0438\u043c\u0456\u0442\u043a\u0438",
   holePointNumericInvalid: "\u0412\u0432\u0435\u0434\u0456\u0442\u044c \u043a\u043e\u0440\u0435\u043a\u0442\u043d\u0456 \u0447\u0438\u0441\u043b\u043e\u0432\u0456 \u0437\u043d\u0430\u0447\u0435\u043d\u043d\u044f",
+  holePointEdit: "\u0420\u0435\u0434\u0430\u0433\u0443\u0432\u0430\u0442\u0438",
+  holePointEditDescription: "\u041e\u043d\u043e\u0432\u0456\u0442\u044c \u0432\u0438\u0431\u0440\u0430\u043d\u0443 \u0442\u043e\u0447\u043a\u0443 \u043e\u0442\u0432\u043e\u0440\u0443.",
+  holePointEditFailed: "\u041d\u0435 \u0432\u0434\u0430\u043b\u043e\u0441\u044f \u0432\u0456\u0434\u043a\u0440\u0438\u0442\u0438 \u0442\u043e\u0447\u043a\u0443 \u0434\u043b\u044f \u0440\u0435\u0434\u0430\u0433\u0443\u0432\u0430\u043d\u043d\u044f",
+  holePointEditTitle: "\u0420\u0435\u0434\u0430\u0433\u0443\u0432\u0430\u0442\u0438 \u0442\u043e\u0447\u043a\u0443 \u043e\u0442\u0432\u043e\u0440\u0443",
   holePointOperation: "\u041e\u043f\u0435\u0440\u0430\u0446\u0456\u044f",
   holePointOperationDrill: "\u0421\u0432\u0435\u0440\u0434\u043b\u0456\u043d\u043d\u044f",
   holePointOrderIndex: "\u041f\u043e\u0440\u044f\u0434\u043e\u043a",
@@ -1765,6 +1798,9 @@ Object.assign(TRANSLATIONS.uk, {
   holePointQuantityInvalid: "\u041a\u0456\u043b\u044c\u043a\u0456\u0441\u0442\u044c \u043c\u0430\u0454 \u0431\u0443\u0442\u0438 \u0449\u043e\u043d\u0430\u0439\u043c\u0435\u043d\u0448\u0435 1",
   holePointSelectionNo: "\u041d\u0456",
   holePointSelectionYes: "\u0422\u0430\u043a",
+  holePointSaveChanges: "\u0417\u0431\u0435\u0440\u0435\u0433\u0442\u0438 \u0437\u043c\u0456\u043d\u0438",
+  holePointUpdateFailed: "\u041d\u0435 \u0432\u0434\u0430\u043b\u043e\u0441\u044f \u043e\u043d\u043e\u0432\u0438\u0442\u0438 \u0442\u043e\u0447\u043a\u0443 \u043e\u0442\u0432\u043e\u0440\u0443",
+  holePointUpdateSuccess: "\u0422\u043e\u0447\u043a\u0443 \u043e\u0442\u0432\u043e\u0440\u0443 \u043e\u043d\u043e\u0432\u043b\u0435\u043d\u043e",
   holePointSide: "\u0421\u0442\u043e\u0440\u043e\u043d\u0430",
   holePointSideBack: "\u0417\u0430\u0434\u043d\u044f \u043f\u043b\u043e\u0449\u0438\u043d\u0430",
   holePointSideBottom: "\u041d\u0438\u0436\u043d\u0456\u0439 \u0442\u043e\u0440\u0435\u0446\u044c",
@@ -4095,6 +4131,10 @@ export default function App() {
   const [holePointCreateOpen, setHolePointCreateOpen] = useState(false);
   const [holePointCreateError, setHolePointCreateError] = useState("");
   const [holePointCreateForm, setHolePointCreateForm] = useState(DEFAULT_HOLE_POINT_FORM);
+  const [holePointEditOpen, setHolePointEditOpen] = useState(false);
+  const [holePointEditError, setHolePointEditError] = useState("");
+  const [holePointEditForm, setHolePointEditForm] = useState(DEFAULT_HOLE_POINT_FORM);
+  const [holePointEditPointId, setHolePointEditPointId] = useState("");
   const [newFittingForm, setNewFittingForm] = useState(DEFAULT_FITTING_FORM);
   const [autoRefreshStatus, setAutoRefreshStatus] = useState(null);
   const storedProjectId = localStorage.getItem(ACTIVE_PROJECT_ID_STORAGE_KEY) || "";
@@ -5918,6 +5958,25 @@ export default function App() {
     setHolePointCreateForm(DEFAULT_HOLE_POINT_FORM);
   }
 
+  function openHolePointEditForm(point) {
+    if (!point?.id) {
+      setHolePointEditError(t.holePointEditFailed);
+      return;
+    }
+
+    setHolePointEditPointId(String(point.id));
+    setHolePointEditForm(buildHolePointFormFromPoint(point));
+    setHolePointEditError("");
+    setHolePointEditOpen(true);
+  }
+
+  function closeHolePointEditForm() {
+    setHolePointEditOpen(false);
+    setHolePointEditError("");
+    setHolePointEditForm(DEFAULT_HOLE_POINT_FORM);
+    setHolePointEditPointId("");
+  }
+
   function parseMaybeNumber(value, fieldName) {
     const text = String(value ?? "").trim();
 
@@ -5934,6 +5993,52 @@ export default function App() {
     return numericValue;
   }
 
+  function buildHolePointPayload(form) {
+    const diameterText = String(form.diameter_mm || "").trim();
+
+    if (!diameterText) {
+      throw new Error(t.holePointDiameterRequired);
+    }
+
+    const payload = {
+      label: String(form.label || "").trim() || null,
+      x_mm: parseMaybeNumber(form.x_mm, t.holePointX),
+      y_mm: parseMaybeNumber(form.y_mm, t.holePointY),
+      z_mm: parseMaybeNumber(form.z_mm, t.holePointZ),
+      diameter_mm: parseMaybeNumber(diameterText, t.holePointDiameter),
+      depth_mm: parseMaybeNumber(form.depth_mm, t.holePointDepth),
+      side: String(form.side || "").trim() || "front",
+      operation: String(form.operation || "").trim() || "drill",
+      order_index: Number.parseInt(String(form.order_index || "0").trim(), 10),
+      quantity: Number.parseInt(String(form.quantity || "1").trim(), 10),
+      mirrored: Boolean(form.mirrored),
+      notes: String(form.notes || "").trim() || null,
+    };
+
+    if (!Number.isFinite(payload.x_mm)) {
+      payload.x_mm = undefined;
+    }
+    if (!Number.isFinite(payload.y_mm)) {
+      payload.y_mm = undefined;
+    }
+    if (!Number.isFinite(payload.z_mm)) {
+      payload.z_mm = undefined;
+    }
+    if (!Number.isFinite(payload.depth_mm)) {
+      payload.depth_mm = undefined;
+    }
+
+    if (!Number.isFinite(payload.order_index)) {
+      throw new Error(t.holePointOrderIndexInvalid);
+    }
+
+    if (!Number.isFinite(payload.quantity) || payload.quantity <= 0) {
+      throw new Error(t.holePointQuantityInvalid);
+    }
+
+    return payload;
+  }
+
   async function handleHolePointCreate(event) {
     event.preventDefault();
 
@@ -5942,64 +6047,74 @@ export default function App() {
       return;
     }
 
-    const diameterText = String(holePointCreateForm.diameter_mm || "").trim();
-    if (!diameterText) {
-      setHolePointCreateError(t.holePointDiameterRequired);
-      return;
-    }
-
-    const diameterValue = Number(diameterText.replace(",", "."));
-    if (!Number.isFinite(diameterValue) || diameterValue <= 0) {
-      setHolePointCreateError(t.holePointDiameterInvalid);
-      return;
-    }
-
-    let payload;
     try {
-      payload = {
-        label: String(holePointCreateForm.label || "").trim() || null,
-        x_mm: parseMaybeNumber(holePointCreateForm.x_mm, t.holePointX),
-        y_mm: parseMaybeNumber(holePointCreateForm.y_mm, t.holePointY),
-        z_mm: parseMaybeNumber(holePointCreateForm.z_mm, t.holePointZ),
-        diameter_mm: diameterValue,
-        depth_mm: parseMaybeNumber(holePointCreateForm.depth_mm, t.holePointDepth),
-        side: String(holePointCreateForm.side || "").trim() || null,
-        operation: String(holePointCreateForm.operation || "").trim() || "drill",
-        order_index: Number.parseInt(String(holePointCreateForm.order_index || "0").trim(), 10),
-        quantity: Number.parseInt(String(holePointCreateForm.quantity || "1").trim(), 10),
-        mirrored: Boolean(holePointCreateForm.mirrored),
-        notes: String(holePointCreateForm.notes || "").trim() || null,
-      };
+      const payload = buildHolePointPayload(holePointCreateForm);
+
+      setLoading(true);
+      const result = await createFittingHolePoint(token, holeSelectedTemplateId, payload);
+      setLoading(false);
+
+      if (!result.success) {
+        const errorMessage = result.error || t.holePointCreateFailed;
+        setHolePointCreateError(errorMessage);
+        setStatus({ message: errorMessage, tone: "error" });
+        return;
+      }
+
+      closeHolePointCreateForm();
+      const reloaded = await loadHoleTemplateDetails(token, holeSelectedTemplateId);
+      if (reloaded) {
+        setStatus({ message: t.holePointCreateSuccess, tone: "success" });
+      }
     } catch (error) {
-      setHolePointCreateError(t.holePointNumericInvalid);
-      return;
-    }
-
-    if (!Number.isFinite(payload.order_index)) {
-      setHolePointCreateError(t.holePointOrderIndexInvalid);
-      return;
-    }
-
-    if (!Number.isFinite(payload.quantity) || payload.quantity <= 0) {
-      setHolePointCreateError(t.holePointQuantityInvalid);
-      return;
-    }
-
-    setLoading(true);
-    const result = await createFittingHolePoint(token, holeSelectedTemplateId, payload);
-    setLoading(false);
-
-    if (!result.success) {
-      const errorMessage = result.error || t.holePointCreateFailed;
+      const errorMessage =
+        error?.message === t.holePointOrderIndexInvalid ||
+        error?.message === t.holePointQuantityInvalid ||
+        error?.message === t.holePointDiameterRequired
+          ? error.message
+          : t.holePointNumericInvalid;
       setHolePointCreateError(errorMessage);
-      setStatus({ message: errorMessage, tone: "error" });
+      setLoading(false);
+      return;
+    }
+  }
+
+  async function handleHolePointEdit(event) {
+    event.preventDefault();
+
+    if (!holeSelectedTemplateId || !holePointEditPointId) {
+      setHolePointEditError(t.holePointEditFailed);
       return;
     }
 
-    closeHolePointCreateForm();
-    const reloaded = await loadHoleTemplateDetails(token, holeSelectedTemplateId);
-    if (reloaded) {
-      setStatus({ message: t.holePointCreateSuccess, tone: "success" });
+    try {
+      const payload = buildHolePointPayload(holePointEditForm);
+
+      setLoading(true);
+      const result = await updateFittingHolePoint(token, holePointEditPointId, payload);
+      setLoading(false);
+
+      if (!result.success) {
+        const errorMessage = result.error || t.holePointUpdateFailed;
+        setHolePointEditError(errorMessage);
+        setStatus({ message: errorMessage, tone: "error" });
+        return;
+      }
+
+      closeHolePointEditForm();
+      const reloaded = await loadHoleTemplateDetails(token, holeSelectedTemplateId);
+      if (reloaded) {
+        setStatus({ message: t.holePointUpdateSuccess, tone: "success" });
+      }
+    } catch (error) {
+      const errorMessage =
+        error?.message === t.holePointOrderIndexInvalid ||
+        error?.message === t.holePointQuantityInvalid ||
+        error?.message === t.holePointDiameterRequired
+          ? error.message
+          : t.holePointNumericInvalid;
+      setHolePointEditError(errorMessage);
+      setLoading(false);
     }
   }
 
@@ -6054,6 +6169,7 @@ export default function App() {
     setHolePoints([]);
     closeHoleTemplateCreateForm();
     closeHolePointCreateForm();
+    closeHolePointEditForm();
     setStatus("");
 
     if (!nextFittingId) {
@@ -6068,6 +6184,7 @@ export default function App() {
     setHoleSelectedTemplate(null);
     setHolePoints([]);
     closeHolePointCreateForm();
+    closeHolePointEditForm();
     setStatus("");
 
     if (!nextTemplateId) {
@@ -6350,6 +6467,7 @@ export default function App() {
     setHolePoints([]);
     closeHoleTemplateCreateForm();
     closeHolePointCreateForm();
+    closeHolePointEditForm();
     setResetPasswordForms({});
     setNewManualServiceForm({
       article: "",
@@ -6643,6 +6761,7 @@ export default function App() {
       setHolePoints([]);
       closeHoleTemplateCreateForm();
       closeHolePointCreateForm();
+      closeHolePointEditForm();
       return;
     }
 
@@ -11168,6 +11287,7 @@ export default function App() {
                           <span>{t.holePointQuantity}</span>
                           <span>{t.holePointMirrored}</span>
                           <span>{t.holePointNotes}</span>
+                          <span>{t.holePointAction}</span>
                         </div>
                         <div className="holes-table-list">
                           {holePoints.map((point) => (
@@ -11185,6 +11305,16 @@ export default function App() {
                               <span>{point.quantity}</span>
                               <span>{point.mirrored ? t.holePointSelectionYes : t.holePointSelectionNo}</span>
                               <span>{point.notes || "—"}</span>
+                              <span className="holes-row-actions">
+                                <button
+                                  className="ghost-button compact-button"
+                                  onClick={() => openHolePointEditForm(point)}
+                                  type="button"
+                                >
+                                  <Pencil size={14} />
+                                  {t.holePointEdit}
+                                </button>
+                              </span>
                             </article>
                           ))}
                         </div>
@@ -13496,6 +13626,281 @@ export default function App() {
                 <button className="primary-button" disabled={loading || !holeSelectedTemplateId} type="submit">
                   <Plus size={16} />
                   {t.save}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      ) : null}
+
+      {holePointEditOpen ? (
+        <div
+          aria-modal="true"
+          className="modal-backdrop"
+          onClick={closeHolePointEditForm}
+          role="dialog"
+        >
+          <section
+            className="confirm-modal hole-template-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="confirm-header">
+              <div>
+                <strong>{t.holePointEditTitle}</strong>
+                <p>{t.holePointEditDescription}</p>
+              </div>
+              <button
+                aria-label={t.cancel}
+                className="icon-button"
+                disabled={loading}
+                onClick={closeHolePointEditForm}
+                type="button"
+              >
+                <X size={18} />
+              </button>
+            </header>
+
+            <form className="hole-template-form" onSubmit={handleHolePointEdit}>
+              <label>
+                {t.holePointTemplate}
+                <input
+                  disabled
+                  readOnly
+                  type="text"
+                  value={
+                    selectedHoleTemplate
+                      ? `${selectedHoleTemplate.id} · ${selectedHoleTemplate.name || t.notSet}`
+                      : holePointEditForm.template_id
+                  }
+                />
+              </label>
+
+              <label>
+                {t.holePointLabel}
+                <input
+                  disabled={loading}
+                  onChange={(event) =>
+                    setHolePointEditForm((current) => ({
+                      ...current,
+                      label: event.target.value,
+                    }))
+                  }
+                  type="text"
+                  value={holePointEditForm.label}
+                />
+              </label>
+
+              <div className="hole-template-form-grid">
+                <label>
+                  {t.holePointX}
+                  <input
+                    disabled={loading}
+                    onChange={(event) =>
+                      setHolePointEditForm((current) => ({
+                        ...current,
+                        x_mm: event.target.value,
+                      }))
+                    }
+                    step="any"
+                    type="number"
+                    value={holePointEditForm.x_mm}
+                  />
+                </label>
+
+                <label>
+                  {t.holePointY}
+                  <input
+                    disabled={loading}
+                    onChange={(event) =>
+                      setHolePointEditForm((current) => ({
+                        ...current,
+                        y_mm: event.target.value,
+                      }))
+                    }
+                    step="any"
+                    type="number"
+                    value={holePointEditForm.y_mm}
+                  />
+                </label>
+
+                <label>
+                  {t.holePointZ}
+                  <input
+                    disabled={loading}
+                    onChange={(event) =>
+                      setHolePointEditForm((current) => ({
+                        ...current,
+                        z_mm: event.target.value,
+                      }))
+                    }
+                    step="any"
+                    type="number"
+                    value={holePointEditForm.z_mm}
+                  />
+                </label>
+              </div>
+
+              <div className="hole-template-form-grid">
+                <label>
+                  {t.holePointDiameter}
+                  <input
+                    disabled={loading}
+                    min="0.01"
+                    onChange={(event) =>
+                      setHolePointEditForm((current) => ({
+                        ...current,
+                        diameter_mm: event.target.value,
+                      }))
+                    }
+                    required
+                    step="any"
+                    type="number"
+                    value={holePointEditForm.diameter_mm}
+                  />
+                </label>
+
+                <label>
+                  {t.holePointDepth}
+                  <input
+                    disabled={loading}
+                    min="0"
+                    onChange={(event) =>
+                      setHolePointEditForm((current) => ({
+                        ...current,
+                        depth_mm: event.target.value,
+                      }))
+                    }
+                    step="any"
+                    type="number"
+                    value={holePointEditForm.depth_mm}
+                  />
+                </label>
+
+                <label>
+                  {t.holePointSide}
+                  <select
+                    disabled={loading}
+                    onChange={(event) =>
+                      setHolePointEditForm((current) => ({
+                        ...current,
+                        side: event.target.value,
+                      }))
+                    }
+                    value={holePointEditForm.side}
+                  >
+                    {HOLE_POINT_SIDE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {t[option.labelKey] || option.value}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <div className="hole-template-form-grid">
+                <label>
+                  {t.holePointOperation}
+                  <select
+                    disabled={loading}
+                    onChange={(event) =>
+                      setHolePointEditForm((current) => ({
+                        ...current,
+                        operation: event.target.value,
+                      }))
+                    }
+                    value={holePointEditForm.operation}
+                  >
+                    {HOLE_POINT_OPERATION_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {t[option.labelKey] || option.value}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label>
+                  {t.holePointOrderIndex}
+                  <input
+                    disabled={loading}
+                    min="0"
+                    onChange={(event) =>
+                      setHolePointEditForm((current) => ({
+                        ...current,
+                        order_index: event.target.value,
+                      }))
+                    }
+                    step="1"
+                    type="number"
+                    value={holePointEditForm.order_index}
+                  />
+                </label>
+
+                <label>
+                  {t.holePointQuantity}
+                  <input
+                    disabled={loading}
+                    min="1"
+                    onChange={(event) =>
+                      setHolePointEditForm((current) => ({
+                        ...current,
+                        quantity: event.target.value,
+                      }))
+                    }
+                    step="1"
+                    type="number"
+                    value={holePointEditForm.quantity}
+                  />
+                </label>
+              </div>
+
+              <div className="hole-template-checks">
+                <label className="material-inline-check">
+                  <input
+                    checked={holePointEditForm.mirrored}
+                    disabled={loading}
+                    onChange={(event) =>
+                      setHolePointEditForm((current) => ({
+                        ...current,
+                        mirrored: event.target.checked,
+                      }))
+                    }
+                    type="checkbox"
+                  />
+                  {t.holePointMirrored}
+                </label>
+              </div>
+
+              <label>
+                {t.holePointNotes}
+                <textarea
+                  disabled={loading}
+                  onChange={(event) =>
+                    setHolePointEditForm((current) => ({
+                      ...current,
+                      notes: event.target.value,
+                    }))
+                  }
+                  rows="3"
+                  value={holePointEditForm.notes}
+                />
+              </label>
+
+              {holePointEditError ? (
+                <p className="hole-template-error">{holePointEditError}</p>
+              ) : null}
+
+              <div className="confirm-actions hole-template-actions">
+                <button
+                  className="ghost-button"
+                  disabled={loading}
+                  onClick={closeHolePointEditForm}
+                  type="button"
+                >
+                  {t.cancel}
+                </button>
+                <button className="primary-button" disabled={loading || !holePointEditPointId} type="submit">
+                  <Save size={16} />
+                  {t.holePointSaveChanges}
                 </button>
               </div>
             </form>

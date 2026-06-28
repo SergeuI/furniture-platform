@@ -1861,7 +1861,7 @@ tbody tr.selected {
 .holes-table-shell {
   border: 1px solid #dbe1e7;
   border-radius: 8px;
-  overflow: hidden;
+  overflow: auto;
 }
 
 .holes-table-list {
@@ -1931,7 +1931,17 @@ tbody tr.selected {
     minmax(72px, 0.7fr)
     minmax(64px, 0.6fr)
     minmax(82px, 0.7fr)
-    minmax(180px, 1.5fr);
+    minmax(180px, 1.5fr)
+    minmax(110px, 0.9fr);
+}
+
+.holes-row-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.holes-row-actions .ghost-button {
+  white-space: nowrap;
 }
 
 .holes-preview-card {
