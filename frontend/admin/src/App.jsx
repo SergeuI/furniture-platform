@@ -503,9 +503,9 @@ const HOLE_POINT_OPERATION_LABEL_KEYS = {
   drill: "holePointOperationDrill",
 };
 
-const HOLE_TEMPLATE_TYPE_LABEL_KEYS = {
-  manual: "holePointTypeManual",
-  auto: "holePointTypeAuto",
+  const HOLE_TEMPLATE_TYPE_LABEL_KEYS = {
+  manual: "holeTemplateTypeManual",
+  auto: "holeTemplateTypeAuto",
 };
 
 const HOLE_TEMPLATE_COORDINATE_SYSTEM_LABEL_KEYS = {
@@ -1380,6 +1380,8 @@ const TRANSLATIONS = {
     holeTemplateColumnNotes: "Notes",
     holeTemplateColumnDefault: "Default",
     holeTemplateColumnActive: "Active",
+    holeTemplateTypeAuto: "Auto",
+    holeTemplateTypeManual: "Manual",
     holePointColumnId: "ID",
     holePointColumnLabel: "Label",
     holePointColumnDepth: "Depth",
@@ -1796,6 +1798,8 @@ Object.assign(TRANSLATIONS.uk, {
   holeTemplateColumnNotes: "\u041f\u0440\u0438\u043c\u0456\u0442\u043a\u0438",
   holeTemplateColumnDefault: "\u0417\u0430 \u0437\u0430\u043c\u043e\u0432\u0447\u0443\u0432\u0430\u043d\u043d\u044f\u043c",
   holeTemplateColumnActive: "\u0410\u043a\u0442\u0438\u0432\u043d\u0438\u0439",
+  holeTemplateTypeAuto: "\u0410\u0432\u0442\u043e\u043c\u0430\u0442\u0438\u0447\u043d\u0438\u0439",
+  holeTemplateTypeManual: "\u0420\u0443\u0447\u043d\u0438\u0439",
   holePointColumnId: "ID",
   holePointColumnLabel: "\u041c\u0456\u0442\u043a\u0430",
   holePointColumnDepth: "\u0413\u043b\u0438\u0431\u0438\u043d\u0430",
@@ -8304,7 +8308,7 @@ export default function App() {
                     onClick={() => switchView("catalogHoles")}
                     type="button"
                   >
-                    Отвори
+                    {t.holeTabTitle}
                   </button>
                 ) : null}
                 {user.role === "admin" ? (
@@ -8375,7 +8379,7 @@ export default function App() {
                 : isCatalogFastenersView
                   ? t.catalogFasteners
                 : isCatalogHolesView
-                  ? "Отвори"
+                  ? t.holeTabTitle
                 : isCatalogValuesView
                   ? t.catalogValues
                 : isCatalogViyarView
