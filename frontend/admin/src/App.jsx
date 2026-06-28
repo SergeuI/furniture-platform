@@ -4183,10 +4183,6 @@ export default function App() {
   const [holeTemplateEditForm, setHoleTemplateEditForm] = useState(DEFAULT_HOLE_TEMPLATE_FORM);
   const [holeTemplateEditTemplateId, setHoleTemplateEditTemplateId] = useState("");
   const [holeTemplateEditSaving, setHoleTemplateEditSaving] = useState(false);
-  const [holeTemplateCreateMountingSchemeKey, setHoleTemplateCreateMountingSchemeKey] =
-    useState("left_edge");
-  const [holeTemplateEditMountingSchemeKey, setHoleTemplateEditMountingSchemeKey] =
-    useState("left_edge");
   const [holePointCreateOpen, setHolePointCreateOpen] = useState(false);
   const [holePointCreateError, setHolePointCreateError] = useState("");
   const [holePointCreateForm, setHolePointCreateForm] = useState(DEFAULT_HOLE_POINT_FORM);
@@ -5936,7 +5932,6 @@ export default function App() {
       ...DEFAULT_HOLE_TEMPLATE_FORM,
       fitting_id: holeSelectedFittingId,
     });
-    setHoleTemplateCreateMountingSchemeKey("left_edge");
     setHoleTemplateCreateError("");
     setHoleTemplateCreateOpen(true);
   }
@@ -5945,7 +5940,6 @@ export default function App() {
     setHoleTemplateCreateOpen(false);
     setHoleTemplateCreateError("");
     setHoleTemplateCreateForm(DEFAULT_HOLE_TEMPLATE_FORM);
-    setHoleTemplateCreateMountingSchemeKey("left_edge");
   }
 
   function openHoleTemplateEditForm(template) {
@@ -5956,7 +5950,6 @@ export default function App() {
 
     setHoleTemplateEditTemplateId(String(template.id));
     setHoleTemplateEditForm(buildHoleTemplateFormFromTemplate(template));
-    setHoleTemplateEditMountingSchemeKey("left_edge");
     setHoleTemplateEditError("");
     setHoleTemplateEditOpen(true);
   }
@@ -5967,7 +5960,6 @@ export default function App() {
     setHoleTemplateEditForm(DEFAULT_HOLE_TEMPLATE_FORM);
     setHoleTemplateEditTemplateId("");
     setHoleTemplateEditSaving(false);
-    setHoleTemplateEditMountingSchemeKey("left_edge");
   }
 
   function renderHoleTemplateMountingSchemeIcon(schemeKey, isActive) {
@@ -6019,22 +6011,22 @@ export default function App() {
     );
   }
 
-  function renderHoleTemplateMountingSchemePicker(selectedSchemeKey, setSelectedSchemeKey) {
+  function renderHoleTemplateMountingSchemePicker(selectedSide, onSelectSide) {
     const schemeCards = [
       {
-        key: "left_edge",
+        side: "left",
         label: t.holeTemplateMountingSchemeLeftEdge,
       },
       {
-        key: "right_edge",
+        side: "right",
         label: t.holeTemplateMountingSchemeRightEdge,
       },
       {
-        key: "top",
+        side: "top",
         label: t.holeTemplateMountingSchemeTop,
       },
       {
-        key: "bottom",
+        side: "bottom",
         label: t.holeTemplateMountingSchemeBottom,
       },
     ];
@@ -6053,13 +6045,13 @@ export default function App() {
           }}
         >
           {schemeCards.map((scheme) => {
-            const isActive = selectedSchemeKey === scheme.key;
+            const isActive = selectedSide === scheme.side;
 
             return (
               <button
                 aria-pressed={isActive}
-                key={scheme.key}
-                onClick={() => setSelectedSchemeKey(scheme.key)}
+                key={scheme.side}
+                onClick={() => onSelectSide(scheme.side)}
                 type="button"
                 style={{
                   alignItems: "center",
@@ -6075,7 +6067,7 @@ export default function App() {
                   textAlign: "left",
                 }}
               >
-                {renderHoleTemplateMountingSchemeIcon(scheme.key, isActive)}
+                {renderHoleTemplateMountingSchemeIcon(scheme.side, isActive)}
                 <span style={{ display: "grid", gap: 4, minWidth: 0 }}>
                   <span style={{ fontWeight: 600 }}>{scheme.label}</span>
                   <span style={{ fontSize: 12, opacity: 0.8 }}>
@@ -13575,8 +13567,12 @@ export default function App() {
               </div>
 
               {renderHoleTemplateMountingSchemePicker(
-                holeTemplateCreateMountingSchemeKey,
-                setHoleTemplateCreateMountingSchemeKey,
+                holeTemplateCreateForm.side,
+                (side) =>
+                  setHoleTemplateCreateForm((current) => ({
+                    ...current,
+                    side,
+                  })),
               )}
 
               <div className="hole-template-checks">
@@ -13765,8 +13761,12 @@ export default function App() {
               </div>
 
               {renderHoleTemplateMountingSchemePicker(
-                holeTemplateEditMountingSchemeKey,
-                setHoleTemplateEditMountingSchemeKey,
+                holeTemplateEditForm.side,
+                (side) =>
+                  setHoleTemplateEditForm((current) => ({
+                    ...current,
+                    side,
+                  })),
               )}
 
               <div className="hole-template-checks">
