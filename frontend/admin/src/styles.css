@@ -1902,12 +1902,18 @@ tbody tr.selected {
 .holes-points-table-row {
   background: #ffffff;
   border-top: 1px solid #edf2f5;
+  cursor: pointer;
   font-size: 12px;
 }
 
 .holes-table-row:first-child,
 .holes-points-table-row:first-child {
   border-top: 0;
+}
+
+.holes-points-table-row.is-hovered {
+  background: #ecf9f4;
+  box-shadow: inset 3px 0 0 #0f766e;
 }
 
 .holes-table-row.active {
@@ -2027,6 +2033,21 @@ tbody tr.selected {
   fill: #0f766e;
   stroke: #ffffff;
   stroke-width: 2;
+  transform-box: fill-box;
+  transform-origin: center;
+  transition:
+    transform 140ms ease,
+    stroke-width 140ms ease,
+    filter 140ms ease,
+    opacity 140ms ease;
+}
+
+.holes-preview-point.is-hovered {
+  filter: drop-shadow(0 0 8px rgba(15, 118, 110, 0.28));
+  opacity: 1;
+  stroke: #064e4a;
+  stroke-width: 3;
+  transform: scale(1.28);
 }
 
 .holes-preview-label {
@@ -2037,6 +2058,13 @@ tbody tr.selected {
   stroke: #ffffff;
   stroke-linejoin: round;
   stroke-width: 3px;
+  transition: fill 140ms ease, stroke-width 140ms ease, opacity 140ms ease;
+}
+
+.holes-preview-label.is-hovered {
+  fill: #0f766e;
+  font-weight: 800;
+  stroke-width: 4px;
 }
 
 .holes-preview-legend {

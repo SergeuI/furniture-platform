@@ -4135,6 +4135,7 @@ export default function App() {
   const [holePointEditError, setHolePointEditError] = useState("");
   const [holePointEditForm, setHolePointEditForm] = useState(DEFAULT_HOLE_POINT_FORM);
   const [holePointEditPointId, setHolePointEditPointId] = useState("");
+  const [hoveredHolePointId, setHoveredHolePointId] = useState("");
   const [newFittingForm, setNewFittingForm] = useState(DEFAULT_FITTING_FORM);
   const [autoRefreshStatus, setAutoRefreshStatus] = useState(null);
   const storedProjectId = localStorage.getItem(ACTIVE_PROJECT_ID_STORAGE_KEY) || "";
@@ -11291,7 +11292,12 @@ export default function App() {
                         </div>
                         <div className="holes-table-list">
                           {holePoints.map((point) => (
-                            <article className="holes-points-table-row" key={point.id}>
+                            <article
+                              className={`holes-points-table-row${String(hoveredHolePointId) === String(point.id) ? " is-hovered" : ""}`}
+                              key={point.id}
+                              onMouseEnter={() => setHoveredHolePointId(String(point.id))}
+                              onMouseLeave={() => setHoveredHolePointId("")}
+                            >
                               <div className="holes-point-id-cell">
                                 <span>{point.id}</span>
                                 <button
@@ -11373,7 +11379,13 @@ export default function App() {
                               y="0"
                             />
                             {holePreviewData.points.map((point) => (
-                              <g key={point.id} transform={`translate(${point.previewX}, ${point.previewY})`}>
+                              <g
+                                key={point.id}
+                                className={String(hoveredHolePointId) === String(point.id) ? "is-hovered" : ""}
+                                onMouseEnter={() => setHoveredHolePointId(String(point.id))}
+                                onMouseLeave={() => setHoveredHolePointId("")}
+                                transform={`translate(${point.previewX}, ${point.previewY})`}
+                              >
                                 <title>
                                   {[
                                     point.label,
@@ -11388,10 +11400,10 @@ export default function App() {
                                   cx="0"
                                   cy="0"
                                   r={point.radius}
-                                  className="holes-preview-point"
+                                  className={`holes-preview-point${String(hoveredHolePointId) === String(point.id) ? " is-hovered" : ""}`}
                                 />
                                 <text
-                                  className="holes-preview-label"
+                                  className={`holes-preview-label${String(hoveredHolePointId) === String(point.id) ? " is-hovered" : ""}`}
                                   x={point.labelX - point.previewX}
                                   y={point.labelY - point.previewY}
                                 >
@@ -11406,17 +11418,6 @@ export default function App() {
                           <span>{t.holePreviewDepth}</span>
                           <span>{t.holePreviewSide}</span>
                           <span>{t.holePreviewOperation}</span>
-                        </div>
-                        <div className="holes-preview-list">
-                          {holePreviewData.points.map((point) => (
-                            <article className="holes-preview-item" key={`preview-${point.id}`}>
-                              <strong>{point.label}</strong>
-                              <span>{t.holePreviewCoordinates}: x {formatMetricValue(point.x)} · y {formatMetricValue(point.y)} · z {formatMetricValue(point.z)}</span>
-                              <span>Ø {formatMetricValue(point.diameter)} · {t.holePreviewDepth} {formatMetricValue(point.depth)}</span>
-                              <span>{t.holePreviewSide}: {formatHolePointSide(point.side, t)}</span>
-                              <span>{t.holePreviewOperation}: {formatHolePointOperation(point.operation, t)}</span>
-                            </article>
-                          ))}
                         </div>
                       </>
                     ) : (
