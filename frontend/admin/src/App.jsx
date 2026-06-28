@@ -6011,6 +6011,21 @@ export default function App() {
     );
   }
 
+  function normalizeHoleTemplateSide(side) {
+    const allowedSides = new Set(["left", "right", "top", "bottom"]);
+
+    return allowedSides.has(side) ? side : "left";
+  }
+
+  function updateHoleTemplateSide(setForm, side) {
+    const normalizedSide = normalizeHoleTemplateSide(side);
+
+    setForm((current) => ({
+      ...current,
+      side: normalizedSide,
+    }));
+  }
+
   function renderHoleTemplateMountingSchemePicker(selectedSide, onSelectSide) {
     const schemeCards = [
       {
@@ -6045,7 +6060,7 @@ export default function App() {
           }}
         >
           {schemeCards.map((scheme) => {
-            const isActive = selectedSide === scheme.side;
+            const isActive = normalizeHoleTemplateSide(selectedSide) === scheme.side;
 
             return (
               <button
@@ -13532,12 +13547,9 @@ export default function App() {
                   <select
                     disabled={loading}
                     onChange={(event) =>
-                      setHoleTemplateCreateForm((current) => ({
-                        ...current,
-                        side: event.target.value,
-                      }))
+                      updateHoleTemplateSide(setHoleTemplateCreateForm, event.target.value)
                     }
-                    value={holeTemplateCreateForm.side}
+                    value={normalizeHoleTemplateSide(holeTemplateCreateForm.side)}
                   >
                     <option value="left">{t.holePointSideLeft}</option>
                     <option value="right">{t.holePointSideRight}</option>
@@ -13568,11 +13580,7 @@ export default function App() {
 
               {renderHoleTemplateMountingSchemePicker(
                 holeTemplateCreateForm.side,
-                (side) =>
-                  setHoleTemplateCreateForm((current) => ({
-                    ...current,
-                    side,
-                  })),
+                (side) => updateHoleTemplateSide(setHoleTemplateCreateForm, side),
               )}
 
               <div className="hole-template-checks">
@@ -13726,12 +13734,9 @@ export default function App() {
                   <select
                     disabled={holeTemplateEditSaving}
                     onChange={(event) =>
-                      setHoleTemplateEditForm((current) => ({
-                        ...current,
-                        side: event.target.value,
-                      }))
+                      updateHoleTemplateSide(setHoleTemplateEditForm, event.target.value)
                     }
-                    value={holeTemplateEditForm.side}
+                    value={normalizeHoleTemplateSide(holeTemplateEditForm.side)}
                   >
                     <option value="left">{t.holePointSideLeft}</option>
                     <option value="right">{t.holePointSideRight}</option>
@@ -13762,11 +13767,7 @@ export default function App() {
 
               {renderHoleTemplateMountingSchemePicker(
                 holeTemplateEditForm.side,
-                (side) =>
-                  setHoleTemplateEditForm((current) => ({
-                    ...current,
-                    side,
-                  })),
+                (side) => updateHoleTemplateSide(setHoleTemplateEditForm, side),
               )}
 
               <div className="hole-template-checks">
