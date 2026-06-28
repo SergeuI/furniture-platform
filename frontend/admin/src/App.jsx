@@ -574,42 +574,6 @@ function formatHoleTemplateCoordinateSystem(value, t) {
   return formatHolePointValue(value, HOLE_TEMPLATE_COORDINATE_SYSTEM_LABEL_KEYS, t);
 }
 
-function renderHoleTemplateSchemePicker(form, setForm, t) {
-  return (
-    <div className="hole-template-scheme-picker">
-      <div className="hole-template-scheme-text">
-        <strong>{t.holeTemplateMountingScheme}</strong>
-        <p>{t.holeTemplateMountingSchemeDescription}</p>
-      </div>
-      <div className="hole-template-scheme-grid">
-        {HOLE_TEMPLATE_SCHEME_OPTIONS.map((scheme) => {
-          const isActive = String(form.side || "") === String(scheme.value);
-
-          return (
-            <button
-              aria-pressed={isActive}
-              className={`hole-template-scheme-card${isActive ? " is-active" : ""}`}
-              key={scheme.value}
-              onClick={() =>
-                setForm((current) => ({
-                  ...current,
-                  side: scheme.value,
-                }))
-              }
-              type="button"
-            >
-              <span className={`hole-template-scheme-icon ${scheme.value}`} aria-hidden="true">
-                <span className="hole-template-scheme-icon-dot" />
-              </span>
-              <span>{t[scheme.labelKey] || scheme.value}</span>
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 function detectFittingSourceSite(sourceUrl) {
   if (!sourceUrl) {
     return "manual";
@@ -13420,8 +13384,8 @@ export default function App() {
                     }
                     value={holeTemplateCreateForm.template_type}
                   >
-                    <option value="manual">{t.holeTemplateTypeManual}</option>
-                    <option value="auto">{t.holeTemplateTypeAuto}</option>
+                    <option value="manual">{t.holePointTypeManual}</option>
+                    <option value="auto">{t.holePointTypeAuto}</option>
                   </select>
                 </label>
 
@@ -13463,8 +13427,6 @@ export default function App() {
                   </select>
                 </label>
               </div>
-
-              {renderHoleTemplateSchemePicker(holeTemplateCreateForm, setHoleTemplateCreateForm, t)}
 
               <div className="hole-template-checks">
                 <label className="material-inline-check">
@@ -13607,8 +13569,8 @@ export default function App() {
                     }
                     value={holeTemplateEditForm.template_type}
                   >
-                    <option value="manual">{t.holeTemplateTypeManual}</option>
-                    <option value="auto">{t.holeTemplateTypeAuto}</option>
+                    <option value="manual">{t.holePointTypeManual}</option>
+                    <option value="auto">{t.holePointTypeAuto}</option>
                   </select>
                 </label>
 
@@ -13650,8 +13612,6 @@ export default function App() {
                   </select>
                 </label>
               </div>
-
-              {renderHoleTemplateSchemePicker(holeTemplateEditForm, setHoleTemplateEditForm, t)}
 
               <div className="hole-template-checks">
                 <label className="material-inline-check">
