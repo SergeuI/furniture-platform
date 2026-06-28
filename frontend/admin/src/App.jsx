@@ -4326,6 +4326,18 @@ export default function App() {
       width,
     };
   }, [holePoints]);
+  const holesPreviewModel = useMemo(
+    () => ({
+      fitting: selectedHoleFitting,
+      hoveredPointId: hoveredHolePointId || "",
+      pointCount: holePoints.length,
+      points: holePoints,
+      side: selectedHoleTemplate?.side ?? "",
+      template: selectedHoleTemplate,
+      type: selectedHoleTemplate?.template_type ?? "",
+    }),
+    [holePoints, hoveredHolePointId, selectedHoleFitting, selectedHoleTemplate],
+  );
   const inferStatusTone = useCallback((message) => {
     const normalizedMessage = String(message || "").toLowerCase();
 
@@ -11845,7 +11857,59 @@ export default function App() {
                         <p>{t.holeWorkspacePreview3dPlaceholder}</p>
                       </div>
                     </div>
-                    {true ? (
+                    <div className="holes-preview-stage holes-preview-stage-placeholder">
+                      <span>{t.holeWorkspacePreview3dPlaceholder}</span>
+                    </div>
+                    <div className="holes-preview-debug" aria-label={t.holeWorkspacePreview3dTitle}>
+                      <div className="holes-preview-debug-row">
+                        <span className="holes-preview-debug-label">Фурнітура</span>
+                        <strong className="holes-preview-debug-value">
+                          {holesPreviewModel.fitting?.name ||
+                            holesPreviewModel.fitting?.article ||
+                            holesPreviewModel.fitting?.code ||
+                            "—"}
+                        </strong>
+                      </div>
+                      <div className="holes-preview-debug-row">
+                        <span className="holes-preview-debug-label">Артикул</span>
+                        <strong className="holes-preview-debug-value">
+                          {holesPreviewModel.fitting?.article || "—"}
+                        </strong>
+                      </div>
+                      <div className="holes-preview-debug-row">
+                        <span className="holes-preview-debug-label">Шаблон</span>
+                        <strong className="holes-preview-debug-value">
+                          {holesPreviewModel.template?.name || `#${holesPreviewModel.template?.id ?? "—"}`}
+                        </strong>
+                      </div>
+                      <div className="holes-preview-debug-row">
+                        <span className="holes-preview-debug-label">Сторона</span>
+                        <strong className="holes-preview-debug-value">
+                          {holesPreviewModel.side
+                            ? formatHolePointSide(holesPreviewModel.side, t) || holesPreviewModel.side
+                            : "—"}
+                        </strong>
+                      </div>
+                      <div className="holes-preview-debug-row">
+                        <span className="holes-preview-debug-label">Тип</span>
+                        <strong className="holes-preview-debug-value">
+                          {holesPreviewModel.type
+                            ? formatHoleTemplateType(holesPreviewModel.type, t) || holesPreviewModel.type
+                            : "—"}
+                        </strong>
+                      </div>
+                      <div className="holes-preview-debug-row">
+                        <span className="holes-preview-debug-label">Точок</span>
+                        <strong className="holes-preview-debug-value">{holesPreviewModel.pointCount}</strong>
+                      </div>
+                      <div className="holes-preview-debug-row">
+                        <span className="holes-preview-debug-label">Hover point</span>
+                        <strong className="holes-preview-debug-value">
+                          {holesPreviewModel.hoveredPointId || "—"}
+                        </strong>
+                      </div>
+                    </div>
+                    {holePreviewData.hasPoints ? (
                       <>
                     <div
                       className="holes-preview-stage"
@@ -11936,7 +12000,7 @@ export default function App() {
                         {holePreviewData.points.length}
                       </span>
                     </div>
-                    {true ? (
+                    {holePreviewData.hasPoints ? (
                       <>
                         <div className="holes-preview-stage">
                           <svg

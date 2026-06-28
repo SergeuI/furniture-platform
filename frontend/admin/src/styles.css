@@ -2124,29 +2124,52 @@ tbody tr.selected {
   position: relative;
 }
 
-.holes-preview-3d-card .holes-preview-stage::before {
+.holes-preview-3d-card > .holes-preview-stage:not(.holes-preview-stage-placeholder),
+.holes-preview-3d-card > .holes-preview-legend {
+  display: none;
+}
+
+.holes-preview-3d-card .holes-preview-stage-placeholder {
   color: #5c6875;
-  content: attr(data-placeholder);
   font-size: 13px;
   line-height: 1.5;
-  max-width: 280px;
   text-align: center;
 }
 
-.holes-preview-3d-card .holes-preview-stage > * {
-  display: none;
+.holes-preview-debug {
+  background: #f8fbfd;
+  border: 1px solid #dbe1e7;
+  border-radius: 12px;
+  display: grid;
+  gap: 8px;
+  padding: 12px;
 }
 
-.holes-preview-3d-card .holes-preview-legend,
-.holes-preview-3d-card .service-tree-badge {
-  display: none;
+.holes-preview-debug-row {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: minmax(88px, 104px) minmax(0, 1fr);
+  min-width: 0;
+}
+
+.holes-preview-debug-label {
+  color: #607182;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.holes-preview-debug-value {
+  color: #24343d;
+  font-size: 12px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
 }
 
 .holes-preview-3d-card .holes-preview-stage-placeholder {
   align-items: center;
   display: flex;
   justify-content: center;
-  min-height: 260px;
+  min-height: 220px;
   text-align: center;
 }
 
