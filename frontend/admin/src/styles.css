@@ -1837,12 +1837,20 @@ tbody tr.selected {
 .holes-grid {
   display: grid;
   gap: 16px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  grid-template-columns: minmax(0, 0.92fr) minmax(420px, 1.08fr);
+}
+
+.holes-left-column {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
 }
 
 .holes-panel {
   display: grid;
   gap: 12px;
+  min-width: 0;
 }
 
 .holes-panel-header {
@@ -1861,7 +1869,9 @@ tbody tr.selected {
 .holes-table-shell {
   border: 1px solid #dbe1e7;
   border-radius: 8px;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  min-width: 0;
 }
 
 .holes-table-list {
@@ -1876,7 +1886,7 @@ tbody tr.selected {
   column-gap: 12px;
   display: grid;
   min-width: 0;
-  padding: 10px 14px;
+  padding: 8px 10px;
 }
 
 .holes-table-header,
@@ -1892,6 +1902,7 @@ tbody tr.selected {
 .holes-points-table-row {
   background: #ffffff;
   border-top: 1px solid #edf2f5;
+  font-size: 12px;
 }
 
 .holes-table-row:first-child,
@@ -1906,47 +1917,75 @@ tbody tr.selected {
 .holes-table-header,
 .holes-table-row {
   grid-template-columns:
-    minmax(64px, 72px)
-    minmax(140px, 1.2fr)
-    minmax(110px, 0.9fr)
-    minmax(100px, 0.8fr)
-    minmax(120px, 0.9fr)
-    minmax(90px, 0.6fr)
-    minmax(90px, 0.6fr)
-    minmax(180px, 1.3fr);
+    minmax(56px, 64px)
+    minmax(120px, 1.2fr)
+    minmax(100px, 0.9fr)
+    minmax(92px, 0.8fr)
+    minmax(108px, 0.9fr)
+    minmax(76px, 0.6fr)
+    minmax(76px, 0.6fr)
+    minmax(120px, 1fr);
 }
 
 .holes-points-table-header,
 .holes-points-table-row {
   grid-template-columns:
-    minmax(64px, 72px)
-    minmax(120px, 1fr)
-    minmax(64px, 0.6fr)
-    minmax(64px, 0.6fr)
-    minmax(64px, 0.6fr)
-    minmax(72px, 0.65fr)
-    minmax(72px, 0.65fr)
-    minmax(80px, 0.7fr)
-    minmax(88px, 0.8fr)
-    minmax(72px, 0.7fr)
-    minmax(64px, 0.6fr)
-    minmax(82px, 0.7fr)
-    minmax(180px, 1.5fr)
-    minmax(110px, 0.9fr);
+    minmax(104px, 0.92fr)
+    minmax(120px, 1.15fr)
+    minmax(44px, 0.34fr)
+    minmax(44px, 0.34fr)
+    minmax(44px, 0.34fr)
+    minmax(52px, 0.4fr)
+    minmax(64px, 0.55fr)
+    minmax(76px, 0.68fr)
+    minmax(92px, 0.8fr)
+    minmax(64px, 0.52fr)
+    minmax(64px, 0.52fr)
+    minmax(72px, 0.6fr)
+    minmax(140px, 1fr);
 }
 
-.holes-row-actions {
+.holes-points-table-header > *,
+.holes-points-table-row > * {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.holes-point-id-cell {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: nowrap;
+  min-width: 0;
 }
 
-.holes-row-actions .ghost-button {
+.holes-point-id-value {
+  font-weight: 700;
+}
+
+.holes-point-edit-button {
+  align-items: center;
+  height: 30px;
+  justify-content: center;
+  flex-shrink: 0;
+  min-height: 30px;
+  min-width: 30px;
+  padding: 0;
+  white-space: nowrap;
+  width: 30px;
+}
+
+.holes-point-label-cell,
+.holes-point-notes-cell {
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .holes-preview-card {
   display: grid;
   gap: 12px;
+  min-width: 0;
   padding-top: 4px;
 }
 
@@ -5367,6 +5406,10 @@ tbody tr.selected {
   .holes-selector-grid,
   .holes-grid {
     grid-template-columns: 1fr;
+  }
+
+  .holes-left-column {
+    gap: 12px;
   }
 
   .holes-preview-list {

@@ -11200,7 +11200,8 @@ export default function App() {
               </div>
 
               <div className="holes-grid">
-                <section className="holes-panel">
+                <div className="holes-left-column">
+                  <section className="holes-panel">
                   <div className="holes-panel-header">
                     <h4>{t.holeTemplateTitle}</h4>
                     <span className="service-tree-badge subtle">
@@ -11287,13 +11288,23 @@ export default function App() {
                           <span>{t.holePointQuantity}</span>
                           <span>{t.holePointMirrored}</span>
                           <span>{t.holePointNotes}</span>
-                          <span>{t.holePointAction}</span>
                         </div>
                         <div className="holes-table-list">
                           {holePoints.map((point) => (
                             <article className="holes-points-table-row" key={point.id}>
-                              <span>{point.id}</span>
-                              <span>{point.label || "—"}</span>
+                              <div className="holes-point-id-cell">
+                                <span>{point.id}</span>
+                                <button
+                                  aria-label={t.holePointEdit}
+                                  className="ghost-button compact-button holes-point-edit-button"
+                                  onClick={() => openHolePointEditForm(point)}
+                                  title={t.holePointEdit}
+                                  type="button"
+                                >
+                                  <Pencil size={14} />
+                                </button>
+                              </div>
+                               <span className="holes-point-label-cell">{point.label || "—"}</span>
                               <span>{point.x_mm ?? "—"}</span>
                               <span>{point.y_mm ?? "—"}</span>
                               <span>{point.z_mm ?? "—"}</span>
@@ -11304,17 +11315,7 @@ export default function App() {
                               <span>{point.order_index}</span>
                               <span>{point.quantity}</span>
                               <span>{point.mirrored ? t.holePointSelectionYes : t.holePointSelectionNo}</span>
-                              <span>{point.notes || "—"}</span>
-                              <span className="holes-row-actions">
-                                <button
-                                  className="ghost-button compact-button"
-                                  onClick={() => openHolePointEditForm(point)}
-                                  type="button"
-                                >
-                                  <Pencil size={14} />
-                                  {t.holePointEdit}
-                                </button>
-                              </span>
+                               <span className="holes-point-notes-cell">{point.notes || "—"}</span>
                             </article>
                           ))}
                         </div>
@@ -11329,7 +11330,10 @@ export default function App() {
                       <span>{t.holeTemplateSelectTemplate}</span>
                     </div>
                   )}
-                  <section className="holes-preview-card">
+                  </section>
+                </div>
+
+                <section className="holes-preview-card">
                     <div className="holes-preview-header">
                       <div>
                         <h4>{t.holePreviewTitle}</h4>
@@ -11421,10 +11425,9 @@ export default function App() {
                       </div>
                     )}
                   </section>
-                </section>
-              </div>
-            </article>
-          </section>
+                </div>
+              </article>
+            </section>
         ) : isCatalogValuesView ? (
           <section className="table-panel full-panel">
             <article className="catalog-card">
