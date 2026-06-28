@@ -503,6 +503,16 @@ const HOLE_POINT_OPERATION_LABEL_KEYS = {
   drill: "holePointOperationDrill",
 };
 
+const HOLE_TEMPLATE_TYPE_LABEL_KEYS = {
+  manual: "holePointTypeManual",
+  auto: "holePointTypeAuto",
+};
+
+const HOLE_TEMPLATE_COORDINATE_SYSTEM_LABEL_KEYS = {
+  "2d": "holeTemplateCoordinateSystem2d",
+  "3d": "holeTemplateCoordinateSystem3d",
+};
+
 function formatHolePointValue(value, labelKeys, t) {
   const rawValue = String(value || "").trim();
 
@@ -520,6 +530,14 @@ function formatHolePointSide(value, t) {
 
 function formatHolePointOperation(value, t) {
   return formatHolePointValue(value, HOLE_POINT_OPERATION_LABEL_KEYS, t);
+}
+
+function formatHoleTemplateType(value, t) {
+  return formatHolePointValue(value, HOLE_TEMPLATE_TYPE_LABEL_KEYS, t);
+}
+
+function formatHoleTemplateCoordinateSystem(value, t) {
+  return formatHolePointValue(value, HOLE_TEMPLATE_COORDINATE_SYSTEM_LABEL_KEYS, t);
 }
 
 function detectFittingSourceSite(sourceUrl) {
@@ -1296,6 +1314,13 @@ const TRANSLATIONS = {
     holePreviewOperation: "Operation",
     holePreviewSide: "Side",
     holePreviewTitle: "2D preview",
+    holeTabDescription: "View hole templates and hole points for the selected fitting.",
+    holeTabPreview: "2D preview",
+    holeTabPoints: "Points",
+    holeTabSearchPlaceholder: "Search services",
+    holeTabTemplates: "Templates",
+    holeTabTitle: "Holes",
+    holeReadOnlyBadge: "Read-only",
     holePointsTitle: "Hole points",
     holePointAdd: "Add point",
     holePointCreateDescription: "Create a new hole point for the selected template.",
@@ -1306,6 +1331,8 @@ const TRANSLATIONS = {
     holePointDiameter: "Diameter, mm",
     holePointDiameterInvalid: "Diameter must be a valid positive number",
     holePointDiameterRequired: "Diameter is required",
+    holePointTypeAuto: "Auto",
+    holePointTypeManual: "Manual",
     holePointLabel: "Label",
     holePointMirrored: "Mirrored",
     holePointNotes: "Notes",
@@ -1316,6 +1343,8 @@ const TRANSLATIONS = {
     holePointOrderIndexInvalid: "Order index must be a whole number",
     holePointQuantity: "Quantity",
     holePointQuantityInvalid: "Quantity must be at least 1",
+    holePointSelectionNo: "No",
+    holePointSelectionYes: "Yes",
     holePointSide: "Side",
     holePointSideBack: "Back face",
     holePointSideBottom: "Bottom edge",
@@ -1325,6 +1354,40 @@ const TRANSLATIONS = {
     holePointSideTop: "Top edge",
     holePointTemplate: "Template",
     holePointTemplateRequired: "Select a template before creating a point",
+    holeTemplateActive: "Active",
+    holeTemplateCoordinateSystem: "System",
+    holeTemplateCreateDescription: "Create a new template for the selected fitting.",
+    holeTemplateCreateTitle: "Add template",
+    holeTemplateCoordinateSystem2d: "2D",
+    holeTemplateCoordinateSystem3d: "3D",
+    holeTemplateDefault: "Default",
+    holeTemplateFitting: "Fitting",
+    holeTemplateName: "Name",
+    holeTemplateNotes: "Notes",
+    holeTemplateRefresh: "Refresh",
+    holeTemplateSave: "Save",
+    holeTemplateSide: "Side",
+    holeTemplateTitle: "Templates",
+    holeTemplateType: "Type",
+    holeTemplateEmpty: "No templates added yet",
+    holeTemplateSelectFitting: "Select fitting",
+    holeTemplateSelectTemplate: "Select template",
+    holeTemplateColumnId: "ID",
+    holeTemplateColumnName: "Name",
+    holeTemplateColumnType: "Type",
+    holeTemplateColumnSide: "Side",
+    holeTemplateColumnSystem: "System",
+    holeTemplateColumnNotes: "Notes",
+    holeTemplateColumnDefault: "Default",
+    holeTemplateColumnActive: "Active",
+    holePointColumnId: "ID",
+    holePointColumnLabel: "Label",
+    holePointColumnDepth: "Depth",
+    holePointColumnSide: "Side",
+    holePointColumnOperation: "Operation",
+    holePointColumnOrder: "Order",
+    holePointPreviewTitle: "2D preview",
+    holePointPreviewHelper: "Preview uses the saved point coordinates and a scaled working plane.",
     holePointX: "X, mm",
     holePointY: "Y, mm",
     holePointZ: "Z, mm",
@@ -1668,7 +1731,14 @@ Object.assign(TRANSLATIONS.uk, {
   holePreviewHelper: "\u041f\u0440\u0435\u0432'\u044e \u043f\u043e\u043a\u0430\u0437\u0443\u0454 \u0437\u0431\u0435\u0440\u0435\u0436\u0435\u043d\u0456 \u043a\u043e\u043e\u0440\u0434\u0438\u043d\u0430\u0442\u0438 \u0442\u043e\u0447\u043e\u043a \u043d\u0430 \u043c\u0430\u0441\u0448\u0442\u0430\u0431\u043e\u0432\u0430\u043d\u0456\u0439 \u043f\u043b\u043e\u0449\u0438\u043d\u0456.",
   holePreviewOperation: "\u041e\u043f\u0435\u0440\u0430\u0446\u0456\u044f",
   holePreviewSide: "\u0421\u0442\u043e\u0440\u043e\u043d\u0430",
-  holePreviewTitle: "2D preview",
+  holePreviewTitle: "2D перегляд",
+  holeTabDescription: "\u041f\u0435\u0440\u0435\u0433\u043b\u044f\u0434 \u0448\u0430\u0431\u043b\u043e\u043d\u0456\u0432 \u0456 \u0442\u043e\u0447\u043e\u043a \u043e\u0442\u0432\u043e\u0440\u0456\u0432 \u0434\u043b\u044f \u0432\u0438\u0431\u0440\u0430\u043d\u043e\u0457 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0438.",
+  holeTabPreview: "2D \u043f\u0435\u0440\u0435\u0433\u043b\u044f\u0434",
+  holeTabPoints: "\u0422\u043e\u0447\u043a\u0438",
+  holeTabSearchPlaceholder: "\u041f\u043e\u0448\u0443\u043a \u043f\u043e\u0441\u043b\u0443\u0433",
+  holeTabTemplates: "\u0428\u0430\u0431\u043b\u043e\u043d\u0438",
+  holeTabTitle: "\u041e\u0442\u0432\u043e\u0440\u0438",
+  holeReadOnlyBadge: "\u041b\u0456\u0448\u0435 \u043f\u0435\u0440\u0435\u0433\u043b\u044f\u0434",
   holePointsTitle: "\u0422\u043e\u0447\u043a\u0438 \u043e\u0442\u0432\u043e\u0440\u0456\u0432",
   holePointAdd: "\u0414\u043e\u0434\u0430\u0442\u0438 \u0442\u043e\u0447\u043a\u0443",
   holePointCreateDescription: "\u0421\u0442\u0432\u043e\u0440\u0435\u043d\u043d\u044f \u043d\u043e\u0432\u043e\u0457 \u0442\u043e\u0447\u043a\u0438 \u0434\u043b\u044f \u0432\u0438\u0431\u0440\u0430\u043d\u043e\u0433\u043e \u0448\u0430\u0431\u043b\u043e\u043d\u0443.",
@@ -1679,6 +1749,8 @@ Object.assign(TRANSLATIONS.uk, {
   holePointDiameter: "\u0414\u0456\u0430\u043c\u0435\u0442\u0440, \u043c\u043c",
   holePointDiameterInvalid: "\u0414\u0456\u0430\u043c\u0435\u0442\u0440 \u043c\u0430\u0454 \u0431\u0443\u0442\u0438 \u0434\u0456\u0439\u0441\u043d\u0438\u043c \u0434\u043e\u0434\u0430\u0442\u043d\u0438\u043c \u0447\u0438\u0441\u043b\u043e\u043c",
   holePointDiameterRequired: "\u0414\u0456\u0430\u043c\u0435\u0442\u0440 \u043e\u0431\u043e\u0432'\u044f\u0437\u043a\u043e\u0432\u0438\u0439",
+  holePointTypeAuto: "Auto",
+  holePointTypeManual: "Manual",
   holePointLabel: "\u041c\u0456\u0442\u043a\u0430",
   holePointMirrored: "\u0414\u0443\u0431\u043b\u044c\u043e\u0432\u0430\u043d\u0430",
   holePointNotes: "\u041f\u0440\u0438\u043c\u0456\u0442\u043a\u0438",
@@ -1689,6 +1761,8 @@ Object.assign(TRANSLATIONS.uk, {
   holePointOrderIndexInvalid: "\u041f\u043e\u0440\u044f\u0434\u043e\u043a \u043c\u0430\u0454 \u0431\u0443\u0442\u0438 \u0446\u0456\u043b\u0438\u043c \u0447\u0438\u0441\u043b\u043e\u043c",
   holePointQuantity: "\u041a\u0456\u043b\u044c\u043a\u0456\u0441\u0442\u044c",
   holePointQuantityInvalid: "\u041a\u0456\u043b\u044c\u043a\u0456\u0441\u0442\u044c \u043c\u0430\u0454 \u0431\u0443\u0442\u0438 \u0449\u043e\u043d\u0430\u0439\u043c\u0435\u043d\u0448\u0435 1",
+  holePointSelectionNo: "\u041d\u0456",
+  holePointSelectionYes: "\u0422\u0430\u043a",
   holePointSide: "\u0421\u0442\u043e\u0440\u043e\u043d\u0430",
   holePointSideBack: "\u0417\u0430\u0434\u043d\u044f \u043f\u043b\u043e\u0449\u0438\u043d\u0430",
   holePointSideBottom: "\u041d\u0438\u0436\u043d\u0456\u0439 \u0442\u043e\u0440\u0435\u0446\u044c",
@@ -1698,6 +1772,38 @@ Object.assign(TRANSLATIONS.uk, {
   holePointSideTop: "\u0412\u0435\u0440\u0445\u043d\u0456\u0439 \u0442\u043e\u0440\u0435\u0446\u044c",
   holePointTemplate: "\u0428\u0430\u0431\u043b\u043e\u043d",
   holePointTemplateRequired: "\u041e\u0431\u0435\u0440\u0456\u0442\u044c \u0448\u0430\u0431\u043b\u043e\u043d \u043f\u0435\u0440\u0435\u0434 \u0441\u0442\u0432\u043e\u0440\u0435\u043d\u043d\u044f\u043c \u0442\u043e\u0447\u043a\u0438",
+  holeTemplateActive: "\u0410\u043a\u0442\u0438\u0432\u043d\u0438\u0439",
+  holeTemplateCoordinateSystem: "\u0421\u0438\u0441\u0442\u0435\u043c\u0430",
+  holeTemplateCreateDescription: "\u0421\u0442\u0432\u043e\u0440\u0435\u043d\u043d\u044f \u043d\u043e\u0432\u043e\u0433\u043e \u0448\u0430\u0431\u043b\u043e\u043d\u0443 \u0434\u043b\u044f \u0432\u0438\u0431\u0440\u0430\u043d\u043e\u0457 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0438.",
+  holeTemplateCreateTitle: "\u0414\u043e\u0434\u0430\u0442\u0438 \u0448\u0430\u0431\u043b\u043e\u043d",
+  holeTemplateDefault: "\u0417\u0430 \u0437\u0430\u043c\u043e\u0432\u0447\u0443\u0432\u0430\u043d\u043d\u044f\u043c",
+  holeTemplateFitting: "\u0424\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0430",
+  holeTemplateName: "\u041d\u0430\u0437\u0432\u0430",
+  holeTemplateNotes: "\u041f\u0440\u0438\u043c\u0456\u0442\u043a\u0438",
+  holeTemplateRefresh: "\u041e\u043d\u043e\u0432\u0438\u0442\u0438",
+  holeTemplateSave: "\u0417\u0431\u0435\u0440\u0435\u0433\u0442\u0438",
+  holeTemplateSide: "\u0421\u0442\u043e\u0440\u043e\u043d\u0430",
+  holeTemplateTitle: "\u0428\u0430\u0431\u043b\u043e\u043d\u0438",
+  holeTemplateType: "\u0422\u0438\u043f",
+  holeTemplateEmpty: "\u0428\u0430\u0431\u043b\u043e\u043d\u0438 \u0449\u0435 \u043d\u0435 \u0434\u043e\u0434\u0430\u043d\u0456",
+  holeTemplateSelectFitting: "\u041e\u0431\u0435\u0440\u0456\u0442\u044c \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0443",
+  holeTemplateSelectTemplate: "\u041e\u0431\u0435\u0440\u0456\u0442\u044c \u0448\u0430\u0431\u043b\u043e\u043d",
+  holeTemplateColumnId: "ID",
+  holeTemplateColumnName: "\u041d\u0430\u0437\u0432\u0430",
+  holeTemplateColumnType: "\u0422\u0438\u043f",
+  holeTemplateColumnSide: "\u0421\u0442\u043e\u0440\u043e\u043d\u0430",
+  holeTemplateColumnSystem: "\u0421\u0438\u0441\u0442\u0435\u043c\u0430",
+  holeTemplateColumnNotes: "\u041f\u0440\u0438\u043c\u0456\u0442\u043a\u0438",
+  holeTemplateColumnDefault: "\u0417\u0430 \u0437\u0430\u043c\u043e\u0432\u0447\u0443\u0432\u0430\u043d\u043d\u044f\u043c",
+  holeTemplateColumnActive: "\u0410\u043a\u0442\u0438\u0432\u043d\u0438\u0439",
+  holePointColumnId: "ID",
+  holePointColumnLabel: "\u041c\u0456\u0442\u043a\u0430",
+  holePointColumnDepth: "\u0413\u043b\u0438\u0431\u0438\u043d\u0430",
+  holePointColumnSide: "\u0421\u0442\u043e\u0440\u043e\u043d\u0430",
+  holePointColumnOperation: "\u041e\u043f\u0435\u0440\u0430\u0446\u0456\u044f",
+  holePointColumnOrder: "\u041f\u043e\u0440\u044f\u0434\u043e\u043a",
+  holeTemplateCoordinateSystem2d: "2D",
+  holeTemplateCoordinateSystem3d: "3D",
   holePointX: "X, \u043c\u043c",
   holePointY: "Y, \u043c\u043c",
   holePointZ: "Z, \u043c\u043c",
@@ -10901,12 +11007,12 @@ export default function App() {
             <article className="catalog-card service-catalog-card service-catalog-card-full holes-view-card">
               <div className="catalog-page-header">
                 <div className="service-catalog-title">
-                  <h3>Отвори</h3>
-                  <p>Перегляд шаблонів і точок отворів для вибраної фурнітури.</p>
+                  <h3>{t.holeTabTitle}</h3>
+                  <p>{t.holeTabDescription}</p>
                 </div>
                 <div className="service-catalog-header-actions">
                   <span className="service-tree-badge subtle">
-                    read-only
+                    {t.holeReadOnlyBadge}
                   </span>
                   <button
                     className="primary-button compact-button"
@@ -10915,7 +11021,7 @@ export default function App() {
                     type="button"
                   >
                     <Plus size={16} />
-                    + Додати шаблон
+                    {t.holeTemplateCreateTitle}
                   </button>
                   <button
                     className="ghost-button"
@@ -10924,7 +11030,7 @@ export default function App() {
                     type="button"
                   >
                     <RefreshCw size={16} />
-                    Оновити
+                    {t.holeTemplateRefresh}
                   </button>
                 </div>
               </div>
@@ -10934,18 +11040,18 @@ export default function App() {
                   <Search size={16} />
                   <input
                     onChange={(event) => setFittingSearch(event.target.value)}
-                    placeholder={t.viyarSearch}
+                    placeholder={t.holeTabSearchPlaceholder}
                     type="search"
                     value={fittingSearch}
                   />
                 </label>
                 <label className="holes-select">
-                  <span>Фурнітура</span>
+                  <span>{t.holeTemplateFitting}</span>
                   <select
                     onChange={(event) => handleHoleFittingChange(event.target.value)}
                     value={holeSelectedFittingId}
                   >
-                    <option value="">Оберіть фурнітуру</option>
+                    <option value="">{t.holeTemplateSelectFitting}</option>
                     {fittingItems.map((item) => (
                       <option key={item.id} value={item.id}>
                         {item.name || item.article || item.code || item.id}
@@ -10954,16 +11060,16 @@ export default function App() {
                   </select>
                 </label>
                 <label className="holes-select">
-                  <span>Шаблон</span>
+                  <span>{t.holePointTemplate}</span>
                   <select
                     disabled={!holeTemplateItems.length}
                     onChange={(event) => handleHoleTemplateChange(event.target.value)}
                     value={holeSelectedTemplateId}
                   >
-                    <option value="">Оберіть шаблон</option>
+                    <option value="">{t.holeTemplateSelectTemplate}</option>
                     {holeTemplateItems.map((template) => (
                       <option key={template.id} value={template.id}>
-                        {template.name || `Шаблон ${template.id}`}
+                        {template.name || `${t.holePointTemplate} ${template.id}`}
                       </option>
                     ))}
                   </select>
@@ -10973,7 +11079,7 @@ export default function App() {
               <div className="holes-grid">
                 <section className="holes-panel">
                   <div className="holes-panel-header">
-                    <h4>Шаблони</h4>
+                    <h4>{t.holeTemplateTitle}</h4>
                     <span className="service-tree-badge subtle">
                       {holeTemplateItems.length}
                     </span>
@@ -10982,14 +11088,14 @@ export default function App() {
                     holeTemplateItems.length ? (
                       <div className="holes-table-shell">
                         <div className="holes-table-header">
-                          <span>ID</span>
-                          <span>Назва</span>
-                          <span>Тип</span>
-                          <span>Сторона</span>
-                          <span>Система</span>
-                          <span>Default</span>
-                          <span>Active</span>
-                          <span>Примітки</span>
+                          <span>{t.holeTemplateColumnId}</span>
+                          <span>{t.holeTemplateColumnName}</span>
+                          <span>{t.holeTemplateColumnType}</span>
+                          <span>{t.holeTemplateColumnSide}</span>
+                          <span>{t.holeTemplateColumnSystem}</span>
+                          <span>{t.holeTemplateColumnDefault}</span>
+                          <span>{t.holeTemplateColumnActive}</span>
+                          <span>{t.holeTemplateColumnNotes}</span>
                         </div>
                         <div className="holes-table-list">
                           {holeTemplateItems.map((template) => {
@@ -11002,11 +11108,11 @@ export default function App() {
                               >
                                 <span>{template.id}</span>
                                 <span>{template.name || "—"}</span>
-                                <span>{template.template_type || "—"}</span>
+                                <span>{formatHoleTemplateType(template.template_type, t)}</span>
                                 <span>{formatHolePointSide(template.side, t)}</span>
-                                <span>{template.coordinate_system || "—"}</span>
-                                <span>{template.is_default ? "Так" : "Ні"}</span>
-                                <span>{template.is_active ? "Так" : "Ні"}</span>
+                                <span>{formatHoleTemplateCoordinateSystem(template.coordinate_system, t)}</span>
+                                <span>{template.is_default ? t.holePointSelectionYes : t.holePointSelectionNo}</span>
+                                <span>{template.is_active ? t.holePointSelectionYes : t.holePointSelectionNo}</span>
                                 <span>{template.notes || "—"}</span>
                               </article>
                             );
@@ -11015,19 +11121,19 @@ export default function App() {
                       </div>
                     ) : (
                       <div className="empty-state compact-empty-state">
-                        <span>Шаблони отворів ще не додані</span>
+                        <span>{t.holeTemplateEmpty}</span>
                       </div>
                     )
                   ) : (
                     <div className="empty-state compact-empty-state">
-                      <span>Оберіть фурнітуру</span>
+                      <span>{t.holeTemplateSelectFitting}</span>
                     </div>
                   )}
                 </section>
 
                 <section className="holes-panel">
                   <div className="holes-panel-header">
-                    <h4>Точки</h4>
+                    <h4>{t.holeTabPoints}</h4>
                     <span className="service-tree-badge subtle">
                       {holePoints.length}
                     </span>
@@ -11045,19 +11151,19 @@ export default function App() {
                     holePoints.length ? (
                       <div className="holes-table-shell">
                         <div className="holes-points-table-header">
-                          <span>ID</span>
-                          <span>Label</span>
+                          <span>{t.holePointColumnId}</span>
+                          <span>{t.holePointColumnLabel}</span>
                           <span>x</span>
                           <span>y</span>
                           <span>z</span>
                           <span>Ø</span>
-                          <span>Depth</span>
-                          <span>Side</span>
-                          <span>Operation</span>
-                          <span>Order</span>
-                          <span>Qty</span>
-                          <span>Mirrored</span>
-                          <span>Notes</span>
+                          <span>{t.holePointColumnDepth}</span>
+                          <span>{t.holePointColumnSide}</span>
+                          <span>{t.holePointColumnOperation}</span>
+                          <span>{t.holePointColumnOrder}</span>
+                          <span>{t.holePointQuantity}</span>
+                          <span>{t.holePointMirrored}</span>
+                          <span>{t.holePointNotes}</span>
                         </div>
                         <div className="holes-table-list">
                           {holePoints.map((point) => (
@@ -11073,7 +11179,7 @@ export default function App() {
                               <span>{formatHolePointOperation(point.operation, t)}</span>
                               <span>{point.order_index}</span>
                               <span>{point.quantity}</span>
-                              <span>{point.mirrored ? "Так" : "Ні"}</span>
+                              <span>{point.mirrored ? t.holePointSelectionYes : t.holePointSelectionNo}</span>
                               <span>{point.notes || "—"}</span>
                             </article>
                           ))}
@@ -11081,12 +11187,12 @@ export default function App() {
                       </div>
                     ) : (
                       <div className="empty-state compact-empty-state">
-                        <span>Точки отворів ще не додані</span>
+                        <span>{t.holePreviewEmpty}</span>
                       </div>
                     )
                   ) : (
                     <div className="empty-state compact-empty-state">
-                      <span>Оберіть шаблон</span>
+                      <span>{t.holeTemplateSelectTemplate}</span>
                     </div>
                   )}
                   <section className="holes-preview-card">
@@ -11159,9 +11265,9 @@ export default function App() {
                         </div>
                         <div className="holes-preview-legend">
                           <span>Ø - {t.holePreviewDiameter}</span>
-                          <span>Depth - {t.holePreviewDepth}</span>
-                          <span>Side - {t.holePreviewSide}</span>
-                          <span>Operation - {t.holePreviewOperation}</span>
+                          <span>{t.holePreviewDepth}</span>
+                          <span>{t.holePreviewSide}</span>
+                          <span>{t.holePreviewOperation}</span>
                         </div>
                         <div className="holes-preview-list">
                           {holePreviewData.points.map((point) => (
@@ -12946,8 +13052,8 @@ export default function App() {
           >
             <header className="confirm-header">
               <div>
-                <strong>Додати шаблон отворів</strong>
-                <p>Створення нового шаблону для вибраної фурнітури.</p>
+                <strong>{t.holeTemplateCreateTitle}</strong>
+                <p>{t.holeTemplateCreateDescription}</p>
               </div>
               <button
                 aria-label={t.cancel}
@@ -12962,7 +13068,7 @@ export default function App() {
 
             <form className="hole-template-form" onSubmit={handleHoleTemplateCreate}>
               <label>
-                Фурнітура
+                {t.holeTemplateFitting}
                 <input
                   disabled
                   readOnly
@@ -12976,7 +13082,7 @@ export default function App() {
               </label>
 
               <label>
-                Назва шаблону
+                {t.holeTemplateName}
                 <input
                   autoFocus
                   disabled={loading}
@@ -12994,7 +13100,7 @@ export default function App() {
 
               <div className="hole-template-form-grid">
                 <label>
-                  Тип шаблону
+                  {t.holeTemplateType}
                   <select
                     disabled={loading}
                     onChange={(event) =>
@@ -13005,13 +13111,13 @@ export default function App() {
                     }
                     value={holeTemplateCreateForm.template_type}
                   >
-                    <option value="manual">manual</option>
-                    <option value="auto">auto</option>
+                    <option value="manual">{t.holePointTypeManual}</option>
+                    <option value="auto">{t.holePointTypeAuto}</option>
                   </select>
                 </label>
 
                 <label>
-                  Сторона
+                  {t.holeTemplateSide}
                   <select
                     disabled={loading}
                     onChange={(event) =>
@@ -13022,17 +13128,17 @@ export default function App() {
                     }
                     value={holeTemplateCreateForm.side}
                   >
-                    <option value="left">left</option>
-                    <option value="right">right</option>
-                    <option value="top">top</option>
-                    <option value="bottom">bottom</option>
-                    <option value="front">front</option>
-                    <option value="back">back</option>
+                    <option value="left">{t.holePointSideLeft}</option>
+                    <option value="right">{t.holePointSideRight}</option>
+                    <option value="top">{t.holePointSideTop}</option>
+                    <option value="bottom">{t.holePointSideBottom}</option>
+                    <option value="front">{t.holePointSideFront}</option>
+                    <option value="back">{t.holePointSideBack}</option>
                   </select>
                 </label>
 
                 <label>
-                  Система координат
+                  {t.holeTemplateCoordinateSystem}
                   <select
                     disabled={loading}
                     onChange={(event) =>
@@ -13043,8 +13149,8 @@ export default function App() {
                     }
                     value={holeTemplateCreateForm.coordinate_system}
                   >
-                    <option value="2d">2d</option>
-                    <option value="3d">3d</option>
+                    <option value="2d">{t.holeTemplateCoordinateSystem2d}</option>
+                    <option value="3d">{t.holeTemplateCoordinateSystem3d}</option>
                   </select>
                 </label>
               </div>
@@ -13062,7 +13168,7 @@ export default function App() {
                     }
                     type="checkbox"
                   />
-                  Default
+                  {t.holeTemplateDefault}
                 </label>
                 <label className="material-inline-check">
                   <input
@@ -13076,12 +13182,12 @@ export default function App() {
                     }
                     type="checkbox"
                   />
-                  Active
+                  {t.holeTemplateActive}
                 </label>
               </div>
 
               <label>
-                Примітки
+                {t.holeTemplateNotes}
                 <textarea
                   disabled={loading}
                   onChange={(event) =>
@@ -13110,7 +13216,7 @@ export default function App() {
                 </button>
                 <button className="primary-button" disabled={loading || !holeSelectedFittingId} type="submit">
                   <Plus size={16} />
-                  Зберегти
+                  {t.holeTemplateSave}
                 </button>
               </div>
             </form>
