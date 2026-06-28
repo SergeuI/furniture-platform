@@ -4234,8 +4234,8 @@ export default function App() {
   const [holePointEditForm, setHolePointEditForm] = useState(DEFAULT_HOLE_POINT_FORM);
   const [holePointEditPointId, setHolePointEditPointId] = useState("");
   const [hoveredHolePointId, setHoveredHolePointId] = useState("");
-  const [holeWorkspaceConnectionVariantKey, setHoleWorkspaceConnectionVariantKey] =
-    useState("face_to_edge");
+  const [selectedHoleMountingVariantKey, setSelectedHoleMountingVariantKey] =
+    useState("plane_to_edge");
   const [newFittingForm, setNewFittingForm] = useState(DEFAULT_FITTING_FORM);
   const [autoRefreshStatus, setAutoRefreshStatus] = useState(null);
   const storedProjectId = localStorage.getItem(ACTIVE_PROJECT_ID_STORAGE_KEY) || "";
@@ -4253,6 +4253,38 @@ export default function App() {
   const selectedHoleTemplate = useMemo(
     () => holeTemplateItems.find((item) => String(item.id) === String(holeSelectedTemplateId)) || holeSelectedTemplate || null,
     [holeSelectedTemplate, holeSelectedTemplateId, holeTemplateItems],
+  );
+  const holeMountingVariantOptions = useMemo(
+    () => [
+      {
+        description: "Для привязки площини фурнітури до торця деталі.",
+        key: "plane_to_edge",
+        label: "Площина → торець",
+      },
+      {
+        description: "Для привязки торця фурнітури до площини деталі.",
+        key: "edge_to_plane",
+        label: "Торець → площина",
+      },
+      {
+        description: "Для вертикальних елементів, що переходять у горизонтальні.",
+        key: "vertical_to_horizontal",
+        label: "Вертикаль → горизонталь",
+      },
+      {
+        description: "Для горизонтальних елементів, що переходять у вертикальні.",
+        key: "horizontal_to_vertical",
+        label: "Горизонталь → вертикаль",
+      },
+    ],
+    [],
+  );
+  const selectedHoleMountingVariant = useMemo(
+    () =>
+      holeMountingVariantOptions.find((item) => item.key === selectedHoleMountingVariantKey) ||
+      holeMountingVariantOptions[0] ||
+      null,
+    [holeMountingVariantOptions, selectedHoleMountingVariantKey],
   );
   const holePreviewData = useMemo(() => {
     const numericValue = (value) => {
@@ -4329,6 +4361,7 @@ export default function App() {
   const holesPreviewModel = useMemo(
     () => ({
       fitting: selectedHoleFitting,
+      mountingVariant: selectedHoleMountingVariant,
       hoveredPointId: hoveredHolePointId || "",
       pointCount: holePoints.length,
       points: holePoints,
@@ -4336,7 +4369,13 @@ export default function App() {
       template: selectedHoleTemplate,
       type: selectedHoleTemplate?.template_type ?? "",
     }),
-    [holePoints, hoveredHolePointId, selectedHoleFitting, selectedHoleTemplate],
+    [
+      holePoints,
+      hoveredHolePointId,
+      selectedHoleFitting,
+      selectedHoleMountingVariant,
+      selectedHoleTemplate,
+    ],
   );
   const inferStatusTone = useCallback((message) => {
     const normalizedMessage = String(message || "").toLowerCase();
@@ -6128,15 +6167,15 @@ export default function App() {
     );
   }
 
-  function normalizeHoleWorkspaceConnectionVariantKey(key) {
+  function normalizeHoleWorkspaceMountingVariantKey(key) {
     const allowedVariants = new Set([
-      "face_to_edge",
-      "edge_to_face",
+      "plane_to_edge",
+      "edge_to_plane",
       "vertical_to_horizontal",
       "horizontal_to_vertical",
     ]);
 
-    return allowedVariants.has(key) ? key : "face_to_edge";
+    return allowedVariants.has(key) ? key : "plane_to_edge";
   }
 
   function renderHoleWorkspaceFittingInfo(fitting) {
@@ -6188,27 +6227,10 @@ export default function App() {
     );
   }
 
-  function renderHoleWorkspaceConnectionVariantCards(selectedVariantKey, onSelectVariant) {
-    const variants = [
-      {
-        key: "face_to_edge",
-        label: t.holeWorkspaceVariantFaceToEdge,
-      },
-      {
-        key: "edge_to_face",
-        label: t.holeWorkspaceVariantEdgeToFace,
-      },
-      {
-        key: "vertical_to_horizontal",
-        label: t.holeWorkspaceVariantVerticalToHorizontal,
-      },
-      {
-        key: "horizontal_to_vertical",
-        label: t.holeWorkspaceVariantHorizontalToVertical,
-      },
-    ];
-
-    const normalizedSelectedVariantKey = normalizeHoleWorkspaceConnectionVariantKey(selectedVariantKey);
+  function renderHoleWorkspaceConnectionVariantCards() {
+    const normalizedSelectedVariantKey = normalizeHoleWorkspaceMountingVariantKey(
+      selectedHoleMountingVariantKey,
+    );
 
     return (
       <section className="holes-panel holes-connection-variant-panel">
@@ -6217,7 +6239,7 @@ export default function App() {
           <span className="service-tree-badge subtle">{t.holeWorkspaceSelected}</span>
         </div>
         <div className="holes-connection-variant-grid">
-          {variants.map((variant) => {
+          {holeMountingVariantOptions.map((variant) => {
             const isActive = normalizedSelectedVariantKey === variant.key;
 
             return (
@@ -6225,7 +6247,7 @@ export default function App() {
                 aria-pressed={isActive}
                 className={`holes-connection-variant-card${isActive ? " active" : ""}`}
                 key={variant.key}
-                onClick={() => onSelectVariant(variant.key)}
+                onClick={() => setSelectedHoleMountingVariantKey(variant.key)}
                 type="button"
               >
                 <span className="holes-connection-variant-card-mark">
@@ -6234,7 +6256,7 @@ export default function App() {
                 </span>
                 <span className="holes-connection-variant-card-copy">
                   <strong>{variant.label}</strong>
-                  <span>{isActive ? t.holeWorkspaceSelected : "\u00A0"}</span>
+                  <span>{variant.description}</span>
                 </span>
               </button>
             );
@@ -11695,10 +11717,7 @@ export default function App() {
               <div className="holes-grid">
                 <div className="holes-left-column">
                   {renderHoleWorkspaceFittingInfo(selectedHoleFitting)}
-                  {renderHoleWorkspaceConnectionVariantCards(
-                    holeWorkspaceConnectionVariantKey,
-                    setHoleWorkspaceConnectionVariantKey,
-                  )}
+                  {renderHoleWorkspaceConnectionVariantCards()}
                   <section className="holes-panel">
                   <div className="holes-panel-header">
                     <h4>{t.holeTemplateTitle}</h4>
@@ -11880,6 +11899,12 @@ export default function App() {
                         <span className="holes-preview-debug-label">Шаблон</span>
                         <strong className="holes-preview-debug-value">
                           {holesPreviewModel.template?.name || `#${holesPreviewModel.template?.id ?? "—"}`}
+                        </strong>
+                      </div>
+                      <div className="holes-preview-debug-row">
+                        <span className="holes-preview-debug-label">Варіант кріплення</span>
+                        <strong className="holes-preview-debug-value">
+                          {holesPreviewModel.mountingVariant?.label || "—"}
                         </strong>
                       </div>
                       <div className="holes-preview-debug-row">
