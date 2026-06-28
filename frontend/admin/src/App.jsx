@@ -1411,6 +1411,11 @@ const TRANSLATIONS = {
     holeTemplateFittingRequired: "Select a fitting before creating a template",
     holeTemplateMountingSchemePlaceholder: "The scheme will be added in the next step.",
     holeTemplateMountingSchemeTitle: "Mounting scheme",
+    holeTemplateMountingSchemeLeftEdge: "Left edge",
+    holeTemplateMountingSchemeRightEdge: "Right edge",
+    holeTemplateMountingSchemeTop: "Top",
+    holeTemplateMountingSchemeBottom: "Bottom",
+    holeTemplateMountingSchemeSelected: "Selected",
     holeTemplateName: "Name",
     holeTemplateNameRequired: "Template name is required",
     holeTemplateNotes: "Notes",
@@ -1850,6 +1855,11 @@ Object.assign(TRANSLATIONS.uk, {
   holeTemplateFittingRequired: "\u041e\u0431\u0435\u0440\u0456\u0442\u044c \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0443 \u043f\u0435\u0440\u0435\u0434 \u0441\u0442\u0432\u043e\u0440\u0435\u043d\u043d\u044f\u043c \u0448\u0430\u0431\u043b\u043e\u043d\u0443",
   holeTemplateMountingSchemePlaceholder: "\u0421\u0445\u0435\u043c\u0430 \u0431\u0443\u0434\u0435 \u0434\u043e\u0434\u0430\u043d\u0430 \u043d\u0430 \u043d\u0430\u0441\u0442\u0443\u043f\u043d\u043e\u043c\u0443 \u0435\u0442\u0430\u043f\u0456.",
   holeTemplateMountingSchemeTitle: "\u041c\u043e\u043d\u0442\u0430\u0436\u043d\u0430 \u0441\u0445\u0435\u043c\u0430",
+  holeTemplateMountingSchemeLeftEdge: "\u041b\u0456\u0432\u0438\u0439 \u0442\u043e\u0440\u0435\u0446\u044c",
+  holeTemplateMountingSchemeRightEdge: "\u041f\u0440\u0430\u0432\u0438\u0439 \u0442\u043e\u0440\u0435\u0446\u044c",
+  holeTemplateMountingSchemeTop: "\u0412\u0435\u0440\u0445",
+  holeTemplateMountingSchemeBottom: "\u041d\u0438\u0437",
+  holeTemplateMountingSchemeSelected: "\u041e\u0431\u0440\u0430\u043d\u043e",
   holeTemplateName: "\u041d\u0430\u0437\u0432\u0430",
   holeTemplateNameRequired: "\u041d\u0430\u0437\u0432\u0430 \u0448\u0430\u0431\u043b\u043e\u043d\u0443 \u0454 \u043e\u0431\u043e\u0432'\u044f\u0437\u043a\u043e\u0432\u043e\u044e",
   holeTemplateNotes: "\u041f\u0440\u0438\u043c\u0456\u0442\u043a\u0438",
@@ -4173,6 +4183,10 @@ export default function App() {
   const [holeTemplateEditForm, setHoleTemplateEditForm] = useState(DEFAULT_HOLE_TEMPLATE_FORM);
   const [holeTemplateEditTemplateId, setHoleTemplateEditTemplateId] = useState("");
   const [holeTemplateEditSaving, setHoleTemplateEditSaving] = useState(false);
+  const [holeTemplateCreateMountingSchemeKey, setHoleTemplateCreateMountingSchemeKey] =
+    useState("left_edge");
+  const [holeTemplateEditMountingSchemeKey, setHoleTemplateEditMountingSchemeKey] =
+    useState("left_edge");
   const [holePointCreateOpen, setHolePointCreateOpen] = useState(false);
   const [holePointCreateError, setHolePointCreateError] = useState("");
   const [holePointCreateForm, setHolePointCreateForm] = useState(DEFAULT_HOLE_POINT_FORM);
@@ -5922,6 +5936,7 @@ export default function App() {
       ...DEFAULT_HOLE_TEMPLATE_FORM,
       fitting_id: holeSelectedFittingId,
     });
+    setHoleTemplateCreateMountingSchemeKey("left_edge");
     setHoleTemplateCreateError("");
     setHoleTemplateCreateOpen(true);
   }
@@ -5930,6 +5945,7 @@ export default function App() {
     setHoleTemplateCreateOpen(false);
     setHoleTemplateCreateError("");
     setHoleTemplateCreateForm(DEFAULT_HOLE_TEMPLATE_FORM);
+    setHoleTemplateCreateMountingSchemeKey("left_edge");
   }
 
   function openHoleTemplateEditForm(template) {
@@ -5940,6 +5956,7 @@ export default function App() {
 
     setHoleTemplateEditTemplateId(String(template.id));
     setHoleTemplateEditForm(buildHoleTemplateFormFromTemplate(template));
+    setHoleTemplateEditMountingSchemeKey("left_edge");
     setHoleTemplateEditError("");
     setHoleTemplateEditOpen(true);
   }
@@ -5950,6 +5967,127 @@ export default function App() {
     setHoleTemplateEditForm(DEFAULT_HOLE_TEMPLATE_FORM);
     setHoleTemplateEditTemplateId("");
     setHoleTemplateEditSaving(false);
+    setHoleTemplateEditMountingSchemeKey("left_edge");
+  }
+
+  function renderHoleTemplateMountingSchemeIcon(schemeKey, isActive) {
+    const barStyles = {
+      bottom: { bottom: 6, left: 10, right: 10, height: 6 },
+      left_edge: { bottom: 10, left: 6, top: 10, width: 6 },
+      right_edge: { bottom: 10, right: 6, top: 10, width: 6 },
+      top: { top: 6, left: 10, right: 10, height: 6 },
+    };
+
+    const accentBarStyle = barStyles[schemeKey] || barStyles.left_edge;
+    const frameColor = isActive ? "#2563eb" : "#94a3b8";
+    const fillColor = isActive ? "rgba(37, 99, 235, 0.08)" : "rgba(148, 163, 184, 0.08)";
+    const barColor = isActive ? "#2563eb" : "#cbd5e1";
+
+    return (
+      <span
+        style={{
+          alignItems: "center",
+          background: fillColor,
+          border: `1px solid ${frameColor}`,
+          borderRadius: 10,
+          boxSizing: "border-box",
+          display: "inline-flex",
+          height: 44,
+          justifyContent: "center",
+          position: "relative",
+          width: 44,
+          flexShrink: 0,
+        }}
+      >
+        <span
+          style={{
+            inset: 7,
+            border: `1px solid ${frameColor}`,
+            borderRadius: 6,
+            position: "absolute",
+          }}
+        />
+        <span
+          style={{
+            background: barColor,
+            borderRadius: 999,
+            position: "absolute",
+            ...accentBarStyle,
+          }}
+        />
+      </span>
+    );
+  }
+
+  function renderHoleTemplateMountingSchemePicker(selectedSchemeKey, setSelectedSchemeKey) {
+    const schemeCards = [
+      {
+        key: "left_edge",
+        label: t.holeTemplateMountingSchemeLeftEdge,
+      },
+      {
+        key: "right_edge",
+        label: t.holeTemplateMountingSchemeRightEdge,
+      },
+      {
+        key: "top",
+        label: t.holeTemplateMountingSchemeTop,
+      },
+      {
+        key: "bottom",
+        label: t.holeTemplateMountingSchemeBottom,
+      },
+    ];
+
+    return (
+      <div style={{ display: "grid", gap: 8, marginTop: 12 }}>
+        <div style={{ display: "grid", gap: 4 }}>
+          <div>{t.holeTemplateMountingSchemeTitle}</div>
+          <p>{t.holeTemplateMountingSchemePlaceholder}</p>
+        </div>
+        <div
+          style={{
+            display: "grid",
+            gap: 8,
+            gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+          }}
+        >
+          {schemeCards.map((scheme) => {
+            const isActive = selectedSchemeKey === scheme.key;
+
+            return (
+              <button
+                aria-pressed={isActive}
+                key={scheme.key}
+                onClick={() => setSelectedSchemeKey(scheme.key)}
+                type="button"
+                style={{
+                  alignItems: "center",
+                  background: isActive ? "rgba(37, 99, 235, 0.08)" : "transparent",
+                  border: `1px solid ${isActive ? "#2563eb" : "#d1d5db"}`,
+                  borderRadius: 12,
+                  color: "inherit",
+                  cursor: "pointer",
+                  display: "flex",
+                  gap: 10,
+                  minHeight: 72,
+                  padding: "10px 12px",
+                  textAlign: "left",
+                }}
+              >
+                {renderHoleTemplateMountingSchemeIcon(scheme.key, isActive)}
+                <span style={{ display: "grid", gap: 4, minWidth: 0 }}>
+                  <span style={{ fontWeight: 600 }}>{scheme.label}</span>
+                  <span style={{ fontSize: 12, opacity: 0.8 }}>
+                    {isActive ? t.holeTemplateMountingSchemeSelected : "\u00A0"}
+                  </span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
   }
 
   async function handleHoleTemplateCreate(event) {
@@ -13436,10 +13574,10 @@ export default function App() {
                 </label>
               </div>
 
-              <div>
-                <div>{t.holeTemplateMountingSchemeTitle}</div>
-                <p>{t.holeTemplateMountingSchemePlaceholder}</p>
-              </div>
+              {renderHoleTemplateMountingSchemePicker(
+                holeTemplateCreateMountingSchemeKey,
+                setHoleTemplateCreateMountingSchemeKey,
+              )}
 
               <div className="hole-template-checks">
                 <label className="material-inline-check">
@@ -13626,10 +13764,10 @@ export default function App() {
                 </label>
               </div>
 
-              <div>
-                <div>{t.holeTemplateMountingSchemeTitle}</div>
-                <p>{t.holeTemplateMountingSchemePlaceholder}</p>
-              </div>
+              {renderHoleTemplateMountingSchemePicker(
+                holeTemplateEditMountingSchemeKey,
+                setHoleTemplateEditMountingSchemeKey,
+              )}
 
               <div className="hole-template-checks">
                 <label className="material-inline-check">
