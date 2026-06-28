@@ -4825,13 +4825,22 @@ tbody tr.selected {
 }
 
 .hole-template-modal {
+  max-height: calc(100vh - 40px);
   max-width: min(760px, calc(100vw - 48px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-bottom: 16px;
   width: 100%;
 }
 
 .hole-template-form {
+  flex: 1;
   display: grid;
   gap: 14px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .hole-template-form-grid {
@@ -4872,7 +4881,98 @@ tbody tr.selected {
 }
 
 .hole-template-actions {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, #ffffff 18px);
+  bottom: 0;
   justify-content: flex-end;
+  margin-top: auto;
+  padding-top: 10px;
+  position: sticky;
+}
+
+.hole-template-fitting-info {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  background: #f8fafb;
+  border: 1px solid #dbe3ea;
+  border-radius: 10px;
+}
+
+.hole-template-fitting-info-head {
+  display: grid;
+  gap: 2px;
+}
+
+.hole-template-fitting-info-name {
+  color: #1f2933;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.hole-template-fitting-info-body {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 64px minmax(0, 1fr);
+}
+
+.hole-template-fitting-info-body.no-image {
+  grid-template-columns: 1fr;
+}
+
+.hole-template-fitting-info-image {
+  border-radius: 8px;
+  display: block;
+  height: 64px;
+  object-fit: cover;
+  width: 64px;
+}
+
+.hole-template-fitting-info-placeholder {
+  align-items: center;
+  background: #edf2f7;
+  border: 1px dashed #c7d0d9;
+  border-radius: 8px;
+  color: #607080;
+  display: flex;
+  font-size: 12px;
+  justify-content: center;
+  min-height: 64px;
+  padding: 8px;
+  text-align: center;
+}
+
+.hole-template-fitting-info-meta {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.hole-template-fitting-info-line {
+  color: #1f2933;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.hole-template-fitting-info-description {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+
+@media (max-width: 640px) {
+  .hole-template-modal {
+    max-height: calc(100vh - 24px);
+  }
+
+  .hole-template-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .hole-template-fitting-info-body {
+    grid-template-columns: 1fr;
+  }
 }
 
 .confirm-header {

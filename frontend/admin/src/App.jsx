@@ -6054,50 +6054,31 @@ export default function App() {
     const fittingImageUrl = String(fitting.image_url || fitting.image || "").trim();
 
     return (
-      <section
-        style={{
-          display: "grid",
-          gap: 10,
-          marginTop: 12,
-        }}
-      >
-        <div style={{ display: "grid", gap: 2 }}>
+      <section className="hole-template-fitting-info">
+        <div className="hole-template-fitting-info-head">
           <strong>{t.holeTemplateFittingInfoTitle}</strong>
-          <div>{fittingName || t.holeTemplateFitting}</div>
+          <div className="hole-template-fitting-info-name">{fittingName || t.holeTemplateFitting}</div>
         </div>
 
-        <div
-          style={{
-            alignItems: "center",
-            display: "grid",
-            gap: 12,
-            gridTemplateColumns: fittingImageUrl ? "72px 1fr" : "1fr",
-          }}
-        >
+        <div className={`hole-template-fitting-info-body${fittingImageUrl ? "" : " no-image"}`}>
           {fittingImageUrl ? (
             <img
               alt={t.holeTemplateFittingInfoImageAlt}
+              className="hole-template-fitting-info-image"
               src={fittingImageUrl}
-              style={{
-                borderRadius: 10,
-                display: "block",
-                height: 72,
-                objectFit: "cover",
-                width: 72,
-              }}
             />
           ) : (
-            <div>{t.holeTemplateFittingInfoNoImage}</div>
+            <div className="hole-template-fitting-info-placeholder">{t.holeTemplateFittingInfoNoImage}</div>
           )}
 
-          <div style={{ display: "grid", gap: 4 }}>
+          <div className="hole-template-fitting-info-meta">
             {fittingArticle ? (
-              <div>
+              <div className="hole-template-fitting-info-line">
                 {t.holeTemplateFittingInfoArticle}: {fittingArticle}
               </div>
             ) : null}
             {fittingDescription ? (
-              <div>
+              <div className="hole-template-fitting-info-line hole-template-fitting-info-description">
                 {t.holeTemplateFittingInfoDescription}: {fittingDescription}
               </div>
             ) : null}
