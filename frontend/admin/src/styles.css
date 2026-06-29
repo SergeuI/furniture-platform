@@ -2460,6 +2460,15 @@ tbody tr.selected {
   min-width: 0;
 }
 
+.holes-selected-point-actions {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .holes-selected-point-panel-header strong {
   color: #24343d;
   display: block;
@@ -5541,6 +5550,15 @@ tbody tr.selected {
 
   .holes-selected-point-grid {
     grid-template-columns: 1fr;
+  }
+
+  .holes-selected-point-panel-header {
+    flex-direction: column;
+  }
+
+  .holes-selected-point-actions {
+    justify-content: flex-start;
+    width: 100%;
   }
 
   .holes-preview-schematic-svg {

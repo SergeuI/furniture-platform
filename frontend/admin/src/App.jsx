@@ -12570,14 +12570,25 @@ export default function App() {
                         <strong>Вибрана точка</strong>
                         <p>Деталі активної точки отвору</p>
                       </div>
-                      <button
-                        className="ghost-button compact-button"
-                        disabled={!selectedHolePointId}
-                        onClick={() => setSelectedHolePointId(null)}
-                        type="button"
-                      >
-                        Скинути вибір
-                      </button>
+                      <div className="holes-selected-point-actions">
+                        {selectedHolePoint ? (
+                          <button
+                            className="ghost-button compact-button"
+                            onClick={() => openHolePointEditForm(selectedHolePoint)}
+                            type="button"
+                          >
+                            Редагувати точку
+                          </button>
+                        ) : null}
+                        <button
+                          className="ghost-button compact-button"
+                          disabled={!selectedHolePointId}
+                          onClick={() => setSelectedHolePointId(null)}
+                          type="button"
+                        >
+                          Скинути вибір
+                        </button>
+                      </div>
                     </div>
                     {selectedHolePoint ? (
                       <div className="holes-selected-point-grid">
