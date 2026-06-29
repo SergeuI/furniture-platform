@@ -4398,6 +4398,9 @@ export default function App() {
       selectedHoleTemplate &&
       normalizedSelectedTemplateMountingVariantKey !== normalizedSelectedHoleMountingVariantKey,
   );
+  const holeWorkspaceHasFitting = Boolean(holeSelectedFittingId);
+  const holeWorkspaceHasTemplate = Boolean(selectedHoleTemplate?.id);
+  const holeWorkspaceCanPreview = holeWorkspaceHasFitting && holeWorkspaceHasTemplate;
   const holeWorkspaceSaveStatus = holeSelectedFittingId
     ? selectedHoleTemplate
       ? holeWorkspaceHasUnsavedVariantChanges
@@ -6325,7 +6328,6 @@ export default function App() {
       return;
     }
 
-    setLoading(true);
     const result = await getFittingsCatalog(activeToken, {
       city:
         options.city ??
@@ -6335,9 +6337,13 @@ export default function App() {
         "",
       search: options.search ?? fittingSearch,
     });
-    setLoading(false);
 
     if (!result.success) {
+      const timeoutError = String(result.error || "").includes("Request timed out after");
+      if (timeoutError && fittingItems.length) {
+        return;
+      }
+
       setStatus({ message: result.error || t.unableToLoadCatalog, tone: "error" });
       return;
     }
@@ -6362,9 +6368,7 @@ export default function App() {
       return [];
     }
 
-    setLoading(true);
     const result = await listFittingHoleTemplatesByFitting(activeToken, fittingId);
-    setLoading(false);
     if (import.meta.env.DEV) {
       console.debug("fitting-holes templates", {
         fittingId,
@@ -6374,6 +6378,12 @@ export default function App() {
     }
 
     if (!result.success) {
+      const timeoutError = String(result.error || "").includes("Request timed out after");
+
+      if (timeoutError && holeTemplateItems.length) {
+        return holeTemplateItems;
+      }
+
       setHoleTemplateItems([]);
       setHoleSelectedTemplateId("");
       setHoleSelectedTemplate(null);
@@ -6692,14 +6702,21 @@ export default function App() {
         </div>
         <div className="holes-connection-variant-grid">
           {holeMountingVariantOptions.map((variant) => {
-            const isActive = normalizedSelectedHoleMountingVariantKey === variant.key;
+            const isActive = holeWorkspaceHasFitting && normalizedSelectedHoleMountingVariantKey === variant.key;
 
             return (
               <button
                 aria-pressed={isActive}
-                className={`holes-connection-variant-card${isActive ? " active" : ""}`}
+                className={`holes-connection-variant-card${isActive ? " active" : ""}${!holeWorkspaceHasFitting ? " is-disabled" : ""}`}
+                disabled={!holeWorkspaceHasFitting}
                 key={variant.key}
-                onClick={() => setSelectedHoleMountingVariantKey(variant.key)}
+                onClick={() => {
+                  if (!holeWorkspaceHasFitting) {
+                    return;
+                  }
+
+                  setSelectedHoleMountingVariantKey(variant.key);
+                }}
                 type="button"
               >
                 <span className="holes-connection-variant-card-mark">
@@ -6742,6 +6759,20 @@ export default function App() {
       surface_mount: { height: 108, width: 132, x: 242, y: 108 },
     };
     const holeZone = zoneByVariant[variantKey] || zoneByVariant.surface_mount;
+
+    if (!holeWorkspaceCanPreview) {
+      return (
+        <section className="holes-preview-schematic variant-surface_mount">
+          <div className="holes-preview-schematic-head">
+            <strong>Схема сцени</strong>
+            <span>Оберіть фурнітуру, щоб побачити схему монтажу</span>
+          </div>
+          <div className="holes-preview-schematic-empty-state">
+            <span>Оберіть фурнітуру, щоб побачити схему монтажу</span>
+          </div>
+        </section>
+      );
+    }
 
     function renderHolePanelBodies() {
       switch (variantKey) {
@@ -7313,12 +7344,10 @@ export default function App() {
       return false;
     }
 
-    setLoading(true);
     const [templateResult, pointsResult] = await Promise.all([
       getFittingHoleTemplate(activeToken, templateId),
       listFittingHolePoints(activeToken, templateId),
     ]);
-    setLoading(false);
     if (import.meta.env.DEV) {
       console.debug("fitting-holes points", {
         templateId,
@@ -7327,7 +7356,15 @@ export default function App() {
       });
     }
 
+    const timeoutError = String(templateResult.error || pointsResult.error || "").includes(
+      "Request timed out after",
+    );
+
     if (!templateResult.success) {
+      if (timeoutError && holeSelectedTemplate) {
+        return true;
+      }
+
       setHoleSelectedTemplate(null);
       setHolePoints([]);
       setSelectedHolePointId("");
@@ -7335,21 +7372,23 @@ export default function App() {
       return false;
     }
 
+    const nextTemplate = templateResult.template || holeSelectedTemplate || null;
+    setSelectedHoleMountingVariantKey(
+      normalizeHoleMountingVariantKey(nextTemplate?.mounting_variant_key),
+    );
+    setHoleSelectedTemplate(nextTemplate);
+
     if (!pointsResult.success) {
-      setSelectedHoleMountingVariantKey(
-        normalizeHoleMountingVariantKey(templateResult.template?.mounting_variant_key),
-      );
-      setHoleSelectedTemplate(templateResult.template || null);
+      if (timeoutError && holePoints.length) {
+        return true;
+      }
+
       setHolePoints([]);
       setSelectedHolePointId("");
       setStatus({ message: pointsResult.error || "Unable to load fitting hole points", tone: "error" });
       return false;
     }
 
-    setSelectedHoleMountingVariantKey(
-      normalizeHoleMountingVariantKey(templateResult.template?.mounting_variant_key),
-    );
-    setHoleSelectedTemplate(templateResult.template || null);
     setHolePoints(Array.isArray(pointsResult.points) ? pointsResult.points : []);
     return true;
   }
@@ -12686,7 +12725,7 @@ export default function App() {
                   </section>
                 </div>
 
-                <section className="holes-preview-card holes-preview-3d-card">
+                <section className={`holes-preview-card holes-preview-3d-card${holeWorkspaceCanPreview ? "" : " is-placeholder"}`}>
                   <div className="holes-preview-header">
                     <div>
                       <h4>{t.holeWorkspacePreview3dTitle}</h4>

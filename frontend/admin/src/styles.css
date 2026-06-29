@@ -1890,6 +1890,19 @@ tbody tr.selected {
   border-color: #bcd2db;
 }
 
+.holes-connection-variant-card:disabled,
+.holes-connection-variant-card.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.holes-connection-variant-card:disabled:hover,
+.holes-connection-variant-card.is-disabled:hover {
+  background: #ffffff;
+  border-color: #dbe1e7;
+  box-shadow: none;
+}
+
 .holes-connection-variant-card.active {
   background: #eef9f2;
   border-color: #46b96b;
@@ -2239,6 +2252,13 @@ tbody tr.selected {
 .holes-preview-3d-card .holes-preview-stage {
   min-height: clamp(360px, 56vh, 760px);
   position: relative;
+}
+
+.holes-preview-3d-card.is-placeholder .holes-preview-material-planes,
+.holes-preview-3d-card.is-placeholder .holes-preview-schematic,
+.holes-preview-3d-card.is-placeholder .holes-preview-debug,
+.holes-preview-3d-card.is-placeholder .holes-preview-technical {
+  display: none;
 }
 
 .holes-preview-3d-card > .holes-preview-stage:not(.holes-preview-stage-placeholder),
