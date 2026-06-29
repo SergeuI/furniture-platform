@@ -4449,15 +4449,120 @@ export default function App() {
       width,
     };
   }, [holePoints]);
+  function normalizeHolesForScenePreview(points, mountingVariantKey = selectedHoleMountingVariantKey) {
+    const zoneByVariant = {
+      angled_two_planes: { height: 126, width: 160, x: 266, y: 118 },
+      drawer_slides: { height: 118, width: 120, x: 320, y: 110 },
+      edge_to_edge: { height: 88, width: 138, x: 304, y: 136 },
+      face_to_edge: { height: 110, width: 122, x: 272, y: 114 },
+      surface_mount: { height: 108, width: 132, x: 242, y: 108 },
+    };
+    const holeZone = zoneByVariant[mountingVariantKey] || zoneByVariant.surface_mount;
+    const normalizedPoints = (Array.isArray(points) ? points : []).map((point, index) => {
+      const x = Number(point?.x);
+      const y = Number(point?.y);
+      const hasX = Number.isFinite(x);
+      const hasY = Number.isFinite(y);
+      const label = String(point?.label || "").trim() || `P${point?.id || index + 1}`;
+      const diameter = Number(point?.diameter);
+      const depth = Number(point?.depth);
+
+      return {
+        depth: Number.isFinite(depth) ? depth : null,
+        diameter: Number.isFinite(diameter) ? diameter : null,
+        hasCoordinates: hasX && hasY,
+        id: point?.id ?? index + 1,
+        label,
+        operation: String(point?.operation || "").trim() || "",
+        side: String(point?.side || "").trim() || "",
+        source: point,
+        x: hasX ? x : null,
+        y: hasY ? y : null,
+      };
+    });
+
+    if (!normalizedPoints.length) {
+      return {
+        hasCoordinates: false,
+        normalizedHoles: [],
+      };
+    }
+
+    const pointsWithCoordinates = normalizedPoints.filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y));
+
+    if (pointsWithCoordinates.length) {
+      const xValues = pointsWithCoordinates.map((point) => point.x);
+      const yValues = pointsWithCoordinates.map((point) => point.y);
+      const minX = Math.min(...xValues);
+      const maxX = Math.max(...xValues);
+      const minY = Math.min(...yValues);
+      const maxY = Math.max(...yValues);
+      const spanX = Math.max(1, maxX - minX);
+      const spanY = Math.max(1, maxY - minY);
+      const innerPadding = 18;
+      const innerWidth = Math.max(1, holeZone.width - innerPadding * 2);
+      const innerHeight = Math.max(1, holeZone.height - innerPadding * 2);
+
+      return {
+        hasCoordinates: true,
+        normalizedHoles: normalizedPoints.map((point, index) => {
+          const hasX = Number.isFinite(point.x);
+          const hasY = Number.isFinite(point.y);
+          const fallbackColumnCount = Math.min(4, Math.max(1, normalizedPoints.length));
+          const fallbackRowCount = Math.max(1, Math.ceil(normalizedPoints.length / fallbackColumnCount));
+          const fallbackColumn = index % fallbackColumnCount;
+          const fallbackRow = Math.floor(index / fallbackColumnCount);
+          const fallbackX = holeZone.x + ((fallbackColumn + 1) / (fallbackColumnCount + 1)) * holeZone.width;
+          const fallbackY = holeZone.y + ((fallbackRow + 1) / (fallbackRowCount + 1)) * holeZone.height;
+          const previewX = hasX ? holeZone.x + innerPadding + ((point.x - minX) / spanX) * innerWidth : fallbackX;
+          const previewY = hasY ? holeZone.y + innerPadding + ((point.y - minY) / spanY) * innerHeight : fallbackY;
+          const clampedX = Math.max(holeZone.x + 8, Math.min(holeZone.x + holeZone.width - 8, previewX));
+          const clampedY = Math.max(holeZone.y + 8, Math.min(holeZone.y + holeZone.height - 8, previewY));
+
+          return {
+            ...point,
+            previewX: clampedX,
+            previewY: clampedY,
+          };
+        }),
+      };
+    }
+
+    const fallbackColumns = Math.min(4, Math.max(1, normalizedPoints.length));
+    const fallbackRows = Math.max(1, Math.ceil(normalizedPoints.length / fallbackColumns));
+    const cellWidth = holeZone.width / (fallbackColumns + 1);
+    const cellHeight = holeZone.height / (fallbackRows + 1);
+
+    return {
+      hasCoordinates: false,
+      normalizedHoles: normalizedPoints.map((point, index) => {
+        const column = index % fallbackColumns;
+        const row = Math.floor(index / fallbackColumns);
+        return {
+          ...point,
+          previewX: holeZone.x + cellWidth * (column + 1),
+          previewY: holeZone.y + cellHeight * (row + 1),
+        };
+      }),
+    };
+  }
+  const holesScenePreviewNormalization = useMemo(
+    () => normalizeHolesForScenePreview(holePreviewData.points, selectedHoleMountingVariantKey),
+    [holePreviewData.points, selectedHoleMountingVariantKey],
+  );
   const holesPreviewSceneModel = useMemo(() => {
-    const sceneHoles = Array.isArray(holePreviewData.points)
-      ? holePreviewData.points.map((point) => ({
+    const sceneHoles = Array.isArray(holesScenePreviewNormalization.normalizedHoles)
+      ? holesScenePreviewNormalization.normalizedHoles.map((point) => ({
           depth: point.depth,
           diameter: point.diameter,
+          hasCoordinates: point.hasCoordinates,
           id: point.id,
           isHovered: String(hoveredHolePointId) === String(point.id),
           operation: point.operation,
+          previewX: point.previewX,
+          previewY: point.previewY,
           side: point.side,
+          source: point.source,
           x: point.x,
           y: point.y,
         }))
@@ -4468,7 +4573,10 @@ export default function App() {
       fitting: selectedHoleFitting,
       hoveredHole,
       hoveredHoleId: hoveredHolePointId || "",
+      hasCoordinates: holesScenePreviewNormalization.hasCoordinates,
       holes: sceneHoles,
+      normalizedHoles: sceneHoles,
+      normalizedCount: sceneHoles.length,
       materialPlanes: holesMaterialPlanesModel,
       mountingVariant: selectedHoleMountingVariant,
       stats: {
@@ -4476,11 +4584,13 @@ export default function App() {
         hasMountingVariant: Boolean(selectedHoleMountingVariant),
         hasTemplate: Boolean(selectedHoleTemplate),
         holesCount: sceneHoles.length,
+        hasCoordinates: holesScenePreviewNormalization.hasCoordinates,
+        normalizedCount: sceneHoles.length,
       },
       template: selectedHoleTemplate,
     };
   }, [
-    holePreviewData.points,
+    holesScenePreviewNormalization,
     hoveredHolePointId,
     holesMaterialPlanesModel,
     selectedHoleFitting,
@@ -6410,19 +6520,14 @@ export default function App() {
     const variantKey = normalizeHoleWorkspaceMountingVariantKey(
       scene?.mountingVariant?.key || selectedHoleMountingVariantKey,
     );
-    const holes = Array.isArray(scene?.holes) ? scene.holes : [];
+    const holes = Array.isArray(scene?.normalizedHoles) && scene.normalizedHoles.length
+      ? scene.normalizedHoles
+      : Array.isArray(scene?.holes)
+        ? scene.holes
+        : [];
     const materialPlaneA = scene?.materialPlanes?.planeA?.label || "Площина A";
     const materialPlaneB = scene?.materialPlanes?.planeB?.label || "Площина B";
     const connectionDirection = scene?.materialPlanes?.connectionDirection || "—";
-    const xValues = holes.map((hole) => Number(hole?.x)).filter(Number.isFinite);
-    const yValues = holes.map((hole) => Number(hole?.y)).filter(Number.isFinite);
-    const hasCoordinates = xValues.length > 0 || yValues.length > 0;
-    const minX = xValues.length ? Math.min(...xValues) : 0;
-    const maxX = xValues.length ? Math.max(...xValues) : 1;
-    const minY = yValues.length ? Math.min(...yValues) : 0;
-    const maxY = yValues.length ? Math.max(...yValues) : 1;
-    const spanX = Math.max(1, maxX - minX);
-    const spanY = Math.max(1, maxY - minY);
     const zoneByVariant = {
       angled_two_planes: { height: 126, width: 160, x: 266, y: 118 },
       drawer_slides: { height: 118, width: 120, x: 320, y: 110 },
@@ -6431,36 +6536,6 @@ export default function App() {
       surface_mount: { height: 108, width: 132, x: 242, y: 108 },
     };
     const holeZone = zoneByVariant[variantKey] || zoneByVariant.surface_mount;
-
-    function getHolePosition(hole, index) {
-      const rawX = Number(hole?.x);
-      const rawY = Number(hole?.y);
-      const hasX = Number.isFinite(rawX);
-      const hasY = Number.isFinite(rawY);
-
-      if (hasCoordinates && (hasX || hasY)) {
-        const mappedX = hasX
-          ? holeZone.x + ((rawX - minX) / spanX) * holeZone.width
-          : holeZone.x + holeZone.width / 2;
-        const mappedY = hasY
-          ? holeZone.y + ((rawY - minY) / spanY) * holeZone.height
-          : holeZone.y + holeZone.height / 2;
-
-        return {
-          x: Math.max(holeZone.x + 10, Math.min(holeZone.x + holeZone.width - 10, mappedX)),
-          y: Math.max(holeZone.y + 10, Math.min(holeZone.y + holeZone.height - 10, mappedY)),
-        };
-      }
-
-      const fallbackColumns = 4;
-      const fallbackRows = Math.max(1, Math.ceil(Math.max(1, holes.length) / fallbackColumns));
-      const column = index % fallbackColumns;
-      const row = Math.floor(index / fallbackColumns);
-      return {
-        x: holeZone.x + ((column + 1) / (fallbackColumns + 1)) * holeZone.width,
-        y: holeZone.y + ((row + 1) / (fallbackRows + 1)) * holeZone.height,
-      };
-    }
 
     function renderHolePanelBodies() {
       switch (variantKey) {
@@ -6509,18 +6584,25 @@ export default function App() {
     }
 
     const points = holes.map((hole, index) => {
-      const position = getHolePosition(hole, index);
+      const rawPreviewX = Number(hole?.previewX);
+      const rawPreviewY = Number(hole?.previewY);
+      const rawX = Number(hole?.x);
+      const rawY = Number(hole?.y);
       const diameter = Number(hole?.diameter);
       const radius = Math.max(4, Math.min(10, Number.isFinite(diameter) ? Math.round(diameter / 2) : 5));
       const holeId = hole?.id;
+      const hasId = holeId !== null && holeId !== undefined && String(holeId).trim() !== "";
+      const hasCoordinates = Boolean(hole?.hasCoordinates) || (Number.isFinite(rawX) && Number.isFinite(rawY));
 
       return {
-        cx: position.x,
-        cy: position.y,
-        hasId: holeId !== null && holeId !== undefined && String(holeId).trim() !== "",
-        hole,
+        cx: Number.isFinite(rawPreviewX) ? rawPreviewX : Number.isFinite(rawX) ? rawX : holeZone.x + holeZone.width / 2,
+        cy: Number.isFinite(rawPreviewY) ? rawPreviewY : Number.isFinite(rawY) ? rawY : holeZone.y + holeZone.height / 2,
+        hasCoordinates,
+        hasId,
         id: holeId,
         radius,
+        isHovered: Boolean(hole?.isHovered),
+        hole,
       };
     });
 
@@ -6602,7 +6684,7 @@ export default function App() {
             <g className="holes-preview-schematic-holes">
               {points.map((point) => (
                 <g
-                  className={`holes-preview-schematic-hole${point.hole.isHovered ? " is-hovered" : ""}${point.hasId ? " is-interactive" : ""}`}
+                  className={`holes-preview-schematic-hole${point.isHovered ? " is-hovered" : ""}${point.hasId ? " is-interactive" : ""}`}
                   key={point.id || `${point.cx}-${point.cy}`}
                   onMouseEnter={
                     point.hasId && typeof onHoverHole === "function"
@@ -12366,8 +12448,16 @@ export default function App() {
                         <strong>{holesPreviewModel.scene?.materialPlanes ? "так" : "ні"}</strong>
                       </div>
                       <div className="holes-preview-scene-stat">
+                        <span>Координати:</span>
+                        <strong>{holesPreviewModel.scene?.stats?.hasCoordinates ? "є" : "немає"}</strong>
+                      </div>
+                      <div className="holes-preview-scene-stat">
                         <span>Отворів у сцені:</span>
                         <strong>{holesPreviewModel.scene?.stats?.holesCount ?? 0}</strong>
+                      </div>
+                      <div className="holes-preview-scene-stat">
+                        <span>Нормалізовано точок:</span>
+                        <strong>{holesPreviewModel.scene?.stats?.normalizedCount ?? 0}</strong>
                       </div>
                       <div className="holes-preview-scene-stat">
                         <span>Hovered hole:</span>
