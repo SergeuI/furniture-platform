@@ -2189,6 +2189,108 @@ tbody tr.selected {
   line-height: 1;
 }
 
+.holes-preview-scene {
+  background: #ffffff;
+  border: 1px solid #dbe1e7;
+  border-radius: 12px;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.holes-preview-scene-title,
+.holes-preview-scene-holes-title {
+  color: #607182;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+}
+
+.holes-preview-scene-stats {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  min-width: 0;
+}
+
+.holes-preview-scene-stat {
+  align-items: baseline;
+  background: #f8fafb;
+  border: 1px solid #e1e8ee;
+  border-radius: 10px;
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 10px 12px;
+}
+
+.holes-preview-scene-stat span {
+  color: #607182;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.holes-preview-scene-stat strong {
+  color: #24343d;
+  font-size: 12px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.holes-preview-scene-holes {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.holes-preview-scene-holes-list {
+  display: grid;
+  gap: 8px;
+  max-height: 160px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.holes-preview-scene-hole {
+  align-items: baseline;
+  background: #f8fafb;
+  border: 1px solid #e1e8ee;
+  border-radius: 10px;
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 12px;
+}
+
+.holes-preview-scene-hole.is-hovered {
+  background: #ecf9f4;
+  border-color: #b7ecc8;
+}
+
+.holes-preview-scene-hole strong,
+.holes-preview-scene-hole span,
+.holes-preview-scene-empty {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.holes-preview-scene-hole strong {
+  color: #24343d;
+}
+
+.holes-preview-scene-hole span,
+.holes-preview-scene-empty {
+  color: #607182;
+}
+
+.holes-preview-scene-empty {
+  background: #f8fafb;
+  border: 1px dashed #dbe1e7;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
 .holes-preview-debug-row {
   display: grid;
   gap: 6px;
@@ -5191,6 +5293,10 @@ tbody tr.selected {
 
   .holes-preview-material-planes-arrow {
     padding-left: 2px;
+  }
+
+  .holes-preview-scene-stats {
+    grid-template-columns: 1fr;
   }
 }
 

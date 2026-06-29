@@ -4449,6 +4449,44 @@ export default function App() {
       width,
     };
   }, [holePoints]);
+  const holesPreviewSceneModel = useMemo(() => {
+    const sceneHoles = Array.isArray(holePreviewData.points)
+      ? holePreviewData.points.map((point) => ({
+          depth: point.depth,
+          diameter: point.diameter,
+          id: point.id,
+          isHovered: String(hoveredHolePointId) === String(point.id),
+          operation: point.operation,
+          side: point.side,
+          x: point.x,
+          y: point.y,
+        }))
+      : [];
+    const hoveredHole = sceneHoles.find((point) => point.isHovered) || null;
+
+    return {
+      fitting: selectedHoleFitting,
+      hoveredHole,
+      hoveredHoleId: hoveredHolePointId || "",
+      holes: sceneHoles,
+      materialPlanes: holesMaterialPlanesModel,
+      mountingVariant: selectedHoleMountingVariant,
+      stats: {
+        hasFitting: Boolean(selectedHoleFitting),
+        hasMountingVariant: Boolean(selectedHoleMountingVariant),
+        hasTemplate: Boolean(selectedHoleTemplate),
+        holesCount: sceneHoles.length,
+      },
+      template: selectedHoleTemplate,
+    };
+  }, [
+    holePreviewData.points,
+    hoveredHolePointId,
+    holesMaterialPlanesModel,
+    selectedHoleFitting,
+    selectedHoleMountingVariant,
+    selectedHoleTemplate,
+  ]);
   const holesPreviewModel = useMemo(
     () => ({
       fitting: selectedHoleFitting,
@@ -4457,6 +4495,7 @@ export default function App() {
       hoveredPointId: hoveredHolePointId || "",
       pointCount: holePoints.length,
       points: holePoints,
+      scene: holesPreviewSceneModel,
       side: selectedHoleTemplate?.side ?? "",
       template: selectedHoleTemplate,
       type: selectedHoleTemplate?.template_type ?? "",
@@ -4468,6 +4507,7 @@ export default function App() {
       holesMaterialPlanesModel,
       selectedHoleMountingVariant,
       selectedHoleTemplate,
+      holesPreviewSceneModel,
     ],
   );
   const inferStatusTone = useCallback((message) => {
@@ -11988,6 +12028,58 @@ export default function App() {
                         <span className="holes-preview-material-plane-card">
                           {holesPreviewModel.materialPlanes?.planeB?.label || "Площина B"}
                         </span>
+                      </div>
+                    </div>
+                    <div className="holes-preview-scene" aria-label="Scene model">
+                      <div className="holes-preview-scene-title">Scene model</div>
+                      <div className="holes-preview-scene-stats">
+                        <div className="holes-preview-scene-stat">
+                          <span>Фурнітура:</span>
+                          <strong>{holesPreviewModel.scene?.stats?.hasFitting ? "так" : "ні"}</strong>
+                        </div>
+                        <div className="holes-preview-scene-stat">
+                          <span>Шаблон:</span>
+                          <strong>{holesPreviewModel.scene?.stats?.hasTemplate ? "так" : "ні"}</strong>
+                        </div>
+                        <div className="holes-preview-scene-stat">
+                          <span>Варіант кріплення:</span>
+                          <strong>{holesPreviewModel.scene?.stats?.hasMountingVariant ? "так" : "ні"}</strong>
+                        </div>
+                        <div className="holes-preview-scene-stat">
+                          <span>Площини:</span>
+                          <strong>{holesPreviewModel.scene?.materialPlanes ? "так" : "ні"}</strong>
+                        </div>
+                        <div className="holes-preview-scene-stat">
+                          <span>Отворів у сцені:</span>
+                          <strong>{holesPreviewModel.scene?.stats?.holesCount ?? 0}</strong>
+                        </div>
+                        <div className="holes-preview-scene-stat">
+                          <span>Hovered hole:</span>
+                          <strong>{holesPreviewModel.scene?.hoveredHoleId || "—"}</strong>
+                        </div>
+                      </div>
+                      <div className="holes-preview-scene-holes">
+                        <div className="holes-preview-scene-holes-title">Отвори сцени</div>
+                        {holesPreviewModel.scene?.holes?.length ? (
+                          <div className="holes-preview-scene-holes-list">
+                            {holesPreviewModel.scene.holes.map((hole) => (
+                              <div
+                                className={`holes-preview-scene-hole${hole.isHovered ? " is-hovered" : ""}`}
+                                key={hole.id}
+                              >
+                                <strong>
+                                  #{hole.id}
+                                  {Number.isFinite(hole.diameter) ? ` Ø${hole.diameter}` : " Ø—"}
+                                </strong>
+                                <span>
+                                  x:{Number.isFinite(hole.x) ? hole.x : "—"} y:{Number.isFinite(hole.y) ? hole.y : "—"}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="holes-preview-scene-empty">Отвори сцени ще не додані</div>
+                        )}
                       </div>
                     </div>
                     <div className="holes-preview-debug" aria-label={t.holeWorkspacePreview3dTitle}>
