@@ -12504,66 +12504,6 @@ export default function App() {
                     () => setHoveredHolePointId(""),
                     (holeId) => setSelectedHolePointId(String(holeId)),
                   )}
-                  <div className="holes-preview-scene" aria-label="Scene model">
-                    <div className="holes-preview-scene-title">Scene model</div>
-                    <div className="holes-preview-scene-stats">
-                      <div className="holes-preview-scene-stat">
-                        <span>Фурнітура:</span>
-                        <strong>{holesPreviewModel.scene?.stats?.hasFitting ? "так" : "ні"}</strong>
-                      </div>
-                      <div className="holes-preview-scene-stat">
-                        <span>Шаблон:</span>
-                        <strong>{holesPreviewModel.scene?.stats?.hasTemplate ? "так" : "ні"}</strong>
-                      </div>
-                      <div className="holes-preview-scene-stat">
-                        <span>Варіант кріплення:</span>
-                        <strong>{holesPreviewModel.scene?.stats?.hasMountingVariant ? "так" : "ні"}</strong>
-                      </div>
-                      <div className="holes-preview-scene-stat">
-                        <span>Площини:</span>
-                        <strong>{holesPreviewModel.scene?.materialPlanes ? "так" : "ні"}</strong>
-                      </div>
-                      <div className="holes-preview-scene-stat">
-                        <span>Координати:</span>
-                        <strong>{holesPreviewModel.scene?.stats?.hasCoordinates ? "є" : "немає"}</strong>
-                      </div>
-                      <div className="holes-preview-scene-stat">
-                        <span>Отворів у сцені:</span>
-                        <strong>{holesPreviewModel.scene?.stats?.holesCount ?? 0}</strong>
-                      </div>
-                      <div className="holes-preview-scene-stat">
-                        <span>Нормалізовано точок:</span>
-                        <strong>{holesPreviewModel.scene?.stats?.normalizedCount ?? 0}</strong>
-                      </div>
-                      <div className="holes-preview-scene-stat">
-                        <span>Hovered hole:</span>
-                        <strong>{holesPreviewModel.scene?.hoveredHoleId || "—"}</strong>
-                      </div>
-                    </div>
-                    <div className="holes-preview-scene-holes">
-                      <div className="holes-preview-scene-holes-title">Отвори сцени</div>
-                      {holesPreviewModel.scene?.holes?.length ? (
-                        <div className="holes-preview-scene-holes-list">
-                          {holesPreviewModel.scene.holes.map((hole) => (
-                            <div
-                              className={`holes-preview-scene-hole${hole.isHovered ? " is-hovered" : ""}${hole.isSelected ? " is-selected" : ""}`}
-                              key={hole.id}
-                            >
-                              <strong>
-                                #{hole.id}
-                                {Number.isFinite(hole.diameter) ? ` Ø${hole.diameter}` : " Ø—"}
-                              </strong>
-                              <span>
-                                x:{Number.isFinite(hole.x) ? hole.x : "—"} y:{Number.isFinite(hole.y) ? hole.y : "—"}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="holes-preview-scene-empty">Отвори сцени ще не додані</div>
-                      )}
-                    </div>
-                  </div>
                   <section className="holes-selected-point-panel" aria-label="Вибрана точка">
                     <div className="holes-selected-point-panel-header">
                       <div>
@@ -12629,6 +12569,68 @@ export default function App() {
                       <div className="holes-selected-point-empty">Точку не вибрано</div>
                     )}
                   </section>
+                  <details className="holes-preview-technical">
+                    <summary>Технічні дані</summary>
+                  <div className="holes-preview-scene" aria-label="Scene model">
+                    <div className="holes-preview-scene-title">Scene model</div>
+                    <div className="holes-preview-scene-stats">
+                      <div className="holes-preview-scene-stat">
+                        <span>Фурнітура:</span>
+                        <strong>{holesPreviewModel.scene?.stats?.hasFitting ? "так" : "ні"}</strong>
+                      </div>
+                      <div className="holes-preview-scene-stat">
+                        <span>Шаблон:</span>
+                        <strong>{holesPreviewModel.scene?.stats?.hasTemplate ? "так" : "ні"}</strong>
+                      </div>
+                      <div className="holes-preview-scene-stat">
+                        <span>Варіант кріплення:</span>
+                        <strong>{holesPreviewModel.scene?.stats?.hasMountingVariant ? "так" : "ні"}</strong>
+                      </div>
+                      <div className="holes-preview-scene-stat">
+                        <span>Площини:</span>
+                        <strong>{holesPreviewModel.scene?.materialPlanes ? "так" : "ні"}</strong>
+                      </div>
+                      <div className="holes-preview-scene-stat">
+                        <span>Координати:</span>
+                        <strong>{holesPreviewModel.scene?.stats?.hasCoordinates ? "є" : "немає"}</strong>
+                      </div>
+                      <div className="holes-preview-scene-stat">
+                        <span>Отворів у сцені:</span>
+                        <strong>{holesPreviewModel.scene?.stats?.holesCount ?? 0}</strong>
+                      </div>
+                      <div className="holes-preview-scene-stat">
+                        <span>Нормалізовано точок:</span>
+                        <strong>{holesPreviewModel.scene?.stats?.normalizedCount ?? 0}</strong>
+                      </div>
+                      <div className="holes-preview-scene-stat">
+                        <span>Hovered hole:</span>
+                        <strong>{holesPreviewModel.scene?.hoveredHoleId || "—"}</strong>
+                      </div>
+                    </div>
+                    <div className="holes-preview-scene-holes">
+                      <div className="holes-preview-scene-holes-title">Отвори сцени</div>
+                      {holesPreviewModel.scene?.holes?.length ? (
+                        <div className="holes-preview-scene-holes-list">
+                          {holesPreviewModel.scene.holes.map((hole) => (
+                            <div
+                              className={`holes-preview-scene-hole${hole.isHovered ? " is-hovered" : ""}${hole.isSelected ? " is-selected" : ""}`}
+                              key={hole.id}
+                            >
+                              <strong>
+                                #{hole.id}
+                                {Number.isFinite(hole.diameter) ? ` Ø${hole.diameter}` : " Ø—"}
+                              </strong>
+                              <span>
+                                x:{Number.isFinite(hole.x) ? hole.x : "—"} y:{Number.isFinite(hole.y) ? hole.y : "—"}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="holes-preview-scene-empty">Отвори сцени ще не додані</div>
+                      )}
+                    </div>
+                  </div>
                   <div className="holes-preview-debug" aria-label={t.holeWorkspacePreview3dTitle}>
                     <div className="holes-preview-debug-row">
                       <span className="holes-preview-debug-label">Фурнітура</span>
@@ -12698,6 +12700,7 @@ export default function App() {
                         <strong className="holes-preview-debug-value">{holesPreviewModel.selectedPointId || "—"}</strong>
                       </div>
                     </div>
+                  </details>
                   {holePreviewData.hasPoints ? (
                     <>
                       <div className="holes-preview-stage" data-placeholder={t.holeWorkspacePreview3dPlaceholder}>

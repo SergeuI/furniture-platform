@@ -2153,6 +2153,34 @@ tbody tr.selected {
   padding: 12px;
 }
 
+.holes-preview-technical {
+  background: #f8fbfd;
+  border: 1px solid #dbe1e7;
+  border-radius: 12px;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.holes-preview-technical > summary {
+  align-items: center;
+  color: #24343d;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 800;
+  list-style: none;
+  width: fit-content;
+}
+
+.holes-preview-technical > summary::-webkit-details-marker {
+  display: none;
+}
+
+.holes-preview-technical[open] > summary {
+  margin-bottom: 2px;
+}
+
 .holes-preview-material-planes {
   background: #ffffff;
   border: 1px solid #dbe1e7;
