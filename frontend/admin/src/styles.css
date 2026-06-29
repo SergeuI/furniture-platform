@@ -2442,6 +2442,76 @@ tbody tr.selected {
   padding: 10px 12px;
 }
 
+.holes-selected-point-panel {
+  background: #ffffff;
+  border: 1px solid #dbe1e7;
+  border-radius: 12px;
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+}
+
+.holes-selected-point-panel-header {
+  align-items: start;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.holes-selected-point-panel-header strong {
+  color: #24343d;
+  display: block;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.holes-selected-point-panel-header p {
+  color: #607182;
+  font-size: 12px;
+  margin: 2px 0 0;
+}
+
+.holes-selected-point-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  min-width: 0;
+}
+
+.holes-selected-point-row {
+  background: #f8fafb;
+  border: 1px solid #e1e8ee;
+  border-radius: 10px;
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 10px 12px;
+}
+
+.holes-selected-point-row span {
+  color: #607182;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.holes-selected-point-row strong {
+  color: #24343d;
+  font-size: 12px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.holes-selected-point-empty {
+  background: #f8fafb;
+  border: 1px dashed #dbe1e7;
+  border-radius: 10px;
+  color: #607182;
+  font-size: 12px;
+  padding: 10px 12px;
+}
+
 .holes-preview-debug-row {
   display: grid;
   gap: 6px;
@@ -5466,6 +5536,10 @@ tbody tr.selected {
   }
 
   .holes-preview-scene-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .holes-selected-point-grid {
     grid-template-columns: 1fr;
   }
 

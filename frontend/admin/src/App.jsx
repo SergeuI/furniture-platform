@@ -4607,6 +4607,10 @@ export default function App() {
     selectedHolePointId,
     selectedHoleTemplate,
   ]);
+  const selectedHolePoint = useMemo(
+    () => holePoints.find((point) => String(point.id) === String(selectedHolePointId)) || null,
+    [holePoints, selectedHolePointId],
+  );
   const holesPreviewModel = useMemo(
     () => ({
       fitting: selectedHoleFitting,
@@ -4614,6 +4618,7 @@ export default function App() {
       mountingVariant: selectedHoleMountingVariant,
       hoveredPointId: hoveredHolePointId || "",
       selectedPointId: selectedHolePointId || "",
+      selectedPoint: selectedHolePoint,
       pointCount: holePoints.length,
       points: holePoints,
       scene: holesPreviewSceneModel,
@@ -4628,6 +4633,7 @@ export default function App() {
       holesMaterialPlanesModel,
       selectedHoleMountingVariant,
       selectedHolePointId,
+      selectedHolePoint,
       selectedHoleTemplate,
       holesPreviewSceneModel,
     ],
@@ -12558,6 +12564,60 @@ export default function App() {
                       )}
                     </div>
                   </div>
+                  <section className="holes-selected-point-panel" aria-label="Вибрана точка">
+                    <div className="holes-selected-point-panel-header">
+                      <div>
+                        <strong>Вибрана точка</strong>
+                        <p>Деталі активної точки отвору</p>
+                      </div>
+                      <button
+                        className="ghost-button compact-button"
+                        disabled={!selectedHolePointId}
+                        onClick={() => setSelectedHolePointId(null)}
+                        type="button"
+                      >
+                        Скинути вибір
+                      </button>
+                    </div>
+                    {selectedHolePoint ? (
+                      <div className="holes-selected-point-grid">
+                        <div className="holes-selected-point-row">
+                          <span>ID</span>
+                          <strong>{selectedHolePoint.id ?? "—"}</strong>
+                        </div>
+                        <div className="holes-selected-point-row">
+                          <span>Назва</span>
+                          <strong>{selectedHolePoint.label || selectedHolePoint.name || "—"}</strong>
+                        </div>
+                        <div className="holes-selected-point-row">
+                          <span>X</span>
+                          <strong>{selectedHolePoint.x_mm ?? selectedHolePoint.x ?? "—"}</strong>
+                        </div>
+                        <div className="holes-selected-point-row">
+                          <span>Y</span>
+                          <strong>{selectedHolePoint.y_mm ?? selectedHolePoint.y ?? "—"}</strong>
+                        </div>
+                        <div className="holes-selected-point-row">
+                          <span>Діаметр</span>
+                          <strong>{selectedHolePoint.diameter_mm ?? selectedHolePoint.diameter ?? "—"}</strong>
+                        </div>
+                        <div className="holes-selected-point-row">
+                          <span>Глибина</span>
+                          <strong>{selectedHolePoint.depth_mm ?? selectedHolePoint.depth ?? "—"}</strong>
+                        </div>
+                        <div className="holes-selected-point-row">
+                          <span>Сторона</span>
+                          <strong>{formatHolePointSide(selectedHolePoint.side, t) || selectedHolePoint.side || "—"}</strong>
+                        </div>
+                        <div className="holes-selected-point-row">
+                          <span>Операція</span>
+                          <strong>{formatHolePointOperation(selectedHolePoint.operation, t) || selectedHolePoint.operation || "—"}</strong>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="holes-selected-point-empty">Точку не вибрано</div>
+                    )}
+                  </section>
                   <div className="holes-preview-debug" aria-label={t.holeWorkspacePreview3dTitle}>
                     <div className="holes-preview-debug-row">
                       <span className="holes-preview-debug-label">Фурнітура</span>
