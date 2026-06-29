@@ -6738,7 +6738,14 @@ export default function App() {
     );
   }
 
-  function renderHolesSceneSchematicPreview(sceneModel, onHoverHole, onLeaveHole, onSelectHole) {
+  function renderHolesSceneSchematicPreview(
+    sceneModel,
+    onHoverHole,
+    onLeaveHole,
+    onSelectHole,
+    options = {},
+  ) {
+    const showHeader = options.showHeader !== false;
     const scene = sceneModel || holesPreviewSceneModel || {};
     const variantKey = normalizeHoleWorkspaceMountingVariantKey(
       scene?.mountingVariant?.key || normalizedSelectedHoleMountingVariantKey,
@@ -6845,13 +6852,17 @@ export default function App() {
     });
 
     return (
-      <section className={`holes-preview-schematic variant-${variantKey}`}>
-        <div className="holes-preview-schematic-head">
-          <strong>Схема сцени</strong>
-          <span>
-            {materialPlaneA} → {materialPlaneB} · {connectionDirection}
-          </span>
-        </div>
+      <section
+        className={`holes-preview-schematic variant-${variantKey}${showHeader ? "" : " holes-preview-schematic-embedded"}`}
+      >
+        {showHeader ? (
+          <div className="holes-preview-schematic-head">
+            <strong>Схема сцени</strong>
+            <span>
+              {materialPlaneA} → {materialPlaneB} · {connectionDirection}
+            </span>
+          </div>
+        ) : null}
 
         <svg
           aria-label="Scene schematic preview"
@@ -12732,9 +12743,19 @@ export default function App() {
                       <p>{t.holeWorkspacePreview3dPlaceholder}</p>
                     </div>
                   </div>
+                  {holeWorkspaceCanPreview ? (
+                    renderHolesSceneSchematicPreview(
+                      holesPreviewModel.scene,
+                      (holeId) => setHoveredHolePointId(String(holeId)),
+                      () => setHoveredHolePointId(""),
+                      (holeId) => setSelectedHolePointId(String(holeId)),
+                      { showHeader: false },
+                    )
+                  ) : (
                   <div className="holes-preview-stage holes-preview-stage-placeholder">
                     <span>{t.holeWorkspacePreview3dPlaceholder}</span>
                   </div>
+                  )}
                   <div className="holes-preview-material-planes" aria-label={t.holeWorkspacePreview3dTitle}>
                     <div className="holes-preview-material-planes-title">Площини матеріалу</div>
                     <div className="holes-preview-material-planes-flow">
