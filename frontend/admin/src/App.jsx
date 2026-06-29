@@ -4389,6 +4389,22 @@ export default function App() {
       null,
     [holeMountingVariantOptions, normalizedSelectedHoleMountingVariantKey],
   );
+  const normalizedSelectedTemplateMountingVariantKey = useMemo(
+    () => normalizeHoleMountingVariantKey(selectedHoleTemplate?.mounting_variant_key),
+    [selectedHoleTemplate],
+  );
+  const holeWorkspaceHasUnsavedVariantChanges = Boolean(
+    holeSelectedFittingId &&
+      selectedHoleTemplate &&
+      normalizedSelectedTemplateMountingVariantKey !== normalizedSelectedHoleMountingVariantKey,
+  );
+  const holeWorkspaceSaveStatus = holeSelectedFittingId
+    ? selectedHoleTemplate
+      ? holeWorkspaceHasUnsavedVariantChanges
+        ? "Є незбережені зміни"
+        : "Збережено"
+      : "Готово до створення"
+    : "";
   const holesMaterialPlanesModel = useMemo(() => {
     switch (normalizedSelectedHoleMountingVariantKey) {
       case "angled_two_planes":
@@ -6416,6 +6432,72 @@ export default function App() {
     setHoleTemplateEditForm(DEFAULT_HOLE_TEMPLATE_FORM);
     setHoleTemplateEditTemplateId("");
     setHoleTemplateEditSaving(false);
+  }
+
+  function buildHoleWorkspaceTemplatePayload(template, mountingVariantKey) {
+    const isExistingTemplate = Boolean(template?.id);
+    const name = String(template?.name || "").trim() || "Основний шаблон";
+
+    return {
+      fitting_id: Number(holeSelectedFittingId),
+      name,
+      template_type: String(template?.template_type || "manual"),
+      side: String(template?.side || "left").trim() || "left",
+      coordinate_system: String(template?.coordinate_system || "2d"),
+      mounting_variant_key: normalizeHoleMountingVariantKey(mountingVariantKey),
+      is_default: isExistingTemplate ? Boolean(template?.is_default) : true,
+      is_active: true,
+      notes: String(template?.notes || "").trim() || null,
+    };
+  }
+
+  async function handleHoleWorkspaceSaveTemplate() {
+    if (!holeSelectedFittingId) {
+      setStatus({ message: "Оберіть фурнітуру перед збереженням", tone: "error" });
+      return;
+    }
+
+    const template = selectedHoleTemplate;
+    const payload = buildHoleWorkspaceTemplatePayload(
+      template,
+      normalizedSelectedHoleMountingVariantKey,
+    );
+
+    setLoading(true);
+    try {
+      const result = template?.id
+        ? await updateFittingHoleTemplate(token, template.id, payload)
+        : await createFittingHoleTemplate(token, payload);
+
+      if (!result.success) {
+        const errorMessage = result.error || "Не вдалося зберегти отвори фурнітури";
+        setStatus({ message: errorMessage, tone: "error" });
+        return;
+      }
+
+      const savedTemplate = result.template || result.item || result.data || null;
+      const savedTemplateId = String(savedTemplate?.id || template?.id || "");
+
+      await loadHoleTemplates(token, holeSelectedFittingId);
+
+      if (savedTemplateId) {
+        setHoleSelectedTemplateId(savedTemplateId);
+        const detailsLoaded = await loadHoleTemplateDetails(token, savedTemplateId);
+        if (!detailsLoaded) {
+          setStatus({ message: "Отвори збережено, але не вдалося відновити деталі", tone: "error" });
+          return;
+        }
+      }
+
+      setStatus({ message: "Збережено", tone: "success" });
+    } catch (error) {
+      setStatus({
+        message: error?.message || "Не вдалося зберегти отвори фурнітури",
+        tone: "error",
+      });
+    } finally {
+      setLoading(false);
+    }
   }
 
   function renderHoleTemplateMountingSchemeIcon(schemeKey, isActive) {
@@ -12320,13 +12402,20 @@ export default function App() {
                 <div className="holes-left-column">
                   {renderHoleWorkspaceFittingInfo(selectedHoleFitting)}
                   {renderHoleWorkspaceConnectionVariantCards()}
-                  <section className="holes-panel">
-                  <div className="holes-panel-header">
-                    <h4>{t.holeTemplateTitle}</h4>
-                    <span className="service-tree-badge subtle">
-                      {holeTemplateItems.length}
-                    </span>
-                  </div>
+                  <details className="holes-panel holes-technical-templates">
+                    <summary className="holes-technical-templates-summary">
+                      <div>
+                        <strong>Технічні шаблони отворів</strong>
+                        <p>
+                          Шаблони лишаються технічним контейнером для точки збереження, але не ведуть
+                          основний сценарій.
+                        </p>
+                      </div>
+                      <span className="service-tree-badge subtle">
+                        {holeTemplateItems.length}
+                      </span>
+                    </summary>
+                    <div className="holes-technical-templates-body">
                   {holeSelectedFittingId ? (
                     holeTemplateItems.length ? (
                       <div className="holes-table-shell">
@@ -12395,9 +12484,10 @@ export default function App() {
                       <span>{t.holeTemplateSelectFitting}</span>
                     </div>
                   )}
-                </section>
+                    </div>
+                  </details>
 
-                <section className="holes-panel">
+                <section className="holes-panel holes-workspace-points-panel">
                   <div className="holes-panel-header">
                     <h4>{t.holeTabPoints}</h4>
                     <span className="service-tree-badge subtle">
@@ -12490,7 +12580,7 @@ export default function App() {
                     </div>
                   )}
                   </section>
-                  <section className="holes-preview-card holes-preview-2d-card">
+                  <section className="holes-preview-card holes-preview-2d-card holes-workspace-preview-panel">
                     <div className="holes-preview-header">
                       <div>
                         <h4>{t.holePreviewTitle}</h4>
@@ -12690,6 +12780,33 @@ export default function App() {
                     ) : (
                       <div className="holes-selected-point-empty">Точку не вибрано</div>
                     )}
+                  </section>
+                  <section className="holes-workspace-save-panel" aria-label="Збереження отворів фурнітури">
+                    <div className="holes-workspace-save-copy">
+                      <strong>Зберегти отвори фурнітури</strong>
+                      <p>
+                        Поточний варіант кріплення:{" "}
+                        {selectedHoleMountingVariant?.label || normalizedSelectedHoleMountingVariantKey}
+                      </p>
+                    </div>
+                    <div className="holes-workspace-save-actions">
+                      <span
+                        className={`holes-workspace-save-status${
+                          holeWorkspaceHasUnsavedVariantChanges ? " is-dirty" : " is-saved"
+                        }`}
+                      >
+                        {holeWorkspaceSaveStatus}
+                      </span>
+                      <button
+                        className="primary-button"
+                        disabled={loading || !holeSelectedFittingId}
+                        onClick={handleHoleWorkspaceSaveTemplate}
+                        type="button"
+                      >
+                        <Save size={16} />
+                        {selectedHoleTemplate ? "Зберегти отвори фурнітури" : "Створити основний шаблон"}
+                      </button>
+                    </div>
                   </section>
                   <details className="holes-preview-technical">
                     <summary>Технічні дані</summary>
