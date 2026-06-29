@@ -40,6 +40,7 @@ def _serialize_template(template) -> dict:
         "template_type": template.template_type,
         "side": template.side,
         "coordinate_system": template.coordinate_system,
+        "mounting_variant_key": template.mounting_variant_key,
         "is_default": bool(template.is_default),
         "notes": template.notes,
         "is_active": bool(template.is_active),

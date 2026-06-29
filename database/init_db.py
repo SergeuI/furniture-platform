@@ -220,6 +220,17 @@ def upgrade_sqlite_schema():
             "DATETIME"
         )
 
+        _add_column_if_missing(
+
+            connection,
+
+            "fitting_hole_templates",
+
+            "mounting_variant_key",
+
+            "TEXT NOT NULL DEFAULT 'surface_mount'"
+        )
+
         connection.exec_driver_sql(
             """
             UPDATE projects

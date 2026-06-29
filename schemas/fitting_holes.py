@@ -26,6 +26,10 @@ class FittingHoleTemplateCreate(BaseModel):
         default=None,
         max_length=64,
     )
+    mounting_variant_key: str = Field(
+        default="surface_mount",
+        max_length=64,
+    )
     is_default: bool = False
     notes: str | None = Field(
         default=None,
@@ -53,6 +57,10 @@ class FittingHoleTemplateUpdate(BaseModel):
         default=None,
         max_length=64,
     )
+    mounting_variant_key: str | None = Field(
+        default=None,
+        max_length=64,
+    )
     is_default: bool | None = None
     notes: str | None = Field(
         default=None,
@@ -68,6 +76,7 @@ class FittingHoleTemplateResponse(BaseModel):
     template_type: str | None = None
     side: str | None = None
     coordinate_system: str | None = None
+    mounting_variant_key: str = "surface_mount"
     is_default: bool = False
     notes: str | None = None
     is_active: bool = True

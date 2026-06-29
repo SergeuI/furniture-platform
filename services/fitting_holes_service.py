@@ -10,6 +10,14 @@ from database.session import SessionLocal
 
 
 class FittingHolesService:
+    _ALLOWED_MOUNTING_VARIANT_KEYS = {
+        "surface_mount",
+        "angled_two_planes",
+        "face_to_edge",
+        "edge_to_edge",
+        "drawer_slides",
+    }
+
     def __init__(
         self,
         session: Optional[Session] = None,
@@ -110,6 +118,13 @@ class FittingHolesService:
                 return False
         return bool(value)
 
+    @classmethod
+    def _normalize_mounting_variant_key(cls, value: Any) -> str:
+        key = "" if value is None else str(value).strip()
+        if key in cls._ALLOWED_MOUNTING_VARIANT_KEYS:
+            return key
+        return "surface_mount"
+
     def _ensure_fitting_exists(self, fitting_id: int) -> FittingModel:
         fitting = self.session.get(FittingModel, fitting_id)
         if fitting is None:
@@ -148,6 +163,9 @@ class FittingHolesService:
         payload["coordinate_system"] = self._text_or_default(
             payload.get("coordinate_system"),
             "2d",
+        )
+        payload["mounting_variant_key"] = self._normalize_mounting_variant_key(
+            payload.get("mounting_variant_key"),
         )
         payload["is_active"] = self._normalize_bool(
             payload.get("is_active"),
@@ -194,6 +212,11 @@ class FittingHolesService:
             payload["coordinate_system"] = self._require_text(
                 payload.get("coordinate_system"),
                 "coordinate_system",
+            )
+
+        if "mounting_variant_key" in payload:
+            payload["mounting_variant_key"] = self._normalize_mounting_variant_key(
+                payload.get("mounting_variant_key"),
             )
 
         if "is_active" in payload:

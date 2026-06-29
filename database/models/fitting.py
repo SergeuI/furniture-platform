@@ -10,7 +10,7 @@ from sqlalchemy import (
     Text,
 )
 from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
+from sqlalchemy.sql import func, text
 
 from database.base import Base
 
@@ -202,6 +202,13 @@ class FittingHoleTemplateModel(Base):
     coordinate_system = Column(
         String,
         nullable=True,
+    )
+
+    mounting_variant_key = Column(
+        String,
+        nullable=False,
+        default="surface_mount",
+        server_default=text("'surface_mount'"),
     )
 
     is_default = Column(

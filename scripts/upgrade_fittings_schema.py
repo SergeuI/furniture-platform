@@ -29,6 +29,7 @@ TABLES = {
             template_type VARCHAR,
             side VARCHAR,
             coordinate_system VARCHAR,
+            mounting_variant_key TEXT NOT NULL DEFAULT 'surface_mount',
             is_default BOOLEAN NOT NULL DEFAULT 1,
             notes TEXT,
             is_active BOOLEAN NOT NULL DEFAULT 1,
@@ -58,6 +59,12 @@ TABLES = {
             FOREIGN KEY(template_id) REFERENCES fitting_hole_templates (id)
         )
     """,
+}
+
+TABLE_COLUMNS = {
+    "fitting_hole_templates": {
+        "mounting_variant_key": "TEXT NOT NULL DEFAULT 'surface_mount'",
+    },
 }
 
 INDEXES = {
@@ -142,7 +149,7 @@ def create_backup(database_path: Path) -> Path:
     return backup_path
 
 
-def build_plan(connection: sqlite3.Connection) -> dict[str, list[str]]:
+def build_plan(connection: sqlite3.Connection) -> dict[str, list]:
     if not table_exists(connection, "fittings"):
         raise SystemExit("Table 'fittings' does not exist.")
 
@@ -162,14 +169,23 @@ def build_plan(connection: sqlite3.Connection) -> dict[str, list[str]]:
         for index_name in INDEXES
         if not index_exists(connection, index_name)
     ]
+    missing_table_columns: list[tuple[str, str]] = []
+    for table_name, columns in TABLE_COLUMNS.items():
+        if not table_exists(connection, table_name):
+            continue
+        existing_columns = column_names(connection, table_name)
+        for column_name in columns:
+            if column_name not in existing_columns:
+                missing_table_columns.append((table_name, column_name))
     return {
         "columns": missing_columns,
         "tables": missing_tables,
         "indexes": missing_indexes,
+        "table_columns": missing_table_columns,
     }
 
 
-def apply_plan(connection: sqlite3.Connection, plan: dict[str, list[str]]) -> None:
+def apply_plan(connection: sqlite3.Connection, plan: dict[str, list]) -> None:
     for column_name in plan["columns"]:
         connection.execute(
             f"ALTER TABLE fittings ADD COLUMN {column_name} {FITTING_COLUMNS[column_name]}"
@@ -181,12 +197,17 @@ def apply_plan(connection: sqlite3.Connection, plan: dict[str, list[str]]) -> No
     for index_name in plan["indexes"]:
         connection.execute(INDEXES[index_name])
 
+    for table_name, column_name in plan.get("table_columns", []):
+        connection.execute(
+            f"ALTER TABLE {table_name} ADD COLUMN {column_name} {TABLE_COLUMNS[table_name][column_name]}"
+        )
+
     connection.commit()
 
 
 def print_plan(
     database_path: Path,
-    plan: dict[str, list[str]],
+    plan: dict[str, list],
     apply: bool,
     backup_path: Path | None,
 ) -> None:
@@ -197,6 +218,14 @@ def print_plan(
     print("Missing fitting columns:", ", ".join(plan["columns"]) or "none")
     print("Missing tables:", ", ".join(plan["tables"]) or "none")
     print("Missing indexes:", ", ".join(plan["indexes"]) or "none")
+    missing_table_columns = plan.get("table_columns", [])
+    if missing_table_columns:
+        formatted_columns = ", ".join(
+            f"{table}.{column}" for table, column in missing_table_columns
+        )
+    else:
+        formatted_columns = "none"
+    print("Missing table columns:", formatted_columns)
 
 
 def main() -> None:

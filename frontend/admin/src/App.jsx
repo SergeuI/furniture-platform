@@ -545,6 +545,7 @@ const DEFAULT_HOLE_TEMPLATE_FORM = {
   template_type: "manual",
   side: "left",
   coordinate_system: "2d",
+  mounting_variant_key: "surface_mount",
   is_default: false,
   is_active: true,
   notes: "",
@@ -591,6 +592,7 @@ function buildHoleTemplateFormFromTemplate(template) {
     template_type: String(template?.template_type ?? "manual"),
     side: String(template?.side ?? "left"),
     coordinate_system: String(template?.coordinate_system ?? "2d"),
+    mounting_variant_key: String(template?.mounting_variant_key ?? "surface_mount"),
     is_default: Boolean(template?.is_default),
     is_active: Boolean(template?.is_active ?? true),
     notes: String(template?.notes ?? ""),
@@ -4322,7 +4324,7 @@ export default function App() {
   const [hoveredHolePointId, setHoveredHolePointId] = useState("");
   const [selectedHolePointId, setSelectedHolePointId] = useState("");
   const [selectedHoleMountingVariantKey, setSelectedHoleMountingVariantKey] =
-    useState("plane_to_edge");
+    useState("surface_mount");
   const [newFittingForm, setNewFittingForm] = useState(DEFAULT_FITTING_FORM);
   const [autoRefreshStatus, setAutoRefreshStatus] = useState(null);
   const storedProjectId = localStorage.getItem(ACTIVE_PROJECT_ID_STORAGE_KEY) || "";
@@ -6394,6 +6396,9 @@ export default function App() {
 
     setHoleTemplateEditTemplateId(String(template.id));
     setHoleTemplateEditForm(buildHoleTemplateFormFromTemplate(template));
+    setSelectedHoleMountingVariantKey(
+      normalizeHoleMountingVariantKey(template?.mounting_variant_key),
+    );
     setHoleTemplateEditError("");
     setHoleTemplateEditOpen(true);
   }
@@ -6459,6 +6464,19 @@ export default function App() {
     const allowedSides = new Set(["left", "right", "top", "bottom"]);
 
     return allowedSides.has(side) ? side : "left";
+  }
+
+  function normalizeHoleMountingVariantKey(key) {
+    const allowedVariants = new Set([
+      "surface_mount",
+      "angled_two_planes",
+      "face_to_edge",
+      "edge_to_edge",
+      "drawer_slides",
+    ]);
+    const normalizedKey = String(key || "").trim();
+
+    return allowedVariants.has(normalizedKey) ? normalizedKey : "surface_mount";
   }
 
   function updateHoleTemplateSide(setForm, side) {
@@ -6925,6 +6943,7 @@ export default function App() {
       template_type: holeTemplateCreateForm.template_type || "manual",
       side: holeTemplateCreateForm.side || "left",
       coordinate_system: holeTemplateCreateForm.coordinate_system || "2d",
+      mounting_variant_key: normalizeHoleMountingVariantKey(selectedHoleMountingVariantKey),
       is_default: Boolean(holeTemplateCreateForm.is_default),
       is_active: Boolean(holeTemplateCreateForm.is_active),
       notes: holeTemplateCreateForm.notes.trim() || null,
@@ -6976,6 +6995,7 @@ export default function App() {
       template_type: holeTemplateEditForm.template_type || "manual",
       side: holeTemplateEditForm.side || "left",
       coordinate_system: holeTemplateEditForm.coordinate_system || "2d",
+      mounting_variant_key: normalizeHoleMountingVariantKey(selectedHoleMountingVariantKey),
       is_default: Boolean(holeTemplateEditForm.is_default),
       is_active: Boolean(holeTemplateEditForm.is_active),
       notes: holeTemplateEditForm.notes.trim() || null,
@@ -7231,6 +7251,9 @@ export default function App() {
     }
 
     if (!pointsResult.success) {
+      setSelectedHoleMountingVariantKey(
+        normalizeHoleMountingVariantKey(templateResult.template?.mounting_variant_key),
+      );
       setHoleSelectedTemplate(templateResult.template || null);
       setHolePoints([]);
       setSelectedHolePointId("");
@@ -7238,6 +7261,9 @@ export default function App() {
       return false;
     }
 
+    setSelectedHoleMountingVariantKey(
+      normalizeHoleMountingVariantKey(templateResult.template?.mounting_variant_key),
+    );
     setHoleSelectedTemplate(templateResult.template || null);
     setHolePoints(Array.isArray(pointsResult.points) ? pointsResult.points : []);
     return true;
