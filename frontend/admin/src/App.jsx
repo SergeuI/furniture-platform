@@ -6123,7 +6123,7 @@ export default function App() {
       setHoleSelectedTemplateId("");
       setHoleSelectedTemplate(null);
       setHolePoints([]);
-      return;
+      return [];
     }
 
     setLoading(true);
@@ -6143,12 +6143,14 @@ export default function App() {
       setHoleSelectedTemplate(null);
       setHolePoints([]);
       setStatus({ message: result.error || "Unable to load fitting hole templates", tone: "error" });
-      return;
+      return [];
     }
 
-    setHoleTemplateItems(Array.isArray(result.templates) ? result.templates : []);
+    const templates = Array.isArray(result.templates) ? result.templates : [];
+    setHoleTemplateItems(templates);
     setHoleSelectedTemplate(null);
     setHolePoints([]);
+    return templates;
   }
 
   function openHoleTemplateCreateForm() {
@@ -7053,7 +7055,10 @@ export default function App() {
       return;
     }
 
-    await loadHoleTemplates(token, nextFittingId);
+    const templates = await loadHoleTemplates(token, nextFittingId);
+    if (templates.length) {
+      await handleHoleTemplateChange(String(templates[0].id));
+    }
   }
 
   async function handleHoleTemplateChange(nextTemplateId) {
@@ -12059,21 +12064,6 @@ export default function App() {
                     ))}
                   </select>
                 </label>
-                <label className="holes-select">
-                  <span>{t.holePointTemplate}</span>
-                  <select
-                    disabled={!holeTemplateItems.length}
-                    onChange={(event) => handleHoleTemplateChange(event.target.value)}
-                    value={holeSelectedTemplateId}
-                  >
-                    <option value="">{t.holeTemplateSelectTemplate}</option>
-                    {holeTemplateItems.map((template) => (
-                      <option key={template.id} value={template.id}>
-                        {template.name || `${t.holePointTemplate} ${template.id}`}
-                      </option>
-                    ))}
-                  </select>
-                </label>
               </div>
 
               <div className="holes-grid">
@@ -12108,6 +12098,15 @@ export default function App() {
                               <article
                                 className={`holes-table-row${isSelected ? " active" : ""}`}
                                 key={template.id}
+                                onClick={() => void handleHoleTemplateChange(String(template.id))}
+                                onKeyDown={(event) => {
+                                  if (event.key === "Enter" || event.key === " ") {
+                                    event.preventDefault();
+                                    void handleHoleTemplateChange(String(template.id));
+                                  }
+                                }}
+                                role="button"
+                                tabIndex={0}
                               >
                                 <div className="holes-template-id-cell">
                                   <span className="holes-template-id-value">{template.id}</span>
@@ -12229,243 +12228,6 @@ export default function App() {
                     </div>
                   )}
                   </section>
-                </div>
-
-                <section className="holes-preview-card holes-preview-3d-card">
-                    <div className="holes-preview-header">
-                      <div>
-                        <h4>{t.holeWorkspacePreview3dTitle}</h4>
-                        <p>{t.holeWorkspacePreview3dPlaceholder}</p>
-                      </div>
-                    </div>
-                    <div className="holes-preview-stage holes-preview-stage-placeholder">
-                      <span>{t.holeWorkspacePreview3dPlaceholder}</span>
-                    </div>
-                    <div className="holes-preview-material-planes" aria-label={t.holeWorkspacePreview3dTitle}>
-                      <div className="holes-preview-material-planes-title">Площини матеріалу</div>
-                      <div className="holes-preview-material-planes-flow">
-                        <span className="holes-preview-material-plane-card">
-                          {holesPreviewModel.materialPlanes?.planeA?.label || "Площина A"}
-                        </span>
-                        <span className="holes-preview-material-planes-arrow" aria-hidden="true">
-                          →
-                        </span>
-                        <span className="holes-preview-material-plane-card">
-                          {holesPreviewModel.materialPlanes?.planeB?.label || "Площина B"}
-                        </span>
-                      </div>
-                    </div>
-                    {renderHolesSceneSchematicPreview(
-                      holesPreviewModel.scene,
-                      (holeId) => setHoveredHolePointId(String(holeId)),
-                      () => setHoveredHolePointId(""),
-                    )}
-                    <div className="holes-preview-scene" aria-label="Scene model">
-                      <div className="holes-preview-scene-title">Scene model</div>
-                      <div className="holes-preview-scene-stats">
-                        <div className="holes-preview-scene-stat">
-                          <span>Фурнітура:</span>
-                          <strong>{holesPreviewModel.scene?.stats?.hasFitting ? "так" : "ні"}</strong>
-                        </div>
-                        <div className="holes-preview-scene-stat">
-                          <span>Шаблон:</span>
-                          <strong>{holesPreviewModel.scene?.stats?.hasTemplate ? "так" : "ні"}</strong>
-                        </div>
-                        <div className="holes-preview-scene-stat">
-                          <span>Варіант кріплення:</span>
-                          <strong>{holesPreviewModel.scene?.stats?.hasMountingVariant ? "так" : "ні"}</strong>
-                        </div>
-                        <div className="holes-preview-scene-stat">
-                          <span>Площини:</span>
-                          <strong>{holesPreviewModel.scene?.materialPlanes ? "так" : "ні"}</strong>
-                        </div>
-                        <div className="holes-preview-scene-stat">
-                          <span>Отворів у сцені:</span>
-                          <strong>{holesPreviewModel.scene?.stats?.holesCount ?? 0}</strong>
-                        </div>
-                        <div className="holes-preview-scene-stat">
-                          <span>Hovered hole:</span>
-                          <strong>{holesPreviewModel.scene?.hoveredHoleId || "—"}</strong>
-                        </div>
-                      </div>
-                      <div className="holes-preview-scene-holes">
-                        <div className="holes-preview-scene-holes-title">Отвори сцени</div>
-                        {holesPreviewModel.scene?.holes?.length ? (
-                          <div className="holes-preview-scene-holes-list">
-                            {holesPreviewModel.scene.holes.map((hole) => (
-                              <div
-                                className={`holes-preview-scene-hole${hole.isHovered ? " is-hovered" : ""}`}
-                                key={hole.id}
-                              >
-                                <strong>
-                                  #{hole.id}
-                                  {Number.isFinite(hole.diameter) ? ` Ø${hole.diameter}` : " Ø—"}
-                                </strong>
-                                <span>
-                                  x:{Number.isFinite(hole.x) ? hole.x : "—"} y:{Number.isFinite(hole.y) ? hole.y : "—"}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="holes-preview-scene-empty">Отвори сцени ще не додані</div>
-                        )}
-                      </div>
-                    </div>
-                    <div className="holes-preview-debug" aria-label={t.holeWorkspacePreview3dTitle}>
-                      <div className="holes-preview-debug-row">
-                        <span className="holes-preview-debug-label">Фурнітура</span>
-                        <strong className="holes-preview-debug-value">
-                          {holesPreviewModel.fitting?.name ||
-                            holesPreviewModel.fitting?.article ||
-                            holesPreviewModel.fitting?.code ||
-                            "—"}
-                        </strong>
-                      </div>
-                      <div className="holes-preview-debug-row">
-                        <span className="holes-preview-debug-label">Артикул</span>
-                        <strong className="holes-preview-debug-value">
-                          {holesPreviewModel.fitting?.article || "—"}
-                        </strong>
-                      </div>
-                      <div className="holes-preview-debug-row">
-                        <span className="holes-preview-debug-label">Шаблон</span>
-                        <strong className="holes-preview-debug-value">
-                          {holesPreviewModel.template?.name || `#${holesPreviewModel.template?.id ?? "—"}`}
-                        </strong>
-                      </div>
-                      <div className="holes-preview-debug-row">
-                        <span className="holes-preview-debug-label">Варіант кріплення</span>
-                        <strong className="holes-preview-debug-value">
-                          {holesPreviewModel.mountingVariant?.label || "—"}
-                        </strong>
-                      </div>
-                      <div className="holes-preview-debug-row">
-                        <span className="holes-preview-debug-label">Площина A</span>
-                        <strong className="holes-preview-debug-value">
-                          {holesPreviewModel.materialPlanes?.planeA?.label || "—"}
-                        </strong>
-                      </div>
-                      <div className="holes-preview-debug-row">
-                        <span className="holes-preview-debug-label">Площина B</span>
-                        <strong className="holes-preview-debug-value">
-                          {holesPreviewModel.materialPlanes?.planeB?.label || "—"}
-                        </strong>
-                      </div>
-                      <div className="holes-preview-debug-row">
-                        <span className="holes-preview-debug-label">Напрям</span>
-                        <strong className="holes-preview-debug-value">
-                          {holesPreviewModel.materialPlanes?.connectionDirection || "—"}
-                        </strong>
-                      </div>
-                      <div className="holes-preview-debug-row">
-                        <span className="holes-preview-debug-label">Сторона</span>
-                        <strong className="holes-preview-debug-value">
-                          {holesPreviewModel.side
-                            ? formatHolePointSide(holesPreviewModel.side, t) || holesPreviewModel.side
-                            : "—"}
-                        </strong>
-                      </div>
-                      <div className="holes-preview-debug-row">
-                        <span className="holes-preview-debug-label">Тип</span>
-                        <strong className="holes-preview-debug-value">
-                          {holesPreviewModel.type
-                            ? formatHoleTemplateType(holesPreviewModel.type, t) || holesPreviewModel.type
-                            : "—"}
-                        </strong>
-                      </div>
-                      <div className="holes-preview-debug-row">
-                        <span className="holes-preview-debug-label">Точок</span>
-                        <strong className="holes-preview-debug-value">{holesPreviewModel.pointCount}</strong>
-                      </div>
-                      <div className="holes-preview-debug-row">
-                        <span className="holes-preview-debug-label">Hover point</span>
-                        <strong className="holes-preview-debug-value">
-                          {holesPreviewModel.hoveredPointId || "—"}
-                        </strong>
-                      </div>
-                    </div>
-                    {holePreviewData.hasPoints ? (
-                      <>
-                    <div
-                      className="holes-preview-stage"
-                      data-placeholder={t.holeWorkspacePreview3dPlaceholder}
-                    >
-                          <svg
-                            className="holes-preview-svg"
-                            preserveAspectRatio="xMinYMin meet"
-                            role="img"
-                            viewBox={`0 0 ${holePreviewData.width} ${holePreviewData.height}`}
-                          >
-                            <defs>
-                              <pattern id="holes-preview-grid" height="24" patternUnits="userSpaceOnUse" width="24">
-                                <path d="M 24 0 L 0 0 0 24" fill="none" stroke="#e6ecf1" strokeWidth="1" />
-                              </pattern>
-                            </defs>
-                            <rect
-                              fill="#fbfdfe"
-                              height={holePreviewData.height}
-                              width={holePreviewData.width}
-                              x="0"
-                              y="0"
-                            />
-                            <rect
-                              fill="url(#holes-preview-grid)"
-                              height={holePreviewData.height}
-                              opacity="0.92"
-                              width={holePreviewData.width}
-                              x="0"
-                              y="0"
-                            />
-                            {holePreviewData.points.map((point) => (
-                              <g
-                                key={point.id}
-                                className={String(hoveredHolePointId) === String(point.id) ? "is-hovered" : ""}
-                                onMouseEnter={() => setHoveredHolePointId(String(point.id))}
-                                onMouseLeave={() => setHoveredHolePointId("")}
-                                transform={`translate(${point.previewX}, ${point.previewY})`}
-                              >
-                                <title>
-                                  {[
-                                    point.label,
-                                    `${t.holePreviewCoordinates}: x=${formatMetricValue(point.x)} y=${formatMetricValue(point.y)} z=${formatMetricValue(point.z)}`,
-                                    `${t.holePreviewDiameter}: ${formatMetricValue(point.diameter)}`,
-                                    `${t.holePreviewDepth}: ${formatMetricValue(point.depth)}`,
-                                    `${t.holePreviewSide}: ${formatHolePointSide(point.side, t)}`,
-                                    `${t.holePreviewOperation}: ${formatHolePointOperation(point.operation, t)}`,
-                                  ].join(" | ")}
-                                </title>
-                                <circle
-                                  cx="0"
-                                  cy="0"
-                                  r={point.radius}
-                                  className={`holes-preview-point${String(hoveredHolePointId) === String(point.id) ? " is-hovered" : ""}`}
-                                />
-                                <text
-                                  className={`holes-preview-label${String(hoveredHolePointId) === String(point.id) ? " is-hovered" : ""}`}
-                                  x={point.labelX - point.previewX}
-                                  y={point.labelY - point.previewY}
-                                >
-                                  {point.label}
-                                </text>
-                              </g>
-                            ))}
-                          </svg>
-                        </div>
-                        <div className="holes-preview-legend">
-                          <span>Ø - {t.holePreviewDiameter}</span>
-                          <span>{t.holePreviewDepth}</span>
-                          <span>{t.holePreviewSide}</span>
-                          <span>{t.holePreviewOperation}</span>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="empty-state compact-empty-state">
-                        <span>{t.holePreviewEmpty}</span>
-                      </div>
-                    )}
-                  </section>
-
                   <section className="holes-preview-card holes-preview-2d-card">
                     <div className="holes-preview-header">
                       <div>
@@ -12553,6 +12315,231 @@ export default function App() {
                       </div>
                     )}
                   </section>
+                </div>
+
+                <section className="holes-preview-card holes-preview-3d-card">
+                  <div className="holes-preview-header">
+                    <div>
+                      <h4>{t.holeWorkspacePreview3dTitle}</h4>
+                      <p>{t.holeWorkspacePreview3dPlaceholder}</p>
+                    </div>
+                  </div>
+                  <div className="holes-preview-stage holes-preview-stage-placeholder">
+                    <span>{t.holeWorkspacePreview3dPlaceholder}</span>
+                  </div>
+                  <div className="holes-preview-material-planes" aria-label={t.holeWorkspacePreview3dTitle}>
+                    <div className="holes-preview-material-planes-title">Площини матеріалу</div>
+                    <div className="holes-preview-material-planes-flow">
+                      <span className="holes-preview-material-plane-card">
+                        {holesPreviewModel.materialPlanes?.planeA?.label || "Площина A"}
+                      </span>
+                      <span className="holes-preview-material-planes-arrow" aria-hidden="true">
+                        →
+                      </span>
+                      <span className="holes-preview-material-plane-card">
+                        {holesPreviewModel.materialPlanes?.planeB?.label || "Площина B"}
+                      </span>
+                    </div>
+                  </div>
+                  {renderHolesSceneSchematicPreview(
+                    holesPreviewModel.scene,
+                    (holeId) => setHoveredHolePointId(String(holeId)),
+                    () => setHoveredHolePointId(""),
+                  )}
+                  <div className="holes-preview-scene" aria-label="Scene model">
+                    <div className="holes-preview-scene-title">Scene model</div>
+                    <div className="holes-preview-scene-stats">
+                      <div className="holes-preview-scene-stat">
+                        <span>Фурнітура:</span>
+                        <strong>{holesPreviewModel.scene?.stats?.hasFitting ? "так" : "ні"}</strong>
+                      </div>
+                      <div className="holes-preview-scene-stat">
+                        <span>Шаблон:</span>
+                        <strong>{holesPreviewModel.scene?.stats?.hasTemplate ? "так" : "ні"}</strong>
+                      </div>
+                      <div className="holes-preview-scene-stat">
+                        <span>Варіант кріплення:</span>
+                        <strong>{holesPreviewModel.scene?.stats?.hasMountingVariant ? "так" : "ні"}</strong>
+                      </div>
+                      <div className="holes-preview-scene-stat">
+                        <span>Площини:</span>
+                        <strong>{holesPreviewModel.scene?.materialPlanes ? "так" : "ні"}</strong>
+                      </div>
+                      <div className="holes-preview-scene-stat">
+                        <span>Отворів у сцені:</span>
+                        <strong>{holesPreviewModel.scene?.stats?.holesCount ?? 0}</strong>
+                      </div>
+                      <div className="holes-preview-scene-stat">
+                        <span>Hovered hole:</span>
+                        <strong>{holesPreviewModel.scene?.hoveredHoleId || "—"}</strong>
+                      </div>
+                    </div>
+                    <div className="holes-preview-scene-holes">
+                      <div className="holes-preview-scene-holes-title">Отвори сцени</div>
+                      {holesPreviewModel.scene?.holes?.length ? (
+                        <div className="holes-preview-scene-holes-list">
+                          {holesPreviewModel.scene.holes.map((hole) => (
+                            <div
+                              className={`holes-preview-scene-hole${hole.isHovered ? " is-hovered" : ""}`}
+                              key={hole.id}
+                            >
+                              <strong>
+                                #{hole.id}
+                                {Number.isFinite(hole.diameter) ? ` Ø${hole.diameter}` : " Ø—"}
+                              </strong>
+                              <span>
+                                x:{Number.isFinite(hole.x) ? hole.x : "—"} y:{Number.isFinite(hole.y) ? hole.y : "—"}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="holes-preview-scene-empty">Отвори сцени ще не додані</div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="holes-preview-debug" aria-label={t.holeWorkspacePreview3dTitle}>
+                    <div className="holes-preview-debug-row">
+                      <span className="holes-preview-debug-label">Фурнітура</span>
+                      <strong className="holes-preview-debug-value">
+                        {holesPreviewModel.fitting?.name ||
+                          holesPreviewModel.fitting?.article ||
+                          holesPreviewModel.fitting?.code ||
+                          "—"}
+                      </strong>
+                    </div>
+                    <div className="holes-preview-debug-row">
+                      <span className="holes-preview-debug-label">Артикул</span>
+                      <strong className="holes-preview-debug-value">{holesPreviewModel.fitting?.article || "—"}</strong>
+                    </div>
+                    <div className="holes-preview-debug-row">
+                      <span className="holes-preview-debug-label">Шаблон</span>
+                      <strong className="holes-preview-debug-value">
+                        {holesPreviewModel.template?.name || `#${holesPreviewModel.template?.id ?? "—"}`}
+                      </strong>
+                    </div>
+                    <div className="holes-preview-debug-row">
+                      <span className="holes-preview-debug-label">Варіант кріплення</span>
+                      <strong className="holes-preview-debug-value">
+                        {holesPreviewModel.mountingVariant?.label || "—"}
+                      </strong>
+                    </div>
+                    <div className="holes-preview-debug-row">
+                      <span className="holes-preview-debug-label">Площина A</span>
+                      <strong className="holes-preview-debug-value">{holesPreviewModel.materialPlanes?.planeA?.label || "—"}</strong>
+                    </div>
+                    <div className="holes-preview-debug-row">
+                      <span className="holes-preview-debug-label">Площина B</span>
+                      <strong className="holes-preview-debug-value">{holesPreviewModel.materialPlanes?.planeB?.label || "—"}</strong>
+                    </div>
+                    <div className="holes-preview-debug-row">
+                      <span className="holes-preview-debug-label">Напрям</span>
+                      <strong className="holes-preview-debug-value">
+                        {holesPreviewModel.materialPlanes?.connectionDirection || "—"}
+                      </strong>
+                    </div>
+                    <div className="holes-preview-debug-row">
+                      <span className="holes-preview-debug-label">Сторона</span>
+                      <strong className="holes-preview-debug-value">
+                        {holesPreviewModel.side
+                          ? formatHolePointSide(holesPreviewModel.side, t) || holesPreviewModel.side
+                          : "—"}
+                      </strong>
+                    </div>
+                    <div className="holes-preview-debug-row">
+                      <span className="holes-preview-debug-label">Тип</span>
+                      <strong className="holes-preview-debug-value">
+                        {holesPreviewModel.type
+                          ? formatHoleTemplateType(holesPreviewModel.type, t) || holesPreviewModel.type
+                          : "—"}
+                      </strong>
+                    </div>
+                    <div className="holes-preview-debug-row">
+                      <span className="holes-preview-debug-label">Точок</span>
+                      <strong className="holes-preview-debug-value">{holesPreviewModel.pointCount}</strong>
+                    </div>
+                    <div className="holes-preview-debug-row">
+                      <span className="holes-preview-debug-label">Hover point</span>
+                      <strong className="holes-preview-debug-value">{holesPreviewModel.hoveredPointId || "—"}</strong>
+                    </div>
+                  </div>
+                  {holePreviewData.hasPoints ? (
+                    <>
+                      <div className="holes-preview-stage" data-placeholder={t.holeWorkspacePreview3dPlaceholder}>
+                        <svg
+                          className="holes-preview-svg"
+                          preserveAspectRatio="xMinYMin meet"
+                          role="img"
+                          viewBox={`0 0 ${holePreviewData.width} ${holePreviewData.height}`}
+                        >
+                          <defs>
+                            <pattern id="holes-preview-grid" height="24" patternUnits="userSpaceOnUse" width="24">
+                              <path d="M 24 0 L 0 0 0 24" fill="none" stroke="#e6ecf1" strokeWidth="1" />
+                            </pattern>
+                          </defs>
+                          <rect
+                            fill="#fbfdfe"
+                            height={holePreviewData.height}
+                            width={holePreviewData.width}
+                            x="0"
+                            y="0"
+                          />
+                          <rect
+                            fill="url(#holes-preview-grid)"
+                            height={holePreviewData.height}
+                            opacity="0.92"
+                            width={holePreviewData.width}
+                            x="0"
+                            y="0"
+                          />
+                          {holePreviewData.points.map((point) => (
+                            <g
+                              key={point.id}
+                              className={String(hoveredHolePointId) === String(point.id) ? "is-hovered" : ""}
+                              onMouseEnter={() => setHoveredHolePointId(String(point.id))}
+                              onMouseLeave={() => setHoveredHolePointId("")}
+                              transform={`translate(${point.previewX}, ${point.previewY})`}
+                            >
+                              <title>
+                                {[
+                                  point.label,
+                                  `${t.holePreviewCoordinates}: x=${formatMetricValue(point.x)} y=${formatMetricValue(point.y)} z=${formatMetricValue(point.z)}`,
+                                  `${t.holePreviewDiameter}: ${formatMetricValue(point.diameter)}`,
+                                  `${t.holePreviewDepth}: ${formatMetricValue(point.depth)}`,
+                                  `${t.holePreviewSide}: ${formatHolePointSide(point.side, t)}`,
+                                  `${t.holePreviewOperation}: ${formatHolePointOperation(point.operation, t)}`,
+                                ].join(" | ")}
+                              </title>
+                              <circle
+                                cx="0"
+                                cy="0"
+                                r={point.radius}
+                                className={`holes-preview-point${String(hoveredHolePointId) === String(point.id) ? " is-hovered" : ""}`}
+                              />
+                              <text
+                                className={`holes-preview-label${String(hoveredHolePointId) === String(point.id) ? " is-hovered" : ""}`}
+                                x={point.labelX - point.previewX}
+                                y={point.labelY - point.previewY}
+                              >
+                                {point.label}
+                              </text>
+                            </g>
+                          ))}
+                        </svg>
+                      </div>
+                      <div className="holes-preview-legend">
+                        <span>Ø - {t.holePreviewDiameter}</span>
+                        <span>{t.holePreviewDepth}</span>
+                        <span>{t.holePreviewSide}</span>
+                        <span>{t.holePreviewOperation}</span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="empty-state compact-empty-state">
+                      <span>{t.holePreviewEmpty}</span>
+                    </div>
+                  )}
+                </section>
                 </div>
               </article>
             </section>
