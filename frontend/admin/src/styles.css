@@ -2143,6 +2143,52 @@ tbody tr.selected {
   padding: 12px;
 }
 
+.holes-preview-material-planes {
+  background: #ffffff;
+  border: 1px solid #dbe1e7;
+  border-radius: 12px;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.holes-preview-material-planes-title {
+  color: #607182;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+}
+
+.holes-preview-material-planes-flow {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.holes-preview-material-plane-card {
+  align-items: center;
+  background: #f4f7f9;
+  border: 1px solid #dbe1e7;
+  border-radius: 999px;
+  color: #24343d;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 700;
+  min-height: 32px;
+  padding: 0 12px;
+}
+
+.holes-preview-material-planes-arrow {
+  color: #2f8e4b;
+  flex: 0 0 auto;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
+}
+
 .holes-preview-debug-row {
   display: grid;
   gap: 6px;
@@ -5136,6 +5182,15 @@ tbody tr.selected {
   .holes-connection-variant-grid,
   .holes-grid {
     grid-template-columns: 1fr;
+  }
+
+  .holes-preview-material-planes-flow {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .holes-preview-material-planes-arrow {
+    padding-left: 2px;
   }
 }
 

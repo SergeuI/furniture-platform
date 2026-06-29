@@ -4302,6 +4302,81 @@ export default function App() {
       null,
     [holeMountingVariantOptions, selectedHoleMountingVariantKey],
   );
+  const holesMaterialPlanesModel = useMemo(() => {
+    switch (selectedHoleMountingVariant?.key || selectedHoleMountingVariantKey || "surface_mount") {
+      case "angled_two_planes":
+        return {
+          connectionDirection: "angled_two_planes",
+          planeA: {
+            key: "vertical_plane",
+            label: "Вертикальна площина",
+            role: "source",
+          },
+          planeB: {
+            key: "angled_plane",
+            label: "Непаралельна площина",
+            role: "target",
+          },
+        };
+      case "face_to_edge":
+        return {
+          connectionDirection: "face_to_edge",
+          planeA: {
+            key: "face",
+            label: "Пласть панелі",
+            role: "source",
+          },
+          planeB: {
+            key: "edge",
+            label: "Торець панелі",
+            role: "target",
+          },
+        };
+      case "edge_to_edge":
+        return {
+          connectionDirection: "edge_to_edge",
+          planeA: {
+            key: "edge_left",
+            label: "Торець панелі A",
+            role: "source",
+          },
+          planeB: {
+            key: "edge_right",
+            label: "Торець панелі B",
+            role: "target",
+          },
+        };
+      case "drawer_slides":
+        return {
+          connectionDirection: "drawer_slides",
+          planeA: {
+            key: "side_left",
+            label: "Ліва боковина",
+            role: "side",
+          },
+          planeB: {
+            key: "side_right",
+            label: "Права боковина",
+            role: "side",
+          },
+        };
+      case "surface_mount":
+      default:
+        return {
+          connectionDirection: "surface_mount",
+          planeA: {
+            key: "surface",
+            label: "Площина",
+            role: "base",
+          },
+          planeB: {
+            key: "hardware",
+            label: "Фурнітура",
+            role: "mounted",
+          },
+        };
+    }
+  }, [selectedHoleMountingVariant?.key, selectedHoleMountingVariantKey]);
   const holePreviewData = useMemo(() => {
     const numericValue = (value) => {
       if (value === null || value === undefined || value === "") {
@@ -4377,6 +4452,7 @@ export default function App() {
   const holesPreviewModel = useMemo(
     () => ({
       fitting: selectedHoleFitting,
+      materialPlanes: holesMaterialPlanesModel,
       mountingVariant: selectedHoleMountingVariant,
       hoveredPointId: hoveredHolePointId || "",
       pointCount: holePoints.length,
@@ -4389,6 +4465,7 @@ export default function App() {
       holePoints,
       hoveredHolePointId,
       selectedHoleFitting,
+      holesMaterialPlanesModel,
       selectedHoleMountingVariant,
       selectedHoleTemplate,
     ],
@@ -11899,6 +11976,20 @@ export default function App() {
                     <div className="holes-preview-stage holes-preview-stage-placeholder">
                       <span>{t.holeWorkspacePreview3dPlaceholder}</span>
                     </div>
+                    <div className="holes-preview-material-planes" aria-label={t.holeWorkspacePreview3dTitle}>
+                      <div className="holes-preview-material-planes-title">Площини матеріалу</div>
+                      <div className="holes-preview-material-planes-flow">
+                        <span className="holes-preview-material-plane-card">
+                          {holesPreviewModel.materialPlanes?.planeA?.label || "Площина A"}
+                        </span>
+                        <span className="holes-preview-material-planes-arrow" aria-hidden="true">
+                          →
+                        </span>
+                        <span className="holes-preview-material-plane-card">
+                          {holesPreviewModel.materialPlanes?.planeB?.label || "Площина B"}
+                        </span>
+                      </div>
+                    </div>
                     <div className="holes-preview-debug" aria-label={t.holeWorkspacePreview3dTitle}>
                       <div className="holes-preview-debug-row">
                         <span className="holes-preview-debug-label">Фурнітура</span>
@@ -11925,6 +12016,24 @@ export default function App() {
                         <span className="holes-preview-debug-label">Варіант кріплення</span>
                         <strong className="holes-preview-debug-value">
                           {holesPreviewModel.mountingVariant?.label || "—"}
+                        </strong>
+                      </div>
+                      <div className="holes-preview-debug-row">
+                        <span className="holes-preview-debug-label">Площина A</span>
+                        <strong className="holes-preview-debug-value">
+                          {holesPreviewModel.materialPlanes?.planeA?.label || "—"}
+                        </strong>
+                      </div>
+                      <div className="holes-preview-debug-row">
+                        <span className="holes-preview-debug-label">Площина B</span>
+                        <strong className="holes-preview-debug-value">
+                          {holesPreviewModel.materialPlanes?.planeB?.label || "—"}
+                        </strong>
+                      </div>
+                      <div className="holes-preview-debug-row">
+                        <span className="holes-preview-debug-label">Напрям</span>
+                        <strong className="holes-preview-debug-value">
+                          {holesPreviewModel.materialPlanes?.connectionDirection || "—"}
                         </strong>
                       </div>
                       <div className="holes-preview-debug-row">
