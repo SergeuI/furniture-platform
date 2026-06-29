@@ -2254,6 +2254,30 @@ tbody tr.selected {
   position: relative;
 }
 
+.holes-preview-3d-card:not(.is-placeholder) > .holes-preview-stage-placeholder {
+  display: none;
+}
+
+.holes-preview-3d-card > .holes-preview-schematic {
+  order: -2;
+}
+
+.holes-preview-3d-card > .holes-preview-material-planes {
+  order: -1;
+}
+
+.holes-preview-3d-card > .holes-selected-point-panel {
+  order: 0;
+}
+
+.holes-preview-3d-card > .holes-workspace-save-panel {
+  order: 1;
+}
+
+.holes-preview-3d-card > .holes-preview-technical {
+  order: 2;
+}
+
 .holes-preview-3d-card.is-placeholder .holes-preview-material-planes,
 .holes-preview-3d-card.is-placeholder .holes-preview-schematic,
 .holes-preview-3d-card.is-placeholder .holes-preview-debug,
