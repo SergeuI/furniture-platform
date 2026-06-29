@@ -2286,10 +2286,15 @@ tbody tr.selected {
 .holes-preview-schematic-hole.is-hovered circle:first-of-type {
   fill: #dff8e7;
   stroke: #13672d;
+  stroke-width: 4;
 }
 
 .holes-preview-schematic-hole.is-hovered circle:last-of-type {
   fill: #13672d;
+}
+
+.holes-preview-schematic-hole.is-interactive {
+  cursor: pointer;
 }
 
 .holes-preview-schematic-hole text {

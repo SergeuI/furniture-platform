@@ -6403,7 +6403,7 @@ export default function App() {
     );
   }
 
-  function renderHolesSceneSchematicPreview(sceneModel) {
+  function renderHolesSceneSchematicPreview(sceneModel, onHoverHole, onLeaveHole) {
     const scene = sceneModel || holesPreviewSceneModel || {};
     const variantKey = normalizeHoleWorkspaceMountingVariantKey(
       scene?.mountingVariant?.key || selectedHoleMountingVariantKey,
@@ -6510,11 +6510,14 @@ export default function App() {
       const position = getHolePosition(hole, index);
       const diameter = Number(hole?.diameter);
       const radius = Math.max(4, Math.min(10, Number.isFinite(diameter) ? Math.round(diameter / 2) : 5));
+      const holeId = hole?.id;
 
       return {
         cx: position.x,
         cy: position.y,
+        hasId: holeId !== null && holeId !== undefined && String(holeId).trim() !== "",
         hole,
+        id: holeId,
         radius,
       };
     });
@@ -6597,13 +6600,20 @@ export default function App() {
             <g className="holes-preview-schematic-holes">
               {points.map((point) => (
                 <g
-                  className={`holes-preview-schematic-hole${point.hole.isHovered ? " is-hovered" : ""}`}
-                  key={point.hole.id}
+                  className={`holes-preview-schematic-hole${point.hole.isHovered ? " is-hovered" : ""}${point.hasId ? " is-interactive" : ""}`}
+                  key={point.id || `${point.cx}-${point.cy}`}
+                  onMouseEnter={
+                    point.hasId && typeof onHoverHole === "function"
+                      ? () => onHoverHole(point.id)
+                      : undefined
+                  }
+                  onMouseLeave={point.hasId && typeof onLeaveHole === "function" ? onLeaveHole : undefined}
                 >
+                  {point.hasId ? <title>{`Отвір #${point.id}`}</title> : null}
                   <circle cx={point.cx} cy={point.cy} r={Math.max(point.radius + 3, 8)} />
                   <circle cx={point.cx} cy={point.cy} r={point.radius} />
                   <text x={point.cx + 10} y={point.cy - 10}>
-                    #{point.hole.id}
+                    {point.hasId ? `#${point.id}` : "—"}
                   </text>
                 </g>
               ))}
@@ -12245,7 +12255,11 @@ export default function App() {
                         </span>
                       </div>
                     </div>
-                    {renderHolesSceneSchematicPreview(holesPreviewModel.scene)}
+                    {renderHolesSceneSchematicPreview(
+                      holesPreviewModel.scene,
+                      (holeId) => setHoveredHolePointId(String(holeId)),
+                      () => setHoveredHolePointId(""),
+                    )}
                     <div className="holes-preview-scene" aria-label="Scene model">
                       <div className="holes-preview-scene-title">Scene model</div>
                       <div className="holes-preview-scene-stats">
