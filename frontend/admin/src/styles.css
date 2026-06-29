@@ -1905,7 +1905,7 @@ tbody tr.selected {
 
 .holes-connection-variant-card-mark {
   align-items: center;
-  background: linear-gradient(145deg, #edf4f7, #ffffff);
+  background: #ffffff;
   border: 1px solid #d3e0e7;
   border-radius: 10px;
   display: inline-flex;
@@ -1916,89 +1916,16 @@ tbody tr.selected {
   flex: 0 0 auto;
 }
 
-.holes-connection-variant-card-icon {
+.holes-connection-variant-card-icon-image {
   display: block;
   height: 100%;
+  object-fit: contain;
   width: 100%;
-}
-
-.holes-connection-variant-card-icon,
-.holes-connection-variant-card-icon * {
-  shape-rendering: geometricPrecision;
-}
-
-.holes-connection-variant-card-icon-frame {
-  stroke: #232b33;
-  stroke-width: 1;
-  vector-effect: non-scaling-stroke;
-}
-
-.holes-connection-variant-card-icon-plane,
-.holes-connection-variant-card-icon-edge {
-  fill: #f7f9fb;
-  stroke: #232b33;
-  stroke-width: 1.2;
-  vector-effect: non-scaling-stroke;
-}
-
-.holes-connection-variant-card-icon-mount {
-  fill: #dff8e7;
-  stroke: #0f766e;
-  stroke-width: 1.1;
-  vector-effect: non-scaling-stroke;
-}
-
-.holes-connection-variant-card-icon-arrow,
-.holes-connection-variant-card-icon-arrow-head {
-  stroke: #0f766e;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 2.1;
-  vector-effect: non-scaling-stroke;
-}
-
-.holes-connection-variant-card-icon-arrow.reverse,
-.holes-connection-variant-card-icon-arrow-head.reverse {
-  stroke: #13672d;
-}
-
-.holes-connection-variant-card-icon-point {
-  fill: #0f766e;
-  vector-effect: non-scaling-stroke;
 }
 
 .holes-connection-variant-card.active .holes-connection-variant-card-mark {
   background: #dff8e7;
   border-color: #b7ecc8;
-}
-
-.holes-connection-variant-card.active .holes-connection-variant-card-icon-frame {
-  stroke: #2f8e4b;
-}
-
-.holes-connection-variant-card.active .holes-connection-variant-card-icon-plane,
-.holes-connection-variant-card.active .holes-connection-variant-card-icon-edge {
-  fill: #f6fff8;
-  stroke: #1f2933;
-}
-
-.holes-connection-variant-card.active .holes-connection-variant-card-icon-mount {
-  fill: #b7ecc8;
-  stroke: #13672d;
-}
-
-.holes-connection-variant-card-icon-plane.angled-a,
-.holes-connection-variant-card-icon-plane.angled-b {
-  stroke-linecap: square;
-}
-
-.holes-connection-variant-card.active .holes-connection-variant-card-icon-arrow,
-.holes-connection-variant-card.active .holes-connection-variant-card-icon-arrow-head {
-  stroke: #13672d;
-}
-
-.holes-connection-variant-card.active .holes-connection-variant-card-icon-point {
-  fill: #13672d;
 }
 
 .holes-connection-variant-card-copy {
