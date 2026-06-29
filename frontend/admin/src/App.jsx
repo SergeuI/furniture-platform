@@ -4378,15 +4378,19 @@ export default function App() {
     ],
     [],
   );
+  const normalizedSelectedHoleMountingVariantKey = useMemo(
+    () => normalizeHoleWorkspaceMountingVariantKey(selectedHoleMountingVariantKey),
+    [selectedHoleMountingVariantKey],
+  );
   const selectedHoleMountingVariant = useMemo(
     () =>
-      holeMountingVariantOptions.find((item) => item.key === selectedHoleMountingVariantKey) ||
+      holeMountingVariantOptions.find((item) => item.key === normalizedSelectedHoleMountingVariantKey) ||
       holeMountingVariantOptions[0] ||
       null,
-    [holeMountingVariantOptions, selectedHoleMountingVariantKey],
+    [holeMountingVariantOptions, normalizedSelectedHoleMountingVariantKey],
   );
   const holesMaterialPlanesModel = useMemo(() => {
-    switch (selectedHoleMountingVariant?.key || selectedHoleMountingVariantKey || "surface_mount") {
+    switch (normalizedSelectedHoleMountingVariantKey) {
       case "angled_two_planes":
         return {
           connectionDirection: "angled_two_planes",
@@ -4459,7 +4463,7 @@ export default function App() {
           },
         };
     }
-  }, [selectedHoleMountingVariant?.key, selectedHoleMountingVariantKey]);
+  }, [normalizedSelectedHoleMountingVariantKey]);
   const holePreviewData = useMemo(() => {
     const numericValue = (value) => {
       if (value === null || value === undefined || value === "") {
@@ -4533,7 +4537,10 @@ export default function App() {
       width,
     };
   }, [holePoints, selectedHolePointId]);
-  function normalizeHolesForScenePreview(points, mountingVariantKey = selectedHoleMountingVariantKey) {
+  function normalizeHolesForScenePreview(
+    points,
+    mountingVariantKey = normalizedSelectedHoleMountingVariantKey,
+  ) {
     const zoneByVariant = {
       angled_two_planes: { height: 126, width: 160, x: 266, y: 118 },
       drawer_slides: { height: 118, width: 120, x: 320, y: 110 },
@@ -4633,8 +4640,8 @@ export default function App() {
     };
   }
   const holesScenePreviewNormalization = useMemo(
-    () => normalizeHolesForScenePreview(holePreviewData.points, selectedHoleMountingVariantKey),
-    [holePreviewData.points, selectedHoleMountingVariantKey, selectedHolePointId],
+    () => normalizeHolesForScenePreview(holePreviewData.points, normalizedSelectedHoleMountingVariantKey),
+    [holePreviewData.points, normalizedSelectedHoleMountingVariantKey, selectedHolePointId],
   );
   const holesPreviewSceneModel = useMemo(() => {
     const sceneHoles = Array.isArray(holesScenePreviewNormalization.normalizedHoles)
@@ -6595,10 +6602,6 @@ export default function App() {
   }
 
   function renderHoleWorkspaceConnectionVariantCards() {
-    const normalizedSelectedVariantKey = normalizeHoleWorkspaceMountingVariantKey(
-      selectedHoleMountingVariantKey,
-    );
-
     return (
       <section className="holes-panel holes-connection-variant-panel">
         <div className="holes-panel-header">
@@ -6607,7 +6610,7 @@ export default function App() {
         </div>
         <div className="holes-connection-variant-grid">
           {holeMountingVariantOptions.map((variant) => {
-            const isActive = normalizedSelectedVariantKey === variant.key;
+            const isActive = normalizedSelectedHoleMountingVariantKey === variant.key;
 
             return (
               <button
@@ -6639,7 +6642,7 @@ export default function App() {
   function renderHolesSceneSchematicPreview(sceneModel, onHoverHole, onLeaveHole, onSelectHole) {
     const scene = sceneModel || holesPreviewSceneModel || {};
     const variantKey = normalizeHoleWorkspaceMountingVariantKey(
-      scene?.mountingVariant?.key || selectedHoleMountingVariantKey,
+      scene?.mountingVariant?.key || normalizedSelectedHoleMountingVariantKey,
     );
     const holes = Array.isArray(scene?.normalizedHoles) && scene.normalizedHoles.length
       ? scene.normalizedHoles
