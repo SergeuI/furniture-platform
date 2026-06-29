@@ -2180,18 +2180,6 @@ tbody tr.selected {
   gap: 12px;
 }
 
-.holes-workspace-points-panel {
-  order: 2;
-}
-
-.holes-workspace-preview-panel {
-  order: 3;
-}
-
-.holes-technical-templates {
-  order: 4;
-}
-
 .holes-workspace-save-panel {
   align-items: start;
   background: linear-gradient(180deg, #f8fbfd 0%, #f3f8fb 100%);
@@ -2254,6 +2242,65 @@ tbody tr.selected {
   position: relative;
 }
 
+.holes-three-preview {
+  display: grid;
+  gap: 10px;
+  min-height: clamp(360px, 56vh, 760px);
+  position: relative;
+}
+
+.holes-three-preview-canvas {
+  border: 1px solid #dbe1e7;
+  border-radius: 12px;
+  display: block;
+  height: clamp(360px, 56vh, 760px) !important;
+  width: 100% !important;
+}
+
+.holes-three-preview-overlay {
+  display: grid;
+  gap: 6px;
+  inset: 12px 12px auto 12px;
+  pointer-events: none;
+  position: absolute;
+  z-index: 2;
+}
+
+.holes-three-preview-label {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid #dbe1e7;
+  border-radius: 999px;
+  color: #24343d;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 6px 10px;
+  width: fit-content;
+}
+
+.holes-three-preview-subtitle {
+  background: rgba(15, 37, 51, 0.72);
+  border-radius: 10px;
+  color: #ffffff;
+  font-size: 12px;
+  line-height: 1.35;
+  padding: 8px 10px;
+  width: fit-content;
+}
+
+.holes-three-preview-empty {
+  align-self: start;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid #dbe1e7;
+  border-radius: 12px;
+  color: #5c6875;
+  font-size: 12px;
+  line-height: 1.35;
+  padding: 8px 12px;
+  width: fit-content;
+}
+
 .holes-preview-3d-card:not(.is-placeholder) > .holes-preview-stage-placeholder {
   display: none;
 }
@@ -2297,6 +2344,15 @@ tbody tr.selected {
   display: grid;
   gap: 10px;
   padding: 12px;
+}
+
+.holes-preview-technical-body {
+  display: grid;
+  gap: 10px;
+}
+
+.holes-preview-scene-stats.compact {
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
 }
 
 .holes-preview-technical > summary {
@@ -5728,6 +5784,10 @@ tbody tr.selected {
 
   .holes-preview-schematic-svg {
     min-height: 220px;
+  }
+
+  .holes-three-preview-canvas {
+    height: 300px !important;
   }
 }
 

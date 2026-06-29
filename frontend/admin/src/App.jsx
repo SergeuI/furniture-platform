@@ -36,6 +36,9 @@ import angledTwoPlanesIcon from "./assets/hole-mounting/angled_two_planes.png";
 import faceToEdgeIcon from "./assets/hole-mounting/face_to_edge.png";
 import edgeToEdgeIcon from "./assets/hole-mounting/edge_to_edge.png";
 import drawerSlidesIcon from "./assets/hole-mounting/drawer_slides.png";
+import { Canvas } from "@react-three/fiber";
+import { OrbitControls } from "@react-three/drei";
+import { DoubleSide } from "three";
 
 import {
   attachMaterialEdge,
@@ -6644,6 +6647,321 @@ export default function App() {
     return allowedVariants.has(key) ? key : "surface_mount";
   }
 
+  function getHoleWorkspaceThreePreviewLayout(variantKey) {
+    switch (variantKey) {
+      case "angled_two_planes":
+        return {
+          camera: [4.7, 3.0, 6.2],
+          label: "Дві площини під кутом",
+          markerPlane: { axis: "z", origin: [-0.92, 0.02, 0], spanU: 1.1, spanV: 1.78 },
+          panels: [
+            {
+              args: [0.24, 2.05, 1.3],
+              color: "#d7edf0",
+              opacity: 0.44,
+              position: [-0.95, 0.04, 0],
+              rotation: [0, 0, 0],
+            },
+            {
+              args: [0.24, 1.55, 1.18],
+              color: "#e4f2e8",
+              opacity: 0.5,
+              position: [0.65, -0.28, 0.1],
+              rotation: [0, 0, -0.72],
+            },
+          ],
+          subtitle: "Панель A → панель B · angled_two_planes",
+        };
+      case "face_to_edge":
+        return {
+          camera: [4.6, 2.8, 6.1],
+          label: "Пласть → торець",
+          markerPlane: { axis: "z", origin: [-0.92, 0.03, 0], spanU: 1.1, spanV: 1.8 },
+          panels: [
+            {
+              args: [0.26, 2.1, 1.32],
+              color: "#d6ecef",
+              opacity: 0.42,
+              position: [-0.98, 0.04, 0],
+              rotation: [0, 0, 0],
+            },
+            {
+              args: [1.95, 0.26, 1.08],
+              color: "#e1f5e7",
+              opacity: 0.46,
+              position: [0.22, -0.78, -0.08],
+              rotation: [0, 0, 0],
+            },
+          ],
+          subtitle: "Пласть панелі → торець панелі · face_to_edge",
+        };
+      case "edge_to_edge":
+        return {
+          camera: [4.9, 2.8, 6.1],
+          label: "Торець до торця",
+          markerPlane: { axis: "z", origin: [-0.82, 0.03, 0], spanU: 1.0, spanV: 1.62 },
+          panels: [
+            {
+              args: [0.26, 1.92, 1.28],
+              color: "#dbeaf0",
+              opacity: 0.44,
+              position: [-0.95, 0.03, 0],
+              rotation: [0, 0, 0],
+            },
+            {
+              args: [0.26, 1.92, 1.28],
+              color: "#e3f0e3",
+              opacity: 0.46,
+              position: [0.84, 0.03, 0.02],
+              rotation: [0, 0, 0],
+            },
+          ],
+          subtitle: "Торець панелі A → торець панелі B · edge_to_edge",
+        };
+      case "drawer_slides":
+        return {
+          camera: [5.1, 2.9, 6.6],
+          label: "Напрямні шухляди",
+          markerPlane: { axis: "z", origin: [-0.98, 0.02, 0], spanU: 1.16, spanV: 1.8 },
+          panels: [
+            {
+              args: [0.24, 2.15, 1.22],
+              color: "#d7e8f0",
+              opacity: 0.42,
+              position: [-1.2, 0.04, 0],
+              rotation: [0, 0, 0],
+            },
+            {
+              args: [0.24, 2.15, 1.22],
+              color: "#dfe7ef",
+              opacity: 0.42,
+              position: [1.2, 0.04, 0],
+              rotation: [0, 0, 0],
+            },
+            {
+              args: [2.0, 0.18, 0.26],
+              color: "#8ea0ad",
+              opacity: 0.92,
+              position: [0, -0.03, 0],
+              rotation: [0, 0, 0],
+            },
+          ],
+          subtitle: "Боковини та напрямна · drawer_slides",
+        };
+      case "surface_mount":
+      default:
+        return {
+          camera: [4.7, 2.9, 6.0],
+          label: "Накладне кріплення",
+          markerPlane: { axis: "z", origin: [-0.96, 0.03, 0], spanU: 1.08, spanV: 1.74 },
+          panels: [
+            {
+              args: [0.26, 2.06, 1.34],
+              color: "#d7edf0",
+              opacity: 0.44,
+              position: [-0.98, 0.04, 0],
+              rotation: [0, 0, 0],
+            },
+            {
+              args: [0.64, 0.18, 0.7],
+              color: "#8ea0ad",
+              opacity: 0.95,
+              position: [0.18, 0.02, 0.1],
+              rotation: [0, 0, 0],
+            },
+          ],
+          subtitle: "Панель → накладний елемент · surface_mount",
+        };
+    }
+  }
+
+  function normalizeThreePreviewHoleRange(values, fallbackValue) {
+    const numericValues = values.filter((value) => Number.isFinite(value));
+
+    if (!numericValues.length) {
+      return { max: fallbackValue, min: fallbackValue, span: 0 };
+    }
+
+    const min = Math.min(...numericValues);
+    const max = Math.max(...numericValues);
+
+    return {
+      max,
+      min,
+      span: Math.max(max - min, 1),
+    };
+  }
+
+  function buildThreePreviewMarkerPositions(holes, markerPlane) {
+    const sourceHoles = Array.isArray(holes) ? holes : [];
+    const xRange = normalizeThreePreviewHoleRange(
+      sourceHoles.map((hole) => Number(hole?.x)),
+      0,
+    );
+    const yRange = normalizeThreePreviewHoleRange(
+      sourceHoles.map((hole) => Number(hole?.y)),
+      0,
+    );
+
+    return sourceHoles.map((hole, index) => {
+      const numericX = Number(hole?.x);
+      const numericY = Number(hole?.y);
+      const ratioX = Number.isFinite(numericX)
+        ? (numericX - xRange.min) / xRange.span
+        : (index % 3) / 2;
+      const ratioY = Number.isFinite(numericY)
+        ? (numericY - yRange.min) / yRange.span
+        : Math.floor(index / 3) / 2;
+      const markerRadius = Math.max(0.04, Math.min(0.08, Number(hole?.diameter) ? Number(hole.diameter) / 150 : 0.05));
+      const offset = Number.isFinite(Number(hole?.depth)) ? Math.min(Number(hole.depth) / 1000, 0.06) : 0.02;
+
+      return {
+        id: hole?.id ?? index + 1,
+        isHovered: Boolean(hole?.isHovered),
+        isSelected: Boolean(hole?.isSelected),
+        label: String(hole?.label || `P${index + 1}`).trim() || `P${index + 1}`,
+        markerRadius,
+        onSurfacePosition:
+          markerPlane.axis === "z"
+            ? [
+                markerPlane.origin[0] + offset,
+                markerPlane.origin[1] + (0.5 - ratioY) * markerPlane.spanV,
+                markerPlane.origin[2] + (ratioX - 0.5) * markerPlane.spanU,
+              ]
+            : [
+                markerPlane.origin[0] + (ratioX - 0.5) * markerPlane.spanU,
+                markerPlane.origin[1] + (0.5 - ratioY) * markerPlane.spanV,
+                markerPlane.origin[2] + offset,
+              ],
+      };
+    });
+  }
+
+  function HolesMountingThreePreview({
+    holes,
+    mountingVariantKey,
+    onHoverHole,
+    onLeaveHole,
+    onSelectHole,
+  }) {
+    const layout = useMemo(
+      () => getHoleWorkspaceThreePreviewLayout(mountingVariantKey),
+      [mountingVariantKey],
+    );
+    const markerPositions = useMemo(
+      () => buildThreePreviewMarkerPositions(holes, layout.markerPlane),
+      [holes, layout.markerPlane],
+    );
+
+    return (
+      <div className="holes-three-preview">
+        <Canvas
+          camera={{ fov: 32, position: layout.camera }}
+          className="holes-three-preview-canvas"
+          dpr={[1, 1.5]}
+          shadows
+        >
+          <color attach="background" args={["#f7fbfc"]} />
+          <fog attach="fog" args={["#f7fbfc", 8, 18]} />
+          <ambientLight intensity={1.05} />
+          <directionalLight castShadow position={[5.2, 7.2, 8]} intensity={1.45} />
+          <directionalLight position={[-4, 2.8, 3]} intensity={0.55} />
+          <group>
+            {layout.panels.map((panel, index) => (
+              <mesh
+                castShadow
+                key={`${mountingVariantKey}-panel-${index}`}
+                position={panel.position}
+                receiveShadow
+                rotation={panel.rotation}
+              >
+                <boxGeometry args={panel.args} />
+                <meshPhysicalMaterial
+                  color={panel.color}
+                  emissive="#c9f3df"
+                  emissiveIntensity={0.08}
+                  metalness={0.12}
+                  opacity={panel.opacity}
+                  roughness={0.45}
+                  side={DoubleSide}
+                  transparent
+                  transmission={0.34}
+                />
+              </mesh>
+            ))}
+
+            {layout.panels[1] ? (
+              <mesh
+                position={[
+                  (layout.panels[0].position[0] + layout.panels[1].position[0]) / 2,
+                  (layout.panels[0].position[1] + layout.panels[1].position[1]) / 2,
+                  (layout.panels[0].position[2] + layout.panels[1].position[2]) / 2,
+                ]}
+                rotation={[0, 0, 0]}
+              >
+                <cylinderGeometry args={[0.04, 0.04, 2.2, 20]} />
+                <meshStandardMaterial color="#0f766e" emissive="#1db3a5" emissiveIntensity={0.22} />
+              </mesh>
+            ) : null}
+
+            {markerPositions.length ? (
+              markerPositions.map((marker) => (
+                <mesh
+                  castShadow
+                  key={`marker-${marker.id}`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onSelectHole?.(marker.id);
+                  }}
+                  onPointerOut={(event) => {
+                    event.stopPropagation();
+                    onLeaveHole?.();
+                  }}
+                  onPointerOver={(event) => {
+                    event.stopPropagation();
+                    onHoverHole?.(marker.id);
+                  }}
+                  position={marker.onSurfacePosition}
+                >
+                  <sphereGeometry args={[marker.markerRadius, 22, 22]} />
+                  <meshStandardMaterial
+                    color={marker.isSelected ? "#16a34a" : marker.isHovered ? "#0f766e" : "#ff33c4"}
+                    emissive={marker.isSelected ? "#8df0ae" : marker.isHovered ? "#43d0bf" : "#ff8de0"}
+                    emissiveIntensity={marker.isSelected ? 0.35 : 0.24}
+                    roughness={0.28}
+                  />
+                </mesh>
+              ))
+            ) : (
+              <mesh position={[0.02, 0.05, 0.01]}>
+                <sphereGeometry args={[0.06, 20, 20]} />
+                <meshStandardMaterial color="#94a3b8" emissive="#cbd5e1" emissiveIntensity={0.12} />
+              </mesh>
+            )}
+          </group>
+          <OrbitControls
+            enableDamping
+            enablePan={false}
+            enableRotate
+            enableZoom
+            maxDistance={11}
+            minDistance={4.2}
+            maxPolarAngle={1.55}
+            minPolarAngle={0.42}
+            target={[0, 0, 0]}
+          />
+        </Canvas>
+        <div className="holes-three-preview-overlay">
+          <div className="holes-three-preview-label">{layout.label}</div>
+          <div className="holes-three-preview-subtitle">{layout.subtitle}</div>
+          {!markerPositions.length ? (
+            <div className="holes-three-preview-empty">Отвори ще не додані</div>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
   function renderHoleWorkspaceFittingInfo(fitting) {
     if (!fitting) {
       return (
@@ -12744,17 +13062,17 @@ export default function App() {
                     </div>
                   </div>
                   {holeWorkspaceCanPreview ? (
-                    renderHolesSceneSchematicPreview(
-                      holesPreviewModel.scene,
-                      (holeId) => setHoveredHolePointId(String(holeId)),
-                      () => setHoveredHolePointId(""),
-                      (holeId) => setSelectedHolePointId(String(holeId)),
-                      { showHeader: false },
-                    )
+                    <HolesMountingThreePreview
+                      holes={holesPreviewModel.scene?.normalizedHoles || holesPreviewModel.scene?.holes || []}
+                      mountingVariantKey={normalizedSelectedHoleMountingVariantKey}
+                      onHoverHole={(holeId) => setHoveredHolePointId(String(holeId))}
+                      onLeaveHole={() => setHoveredHolePointId("")}
+                      onSelectHole={(holeId) => setSelectedHolePointId(String(holeId))}
+                    />
                   ) : (
-                  <div className="holes-preview-stage holes-preview-stage-placeholder">
-                    <span>{t.holeWorkspacePreview3dPlaceholder}</span>
-                  </div>
+                    <div className="holes-preview-stage holes-preview-stage-placeholder">
+                      <span>{t.holeWorkspacePreview3dPlaceholder}</span>
+                    </div>
                   )}
                   <div className="holes-preview-material-planes" aria-label={t.holeWorkspacePreview3dTitle}>
                     <div className="holes-preview-material-planes-title">Площини матеріалу</div>
@@ -12770,12 +13088,6 @@ export default function App() {
                       </span>
                     </div>
                   </div>
-                  {renderHolesSceneSchematicPreview(
-                    holesPreviewModel.scene,
-                    (holeId) => setHoveredHolePointId(String(holeId)),
-                    () => setHoveredHolePointId(""),
-                    (holeId) => setSelectedHolePointId(String(holeId)),
-                  )}
                   <section className="holes-selected-point-panel" aria-label="Вибрана точка">
                     <div className="holes-selected-point-panel-header">
                       <div>
