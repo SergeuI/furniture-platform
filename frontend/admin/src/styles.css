@@ -2014,6 +2014,11 @@ tbody tr.selected {
   outline: none;
 }
 
+.holes-points-table-row.is-selected {
+  background: #eff6ff;
+  box-shadow: inset 3px 0 0 #2563eb;
+}
+
 .holes-template-id-cell {
   align-items: center;
   display: flex;
@@ -2298,6 +2303,21 @@ tbody tr.selected {
   fill: #13672d;
 }
 
+.holes-preview-schematic-hole.is-selected circle:first-of-type {
+  fill: #dbeafe;
+  stroke: #1d4ed8;
+  stroke-width: 4;
+}
+
+.holes-preview-schematic-hole.is-selected circle:last-of-type {
+  fill: #1d4ed8;
+}
+
+.holes-preview-schematic-hole.is-selected text {
+  fill: #1d4ed8;
+  font-weight: 800;
+}
+
 .holes-preview-schematic-hole.is-interactive {
   cursor: pointer;
 }
@@ -2392,6 +2412,11 @@ tbody tr.selected {
 .holes-preview-scene-hole.is-hovered {
   background: #ecf9f4;
   border-color: #b7ecc8;
+}
+
+.holes-preview-scene-hole.is-selected {
+  background: #eff6ff;
+  border-color: #93c5fd;
 }
 
 .holes-preview-scene-hole strong,
@@ -2507,6 +2532,19 @@ tbody tr.selected {
   transform: scale(1.28);
 }
 
+.holes-preview-point.is-selected {
+  fill: #1d4ed8;
+  opacity: 1;
+  stroke: #ffffff;
+  stroke-width: 3;
+  transform: scale(1.28);
+}
+
+.holes-preview-point.is-selected.is-hovered {
+  filter: drop-shadow(0 0 8px rgba(29, 78, 216, 0.3));
+  stroke: #ffffff;
+}
+
 .holes-preview-label {
   fill: #24343d;
   font-size: 12px;
@@ -2520,6 +2558,12 @@ tbody tr.selected {
 
 .holes-preview-label.is-hovered {
   fill: #0f766e;
+  font-weight: 800;
+  stroke-width: 4px;
+}
+
+.holes-preview-label.is-selected {
+  fill: #1d4ed8;
   font-weight: 800;
   stroke-width: 4px;
 }

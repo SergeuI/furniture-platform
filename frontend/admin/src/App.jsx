@@ -4240,6 +4240,7 @@ export default function App() {
   const [holePointEditForm, setHolePointEditForm] = useState(DEFAULT_HOLE_POINT_FORM);
   const [holePointEditPointId, setHolePointEditPointId] = useState("");
   const [hoveredHolePointId, setHoveredHolePointId] = useState("");
+  const [selectedHolePointId, setSelectedHolePointId] = useState("");
   const [selectedHoleMountingVariantKey, setSelectedHoleMountingVariantKey] =
     useState("plane_to_edge");
   const [newFittingForm, setNewFittingForm] = useState(DEFAULT_FITTING_FORM);
@@ -4408,6 +4409,7 @@ export default function App() {
         operation,
         orderIndex: point?.order_index ?? 0,
         quantity: point?.quantity ?? 1,
+        isSelected: String(selectedHolePointId) === String(point?.id),
         side,
         x,
         y,
@@ -4448,7 +4450,7 @@ export default function App() {
       })),
       width,
     };
-  }, [holePoints]);
+  }, [holePoints, selectedHolePointId]);
   function normalizeHolesForScenePreview(points, mountingVariantKey = selectedHoleMountingVariantKey) {
     const zoneByVariant = {
       angled_two_planes: { height: 126, width: 160, x: 266, y: 118 },
@@ -4521,6 +4523,7 @@ export default function App() {
 
           return {
             ...point,
+            isSelected: String(selectedHolePointId) === String(point.id),
             previewX: clampedX,
             previewY: clampedY,
           };
@@ -4542,13 +4545,14 @@ export default function App() {
           ...point,
           previewX: holeZone.x + cellWidth * (column + 1),
           previewY: holeZone.y + cellHeight * (row + 1),
+          isSelected: String(selectedHolePointId) === String(point.id),
         };
       }),
     };
   }
   const holesScenePreviewNormalization = useMemo(
     () => normalizeHolesForScenePreview(holePreviewData.points, selectedHoleMountingVariantKey),
-    [holePreviewData.points, selectedHoleMountingVariantKey],
+    [holePreviewData.points, selectedHoleMountingVariantKey, selectedHolePointId],
   );
   const holesPreviewSceneModel = useMemo(() => {
     const sceneHoles = Array.isArray(holesScenePreviewNormalization.normalizedHoles)
@@ -4558,6 +4562,7 @@ export default function App() {
           hasCoordinates: point.hasCoordinates,
           id: point.id,
           isHovered: String(hoveredHolePointId) === String(point.id),
+          isSelected: String(selectedHolePointId) === String(point.id),
           operation: point.operation,
           previewX: point.previewX,
           previewY: point.previewY,
@@ -4568,6 +4573,7 @@ export default function App() {
         }))
       : [];
     const hoveredHole = sceneHoles.find((point) => point.isHovered) || null;
+    const selectedHole = sceneHoles.find((point) => point.isSelected) || null;
 
     return {
       fitting: selectedHoleFitting,
@@ -4575,6 +4581,8 @@ export default function App() {
       hoveredHoleId: hoveredHolePointId || "",
       hasCoordinates: holesScenePreviewNormalization.hasCoordinates,
       holes: sceneHoles,
+      selectedHole,
+      selectedHoleId: selectedHolePointId || "",
       normalizedHoles: sceneHoles,
       normalizedCount: sceneHoles.length,
       materialPlanes: holesMaterialPlanesModel,
@@ -4583,6 +4591,7 @@ export default function App() {
         hasFitting: Boolean(selectedHoleFitting),
         hasMountingVariant: Boolean(selectedHoleMountingVariant),
         hasTemplate: Boolean(selectedHoleTemplate),
+        hasSelectedPoint: Boolean(selectedHole),
         holesCount: sceneHoles.length,
         hasCoordinates: holesScenePreviewNormalization.hasCoordinates,
         normalizedCount: sceneHoles.length,
@@ -4595,6 +4604,7 @@ export default function App() {
     holesMaterialPlanesModel,
     selectedHoleFitting,
     selectedHoleMountingVariant,
+    selectedHolePointId,
     selectedHoleTemplate,
   ]);
   const holesPreviewModel = useMemo(
@@ -4603,6 +4613,7 @@ export default function App() {
       materialPlanes: holesMaterialPlanesModel,
       mountingVariant: selectedHoleMountingVariant,
       hoveredPointId: hoveredHolePointId || "",
+      selectedPointId: selectedHolePointId || "",
       pointCount: holePoints.length,
       points: holePoints,
       scene: holesPreviewSceneModel,
@@ -4616,6 +4627,7 @@ export default function App() {
       selectedHoleFitting,
       holesMaterialPlanesModel,
       selectedHoleMountingVariant,
+      selectedHolePointId,
       selectedHoleTemplate,
       holesPreviewSceneModel,
     ],
@@ -6233,6 +6245,7 @@ export default function App() {
       setHoleSelectedTemplateId("");
       setHoleSelectedTemplate(null);
       setHolePoints([]);
+      setSelectedHolePointId("");
       return [];
     }
 
@@ -6252,6 +6265,7 @@ export default function App() {
       setHoleSelectedTemplateId("");
       setHoleSelectedTemplate(null);
       setHolePoints([]);
+      setSelectedHolePointId("");
       setStatus({ message: result.error || "Unable to load fitting hole templates", tone: "error" });
       return [];
     }
@@ -6260,6 +6274,7 @@ export default function App() {
     setHoleTemplateItems(templates);
     setHoleSelectedTemplate(null);
     setHolePoints([]);
+    setSelectedHolePointId("");
     return templates;
   }
 
@@ -6515,7 +6530,7 @@ export default function App() {
     );
   }
 
-  function renderHolesSceneSchematicPreview(sceneModel, onHoverHole, onLeaveHole) {
+  function renderHolesSceneSchematicPreview(sceneModel, onHoverHole, onLeaveHole, onSelectHole) {
     const scene = sceneModel || holesPreviewSceneModel || {};
     const variantKey = normalizeHoleWorkspaceMountingVariantKey(
       scene?.mountingVariant?.key || selectedHoleMountingVariantKey,
@@ -6602,6 +6617,7 @@ export default function App() {
         id: holeId,
         radius,
         isHovered: Boolean(hole?.isHovered),
+        isSelected: Boolean(hole?.isSelected),
         hole,
       };
     });
@@ -6684,14 +6700,31 @@ export default function App() {
             <g className="holes-preview-schematic-holes">
               {points.map((point) => (
                 <g
-                  className={`holes-preview-schematic-hole${point.isHovered ? " is-hovered" : ""}${point.hasId ? " is-interactive" : ""}`}
+                  className={`holes-preview-schematic-hole${point.isHovered ? " is-hovered" : ""}${point.isSelected ? " is-selected" : ""}${point.hasId ? " is-interactive" : ""}`}
                   key={point.id || `${point.cx}-${point.cy}`}
+                  onClick={
+                    point.hasId && typeof onSelectHole === "function"
+                      ? () => onSelectHole(point.id)
+                      : undefined
+                  }
+                  onKeyDown={
+                    point.hasId && typeof onSelectHole === "function"
+                      ? (event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            onSelectHole(point.id);
+                          }
+                        }
+                      : undefined
+                  }
                   onMouseEnter={
                     point.hasId && typeof onHoverHole === "function"
                       ? () => onHoverHole(point.id)
                       : undefined
                   }
                   onMouseLeave={point.hasId && typeof onLeaveHole === "function" ? onLeaveHole : undefined}
+                  role={point.hasId && typeof onSelectHole === "function" ? "button" : undefined}
+                  tabIndex={point.hasId && typeof onSelectHole === "function" ? 0 : undefined}
                 >
                   {point.hasId ? <title>{`Отвір #${point.id}`}</title> : null}
                   <circle cx={point.cx} cy={point.cy} r={Math.max(point.radius + 3, 8)} />
@@ -7083,6 +7116,7 @@ export default function App() {
     if (!activeToken || !templateId) {
       setHoleSelectedTemplate(null);
       setHolePoints([]);
+      setSelectedHolePointId("");
       return false;
     }
 
@@ -7103,6 +7137,7 @@ export default function App() {
     if (!templateResult.success) {
       setHoleSelectedTemplate(null);
       setHolePoints([]);
+      setSelectedHolePointId("");
       setStatus({ message: templateResult.error || "Unable to load fitting hole template", tone: "error" });
       return false;
     }
@@ -7110,6 +7145,7 @@ export default function App() {
     if (!pointsResult.success) {
       setHoleSelectedTemplate(templateResult.template || null);
       setHolePoints([]);
+      setSelectedHolePointId("");
       setStatus({ message: pointsResult.error || "Unable to load fitting hole points", tone: "error" });
       return false;
     }
@@ -7128,6 +7164,7 @@ export default function App() {
     setHoleSelectedTemplate(null);
     setHoleTemplateItems([]);
     setHolePoints([]);
+    setSelectedHolePointId("");
     closeHoleTemplateCreateForm();
     closeHolePointCreateForm();
     closeHolePointEditForm();
@@ -7147,6 +7184,7 @@ export default function App() {
     setHoleSelectedTemplateId(nextTemplateId);
     setHoleSelectedTemplate(null);
     setHolePoints([]);
+    setSelectedHolePointId("");
     closeHolePointCreateForm();
     closeHolePointEditForm();
     setStatus("");
@@ -7429,6 +7467,7 @@ export default function App() {
     setHoleSelectedTemplateId("");
     setHoleSelectedTemplate(null);
     setHolePoints([]);
+    setSelectedHolePointId("");
     closeHoleTemplateCreateForm();
     closeHolePointCreateForm();
     closeHolePointEditForm();
@@ -7723,6 +7762,7 @@ export default function App() {
       setHoleSelectedTemplate(null);
       setHoleTemplateItems([]);
       setHolePoints([]);
+      setSelectedHolePointId("");
       closeHoleTemplateCreateForm();
       closeHolePointCreateForm();
       closeHolePointEditForm();
@@ -12266,17 +12306,29 @@ export default function App() {
                         <div className="holes-table-list">
                           {holePoints.map((point) => (
                             <article
-                              className={`holes-points-table-row${String(hoveredHolePointId) === String(point.id) ? " is-hovered" : ""}`}
+                              className={`holes-points-table-row${String(hoveredHolePointId) === String(point.id) ? " is-hovered" : ""}${String(selectedHolePointId) === String(point.id) ? " is-selected" : ""}`}
                               key={point.id}
+                              onClick={() => setSelectedHolePointId(String(point.id))}
                               onMouseEnter={() => setHoveredHolePointId(String(point.id))}
                               onMouseLeave={() => setHoveredHolePointId("")}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter" || event.key === " ") {
+                                  event.preventDefault();
+                                  setSelectedHolePointId(String(point.id));
+                                }
+                              }}
+                              role="button"
+                              tabIndex={0}
                             >
                               <div className="holes-point-id-cell">
                                 <span>{point.id}</span>
                                 <button
                                   aria-label={t.holePointEdit}
                                   className="ghost-button compact-button holes-point-edit-button"
-                                  onClick={() => openHolePointEditForm(point)}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    openHolePointEditForm(point);
+                                  }}
                                   title={t.holePointEdit}
                                   type="button"
                                 >
@@ -12352,9 +12404,26 @@ export default function App() {
                             {holePreviewData.points.map((point) => (
                               <g
                                 key={point.id}
-                                className={String(hoveredHolePointId) === String(point.id) ? "is-hovered" : ""}
+                                className={`${String(hoveredHolePointId) === String(point.id) ? "is-hovered" : ""}${String(selectedHolePointId) === String(point.id) ? " is-selected" : ""}`}
+                                onClick={
+                                  point.id !== null && point.id !== undefined
+                                    ? () => setSelectedHolePointId(String(point.id))
+                                    : undefined
+                                }
+                                onKeyDown={
+                                  point.id !== null && point.id !== undefined
+                                    ? (event) => {
+                                        if (event.key === "Enter" || event.key === " ") {
+                                          event.preventDefault();
+                                          setSelectedHolePointId(String(point.id));
+                                        }
+                                      }
+                                    : undefined
+                                }
                                 onMouseEnter={() => setHoveredHolePointId(String(point.id))}
                                 onMouseLeave={() => setHoveredHolePointId("")}
+                                role={point.id !== null && point.id !== undefined ? "button" : undefined}
+                                tabIndex={point.id !== null && point.id !== undefined ? 0 : undefined}
                                 transform={`translate(${point.previewX}, ${point.previewY})`}
                               >
                                 <title>
@@ -12367,17 +12436,17 @@ export default function App() {
                                     `${t.holePreviewOperation}: ${formatHolePointOperation(point.operation, t)}`,
                                   ].join(" | ")}
                                 </title>
-                                <circle
-                                  cx="0"
-                                  cy="0"
-                                  r={point.radius}
-                                  className={`holes-preview-point${String(hoveredHolePointId) === String(point.id) ? " is-hovered" : ""}`}
-                                />
-                                <text
-                                  className={`holes-preview-label${String(hoveredHolePointId) === String(point.id) ? " is-hovered" : ""}`}
-                                  x={point.labelX - point.previewX}
-                                  y={point.labelY - point.previewY}
-                                >
+                              <circle
+                                cx="0"
+                                cy="0"
+                                r={point.radius}
+                                className={`holes-preview-point${String(hoveredHolePointId) === String(point.id) ? " is-hovered" : ""}${String(selectedHolePointId) === String(point.id) ? " is-selected" : ""}`}
+                              />
+                              <text
+                                className={`holes-preview-label${String(hoveredHolePointId) === String(point.id) ? " is-hovered" : ""}${String(selectedHolePointId) === String(point.id) ? " is-selected" : ""}`}
+                                x={point.labelX - point.previewX}
+                                y={point.labelY - point.previewY}
+                              >
                                   {point.label}
                                 </text>
                               </g>
@@ -12427,6 +12496,7 @@ export default function App() {
                     holesPreviewModel.scene,
                     (holeId) => setHoveredHolePointId(String(holeId)),
                     () => setHoveredHolePointId(""),
+                    (holeId) => setSelectedHolePointId(String(holeId)),
                   )}
                   <div className="holes-preview-scene" aria-label="Scene model">
                     <div className="holes-preview-scene-title">Scene model</div>
@@ -12470,7 +12540,7 @@ export default function App() {
                         <div className="holes-preview-scene-holes-list">
                           {holesPreviewModel.scene.holes.map((hole) => (
                             <div
-                              className={`holes-preview-scene-hole${hole.isHovered ? " is-hovered" : ""}`}
+                              className={`holes-preview-scene-hole${hole.isHovered ? " is-hovered" : ""}${hole.isSelected ? " is-selected" : ""}`}
                               key={hole.id}
                             >
                               <strong>
@@ -12548,11 +12618,15 @@ export default function App() {
                       <span className="holes-preview-debug-label">Точок</span>
                       <strong className="holes-preview-debug-value">{holesPreviewModel.pointCount}</strong>
                     </div>
-                    <div className="holes-preview-debug-row">
-                      <span className="holes-preview-debug-label">Hover point</span>
-                      <strong className="holes-preview-debug-value">{holesPreviewModel.hoveredPointId || "—"}</strong>
+                      <div className="holes-preview-debug-row">
+                        <span className="holes-preview-debug-label">Hover point</span>
+                        <strong className="holes-preview-debug-value">{holesPreviewModel.hoveredPointId || "—"}</strong>
+                      </div>
+                      <div className="holes-preview-debug-row">
+                        <span className="holes-preview-debug-label">Selected hole</span>
+                        <strong className="holes-preview-debug-value">{holesPreviewModel.selectedPointId || "—"}</strong>
+                      </div>
                     </div>
-                  </div>
                   {holePreviewData.hasPoints ? (
                     <>
                       <div className="holes-preview-stage" data-placeholder={t.holeWorkspacePreview3dPlaceholder}>
@@ -12604,10 +12678,10 @@ export default function App() {
                                 cx="0"
                                 cy="0"
                                 r={point.radius}
-                                className={`holes-preview-point${String(hoveredHolePointId) === String(point.id) ? " is-hovered" : ""}`}
+                                className={`holes-preview-point${String(hoveredHolePointId) === String(point.id) ? " is-hovered" : ""}${String(selectedHolePointId) === String(point.id) ? " is-selected" : ""}`}
                               />
                               <text
-                                className={`holes-preview-label${String(hoveredHolePointId) === String(point.id) ? " is-hovered" : ""}`}
+                                className={`holes-preview-label${String(hoveredHolePointId) === String(point.id) ? " is-hovered" : ""}${String(selectedHolePointId) === String(point.id) ? " is-selected" : ""}`}
                                 x={point.labelX - point.previewX}
                                 y={point.labelY - point.previewY}
                               >
