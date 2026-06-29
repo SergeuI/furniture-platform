@@ -2189,6 +2189,122 @@ tbody tr.selected {
   line-height: 1;
 }
 
+.holes-preview-schematic {
+  background: #ffffff;
+  border: 1px solid #dbe1e7;
+  border-radius: 12px;
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+}
+
+.holes-preview-schematic-head {
+  align-items: start;
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.holes-preview-schematic-head strong {
+  color: #24343d;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.holes-preview-schematic-head span {
+  color: #607182;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.holes-preview-schematic-svg {
+  background: linear-gradient(180deg, #fbfdfe 0%, #f7fafc 100%);
+  border: 1px solid #e1e8ee;
+  border-radius: 12px;
+  display: block;
+  height: auto;
+  max-height: 320px;
+  min-height: 260px;
+  overflow: hidden;
+  width: 100%;
+}
+
+.holes-preview-schematic-backdrop {
+  fill: #fbfdfe;
+}
+
+.holes-preview-schematic-grid path {
+  fill: none;
+  stroke: #e8edf1;
+  stroke-width: 1;
+}
+
+.holes-preview-schematic-panel {
+  fill: #f8fafb;
+  stroke: #20303a;
+  stroke-width: 2.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.holes-preview-schematic-panel.is-secondary {
+  fill: url(#holes-preview-schematic-hatch);
+}
+
+.holes-preview-schematic-bridge {
+  fill: #f1f6f8;
+  stroke: #20303a;
+  stroke-width: 2.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.holes-preview-schematic-connectors path {
+  fill: none;
+  stroke: #0f766e;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 5;
+  vector-effect: non-scaling-stroke;
+}
+
+.holes-preview-schematic-plane-labels text {
+  fill: #556270;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.holes-preview-schematic-holes circle:first-of-type {
+  fill: #ffffff;
+  stroke: #0f766e;
+  stroke-width: 3;
+}
+
+.holes-preview-schematic-holes circle:last-of-type {
+  fill: #0f766e;
+}
+
+.holes-preview-schematic-hole.is-hovered circle:first-of-type {
+  fill: #dff8e7;
+  stroke: #13672d;
+}
+
+.holes-preview-schematic-hole.is-hovered circle:last-of-type {
+  fill: #13672d;
+}
+
+.holes-preview-schematic-hole text {
+  fill: #24343d;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.holes-preview-schematic-empty {
+  fill: #607182;
+  font-size: 14px;
+  font-weight: 700;
+  text-anchor: middle;
+}
+
 .holes-preview-scene {
   background: #ffffff;
   border: 1px solid #dbe1e7;
@@ -5297,6 +5413,10 @@ tbody tr.selected {
 
   .holes-preview-scene-stats {
     grid-template-columns: 1fr;
+  }
+
+  .holes-preview-schematic-svg {
+    min-height: 220px;
   }
 }
 

@@ -6403,6 +6403,221 @@ export default function App() {
     );
   }
 
+  function renderHolesSceneSchematicPreview(sceneModel) {
+    const scene = sceneModel || holesPreviewSceneModel || {};
+    const variantKey = normalizeHoleWorkspaceMountingVariantKey(
+      scene?.mountingVariant?.key || selectedHoleMountingVariantKey,
+    );
+    const holes = Array.isArray(scene?.holes) ? scene.holes : [];
+    const materialPlaneA = scene?.materialPlanes?.planeA?.label || "Площина A";
+    const materialPlaneB = scene?.materialPlanes?.planeB?.label || "Площина B";
+    const connectionDirection = scene?.materialPlanes?.connectionDirection || "—";
+    const xValues = holes.map((hole) => Number(hole?.x)).filter(Number.isFinite);
+    const yValues = holes.map((hole) => Number(hole?.y)).filter(Number.isFinite);
+    const hasCoordinates = xValues.length > 0 || yValues.length > 0;
+    const minX = xValues.length ? Math.min(...xValues) : 0;
+    const maxX = xValues.length ? Math.max(...xValues) : 1;
+    const minY = yValues.length ? Math.min(...yValues) : 0;
+    const maxY = yValues.length ? Math.max(...yValues) : 1;
+    const spanX = Math.max(1, maxX - minX);
+    const spanY = Math.max(1, maxY - minY);
+    const zoneByVariant = {
+      angled_two_planes: { height: 126, width: 160, x: 266, y: 118 },
+      drawer_slides: { height: 118, width: 120, x: 320, y: 110 },
+      edge_to_edge: { height: 88, width: 138, x: 304, y: 136 },
+      face_to_edge: { height: 110, width: 122, x: 272, y: 114 },
+      surface_mount: { height: 108, width: 132, x: 242, y: 108 },
+    };
+    const holeZone = zoneByVariant[variantKey] || zoneByVariant.surface_mount;
+
+    function getHolePosition(hole, index) {
+      const rawX = Number(hole?.x);
+      const rawY = Number(hole?.y);
+      const hasX = Number.isFinite(rawX);
+      const hasY = Number.isFinite(rawY);
+
+      if (hasCoordinates && (hasX || hasY)) {
+        const mappedX = hasX
+          ? holeZone.x + ((rawX - minX) / spanX) * holeZone.width
+          : holeZone.x + holeZone.width / 2;
+        const mappedY = hasY
+          ? holeZone.y + ((rawY - minY) / spanY) * holeZone.height
+          : holeZone.y + holeZone.height / 2;
+
+        return {
+          x: Math.max(holeZone.x + 10, Math.min(holeZone.x + holeZone.width - 10, mappedX)),
+          y: Math.max(holeZone.y + 10, Math.min(holeZone.y + holeZone.height - 10, mappedY)),
+        };
+      }
+
+      const fallbackColumns = 4;
+      const fallbackRows = Math.max(1, Math.ceil(Math.max(1, holes.length) / fallbackColumns));
+      const column = index % fallbackColumns;
+      const row = Math.floor(index / fallbackColumns);
+      return {
+        x: holeZone.x + ((column + 1) / (fallbackColumns + 1)) * holeZone.width,
+        y: holeZone.y + ((row + 1) / (fallbackRows + 1)) * holeZone.height,
+      };
+    }
+
+    function renderHolePanelBodies() {
+      switch (variantKey) {
+        case "angled_two_planes":
+          return (
+            <>
+              <rect className="holes-preview-schematic-panel" height="206" rx="10" width="88" x="92" y="44" />
+              <path
+                className="holes-preview-schematic-panel is-secondary"
+                d="M 236 138 L 390 70 L 434 166 L 286 216 Z"
+              />
+            </>
+          );
+        case "face_to_edge":
+          return (
+            <>
+              <rect className="holes-preview-schematic-panel" height="208" rx="10" width="88" x="94" y="46" />
+              <rect className="holes-preview-schematic-panel is-secondary" height="70" rx="10" width="244" x="246" y="122" />
+            </>
+          );
+        case "edge_to_edge":
+          return (
+            <>
+              <rect className="holes-preview-schematic-panel" height="64" rx="10" width="214" x="138" y="128" />
+              <rect className="holes-preview-schematic-panel is-secondary" height="64" rx="10" width="214" x="356" y="128" />
+            </>
+          );
+        case "drawer_slides":
+          return (
+            <>
+              <rect className="holes-preview-schematic-panel" height="204" rx="10" width="76" x="102" y="56" />
+              <rect className="holes-preview-schematic-panel is-secondary" height="204" rx="10" width="76" x="578" y="56" />
+              <rect className="holes-preview-schematic-bridge" height="56" rx="8" width="212" x="242" y="122" />
+            </>
+          );
+        case "surface_mount":
+        default:
+          return (
+            <>
+              <rect className="holes-preview-schematic-panel" height="220" rx="10" width="92" x="98" y="40" />
+              <rect className="holes-preview-schematic-bridge" height="86" rx="8" width="132" x="274" y="108" />
+              <path className="holes-preview-schematic-panel is-secondary" d="M 392 106 L 430 106 L 454 128 L 454 176 L 430 198 L 392 198 Z" />
+            </>
+          );
+      }
+    }
+
+    const points = holes.map((hole, index) => {
+      const position = getHolePosition(hole, index);
+      const diameter = Number(hole?.diameter);
+      const radius = Math.max(4, Math.min(10, Number.isFinite(diameter) ? Math.round(diameter / 2) : 5));
+
+      return {
+        cx: position.x,
+        cy: position.y,
+        hole,
+        radius,
+      };
+    });
+
+    return (
+      <section className={`holes-preview-schematic variant-${variantKey}`}>
+        <div className="holes-preview-schematic-head">
+          <strong>Схема сцени</strong>
+          <span>
+            {materialPlaneA} → {materialPlaneB} · {connectionDirection}
+          </span>
+        </div>
+
+        <svg
+          aria-label="Scene schematic preview"
+          className="holes-preview-schematic-svg"
+          role="img"
+          viewBox="0 0 760 320"
+        >
+          <defs>
+            <pattern id="holes-preview-schematic-hatch" height="10" patternUnits="userSpaceOnUse" width="10">
+              <path d="M 0 10 L 10 0" fill="none" stroke="#d8e1e8" strokeWidth="1" />
+            </pattern>
+            <linearGradient id="holes-preview-schematic-panel-fill" x1="0%" x2="100%" y1="0%" y2="100%">
+              <stop offset="0%" stopColor="#f8fafb" />
+              <stop offset="100%" stopColor="#eef2f6" />
+            </linearGradient>
+          </defs>
+
+          <rect className="holes-preview-schematic-backdrop" height="320" width="760" x="0" y="0" />
+          <g className="holes-preview-schematic-grid">
+            <path d="M 40 80 H 720" />
+            <path d="M 40 160 H 720" />
+            <path d="M 40 240 H 720" />
+            <path d="M 120 32 V 288" />
+            <path d="M 380 32 V 288" />
+            <path d="M 640 32 V 288" />
+          </g>
+
+          {renderHolePanelBodies()}
+
+          <g className="holes-preview-schematic-connectors">
+            {variantKey === "drawer_slides" ? (
+              <>
+                <path d="M 178 158 H 242" />
+                <path d="M 454 150 H 578" />
+                <path d="M 348 150 H 388" />
+              </>
+            ) : variantKey === "edge_to_edge" ? (
+              <>
+                <path d="M 246 160 H 356" />
+                <path d="M 352 160 H 462" />
+              </>
+            ) : variantKey === "angled_two_planes" ? (
+              <>
+                <path d="M 182 144 L 246 146" />
+                <path d="M 252 140 L 320 120" />
+                <path d="M 318 120 L 384 92" />
+              </>
+            ) : variantKey === "face_to_edge" ? (
+              <>
+                <path d="M 182 154 H 246" />
+                <path d="M 248 154 H 300" />
+              </>
+            ) : (
+              <>
+                <path d="M 190 150 H 274" />
+                <path d="M 340 150 H 392" />
+              </>
+            )}
+          </g>
+
+          <g className="holes-preview-schematic-plane-labels">
+            <text x="132" y="68">{materialPlaneA}</text>
+            <text x="528" y="68">{materialPlaneB}</text>
+            <text x="42" y="300">{connectionDirection}</text>
+          </g>
+
+          {points.length ? (
+            <g className="holes-preview-schematic-holes">
+              {points.map((point) => (
+                <g
+                  className={`holes-preview-schematic-hole${point.hole.isHovered ? " is-hovered" : ""}`}
+                  key={point.hole.id}
+                >
+                  <circle cx={point.cx} cy={point.cy} r={Math.max(point.radius + 3, 8)} />
+                  <circle cx={point.cx} cy={point.cy} r={point.radius} />
+                  <text x={point.cx + 10} y={point.cy - 10}>
+                    #{point.hole.id}
+                  </text>
+                </g>
+              ))}
+            </g>
+          ) : (
+            <text className="holes-preview-schematic-empty" x="380" y="160">
+              Отвори сцени ще не додані
+            </text>
+          )}
+        </svg>
+      </section>
+    );
+  }
+
   function renderHoleTemplateMountingSchemePicker(selectedSide, onSelectSide) {
     const schemeCards = [
       {
@@ -12030,6 +12245,7 @@ export default function App() {
                         </span>
                       </div>
                     </div>
+                    {renderHolesSceneSchematicPreview(holesPreviewModel.scene)}
                     <div className="holes-preview-scene" aria-label="Scene model">
                       <div className="holes-preview-scene-title">Scene model</div>
                       <div className="holes-preview-scene-stats">
