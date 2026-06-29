@@ -105,6 +105,7 @@ const ProjectThreeViewer = lazy(() => import("./components/ProjectThreeViewer"))
 
 
 const TOKEN_STORAGE_KEY = "furniture_admin_token";
+const USER_STORAGE_KEY = "furniture_admin_user";
 const LANGUAGE_STORAGE_KEY = "furniture_admin_language";
 const ACTIVE_VIEW_STORAGE_KEY = "furniture_admin_active_view";
 const ACTIVE_PROJECT_ID_STORAGE_KEY = "furniture_admin_active_project_id";
@@ -173,6 +174,83 @@ function consumeAdminTokenHandoff() {
   window.history.replaceState(null, document.title, nextUrl);
 
   return handoffToken;
+}
+
+function decodeAdminTokenPayload(token) {
+  const rawToken = String(token || "").trim();
+
+  if (!rawToken) {
+    return null;
+  }
+
+  try {
+    const [payloadPart] = rawToken.split(".");
+
+    if (!payloadPart) {
+      return null;
+    }
+
+    const normalizedPayload = payloadPart.replace(/-/g, "+").replace(/_/g, "/");
+    const paddedPayload = normalizedPayload.padEnd(
+      normalizedPayload.length + ((4 - (normalizedPayload.length % 4)) % 4),
+      "=",
+    );
+
+    return JSON.parse(window.atob(paddedPayload));
+  } catch {
+    return null;
+  }
+}
+
+function isAdminTokenExpired(token) {
+  const payload = decodeAdminTokenPayload(token);
+  const exp = Number(payload?.exp || 0);
+
+  if (!exp) {
+    return false;
+  }
+
+  return exp <= Math.floor(Date.now() / 1000);
+}
+
+function readPersistedAdminToken() {
+  const token = consumeAdminTokenHandoff();
+
+  if (!token) {
+    return "";
+  }
+
+  if (!isAdminTokenExpired(token)) {
+    return token;
+  }
+
+  localStorage.removeItem(TOKEN_STORAGE_KEY);
+  localStorage.removeItem(USER_STORAGE_KEY);
+  return "";
+}
+
+function readPersistedAdminUser(token) {
+  if (!token) {
+    return null;
+  }
+
+  try {
+    const rawValue = localStorage.getItem(USER_STORAGE_KEY);
+
+    if (!rawValue) {
+      return null;
+    }
+
+    const parsedUser = JSON.parse(rawValue);
+
+    if (!parsedUser || typeof parsedUser !== "object") {
+      return null;
+    }
+
+    return parsedUser;
+  } catch {
+    return null;
+  }
 }
 const DEFAULT_PROJECT_NAME = "Новий проект";
 const DEFAULT_PROJECT_FORM = {
@@ -4082,10 +4160,12 @@ export default function App() {
     () => localStorage.getItem(LANGUAGE_STORAGE_KEY) || "en",
   );
   const [token, setToken] = useState(
-    () => consumeAdminTokenHandoff(),
+    () => readPersistedAdminToken(),
   );
   const tokenRef = useRef(token);
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(
+    () => readPersistedAdminUser(localStorage.getItem(TOKEN_STORAGE_KEY) || ""),
+  );
   const [authChecking, setAuthChecking] = useState(Boolean(token));
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -5952,14 +6032,16 @@ export default function App() {
     }
 
     if (!result.success) {
-      if (result.status && result.status !== 401) {
-        setStatus(result.error || t.loginFailed);
+      if (result.status === 401 || result.status === 403) {
+        localStorage.removeItem(TOKEN_STORAGE_KEY);
+        localStorage.removeItem(USER_STORAGE_KEY);
+        setToken("");
+        setUser(null);
         return null;
       }
-      localStorage.removeItem(TOKEN_STORAGE_KEY);
-      setToken("");
-      setUser(null);
-      return null;
+
+      setStatus({ message: result.error || t.loginFailed, tone: "error" });
+      return user || readPersistedAdminUser(activeToken);
     }
 
     setUser(result.user);
@@ -7440,6 +7522,7 @@ export default function App() {
     }
 
     localStorage.setItem(TOKEN_STORAGE_KEY, result.access_token);
+    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(result.user));
     localStorage.setItem(ACTIVE_VIEW_STORAGE_KEY, "home");
     localStorage.removeItem(ACTIVE_PROJECT_ID_STORAGE_KEY);
     localStorage.removeItem(ACTIVE_PROJECT_TAB_STORAGE_KEY);
@@ -7452,6 +7535,7 @@ export default function App() {
 
   function handleLogout() {
     localStorage.removeItem(TOKEN_STORAGE_KEY);
+    localStorage.removeItem(USER_STORAGE_KEY);
     localStorage.removeItem(ACTIVE_VIEW_STORAGE_KEY);
     localStorage.removeItem(ACTIVE_PROJECT_ID_STORAGE_KEY);
     localStorage.removeItem(ACTIVE_PROJECT_TAB_STORAGE_KEY);
@@ -8978,6 +9062,15 @@ export default function App() {
     setActiveView("projects");
     await loadProjects(token, offset);
   }
+
+  useEffect(() => {
+    if (user) {
+      localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+      return;
+    }
+
+    localStorage.removeItem(USER_STORAGE_KEY);
+  }, [user]);
 
   useEffect(() => {
     if (!token) {
