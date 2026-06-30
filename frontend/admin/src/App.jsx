@@ -37,7 +37,7 @@ import faceToEdgeIcon from "./assets/hole-mounting/face_to_edge.png";
 import edgeToEdgeIcon from "./assets/hole-mounting/edge_to_edge.png";
 import drawerSlidesIcon from "./assets/hole-mounting/drawer_slides.png";
 import { Canvas } from "@react-three/fiber";
-import { Edges, OrbitControls } from "@react-three/drei";
+import { OrbitControls } from "@react-three/drei";
 import { CanvasTexture, DoubleSide, LinearFilter } from "three";
 
 import {
@@ -6771,14 +6771,14 @@ export default function App() {
             {
               args: [0.28, 2.18, 1.34],
               color: "#b9ffb9",
-              opacity: 0.34,
+              opacity: 0.28,
               position: [-0.14, 0, 0],
               rotation: [0, 0, 0],
             },
             {
               args: [1.96, 0.28, 1.08],
               color: "#b9ffb9",
-              opacity: 0.34,
+              opacity: 0.28,
               position: [0.98, -0.14, 0],
               rotation: [0, 0, 0],
             },
@@ -7058,9 +7058,9 @@ export default function App() {
           ? {
               opacity: 0.96,
               positions: {
-                x: [0.14, 0.02, 0],
-                y: [0.02, 0.18, 0],
-                z: [-0.22, 0.0, 0],
+                x: [0.12, 0.02, 0],
+                y: [0.02, 0.16, 0],
+                z: [-0.3, -0.06, 0],
               },
               scale: 0.14,
             }
@@ -7261,6 +7261,7 @@ export default function App() {
                   {isFaceToEdgePreview ? (
                     <meshBasicMaterial
                       color={panel.color}
+                      depthWrite={false}
                       opacity={panel.opacity}
                       side={DoubleSide}
                       transparent
@@ -7280,7 +7281,6 @@ export default function App() {
                     />
                   )}
                 </mesh>
-                {isFaceToEdgePreview ? <Edges color="#35ff35" lineWidth={1} /> : null}
               </group>
             ))}
 
