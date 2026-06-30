@@ -2289,6 +2289,22 @@ tbody tr.selected {
   width: fit-content;
 }
 
+.holes-three-preview-origin-note {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid #dbe1e7;
+  border-radius: 12px;
+  color: #52606d;
+  font-size: 12px;
+  line-height: 1.45;
+  max-width: 36rem;
+  padding: 8px 10px;
+}
+
+.holes-three-preview-origin-note strong {
+  color: #24343d;
+  font-weight: 800;
+}
+
 .holes-three-preview-empty {
   align-self: start;
   background: rgba(255, 255, 255, 0.92);
@@ -2353,6 +2369,28 @@ tbody tr.selected {
 
 .holes-preview-scene-stats.compact {
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.hole-point-coordinate-hint {
+  background: linear-gradient(180deg, #f8fbfd 0%, #f1f7fb 100%);
+  border: 1px solid #dbe1e7;
+  border-radius: 12px;
+  color: #52606d;
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+}
+
+.hole-point-coordinate-hint strong {
+  color: #24343d;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.hole-point-coordinate-hint p {
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 0;
 }
 
 .holes-preview-technical > summary {

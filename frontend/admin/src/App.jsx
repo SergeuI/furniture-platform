@@ -29,7 +29,7 @@ import {
   Users,
   Wrench,
 } from "lucide-react";
-import { Component, Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Component, Suspense, lazy, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import surfaceMountIcon from "./assets/hole-mounting/surface_mount.png";
 import angledTwoPlanesIcon from "./assets/hole-mounting/angled_two_planes.png";
@@ -6676,20 +6676,20 @@ export default function App() {
         return {
           camera: [4.6, 2.8, 6.1],
           label: "Пласть → торець",
-          markerPlane: { axis: "z", origin: [-0.92, 0.03, 0], spanU: 1.1, spanV: 1.8 },
+          markerPlane: { axis: "z", origin: [0, 0, 0], spanU: 1.1, spanV: 1.8 },
           panels: [
             {
-              args: [0.26, 2.1, 1.32],
+              args: [0.28, 2.1, 1.32],
               color: "#d6ecef",
               opacity: 0.42,
-              position: [-0.98, 0.04, 0],
+              position: [-0.14, 0, 0],
               rotation: [0, 0, 0],
             },
             {
-              args: [1.95, 0.26, 1.08],
+              args: [1.95, 0.28, 1.08],
               color: "#e1f5e7",
               opacity: 0.46,
-              position: [0.22, -0.78, -0.08],
+              position: [0.84, -0.14, -0.08],
               rotation: [0, 0, 0],
             },
           ],
@@ -6817,8 +6817,6 @@ export default function App() {
 
       return {
         id: hole?.id ?? index + 1,
-        isHovered: Boolean(hole?.isHovered),
-        isSelected: Boolean(hole?.isSelected),
         label: String(hole?.label || `P${index + 1}`).trim() || `P${index + 1}`,
         markerRadius,
         onSurfacePosition:
@@ -6837,9 +6835,11 @@ export default function App() {
     });
   }
 
-  function HolesMountingThreePreview({
+  const HolesMountingThreePreview = memo(function HolesMountingThreePreview({
     holes,
     mountingVariantKey,
+    hoveredHoleId,
+    selectedHoleId,
     onHoverHole,
     onLeaveHole,
     onSelectHole,
@@ -6866,6 +6866,8 @@ export default function App() {
           <ambientLight intensity={1.05} />
           <directionalLight castShadow position={[5.2, 7.2, 8]} intensity={1.45} />
           <directionalLight position={[-4, 2.8, 3]} intensity={0.55} />
+          <axesHelper args={[1.7]} position={layout.markerPlane.origin} />
+          <gridHelper args={[3.1, 10, "#d2dde5", "#e7eef3"]} position={[0, -1.02, 0]} />
           <group>
             {layout.panels.map((panel, index) => (
               <mesh
@@ -6925,15 +6927,15 @@ export default function App() {
                 >
                   <sphereGeometry args={[marker.markerRadius, 22, 22]} />
                   <meshStandardMaterial
-                    color={marker.isSelected ? "#16a34a" : marker.isHovered ? "#0f766e" : "#ff33c4"}
-                    emissive={marker.isSelected ? "#8df0ae" : marker.isHovered ? "#43d0bf" : "#ff8de0"}
-                    emissiveIntensity={marker.isSelected ? 0.35 : 0.24}
+                    color={String(selectedHoleId) === String(marker.id) ? "#16a34a" : String(hoveredHoleId) === String(marker.id) ? "#0f766e" : "#ff33c4"}
+                    emissive={String(selectedHoleId) === String(marker.id) ? "#8df0ae" : String(hoveredHoleId) === String(marker.id) ? "#43d0bf" : "#ff8de0"}
+                    emissiveIntensity={String(selectedHoleId) === String(marker.id) ? 0.35 : 0.24}
                     roughness={0.28}
                   />
                 </mesh>
               ))
             ) : (
-              <mesh position={[0.02, 0.05, 0.01]}>
+              <mesh position={layout.markerPlane.origin}>
                 <sphereGeometry args={[0.06, 20, 20]} />
                 <meshStandardMaterial color="#94a3b8" emissive="#cbd5e1" emissiveIntensity={0.12} />
               </mesh>
@@ -6954,13 +6956,16 @@ export default function App() {
         <div className="holes-three-preview-overlay">
           <div className="holes-three-preview-label">{layout.label}</div>
           <div className="holes-three-preview-subtitle">{layout.subtitle}</div>
+          <div className="holes-three-preview-origin-note">
+            <strong>Система координат:</strong> 0,0,0 у внутрішньому куті стику панелей. Ось X, Y, Z показані в сцені.
+          </div>
           {!markerPositions.length ? (
             <div className="holes-three-preview-empty">Отвори ще не додані</div>
           ) : null}
         </div>
       </div>
     );
-  }
+  });
 
   function renderHoleWorkspaceFittingInfo(fitting) {
     if (!fitting) {
@@ -13063,11 +13068,13 @@ export default function App() {
                   </div>
                   {holeWorkspaceCanPreview ? (
                     <HolesMountingThreePreview
-                      holes={holesPreviewModel.scene?.normalizedHoles || holesPreviewModel.scene?.holes || []}
+                      holes={holePoints}
+                      hoveredHoleId={hoveredHolePointId}
                       mountingVariantKey={normalizedSelectedHoleMountingVariantKey}
                       onHoverHole={(holeId) => setHoveredHolePointId(String(holeId))}
                       onLeaveHole={() => setHoveredHolePointId("")}
                       onSelectHole={(holeId) => setSelectedHolePointId(String(holeId))}
+                      selectedHoleId={selectedHolePointId}
                     />
                   ) : (
                     <div className="holes-preview-stage holes-preview-stage-placeholder">
@@ -15637,6 +15644,20 @@ export default function App() {
                     value={holePointCreateForm.z_mm}
                   />
                 </label>
+              </div>
+
+              <div className="hole-point-coordinate-hint">
+                <strong>Початок координат</strong>
+                <p>
+                  0,0,0 розташовано у внутрішньому куті стику панелей. Координати X/Y/Z рахуйте від цієї точки у
+                  напрямках, які показані в 3D preview.
+                </p>
+                <p>
+                  Поточний варіант кріплення: {selectedHoleMountingVariant?.label || normalizedSelectedHoleMountingVariantKey}
+                  {normalizedSelectedHoleMountingVariantKey === "face_to_edge"
+                    ? " · для face_to_edge вісь X іде уздовж пласті, Y - уздовж торця, Z - перпендикулярно до вузла."
+                    : ""}
+                </p>
               </div>
 
               <div className="hole-template-form-grid">
