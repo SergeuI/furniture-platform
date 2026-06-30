@@ -7058,11 +7058,11 @@ export default function App() {
           ? {
               opacity: 0.96,
               positions: {
-                x: [0.26, 0.02, 0],
-                y: [0.02, 0.34, 0],
-                z: [-0.62, -0.08, 0],
+                x: [0.46, -0.02, 0],
+                y: [0.02, 0.52, 0],
+                z: [-0.82, -0.12, 0],
               },
-              scale: 0.14,
+              scale: 0.16,
             }
           : {
               opacity: 1,
@@ -7455,25 +7455,25 @@ export default function App() {
             {isFaceToEdgePreview ? (
               <group position={faceToEdgeOrigin || layout.markerPlane.origin}>
                 <sprite position={axisLabelPresentation.positions.x} scale={[axisLabelPresentation.scale, axisLabelPresentation.scale, axisLabelPresentation.scale]}>
-                  <spriteMaterial attach="material" depthWrite={false} map={axisLabelTextures.x || undefined} opacity={axisLabelPresentation.opacity} transparent />
+                  <spriteMaterial attach="material" depthTest={false} depthWrite={false} map={axisLabelTextures.x || undefined} opacity={axisLabelPresentation.opacity} transparent />
                 </sprite>
                 <sprite position={axisLabelPresentation.positions.y} scale={[axisLabelPresentation.scale, axisLabelPresentation.scale, axisLabelPresentation.scale]}>
-                  <spriteMaterial attach="material" depthWrite={false} map={axisLabelTextures.y || undefined} opacity={axisLabelPresentation.opacity} transparent />
+                  <spriteMaterial attach="material" depthTest={false} depthWrite={false} map={axisLabelTextures.y || undefined} opacity={axisLabelPresentation.opacity} transparent />
                 </sprite>
                 <sprite position={axisLabelPresentation.positions.z} scale={[axisLabelPresentation.scale, axisLabelPresentation.scale, axisLabelPresentation.scale]}>
-                  <spriteMaterial attach="material" depthWrite={false} map={axisLabelTextures.z || undefined} opacity={axisLabelPresentation.opacity} transparent />
+                  <spriteMaterial attach="material" depthTest={false} depthWrite={false} map={axisLabelTextures.z || undefined} opacity={axisLabelPresentation.opacity} transparent />
                 </sprite>
               </group>
             ) : (
               <group position={layout.markerPlane.origin}>
                 <sprite position={axisLabelPresentation.positions.x} scale={[axisLabelPresentation.scale, axisLabelPresentation.scale, axisLabelPresentation.scale]}>
-                  <spriteMaterial attach="material" depthWrite={false} map={axisLabelTextures.x || undefined} opacity={axisLabelPresentation.opacity} transparent />
+                  <spriteMaterial attach="material" depthTest={false} depthWrite={false} map={axisLabelTextures.x || undefined} opacity={axisLabelPresentation.opacity} transparent />
                 </sprite>
                 <sprite position={axisLabelPresentation.positions.y} scale={[axisLabelPresentation.scale, axisLabelPresentation.scale, axisLabelPresentation.scale]}>
-                  <spriteMaterial attach="material" depthWrite={false} map={axisLabelTextures.y || undefined} opacity={axisLabelPresentation.opacity} transparent />
+                  <spriteMaterial attach="material" depthTest={false} depthWrite={false} map={axisLabelTextures.y || undefined} opacity={axisLabelPresentation.opacity} transparent />
                 </sprite>
                 <sprite position={axisLabelPresentation.positions.z} scale={[axisLabelPresentation.scale, axisLabelPresentation.scale, axisLabelPresentation.scale]}>
-                  <spriteMaterial attach="material" depthWrite={false} map={axisLabelTextures.z || undefined} opacity={axisLabelPresentation.opacity} transparent />
+                  <spriteMaterial attach="material" depthTest={false} depthWrite={false} map={axisLabelTextures.z || undefined} opacity={axisLabelPresentation.opacity} transparent />
                 </sprite>
               </group>
             )}
