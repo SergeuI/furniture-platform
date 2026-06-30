@@ -37,7 +37,7 @@ import faceToEdgeIcon from "./assets/hole-mounting/face_to_edge.png";
 import edgeToEdgeIcon from "./assets/hole-mounting/edge_to_edge.png";
 import drawerSlidesIcon from "./assets/hole-mounting/drawer_slides.png";
 import { Canvas } from "@react-three/fiber";
-import { OrbitControls } from "@react-three/drei";
+import { Edges, OrbitControls } from "@react-three/drei";
 import { CanvasTexture, DoubleSide, LinearFilter } from "three";
 
 import {
@@ -7245,7 +7245,9 @@ export default function App() {
           <ambientLight intensity={1.05} />
           <directionalLight castShadow position={[5.2, 7.2, 8]} intensity={1.45} />
           <directionalLight position={[-4, 2.8, 3]} intensity={0.55} />
-          <axesHelper args={isFaceToEdgePreview ? [0.42] : [1.8]} position={faceToEdgeOrigin || layout.markerPlane.origin} />
+          {isFaceToEdgePreview ? null : (
+            <axesHelper args={[1.8]} position={layout.markerPlane.origin} />
+          )}
           {isFaceToEdgePreview ? null : (
             <gridHelper args={[3.1, 10, "#d2dde5", "#e7eef3"]} position={[0, -1.02, 0]} />
           )}
@@ -7271,18 +7273,7 @@ export default function App() {
                     transmission={isFaceToEdgePreview ? 0 : 0.34}
                   />
                 </mesh>
-                {isFaceToEdgePreview ? (
-                  <mesh>
-                    <boxGeometry args={panel.args.map((value) => value + 0.002)} />
-                    <meshBasicMaterial
-                      color="#21ff21"
-                      depthWrite={false}
-                      opacity={0.78}
-                      transparent
-                      wireframe
-                    />
-                  </mesh>
-                ) : null}
+                {isFaceToEdgePreview ? <Edges color="#35ff35" lineWidth={1} /> : null}
               </group>
             ))}
 
