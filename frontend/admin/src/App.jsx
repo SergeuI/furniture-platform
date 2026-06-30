@@ -6884,33 +6884,45 @@ export default function App() {
 
   function buildThreePreviewMarkerPositions(holes, markerPlane) {
     const sourceHoles = Array.isArray(holes) ? holes : [];
+    const readHoleNumber = (hole, keys) => {
+      for (const key of keys) {
+        const parsed = Number(String(hole?.[key] ?? "").replace(",", "."));
+
+        if (Number.isFinite(parsed)) {
+          return parsed;
+        }
+      }
+
+      return null;
+    };
     const xRange = normalizeThreePreviewHoleRange(
-      sourceHoles.map((hole) => Number(hole?.x)),
+      sourceHoles.map((hole) => readHoleNumber(hole, ["x", "x_mm"])),
       0,
     );
     const yRange = normalizeThreePreviewHoleRange(
-      sourceHoles.map((hole) => Number(hole?.y)),
+      sourceHoles.map((hole) => readHoleNumber(hole, ["y", "y_mm"])),
       0,
     );
 
     return sourceHoles.map((hole, index) => {
-      const numericX = Number(hole?.x);
-      const numericY = Number(hole?.y);
+      const numericX = readHoleNumber(hole, ["x", "x_mm"]);
+      const numericY = readHoleNumber(hole, ["y", "y_mm"]);
+      const numericDiameter = readHoleNumber(hole, ["diameter", "diameter_mm"]);
+      const depthValue = readHoleNumber(hole, ["depth", "depth_mm"]);
       const ratioX = Number.isFinite(numericX)
         ? (numericX - xRange.min) / xRange.span
         : (index % 3) / 2;
       const ratioY = Number.isFinite(numericY)
         ? (numericY - yRange.min) / yRange.span
         : Math.floor(index / 3) / 2;
-      const markerRadius = Math.max(0.04, Math.min(0.08, Number(hole?.diameter) ? Number(hole.diameter) / 150 : 0.05));
-      const offset = Number.isFinite(Number(hole?.depth)) ? Math.min(Number(hole.depth) / 1000, 0.06) : 0.02;
-      const depthValue = Number(hole?.depth);
+      const markerRadius = Math.max(0.04, Math.min(0.08, numericDiameter ? numericDiameter / 150 : 0.05));
+      const offset = Number.isFinite(depthValue) ? Math.min(depthValue / 1000, 0.06) : 0.02;
       const hasDepth = Number.isFinite(depthValue) && depthValue > 0;
 
       return {
         id: hole?.id ?? index + 1,
         label: String(hole?.label || `P${index + 1}`).trim() || `P${index + 1}`,
-        diameter: Number.isFinite(Number(hole?.diameter)) ? Number(hole.diameter) : null,
+        diameter: Number.isFinite(numericDiameter) ? numericDiameter : null,
         depth: hasDepth ? depthValue : null,
         hasDepth,
         markerRadius,
@@ -6977,6 +6989,18 @@ export default function App() {
     }
 
     return Math.max(0.24, Number(panel.args[0]) || 0.28);
+  }
+
+  function readHolePreviewNumber(hole, keys, fallback = null) {
+    for (const key of keys) {
+      const parsed = Number(String(hole?.[key] ?? "").replace(",", "."));
+
+      if (Number.isFinite(parsed)) {
+        return parsed;
+      }
+    }
+
+    return fallback;
   }
 
   const HolesMountingThreePreview = useMemo(
@@ -7117,11 +7141,10 @@ export default function App() {
 
           const panelAThickness = Number(panelA?.args?.[0]) || 0.28;
           const panelBWidth = Number(panelB?.args?.[0]) || 1.92;
-          const panelBThickness = Number(panelB?.args?.[1]) || 0.28;
           const panelAOuterFaceX = (Number(panelA?.position?.[0]) || 0) - panelAThickness / 2;
           const panelAInnerFaceX = (Number(panelA?.position?.[0]) || 0) + panelAThickness / 2;
           const panelBEdgeStartX = (Number(panelB?.position?.[0]) || 0) - panelBWidth / 2;
-          const panelCenterY = (Number(panelB?.position?.[1]) || 0) + panelBThickness / 2;
+          const panelCenterY = Number(panelB?.position?.[1]) || 0;
           const panelCenterZ = ((Number(panelA?.position?.[2]) || 0) + (Number(panelB?.position?.[2]) || 0)) / 2;
           const sortedHoles = [...(Array.isArray(holes) ? holes : [])].sort((left, right) => {
             const leftOrder = Number(left?.order_index ?? left?.orderIndex ?? 0);
@@ -7132,12 +7155,23 @@ export default function App() {
 
             return Number(left?.id ?? 0) - Number(right?.id ?? 0);
           });
-          const firstHole = sortedHoles.find((hole) => String(hole?.label || "").trim() === "P1") || sortedHoles[0] || null;
-          const secondHole = sortedHoles.find((hole) => String(hole?.label || "").trim() === "P2") || sortedHoles[1] || null;
-          const firstRadius = Math.max(0.022, Math.min(0.05, Number(firstHole?.diameter) ? Number(firstHole.diameter) / 220 : 0.032));
-          const secondRadius = Math.max(0.018, Math.min(0.04, Number(secondHole?.diameter) ? Number(secondHole.diameter) / 220 : 0.024));
-          const firstLength = Math.max(0.22, Math.min(0.3, panelAThickness));
-          const secondLength = Math.max(0.14, Math.min(0.24, Number(secondHole?.depth) ? Number(secondHole.depth) / 200 : 0.17, panelBThickness * 0.85));
+          const firstHole =
+            sortedHoles.find((hole) => String(hole?.label || "").trim().toLowerCase() === "p1") ||
+            sortedHoles.find((hole) => String(hole?.side || "").trim() !== "edge") ||
+            sortedHoles[0] ||
+            { id: "face-through-7", label: "P1", diameter_mm: 7 };
+          const secondHole =
+            sortedHoles.find((hole) => String(hole?.label || "").trim().toLowerCase() === "p2") ||
+            sortedHoles.find((hole) => String(hole?.side || "").trim() === "edge") ||
+            sortedHoles[1] ||
+            { id: "edge-blind-45", label: "P2", diameter_mm: 4.5, depth_mm: 34, side: "edge" };
+          const firstDiameter = readHolePreviewNumber(firstHole, ["diameter", "diameter_mm"], 7);
+          const secondDiameter = readHolePreviewNumber(secondHole, ["diameter", "diameter_mm"], 4.5);
+          const secondDepth = readHolePreviewNumber(secondHole, ["depth", "depth_mm"], 34);
+          const firstRadius = Math.max(0.022, Math.min(0.05, firstDiameter / 220));
+          const secondRadius = Math.max(0.018, Math.min(0.04, secondDiameter / 220));
+          const firstLength = panelAThickness;
+          const secondLength = Math.max(0.12, Math.min(panelBWidth * 0.9, secondDepth / 200));
 
           return [
             {
@@ -7161,7 +7195,7 @@ export default function App() {
               id: secondHole?.id ?? "face-to-edge-p2",
               isSelected: String(selectedHoleId) === String(secondHole?.id),
               isHovered: String(hoveredHoleId) === String(secondHole?.id),
-              hasDepth: Boolean(secondHole?.depth),
+              hasDepth: true,
               length: secondLength,
               opacity: 0.74,
               radius: secondRadius,
@@ -7170,6 +7204,25 @@ export default function App() {
             },
           ];
         }, [holes, hoveredHoleId, layout.panels, mountingVariantKey, selectedHoleId]);
+        const faceToEdgeOrigin = useMemo(() => {
+          if (normalizeHoleWorkspaceMountingVariantKey(mountingVariantKey) !== "face_to_edge") {
+            return null;
+          }
+
+          const panelA = Array.isArray(layout.panels) ? layout.panels[0] || null : null;
+          const panelB = Array.isArray(layout.panels) ? layout.panels[1] || null : null;
+
+          if (!panelA || !panelB) {
+            return null;
+          }
+
+          const panelAThickness = Number(panelA?.args?.[0]) || 0.28;
+          return [
+            (Number(panelA?.position?.[0]) || 0) - panelAThickness / 2,
+            Number(panelB?.position?.[1]) || 0,
+            ((Number(panelA?.position?.[2]) || 0) + (Number(panelB?.position?.[2]) || 0)) / 2,
+          ];
+        }, [layout.panels, mountingVariantKey]);
 
         useEffect(
           () => () => {
@@ -7191,7 +7244,7 @@ export default function App() {
           <ambientLight intensity={1.05} />
           <directionalLight castShadow position={[5.2, 7.2, 8]} intensity={1.45} />
           <directionalLight position={[-4, 2.8, 3]} intensity={0.55} />
-          <axesHelper args={isFaceToEdgePreview ? [1.32] : [1.8]} position={isFaceToEdgePreview ? [0.12, -0.06, 0] : layout.markerPlane.origin} />
+          <axesHelper args={isFaceToEdgePreview ? [1.32] : [1.8]} position={faceToEdgeOrigin || layout.markerPlane.origin} />
           <gridHelper args={[3.1, 10, "#d2dde5", "#e7eef3"]} position={[0, -1.02, 0]} />
           <group>
             {layout.panels.map((panel, index) => (
@@ -7260,9 +7313,8 @@ export default function App() {
                       }}
                       position={channel.center}
                       renderOrder={2}
-                      rotation={[0, 0, Math.PI / 2]}
                     >
-                      <mesh castShadow renderOrder={2}>
+                      <mesh castShadow renderOrder={2} rotation={[0, 0, Math.PI / 2]}>
                         <cylinderGeometry args={[channel.radius, channel.radius, channel.length, 24, 1, true]} />
                         <meshBasicMaterial
                           color={channelColor}
@@ -7414,7 +7466,7 @@ export default function App() {
                 <meshStandardMaterial color="#94a3b8" emissive="#cbd5e1" emissiveIntensity={0.12} />
               </mesh>
             )}
-            <group position={layout.markerPlane.origin}>
+            <group position={faceToEdgeOrigin || layout.markerPlane.origin}>
               <sprite position={axisLabelPresentation.positions.x} scale={[axisLabelPresentation.scale, axisLabelPresentation.scale, axisLabelPresentation.scale]}>
                 <spriteMaterial attach="material" depthWrite={false} map={axisLabelTextures.x || undefined} opacity={axisLabelPresentation.opacity} transparent />
               </sprite>
