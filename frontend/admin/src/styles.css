@@ -1964,6 +1964,42 @@ tbody tr.selected {
   min-width: 0;
 }
 
+.holes-panel-groups {
+  display: grid;
+  gap: 14px;
+}
+
+.holes-panel-group {
+  display: grid;
+  gap: 8px;
+}
+
+.holes-panel-group-header {
+  align-items: start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.holes-panel-group-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.holes-panel-group-copy strong {
+  color: #24343d;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.holes-panel-group-copy span {
+  color: #5c6875;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
 .holes-panel-header {
   align-items: center;
   display: flex;
