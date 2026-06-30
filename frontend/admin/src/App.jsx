@@ -4328,6 +4328,7 @@ export default function App() {
   const [selectedHolePointId, setSelectedHolePointId] = useState("");
   const [selectedHoleMountingVariantKey, setSelectedHoleMountingVariantKey] =
     useState("surface_mount");
+  const [holeMountingVariantDropdownOpen, setHoleMountingVariantDropdownOpen] = useState(false);
   const [newFittingForm, setNewFittingForm] = useState(DEFAULT_FITTING_FORM);
   const [autoRefreshStatus, setAutoRefreshStatus] = useState(null);
   const storedProjectId = localStorage.getItem(ACTIVE_PROJECT_ID_STORAGE_KEY) || "";
@@ -7084,8 +7085,6 @@ export default function App() {
           />
         </Canvas>
         <div className="holes-three-preview-overlay">
-          <div className="holes-three-preview-label">{layout.label}</div>
-          <div className="holes-three-preview-subtitle">{layout.subtitle}</div>
           <div className="holes-three-preview-origin-note">
             <strong>Система координат:</strong> 0,0,0 у внутрішньому куті стику панелей. Ось X, Y, Z показані в сцені.
           </div>
@@ -7102,9 +7101,14 @@ export default function App() {
   function renderHoleWorkspaceFittingInfo(fitting) {
     if (!fitting) {
       return (
-        <div className="empty-state compact-empty-state">
-          <span>{t.holeTemplateSelectFitting}</span>
-        </div>
+        <section className="hole-template-fitting-info is-empty">
+          <div className="hole-template-fitting-info-head">
+            <strong>{t.holeWorkspaceFittingInfoTitle}</strong>
+          </div>
+          <div className="empty-state compact-empty-state">
+            <span>{t.holeTemplateSelectFitting}</span>
+          </div>
+        </section>
       );
     }
 
@@ -7112,14 +7116,14 @@ export default function App() {
     const fittingArticle = String(fitting.article || "").trim();
     const fittingDescription = String(fitting.description || "").trim();
     const fittingImageUrl = String(fitting.image_url || "").trim();
+    const fittingTitle = fittingName || t.holeTemplateFitting;
+    const fittingSubtitle = [fittingArticle, fitting.code].filter(Boolean).join(" · ");
 
     return (
       <section className="hole-template-fitting-info">
         <div className="hole-template-fitting-info-head">
           <strong>{t.holeWorkspaceFittingInfoTitle}</strong>
-          <div className="hole-template-fitting-info-name">{fittingName || t.holeTemplateFitting}</div>
         </div>
-
         <div className={`hole-template-fitting-info-body${fittingImageUrl ? "" : " no-image"}`}>
           {fittingImageUrl ? (
             <img
@@ -7131,16 +7135,11 @@ export default function App() {
             <div className="hole-template-fitting-info-placeholder">{t.holeWorkspaceNoImage}</div>
           )}
 
-          <div className="hole-template-fitting-info-meta">
-            {fittingArticle ? (
-              <div className="hole-template-fitting-info-line">
-                {t.holeWorkspaceFittingInfoArticle}: {fittingArticle}
-              </div>
-            ) : null}
+          <div className="hole-template-fitting-info-copy">
+            <strong className="hole-template-fitting-info-title">{fittingTitle}</strong>
+            {fittingSubtitle ? <div className="hole-template-fitting-info-subtitle">{fittingSubtitle}</div> : null}
             {fittingDescription ? (
-              <div className="hole-template-fitting-info-line hole-template-fitting-info-description">
-                {t.holeWorkspaceFittingInfoDescription}: {fittingDescription}
-              </div>
+              <p className="hole-template-fitting-info-description">{fittingDescription}</p>
             ) : null}
           </div>
         </div>
@@ -7148,46 +7147,68 @@ export default function App() {
     );
   }
 
-  function renderHoleWorkspaceConnectionVariantCards() {
+  function renderHoleWorkspaceMountingVariantDropdown() {
+    const selectedVariant = selectedHoleMountingVariant || holeMountingVariantOptions[0] || null;
+    const selectedVariantIcon = selectedVariant?.icon || null;
+
     return (
-      <section className="holes-panel holes-connection-variant-panel">
-        <div className="holes-panel-header">
-          <h4>{t.holeWorkspaceConnectionVariantTitle}</h4>
-          <span className="service-tree-badge subtle">{t.holeWorkspaceSelected}</span>
+      <section className="holes-mounting-variant-dropdown">
+        <div className="holes-mounting-variant-dropdown-head">
+          <div>
+            <strong>{t.holeWorkspaceConnectionVariantTitle}</strong>
+            <p>Виберіть варіант кріплення для активного шаблону.</p>
+          </div>
+          {holeWorkspaceHasUnsavedVariantChanges ? (
+            <span className="service-tree-badge subtle holes-mounting-variant-dirty">
+              Є незбережені зміни
+            </span>
+          ) : null}
         </div>
-        <div className="holes-connection-variant-grid">
-          {holeMountingVariantOptions.map((variant) => {
-            const isActive = holeWorkspaceHasFitting && normalizedSelectedHoleMountingVariantKey === variant.key;
+        <div className={`holes-mounting-variant-dropdown-shell${holeMountingVariantDropdownOpen ? " is-open" : ""}`}>
+          <button
+            aria-expanded={holeMountingVariantDropdownOpen}
+            className="holes-mounting-variant-toggle"
+            disabled={!holeWorkspaceHasFitting}
+            onClick={() => setHoleMountingVariantDropdownOpen((current) => !current)}
+            type="button"
+          >
+            <span className="holes-mounting-variant-toggle-mark">
+              {selectedVariantIcon ? <img alt="" src={selectedVariantIcon} /> : <span>∎</span>}
+            </span>
+            <span className="holes-mounting-variant-toggle-copy">
+              <strong>{selectedVariant?.label || normalizedSelectedHoleMountingVariantKey}</strong>
+              <span>{selectedVariant?.description || t.holeWorkspaceSelected}</span>
+            </span>
+            <ChevronRight className="holes-mounting-variant-toggle-arrow" size={16} />
+          </button>
+          {holeMountingVariantDropdownOpen ? (
+            <div className="holes-mounting-variant-menu" role="listbox">
+              {holeMountingVariantOptions.map((variant) => {
+                const isActive = holeWorkspaceHasFitting && normalizedSelectedHoleMountingVariantKey === variant.key;
 
-            return (
-              <button
-                aria-pressed={isActive}
-                className={`holes-connection-variant-card${isActive ? " active" : ""}${!holeWorkspaceHasFitting ? " is-disabled" : ""}`}
-                disabled={!holeWorkspaceHasFitting}
-                key={variant.key}
-                onClick={() => {
-                  if (!holeWorkspaceHasFitting) {
-                    return;
-                  }
-
-                  setSelectedHoleMountingVariantKey(variant.key);
-                }}
-                type="button"
-              >
-                <span className="holes-connection-variant-card-mark">
-                  <img
-                    alt=""
-                    className="holes-connection-variant-card-icon-image"
-                    src={variant.icon}
-                  />
-                </span>
-                <span className="holes-connection-variant-card-copy">
-                  <strong>{variant.label}</strong>
-                  <span>{variant.description}</span>
-                </span>
-              </button>
-            );
-          })}
+                return (
+                  <button
+                    aria-pressed={isActive}
+                    className={`holes-mounting-variant-option${isActive ? " active" : ""}`}
+                    key={variant.key}
+                    onClick={() => {
+                      setSelectedHoleMountingVariantKey(variant.key);
+                      setHoleMountingVariantDropdownOpen(false);
+                    }}
+                    type="button"
+                  >
+                    <span className="holes-mounting-variant-option-mark">
+                      <img alt="" src={variant.icon} />
+                    </span>
+                    <span className="holes-mounting-variant-option-copy">
+                      <strong>{variant.label}</strong>
+                      <span>{variant.description}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
         </div>
       </section>
     );
@@ -12905,8 +12926,10 @@ export default function App() {
 
               <div className="holes-grid">
                 <div className="holes-left-column">
-                  {renderHoleWorkspaceFittingInfo(selectedHoleFitting)}
-                  {renderHoleWorkspaceConnectionVariantCards()}
+                  <div className="holes-workspace-top-zone">
+                    {renderHoleWorkspaceFittingInfo(selectedHoleFitting)}
+                    {renderHoleWorkspaceMountingVariantDropdown()}
+                  </div>
                   <details className="holes-panel holes-technical-templates">
                     <summary className="holes-technical-templates-summary">
                       <div>
@@ -13195,7 +13218,6 @@ export default function App() {
                   <div className="holes-preview-header">
                     <div>
                       <h4>{t.holeWorkspacePreview3dTitle}</h4>
-                      <p>{t.holeWorkspacePreview3dPlaceholder}</p>
                     </div>
                   </div>
                   {holeWorkspaceCanPreview ? (
