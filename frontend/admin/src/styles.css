@@ -2221,6 +2221,17 @@ tbody tr.selected {
   width: 30px;
 }
 
+.holes-template-delete-button {
+  align-items: center;
+  flex: 0 0 auto;
+  height: 30px;
+  justify-content: center;
+  min-height: 30px;
+  min-width: 30px;
+  padding: 0;
+  width: 30px;
+}
+
 .holes-points-table-row.is-hovered {
   background: #ecf9f4;
   box-shadow: inset 3px 0 0 #0f766e;
@@ -2289,6 +2300,22 @@ tbody tr.selected {
   padding: 0;
   white-space: nowrap;
   width: 30px;
+}
+
+.holes-point-delete-button {
+  align-items: center;
+  height: 30px;
+  justify-content: center;
+  flex-shrink: 0;
+  min-height: 30px;
+  min-width: 30px;
+  padding: 0;
+  white-space: nowrap;
+  width: 30px;
+}
+
+.holes-selected-point-delete-button {
+  color: #b91c1c;
 }
 
 .holes-point-label-cell,

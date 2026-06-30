@@ -222,6 +222,13 @@ export async function updateFittingHoleTemplate(token, templateId, payload) {
   });
 }
 
+export async function deleteFittingHoleTemplate(token, templateId) {
+  return request(`/fitting-holes/templates/${templateId}`, {
+    method: "DELETE",
+    headers: authHeaders(token),
+  });
+}
+
 export async function createFittingHolePoint(token, templateId, payload) {
   return request(`/fitting-holes/templates/${templateId}/points`, {
     method: "POST",
@@ -235,6 +242,13 @@ export async function updateFittingHolePoint(token, pointId, payload) {
     method: "PATCH",
     headers: authHeaders(token),
     body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteFittingHolePoint(token, pointId) {
+  return request(`/fitting-holes/points/${pointId}`, {
+    method: "DELETE",
+    headers: authHeaders(token),
   });
 }
 

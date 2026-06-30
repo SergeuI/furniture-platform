@@ -52,6 +52,8 @@ import {
   createCatalogItem,
   createUser,
   deleteFitting,
+  deleteFittingHolePoint,
+  deleteFittingHoleTemplate,
   deleteMaterial,
   deleteProject,
   generateProject,
@@ -611,7 +613,14 @@ const HOLE_POINT_SIDE_OPTIONS = [
   { value: "bottom", labelKey: "holePointSideBottom" },
 ];
 
-const HOLE_POINT_OPERATION_OPTIONS = [{ value: "drill", labelKey: "holePointOperationDrill" }];
+const HOLE_POINT_OPERATION_OPTIONS = [
+  { value: "drill", labelKey: "holePointOperationDrill" },
+  { value: "through_drill", labelKey: "holePointOperationThroughDrill" },
+  { value: "blind_drill", labelKey: "holePointOperationBlindDrill" },
+  { value: "milling", labelKey: "holePointOperationMilling" },
+  { value: "slot", labelKey: "holePointOperationSlot" },
+  { value: "mark", labelKey: "holePointOperationMark" },
+];
 
 const HOLE_POINT_SIDE_LABEL_KEYS = {
   front: "holePointSideFront",
@@ -624,9 +633,14 @@ const HOLE_POINT_SIDE_LABEL_KEYS = {
 
 const HOLE_POINT_OPERATION_LABEL_KEYS = {
   drill: "holePointOperationDrill",
+  through_drill: "holePointOperationThroughDrill",
+  blind_drill: "holePointOperationBlindDrill",
+  milling: "holePointOperationMilling",
+  slot: "holePointOperationSlot",
+  mark: "holePointOperationMark",
 };
 
-  const HOLE_TEMPLATE_TYPE_LABEL_KEYS = {
+const HOLE_TEMPLATE_TYPE_LABEL_KEYS = {
   manual: "holeTemplateTypeManual",
   auto: "holeTemplateTypeAuto",
 };
@@ -1478,8 +1492,17 @@ const TRANSLATIONS = {
     holePointEditDescription: "Update the selected hole point.",
     holePointEditFailed: "Unable to open hole point for editing",
     holePointEditTitle: "Edit hole point",
+    holePointDelete: "Delete point",
+    holePointDeleteConfirm: "Delete hole point",
+    holePointDeleteFailed: "Unable to delete hole point",
+    holePointDeleteSuccess: "Hole point deleted",
     holePointOperation: "Operation",
     holePointOperationDrill: "Drilling",
+    holePointOperationThroughDrill: "Through drilling",
+    holePointOperationBlindDrill: "Blind drilling",
+    holePointOperationMilling: "Milling",
+    holePointOperationSlot: "Slot",
+    holePointOperationMark: "Marking",
     holePointOrderIndex: "Order index",
     holePointOrderIndexInvalid: "Order index must be a whole number",
     holePointQuantity: "Quantity",
@@ -1506,6 +1529,10 @@ const TRANSLATIONS = {
     holeTemplateEditDescription: "Update the hole template for the selected fitting.",
     holeTemplateEditFailed: "Unable to open hole template for editing",
     holeTemplateEditTitle: "Edit hole template",
+    holeTemplateDelete: "Delete template",
+    holeTemplateDeleteConfirm: "Delete hole template",
+    holeTemplateDeleteFailed: "Unable to delete hole template",
+    holeTemplateDeleteSuccess: "Hole template deleted",
     holeTemplateCoordinateSystem2d: "2D",
     holeTemplateCoordinateSystem3d: "3D",
     holeTemplateDefault: "Default",
@@ -1523,6 +1550,8 @@ const TRANSLATIONS = {
     holeTemplateConnectionVariantTitle: "Connection variant",
     holeTemplateMountingSchemeLeftEdge: "Left edge",
     holeTemplateMountingSchemeRightEdge: "Right edge",
+    holeTemplateMountingSchemeFrontFace: "Front face",
+    holeTemplateMountingSchemeBackFace: "Back face",
     holeTemplateMountingSchemeTop: "Top",
     holeTemplateMountingSchemeBottom: "Bottom",
     holeTemplateMountingSchemeSelected: "Selected",
@@ -1945,8 +1974,17 @@ Object.assign(TRANSLATIONS.uk, {
   holePointEditDescription: "\u041e\u043d\u043e\u0432\u0456\u0442\u044c \u0432\u0438\u0431\u0440\u0430\u043d\u0443 \u0442\u043e\u0447\u043a\u0443 \u043e\u0442\u0432\u043e\u0440\u0443.",
   holePointEditFailed: "\u041d\u0435 \u0432\u0434\u0430\u043b\u043e\u0441\u044f \u0432\u0456\u0434\u043a\u0440\u0438\u0442\u0438 \u0442\u043e\u0447\u043a\u0443 \u0434\u043b\u044f \u0440\u0435\u0434\u0430\u0433\u0443\u0432\u0430\u043d\u043d\u044f",
   holePointEditTitle: "\u0420\u0435\u0434\u0430\u0433\u0443\u0432\u0430\u0442\u0438 \u0442\u043e\u0447\u043a\u0443 \u043e\u0442\u0432\u043e\u0440\u0443",
+  holePointDelete: "\u0412\u0438\u0434\u0430\u043b\u0438\u0442\u0438 \u0442\u043e\u0447\u043a\u0443",
+  holePointDeleteConfirm: "\u0412\u0438\u0434\u0430\u043b\u0438\u0442\u0438 \u0442\u043e\u0447\u043a\u0443 \u043e\u0442\u0432\u043e\u0440\u0443",
+  holePointDeleteFailed: "\u041d\u0435 \u0432\u0434\u0430\u043b\u043e\u0441\u044f \u0432\u0438\u0434\u0430\u043b\u0438\u0442\u0438 \u0442\u043e\u0447\u043a\u0443 \u043e\u0442\u0432\u043e\u0440\u0443",
+  holePointDeleteSuccess: "\u0422\u043e\u0447\u043a\u0443 \u043e\u0442\u0432\u043e\u0440\u0443 \u0432\u0438\u0434\u0430\u043b\u0435\u043d\u043e",
   holePointOperation: "\u041e\u043f\u0435\u0440\u0430\u0446\u0456\u044f",
   holePointOperationDrill: "\u0421\u0432\u0435\u0440\u0434\u043b\u0456\u043d\u043d\u044f",
+  holePointOperationThroughDrill: "\u0421\u043a\u0432\u043e\u0437\u043d\u0435 \u0441\u0432\u0435\u0440\u0434\u043b\u0456\u043d\u043d\u044f",
+  holePointOperationBlindDrill: "\u0413\u043b\u0443\u0445\u0435 \u0441\u0432\u0435\u0440\u0434\u043b\u0456\u043d\u043d\u044f",
+  holePointOperationMilling: "\u0424\u0440\u0435\u0437\u0435\u0440\u0443\u0432\u0430\u043d\u043d\u044f",
+  holePointOperationSlot: "\u041f\u0430\u0437",
+  holePointOperationMark: "\u041c\u0456\u0442\u043a\u0430",
   holePointOrderIndex: "\u041f\u043e\u0440\u044f\u0434\u043e\u043a",
   holePointOrderIndexInvalid: "\u041f\u043e\u0440\u044f\u0434\u043e\u043a \u043c\u0430\u0454 \u0431\u0443\u0442\u0438 \u0446\u0456\u043b\u0438\u043c \u0447\u0438\u0441\u043b\u043e\u043c",
   holePointQuantity: "\u041a\u0456\u043b\u044c\u043a\u0456\u0441\u0442\u044c",
@@ -1973,6 +2011,10 @@ Object.assign(TRANSLATIONS.uk, {
   holeTemplateEditDescription: "\u041e\u043d\u043e\u0432\u043b\u0435\u043d\u043d\u044f \u0448\u0430\u0431\u043b\u043e\u043d\u0443 \u043e\u0442\u0432\u043e\u0440\u0456\u0432 \u0434\u043b\u044f \u0432\u0438\u0431\u0440\u0430\u043d\u043e\u0457 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0438.",
   holeTemplateEditFailed: "\u041d\u0435 \u0432\u0434\u0430\u043b\u043e\u0441\u044f \u0432\u0456\u0434\u043a\u0440\u0438\u0442\u0438 \u0448\u0430\u0431\u043b\u043e\u043d \u043e\u0442\u0432\u043e\u0440\u0456\u0432 \u0434\u043b\u044f \u0440\u0435\u0434\u0430\u0433\u0443\u0432\u0430\u043d\u043d\u044f",
   holeTemplateEditTitle: "\u0420\u0435\u0434\u0430\u0433\u0443\u0432\u0430\u0442\u0438 \u0448\u0430\u0431\u043b\u043e\u043d \u043e\u0442\u0432\u043e\u0440\u0456\u0432",
+  holeTemplateDelete: "\u0412\u0438\u0434\u0430\u043b\u0438\u0442\u0438 \u0448\u0430\u0431\u043b\u043e\u043d",
+  holeTemplateDeleteConfirm: "\u0412\u0438\u0434\u0430\u043b\u0438\u0442\u0438 \u0448\u0430\u0431\u043b\u043e\u043d \u043e\u0442\u0432\u043e\u0440\u0456\u0432",
+  holeTemplateDeleteFailed: "\u041d\u0435 \u0432\u0434\u0430\u043b\u043e\u0441\u044f \u0432\u0438\u0434\u0430\u043b\u0438\u0442\u0438 \u0448\u0430\u0431\u043b\u043e\u043d \u043e\u0442\u0432\u043e\u0440\u0456\u0432",
+  holeTemplateDeleteSuccess: "\u0428\u0430\u0431\u043b\u043e\u043d \u043e\u0442\u0432\u043e\u0440\u0456\u0432 \u0432\u0438\u0434\u0430\u043b\u0435\u043d\u043e",
   holeTemplateDefault: "\u0417\u0430 \u0437\u0430\u043c\u043e\u0432\u0447\u0443\u0432\u0430\u043d\u043d\u044f\u043c",
   holeTemplateFitting: "\u0424\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0430",
   holeTemplateFittingRequired: "\u041e\u0431\u0435\u0440\u0456\u0442\u044c \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0443 \u043f\u0435\u0440\u0435\u0434 \u0441\u0442\u0432\u043e\u0440\u0435\u043d\u043d\u044f\u043c \u0448\u0430\u0431\u043b\u043e\u043d\u0443",
@@ -1989,6 +2031,8 @@ Object.assign(TRANSLATIONS.uk, {
   holeTemplateConnectionVariantTitle: "\u0412\u0430\u0440\u0456\u0430\u043d\u0442 \u043a\u0440\u0456\u043f\u043b\u0435\u043d\u043d\u044f",
   holeTemplateMountingSchemeLeftEdge: "\u041b\u0456\u0432\u0438\u0439 \u0442\u043e\u0440\u0435\u0446\u044c",
   holeTemplateMountingSchemeRightEdge: "\u041f\u0440\u0430\u0432\u0438\u0439 \u0442\u043e\u0440\u0435\u0446\u044c",
+  holeTemplateMountingSchemeFrontFace: "\u0424\u0430\u0441\u0430\u0434",
+  holeTemplateMountingSchemeBackFace: "\u0417\u0430\u0434\u043d\u044f \u043f\u043b\u043e\u0449\u0438\u043d\u0430",
   holeTemplateMountingSchemeTop: "\u0412\u0435\u0440\u0445",
   holeTemplateMountingSchemeBottom: "\u041d\u0438\u0437",
   holeTemplateMountingSchemeSelected: "\u041e\u0431\u0440\u0430\u043d\u043e",
@@ -6516,8 +6560,12 @@ export default function App() {
 
   function renderHoleTemplateMountingSchemeIcon(schemeKey, isActive) {
     const barStyles = {
+      back: { inset: 12, height: 20, left: 12, right: 12 },
       bottom: { bottom: 6, left: 10, right: 10, height: 6 },
+      front: { inset: 12, height: 20, left: 12, right: 12 },
+      left: { bottom: 10, left: 6, top: 10, width: 6 },
       left_edge: { bottom: 10, left: 6, top: 10, width: 6 },
+      right: { bottom: 10, right: 6, top: 10, width: 6 },
       right_edge: { bottom: 10, right: 6, top: 10, width: 6 },
       top: { top: 6, left: 10, right: 10, height: 6 },
     };
@@ -6564,7 +6612,7 @@ export default function App() {
   }
 
   function normalizeHoleTemplateSide(side) {
-    const allowedSides = new Set(["left", "right", "top", "bottom"]);
+    const allowedSides = new Set(["front", "back", "left", "right", "top", "bottom"]);
 
     return allowedSides.has(side) ? side : "left";
   }
@@ -7457,6 +7505,14 @@ export default function App() {
   function renderHoleTemplateMountingSchemePicker(selectedSide, onSelectSide) {
     const schemeCards = [
       {
+        side: "front",
+        label: t.holeTemplateMountingSchemeFrontFace,
+      },
+      {
+        side: "back",
+        label: t.holeTemplateMountingSchemeBackFace,
+      },
+      {
         side: "left",
         label: t.holeTemplateMountingSchemeLeftEdge,
       },
@@ -7482,11 +7538,11 @@ export default function App() {
         </div>
         <div
           style={{
-            display: "grid",
-            gap: 8,
-            gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-          }}
-        >
+          display: "grid",
+          gap: 8,
+          gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+        }}
+      >
           {schemeCards.map((scheme) => {
             const isActive = normalizeHoleTemplateSide(selectedSide) === scheme.side;
 
@@ -7643,6 +7699,20 @@ export default function App() {
     }
   }
 
+  function openDeleteHoleTemplateConfirm(template) {
+    if (!template?.id) {
+      return;
+    }
+
+    setConfirmAction({
+      type: "deleteHoleTemplate",
+      title: t.holeTemplateDelete,
+      message: `${t.holeTemplateDeleteConfirm}: ${template.name || template.id}?`,
+      confirmLabel: t.delete,
+      targetId: template.id,
+    });
+  }
+
   function openHolePointCreateForm() {
     if (!holeSelectedTemplateId) {
       setHolePointCreateError(t.holePointTemplateRequired);
@@ -7680,6 +7750,20 @@ export default function App() {
     setHolePointEditError("");
     setHolePointEditForm(DEFAULT_HOLE_POINT_FORM);
     setHolePointEditPointId("");
+  }
+
+  function openDeleteHolePointConfirm(point) {
+    if (!point?.id) {
+      return;
+    }
+
+    setConfirmAction({
+      type: "deleteHolePoint",
+      title: t.holePointDelete,
+      message: `${t.holePointDeleteConfirm}: ${point.label || point.id}?`,
+      confirmLabel: t.delete,
+      targetId: point.id,
+    });
   }
 
   function parseMaybeNumber(value, fieldName) {
@@ -7820,6 +7904,74 @@ export default function App() {
           : t.holePointNumericInvalid;
       setHolePointEditError(errorMessage);
       setLoading(false);
+    }
+  }
+
+  async function handleDeleteHoleTemplate(templateId) {
+    if (!templateId || !holeSelectedFittingId) {
+      return;
+    }
+
+    setLoading(true);
+    const result = await deleteFittingHoleTemplate(token, templateId);
+    setLoading(false);
+
+    if (!result.success) {
+      setStatus({ message: result.error || t.holeTemplateDeleteFailed, tone: "error" });
+      return;
+    }
+
+    const templatesResult = await listFittingHoleTemplatesByFitting(token, holeSelectedFittingId);
+
+    if (!templatesResult.success) {
+      setStatus({ message: templatesResult.error || t.holeTemplateDeleteFailed, tone: "error" });
+      return;
+    }
+
+    const templates = Array.isArray(templatesResult.templates) ? templatesResult.templates : [];
+    setHoleTemplateItems(templates);
+    setHoleSelectedTemplate(null);
+    setHolePoints([]);
+    setSelectedHolePointId("");
+    const nextTemplateId = String(templates?.[0]?.id || "");
+
+    closeConfirm();
+
+    if (nextTemplateId) {
+      setHoleSelectedTemplateId(nextTemplateId);
+      await loadHoleTemplateDetails(token, nextTemplateId);
+    } else {
+      setHoleSelectedTemplateId("");
+      setHoleSelectedTemplate(null);
+      setHolePoints([]);
+      setSelectedHolePointId("");
+    }
+
+    setStatus({ message: t.holeTemplateDeleteSuccess, tone: "success" });
+  }
+
+  async function handleDeleteHolePoint(pointId) {
+    if (!pointId || !holeSelectedTemplateId) {
+      return;
+    }
+
+    setLoading(true);
+    const result = await deleteFittingHolePoint(token, pointId);
+    setLoading(false);
+
+    if (!result.success) {
+      setStatus({ message: result.error || t.holePointDeleteFailed, tone: "error" });
+      return;
+    }
+
+    if (String(selectedHolePointId) === String(pointId)) {
+      setSelectedHolePointId("");
+    }
+
+    closeConfirm();
+    const reloaded = await loadHoleTemplateDetails(token, holeSelectedTemplateId);
+    if (reloaded) {
+      setStatus({ message: t.holePointDeleteSuccess, tone: "success" });
     }
   }
 
@@ -9636,6 +9788,16 @@ export default function App() {
 
     if (confirmAction.type === "deleteFitting") {
       await handleDeleteFitting(confirmAction.targetId);
+      return;
+    }
+
+    if (confirmAction.type === "deleteHoleTemplate") {
+      await handleDeleteHoleTemplate(confirmAction.targetId);
+      return;
+    }
+
+    if (confirmAction.type === "deleteHolePoint") {
+      await handleDeleteHolePoint(confirmAction.targetId);
     }
   }
 
@@ -12989,6 +13151,18 @@ export default function App() {
                                   >
                                     <Pencil size={14} />
                                   </button>
+                                  <button
+                                    aria-label={t.holeTemplateDelete}
+                                    className="ghost-button compact-button holes-template-delete-button"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      openDeleteHoleTemplateConfirm(template);
+                                    }}
+                                    title={t.holeTemplateDelete}
+                                    type="button"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
                                 </div>
                                 <span>{template.name || "—"}</span>
                                 <span>{formatHoleTemplateType(template.template_type, t)}</span>
@@ -13079,6 +13253,18 @@ export default function App() {
                                   type="button"
                                 >
                                   <Pencil size={14} />
+                                </button>
+                                <button
+                                  aria-label={t.holePointDelete}
+                                  className="ghost-button compact-button holes-point-delete-button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    openDeleteHolePointConfirm(point);
+                                  }}
+                                  title={t.holePointDelete}
+                                  type="button"
+                                >
+                                  <Trash2 size={14} />
                                 </button>
                               </div>
                                <span className="holes-point-label-cell">{point.label || "—"}</span>
@@ -13262,16 +13448,25 @@ export default function App() {
                             onClick={() => openHolePointEditForm(selectedHolePoint)}
                             type="button"
                           >
-                            Редагувати точку
+                            {t.holePointEdit}
+                          </button>
+                        ) : null}
+                        {selectedHolePoint ? (
+                          <button
+                            className="ghost-button compact-button holes-selected-point-delete-button"
+                            onClick={() => openDeleteHolePointConfirm(selectedHolePoint)}
+                            type="button"
+                          >
+                            {t.holePointDelete}
                           </button>
                         ) : null}
                         <button
                           className="ghost-button compact-button"
                           disabled={!selectedHolePointId}
-                          onClick={() => setSelectedHolePointId(null)}
+                          onClick={() => setSelectedHolePointId("")}
                           type="button"
                         >
-                          Скинути вибір
+                          {t.clearSelection}
                         </button>
                       </div>
                     </div>
@@ -16288,7 +16483,9 @@ export default function App() {
               </button>
               <button
                 className={
-                  confirmAction.type === "delete"
+                  confirmAction.type === "delete" ||
+                  confirmAction.type === "deleteHoleTemplate" ||
+                  confirmAction.type === "deleteHolePoint"
                     ? "danger-button"
                     : "primary-button"
                 }
