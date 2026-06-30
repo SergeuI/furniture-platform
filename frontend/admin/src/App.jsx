@@ -6764,22 +6764,22 @@ export default function App() {
         };
       case "face_to_edge":
         return {
-          camera: [4.6, 2.8, 6.1],
+          camera: [5.1, 3.05, 5.5],
           label: "Пласть → торець",
-          markerPlane: { axis: "z", origin: [0, 0, 0], spanU: 1.1, spanV: 1.8 },
+          markerPlane: { axis: "x", origin: [0, 0, 0], spanU: 1.22, spanV: 1.72 },
           panels: [
             {
-              args: [0.28, 2.1, 1.32],
+              args: [0.28, 2.18, 1.34],
               color: "#d6ecef",
-              opacity: 0.42,
+              opacity: 0.47,
               position: [-0.14, 0, 0],
               rotation: [0, 0, 0],
             },
             {
-              args: [1.95, 0.28, 1.08],
+              args: [1.96, 0.28, 1.08],
               color: "#e1f5e7",
-              opacity: 0.46,
-              position: [0.84, -0.14, -0.08],
+              opacity: 0.5,
+              position: [0.98, -0.14, 0],
               rotation: [0, 0, 0],
             },
           ],
@@ -7033,18 +7033,38 @@ export default function App() {
         const holeVolumes = useMemo(
           () =>
             markerPositions.map((marker) => {
-              const sideDirection = getHoleWorkspaceHoleDirection(marker.side);
+              const isFaceToEdge = normalizeHoleWorkspaceMountingVariantKey(mountingVariantKey) === "face_to_edge";
+              const sideDirection = isFaceToEdge ? { axis: "x", sign: 1 } : getHoleWorkspaceHoleDirection(marker.side);
               const holeRadius = Math.max(0.045, Math.min(0.1, (marker.diameter || 0) / 110 || 0.052));
-              const holeLength = marker.hasDepth
-                ? Math.max(0.18, Math.min(0.62, (marker.depth || 0) / 120 || 0.22))
-                : 0.42;
+              const panelA = Array.isArray(layout.panels) ? layout.panels[0] || null : null;
+              const panelB = Array.isArray(layout.panels) ? layout.panels[1] || null : null;
+              const panelAThickness = Number(panelA?.args?.[0]) || 0.28;
+              const panelBWidth = Number(panelB?.args?.[0]) || 1.92;
               const panelThickness = markerPlaneThickness(layout.panels, sideDirection.axis);
-              const visibleLength = marker.hasDepth ? holeLength : Math.max(holeLength, panelThickness);
-              const centerPosition = [
-                marker.onSurfacePosition[0] + (sideDirection.axis === "x" ? sideDirection.sign * visibleLength * 0.5 : 0),
-                marker.onSurfacePosition[1] + (sideDirection.axis === "y" ? sideDirection.sign * visibleLength * 0.5 : 0),
-                marker.onSurfacePosition[2] + (sideDirection.axis === "z" ? sideDirection.sign * visibleLength * 0.5 : 0),
-              ];
+              const holeLength = isFaceToEdge
+                ? marker.side === "edge"
+                  ? Math.max(0.18, Math.min(0.62, Number(marker.depth) ? Number(marker.depth) / 100 : 0.34))
+                  : Math.max(0.24, panelAThickness)
+                : marker.hasDepth
+                  ? Math.max(0.18, Math.min(0.62, (marker.depth || 0) / 120 || 0.22))
+                  : Math.max(0.42, panelThickness);
+              const visibleLength = holeLength;
+              const centerPosition = isFaceToEdge
+                ? [
+                    marker.side === "edge"
+                      ? (panelB?.position?.[0] || 0) - panelBWidth / 2 + visibleLength * 0.5
+                      : (panelA?.position?.[0] || 0) - panelAThickness / 2 + visibleLength * 0.5,
+                    marker.onSurfacePosition[1],
+                    marker.onSurfacePosition[2],
+                  ]
+                : [
+                    marker.onSurfacePosition[0] +
+                      (sideDirection.axis === "x" ? sideDirection.sign * visibleLength * 0.5 : 0),
+                    marker.onSurfacePosition[1] +
+                      (sideDirection.axis === "y" ? sideDirection.sign * visibleLength * 0.5 : 0),
+                    marker.onSurfacePosition[2] +
+                      (sideDirection.axis === "z" ? sideDirection.sign * visibleLength * 0.5 : 0),
+                  ];
 
               return {
                 ...marker,
@@ -7056,7 +7076,7 @@ export default function App() {
                 sideDirection,
               };
             }),
-          [layout.panels, markerPositions],
+          [layout.panels, markerPositions, mountingVariantKey],
         );
 
         useEffect(
@@ -7116,6 +7136,21 @@ export default function App() {
               >
                 <cylinderGeometry args={[0.04, 0.04, 2.2, 20]} />
                 <meshStandardMaterial color="#0f766e" emissive="#1db3a5" emissiveIntensity={0.22} />
+              </mesh>
+            ) : null}
+
+            {mountingVariantKey === "face_to_edge" ? (
+              <mesh position={[0.18, 0.01, 0]} rotation={[0, 0, Math.PI / 2]}>
+                <cylinderGeometry args={[0.034, 0.034, 0.78, 18]} />
+                <meshStandardMaterial
+                  color="#8a96a3"
+                  emissive="#d9e1e8"
+                  emissiveIntensity={0.12}
+                  metalness={0.32}
+                  opacity={0.58}
+                  roughness={0.38}
+                  transparent
+                />
               </mesh>
             ) : null}
 
@@ -7368,8 +7403,9 @@ export default function App() {
         case "face_to_edge":
           return (
             <>
-              <rect className="holes-preview-schematic-panel" height="208" rx="10" width="88" x="94" y="46" />
-              <rect className="holes-preview-schematic-panel is-secondary" height="70" rx="10" width="244" x="246" y="122" />
+              <rect className="holes-preview-schematic-panel" height="212" rx="10" width="88" x="112" y="42" />
+              <rect className="holes-preview-schematic-bridge" height="30" rx="10" width="64" x="194" y="132" />
+              <rect className="holes-preview-schematic-panel is-secondary" height="74" rx="10" width="276" x="194" y="152" />
             </>
           );
         case "edge_to_edge":
@@ -7484,8 +7520,9 @@ export default function App() {
               </>
             ) : variantKey === "face_to_edge" ? (
               <>
-                <path d="M 182 154 H 246" />
-                <path d="M 248 154 H 300" />
+                <path d="M 176 156 H 194" />
+                <path d="M 194 156 H 252" />
+                <path d="M 252 156 H 324" />
               </>
             ) : (
               <>
