@@ -7058,11 +7058,11 @@ export default function App() {
           ? {
               opacity: 0.96,
               positions: {
-                x: [0.46, -0.02, 0],
-                y: [0.02, 0.52, 0],
-                z: [-0.82, -0.12, 0],
+                x: [0.18, 0.02, 0],
+                y: [0.02, 0.22, 0],
+                z: [-0.2, -0.03, 0],
               },
-              scale: 0.16,
+              scale: 0.13,
             }
           : {
               opacity: 1,
@@ -7170,7 +7170,7 @@ export default function App() {
           const secondDepth = readHolePreviewNumber(secondHole, ["depth", "depth_mm"], 34);
           const firstRadius = Math.max(0.04, Math.min(0.075, firstDiameter / 110));
           const secondRadius = Math.max(0.028, Math.min(0.058, secondDiameter / 110));
-          const firstLength = Math.max(0.08, panelAThickness - 0.01);
+          const firstLength = Math.max(0.08, panelAThickness - 0.04);
           const secondLength = Math.max(0.44, Math.min(panelBWidth * 0.8, secondDepth / 52));
 
           return [
