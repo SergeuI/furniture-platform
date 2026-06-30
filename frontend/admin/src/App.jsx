@@ -1,4 +1,4 @@
-﻿import {
+import {
   Blocks,
   CheckCircle2,
   ChevronLeft,
@@ -4500,12 +4500,12 @@ export default function App() {
           connectionDirection: "angled_two_planes",
           planeA: {
             key: "vertical_plane",
-            label: "Р’РµСЂС‚РёРєР°Р»СЊРЅР° РїР»РѕС‰РёРЅР°",
+            label: "Vertical plane",
             role: "source",
           },
           planeB: {
             key: "angled_plane",
-            label: "РќРµРїР°СЂР°Р»РµР»СЊРЅР° РїР»РѕС‰РёРЅР°",
+            label: "Angled plane",
             role: "target",
           },
         };
@@ -4514,12 +4514,12 @@ export default function App() {
           connectionDirection: "face_to_edge",
           planeA: {
             key: "face",
-            label: "РџР»Р°СЃС‚СЊ РїР°РЅРµР»С–",
+            label: "Panel face",
             role: "source",
           },
           planeB: {
             key: "edge",
-            label: "РўРѕСЂРµС†СЊ РїР°РЅРµР»С–",
+            label: "Panel edge",
             role: "target",
           },
         };
@@ -4528,12 +4528,12 @@ export default function App() {
           connectionDirection: "edge_to_edge",
           planeA: {
             key: "edge_left",
-            label: "РўРѕСЂРµС†СЊ РїР°РЅРµР»С– A",
+            label: "Panel A edge",
             role: "source",
           },
           planeB: {
             key: "edge_right",
-            label: "РўРѕСЂРµС†СЊ РїР°РЅРµР»С– B",
+            label: "Panel B edge",
             role: "target",
           },
         };
@@ -4542,12 +4542,12 @@ export default function App() {
           connectionDirection: "drawer_slides",
           planeA: {
             key: "side_left",
-            label: "Р›С–РІР° Р±РѕРєРѕРІРёРЅР°",
+            label: "Left side panel",
             role: "side",
           },
           planeB: {
             key: "side_right",
-            label: "РџСЂР°РІР° Р±РѕРєРѕРІРёРЅР°",
+            label: "Right side panel",
             role: "side",
           },
         };
@@ -4557,12 +4557,12 @@ export default function App() {
           connectionDirection: "surface_mount",
           planeA: {
             key: "surface",
-            label: "РџР»РѕС‰РёРЅР°",
+            label: "Surface",
             role: "base",
           },
           planeB: {
             key: "hardware",
-            label: "Р¤СѓСЂРЅС–С‚СѓСЂР°",
+            label: "Hardware",
             role: "mounted",
           },
         };
@@ -4653,15 +4653,15 @@ export default function App() {
       variantKey === "face_to_edge"
         ? [
             {
-              helper: "РћС‚РІРѕСЂРё РЅР° С„Р°СЃР°РґРЅС–Р№ С‡Р°СЃС‚РёРЅС– РІРµСЂС‚РёРєР°Р»СЊРЅРѕС— РїР°РЅРµР»С–.",
+              helper: "Holes on the face side of the vertical panel.",
               key: "vertical_panel",
-              label: "Р’РµСЂС‚РёРєР°Р»СЊРЅР° РїР°РЅРµР»СЊ",
+              label: "Vertical panel",
               order: 0,
             },
             {
-              helper: "РћС‚РІРѕСЂРё РЅР° С‚РѕСЂС†С– РіРѕСЂРёР·РѕРЅС‚Р°Р»СЊРЅРѕС— РїР°РЅРµР»С–.",
+              helper: "Holes on the edge side of the horizontal panel.",
               key: "horizontal_panel",
-              label: "Р“РѕСЂРёР·РѕРЅС‚Р°Р»СЊРЅР° РїР°РЅРµР»СЊ",
+              label: "Horizontal panel",
               order: 1,
             },
           ]
