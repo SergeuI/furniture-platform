@@ -6766,7 +6766,7 @@ export default function App() {
         return {
           camera: [5.1, 3.05, 5.5],
           label: "Пласть → торець",
-          markerPlane: { axis: "x", origin: [0, 0, 0], spanU: 1.22, spanV: 1.72 },
+          markerPlane: { axis: "z", origin: [0, 0, 0], spanU: 1.22, spanV: 1.72 },
           panels: [
             {
               args: [0.28, 2.18, 1.34],
@@ -7074,6 +7074,7 @@ export default function App() {
                 rotation: getHoleWorkspaceHoleRotation(sideDirection.axis),
                 isThrough: !marker.hasDepth,
                 sideDirection,
+                isFaceToEdge,
               };
             }),
           [layout.panels, markerPositions, mountingVariantKey],
@@ -7155,38 +7156,102 @@ export default function App() {
             ) : null}
 
             {holeVolumes.length ? (
-              holeVolumes.map((marker) => (
-                <mesh
-                  castShadow
-                  key={`marker-${marker.id}`}
-                  renderOrder={2}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onSelectHole?.(marker.id);
-                  }}
-                  onPointerOut={(event) => {
-                    event.stopPropagation();
-                    onLeaveHole?.();
-                  }}
-                  onPointerOver={(event) => {
-                    event.stopPropagation();
-                    onHoverHole?.(marker.id);
-                  }}
-                  position={marker.centerPosition}
-                  rotation={marker.rotation}
-                >
-                  <cylinderGeometry args={[marker.holeRadius, marker.holeRadius, marker.holeLength, 24, 1, false]} />
-                  <meshStandardMaterial
-                    color={String(selectedHoleId) === String(marker.id) ? "#16a34a" : String(hoveredHoleId) === String(marker.id) ? "#0f766e" : "#6f2bd6"}
-                    emissive={String(selectedHoleId) === String(marker.id) ? "#8df0ae" : String(hoveredHoleId) === String(marker.id) ? "#43d0bf" : "#b28fff"}
-                    emissiveIntensity={String(selectedHoleId) === String(marker.id) ? 0.42 : 0.22}
-                    opacity={mountingVariantKey === "face_to_edge" ? 0.74 : 0.92}
-                    depthWrite={false}
-                    transparent
-                    roughness={0.22}
-                  />
-                </mesh>
-              ))
+              holeVolumes.map((marker) =>
+                marker.isFaceToEdge ? (
+                  <group
+                    key={`marker-${marker.id}`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onSelectHole?.(marker.id);
+                    }}
+                    onPointerOut={(event) => {
+                      event.stopPropagation();
+                      onLeaveHole?.();
+                    }}
+                    onPointerOver={(event) => {
+                      event.stopPropagation();
+                      onHoverHole?.(marker.id);
+                    }}
+                    position={marker.centerPosition}
+                    renderOrder={2}
+                    rotation={marker.rotation}
+                  >
+                    <mesh castShadow>
+                      <cylinderGeometry args={[marker.holeRadius * 0.92, marker.holeRadius * 0.92, marker.holeLength, 24, 1, false]} />
+                      <meshStandardMaterial
+                        color={String(selectedHoleId) === String(marker.id) ? "#4b5563" : String(hoveredHoleId) === String(marker.id) ? "#64748b" : "#6b7280"}
+                        emissive={String(selectedHoleId) === String(marker.id) ? "#d1d5db" : String(hoveredHoleId) === String(marker.id) ? "#cbd5e1" : "#cfd8e3"}
+                        emissiveIntensity={String(selectedHoleId) === String(marker.id) ? 0.14 : 0.08}
+                        opacity={0.58}
+                        transparent
+                        depthWrite={false}
+                        roughness={0.36}
+                        metalness={0.18}
+                      />
+                    </mesh>
+                    <mesh position={[-marker.holeLength / 2, 0, 0]}>
+                      <torusGeometry args={[marker.holeRadius * 1.08, 0.015, 10, 24]} />
+                      <meshStandardMaterial
+                        color={String(selectedHoleId) === String(marker.id) ? "#cbd5e1" : String(hoveredHoleId) === String(marker.id) ? "#d7dde3" : "#b8c2cc"}
+                        depthWrite={false}
+                        opacity={0.85}
+                        transparent
+                      />
+                    </mesh>
+                    <mesh position={[marker.holeLength / 2, 0, 0]}>
+                      <torusGeometry args={[marker.holeRadius * 1.08, 0.015, 10, 24]} />
+                      <meshStandardMaterial
+                        color={String(selectedHoleId) === String(marker.id) ? "#cbd5e1" : String(hoveredHoleId) === String(marker.id) ? "#d7dde3" : "#b8c2cc"}
+                        depthWrite={false}
+                        opacity={0.85}
+                        transparent
+                      />
+                    </mesh>
+                    {marker.side === "edge" ? (
+                      <mesh position={[marker.holeLength / 2, 0, 0]}>
+                        <cylinderGeometry args={[marker.holeRadius * 0.92, marker.holeRadius * 0.92, 0.02, 18]} />
+                        <meshStandardMaterial
+                          color={String(selectedHoleId) === String(marker.id) ? "#d1d5db" : String(hoveredHoleId) === String(marker.id) ? "#e2e8f0" : "#c7d2da"}
+                          depthWrite={false}
+                          opacity={0.72}
+                          transparent
+                        />
+                      </mesh>
+                    ) : null}
+                  </group>
+                ) : (
+                  <mesh
+                    castShadow
+                    key={`marker-${marker.id}`}
+                    renderOrder={2}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onSelectHole?.(marker.id);
+                    }}
+                    onPointerOut={(event) => {
+                      event.stopPropagation();
+                      onLeaveHole?.();
+                    }}
+                    onPointerOver={(event) => {
+                      event.stopPropagation();
+                      onHoverHole?.(marker.id);
+                    }}
+                    position={marker.centerPosition}
+                    rotation={marker.rotation}
+                  >
+                    <cylinderGeometry args={[marker.holeRadius, marker.holeRadius, marker.holeLength, 24, 1, false]} />
+                    <meshStandardMaterial
+                      color={String(selectedHoleId) === String(marker.id) ? "#16a34a" : String(hoveredHoleId) === String(marker.id) ? "#0f766e" : "#6f2bd6"}
+                      emissive={String(selectedHoleId) === String(marker.id) ? "#8df0ae" : String(hoveredHoleId) === String(marker.id) ? "#43d0bf" : "#b28fff"}
+                      emissiveIntensity={String(selectedHoleId) === String(marker.id) ? 0.42 : 0.22}
+                      opacity={mountingVariantKey === "face_to_edge" ? 0.74 : 0.92}
+                      depthWrite={false}
+                      transparent
+                      roughness={0.22}
+                    />
+                  </mesh>
+                ),
+              )
             ) : (
               <mesh position={layout.markerPlane.origin}>
                 <sphereGeometry args={[0.06, 20, 20]} />
