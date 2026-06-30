@@ -6771,14 +6771,14 @@ export default function App() {
             {
               args: [0.28, 2.18, 1.34],
               color: "#d6ecef",
-              opacity: 0.47,
+              opacity: 0.38,
               position: [-0.14, 0, 0],
               rotation: [0, 0, 0],
             },
             {
               args: [1.96, 0.28, 1.08],
               color: "#e1f5e7",
-              opacity: 0.5,
+              opacity: 0.42,
               position: [0.98, -0.14, 0],
               rotation: [0, 0, 0],
             },
@@ -7125,7 +7125,7 @@ export default function App() {
               </mesh>
             ))}
 
-            {layout.panels[1] ? (
+            {layout.panels[1] && mountingVariantKey !== "face_to_edge" ? (
               <mesh
                 position={[
                   (layout.panels[0].position[0] + layout.panels[1].position[0]) / 2,
@@ -7140,15 +7140,15 @@ export default function App() {
             ) : null}
 
             {mountingVariantKey === "face_to_edge" ? (
-              <mesh position={[0.18, 0.01, 0]} rotation={[0, 0, Math.PI / 2]}>
-                <cylinderGeometry args={[0.034, 0.034, 0.78, 18]} />
+              <mesh position={[0.06, 0.01, 0]} rotation={[0, 0, Math.PI / 2]} renderOrder={1}>
+                <cylinderGeometry args={[0.028, 0.028, 1.02, 18]} />
                 <meshStandardMaterial
                   color="#8a96a3"
                   emissive="#d9e1e8"
-                  emissiveIntensity={0.12}
-                  metalness={0.32}
-                  opacity={0.58}
-                  roughness={0.38}
+                  emissiveIntensity={0.16}
+                  metalness={0.38}
+                  opacity={0.5}
+                  roughness={0.3}
                   transparent
                 />
               </mesh>
@@ -7159,6 +7159,7 @@ export default function App() {
                 <mesh
                   castShadow
                   key={`marker-${marker.id}`}
+                  renderOrder={2}
                   onClick={(event) => {
                     event.stopPropagation();
                     onSelectHole?.(marker.id);
@@ -7179,7 +7180,8 @@ export default function App() {
                     color={String(selectedHoleId) === String(marker.id) ? "#16a34a" : String(hoveredHoleId) === String(marker.id) ? "#0f766e" : "#6f2bd6"}
                     emissive={String(selectedHoleId) === String(marker.id) ? "#8df0ae" : String(hoveredHoleId) === String(marker.id) ? "#43d0bf" : "#b28fff"}
                     emissiveIntensity={String(selectedHoleId) === String(marker.id) ? 0.42 : 0.22}
-                    opacity={0.92}
+                    opacity={mountingVariantKey === "face_to_edge" ? 0.74 : 0.92}
+                    depthWrite={false}
                     transparent
                     roughness={0.22}
                   />
