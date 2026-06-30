@@ -7105,6 +7105,9 @@ export default function App() {
             return [];
           }
 
+          // face_to_edge preview uses a local CAD frame:
+          // origin sits on the front face of the vertical panel, +X follows the drilling direction,
+          // P1 passes through the vertical panel thickness, and P2 starts from the end face of the horizontal panel.
           const panelA = Array.isArray(layout.panels) ? layout.panels[0] || null : null;
           const panelB = Array.isArray(layout.panels) ? layout.panels[1] || null : null;
 
