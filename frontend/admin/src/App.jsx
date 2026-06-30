@@ -7080,6 +7080,72 @@ export default function App() {
           [layout.panels, markerPositions, mountingVariantKey],
         );
 
+        const faceToEdgeChannels = useMemo(() => {
+          if (normalizeHoleWorkspaceMountingVariantKey(mountingVariantKey) !== "face_to_edge") {
+            return [];
+          }
+
+          const panelA = Array.isArray(layout.panels) ? layout.panels[0] || null : null;
+          const panelB = Array.isArray(layout.panels) ? layout.panels[1] || null : null;
+
+          if (!panelA || !panelB) {
+            return [];
+          }
+
+          const panelAThickness = Number(panelA?.args?.[0]) || 0.28;
+          const panelBWidth = Number(panelB?.args?.[0]) || 1.92;
+          const panelBThickness = Number(panelB?.args?.[1]) || 0.28;
+          const panelAOuterFaceX = (Number(panelA?.position?.[0]) || 0) - panelAThickness / 2;
+          const panelAInnerFaceX = (Number(panelA?.position?.[0]) || 0) + panelAThickness / 2;
+          const panelBEdgeStartX = (Number(panelB?.position?.[0]) || 0) - panelBWidth / 2;
+          const panelCenterY = (Number(panelB?.position?.[1]) || 0) + panelBThickness / 2;
+          const panelCenterZ = ((Number(panelA?.position?.[2]) || 0) + (Number(panelB?.position?.[2]) || 0)) / 2;
+          const sortedHoles = [...(Array.isArray(holes) ? holes : [])].sort((left, right) => {
+            const leftOrder = Number(left?.order_index ?? left?.orderIndex ?? 0);
+            const rightOrder = Number(right?.order_index ?? right?.orderIndex ?? 0);
+            if (leftOrder !== rightOrder) {
+              return leftOrder - rightOrder;
+            }
+
+            return Number(left?.id ?? 0) - Number(right?.id ?? 0);
+          });
+          const firstHole = sortedHoles.find((hole) => String(hole?.label || "").trim() === "P1") || sortedHoles[0] || null;
+          const secondHole = sortedHoles.find((hole) => String(hole?.label || "").trim() === "P2") || sortedHoles[1] || null;
+          const firstRadius = Math.max(0.022, Math.min(0.05, Number(firstHole?.diameter) ? Number(firstHole.diameter) / 220 : 0.032));
+          const secondRadius = Math.max(0.018, Math.min(0.04, Number(secondHole?.diameter) ? Number(secondHole.diameter) / 220 : 0.024));
+          const firstLength = Math.max(0.22, Math.min(0.3, panelAThickness));
+          const secondLength = Math.max(0.14, Math.min(0.24, Number(secondHole?.depth) ? Number(secondHole.depth) / 200 : 0.17, panelBThickness * 0.85));
+
+          return [
+            {
+              center: [(panelAOuterFaceX + panelAInnerFaceX) / 2, panelCenterY, panelCenterZ],
+              depthTest: false,
+              endX: panelAInnerFaceX,
+              id: firstHole?.id ?? "face-to-edge-p1",
+              isSelected: String(selectedHoleId) === String(firstHole?.id),
+              isHovered: String(hoveredHoleId) === String(firstHole?.id),
+              length: firstLength,
+              opacity: 0.68,
+              radius: firstRadius,
+              startX: panelAOuterFaceX,
+              tone: "neutral",
+            },
+            {
+              center: [panelBEdgeStartX + secondLength / 2, panelCenterY, panelCenterZ],
+              depthTest: false,
+              endX: panelBEdgeStartX + secondLength,
+              id: secondHole?.id ?? "face-to-edge-p2",
+              isSelected: String(selectedHoleId) === String(secondHole?.id),
+              isHovered: String(hoveredHoleId) === String(secondHole?.id),
+              length: secondLength,
+              opacity: 0.74,
+              radius: secondRadius,
+              startX: panelBEdgeStartX,
+              tone: "secondary",
+            },
+          ];
+        }, [holes, hoveredHoleId, layout.panels, mountingVariantKey, selectedHoleId]);
+
         useEffect(
           () => () => {
             Object.values(axisLabelTextures).forEach((texture) => texture?.dispose?.());
@@ -7155,7 +7221,56 @@ export default function App() {
               </mesh>
             ) : null}
 
-            {holeVolumes.length ? (
+            {mountingVariantKey === "face_to_edge" ? (
+              faceToEdgeChannels.length ? (
+                faceToEdgeChannels.map((channel) => {
+                  const isSelected = Boolean(channel.isSelected);
+                  const isHovered = Boolean(channel.isHovered);
+                  const channelColor = isSelected ? "#4b5563" : isHovered ? "#64748b" : channel.tone === "secondary" ? "#6b7280" : "#5f6b75";
+                  const channelEmissive = isSelected ? "#e2e8f0" : isHovered ? "#cbd5e1" : "#d3dbe3";
+
+                  return (
+                    <mesh
+                      castShadow
+                      key={`face-to-edge-${channel.id}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onSelectHole?.(channel.id);
+                      }}
+                      onPointerOut={(event) => {
+                        event.stopPropagation();
+                        onLeaveHole?.();
+                      }}
+                      onPointerOver={(event) => {
+                        event.stopPropagation();
+                        onHoverHole?.(channel.id);
+                      }}
+                      position={channel.center}
+                      renderOrder={2}
+                      rotation={[0, 0, Math.PI / 2]}
+                    >
+                      <cylinderGeometry args={[channel.radius, channel.radius, channel.length, 24, 1, false]} />
+                      <meshStandardMaterial
+                        color={channelColor}
+                        emissive={channelEmissive}
+                        emissiveIntensity={isSelected ? 0.2 : isHovered ? 0.14 : 0.08}
+                        metalness={0.22}
+                        opacity={0.72}
+                        depthTest={false}
+                        depthWrite={false}
+                        roughness={0.28}
+                        transparent
+                      />
+                    </mesh>
+                  );
+                })
+              ) : (
+                <mesh position={layout.markerPlane.origin}>
+                  <sphereGeometry args={[0.06, 20, 20]} />
+                  <meshStandardMaterial color="#94a3b8" emissive="#cbd5e1" emissiveIntensity={0.12} />
+                </mesh>
+              )
+            ) : holeVolumes.length ? (
               holeVolumes.map((marker) =>
                 marker.isFaceToEdge ? (
                   <group
