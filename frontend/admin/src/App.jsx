@@ -7056,13 +7056,13 @@ export default function App() {
         const isFaceToEdgePreview = normalizeHoleWorkspaceMountingVariantKey(mountingVariantKey) === "face_to_edge";
         const axisLabelPresentation = isFaceToEdgePreview
           ? {
-              opacity: 0.72,
+              opacity: 0.96,
               positions: {
-                x: [2.24, -0.1, 0],
-                y: [-0.1, 2.08, 0],
-                z: [0.56, -0.12, 2.28],
+                x: [0.42, 0.02, 0],
+                y: [0.02, 0.42, 0],
+                z: [-0.32, 0.02, 0],
               },
-              scale: 0.34,
+              scale: 0.18,
             }
           : {
               opacity: 1,
@@ -7168,11 +7168,11 @@ export default function App() {
           const firstDiameter = readHolePreviewNumber(firstHole, ["diameter", "diameter_mm"], 7);
           const secondDiameter = readHolePreviewNumber(secondHole, ["diameter", "diameter_mm"], 4.5);
           const secondDepth = readHolePreviewNumber(secondHole, ["depth", "depth_mm"], 34);
-          const sleeveOverhang = 0.18;
-          const firstRadius = Math.max(0.032, Math.min(0.065, firstDiameter / 135));
-          const secondRadius = Math.max(0.022, Math.min(0.045, secondDiameter / 150));
+          const sleeveOverhang = 0.1;
+          const firstRadius = Math.max(0.03, Math.min(0.06, firstDiameter / 145));
+          const secondRadius = Math.max(0.02, Math.min(0.042, secondDiameter / 160));
           const firstLength = panelAThickness + sleeveOverhang;
-          const secondLength = Math.max(0.34, Math.min(panelBWidth * 0.62, secondDepth / 75));
+          const secondLength = Math.max(0.42, Math.min(panelBWidth * 0.72, secondDepth / 60));
 
           return [
             {
@@ -7245,9 +7245,7 @@ export default function App() {
           <ambientLight intensity={1.05} />
           <directionalLight castShadow position={[5.2, 7.2, 8]} intensity={1.45} />
           <directionalLight position={[-4, 2.8, 3]} intensity={0.55} />
-          {isFaceToEdgePreview ? null : (
-            <axesHelper args={[1.8]} position={layout.markerPlane.origin} />
-          )}
+          <axesHelper args={isFaceToEdgePreview ? [0.42] : [1.8]} position={faceToEdgeOrigin || layout.markerPlane.origin} />
           {isFaceToEdgePreview ? null : (
             <gridHelper args={[3.1, 10, "#d2dde5", "#e7eef3"]} position={[0, -1.02, 0]} />
           )}
@@ -7476,7 +7474,19 @@ export default function App() {
                 <meshStandardMaterial color="#94a3b8" emissive="#cbd5e1" emissiveIntensity={0.12} />
               </mesh>
             )}
-            {!isFaceToEdgePreview ? (
+            {isFaceToEdgePreview ? (
+              <group position={faceToEdgeOrigin || layout.markerPlane.origin}>
+                <sprite position={axisLabelPresentation.positions.x} scale={[axisLabelPresentation.scale, axisLabelPresentation.scale, axisLabelPresentation.scale]}>
+                  <spriteMaterial attach="material" depthWrite={false} map={axisLabelTextures.x || undefined} opacity={axisLabelPresentation.opacity} transparent />
+                </sprite>
+                <sprite position={axisLabelPresentation.positions.y} scale={[axisLabelPresentation.scale, axisLabelPresentation.scale, axisLabelPresentation.scale]}>
+                  <spriteMaterial attach="material" depthWrite={false} map={axisLabelTextures.y || undefined} opacity={axisLabelPresentation.opacity} transparent />
+                </sprite>
+                <sprite position={axisLabelPresentation.positions.z} scale={[axisLabelPresentation.scale, axisLabelPresentation.scale, axisLabelPresentation.scale]}>
+                  <spriteMaterial attach="material" depthWrite={false} map={axisLabelTextures.z || undefined} opacity={axisLabelPresentation.opacity} transparent />
+                </sprite>
+              </group>
+            ) : (
               <group position={layout.markerPlane.origin}>
                 <sprite position={axisLabelPresentation.positions.x} scale={[axisLabelPresentation.scale, axisLabelPresentation.scale, axisLabelPresentation.scale]}>
                   <spriteMaterial attach="material" depthWrite={false} map={axisLabelTextures.x || undefined} opacity={axisLabelPresentation.opacity} transparent />
@@ -7488,7 +7498,7 @@ export default function App() {
                   <spriteMaterial attach="material" depthWrite={false} map={axisLabelTextures.z || undefined} opacity={axisLabelPresentation.opacity} transparent />
                 </sprite>
               </group>
-            ) : null}
+            )}
           </group>
           <OrbitControls
             enableDamping
