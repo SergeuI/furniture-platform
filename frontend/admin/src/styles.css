@@ -2300,6 +2300,14 @@ tbody tr.selected {
   padding: 8px 10px;
 }
 
+.holes-preview-2d-card {
+  display: none !important;
+}
+
+.holes-three-preview-origin-note {
+  display: none !important;
+}
+
 .holes-three-preview-origin-note strong {
   color: #24343d;
   font-weight: 800;

@@ -38,7 +38,7 @@ import edgeToEdgeIcon from "./assets/hole-mounting/edge_to_edge.png";
 import drawerSlidesIcon from "./assets/hole-mounting/drawer_slides.png";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
-import { DoubleSide } from "three";
+import { CanvasTexture, DoubleSide, LinearFilter } from "three";
 
 import {
   attachMaterialEdge,
@@ -6835,23 +6835,70 @@ export default function App() {
     });
   }
 
-  const HolesMountingThreePreview = memo(function HolesMountingThreePreview({
-    holes,
-    mountingVariantKey,
-    hoveredHoleId,
-    selectedHoleId,
-    onHoverHole,
-    onLeaveHole,
-    onSelectHole,
-  }) {
-    const layout = useMemo(
-      () => getHoleWorkspaceThreePreviewLayout(mountingVariantKey),
-      [mountingVariantKey],
-    );
-    const markerPositions = useMemo(
-      () => buildThreePreviewMarkerPositions(holes, layout.markerPlane),
-      [holes, layout.markerPlane],
-    );
+  const HolesMountingThreePreview = useMemo(
+    () =>
+      memo(function HolesMountingThreePreview({
+        holes,
+        mountingVariantKey,
+        hoveredHoleId,
+        selectedHoleId,
+        onHoverHole,
+        onLeaveHole,
+        onSelectHole,
+      }) {
+        const layout = useMemo(
+          () => getHoleWorkspaceThreePreviewLayout(mountingVariantKey),
+          [mountingVariantKey],
+        );
+        const markerPositions = useMemo(
+          () => buildThreePreviewMarkerPositions(holes, layout.markerPlane),
+          [holes, layout.markerPlane],
+        );
+        const axisLabelTextures = useMemo(() => {
+          const createAxisLabelTexture = (label, color) => {
+            const canvas = document.createElement("canvas");
+            canvas.width = 128;
+            canvas.height = 128;
+            const context = canvas.getContext("2d");
+
+            if (!context) {
+              return null;
+            }
+
+            context.clearRect(0, 0, canvas.width, canvas.height);
+            context.fillStyle = "rgba(255, 255, 255, 0.96)";
+            context.strokeStyle = color;
+            context.lineWidth = 6;
+            context.beginPath();
+            context.roundRect(10, 10, 108, 108, 28);
+            context.fill();
+            context.stroke();
+            context.fillStyle = color;
+            context.font = "bold 62px Arial, sans-serif";
+            context.textAlign = "center";
+            context.textBaseline = "middle";
+            context.fillText(label, 64, 66);
+
+            const texture = new CanvasTexture(canvas);
+            texture.minFilter = LinearFilter;
+            texture.magFilter = LinearFilter;
+            texture.needsUpdate = true;
+            return texture;
+          };
+
+          return {
+            x: createAxisLabelTexture("X", "#e200b6"),
+            y: createAxisLabelTexture("Y", "#0f766e"),
+            z: createAxisLabelTexture("Z", "#2563eb"),
+          };
+        }, []);
+
+        useEffect(
+          () => () => {
+            Object.values(axisLabelTextures).forEach((texture) => texture?.dispose?.());
+          },
+          [axisLabelTextures],
+        );
 
     return (
       <div className="holes-three-preview">
@@ -6866,7 +6913,7 @@ export default function App() {
           <ambientLight intensity={1.05} />
           <directionalLight castShadow position={[5.2, 7.2, 8]} intensity={1.45} />
           <directionalLight position={[-4, 2.8, 3]} intensity={0.55} />
-          <axesHelper args={[1.7]} position={layout.markerPlane.origin} />
+          <axesHelper args={[1.8]} position={layout.markerPlane.origin} />
           <gridHelper args={[3.1, 10, "#d2dde5", "#e7eef3"]} position={[0, -1.02, 0]} />
           <group>
             {layout.panels.map((panel, index) => (
@@ -6940,6 +6987,17 @@ export default function App() {
                 <meshStandardMaterial color="#94a3b8" emissive="#cbd5e1" emissiveIntensity={0.12} />
               </mesh>
             )}
+            <group position={layout.markerPlane.origin}>
+              <sprite position={[1.95, 0, 0]} scale={[0.42, 0.42, 0.42]}>
+                <spriteMaterial attach="material" depthWrite={false} map={axisLabelTextures.x || undefined} transparent />
+              </sprite>
+              <sprite position={[0, 1.95, 0]} scale={[0.42, 0.42, 0.42]}>
+                <spriteMaterial attach="material" depthWrite={false} map={axisLabelTextures.y || undefined} transparent />
+              </sprite>
+              <sprite position={[0, 0, 1.95]} scale={[0.42, 0.42, 0.42]}>
+                <spriteMaterial attach="material" depthWrite={false} map={axisLabelTextures.z || undefined} transparent />
+              </sprite>
+            </group>
           </group>
           <OrbitControls
             enableDamping
@@ -6965,7 +7023,9 @@ export default function App() {
         </div>
       </div>
     );
-  });
+      }),
+    [],
+  );
 
   function renderHoleWorkspaceFittingInfo(fitting) {
     if (!fitting) {
