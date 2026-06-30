@@ -6814,10 +6814,15 @@ export default function App() {
         : Math.floor(index / 3) / 2;
       const markerRadius = Math.max(0.04, Math.min(0.08, Number(hole?.diameter) ? Number(hole.diameter) / 150 : 0.05));
       const offset = Number.isFinite(Number(hole?.depth)) ? Math.min(Number(hole.depth) / 1000, 0.06) : 0.02;
+      const depthValue = Number(hole?.depth);
+      const hasDepth = Number.isFinite(depthValue) && depthValue > 0;
 
       return {
         id: hole?.id ?? index + 1,
         label: String(hole?.label || `P${index + 1}`).trim() || `P${index + 1}`,
+        diameter: Number.isFinite(Number(hole?.diameter)) ? Number(hole.diameter) : null,
+        depth: hasDepth ? depthValue : null,
+        hasDepth,
         markerRadius,
         onSurfacePosition:
           markerPlane.axis === "z"
@@ -6831,8 +6836,50 @@ export default function App() {
                 markerPlane.origin[1] + (0.5 - ratioY) * markerPlane.spanV,
                 markerPlane.origin[2] + offset,
               ],
+        operation: String(hole?.operation || "").trim() || "drill",
+        side: String(hole?.side || "").trim() || "front",
       };
     });
+  }
+
+  function getHoleWorkspaceHoleDirection(side) {
+    switch (String(side || "").trim()) {
+      case "back":
+        return { axis: "x", sign: -1 };
+      case "left":
+        return { axis: "z", sign: -1 };
+      case "right":
+        return { axis: "z", sign: 1 };
+      case "top":
+        return { axis: "y", sign: 1 };
+      case "bottom":
+        return { axis: "y", sign: -1 };
+      case "front":
+      default:
+        return { axis: "x", sign: 1 };
+    }
+  }
+
+  function getHoleWorkspaceHoleRotation(axis) {
+    switch (axis) {
+      case "y":
+        return [0, 0, 0];
+      case "z":
+        return [Math.PI / 2, 0, 0];
+      case "x":
+      default:
+        return [0, 0, Math.PI / 2];
+    }
+  }
+
+  function markerPlaneThickness(panels, axis) {
+    const panel = Array.isArray(panels) ? panels[0] : null;
+
+    if (!panel || !Array.isArray(panel.args)) {
+      return 0.28;
+    }
+
+    return Math.max(0.24, Number(panel.args[0]) || 0.28);
   }
 
   const HolesMountingThreePreview = useMemo(
@@ -6866,18 +6913,11 @@ export default function App() {
             }
 
             context.clearRect(0, 0, canvas.width, canvas.height);
-            context.fillStyle = "rgba(255, 255, 255, 0.96)";
-            context.strokeStyle = color;
-            context.lineWidth = 6;
-            context.beginPath();
-            context.roundRect(10, 10, 108, 108, 28);
-            context.fill();
-            context.stroke();
             context.fillStyle = color;
-            context.font = "bold 62px Arial, sans-serif";
+            context.font = "700 76px Arial, sans-serif";
             context.textAlign = "center";
             context.textBaseline = "middle";
-            context.fillText(label, 64, 66);
+            context.fillText(label, 64, 68);
 
             const texture = new CanvasTexture(canvas);
             texture.minFilter = LinearFilter;
@@ -6892,6 +6932,35 @@ export default function App() {
             z: createAxisLabelTexture("Z", "#2563eb"),
           };
         }, []);
+
+        const holeVolumes = useMemo(
+          () =>
+            markerPositions.map((marker) => {
+              const sideDirection = getHoleWorkspaceHoleDirection(marker.side);
+              const holeRadius = Math.max(0.045, Math.min(0.1, (marker.diameter || 0) / 110 || 0.052));
+              const holeLength = marker.hasDepth
+                ? Math.max(0.18, Math.min(0.62, (marker.depth || 0) / 120 || 0.22))
+                : 0.42;
+              const panelThickness = markerPlaneThickness(layout.panels, sideDirection.axis);
+              const visibleLength = marker.hasDepth ? holeLength : Math.max(holeLength, panelThickness);
+              const centerPosition = [
+                marker.onSurfacePosition[0] + (sideDirection.axis === "x" ? sideDirection.sign * visibleLength * 0.5 : 0),
+                marker.onSurfacePosition[1] + (sideDirection.axis === "y" ? sideDirection.sign * visibleLength * 0.5 : 0),
+                marker.onSurfacePosition[2] + (sideDirection.axis === "z" ? sideDirection.sign * visibleLength * 0.5 : 0),
+              ];
+
+              return {
+                ...marker,
+                centerPosition,
+                holeLength: visibleLength,
+                holeRadius,
+                rotation: getHoleWorkspaceHoleRotation(sideDirection.axis),
+                isThrough: !marker.hasDepth,
+                sideDirection,
+              };
+            }),
+          [layout.panels, markerPositions],
+        );
 
         useEffect(
           () => () => {
@@ -6953,8 +7022,8 @@ export default function App() {
               </mesh>
             ) : null}
 
-            {markerPositions.length ? (
-              markerPositions.map((marker) => (
+            {holeVolumes.length ? (
+              holeVolumes.map((marker) => (
                 <mesh
                   castShadow
                   key={`marker-${marker.id}`}
@@ -6970,14 +7039,17 @@ export default function App() {
                     event.stopPropagation();
                     onHoverHole?.(marker.id);
                   }}
-                  position={marker.onSurfacePosition}
+                  position={marker.centerPosition}
+                  rotation={marker.rotation}
                 >
-                  <sphereGeometry args={[marker.markerRadius, 22, 22]} />
+                  <cylinderGeometry args={[marker.holeRadius, marker.holeRadius, marker.holeLength, 24, 1, false]} />
                   <meshStandardMaterial
-                    color={String(selectedHoleId) === String(marker.id) ? "#16a34a" : String(hoveredHoleId) === String(marker.id) ? "#0f766e" : "#ff33c4"}
-                    emissive={String(selectedHoleId) === String(marker.id) ? "#8df0ae" : String(hoveredHoleId) === String(marker.id) ? "#43d0bf" : "#ff8de0"}
-                    emissiveIntensity={String(selectedHoleId) === String(marker.id) ? 0.35 : 0.24}
-                    roughness={0.28}
+                    color={String(selectedHoleId) === String(marker.id) ? "#16a34a" : String(hoveredHoleId) === String(marker.id) ? "#0f766e" : "#6f2bd6"}
+                    emissive={String(selectedHoleId) === String(marker.id) ? "#8df0ae" : String(hoveredHoleId) === String(marker.id) ? "#43d0bf" : "#b28fff"}
+                    emissiveIntensity={String(selectedHoleId) === String(marker.id) ? 0.42 : 0.22}
+                    opacity={0.92}
+                    transparent
+                    roughness={0.22}
                   />
                 </mesh>
               ))
