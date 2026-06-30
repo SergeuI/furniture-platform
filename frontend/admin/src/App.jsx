@@ -6764,21 +6764,21 @@ export default function App() {
         };
       case "face_to_edge":
         return {
-          camera: [5.1, 3.05, 5.5],
+          camera: [3.55, 2.35, 4.1],
           label: "Пласть → торець",
           markerPlane: { axis: "z", origin: [0, 0, 0], spanU: 1.22, spanV: 1.72 },
           panels: [
             {
               args: [0.28, 2.18, 1.34],
-              color: "#d6ecef",
-              opacity: 0.55,
+              color: "#b9ffb9",
+              opacity: 0.34,
               position: [-0.14, 0, 0],
               rotation: [0, 0, 0],
             },
             {
               args: [1.96, 0.28, 1.08],
-              color: "#e1f5e7",
-              opacity: 0.58,
+              color: "#b9ffb9",
+              opacity: 0.34,
               position: [0.98, -0.14, 0],
               rotation: [0, 0, 0],
             },
@@ -7168,14 +7168,15 @@ export default function App() {
           const firstDiameter = readHolePreviewNumber(firstHole, ["diameter", "diameter_mm"], 7);
           const secondDiameter = readHolePreviewNumber(secondHole, ["diameter", "diameter_mm"], 4.5);
           const secondDepth = readHolePreviewNumber(secondHole, ["depth", "depth_mm"], 34);
-          const firstRadius = Math.max(0.022, Math.min(0.05, firstDiameter / 220));
-          const secondRadius = Math.max(0.018, Math.min(0.04, secondDiameter / 220));
-          const firstLength = panelAThickness;
-          const secondLength = Math.max(0.12, Math.min(panelBWidth * 0.9, secondDepth / 200));
+          const sleeveOverhang = 0.18;
+          const firstRadius = Math.max(0.032, Math.min(0.065, firstDiameter / 135));
+          const secondRadius = Math.max(0.022, Math.min(0.045, secondDiameter / 150));
+          const firstLength = panelAThickness + sleeveOverhang;
+          const secondLength = Math.max(0.34, Math.min(panelBWidth * 0.62, secondDepth / 75));
 
           return [
             {
-              center: [(panelAOuterFaceX + panelAInnerFaceX) / 2, panelCenterY, panelCenterZ],
+              center: [panelAOuterFaceX - sleeveOverhang / 2 + firstLength / 2, panelCenterY, panelCenterZ],
               depthTest: false,
               endX: panelAInnerFaceX,
               id: firstHole?.id ?? "face-to-edge-p1",
@@ -7185,13 +7186,13 @@ export default function App() {
               length: firstLength,
               opacity: 0.68,
               radius: firstRadius,
-              startX: panelAOuterFaceX,
+              startX: panelAOuterFaceX - sleeveOverhang,
               tone: "neutral",
             },
             {
-              center: [panelBEdgeStartX + secondLength / 2, panelCenterY, panelCenterZ],
+              center: [panelAInnerFaceX + secondLength / 2, panelCenterY, panelCenterZ],
               depthTest: false,
-              endX: panelBEdgeStartX + secondLength,
+              endX: panelAInnerFaceX + secondLength,
               id: secondHole?.id ?? "face-to-edge-p2",
               isSelected: String(selectedHoleId) === String(secondHole?.id),
               isHovered: String(hoveredHoleId) === String(secondHole?.id),
@@ -7199,7 +7200,7 @@ export default function App() {
               length: secondLength,
               opacity: 0.74,
               radius: secondRadius,
-              startX: panelBEdgeStartX,
+              startX: panelAInnerFaceX,
               tone: "secondary",
             },
           ];
@@ -7244,30 +7245,45 @@ export default function App() {
           <ambientLight intensity={1.05} />
           <directionalLight castShadow position={[5.2, 7.2, 8]} intensity={1.45} />
           <directionalLight position={[-4, 2.8, 3]} intensity={0.55} />
-          <axesHelper args={isFaceToEdgePreview ? [1.32] : [1.8]} position={faceToEdgeOrigin || layout.markerPlane.origin} />
-          <gridHelper args={[3.1, 10, "#d2dde5", "#e7eef3"]} position={[0, -1.02, 0]} />
+          <axesHelper args={isFaceToEdgePreview ? [0.42] : [1.8]} position={faceToEdgeOrigin || layout.markerPlane.origin} />
+          {isFaceToEdgePreview ? null : (
+            <gridHelper args={[3.1, 10, "#d2dde5", "#e7eef3"]} position={[0, -1.02, 0]} />
+          )}
           <group>
             {layout.panels.map((panel, index) => (
-              <mesh
-                castShadow
+              <group
                 key={`${mountingVariantKey}-panel-${index}`}
                 position={panel.position}
-                receiveShadow
                 rotation={panel.rotation}
               >
-                <boxGeometry args={panel.args} />
-                <meshPhysicalMaterial
-                  color={panel.color}
-                  emissive="#c9f3df"
-                  emissiveIntensity={0.08}
-                  metalness={0.12}
-                  opacity={isFaceToEdgePreview ? Math.min(0.86, panel.opacity + 0.18) : panel.opacity}
-                  roughness={isFaceToEdgePreview ? 0.55 : 0.45}
-                  side={DoubleSide}
-                  transparent
-                  transmission={isFaceToEdgePreview ? 0.14 : 0.34}
-                />
-              </mesh>
+                <mesh castShadow receiveShadow>
+                  <boxGeometry args={panel.args} />
+                  <meshPhysicalMaterial
+                    color={panel.color}
+                    depthWrite={!isFaceToEdgePreview}
+                    emissive={isFaceToEdgePreview ? "#75ff75" : "#c9f3df"}
+                    emissiveIntensity={isFaceToEdgePreview ? 0.04 : 0.08}
+                    metalness={0.02}
+                    opacity={isFaceToEdgePreview ? panel.opacity : panel.opacity}
+                    roughness={isFaceToEdgePreview ? 0.62 : 0.45}
+                    side={DoubleSide}
+                    transparent
+                    transmission={isFaceToEdgePreview ? 0 : 0.34}
+                  />
+                </mesh>
+                {isFaceToEdgePreview ? (
+                  <mesh>
+                    <boxGeometry args={panel.args.map((value) => value + 0.002)} />
+                    <meshBasicMaterial
+                      color="#21ff21"
+                      depthWrite={false}
+                      opacity={0.78}
+                      transparent
+                      wireframe
+                    />
+                  </mesh>
+                ) : null}
+              </group>
             ))}
 
             {layout.panels[1] && mountingVariantKey !== "face_to_edge" ? (
@@ -7289,12 +7305,12 @@ export default function App() {
                 faceToEdgeChannels.map((channel) => {
                   const isSelected = Boolean(channel.isSelected);
                   const isHovered = Boolean(channel.isHovered);
-                  const channelColor = isSelected ? "#1f2937" : isHovered ? "#334155" : channel.tone === "secondary" ? "#1e293b" : "#111827";
-                  const channelOpacity = isSelected ? 0.28 : isHovered ? 0.23 : 0.18;
-                  const entryRingColor = isSelected ? "#cbd5e1" : isHovered ? "#d7dde3" : "#bcc7d2";
-                  const exitRingColor = isSelected ? "#94a3b8" : isHovered ? "#a8b4c1" : "#8f9aa7";
-                  const ringOpacity = isSelected ? 0.62 : isHovered ? 0.52 : 0.34;
-                  const exitOpacity = isSelected ? 0.5 : isHovered ? 0.42 : 0.28;
+                  const channelColor = isSelected ? "#9fb7a2" : isHovered ? "#b8cab8" : channel.tone === "secondary" ? "#8fb58f" : "#bfd4bd";
+                  const channelOpacity = isSelected ? 0.96 : isHovered ? 0.94 : 0.9;
+                  const entryRingColor = isSelected ? "#4b5563" : isHovered ? "#667382" : "#6b7280";
+                  const exitRingColor = isSelected ? "#4b5563" : isHovered ? "#667382" : "#6b7280";
+                  const ringOpacity = isSelected ? 0.95 : isHovered ? 0.9 : 0.82;
+                  const exitOpacity = isSelected ? 0.88 : isHovered ? 0.82 : 0.72;
 
                   return (
                     <group
@@ -7316,10 +7332,13 @@ export default function App() {
                     >
                       <mesh castShadow renderOrder={2} rotation={[0, 0, Math.PI / 2]}>
                         <cylinderGeometry args={[channel.radius, channel.radius, channel.length, 24, 1, true]} />
-                        <meshBasicMaterial
+                        <meshStandardMaterial
                           color={channelColor}
+                          emissive={isSelected || isHovered ? "#dff2dc" : "#8fb58f"}
+                          emissiveIntensity={isSelected || isHovered ? 0.18 : 0.06}
+                          metalness={0.08}
                           opacity={channelOpacity}
-                          depthTest
+                          roughness={0.36}
                           depthWrite={false}
                           transparent
                         />
@@ -7466,17 +7485,19 @@ export default function App() {
                 <meshStandardMaterial color="#94a3b8" emissive="#cbd5e1" emissiveIntensity={0.12} />
               </mesh>
             )}
-            <group position={faceToEdgeOrigin || layout.markerPlane.origin}>
-              <sprite position={axisLabelPresentation.positions.x} scale={[axisLabelPresentation.scale, axisLabelPresentation.scale, axisLabelPresentation.scale]}>
-                <spriteMaterial attach="material" depthWrite={false} map={axisLabelTextures.x || undefined} opacity={axisLabelPresentation.opacity} transparent />
-              </sprite>
-              <sprite position={axisLabelPresentation.positions.y} scale={[axisLabelPresentation.scale, axisLabelPresentation.scale, axisLabelPresentation.scale]}>
-                <spriteMaterial attach="material" depthWrite={false} map={axisLabelTextures.y || undefined} opacity={axisLabelPresentation.opacity} transparent />
-              </sprite>
-              <sprite position={axisLabelPresentation.positions.z} scale={[axisLabelPresentation.scale, axisLabelPresentation.scale, axisLabelPresentation.scale]}>
-                <spriteMaterial attach="material" depthWrite={false} map={axisLabelTextures.z || undefined} opacity={axisLabelPresentation.opacity} transparent />
-              </sprite>
-            </group>
+            {!isFaceToEdgePreview ? (
+              <group position={layout.markerPlane.origin}>
+                <sprite position={axisLabelPresentation.positions.x} scale={[axisLabelPresentation.scale, axisLabelPresentation.scale, axisLabelPresentation.scale]}>
+                  <spriteMaterial attach="material" depthWrite={false} map={axisLabelTextures.x || undefined} opacity={axisLabelPresentation.opacity} transparent />
+                </sprite>
+                <sprite position={axisLabelPresentation.positions.y} scale={[axisLabelPresentation.scale, axisLabelPresentation.scale, axisLabelPresentation.scale]}>
+                  <spriteMaterial attach="material" depthWrite={false} map={axisLabelTextures.y || undefined} opacity={axisLabelPresentation.opacity} transparent />
+                </sprite>
+                <sprite position={axisLabelPresentation.positions.z} scale={[axisLabelPresentation.scale, axisLabelPresentation.scale, axisLabelPresentation.scale]}>
+                  <spriteMaterial attach="material" depthWrite={false} map={axisLabelTextures.z || undefined} opacity={axisLabelPresentation.opacity} transparent />
+                </sprite>
+              </group>
+            ) : null}
           </group>
           <OrbitControls
             enableDamping
