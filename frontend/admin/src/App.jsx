@@ -611,6 +611,10 @@ const HOLE_POINT_SIDE_OPTIONS = [
   { value: "right", labelKey: "holePointSideRight" },
   { value: "top", labelKey: "holePointSideTop" },
   { value: "bottom", labelKey: "holePointSideBottom" },
+  { value: "face", labelKey: "holePointSideFace" },
+  { value: "edge", labelKey: "holePointSideEdge" },
+  { value: "inner", labelKey: "holePointSideInner" },
+  { value: "outer", labelKey: "holePointSideOuter" },
 ];
 
 const HOLE_POINT_OPERATION_OPTIONS = [
@@ -629,6 +633,10 @@ const HOLE_POINT_SIDE_LABEL_KEYS = {
   right: "holePointSideRight",
   top: "holePointSideTop",
   bottom: "holePointSideBottom",
+  face: "holePointSideFace",
+  edge: "holePointSideEdge",
+  inner: "holePointSideInner",
+  outer: "holePointSideOuter",
 };
 
 const HOLE_POINT_OPERATION_LABEL_KEYS = {
@@ -675,6 +683,27 @@ function formatHoleTemplateType(value, t) {
 
 function formatHoleTemplateCoordinateSystem(value, t) {
   return formatHolePointValue(value, HOLE_TEMPLATE_COORDINATE_SYSTEM_LABEL_KEYS, t);
+}
+
+function getHoleSideSelectOptions(currentValue) {
+  const normalizedValue = String(currentValue || "").trim();
+
+  if (!normalizedValue) {
+    return HOLE_POINT_SIDE_OPTIONS;
+  }
+
+  const hasKnownOption = HOLE_POINT_SIDE_OPTIONS.some((option) => option.value === normalizedValue);
+  return hasKnownOption
+    ? HOLE_POINT_SIDE_OPTIONS
+    : [...HOLE_POINT_SIDE_OPTIONS, { value: normalizedValue, label: normalizedValue }];
+}
+
+function renderHoleSideOptionLabel(option, t) {
+  if (option.labelKey) {
+    return t[option.labelKey] || option.value;
+  }
+
+  return option.label || option.value;
 }
 
 function detectFittingSourceSite(sourceUrl) {
@@ -1515,8 +1544,12 @@ const TRANSLATIONS = {
     holePointSide: "Side",
     holePointSideBack: "Back face",
     holePointSideBottom: "Bottom edge",
+    holePointSideEdge: "Edge",
+    holePointSideFace: "Face",
     holePointSideFront: "Front face",
+    holePointSideInner: "Inner side",
     holePointSideLeft: "Left edge",
+    holePointSideOuter: "Outer side",
     holePointSideRight: "Right edge",
     holePointSideTop: "Top edge",
     holePointTemplate: "Template",
@@ -1997,8 +2030,12 @@ Object.assign(TRANSLATIONS.uk, {
   holePointSide: "\u0421\u0442\u043e\u0440\u043e\u043d\u0430",
   holePointSideBack: "\u0417\u0430\u0434\u043d\u044f \u043f\u043b\u043e\u0449\u0438\u043d\u0430",
   holePointSideBottom: "\u041d\u0438\u0436\u043d\u0456\u0439 \u0442\u043e\u0440\u0435\u0446\u044c",
+  holePointSideEdge: "\u0422\u043e\u0440\u0435\u0446\u044c",
+  holePointSideFace: "\u041f\u043b\u0430\u0441\u0442\u044c",
   holePointSideFront: "\u0424\u0430\u0441\u0430\u0434 / \u043f\u0435\u0440\u0435\u0434\u043d\u044f \u043f\u043b\u043e\u0449\u0438\u043d\u0430",
+  holePointSideInner: "\u0412\u043d\u0443\u0442\u0440\u0456\u0448\u043d\u044f",
   holePointSideLeft: "\u041b\u0456\u0432\u0438\u0439 \u0442\u043e\u0440\u0435\u0446\u044c",
+  holePointSideOuter: "\u0417\u043e\u0432\u043d\u0456\u0448\u043d\u044f",
   holePointSideRight: "\u041f\u0440\u0430\u0432\u0438\u0439 \u0442\u043e\u0440\u0435\u0446\u044c",
   holePointSideTop: "\u0412\u0435\u0440\u0445\u043d\u0456\u0439 \u0442\u043e\u0440\u0435\u0446\u044c",
   holePointTemplate: "\u0428\u0430\u0431\u043b\u043e\u043d",
@@ -6562,9 +6599,13 @@ export default function App() {
     const barStyles = {
       back: { inset: 12, height: 20, left: 12, right: 12 },
       bottom: { bottom: 6, left: 10, right: 10, height: 6 },
+      edge: { bottom: 10, left: 6, top: 10, width: 6 },
+      face: { inset: 12, height: 20, left: 12, right: 12 },
       front: { inset: 12, height: 20, left: 12, right: 12 },
+      inner: { bottom: 10, left: 6, top: 10, width: 6 },
       left: { bottom: 10, left: 6, top: 10, width: 6 },
       left_edge: { bottom: 10, left: 6, top: 10, width: 6 },
+      outer: { bottom: 10, right: 6, top: 10, width: 6 },
       right: { bottom: 10, right: 6, top: 10, width: 6 },
       right_edge: { bottom: 10, right: 6, top: 10, width: 6 },
       top: { top: 6, left: 10, right: 10, height: 6 },
@@ -6612,9 +6653,9 @@ export default function App() {
   }
 
   function normalizeHoleTemplateSide(side) {
-    const allowedSides = new Set(["front", "back", "left", "right", "top", "bottom"]);
+    const normalized = String(side || "").trim();
 
-    return allowedSides.has(side) ? side : "left";
+    return normalized || "left";
   }
 
   function normalizeHoleMountingVariantKey(key) {
@@ -6895,7 +6936,14 @@ export default function App() {
     switch (String(side || "").trim()) {
       case "back":
         return { axis: "x", sign: -1 };
+      case "face":
+        return { axis: "x", sign: 1 };
+      case "inner":
+        return { axis: "x", sign: -1 };
+      case "outer":
+        return { axis: "x", sign: 1 };
       case "left":
+      case "edge":
         return { axis: "z", sign: -1 };
       case "right":
         return { axis: "z", sign: 1 };
@@ -7503,32 +7551,10 @@ export default function App() {
   }
 
   function renderHoleTemplateMountingSchemePicker(selectedSide, onSelectSide) {
-    const schemeCards = [
-      {
-        side: "front",
-        label: t.holeTemplateMountingSchemeFrontFace,
-      },
-      {
-        side: "back",
-        label: t.holeTemplateMountingSchemeBackFace,
-      },
-      {
-        side: "left",
-        label: t.holeTemplateMountingSchemeLeftEdge,
-      },
-      {
-        side: "right",
-        label: t.holeTemplateMountingSchemeRightEdge,
-      },
-      {
-        side: "top",
-        label: t.holeTemplateMountingSchemeTop,
-      },
-      {
-        side: "bottom",
-        label: t.holeTemplateMountingSchemeBottom,
-      },
-    ];
+    const schemeCards = HOLE_POINT_SIDE_OPTIONS.map((option) => ({
+      side: option.value,
+      label: renderHoleSideOptionLabel(option, t),
+    }));
 
     return (
       <div style={{ display: "grid", gap: 8, marginTop: 12 }}>
@@ -7538,11 +7564,11 @@ export default function App() {
         </div>
         <div
           style={{
-          display: "grid",
-          gap: 8,
-          gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-        }}
-      >
+            display: "grid",
+            gap: 8,
+            gridTemplateColumns: "repeat(auto-fit, minmax(128px, 1fr))",
+          }}
+        >
           {schemeCards.map((scheme) => {
             const isActive = normalizeHoleTemplateSide(selectedSide) === scheme.side;
 
@@ -15584,12 +15610,11 @@ export default function App() {
                     }
                     value={normalizeHoleTemplateSide(holeTemplateCreateForm.side)}
                   >
-                    <option value="left">{t.holePointSideLeft}</option>
-                    <option value="right">{t.holePointSideRight}</option>
-                    <option value="top">{t.holePointSideTop}</option>
-                    <option value="bottom">{t.holePointSideBottom}</option>
-                    <option value="front">{t.holePointSideFront}</option>
-                    <option value="back">{t.holePointSideBack}</option>
+                    {getHoleSideSelectOptions(holeTemplateCreateForm.side).map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {renderHoleSideOptionLabel(option, t)}
+                      </option>
+                    ))}
                   </select>
                 </label>
 
@@ -15778,12 +15803,11 @@ export default function App() {
                     }
                     value={normalizeHoleTemplateSide(holeTemplateEditForm.side)}
                   >
-                    <option value="left">{t.holePointSideLeft}</option>
-                    <option value="right">{t.holePointSideRight}</option>
-                    <option value="top">{t.holePointSideTop}</option>
-                    <option value="bottom">{t.holePointSideBottom}</option>
-                    <option value="front">{t.holePointSideFront}</option>
-                    <option value="back">{t.holePointSideBack}</option>
+                    {getHoleSideSelectOptions(holeTemplateEditForm.side).map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {renderHoleSideOptionLabel(option, t)}
+                      </option>
+                    ))}
                   </select>
                 </label>
 
@@ -16057,9 +16081,9 @@ export default function App() {
                     }
                     value={holePointCreateForm.side}
                   >
-                    {HOLE_POINT_SIDE_OPTIONS.map((option) => (
+                    {getHoleSideSelectOptions(holePointCreateForm.side).map((option) => (
                       <option key={option.value} value={option.value}>
-                        {t[option.labelKey] || option.value}
+                        {renderHoleSideOptionLabel(option, t)}
                       </option>
                     ))}
                   </select>
@@ -16332,9 +16356,9 @@ export default function App() {
                     }
                     value={holePointEditForm.side}
                   >
-                    {HOLE_POINT_SIDE_OPTIONS.map((option) => (
+                    {getHoleSideSelectOptions(holePointEditForm.side).map((option) => (
                       <option key={option.value} value={option.value}>
-                        {t[option.labelKey] || option.value}
+                        {renderHoleSideOptionLabel(option, t)}
                       </option>
                     ))}
                   </select>
