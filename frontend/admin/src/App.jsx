@@ -7124,6 +7124,7 @@ export default function App() {
               id: firstHole?.id ?? "face-to-edge-p1",
               isSelected: String(selectedHoleId) === String(firstHole?.id),
               isHovered: String(hoveredHoleId) === String(firstHole?.id),
+              hasDepth: false,
               length: firstLength,
               opacity: 0.68,
               radius: firstRadius,
@@ -7137,6 +7138,7 @@ export default function App() {
               id: secondHole?.id ?? "face-to-edge-p2",
               isSelected: String(selectedHoleId) === String(secondHole?.id),
               isHovered: String(hoveredHoleId) === String(secondHole?.id),
+              hasDepth: Boolean(secondHole?.depth),
               length: secondLength,
               opacity: 0.74,
               radius: secondRadius,
@@ -7145,6 +7147,7 @@ export default function App() {
             },
           ];
         }, [holes, hoveredHoleId, layout.panels, mountingVariantKey, selectedHoleId]);
+        const isFaceToEdgePreview = normalizeHoleWorkspaceMountingVariantKey(mountingVariantKey) === "face_to_edge";
 
         useEffect(
           () => () => {
@@ -7183,11 +7186,11 @@ export default function App() {
                   emissive="#c9f3df"
                   emissiveIntensity={0.08}
                   metalness={0.12}
-                  opacity={panel.opacity}
-                  roughness={0.45}
+                  opacity={isFaceToEdgePreview ? Math.min(0.86, panel.opacity + 0.18) : panel.opacity}
+                  roughness={isFaceToEdgePreview ? 0.55 : 0.45}
                   side={DoubleSide}
                   transparent
-                  transmission={0.34}
+                  transmission={isFaceToEdgePreview ? 0.14 : 0.34}
                 />
               </mesh>
             ))}
@@ -7207,31 +7210,17 @@ export default function App() {
             ) : null}
 
             {mountingVariantKey === "face_to_edge" ? (
-              <mesh position={[0.06, 0.01, 0]} rotation={[0, 0, Math.PI / 2]} renderOrder={1}>
-                <cylinderGeometry args={[0.028, 0.028, 1.02, 18]} />
-                <meshStandardMaterial
-                  color="#8a96a3"
-                  emissive="#d9e1e8"
-                  emissiveIntensity={0.16}
-                  metalness={0.38}
-                  opacity={0.5}
-                  roughness={0.3}
-                  transparent
-                />
-              </mesh>
-            ) : null}
-
-            {mountingVariantKey === "face_to_edge" ? (
               faceToEdgeChannels.length ? (
                 faceToEdgeChannels.map((channel) => {
                   const isSelected = Boolean(channel.isSelected);
                   const isHovered = Boolean(channel.isHovered);
-                  const channelColor = isSelected ? "#4b5563" : isHovered ? "#64748b" : channel.tone === "secondary" ? "#6b7280" : "#5f6b75";
-                  const channelEmissive = isSelected ? "#e2e8f0" : isHovered ? "#cbd5e1" : "#d3dbe3";
+                  const channelColor = isSelected ? "#1f2937" : isHovered ? "#334155" : channel.tone === "secondary" ? "#1e293b" : "#111827";
+                  const channelOpacity = isSelected ? 0.28 : isHovered ? 0.23 : 0.18;
+                  const entryRingColor = isSelected ? "#cbd5e1" : isHovered ? "#d7dde3" : "#bcc7d2";
+                  const exitRingColor = isSelected ? "#94a3b8" : isHovered ? "#a8b4c1" : "#8f9aa7";
 
                   return (
-                    <mesh
-                      castShadow
+                    <group
                       key={`face-to-edge-${channel.id}`}
                       onClick={(event) => {
                         event.stopPropagation();
@@ -7249,15 +7238,47 @@ export default function App() {
                       renderOrder={2}
                       rotation={[0, 0, Math.PI / 2]}
                     >
-                      <cylinderGeometry args={[channel.radius, channel.radius, channel.length, 24, 1, true]} />
-                      <meshBasicMaterial
-                        color={channelColor}
-                        opacity={isSelected ? 0.48 : isHovered ? 0.42 : 0.36}
-                        depthTest
-                        depthWrite={false}
-                        transparent
-                      />
-                    </mesh>
+                      <mesh castShadow renderOrder={2}>
+                        <cylinderGeometry args={[channel.radius, channel.radius, channel.length, 24, 1, true]} />
+                        <meshBasicMaterial
+                          color={channelColor}
+                          opacity={channelOpacity}
+                          depthTest
+                          depthWrite={false}
+                          transparent
+                        />
+                      </mesh>
+                      <mesh position={[-channel.length / 2, 0, 0]} renderOrder={3} rotation={[0, Math.PI / 2, 0]}>
+                        <torusGeometry args={[channel.radius * 1.08, 0.015, 10, 24]} />
+                        <meshBasicMaterial
+                          color={entryRingColor}
+                          depthWrite={false}
+                          opacity={isSelected ? 0.9 : isHovered ? 0.84 : 0.78}
+                          transparent
+                        />
+                      </mesh>
+                      {channel.hasDepth ? (
+                        <mesh position={[channel.length / 2, 0, 0]} renderOrder={3} rotation={[0, Math.PI / 2, 0]}>
+                          <circleGeometry args={[channel.radius * 1.02, 24]} />
+                          <meshBasicMaterial
+                            color={exitRingColor}
+                            depthWrite={false}
+                            opacity={isSelected ? 0.72 : isHovered ? 0.64 : 0.56}
+                            transparent
+                          />
+                        </mesh>
+                      ) : (
+                        <mesh position={[channel.length / 2, 0, 0]} renderOrder={3} rotation={[0, Math.PI / 2, 0]}>
+                          <torusGeometry args={[channel.radius * 1.08, 0.015, 10, 24]} />
+                          <meshBasicMaterial
+                            color={exitRingColor}
+                            depthWrite={false}
+                            opacity={isSelected ? 0.9 : isHovered ? 0.84 : 0.78}
+                            transparent
+                          />
+                        </mesh>
+                      )}
+                    </group>
                   );
                 })
               ) : (
