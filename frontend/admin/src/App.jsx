@@ -7029,6 +7029,26 @@ export default function App() {
             z: createAxisLabelTexture("Z", "#2563eb"),
           };
         }, []);
+        const isFaceToEdgePreview = normalizeHoleWorkspaceMountingVariantKey(mountingVariantKey) === "face_to_edge";
+        const axisLabelPresentation = isFaceToEdgePreview
+          ? {
+              opacity: 0.72,
+              positions: {
+                x: [2.24, -0.1, 0],
+                y: [-0.1, 2.08, 0],
+                z: [0.56, -0.12, 2.28],
+              },
+              scale: 0.34,
+            }
+          : {
+              opacity: 1,
+              positions: {
+                x: [1.95, 0, 0],
+                y: [0, 1.95, 0],
+                z: [0, 0, 1.95],
+              },
+              scale: 0.42,
+            };
 
         const holeVolumes = useMemo(
           () =>
@@ -7147,7 +7167,6 @@ export default function App() {
             },
           ];
         }, [holes, hoveredHoleId, layout.panels, mountingVariantKey, selectedHoleId]);
-        const isFaceToEdgePreview = normalizeHoleWorkspaceMountingVariantKey(mountingVariantKey) === "face_to_edge";
 
         useEffect(
           () => () => {
@@ -7169,7 +7188,7 @@ export default function App() {
           <ambientLight intensity={1.05} />
           <directionalLight castShadow position={[5.2, 7.2, 8]} intensity={1.45} />
           <directionalLight position={[-4, 2.8, 3]} intensity={0.55} />
-          <axesHelper args={[1.8]} position={layout.markerPlane.origin} />
+          <axesHelper args={isFaceToEdgePreview ? [1.32] : [1.8]} position={isFaceToEdgePreview ? [0.12, -0.06, 0] : layout.markerPlane.origin} />
           <gridHelper args={[3.1, 10, "#d2dde5", "#e7eef3"]} position={[0, -1.02, 0]} />
           <group>
             {layout.panels.map((panel, index) => (
@@ -7218,6 +7237,8 @@ export default function App() {
                   const channelOpacity = isSelected ? 0.28 : isHovered ? 0.23 : 0.18;
                   const entryRingColor = isSelected ? "#cbd5e1" : isHovered ? "#d7dde3" : "#bcc7d2";
                   const exitRingColor = isSelected ? "#94a3b8" : isHovered ? "#a8b4c1" : "#8f9aa7";
+                  const ringOpacity = isSelected ? 0.62 : isHovered ? 0.52 : 0.34;
+                  const exitOpacity = isSelected ? 0.5 : isHovered ? 0.42 : 0.28;
 
                   return (
                     <group
@@ -7249,11 +7270,11 @@ export default function App() {
                         />
                       </mesh>
                       <mesh position={[-channel.length / 2, 0, 0]} renderOrder={3} rotation={[0, Math.PI / 2, 0]}>
-                        <torusGeometry args={[channel.radius * 1.08, 0.015, 10, 24]} />
+                        <torusGeometry args={[channel.radius * 1.06, 0.011, 10, 24]} />
                         <meshBasicMaterial
                           color={entryRingColor}
                           depthWrite={false}
-                          opacity={isSelected ? 0.9 : isHovered ? 0.84 : 0.78}
+                          opacity={ringOpacity}
                           transparent
                         />
                       </mesh>
@@ -7263,17 +7284,17 @@ export default function App() {
                           <meshBasicMaterial
                             color={exitRingColor}
                             depthWrite={false}
-                            opacity={isSelected ? 0.72 : isHovered ? 0.64 : 0.56}
+                            opacity={exitOpacity}
                             transparent
                           />
                         </mesh>
                       ) : (
                         <mesh position={[channel.length / 2, 0, 0]} renderOrder={3} rotation={[0, Math.PI / 2, 0]}>
-                          <torusGeometry args={[channel.radius * 1.08, 0.015, 10, 24]} />
+                          <torusGeometry args={[channel.radius * 1.06, 0.011, 10, 24]} />
                           <meshBasicMaterial
                             color={exitRingColor}
                             depthWrite={false}
-                            opacity={isSelected ? 0.9 : isHovered ? 0.84 : 0.78}
+                            opacity={exitOpacity}
                             transparent
                           />
                         </mesh>
@@ -7391,14 +7412,14 @@ export default function App() {
               </mesh>
             )}
             <group position={layout.markerPlane.origin}>
-              <sprite position={[1.95, 0, 0]} scale={[0.42, 0.42, 0.42]}>
-                <spriteMaterial attach="material" depthWrite={false} map={axisLabelTextures.x || undefined} transparent />
+              <sprite position={axisLabelPresentation.positions.x} scale={[axisLabelPresentation.scale, axisLabelPresentation.scale, axisLabelPresentation.scale]}>
+                <spriteMaterial attach="material" depthWrite={false} map={axisLabelTextures.x || undefined} opacity={axisLabelPresentation.opacity} transparent />
               </sprite>
-              <sprite position={[0, 1.95, 0]} scale={[0.42, 0.42, 0.42]}>
-                <spriteMaterial attach="material" depthWrite={false} map={axisLabelTextures.y || undefined} transparent />
+              <sprite position={axisLabelPresentation.positions.y} scale={[axisLabelPresentation.scale, axisLabelPresentation.scale, axisLabelPresentation.scale]}>
+                <spriteMaterial attach="material" depthWrite={false} map={axisLabelTextures.y || undefined} opacity={axisLabelPresentation.opacity} transparent />
               </sprite>
-              <sprite position={[0, 0, 1.95]} scale={[0.42, 0.42, 0.42]}>
-                <spriteMaterial attach="material" depthWrite={false} map={axisLabelTextures.z || undefined} transparent />
+              <sprite position={axisLabelPresentation.positions.z} scale={[axisLabelPresentation.scale, axisLabelPresentation.scale, axisLabelPresentation.scale]}>
+                <spriteMaterial attach="material" depthWrite={false} map={axisLabelTextures.z || undefined} opacity={axisLabelPresentation.opacity} transparent />
               </sprite>
             </group>
           </group>
