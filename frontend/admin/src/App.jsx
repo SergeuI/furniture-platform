@@ -7058,9 +7058,9 @@ export default function App() {
           ? {
               opacity: 0.96,
               positions: {
-                x: [0.16, 0.02, 0],
-                y: [0.02, 0.16, 0],
-                z: [-0.16, -0.02, 0],
+                x: [0.14, 0.02, 0],
+                y: [0.02, 0.18, 0],
+                z: [-0.22, 0.0, 0],
               },
               scale: 0.14,
             }
@@ -7169,10 +7169,10 @@ export default function App() {
           const secondDiameter = readHolePreviewNumber(secondHole, ["diameter", "diameter_mm"], 4.5);
           const secondDepth = readHolePreviewNumber(secondHole, ["depth", "depth_mm"], 34);
           const sleeveOverhang = 0.1;
-          const firstRadius = Math.max(0.03, Math.min(0.06, firstDiameter / 145));
-          const secondRadius = Math.max(0.02, Math.min(0.042, secondDiameter / 160));
+          const firstRadius = Math.max(0.04, Math.min(0.075, firstDiameter / 110));
+          const secondRadius = Math.max(0.028, Math.min(0.058, secondDiameter / 110));
           const firstLength = panelAThickness + sleeveOverhang;
-          const secondLength = Math.max(0.42, Math.min(panelBWidth * 0.72, secondDepth / 60));
+          const secondLength = Math.max(0.44, Math.min(panelBWidth * 0.8, secondDepth / 52));
 
           return [
             {
@@ -7329,14 +7329,14 @@ export default function App() {
                       renderOrder={2}
                     >
                       <mesh castShadow renderOrder={2} rotation={[0, 0, Math.PI / 2]}>
-                        <cylinderGeometry args={[channel.radius, channel.radius, channel.length, 24, 1, true]} />
+                        <cylinderGeometry args={[channel.radius, channel.radius, channel.length, 24, 1, false]} />
                         <meshStandardMaterial
                           color={channelColor}
                           emissive={isSelected || isHovered ? "#dff2dc" : "#8fb58f"}
                           emissiveIntensity={isSelected || isHovered ? 0.18 : 0.06}
-                          metalness={0.08}
-                          opacity={channelOpacity}
-                          roughness={0.36}
+                          metalness={0.12}
+                          opacity={Math.min(1, channelOpacity + 0.02)}
+                          roughness={0.28}
                           depthWrite={false}
                           transparent
                         />
