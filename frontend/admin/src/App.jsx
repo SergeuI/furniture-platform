@@ -7058,11 +7058,11 @@ export default function App() {
           ? {
               opacity: 0.96,
               positions: {
-                x: [0.42, 0.02, 0],
-                y: [0.02, 0.42, 0],
-                z: [-0.32, 0.02, 0],
+                x: [0.16, 0.02, 0],
+                y: [0.02, 0.16, 0],
+                z: [-0.16, -0.02, 0],
               },
-              scale: 0.18,
+              scale: 0.14,
             }
           : {
               opacity: 1,
@@ -7258,18 +7258,27 @@ export default function App() {
               >
                 <mesh castShadow receiveShadow>
                   <boxGeometry args={panel.args} />
-                  <meshPhysicalMaterial
-                    color={panel.color}
-                    depthWrite={!isFaceToEdgePreview}
-                    emissive={isFaceToEdgePreview ? "#75ff75" : "#c9f3df"}
-                    emissiveIntensity={isFaceToEdgePreview ? 0.04 : 0.08}
-                    metalness={0.02}
-                    opacity={isFaceToEdgePreview ? panel.opacity : panel.opacity}
-                    roughness={isFaceToEdgePreview ? 0.62 : 0.45}
-                    side={DoubleSide}
-                    transparent
-                    transmission={isFaceToEdgePreview ? 0 : 0.34}
-                  />
+                  {isFaceToEdgePreview ? (
+                    <meshBasicMaterial
+                      color={panel.color}
+                      opacity={panel.opacity}
+                      side={DoubleSide}
+                      transparent
+                    />
+                  ) : (
+                    <meshPhysicalMaterial
+                      color={panel.color}
+                      depthWrite={!isFaceToEdgePreview}
+                      emissive="#c9f3df"
+                      emissiveIntensity={0.08}
+                      metalness={0.02}
+                      opacity={panel.opacity}
+                      roughness={0.45}
+                      side={DoubleSide}
+                      transparent
+                      transmission={0.34}
+                    />
+                  )}
                 </mesh>
                 {isFaceToEdgePreview ? <Edges color="#35ff35" lineWidth={1} /> : null}
               </group>
@@ -7332,36 +7341,6 @@ export default function App() {
                           transparent
                         />
                       </mesh>
-                      <mesh position={[-channel.length / 2, 0, 0]} renderOrder={3} rotation={[0, Math.PI / 2, 0]}>
-                        <torusGeometry args={[channel.radius * 1.06, 0.011, 10, 24]} />
-                        <meshBasicMaterial
-                          color={entryRingColor}
-                          depthWrite={false}
-                          opacity={ringOpacity}
-                          transparent
-                        />
-                      </mesh>
-                      {channel.hasDepth ? (
-                        <mesh position={[channel.length / 2, 0, 0]} renderOrder={3} rotation={[0, Math.PI / 2, 0]}>
-                          <circleGeometry args={[channel.radius * 1.02, 24]} />
-                          <meshBasicMaterial
-                            color={exitRingColor}
-                            depthWrite={false}
-                            opacity={exitOpacity}
-                            transparent
-                          />
-                        </mesh>
-                      ) : (
-                        <mesh position={[channel.length / 2, 0, 0]} renderOrder={3} rotation={[0, Math.PI / 2, 0]}>
-                          <torusGeometry args={[channel.radius * 1.06, 0.011, 10, 24]} />
-                          <meshBasicMaterial
-                            color={exitRingColor}
-                            depthWrite={false}
-                            opacity={exitOpacity}
-                            transparent
-                          />
-                        </mesh>
-                      )}
                     </group>
                   );
                 })
