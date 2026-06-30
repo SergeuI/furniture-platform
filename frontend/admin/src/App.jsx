@@ -6771,14 +6771,14 @@ export default function App() {
             {
               args: [0.28, 2.18, 1.34],
               color: "#d6ecef",
-              opacity: 0.38,
+              opacity: 0.55,
               position: [-0.14, 0, 0],
               rotation: [0, 0, 0],
             },
             {
               args: [1.96, 0.28, 1.08],
               color: "#e1f5e7",
-              opacity: 0.42,
+              opacity: 0.58,
               position: [0.98, -0.14, 0],
               rotation: [0, 0, 0],
             },
@@ -7249,16 +7249,12 @@ export default function App() {
                       renderOrder={2}
                       rotation={[0, 0, Math.PI / 2]}
                     >
-                      <cylinderGeometry args={[channel.radius, channel.radius, channel.length, 24, 1, false]} />
-                      <meshStandardMaterial
+                      <cylinderGeometry args={[channel.radius, channel.radius, channel.length, 24, 1, true]} />
+                      <meshBasicMaterial
                         color={channelColor}
-                        emissive={channelEmissive}
-                        emissiveIntensity={isSelected ? 0.2 : isHovered ? 0.14 : 0.08}
-                        metalness={0.22}
-                        opacity={0.72}
-                        depthTest={false}
+                        opacity={isSelected ? 0.48 : isHovered ? 0.42 : 0.36}
+                        depthTest
                         depthWrite={false}
-                        roughness={0.28}
                         transparent
                       />
                     </mesh>
