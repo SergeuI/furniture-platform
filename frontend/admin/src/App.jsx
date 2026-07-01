@@ -2946,7 +2946,7 @@ Object.assign(TRANSLATIONS.uk, {
     "Компактний зріз по проєктах, користувачах і довідниках.",
   homeOpenProjects: "Відкрити проєкти",
   homeOpenSettings: "Налаштування профілю",
-  holes: "Отвори",
+  holes: "Присадка фурнітури",
   manualServices: "Ручні послуги",
   materials: "Матеріали",
   myData: "Мої дані",
@@ -2968,11 +2968,11 @@ Object.assign(TRANSLATIONS.uk, {
   width: "Ширина",
   widthMax: "Ширина до",
   widthMin: "Ширина від",
-  holeTabDescription: "Перегляд отворів для вибраної фурнітури і варіанта кріплення.",
+  holeTabDescription: "Перегляд присадки фурнітури для вибраної фурнітури і варіанта кріплення.",
   holeTabSearchPlaceholder: "Пошук фурнітури",
-  holeTabTitle: "Отвори",
+  holeTabTitle: "Присадка фурнітури",
   holeReadOnlyBadge: "Лише перегляд",
-  holePointsTitle: "Точки отворів",
+  holePointsTitle: "Точки присадки",
   holeWorkspaceConnectionVariantTitle: "Варіант кріплення",
   holeWorkspaceFittingInfoTitle: "Інформація про фурнітуру",
   holeWorkspacePreview3dTitle: "3D перегляд",
@@ -3051,9 +3051,9 @@ Object.assign(TRANSLATIONS.uk, {
   homeOpenSettings: "Налаштування профілю",
   furniturePlatform: "MProject.furniture",
   brandTagline: "Професійне рішення для меблевого виробництва",
-  holes: "Отвори",
-  holeTabTitle: "Отвори",
-  holeTabDescription: "Перегляд отворів для вибраної фурнітури і варіанта кріплення.",
+  holes: "Присадка фурнітури",
+  holeTabTitle: "Присадка фурнітури",
+  holeTabDescription: "Перегляд присадки фурнітури для вибраної фурнітури і варіанта кріплення.",
   holeWorkspaceConnectionVariantTitle: "Варіант кріплення",
   holeWorkspaceFittingInfoTitle: "Інформація про фурнітуру",
   holeWorkspacePreview3dTitle: "3D перегляд",
@@ -3062,12 +3062,12 @@ Object.assign(TRANSLATIONS.uk, {
   holeTemplateSelectFitting: "Оберіть фурнітуру",
   holeTemplateSelectTemplate: "Для цієї фурнітури немає отворів",
   holePointTemplateRequired: "Оберіть шаблон перед створенням точки",
-  holePointCreateTitle: "Додати точку отвору",
-  holePointCreateDescription: "Створення нової точки для вибраної фурнітури та варіанта кріплення.",
-  holePointEditTitle: "Редагувати точку отвору",
+  holePointCreateTitle: "Додати точку присадки",
+  holePointCreateDescription: "Створення нової точки присадки для вибраної фурнітури та варіанта кріплення.",
+  holePointEditTitle: "Редагувати точку присадки",
   holePreviewTitle: "2D перегляд",
   holePreviewHelper: "Прев'ю показує збережені координати точок на масштабованій площині.",
-  holePreviewEmpty: "Точки отворів ще не додані",
+  holePreviewEmpty: "Точки присадки ще не додані",
   holePreviewCoordinates: "Координати",
   holePreviewDiameter: "Діаметр",
   holePreviewDepth: "Глибина",
@@ -14274,7 +14274,7 @@ export default function App() {
                       </div>
                     </div>
                     <div className="holes-preview-scene-holes">
-                      <div className="holes-preview-scene-holes-title">Отвори сцени</div>
+                      <div className="holes-preview-scene-holes-title">Присадка сцени</div>
                       {holesPreviewModel.scene?.holes?.length ? (
                         <div className="holes-preview-scene-holes-list">
                           {holesPreviewModel.scene.holes.map((hole) => (
@@ -14293,7 +14293,7 @@ export default function App() {
                           ))}
                         </div>
                       ) : (
-                        <div className="holes-preview-scene-empty">Отвори сцени ще не додані</div>
+                        <div className="holes-preview-scene-empty">Присадка сцени ще не додана</div>
                       )}
                     </div>
                   </div>
