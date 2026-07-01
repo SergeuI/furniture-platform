@@ -2368,47 +2368,6 @@ tbody tr.selected {
   padding-top: 4px;
 }
 
-.holes-technical-templates {
-  background: #f8fbfd;
-  border: 1px solid #dbe1e7;
-  border-radius: 12px;
-  display: grid;
-  gap: 12px;
-  padding: 12px;
-}
-
-.holes-technical-templates > summary {
-  align-items: center;
-  color: #24343d;
-  cursor: pointer;
-  display: flex;
-  gap: 12px;
-  justify-content: space-between;
-  list-style: none;
-  width: 100%;
-}
-
-.holes-technical-templates > summary::-webkit-details-marker {
-  display: none;
-}
-
-.holes-technical-templates > summary strong {
-  display: block;
-  font-size: 13px;
-  font-weight: 800;
-}
-
-.holes-technical-templates > summary p {
-  color: #607182;
-  font-size: 12px;
-  margin: 4px 0 0;
-}
-
-.holes-technical-templates-body {
-  display: grid;
-  gap: 12px;
-}
-
 .holes-workspace-save-panel {
   align-items: start;
   background: linear-gradient(180deg, #f8fbfd 0%, #f3f8fb 100%);
