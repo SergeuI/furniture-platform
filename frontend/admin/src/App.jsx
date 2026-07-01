@@ -558,6 +558,7 @@ const DEFAULT_HOLE_TEMPLATE_FORM = {
 
 const DEFAULT_HOLE_POINT_FORM = {
   template_id: "",
+  panel_key: "",
   label: "",
   x_mm: "",
   y_mm: "",
@@ -574,8 +575,10 @@ const DEFAULT_HOLE_POINT_FORM = {
 };
 
 function buildHolePointFormFromPoint(point) {
+  const panelKey = String(point?.panelKey || point?.panel_key || point?.panelId || point?.panel_id || "").trim();
   return {
     template_id: String(point?.template_id ?? ""),
+    panel_key: panelKey,
     label: String(point?.label ?? ""),
     x_mm: point?.x_mm ?? "",
     y_mm: point?.y_mm ?? "",
@@ -587,7 +590,9 @@ function buildHolePointFormFromPoint(point) {
     order_index: point?.order_index ?? 0,
     quantity: point?.quantity ?? 1,
     mirrored: Boolean(point?.mirrored),
-    is_through: !(Number.isFinite(Number(point?.depth_mm)) || Number.isFinite(Number(point?.depth))),
+    is_through: panelKey === "horizontal_panel"
+      ? false
+      : !(Number.isFinite(Number(point?.depth_mm)) || Number.isFinite(Number(point?.depth))),
     notes: String(point?.notes ?? ""),
   };
 }
@@ -695,6 +700,30 @@ function formatHolePointDepthDisplay(point) {
   }
 
   return depthValue;
+}
+
+function getHolePointPanelDisplayName(panelKey) {
+  if (panelKey === "horizontal_panel") {
+    return "горизонтальній панелі";
+  }
+
+  return "вертикальній панелі";
+}
+
+function getHolePointPanelDescription(panelKey) {
+  if (panelKey === "horizontal_panel") {
+    return "Відредагуйте координати, діаметр і глибину отвору для горизонтальної панелі. Наскрізний режим тут не використовується.";
+  }
+
+  return "Відредагуйте координати, діаметр і параметри глибини для отвору.";
+}
+
+function getHolePointCoordinateHintText(panelKey) {
+  if (panelKey === "horizontal_panel") {
+    return "Початок координат: 0,0,0 знаходиться на тильній стороні горизонтальної панелі, що стикується з вертикальною. X, Y та Z рахуються від цієї точки.";
+  }
+
+  return "Початок координат: 0,0,0 знаходиться на зовнішній стороні стику панелей. X, Y та Z рахуються від цієї точки.";
 }
 
 function getSafeHolePointLabel(value, fallback) {
@@ -5230,7 +5259,11 @@ export default function App() {
 
     return matchingGroup?.key || "";
   }, [holePanelGroups, selectedHolePointId]);
-  const holePointFormPanelKey = selectedHolePointPanelKey || (normalizedSelectedHoleMountingVariantKey === "face_to_edge" ? "vertical_panel" : "");
+  const holePointCreatePanelKey =
+    holePointCreateForm.panel_key ||
+    selectedHolePointPanelKey ||
+    (normalizedSelectedHoleMountingVariantKey === "face_to_edge" ? "vertical_panel" : "");
+  const holePointEditPanelKey = holePointEditForm.panel_key || selectedHolePointPanelKey || "";
   const holesPreviewModel = useMemo(
     () => ({
       fitting: selectedHoleFitting,
@@ -8490,9 +8523,12 @@ export default function App() {
       return;
     }
 
+    const panelKey = selectedHolePointPanelKey || (normalizedSelectedHoleMountingVariantKey === "face_to_edge" ? "vertical_panel" : "");
+
     setHolePointCreateForm({
       ...DEFAULT_HOLE_POINT_FORM,
       template_id: holeSelectedTemplateId,
+      panel_key: panelKey,
     });
     setHolePointCreateError("");
     setHolePointCreateOpen(true);
@@ -8560,7 +8596,8 @@ export default function App() {
       throw new Error(t.holePointDiameterRequired);
     }
 
-    const isThrough = Boolean(form.is_through);
+    const isHorizontalPanel = String(form.panel_key || "").trim() === "horizontal_panel";
+    const isThrough = !isHorizontalPanel && Boolean(form.is_through);
     const depthText = String(form.depth_mm || "").trim();
     const depthValue = isThrough ? null : parseMaybeNumber(depthText, t.holePointDepth);
 
@@ -16549,6 +16586,14 @@ export default function App() {
       ) : null}
 
       {holePointCreateOpen ? (
+        (() => {
+          const panelKey = holePointCreatePanelKey;
+          const isHorizontalPanel = panelKey === "horizontal_panel";
+          const panelTitle = getHolePointPanelDisplayName(panelKey);
+          const panelDescription = getHolePointPanelDescription(panelKey);
+          const panelHint = getHolePointCoordinateHintText(panelKey);
+
+          return (
         <div
           aria-modal="true"
           className="modal-backdrop"
@@ -16561,8 +16606,8 @@ export default function App() {
           >
             <header className="confirm-header">
               <div>
-                <strong>Додати отвір у вертикальній панелі</strong>
-                <p>Задайте координати, діаметр і спосіб глибини отвору.</p>
+                <strong>{`Додати отвір у ${panelTitle}`}</strong>
+                <p>{panelDescription}</p>
               </div>
               <button
                 aria-label={t.cancel}
@@ -16577,11 +16622,9 @@ export default function App() {
 
             <form className="hole-template-form" onSubmit={handleHolePointCreate}>
               <div className="hole-point-coordinate-hint">
-                <strong>Отвір у вертикальній панелі</strong>
-                <p>Вкажіть координати, діаметр і спосіб глибини для отвору.</p>
-                <p>
-                  Початок координат: 0,0,0 знаходиться на зовнішній стороні стику панелей. X, Y та Z рахуються від цієї точки.
-                </p>
+                <strong>{`Отвір у ${panelTitle}`}</strong>
+                <p>{isHorizontalPanel ? "Вкажіть координати, діаметр і глибину для горизонтальної панелі." : "Вкажіть координати, діаметр і спосіб глибини для отвору."}</p>
+                <p>{panelHint}</p>
               </div>
 
               <div className="hole-template-form-grid">
@@ -16654,7 +16697,7 @@ export default function App() {
                 </label>
 
                 <label>
-                  Сторона
+                  {isHorizontalPanel ? "Тильна сторона" : "Сторона"}
                   <select
                     disabled={loading}
                     onChange={(event) =>
@@ -16665,31 +16708,32 @@ export default function App() {
                     }
                     value={holePointCreateForm.side}
                   >
-                    {getHoleSideSelectOptionsForPanel(holePointFormPanelKey, holePointCreateForm.side).map((option) => (
+                    {getHoleSideSelectOptionsForPanel(panelKey, holePointCreateForm.side).map((option) => (
                       <option key={option.value} value={option.value}>
                         {renderHoleSideOptionLabel(option, t)}
                       </option>
                     ))}
                   </select>
                 </label>
-
-                <label className="material-inline-check">
-                  <input
-                    checked={holePointCreateForm.is_through}
-                    disabled={loading}
-                    onChange={(event) =>
-                      setHolePointCreateForm((current) => ({
-                        ...current,
-                        is_through: event.target.checked,
-                      }))
-                    }
-                    type="checkbox"
-                  />
-                  Наскрізний отвір
-                </label>
+                {!isHorizontalPanel ? (
+                  <label className="material-inline-check">
+                    <input
+                      checked={holePointCreateForm.is_through}
+                      disabled={loading}
+                      onChange={(event) =>
+                        setHolePointCreateForm((current) => ({
+                          ...current,
+                          is_through: event.target.checked,
+                        }))
+                      }
+                      type="checkbox"
+                    />
+                    Наскрізний отвір
+                  </label>
+                ) : null}
               </div>
 
-              {!holePointCreateForm.is_through ? (
+              {!holePointCreateForm.is_through || isHorizontalPanel ? (
                 <div className="hole-template-form-grid">
                   <label>
                     Глибина, мм
@@ -16747,9 +16791,19 @@ export default function App() {
             </form>
           </section>
         </div>
+          );
+        })()
       ) : null}
 
       {holePointEditOpen ? (
+        (() => {
+          const panelKey = holePointEditPanelKey;
+          const isHorizontalPanel = panelKey === "horizontal_panel";
+          const panelTitle = getHolePointPanelDisplayName(panelKey);
+          const panelDescription = getHolePointPanelDescription(panelKey);
+          const panelHint = getHolePointCoordinateHintText(panelKey);
+
+          return (
         <div
           aria-modal="true"
           className="modal-backdrop"
@@ -16762,8 +16816,8 @@ export default function App() {
           >
             <header className="confirm-header">
               <div>
-                <strong>Редагувати отвір у вертикальній панелі</strong>
-                <p>Оновіть координати, діаметр і глибину вибраного отвору.</p>
+                <strong>{`Редагувати отвір у ${panelTitle}`}</strong>
+                <p>{panelDescription}</p>
               </div>
               <button
                 aria-label={t.cancel}
@@ -16778,11 +16832,9 @@ export default function App() {
 
             <form className="hole-template-form" onSubmit={handleHolePointEdit}>
               <div className="hole-point-coordinate-hint">
-                <strong>Отвір у вертикальній панелі</strong>
-                <p>Відредагуйте координати, діаметр і параметри глибини для отвору.</p>
-                <p>
-                  Початок координат: 0,0,0 знаходиться на зовнішній стороні стику панелей. X, Y та Z рахуються від цієї точки.
-                </p>
+                <strong>{`Отвір у ${panelTitle}`}</strong>
+                <p>{isHorizontalPanel ? "Відредагуйте координати, діаметр і глибину для горизонтальної панелі." : "Відредагуйте координати, діаметр і параметри глибини для отвору."}</p>
+                <p>{panelHint}</p>
               </div>
 
               <div className="hole-template-form-grid">
@@ -16855,7 +16907,7 @@ export default function App() {
                 </label>
 
                 <label>
-                  Сторона
+                  {isHorizontalPanel ? "Тильна сторона" : "Сторона"}
                   <select
                     disabled={loading}
                     onChange={(event) =>
@@ -16866,31 +16918,32 @@ export default function App() {
                     }
                     value={holePointEditForm.side}
                   >
-                    {getHoleSideSelectOptionsForPanel(holePointFormPanelKey, holePointEditForm.side).map((option) => (
+                    {getHoleSideSelectOptionsForPanel(panelKey, holePointEditForm.side).map((option) => (
                       <option key={option.value} value={option.value}>
                         {renderHoleSideOptionLabel(option, t)}
                       </option>
                     ))}
                   </select>
                 </label>
-
-                <label className="material-inline-check">
-                  <input
-                    checked={holePointEditForm.is_through}
-                    disabled={loading}
-                    onChange={(event) =>
-                      setHolePointEditForm((current) => ({
-                        ...current,
-                        is_through: event.target.checked,
-                      }))
-                    }
-                    type="checkbox"
-                  />
-                  Наскрізний отвір
-                </label>
+                {!isHorizontalPanel ? (
+                  <label className="material-inline-check">
+                    <input
+                      checked={holePointEditForm.is_through}
+                      disabled={loading}
+                      onChange={(event) =>
+                        setHolePointEditForm((current) => ({
+                          ...current,
+                          is_through: event.target.checked,
+                        }))
+                      }
+                      type="checkbox"
+                    />
+                    Наскрізний отвір
+                  </label>
+                ) : null}
               </div>
 
-              {!holePointEditForm.is_through ? (
+              {!holePointEditForm.is_through || isHorizontalPanel ? (
                 <div className="hole-template-form-grid">
                   <label>
                     Глибина, мм
@@ -16948,6 +17001,8 @@ export default function App() {
             </form>
           </section>
         </div>
+          );
+        })()
       ) : null}
 
       {confirmAction ? (
