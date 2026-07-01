@@ -13875,9 +13875,6 @@ export default function App() {
                                 <span>⌀</span>
                                 <span>{t.holePointColumnDepth}</span>
                                 <span>{t.holePointColumnSide}</span>
-                                <span>{t.holePointColumnOperation}</span>
-                                <span>{t.holePointColumnOrder}</span>
-                                <span>{t.holePointQuantity}</span>
                                 <span>{t.holePointMirrored}</span>
                                 <span>{t.holePointNotes}</span>
                               </div>
@@ -13934,9 +13931,6 @@ export default function App() {
                                     <span>{point.diameter_mm ?? "—"}</span>
                                     <span>{formatHolePointDepthDisplay(point)}</span>
                                     <span>{formatHolePointSide(point.side, t)}</span>
-                                    <span>{formatHolePointOperation(point.operation, t)}</span>
-                                    <span>{point.order_index}</span>
-                                    <span>{point.quantity}</span>
                                     <span>{point.mirrored ? t.holePointSelectionYes : t.holePointSelectionNo}</span>
                                     <span className="holes-point-notes-cell">{point.notes || "—"}</span>
                                   </article>
