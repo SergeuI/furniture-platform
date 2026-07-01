@@ -257,7 +257,7 @@ function readPersistedAdminUser(token) {
     return null;
   }
 }
-const DEFAULT_PROJECT_NAME = "РќРѕРІРёР№ РїСЂРѕРµРєС‚";
+const DEFAULT_PROJECT_NAME = "Новий проект";
 const DEFAULT_PROJECT_FORM = {
   projectName: DEFAULT_PROJECT_NAME,
   projectType: "dresser",
@@ -287,20 +287,20 @@ const PROJECT_DRAWER_TYPE_PRESETS = [
   {
     id: "drawer-type-dsp",
     image_url: "/static/project-drawers/drawer-dsp.jpg",
-    pickerSubtitleUk: "Р”РЅРѕ С€СѓС…Р»СЏРґРё Р· Р”РЎРџ 18 РјРј РґР»СЏ Р±С–Р»СЊС€ Р¶РѕСЂСЃС‚РєРѕС— РєРѕРЅСЃС‚СЂСѓРєС†С–С—.",
+    pickerSubtitleUk: "Дно шухляди з ДСП 18 мм для більш жорсткої конструкції.",
     pickerSubtitleEn: "Drawer bottom made from 18 mm board for a more rigid build.",
     pickerTitleEn: "Drawer bottom DSP",
-    pickerTitleUk: "РЁСѓС…Р»СЏРґР° Р· Р”РЎРџ",
+    pickerTitleUk: "Шухляда з ДСП",
     pickerValue: "dsp_18",
     search: "dsp dsp_18 drawer bottom board",
   },
   {
     id: "drawer-type-hdf",
     image_url: "/static/project-drawers/drawer-hdf.jpg",
-    pickerSubtitleUk: "РљР»Р°СЃРёС‡РЅРµ РґРЅРѕ HDF / Р”Р’Рџ РґР»СЏ Р»РµРіРєРѕС— С€СѓС…Р»СЏРґРё.",
+    pickerSubtitleUk: "Класичне дно HDF / ДВП для легкої шухляди.",
     pickerSubtitleEn: "Classic HDF drawer bottom for a lighter drawer box.",
     pickerTitleEn: "Drawer bottom HDF",
-    pickerTitleUk: "РЁСѓС…Р»СЏРґР° Р· HDF",
+    pickerTitleUk: "Шухляда з HDF",
     pickerValue: "hdf",
     search: "hdf hdf_3 drawer bottom fiberboard",
   },
@@ -509,12 +509,12 @@ const DEFAULT_CITY_OPTIONS = [
 ];
 
 const MATERIAL_EDGE_SLOTS = [
-  { key: "edge_04", label: "0,4 РјРј" },
-  { key: "edge_08", label: "0,8 РјРј" },
-  { key: "edge_1", label: "1 РјРј" },
-  { key: "edge_1x43", label: "1С…43 РјРј" },
-  { key: "edge_2", label: "2 РјРј" },
-  { key: "edge_2x43", label: "2С…43 РјРј" },
+  { key: "edge_04", label: "0,4 мм" },
+  { key: "edge_08", label: "0,8 мм" },
+  { key: "edge_1", label: "1 мм" },
+  { key: "edge_1x43", label: "1х43 мм" },
+  { key: "edge_2", label: "2 мм" },
+  { key: "edge_2x43", label: "2х43 мм" },
 ];
 
 const CATALOG_SERVICE_VIEWS = new Set([
@@ -662,7 +662,7 @@ function formatHolePointValue(value, labelKeys, t) {
   const rawValue = String(value || "").trim();
 
   if (!rawValue) {
-    return "вЂ”";
+    return "—";
   }
 
   const labelKey = labelKeys[rawValue];
@@ -958,7 +958,7 @@ function formatMaterialImportDiagnostic(value, limit = 280) {
     normalized.includes("libatk-1.0.so.0") ||
     normalized.includes("error while loading shared libraries")
   ) {
-    return "РќР° СЃРµСЂРІРµСЂС– РІС–РґСЃСѓС‚РЅС– СЃРёСЃС‚РµРјРЅС– Р·Р°Р»РµР¶РЅРѕСЃС‚С– Playwright Chromium. Р’СЃС‚Р°РЅРѕРІС–С‚СЊ Р·Р°Р»РµР¶РЅРѕСЃС‚С– Р±СЂР°СѓР·РµСЂР° С‚Р° РїРѕРІС‚РѕСЂС–С‚СЊ С–РјРїРѕСЂС‚.";
+    return "На сервері відсутні системні залежності Playwright Chromium. Встановіть залежності браузера та повторіть імпорт.";
   }
 
   return normalized.length > limit
@@ -980,7 +980,7 @@ function isFastenerFitting(item) {
     .join(" ")
     .toLowerCase();
 
-  return /(СЃР°РјРѕСЂ|СЃС‚СЏР¶|РєРѕРЅС„РёСЂРј|С€СѓСЂСѓРї|РіРІРёРЅС‚|Р±РѕР»С‚|РіР°Р№Рє|РґСЋР±|РјРµС‚РёР·|screw|confirmat)/i.test(
+  return /(самор|стяж|конфірм|шуруп|гвинт|болт|гайк|дюб|метиз|screw|confirmat)/i.test(
     haystack,
   );
 }
@@ -1497,10 +1497,10 @@ const TRANSLATIONS = {
       "The 3D view of panels, faces and holes will be added here.",
     holeWorkspacePreview3dTitle: "3D preview",
     holeWorkspaceSelected: "Selected",
-    holeWorkspaceVariantEdgeToFace: "Edge в†’ face",
-    holeWorkspaceVariantFaceToEdge: "Face в†’ edge",
-    holeWorkspaceVariantHorizontalToVertical: "Horizontal в†’ vertical",
-    holeWorkspaceVariantVerticalToHorizontal: "Vertical в†’ horizontal",
+    holeWorkspaceVariantEdgeToFace: "Edge → face",
+    holeWorkspaceVariantFaceToEdge: "Face → edge",
+    holeWorkspaceVariantHorizontalToVertical: "Horizontal → vertical",
+    holeWorkspaceVariantVerticalToHorizontal: "Vertical → horizontal",
     holePanelGroupVerticalTitle: "Vertical panel",
     holePanelGroupVerticalHelper: "Holes on the face side of the vertical panel.",
     holePanelGroupHorizontalTitle: "Horizontal panel",
@@ -1689,15 +1689,15 @@ const TRANSLATIONS = {
     wardrobe: "Wardrobe",
   },
   uk: {
-    access: "Р”РѕСЃС‚СѓРї",
-    action: "Р”С–СЏ",
-    active: "РђРєС‚РёРІРЅРёР№",
-    actor: "РљРѕСЂРёСЃС‚СѓРІР°С‡",
-    admin: "РђРґРјС–РЅ",
-    all: "Р’СЃС–",
-    applyFilters: "Р—Р°СЃС‚РѕСЃСѓРІР°С‚Рё",
-    audit: "РђСѓРґРёС‚",
-    catalog: "Р”РѕРІС–РґРЅРёРєРё",
+    access: "Доступ",
+    action: "Дія",
+    active: "Активний",
+    actor: "Користувач",
+    admin: "Адмін",
+    all: "Всі",
+    applyFilters: "Застосувати",
+    audit: "Аудит",
+    catalog: "Довідники",
     myData: "\u041c\u043e\u0457 \u0434\u0430\u043d\u0456",
     username: "\u041b\u043e\u0433\u0456\u043d",
     phone: "\u0422\u0435\u043b\u0435\u0444\u043e\u043d",
@@ -1716,167 +1716,167 @@ const TRANSLATIONS = {
     approve: "\u041f\u043e\u0433\u043e\u0434\u0438\u0442\u0438",
     reject: "\u0412\u0456\u0434\u0445\u0438\u043b\u0438\u0442\u0438",
     requestReviewed: "\u0417\u0430\u043f\u0438\u0442 \u043e\u043f\u0440\u0430\u0446\u044c\u043e\u0432\u0430\u043d\u043e",
-    catalogCategory: "РљР°С‚РµРіРѕСЂС–СЏ",
-    catalogItemCreated: "Р—РЅР°С‡РµРЅРЅСЏ РґРѕРІС–РґРЅРёРєР° СЃС‚РІРѕСЂРµРЅРѕ",
-    catalogItemUpdated: "Р—РЅР°С‡РµРЅРЅСЏ РґРѕРІС–РґРЅРёРєР° РѕРЅРѕРІР»РµРЅРѕ",
-    catalogItemValue: "Р—РЅР°С‡РµРЅРЅСЏ",
-    catalogSortOrder: "РџРѕСЂСЏРґРѕРє",
-    catalogStatusUpdated: "РЎС‚Р°С‚СѓСЃ РґРѕРІС–РґРЅРёРєР° РѕРЅРѕРІР»РµРЅРѕ",
-    cancel: "РЎРєР°СЃСѓРІР°С‚Рё",
-    changePassword: "Р—РјС–РЅРёС‚Рё РїР°СЂРѕР»СЊ",
-    create: "РЎС‚РІРѕСЂРёС‚Рё",
-    createProject: "РЎС‚РІРѕСЂРёС‚Рё РїСЂРѕРµРєС‚",
-    createUser: "РЎС‚РІРѕСЂРёС‚Рё РєРѕСЂРёСЃС‚СѓРІР°С‡Р°",
-    created: "РЎС‚РІРѕСЂРµРЅРѕ",
-    createdBy: "РЎС‚РІРѕСЂРёРІ",
-    currentPassword: "РџРѕС‚РѕС‡РЅРёР№ РїР°СЂРѕР»СЊ",
-    dataProject: "Р”Р°РЅС– РїСЂРѕРµРєС‚Сѓ",
-    cuttingArea: "РџР»РѕС‰Р°, Рј2",
-    cuttingEdge: "РљСЂР°Р№РєР°, Рј",
-    cuttingExportCode: "РљРѕРґ",
-    cuttingGrain: "Р’РѕР»РѕРєРЅРѕ",
-    cuttingLength: "Р С–Р·, Рј",
-    cuttingSize: "Р РѕР·РјС–СЂ",
-    cuttingSummary: "РџС–РґСЃСѓРјРѕРє",
-    bottomType: "РўРёРї РґРЅР°",
-    bottom_type: "РўРёРї РґРЅР°",
-    brandTagline: "РџСЂРѕС„РµСЃС–Р№РЅРµ СЂС–С€РµРЅРЅСЏ РґР»СЏ РјРµР±Р»РµРІРѕРіРѕ РІРёСЂРѕР±РЅРёС†С‚РІР°",
-    bottom: "РќРёР·",
-    cabinet: "РўСѓРјР±Р°",
-    center: "РџРѕ С†РµРЅС‚СЂСѓ",
-    client: "РљР»С–С”РЅС‚",
-    delete: "Р’РёРґР°Р»РёС‚Рё",
-    deleteFailed: "РќРµ РІРґР°Р»РѕСЃСЏ РІРёРґР°Р»РёС‚Рё",
-    deleteProject: "Р’РёРґР°Р»РёС‚Рё РїСЂРѕРµРєС‚",
-    deleteProjectConfirm: "Р’РёРґР°Р»РёС‚Рё РїСЂРѕРµРєС‚",
-    deleteRestricted: "Р’РёРґР°Р»СЏС‚Рё РїСЂРѕРµРєС‚Рё РјРѕР¶Рµ С‚С–Р»СЊРєРё Р°РґРјС–РЅС–СЃС‚СЂР°С‚РѕСЂ",
-    depth: "Р“Р»РёР±РёРЅР°",
-    details: "Р”РµС‚Р°Р»С–",
-    dresser: "РљРѕРјРѕРґ",
-    drawers: "РЁСѓС…Р»СЏРґРё",
-    drawerUnit: "Р‘Р»РѕРє С€СѓС…Р»СЏРґ",
-    edgeBanding: "РљСЂР°Р№РєР°",
-    edgeEditor: "РћР±СЂРѕР±РєР° С‚РѕСЂС†С–РІ",
-    edgeEditorDescription: "Р РµРґР°РіСѓРІР°РЅРЅСЏ РєСЂР°Р№РєРё РґР»СЏ РІРёР±СЂР°РЅРѕС— РІРёСЂРѕР±РЅРёС‡РѕС— РґРµС‚Р°Р»С–.",
-    edgeSaved: "РљСЂР°Р№РєСѓ РґРµС‚Р°Р»С– РѕРЅРѕРІР»РµРЅРѕ",
+    catalogCategory: "Категорія",
+    catalogItemCreated: "Значення довідника створено",
+    catalogItemUpdated: "Значення довідника оновлено",
+    catalogItemValue: "Значення",
+    catalogSortOrder: "Порядок",
+    catalogStatusUpdated: "Статус довідника оновлено",
+    cancel: "Скасувати",
+    changePassword: "Змінити пароль",
+    create: "Створити",
+    createProject: "Створити проект",
+    createUser: "Створити користувача",
+    created: "Створено",
+    createdBy: "Створив",
+    currentPassword: "Поточний пароль",
+    dataProject: "Дані проекту",
+    cuttingArea: "Площа, м2",
+    cuttingEdge: "Крайка, м",
+    cuttingExportCode: "Код",
+    cuttingGrain: "Волокно",
+    cuttingLength: "Різ, м",
+    cuttingSize: "Розмір",
+    cuttingSummary: "Підсумок",
+    bottomType: "Тип дна",
+    bottom_type: "Тип дна",
+    brandTagline: "Професійне рішення для меблевого виробництва",
+    bottom: "Низ",
+    cabinet: "Тумба",
+    center: "По центру",
+    client: "Клієнт",
+    delete: "Видалити",
+    deleteFailed: "Не вдалося видалити",
+    deleteProject: "Видалити проект",
+    deleteProjectConfirm: "Видалити проект",
+    deleteRestricted: "Видаляти проекти може тільки адміністратор",
+    depth: "Глибина",
+    details: "Деталі",
+    dresser: "Комод",
+    drawers: "Шухляди",
+    drawerUnit: "Блок шухляд",
+    edgeBanding: "Крайка",
+    edgeEditor: "Обробка торців",
+    edgeEditorDescription: "Редагування крайки для вибраної виробничої деталі.",
+    edgeSaved: "Крайку деталі оновлено",
     email: "Email",
-    machiningAddGroove: "Р”РѕРґР°С‚Рё РїР°Р·",
-    machiningAddHole: "Р”РѕРґР°С‚Рё РѕС‚РІС–СЂ",
-    machiningAddQuarter: "Р”РѕРґР°С‚Рё С‡РІРµСЂС‚СЊ",
-    machiningEditor: "Р РµРґР°РєС‚РѕСЂ РѕР±СЂРѕР±РєРё",
-    machiningSaved: "РћР±СЂРѕР±РєСѓ РґРµС‚Р°Р»С– РѕРЅРѕРІР»РµРЅРѕ",
-    enabled: "РЈРІС–РјРєРЅРµРЅРѕ",
-    entity: "РЎСѓС‚РЅС–СЃС‚СЊ",
-    edge_banding: "РљСЂР°Р№РєР°",
-    facadeMaterial: "РњР°С‚РµСЂС–Р°Р» С„Р°СЃР°РґСѓ",
+    machiningAddGroove: "Додати паз",
+    machiningAddHole: "Додати отвір",
+    machiningAddQuarter: "Додати чверть",
+    machiningEditor: "Редактор обробки",
+    machiningSaved: "Обробку деталі оновлено",
+    enabled: "Увімкнено",
+    entity: "Сутність",
+    edge_banding: "Крайка",
+    facadeMaterial: "Матеріал фасаду",
     furniturePlatform: "MProject.furniture",
-    handlePosition: "РџРѕР·РёС†С–СЏ СЂСѓС‡РєРё",
-    handle_position: "РџРѕР·РёС†С–СЏ СЂСѓС‡РєРё",
-    handleType: "РўРёРї СЂСѓС‡РєРё",
-    height: "Р’РёСЃРѕС‚Р°",
-    heightMax: "Р’РёСЃРѕС‚Р° РґРѕ",
-    heightMin: "Р’РёСЃРѕС‚Р° РІС–Рґ",
-    history: "Р†СЃС‚РѕСЂС–СЏ",
-    insideMaterial: "РњР°С‚РµСЂС–Р°Р» РєРѕСЂРїСѓСЃСѓ",
-    inactive: "РќРµР°РєС‚РёРІРЅРёР№",
-    integrated: "Р†РЅС‚РµРіСЂРѕРІР°РЅР°",
-    kitchen: "РљСѓС…РЅСЏ",
-    left: "Р—Р»С–РІР°",
-    invalidCurrentPassword: "РќРµРІС–СЂРЅРёР№ РїРѕС‚РѕС‡РЅРёР№ РїР°СЂРѕР»СЊ",
-    loginFailed: "РќРµ РІРґР°Р»РѕСЃСЏ СѓРІС–Р№С‚Рё",
+    handlePosition: "Позиція ручки",
+    handle_position: "Позиція ручки",
+    handleType: "Тип ручки",
+    height: "Висота",
+    heightMax: "Висота до",
+    heightMin: "Висота від",
+    history: "Історія",
+    insideMaterial: "Матеріал корпусу",
+    inactive: "Неактивний",
+    integrated: "Інтегрована",
+    kitchen: "Кухня",
+    left: "Зліва",
+    invalidCurrentPassword: "Невірний поточний пароль",
+    loginFailed: "Не вдалося увійти",
     loginOrEmail: "\u041b\u043e\u0433\u0456\u043d \u0430\u0431\u043e email",
-    logout: "Р’РёР№С‚Рё",
-    noDetails: "Р‘РµР· РґРµС‚Р°Р»РµР№",
-    noCuttingItems: "РљР°СЂС‚Р° СЂРѕР·РєСЂРѕСЋ С‰Рµ РїРѕСЂРѕР¶РЅСЏ.",
-    newPassword: "РќРѕРІРёР№ РїР°СЂРѕР»СЊ",
-    newProjectDefault: "РќРѕРІРёР№ РїСЂРѕРµРєС‚",
-    notSet: "РќРµ РІРєР°Р·Р°РЅРѕ",
-    materialThickness: "РўРѕРІС‰РёРЅР°",
-    material_thickness: "РўРѕРІС‰РёРЅР°",
-    notes: "РќРѕС‚Р°С‚РєРё",
-    of: "Р·",
-    onlyMine: "РўС–Р»СЊРєРё РјРѕС—",
-    password: "РџР°СЂРѕР»СЊ",
-    showPassword: "РџРѕРєР°Р·Р°С‚Рё РїР°СЂРѕР»СЊ",
-    hidePassword: "РЎС…РѕРІР°С‚Рё РїР°СЂРѕР»СЊ",
-    passwordChanged: "РџР°СЂРѕР»СЊ Р·РјС–РЅРµРЅРѕ",
-    passwordMustBeLong: "РџР°СЂРѕР»СЊ РјР°С” РјС–СЃС‚РёС‚Рё РјС–РЅС–РјСѓРј 8 СЃРёРјРІРѕР»С–РІ",
-    passwordReset: "РџР°СЂРѕР»СЊ СЃРєРёРЅСѓС‚Рѕ",
-    projectDeleted: "РџСЂРѕРµРєС‚ РІРёРґР°Р»РµРЅРѕ",
-    projectDeleteRestricted: "РЈ РІР°СЃ РЅРµРјР°С” РїСЂР°РІ РґР»СЏ РІРёРґР°Р»РµРЅРЅСЏ С†СЊРѕРіРѕ РїСЂРѕРµРєС‚Сѓ",
-    projectEditRestricted: "РЈ РІР°СЃ РЅРµРјР°С” РїСЂР°РІ РґР»СЏ СЂРµРґР°РіСѓРІР°РЅРЅСЏ С†СЊРѕРіРѕ РїСЂРѕРµРєС‚Сѓ",
-    projectCreated: "РџСЂРѕРµРєС‚ СЃС‚РІРѕСЂРµРЅРѕ",
-    projectName: "РќР°Р·РІР° РїСЂРѕРµРєС‚Сѓ",
-    projectNotFound: "РџСЂРѕРµРєС‚ РЅРµ Р·РЅР°Р№РґРµРЅРѕ",
-    projectDetails: "Р”РµС‚Р°Р»С– РїСЂРѕРµРєС‚Сѓ",
-    projectRolledBack: "РџСЂРѕРµРєС‚ РІС–РґРЅРѕРІР»РµРЅРѕ",
-    projectRollbackRestricted: "РЈ РІР°СЃ РЅРµРјР°С” РїСЂР°РІ РґР»СЏ РІС–РґРЅРѕРІР»РµРЅРЅСЏ С†СЊРѕРіРѕ РїСЂРѕРµРєС‚Сѓ",
-    projectUpdated: "РџСЂРѕРµРєС‚ РѕРЅРѕРІР»РµРЅРѕ",
-    projects: "РџСЂРѕРµРєС‚Рё",
-    projectType: "РўРёРї РїСЂРѕРµРєС‚Сѓ",
-    project_type: "РўРёРї РїСЂРѕРµРєС‚Сѓ",
-    production: "Р’РёСЂРѕР±РЅРёС†С‚РІРѕ",
-    productionCutting: "РљР°СЂС‚Р° СЂРѕР·РєСЂРѕСЋ",
-    productionGrooves: "РџР°Р·Рё",
-    productionHoles: "РћС‚РІРѕСЂРё",
-    productionPartBack: "РќР°Р·Р°Рґ РґРѕ РІРёСЂРѕР±РЅРёС†С‚РІР°",
-    productionPartWorkspace: "Р РѕР±РѕС‡Рµ РјС–СЃС†Рµ РґРµС‚Р°Р»С–",
-    productionPartViewer: "РљР°СЂС‚Р° РґРµС‚Р°Р»С–",
-    productionQuarters: "Р§РІРµСЂС‚С–",
-    readOnlyProject: "РџСЂРѕРµРєС‚ Р»РёС€Рµ РґР»СЏ РїРµСЂРµРіР»СЏРґСѓ",
-    readOnlyProjectDescription: "Р’Рё РјРѕР¶РµС‚Рµ РїРµСЂРµРіР»СЏРґР°С‚Рё С†РµР№ РїСЂРѕРµРєС‚, Р°Р»Рµ РЅРµ РјРѕР¶РµС‚Рµ Р№РѕРіРѕ СЂРµРґР°РіСѓРІР°С‚Рё.",
-    reset: "РЎРєРёРЅСѓС‚Рё",
-    right: "РЎРїСЂР°РІР°",
-    role: "Р РѕР»СЊ",
-    rollback: "Р’С–РґРЅРѕРІРёС‚Рё",
-    rollbackFailed: "РќРµ РІРґР°Р»РѕСЃСЏ РІС–РґРЅРѕРІРёС‚Рё",
-    rollbackProject: "Р’С–РґРЅРѕРІРёС‚Рё РїСЂРѕРµРєС‚",
-    room: "РљС–РјРЅР°С‚Р°",
-    save: "Р—Р±РµСЂРµРіС‚Рё",
-    searchProjects: "РџРѕС€СѓРє РїСЂРѕРµРєС‚С–РІ",
-    sections: "РЎРµРєС†С–С—",
-    selectProject: "Р’РёР±РµСЂС–С‚СЊ РїСЂРѕРµРєС‚",
-    selectedProject: "Р’РёР±СЂР°РЅРёР№ РїСЂРѕРµРєС‚",
-    showProjectOverview: "РџРѕРєР°Р·Р°С‚Рё РґР°РЅС– РїСЂРѕРµРєС‚Сѓ",
-    side: "РЎС‚РѕСЂРѕРЅР°",
-    slideType: "РўРёРї РЅР°РїСЂР°РІР»СЏСЋС‡РёС…",
-    hideProjectOverview: "РЎС…РѕРІР°С‚Рё РґР°РЅС– РїСЂРѕРµРєС‚Сѓ",
-    slide_type: "РўРёРї РЅР°РїСЂР°РІР»СЏСЋС‡РёС…",
-    signIn: "РЈРІС–Р№С‚Рё",
+    logout: "Вийти",
+    noDetails: "Без деталей",
+    noCuttingItems: "Карта розкрою ще порожня.",
+    newPassword: "Новий пароль",
+    newProjectDefault: "Новий проект",
+    notSet: "Не вказано",
+    materialThickness: "Товщина",
+    material_thickness: "Товщина",
+    notes: "Нотатки",
+    of: "з",
+    onlyMine: "Тільки мої",
+    password: "Пароль",
+    showPassword: "Показати пароль",
+    hidePassword: "Сховати пароль",
+    passwordChanged: "Пароль змінено",
+    passwordMustBeLong: "Пароль має містити мінімум 8 символів",
+    passwordReset: "Пароль скинуто",
+    projectDeleted: "Проект видалено",
+    projectDeleteRestricted: "У вас немає прав для видалення цього проекту",
+    projectEditRestricted: "У вас немає прав для редагування цього проекту",
+    projectCreated: "Проект створено",
+    projectName: "Назва проекту",
+    projectNotFound: "Проект не знайдено",
+    projectDetails: "Деталі проекту",
+    projectRolledBack: "Проект відновлено",
+    projectRollbackRestricted: "У вас немає прав для відновлення цього проекту",
+    projectUpdated: "Проект оновлено",
+    projects: "Проекти",
+    projectType: "Тип проекту",
+    project_type: "Тип проекту",
+    production: "Виробництво",
+    productionCutting: "Карта розкрою",
+    productionGrooves: "Пази",
+    productionHoles: "Отвори",
+    productionPartBack: "Назад до виробництва",
+    productionPartWorkspace: "Робоче місце деталі",
+    productionPartViewer: "Карта деталі",
+    productionQuarters: "Чверті",
+    readOnlyProject: "Проект лише для перегляду",
+    readOnlyProjectDescription: "Ви можете переглядати цей проект, але не можете його редагувати.",
+    reset: "Скинути",
+    right: "Справа",
+    role: "Роль",
+    rollback: "Відновити",
+    rollbackFailed: "Не вдалося відновити",
+    rollbackProject: "Відновити проект",
+    room: "Кімната",
+    save: "Зберегти",
+    searchProjects: "Пошук проектів",
+    sections: "Секції",
+    selectProject: "Виберіть проект",
+    selectedProject: "Вибраний проект",
+    showProjectOverview: "Показати дані проекту",
+    side: "Сторона",
+    slideType: "Тип направляючих",
+    hideProjectOverview: "Сховати дані проекту",
+    slide_type: "Тип направляючих",
+    signIn: "Увійти",
     settings: "\u041d\u0430\u043b\u0430\u0448\u0442\u0443\u0432\u0430\u043d\u043d\u044f",
-    size: "Р РѕР·РјС–СЂ",
-    specification: "РЎРїРµС†РёС„С–РєР°С†С–СЏ",
-    status: "РЎС‚Р°С‚СѓСЃ",
-    time: "Р§Р°СЃ",
-    top: "Р—РІРµСЂС…Сѓ",
-    to: "РґРѕ",
-    unableToChangePassword: "РќРµ РІРґР°Р»РѕСЃСЏ Р·РјС–РЅРёС‚Рё РїР°СЂРѕР»СЊ",
-    unableToCreateProject: "РќРµ РІРґР°Р»РѕСЃСЏ СЃС‚РІРѕСЂРёС‚Рё РїСЂРѕРµРєС‚",
-    unableToCreateUser: "РќРµ РІРґР°Р»РѕСЃСЏ СЃС‚РІРѕСЂРёС‚Рё РєРѕСЂРёСЃС‚СѓРІР°С‡Р°",
-    unableToLoadCutting: "РќРµ РІРґР°Р»РѕСЃСЏ Р·Р°РІР°РЅС‚Р°Р¶РёС‚Рё РєР°СЂС‚Сѓ СЂРѕР·РєСЂРѕСЋ",
-    unableToLoadPart: "РќРµ РІРґР°Р»РѕСЃСЏ Р·Р°РІР°РЅС‚Р°Р¶РёС‚Рё РєР°СЂС‚Сѓ РґРµС‚Р°Р»С–",
-    unableToSaveEdges: "РќРµ РІРґР°Р»РѕСЃСЏ Р·Р±РµСЂРµРіС‚Рё РєСЂР°Р№РєСѓ РґРµС‚Р°Р»С–",
-    unableToSaveMachining: "РќРµ РІРґР°Р»РѕСЃСЏ Р·Р±РµСЂРµРіС‚Рё РѕР±СЂРѕР±РєСѓ РґРµС‚Р°Р»С–",
-    unableToLoadCatalog: "РќРµ РІРґР°Р»РѕСЃСЏ Р·Р°РІР°РЅС‚Р°Р¶РёС‚Рё РґРѕРІС–РґРЅРёРєРё",
-    unableToSaveCatalogItem: "РќРµ РІРґР°Р»РѕСЃСЏ Р·Р±РµСЂРµРіС‚Рё Р·РЅР°С‡РµРЅРЅСЏ РґРѕРІС–РґРЅРёРєР°",
-    unableToUpdateCatalogStatus: "РќРµ РІРґР°Р»РѕСЃСЏ РѕРЅРѕРІРёС‚Рё СЃС‚Р°С‚СѓСЃ РґРѕРІС–РґРЅРёРєР°",
-    unableToLoadAuditLogs: "РќРµ РІРґР°Р»РѕСЃСЏ Р·Р°РІР°РЅС‚Р°Р¶РёС‚Рё Р°СѓРґРёС‚",
-    unableToLoadProjects: "РќРµ РІРґР°Р»РѕСЃСЏ Р·Р°РІР°РЅС‚Р°Р¶РёС‚Рё РїСЂРѕРµРєС‚Рё",
-    unableToLoadUsers: "РќРµ РІРґР°Р»РѕСЃСЏ Р·Р°РІР°РЅС‚Р°Р¶РёС‚Рё РєРѕСЂРёСЃС‚СѓРІР°С‡С–РІ",
-    unableToResetPassword: "РќРµ РІРґР°Р»РѕСЃСЏ СЃРєРёРЅСѓС‚Рё РїР°СЂРѕР»СЊ",
-    unableToUpdateUserAccess: "РќРµ РІРґР°Р»РѕСЃСЏ РѕРЅРѕРІРёС‚Рё РґРѕСЃС‚СѓРї РєРѕСЂРёСЃС‚СѓРІР°С‡Р°",
-    unableToUpdateUserRole: "РќРµ РІРґР°Р»РѕСЃСЏ РѕРЅРѕРІРёС‚Рё СЂРѕР»СЊ РєРѕСЂРёСЃС‚СѓРІР°С‡Р°",
-    updateFailed: "РќРµ РІРґР°Р»РѕСЃСЏ РѕРЅРѕРІРёС‚Рё",
-    updated: "РћРЅРѕРІР»РµРЅРѕ",
-    updatedBy: "РћРЅРѕРІРёРІ",
-    userAccessUpdated: "Р”РѕСЃС‚СѓРї РєРѕСЂРёСЃС‚СѓРІР°С‡Р° РѕРЅРѕРІР»РµРЅРѕ",
-    userCreated: "РљРѕСЂРёСЃС‚СѓРІР°С‡Р° СЃС‚РІРѕСЂРµРЅРѕ",
-    userRoleUpdated: "Р РѕР»СЊ РєРѕСЂРёСЃС‚СѓРІР°С‡Р° РѕРЅРѕРІР»РµРЅРѕ",
-    users: "РљРѕСЂРёСЃС‚СѓРІР°С‡С–",
-    width: "РЁРёСЂРёРЅР°",
-    widthMax: "РЁРёСЂРёРЅР° РґРѕ",
-    widthMin: "РЁРёСЂРёРЅР° РІС–Рґ",
-    wardrobe: "РЁР°С„Р°",
+    size: "Розмір",
+    specification: "Специфікація",
+    status: "Статус",
+    time: "Час",
+    top: "Зверху",
+    to: "до",
+    unableToChangePassword: "Не вдалося змінити пароль",
+    unableToCreateProject: "Не вдалося створити проект",
+    unableToCreateUser: "Не вдалося створити користувача",
+    unableToLoadCutting: "Не вдалося завантажити карту розкрою",
+    unableToLoadPart: "Не вдалося завантажити карту деталі",
+    unableToSaveEdges: "Не вдалося зберегти крайку деталі",
+    unableToSaveMachining: "Не вдалося зберегти обробку деталі",
+    unableToLoadCatalog: "Не вдалося завантажити довідники",
+    unableToSaveCatalogItem: "Не вдалося зберегти значення довідника",
+    unableToUpdateCatalogStatus: "Не вдалося оновити статус довідника",
+    unableToLoadAuditLogs: "Не вдалося завантажити аудит",
+    unableToLoadProjects: "Не вдалося завантажити проекти",
+    unableToLoadUsers: "Не вдалося завантажити користувачів",
+    unableToResetPassword: "Не вдалося скинути пароль",
+    unableToUpdateUserAccess: "Не вдалося оновити доступ користувача",
+    unableToUpdateUserRole: "Не вдалося оновити роль користувача",
+    updateFailed: "Не вдалося оновити",
+    updated: "Оновлено",
+    updatedBy: "Оновив",
+    userAccessUpdated: "Доступ користувача оновлено",
+    userCreated: "Користувача створено",
+    userRoleUpdated: "Роль користувача оновлено",
+    users: "Користувачі",
+    width: "Ширина",
+    widthMax: "Ширина до",
+    widthMin: "Ширина від",
+    wardrobe: "Шафа",
   },
 };
 
@@ -1924,31 +1924,31 @@ Object.assign(TRANSLATIONS.en, {
 });
 
 Object.assign(TRANSLATIONS.uk, {
-  preview3dInteractiveHint: "РџРµСЂРµС‚СЏРіСѓР№С‚Рµ РґР»СЏ РѕР±РµСЂС‚Р°РЅРЅСЏ. РљРѕР»РµСЃРѕ РјРёС€С– Р°Р±Рѕ Р¶РµСЃС‚ РјР°СЃС€С‚Р°Р±СѓРІР°РЅРЅСЏ Р·РјС–РЅСЋС” Р·СѓРј. РЈ 3D РјРѕРґРµР»С– РїРѕРєР°Р·Р°РЅС– РєСЂР°Р№РєР°, РѕС‚РІРѕСЂРё, РїР°Р·Рё С‚Р° С‡РІРµСЂС‚С–.",
-  productionAssembly3d: "3D Р·Р±С–СЂРєР°",
-  productionAssemblyHint: "Р¦СЏ 3D Р·Р±С–СЂРєР° РїРѕР±СѓРґРѕРІР°РЅР° РЅР° РѕСЃРЅРѕРІС– РєР°СЂС‚Рё СЂРѕР·РєСЂРѕСЋ. РќР°С‚РёСЃРЅС–С‚СЊ РЅР° РїР°РЅРµР»СЊ, С‰РѕР± РІС–РґРєСЂРёС‚Рё С—С— СЂРѕР±РѕС‡Рµ РјС–СЃС†Рµ РґРµС‚Р°Р»С–.",
-  assemblyAssembled: "Р—С–Р±СЂР°РЅРѕ",
-  assemblyExploded: "Р РѕР·РЅРµСЃРµРЅРѕ",
-  assemblyShowAll: "РџРѕРєР°Р·Р°С‚Рё РІСЃРµ",
-  assemblyGroupCarcass: "РљРѕСЂРїСѓСЃ",
-  assemblyGroupFacades: "Р¤Р°СЃР°РґРё",
-  assemblyGroupDrawers: "РЁСѓС…Р»СЏРґРё",
-  assemblyGroupBack: "Р—Р°РґРЅСЏ СЃС‚С–РЅРєР°",
-  assemblyGroupOther: "Р†РЅС€С– РїР°РЅРµР»С–",
+  preview3dInteractiveHint: "Перетягуйте для обертання. Колесо миші або жест масштабування змінює зум. У 3D моделі показані крайка, отвори, пази та чверті.",
+  productionAssembly3d: "3D збірка",
+  productionAssemblyHint: "Ця 3D збірка побудована на основі карти розкрою. Натисніть на панель, щоб відкрити її робоче місце деталі.",
+  assemblyAssembled: "Зібрано",
+  assemblyExploded: "Рознесено",
+  assemblyShowAll: "Показати все",
+  assemblyGroupCarcass: "Корпус",
+  assemblyGroupFacades: "Фасади",
+  assemblyGroupDrawers: "Шухляди",
+  assemblyGroupBack: "Задня стінка",
+  assemblyGroupOther: "Інші панелі",
 });
 
 Object.assign(TRANSLATIONS.uk, {
-  preview3dInteractiveHint: "РџРµСЂРµС‚СЏРіСѓР№С‚Рµ РґР»СЏ РѕР±РµСЂС‚Р°РЅРЅСЏ. РљРѕР»РµСЃРѕ РјРёС€С– Р°Р±Рѕ Р¶РµСЃС‚ РјР°СЃС€С‚Р°Р±СѓРІР°РЅРЅСЏ Р·РјС–РЅСЋС” Р·СѓРј. РЈ 3D РјРѕРґРµР»С– РїРѕРєР°Р·Р°РЅС– РєСЂР°Р№РєР°, РѕС‚РІРѕСЂРё, РїР°Р·Рё С‚Р° С‡РІРµСЂС‚С–.",
-  productionAssembly3d: "3D Р·Р±С–СЂРєР°",
-  productionAssemblyHint: "Р¦СЏ 3D Р·Р±С–СЂРєР° РїРѕР±СѓРґРѕРІР°РЅР° РЅР° РѕСЃРЅРѕРІС– РєР°СЂС‚Рё СЂРѕР·РєСЂРѕСЋ. РќР°С‚РёСЃРЅС–С‚СЊ РЅР° РїР°РЅРµР»СЊ, С‰РѕР± РІС–РґРєСЂРёС‚Рё С—С— СЂРѕР±РѕС‡Рµ РјС–СЃС†Рµ РґРµС‚Р°Р»С–.",
-  assemblyAssembled: "Р—С–Р±СЂР°РЅРѕ",
-  assemblyExploded: "Р РѕР·РЅРµСЃРµРЅРѕ",
-  assemblyShowAll: "РџРѕРєР°Р·Р°С‚Рё РІСЃРµ",
-  assemblyGroupCarcass: "РљРѕСЂРїСѓСЃ",
-  assemblyGroupFacades: "Р¤Р°СЃР°РґРё",
-  assemblyGroupDrawers: "РЁСѓС…Р»СЏРґРё",
-  assemblyGroupBack: "Р—Р°РґРЅСЏ СЃС‚С–РЅРєР°",
-  assemblyGroupOther: "Р†РЅС€С– РїР°РЅРµР»С–",
+  preview3dInteractiveHint: "Перетягуйте для обертання. Колесо миші або жест масштабування змінює зум. У 3D моделі показані крайка, отвори, пази та чверті.",
+  productionAssembly3d: "3D збірка",
+  productionAssemblyHint: "Ця 3D збірка побудована на основі карти розкрою. Натисніть на панель, щоб відкрити її робоче місце деталі.",
+  assemblyAssembled: "Зібрано",
+  assemblyExploded: "Рознесено",
+  assemblyShowAll: "Показати все",
+  assemblyGroupCarcass: "Корпус",
+  assemblyGroupFacades: "Фасади",
+  assemblyGroupDrawers: "Шухляди",
+  assemblyGroupBack: "Задня стінка",
+  assemblyGroupOther: "Інші панелі",
 });
 
 Object.assign(TRANSLATIONS.uk, {
@@ -1969,7 +1969,7 @@ Object.assign(TRANSLATIONS.uk, {
   holePreviewHelper: "\u041f\u0440\u0435\u0432'\u044e \u043f\u043e\u043a\u0430\u0437\u0443\u0454 \u0437\u0431\u0435\u0440\u0435\u0436\u0435\u043d\u0456 \u043a\u043e\u043e\u0440\u0434\u0438\u043d\u0430\u0442\u0438 \u0442\u043e\u0447\u043e\u043a \u043d\u0430 \u043c\u0430\u0441\u0448\u0442\u0430\u0431\u043e\u0432\u0430\u043d\u0456\u0439 \u043f\u043b\u043e\u0449\u0438\u043d\u0456.",
   holePreviewOperation: "\u041e\u043f\u0435\u0440\u0430\u0446\u0456\u044f",
   holePreviewSide: "\u0421\u0442\u043e\u0440\u043e\u043d\u0430",
-  holePreviewTitle: "2D РїРµСЂРµРіР»СЏРґ",
+  holePreviewTitle: "2D перегляд",
   holeTabDescription: "\u041f\u0435\u0440\u0435\u0433\u043b\u044f\u0434 \u0448\u0430\u0431\u043b\u043e\u043d\u0456\u0432 \u0456 \u0442\u043e\u0447\u043e\u043a \u043e\u0442\u0432\u043e\u0440\u0456\u0432 \u0434\u043b\u044f \u0432\u0438\u0431\u0440\u0430\u043d\u043e\u0457 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0438.",
   holeTabPreview: "2D \u043f\u0435\u0440\u0435\u0433\u043b\u044f\u0434",
   holeTabPoints: "\u0422\u043e\u0447\u043a\u0438",
@@ -2811,22 +2811,22 @@ Object.assign(TRANSLATIONS.en, {
 });
 
 Object.assign(TRANSLATIONS.uk, {
-  bathroom_shelf: "РЎР°РЅРІСѓР·Р»РѕРІР° РїРѕР»РєР°",
-  bathroom_vanity: "РЎР°РЅРІСѓР·Р»РѕРІР° С‚СѓРјР±Р°",
-  wall_unit: "РЎС‚С–РЅРєР°",
+  bathroom_shelf: "Санвузлова полка",
+  bathroom_vanity: "Санвузлова тумба",
+  wall_unit: "Стінка",
   projectStartPremiumBadge: "Business",
   projectStartPremiumDescription:
-    "Business-СЃС‚Р°СЂС‚: С€Р°Р±Р»РѕРЅРё, СЃРєР°РЅ, PDF С‚Р° СЂРѕР·С€РёСЂРµРЅС– СЃС†РµРЅР°СЂС–С— С–РјРїРѕСЂС‚Сѓ РґР»СЏ Р±С–Р»СЊС€РёС… СЂРѕР±РѕС‡РёС… РїСЂРѕС†РµСЃС–РІ.",
-  projectStartPremiumOnly: "Business-СЃС‚Р°СЂС‚ РґРѕСЃС‚СѓРїРЅРёР№ РґР»СЏ Premium-РєРѕСЂРёСЃС‚СѓРІР°С‡С–РІ С‚Р° Р°РґРјС–РЅР°.",
-  projectStartPremiumTitle: "Business СЃС‚Р°СЂС‚",
-  projectTemplateBathroomShelfDescription: "РљРѕРјРїР°РєС‚РЅР° СЃР°РЅРІСѓР·Р»РѕРІР° РїРѕР»РєР° Р· РјР°Р»РѕСЋ РіР»РёР±РёРЅРѕСЋ С‚Р° РІРµСЂС‚РёРєР°Р»СЊРЅРёРј Р·Р±РµСЂС–РіР°РЅРЅСЏРј.",
-  projectTemplateBathroomShelfTitle: "РЎР°РЅРІСѓР·Р»РѕРІР° РїРѕР»РєР°",
-  projectTemplateBathroomVanityDescription: "РўСѓРјР±Р° РґР»СЏ СЃР°РЅРІСѓР·Р»Р° Р· РєРѕСЂРїСѓСЃРѕРј, С„Р°СЃР°РґРѕРј С– Р±Р°Р·РѕРІРёРјРё РїР°СЂР°РјРµС‚СЂР°РјРё.",
-  projectTemplateBathroomVanityTitle: "РЎР°РЅРІСѓР·Р»РѕРІР° С‚СѓРјР±Р°",
-  projectTemplateKitchenDescription: "Р‘Р°Р·РѕРІРёР№ РєСѓС…РѕРЅРЅРёР№ РјРѕРґСѓР»СЊ Р· СЂРѕР±РѕС‡РѕСЋ РІРёСЃРѕС‚РѕСЋ С‚Р° РіР»РёР±РёРЅРѕСЋ СЃС‚С–Р»СЊРЅРёС†С–.",
-  projectTemplateKitchenTitle: "РљСѓС…РЅСЏ",
-  projectTemplateWallUnitDescription: "РЎС‚С–РЅРєР° РґР»СЏ РєС–РјРЅР°С‚Рё Р· С€РёСЂРѕРєРёРј РєРѕСЂРїСѓСЃРѕРј С– Р·РѕРЅР°РјРё Р·Р±РµСЂС–РіР°РЅРЅСЏ.",
-  projectTemplateWallUnitTitle: "РЎС‚С–РЅРєР°",
+    "Business-старт: шаблони, скан, PDF та розширені сценарії імпорту для більших робочих процесів.",
+  projectStartPremiumOnly: "Business-старт доступний для Premium-користувачів та адміна.",
+  projectStartPremiumTitle: "Business старт",
+  projectTemplateBathroomShelfDescription: "Компактна санвузлова полка з малою глибиною та вертикальним зберіганням.",
+  projectTemplateBathroomShelfTitle: "Санвузлова полка",
+  projectTemplateBathroomVanityDescription: "Тумба для санвузла з корпусом, фасадом і базовими параметрами.",
+  projectTemplateBathroomVanityTitle: "Санвузлова тумба",
+  projectTemplateKitchenDescription: "Базовий кухонний модуль з робочою висотою та глибиною стільниці.",
+  projectTemplateKitchenTitle: "Кухня",
+  projectTemplateWallUnitDescription: "Стінка для кімнати з широким корпусом і зонами зберігання.",
+  projectTemplateWallUnitTitle: "Стінка",
 });
 
 function buildProjectPayload(form) {
@@ -3102,7 +3102,7 @@ function detectProjectSlideFamily(value) {
     return "tandem";
   }
 
-  if (haystack.includes("telescopic") || haystack.includes("С‚РµР»РµСЃРєРѕРї")) {
+  if (haystack.includes("telescopic") || haystack.includes("телескоп")) {
     return "telescopic";
   }
 
@@ -3301,19 +3301,19 @@ function getMaterialDescriptionText(item, t) {
 
   const normalizedDescription = description.toLowerCase();
   const promoMarkers = [
-    "С–РЅС‚РµСЂРЅРµС‚-РјР°РіР°Р·РёРЅ",
-    "РёРЅС‚РµСЂРЅРµС‚-РјР°РіР°Р·РёРЅ",
-    "РїСЂРѕРїРѕРЅСѓС” Р·Р°РјРѕРІРёС‚Рё",
-    "Р· РґРѕСЃС‚Р°РІРєРѕСЋ РїРѕ СѓРєСЂР°С—РЅС–",
-    "С‚РµР»РµС„РѕРЅСѓР№С‚Рµ",
-    "РєСѓРїРёС‚Рё",
-    "РєСѓРїРёС‚СЊ",
-    "Р»СѓС‡С€РёРµ С†РµРЅС‹",
-    "РєСЂР°С‰С– С†С–РЅРё",
-    "РґРѕСЃС‚Р°РІРєР° РїРѕ",
-    "РґРѕСЃС‚Р°РІРєР° РґРѕ",
-    "РєРѕРЅСЃСѓР»СЊС‚Р°С†РёРё РїРѕ С‚РµР»РµС„РѕРЅСѓ",
-    "РєРѕРЅСЃСѓР»СЊС‚Р°С†С–С— Р·Р° С‚РµР»РµС„РѕРЅРѕРј",
+    "інтернет-магазин",
+    "интернет-магазин",
+    "пропонує замовити",
+    "з доставкою по україні",
+    "телефонуйте",
+    "купити",
+    "купить",
+    "лучшие цены",
+    "кращі ціни",
+    "доставка по",
+    "доставка до",
+    "консультации по телефону",
+    "консультації за телефоном",
   ];
 
   if (promoMarkers.some((marker) => normalizedDescription.includes(marker))) {
@@ -3833,18 +3833,18 @@ function PartPreview({ detail, onSelectEdge, selectedEdgeSide, t }) {
         </g>
         <g className="part-legend" transform={`translate(34 ${legendY})`}>
           <rect className="legend-swatch" fill="#078000" height="18" width="22" x="0" y="-14" />
-          <text x="30" y="0">в‰¤ 0.6 РјРј</text>
+          <text x="30" y="0">≤ 0.6 мм</text>
           <rect className="legend-swatch" fill="#ff7300" height="18" width="22" x="98" y="-14" />
-          <text x="128" y="0">в‰¤ 0.8 РјРј</text>
+          <text x="128" y="0">≤ 0.8 мм</text>
           <rect className="legend-swatch" fill="#b7dce8" height="18" width="22" x="196" y="-14" />
-          <text x="226" y="0">в‰¤ 1.0 РјРј</text>
+          <text x="226" y="0">≤ 1.0 мм</text>
           <rect className="legend-swatch" fill="#0b1cff" height="18" width="22" x="294" y="-14" />
-          <text x="324" y="0">&lt; 2.0 РјРј</text>
+          <text x="324" y="0">&lt; 2.0 мм</text>
           <rect className="legend-swatch" fill="#7a0b80" height="18" width="22" x="392" y="-14" />
-          <text x="422" y="0">= 2.0 РјРј</text>
+          <text x="422" y="0">= 2.0 мм</text>
           <rect className="legend-swatch" fill="#f3b300" height="18" width="22" x="490" y="-14" />
           <line className="legend-facade-line" x1="490" x2="512" y1="-5" y2="-5" />
-          <text x="520" y="0">Р· С„Р°СЃРєРѕСЋ 45</text>
+          <text x="520" y="0">з фаскою 45</text>
           <g className="legend-grain" transform="translate(615 -11)">
             <line x1="0" x2="24" y1="0" y2="0" />
             <line x1="0" x2="24" y1="7" y2="7" />
@@ -4474,34 +4474,34 @@ export default function App() {
   const holeMountingVariantOptions = useMemo(
     () => [
       {
-        description: "РЈСЃС‚Р°РЅРѕРІРєР° С„СѓСЂРЅС–С‚СѓСЂРё РЅР° РїР»РѕС‰РёРЅС–.",
+        description: "Установка фурнітури на площині.",
         key: "surface_mount",
         icon: surfaceMountIcon,
-        label: "РЈСЃС‚Р°РЅРѕРІРєР° С„СѓСЂРЅС–С‚СѓСЂРё РЅР° РїР»РѕС‰РёРЅС–",
+        label: "Установка фурнітури на площині",
       },
       {
-        description: "РљСЂС–РїР»РµРЅРЅСЏ РјС–Р¶ РґРІРѕРјР° РЅРµРїР°СЂР°Р»РµР»СЊРЅРёРјРё РїР»РѕС‰РёРЅР°РјРё.",
+        description: "Кріплення між двома непаралельними площинами.",
         key: "angled_two_planes",
         icon: angledTwoPlanesIcon,
-        label: "РЈСЃС‚Р°РЅРѕРІРєР° С„СѓСЂРЅС–С‚СѓСЂРё РЅР° РґРІС– РЅРµРїР°СЂР°Р»РµР»СЊРЅС– РїР»РѕС‰РёРЅРё",
+        label: "Установка фурнітури на дві непаралельні площини",
       },
       {
-        description: "РЈСЃС‚Р°РЅРѕРІРєР° РЅР° РїР»Р°cС‚С– РѕРґРЅС–С”С— С‚Р° С‚РѕСЂС†СЏ С–РЅС€РѕС— РїР°РЅРµР»С–.",
+        description: "Установка на плаcті однієї та торця іншої панелі.",
         key: "face_to_edge",
         icon: faceToEdgeIcon,
-        label: "РЈСЃС‚Р°РЅРѕРІРєР° РЅР° РїР»Р°cС‚С– РѕРґРЅС–С”С— С‚Р° С‚РѕСЂС†СЏ С–РЅС€РѕС— РїР°РЅРµР»С–",
+        label: "Установка на плаcті однієї та торця іншої панелі",
       },
       {
-        description: "РЈСЃС‚Р°РЅРѕРІРєР° С„СѓСЂРЅС–С‚СѓСЂРё РїРѕ С‚РѕСЂС†СЏС… РїР°РЅРµР»РµР№.",
+        description: "Установка фурнітури по торцях панелей.",
         key: "edge_to_edge",
         icon: edgeToEdgeIcon,
-        label: "РЈСЃС‚Р°РЅРѕРІРєР° С„СѓСЂРЅС–С‚СѓСЂРё РїРѕ С‚РѕСЂС†СЏС… РїР°РЅРµР»РµР№",
+        label: "Установка фурнітури по торцях панелей",
       },
       {
-        description: "РќР°РїСЂСЏРјРЅС– РґР»СЏ РІРёСЃСѓРІРЅРёС… РµР»РµРјРµРЅС‚С–РІ.",
+        description: "Напрямні для висувних елементів.",
         key: "drawer_slides",
         icon: drawerSlidesIcon,
-        label: "РќР°РїСЂСЏРјРЅС–",
+        label: "Напрямні",
       },
     ],
     [],
@@ -4532,9 +4532,9 @@ export default function App() {
   const holeWorkspaceSaveStatus = holeSelectedFittingId
     ? selectedHoleTemplate
       ? holeWorkspaceHasUnsavedVariantChanges
-        ? "Р„ РЅРµР·Р±РµСЂРµР¶РµРЅС– Р·РјС–РЅРё"
-        : "Р—Р±РµСЂРµР¶РµРЅРѕ"
-      : "Р“РѕС‚РѕРІРѕ РґРѕ СЃС‚РІРѕСЂРµРЅРЅСЏ"
+        ? "Є незбережені зміни"
+        : "Збережено"
+      : "Готово до створення"
     : "";
   const holesMaterialPlanesModel = useMemo(() => {
     switch (normalizedSelectedHoleMountingVariantKey) {
@@ -4710,15 +4710,15 @@ export default function App() {
           ]
         : [
             {
-              helper: panelA?.label || "РџР°РЅРµР»СЊ A",
+              helper: panelA?.label || "Панель A",
               key: panelA?.key || "panel_a",
-              label: panelA?.label || "РџР°РЅРµР»СЊ A",
+              label: panelA?.label || "Панель A",
               order: 0,
             },
             {
-              helper: panelB?.label || "РџР°РЅРµР»СЊ B",
+              helper: panelB?.label || "Панель B",
               key: panelB?.key || "panel_b",
-              label: panelB?.label || "РџР°РЅРµР»СЊ B",
+              label: panelB?.label || "Панель B",
               order: 1,
             },
           ];
@@ -4794,7 +4794,7 @@ export default function App() {
       const assignedPoint = {
         ...point,
         panelKey: groupKey,
-        panelLabel: group?.label || "РџР°РЅРµР»СЊ",
+        panelLabel: group?.label || "Панель",
       };
 
       if (group) {
@@ -4812,7 +4812,7 @@ export default function App() {
       orderedGroups.push({
         helper: "",
         key: "unassigned",
-        label: "Р‘РµР· РїСЂРёРІвЂ™СЏР·РєРё РґРѕ РїР°РЅРµР»С–",
+        label: "Без прив’язки до панелі",
         order: 99,
         points: unassigned,
       });
@@ -5607,12 +5607,12 @@ export default function App() {
               ? "Movento"
               : slideFamily === "telescopic"
                 ? language === "uk"
-                  ? "РўРµР»РµСЃРєРѕРїС–С‡РЅС–"
+                  ? "Телескопічні"
                   : "Telescopic"
                 : slideFamily === "tandem"
                   ? "Tandem"
                   : language === "uk"
-                    ? "РќР°РїСЂСЏРјРЅС–"
+                    ? "Напрямні"
                     : "Slides";
 
           return {
@@ -5622,7 +5622,7 @@ export default function App() {
             pickerRecommended: slideLength === targetLength,
             pickerSubtitle: [
               familyLabel,
-              slideLength ? `${slideLength} РјРј` : "",
+              slideLength ? `${slideLength} мм` : "",
               item.article || item.code || "",
             ]
               .filter(Boolean)
@@ -5706,7 +5706,7 @@ export default function App() {
         pickerTitle: formatCatalogLabel(value, t),
         pickerSubtitle:
           language === "uk"
-            ? "РўРёРї РІРёСЂРѕР±Сѓ РґР»СЏ СЃС‚Р°СЂС‚Сѓ РїСЂРѕРµРєС‚Сѓ."
+            ? "Тип виробу для старту проекту."
             : "Project construction type.",
         pickerSearch: `${value} ${formatCatalogLabel(value, t)}`.toLowerCase(),
       })),
@@ -5719,7 +5719,7 @@ export default function App() {
         pickerValue: String(value),
         pickerTitle: `${value}`,
         pickerSubtitle:
-          language === "uk" ? "РўРѕРІС‰РёРЅР° РїР»РёС‚РЅРѕРіРѕ РјР°С‚РµСЂС–Р°Р»Сѓ." : "Board material thickness.",
+          language === "uk" ? "Товщина плитного матеріалу." : "Board material thickness.",
         pickerSearch: `${value} ${t.materialThickness}`.toLowerCase(),
       })),
     [language, specificationCatalog.material_thicknesses, t],
@@ -5731,7 +5731,7 @@ export default function App() {
         pickerValue: value,
         pickerTitle: formatCatalogLabel(value, t),
         pickerSubtitle:
-          language === "uk" ? "РўРёРї РЅР°РїСЂР°РІР»СЏСЋС‡РёС… РґР»СЏ С€СѓС…Р»СЏРґ." : "Drawer slide type.",
+          language === "uk" ? "Тип направляючих для шухляд." : "Drawer slide type.",
         pickerSearch: `${value} ${formatCatalogLabel(value, t)}`.toLowerCase(),
       })),
     [language, specificationCatalog.slide_types, t],
@@ -5743,7 +5743,7 @@ export default function App() {
         pickerValue: value,
         pickerTitle: formatCatalogLabel(value, t),
         pickerSubtitle:
-          language === "uk" ? "РњР°С‚РµСЂС–Р°Р» Р°Р±Рѕ С‚РёРї РґРЅР°." : "Bottom material or type.",
+          language === "uk" ? "Матеріал або тип дна." : "Bottom material or type.",
         pickerSearch: `${value} ${formatCatalogLabel(value, t)}`.toLowerCase(),
       })),
     [language, specificationCatalog.bottom_types, t],
@@ -5776,7 +5776,7 @@ export default function App() {
         pickerValue: value,
         pickerTitle: formatCatalogLabel(value, t),
         pickerSubtitle:
-          language === "uk" ? "РџРѕР»РѕР¶РµРЅРЅСЏ СЂСѓС‡РєРё РЅР° С„Р°СЃР°РґС–." : "Handle position on the facade.",
+          language === "uk" ? "Положення ручки на фасаді." : "Handle position on the facade.",
         pickerSearch: `${value || ""} ${formatCatalogLabel(value, t)}`.toLowerCase(),
       })),
     [language, specificationCatalog.handle_positions, t],
@@ -5934,12 +5934,12 @@ export default function App() {
       return {
         description:
           language === "uk"
-            ? "Р’РёР±РµСЂС–С‚СЊ С‚РёРї РІРёСЂРѕР±Сѓ, Р· СЏРєРѕРіРѕ РїРѕС‡РЅРµС‚СЊСЃСЏ РїСЂРѕРµРєС‚."
+            ? "Виберіть тип виробу, з якого почнеться проект."
             : "Choose the product type your project starts from.",
         empty:
-          language === "uk" ? "РўРёРїРё РїСЂРѕРµРєС‚С–РІ С‰Рµ РЅРµ Р·Р°РІР°РЅС‚Р°Р¶РµРЅС–." : "Project types are not loaded yet.",
+          language === "uk" ? "Типи проектів ще не завантажені." : "Project types are not loaded yet.",
         items: projectTypePickerItems,
-        placeholder: language === "uk" ? "РџРѕС€СѓРє С‚РёРїСѓ РїСЂРѕРµРєС‚Сѓ" : "Search project type",
+        placeholder: language === "uk" ? "Пошук типу проекту" : "Search project type",
       };
     }
 
@@ -5947,18 +5947,18 @@ export default function App() {
       return {
         description:
           language === "uk"
-            ? "Р’РёР±РµСЂС–С‚СЊ РєСЂР°Р№РєСѓ, СЏРєР° РїСЂРёРІвЂ™СЏР·Р°РЅР° РґРѕ РІРёР±СЂР°РЅРѕРіРѕ РјР°С‚РµСЂС–Р°Р»Сѓ."
+            ? "Виберіть крайку, яка прив’язана до вибраного матеріалу."
             : "Choose edge banding linked to the selected material.",
         empty:
           activeProjectPickerMaterial
             ? language === "uk"
-              ? "Р”Р»СЏ С†СЊРѕРіРѕ РјР°С‚РµСЂС–Р°Р»Сѓ С‰Рµ РЅРµ РїСЂРёРІвЂ™СЏР·Р°РЅРѕ РєСЂР°Р№РєСѓ."
+              ? "Для цього матеріалу ще не прив’язано крайку."
               : "No edge banding is attached to this material yet."
             : language === "uk"
-              ? "РЎРїРѕС‡Р°С‚РєСѓ РІРёР±РµСЂС–С‚СЊ РјР°С‚РµСЂС–Р°Р» С„Р°СЃР°РґСѓ Р°Р±Рѕ РєРѕСЂРїСѓСЃСѓ."
+              ? "Спочатку виберіть матеріал фасаду або корпусу."
               : "Select facade or inside material first.",
         items: activeProjectEdgeBandingItems,
-        placeholder: language === "uk" ? "РџРѕС€СѓРє РєСЂР°Р№РєРё" : "Search edge banding",
+        placeholder: language === "uk" ? "Пошук крайки" : "Search edge banding",
       };
     }
 
@@ -5966,12 +5966,12 @@ export default function App() {
       return {
         description:
           language === "uk"
-            ? "Р’РёР±РµСЂС–С‚СЊ С‚РѕРІС‰РёРЅСѓ РјР°С‚РµСЂС–Р°Р»Сѓ."
+            ? "Виберіть товщину матеріалу."
             : "Choose material thickness.",
         empty:
-          language === "uk" ? "РќРµРјР°С” С‚РѕРІС‰РёРЅ Сѓ РґРѕРІС–РґРЅРёРєСѓ." : "No thickness values are available.",
+          language === "uk" ? "Немає товщин у довіднику." : "No thickness values are available.",
         items: legacyProjectThicknessPickerItems,
-        placeholder: language === "uk" ? "РџРѕС€СѓРє С‚РѕРІС‰РёРЅРё" : "Search thickness",
+        placeholder: language === "uk" ? "Пошук товщини" : "Search thickness",
       };
     }
 
@@ -5979,12 +5979,12 @@ export default function App() {
       return {
         description:
           language === "uk"
-            ? "Р’РёР±РµСЂС–С‚СЊ С‚РёРї РЅР°РїСЂР°РІР»СЏСЋС‡РёС…."
+            ? "Виберіть тип направляючих."
             : "Choose the drawer slide type.",
         empty:
-          language === "uk" ? "РўРёРїРё РЅР°РїСЂР°РІР»СЏСЋС‡РёС… С‰Рµ РЅРµ Р·Р°РїРѕРІРЅРµРЅС–." : "No slide types are available.",
+          language === "uk" ? "Типи направляючих ще не заповнені." : "No slide types are available.",
         items: projectSlideTypePickerItems,
-        placeholder: language === "uk" ? "РџРѕС€СѓРє РЅР°РїСЂР°РІР»СЏСЋС‡РёС…" : "Search slide type",
+        placeholder: language === "uk" ? "Пошук направляючих" : "Search slide type",
       };
     }
 
@@ -5992,12 +5992,12 @@ export default function App() {
       return {
         description:
           language === "uk"
-            ? "Р’РёР±РµСЂС–С‚СЊ С‚РёРї РґРЅР°."
+            ? "Виберіть тип дна."
             : "Choose bottom type.",
         empty:
-          language === "uk" ? "РўРёРїРё РґРЅР° С‰Рµ РЅРµ Р·Р°РїРѕРІРЅРµРЅС–." : "No bottom types are available.",
+          language === "uk" ? "Типи дна ще не заповнені." : "No bottom types are available.",
         items: projectBottomTypePickerItems,
-        placeholder: language === "uk" ? "РџРѕС€СѓРє С‚РёРїСѓ РґРЅР°" : "Search bottom type",
+        placeholder: language === "uk" ? "Пошук типу дна" : "Search bottom type",
       };
     }
 
@@ -6005,12 +6005,12 @@ export default function App() {
       return {
         description:
           language === "uk"
-            ? "Р’РёР±РµСЂС–С‚СЊ РїРѕР»РѕР¶РµРЅРЅСЏ СЂСѓС‡РєРё."
+            ? "Виберіть положення ручки."
             : "Choose handle position.",
         empty:
-          language === "uk" ? "РџРѕР»РѕР¶РµРЅРЅСЏ СЂСѓС‡РѕРє С‰Рµ РЅРµ Р·Р°РїРѕРІРЅРµРЅС–." : "No handle positions are available.",
+          language === "uk" ? "Положення ручок ще не заповнені." : "No handle positions are available.",
         items: projectHandlePositionPickerItems,
-        placeholder: language === "uk" ? "РџРѕС€СѓРє РїРѕР·РёС†С–С— СЂСѓС‡РєРё" : "Search handle position",
+        placeholder: language === "uk" ? "Пошук позиції ручки" : "Search handle position",
       };
     }
 
@@ -6018,28 +6018,28 @@ export default function App() {
       return {
         description:
           language === "uk"
-            ? "Р’РёР±РµСЂС–С‚СЊ СЂСѓС‡РєСѓ Р°Р±Рѕ РїСЂРѕС„С–Р»СЊ С–Р· Р·РѕР±СЂР°Р¶РµРЅРЅСЏРј, С†С–РЅРѕСЋ С‚Р° РєРѕСЂРѕС‚РєРёРјРё РґР°РЅРёРјРё."
+            ? "Виберіть ручку або профіль із зображенням, ціною та короткими даними."
             : "Choose a handle or profile with image, price, and short details.",
         empty:
           language === "uk"
-            ? "Р”Р»СЏ С†СЊРѕРіРѕ РїР°СЂР°РјРµС‚СЂР° С‰Рµ РЅРµРјР°С” РґРѕСЃС‚СѓРїРЅРёС… РїРѕР·РёС†С–Р№."
+            ? "Для цього параметра ще немає доступних позицій."
             : "No items are available for this parameter yet.",
         items: projectHandlePickerItems,
-        placeholder: language === "uk" ? "РџРѕС€СѓРє СЂСѓС‡РєРё" : "Search handle",
+        placeholder: language === "uk" ? "Пошук ручки" : "Search handle",
       };
     }
 
     return {
       description:
         language === "uk"
-          ? "Р’РёР±РµСЂС–С‚СЊ РјР°С‚РµСЂС–Р°Р» РїРѕ РєР°СЂС‚С†С– Р· С„РѕС‚Рѕ, С†С–РЅРѕСЋ С‚Р° РѕСЃРЅРѕРІРЅРёРјРё С…Р°СЂР°РєС‚РµСЂРёСЃС‚РёРєР°РјРё."
+          ? "Виберіть матеріал по картці з фото, ціною та основними характеристиками."
           : "Choose a material card with image, price, and main specifications.",
       empty:
         language === "uk"
-          ? "Р”Р»СЏ С†СЊРѕРіРѕ РїР°СЂР°РјРµС‚СЂР° С‰Рµ РЅРµРјР°С” РґРѕСЃС‚СѓРїРЅРёС… РјР°С‚РµСЂС–Р°Р»С–РІ."
+          ? "Для цього параметра ще немає доступних матеріалів."
           : "No materials are available for this parameter yet.",
       items: projectMaterialPickerItems,
-      placeholder: language === "uk" ? "РџРѕС€СѓРє РјР°С‚РµСЂС–Р°Р»Сѓ" : "Search material",
+      placeholder: language === "uk" ? "Пошук матеріалу" : "Search material",
     };
   }, [
     language,
@@ -6171,7 +6171,7 @@ export default function App() {
         <span className="project-option-trigger-text">{value || title}</span>
         <span className="project-option-trigger-action">
           <Search size={16} />
-          {language === "uk" ? "Р’РёР±СЂР°С‚Рё" : "Choose"}
+          {language === "uk" ? "Вибрати" : "Choose"}
         </span>
       </button>
     </label>
@@ -6667,7 +6667,7 @@ export default function App() {
 
   function openHoleTemplateCreateForm() {
     if (!holeSelectedFittingId) {
-      setHoleTemplateCreateError("РћР±РµСЂС–С‚СЊ С„СѓСЂРЅС–С‚СѓСЂСѓ РїРµСЂРµРґ СЃС‚РІРѕСЂРµРЅРЅСЏРј С€Р°Р±Р»РѕРЅСѓ");
+      setHoleTemplateCreateError("Оберіть фурнітуру перед створенням шаблону");
       return;
     }
 
@@ -6710,7 +6710,7 @@ export default function App() {
 
   function buildHoleWorkspaceTemplatePayload(template, mountingVariantKey) {
     const isExistingTemplate = Boolean(template?.id);
-    const name = String(template?.name || "").trim() || "РћСЃРЅРѕРІРЅРёР№ С€Р°Р±Р»РѕРЅ";
+    const name = String(template?.name || "").trim() || "Основний шаблон";
 
     return {
       fitting_id: Number(holeSelectedFittingId),
@@ -6727,7 +6727,7 @@ export default function App() {
 
   async function handleHoleWorkspaceSaveTemplate() {
     if (!holeSelectedFittingId) {
-      setStatus({ message: "РћР±РµСЂС–С‚СЊ С„СѓСЂРЅС–С‚СѓСЂСѓ РїРµСЂРµРґ Р·Р±РµСЂРµР¶РµРЅРЅСЏРј", tone: "error" });
+      setStatus({ message: "Оберіть фурнітуру перед збереженням", tone: "error" });
       return;
     }
 
@@ -6744,7 +6744,7 @@ export default function App() {
         : await createFittingHoleTemplate(token, payload);
 
       if (!result.success) {
-        const errorMessage = result.error || "РќРµ РІРґР°Р»РѕСЃСЏ Р·Р±РµСЂРµРіС‚Рё РѕС‚РІРѕСЂРё С„СѓСЂРЅС–С‚СѓСЂРё";
+        const errorMessage = result.error || "Не вдалося зберегти отвори фурнітури";
         setStatus({ message: errorMessage, tone: "error" });
         return;
       }
@@ -6758,15 +6758,15 @@ export default function App() {
         setHoleSelectedTemplateId(savedTemplateId);
         const detailsLoaded = await loadHoleTemplateDetails(token, savedTemplateId);
         if (!detailsLoaded) {
-          setStatus({ message: "РћС‚РІРѕСЂРё Р·Р±РµСЂРµР¶РµРЅРѕ, Р°Р»Рµ РЅРµ РІРґР°Р»РѕСЃСЏ РІС–РґРЅРѕРІРёС‚Рё РґРµС‚Р°Р»С–", tone: "error" });
+          setStatus({ message: "Отвори збережено, але не вдалося відновити деталі", tone: "error" });
           return;
         }
       }
 
-      setStatus({ message: "Р—Р±РµСЂРµР¶РµРЅРѕ", tone: "success" });
+      setStatus({ message: "Збережено", tone: "success" });
     } catch (error) {
       setStatus({
-        message: error?.message || "РќРµ РІРґР°Р»РѕСЃСЏ Р·Р±РµСЂРµРіС‚Рё РѕС‚РІРѕСЂРё С„СѓСЂРЅС–С‚СѓСЂРё",
+        message: error?.message || "Не вдалося зберегти отвори фурнітури",
         tone: "error",
       });
     } finally {
@@ -6921,7 +6921,7 @@ export default function App() {
       case "angled_two_planes":
         return {
           camera: [4.7, 3.0, 6.2],
-          label: "Р”РІС– РїР»РѕС‰РёРЅРё РїС–Рґ РєСѓС‚РѕРј",
+          label: "Дві площини під кутом",
           markerPlane: { axis: "z", origin: [-0.92, 0.02, 0], spanU: 1.1, spanV: 1.78 },
           panels: [
             {
@@ -6939,12 +6939,12 @@ export default function App() {
               rotation: [0, 0, -0.72],
             },
           ],
-          subtitle: "РџР°РЅРµР»СЊ A в†’ РїР°РЅРµР»СЊ B В· angled_two_planes",
+          subtitle: "Панель A → панель B · angled_two_planes",
         };
       case "face_to_edge":
         return {
           camera: [3.55, 2.35, 4.1],
-          label: "РџР»Р°СЃС‚СЊ в†’ С‚РѕСЂРµС†СЊ",
+          label: "Пласть → торець",
           markerPlane: { axis: "z", origin: [0, 0, 0], spanU: 1.22, spanV: 1.72 },
           panels: [
             {
@@ -6962,12 +6962,12 @@ export default function App() {
               rotation: [0, 0, 0],
             },
           ],
-          subtitle: "РџР»Р°СЃС‚СЊ РїР°РЅРµР»С– в†’ С‚РѕСЂРµС†СЊ РїР°РЅРµР»С– В· face_to_edge",
+          subtitle: "Пласть панелі → торець панелі · face_to_edge",
         };
       case "edge_to_edge":
         return {
           camera: [4.9, 2.8, 6.1],
-          label: "РўРѕСЂРµС†СЊ РґРѕ С‚РѕСЂС†СЏ",
+          label: "Торець до торця",
           markerPlane: { axis: "z", origin: [-0.82, 0.03, 0], spanU: 1.0, spanV: 1.62 },
           panels: [
             {
@@ -6985,12 +6985,12 @@ export default function App() {
               rotation: [0, 0, 0],
             },
           ],
-          subtitle: "РўРѕСЂРµС†СЊ РїР°РЅРµР»С– A в†’ С‚РѕСЂРµС†СЊ РїР°РЅРµР»С– B В· edge_to_edge",
+          subtitle: "Торець панелі A → торець панелі B · edge_to_edge",
         };
       case "drawer_slides":
         return {
           camera: [5.1, 2.9, 6.6],
-          label: "РќР°РїСЂСЏРјРЅС– С€СѓС…Р»СЏРґРё",
+          label: "Напрямні шухляди",
           markerPlane: { axis: "z", origin: [-0.98, 0.02, 0], spanU: 1.16, spanV: 1.8 },
           panels: [
             {
@@ -7015,13 +7015,13 @@ export default function App() {
               rotation: [0, 0, 0],
             },
           ],
-          subtitle: "Р‘РѕРєРѕРІРёРЅРё С‚Р° РЅР°РїСЂСЏРјРЅР° В· drawer_slides",
+          subtitle: "Боковини та напрямна · drawer_slides",
         };
       case "surface_mount":
       default:
         return {
           camera: [4.7, 2.9, 6.0],
-          label: "РќР°РєР»Р°РґРЅРµ РєСЂС–РїР»РµРЅРЅСЏ",
+          label: "Накладне кріплення",
           markerPlane: { axis: "z", origin: [-0.96, 0.03, 0], spanU: 1.08, spanV: 1.74 },
           panels: [
             {
@@ -7039,7 +7039,7 @@ export default function App() {
               rotation: [0, 0, 0],
             },
           ],
-          subtitle: "РџР°РЅРµР»СЊ в†’ РЅР°РєР»Р°РґРЅРёР№ РµР»РµРјРµРЅС‚ В· surface_mount",
+          subtitle: "Панель → накладний елемент · surface_mount",
         };
     }
   }
@@ -7671,10 +7671,10 @@ export default function App() {
         </Canvas>
         <div className="holes-three-preview-overlay">
           <div className="holes-three-preview-origin-note">
-            <strong>РЎРёСЃС‚РµРјР° РєРѕРѕСЂРґРёРЅР°С‚:</strong> 0,0,0 Сѓ РІРЅСѓС‚СЂС–С€РЅСЊРѕРјСѓ РєСѓС‚С– СЃС‚РёРєСѓ РїР°РЅРµР»РµР№. РћСЃСЊ X, Y, Z РїРѕРєР°Р·Р°РЅС– РІ СЃС†РµРЅС–.
+            <strong>Система координат:</strong> 0,0,0 у внутрішньому куті стику панелей. Ось X, Y, Z показані в сцені.
           </div>
           {!markerPositions.length ? (
-            <div className="holes-three-preview-empty">РћС‚РІРѕСЂРё С‰Рµ РЅРµ РґРѕРґР°РЅС–</div>
+            <div className="holes-three-preview-empty">Отвори ще не додані</div>
           ) : null}
         </div>
       </div>
@@ -7702,7 +7702,7 @@ export default function App() {
     const fittingDescription = String(fitting.description || "").trim();
     const fittingImageUrl = String(fitting.image_url || "").trim();
     const fittingTitle = fittingName || t.holeTemplateFitting;
-    const fittingSubtitle = [fittingArticle, fitting.code].filter(Boolean).join(" В· ");
+    const fittingSubtitle = [fittingArticle, fitting.code].filter(Boolean).join(" · ");
 
     return (
       <section className="hole-template-fitting-info">
@@ -7741,11 +7741,11 @@ export default function App() {
         <div className="holes-mounting-variant-dropdown-head">
           <div>
             <strong>{t.holeWorkspaceConnectionVariantTitle}</strong>
-            <p>Р’РёР±РµСЂС–С‚СЊ РІР°СЂС–Р°РЅС‚ РєСЂС–РїР»РµРЅРЅСЏ РґР»СЏ Р°РєС‚РёРІРЅРѕРіРѕ С€Р°Р±Р»РѕРЅСѓ.</p>
+            <p>Виберіть варіант кріплення для активного шаблону.</p>
           </div>
           {holeWorkspaceHasUnsavedVariantChanges ? (
             <span className="service-tree-badge subtle holes-mounting-variant-dirty">
-              Р„ РЅРµР·Р±РµСЂРµР¶РµРЅС– Р·РјС–РЅРё
+              Є незбережені зміни
             </span>
           ) : null}
         </div>
@@ -7758,7 +7758,7 @@ export default function App() {
             type="button"
           >
             <span className="holes-mounting-variant-toggle-mark">
-              {selectedVariantIcon ? <img alt="" src={selectedVariantIcon} /> : <span>в€Ћ</span>}
+              {selectedVariantIcon ? <img alt="" src={selectedVariantIcon} /> : <span>⋯</span>}
             </span>
             <span className="holes-mounting-variant-toggle-copy">
               <strong>{selectedVariant?.label || normalizedSelectedHoleMountingVariantKey}</strong>
@@ -7816,9 +7816,9 @@ export default function App() {
       : Array.isArray(scene?.holes)
         ? scene.holes
         : [];
-    const materialPlaneA = scene?.materialPlanes?.planeA?.label || "РџР»РѕС‰РёРЅР° A";
-    const materialPlaneB = scene?.materialPlanes?.planeB?.label || "РџР»РѕС‰РёРЅР° B";
-    const connectionDirection = scene?.materialPlanes?.connectionDirection || "вЂ”";
+    const materialPlaneA = scene?.materialPlanes?.planeA?.label || "Площина A";
+    const materialPlaneB = scene?.materialPlanes?.planeB?.label || "Площина B";
+    const connectionDirection = scene?.materialPlanes?.connectionDirection || "—";
     const zoneByVariant = {
       angled_two_planes: { height: 126, width: 160, x: 266, y: 118 },
       drawer_slides: { height: 118, width: 120, x: 320, y: 110 },
@@ -7832,11 +7832,11 @@ export default function App() {
       return (
         <section className="holes-preview-schematic variant-surface_mount">
           <div className="holes-preview-schematic-head">
-            <strong>РЎС…РµРјР° СЃС†РµРЅРё</strong>
-            <span>РћР±РµСЂС–С‚СЊ С„СѓСЂРЅС–С‚СѓСЂСѓ, С‰РѕР± РїРѕР±Р°С‡РёС‚Рё СЃС…РµРјСѓ РјРѕРЅС‚Р°Р¶Сѓ</span>
+            <strong>Схема сцени</strong>
+            <span>Оберіть фурнітуру, щоб побачити схему монтажу</span>
           </div>
           <div className="holes-preview-schematic-empty-state">
-            <span>РћР±РµСЂС–С‚СЊ С„СѓСЂРЅС–С‚СѓСЂСѓ, С‰РѕР± РїРѕР±Р°С‡РёС‚Рё СЃС…РµРјСѓ РјРѕРЅС‚Р°Р¶Сѓ</span>
+            <span>Оберіть фурнітуру, щоб побачити схему монтажу</span>
           </div>
         </section>
       );
@@ -7919,9 +7919,9 @@ export default function App() {
       >
         {showHeader ? (
           <div className="holes-preview-schematic-head">
-            <strong>РЎС…РµРјР° СЃС†РµРЅРё</strong>
+            <strong>Схема сцени</strong>
             <span>
-              {materialPlaneA} в†’ {materialPlaneB} В· {connectionDirection}
+              {materialPlaneA} → {materialPlaneB} · {connectionDirection}
             </span>
           </div>
         ) : null}
@@ -8022,18 +8022,18 @@ export default function App() {
                   role={point.hasId && typeof onSelectHole === "function" ? "button" : undefined}
                   tabIndex={point.hasId && typeof onSelectHole === "function" ? 0 : undefined}
                 >
-                  {point.hasId ? <title>{`РћС‚РІС–СЂ #${point.id}`}</title> : null}
+                  {point.hasId ? <title>{`Отвір #${point.id}`}</title> : null}
                   <circle cx={point.cx} cy={point.cy} r={Math.max(point.radius + 3, 8)} />
                   <circle cx={point.cx} cy={point.cy} r={point.radius} />
                   <text x={point.cx + 10} y={point.cy - 10}>
-                    {point.hasId ? `#${point.id}` : "вЂ”"}
+                    {point.hasId ? `#${point.id}` : "—"}
                   </text>
                 </g>
               ))}
             </g>
           ) : (
             <text className="holes-preview-schematic-empty" x="380" y="160">
-              РћС‚РІРѕСЂРё СЃС†РµРЅРё С‰Рµ РЅРµ РґРѕРґР°РЅС–
+              Отвори сцени ще не додані
             </text>
           )}
         </svg>
@@ -8102,14 +8102,14 @@ export default function App() {
     event.preventDefault();
 
     if (!holeSelectedFittingId) {
-      setHoleTemplateCreateError("РћР±РµСЂС–С‚СЊ С„СѓСЂРЅС–С‚СѓСЂСѓ РїРµСЂРµРґ СЃС‚РІРѕСЂРµРЅРЅСЏРј С€Р°Р±Р»РѕРЅСѓ");
+      setHoleTemplateCreateError("Оберіть фурнітуру перед створенням шаблону");
       return;
     }
 
     const trimmedName = holeTemplateCreateForm.name.trim();
 
     if (!trimmedName) {
-      setHoleTemplateCreateError("РќР°Р·РІР° С€Р°Р±Р»РѕРЅСѓ С” РѕР±РѕРІ'СЏР·РєРѕРІРѕСЋ");
+      setHoleTemplateCreateError("Назва шаблону є обов'язковою");
       return;
     }
 
@@ -8130,7 +8130,7 @@ export default function App() {
     setLoading(false);
 
     if (!result.success) {
-      const errorMessage = result.error || "РќРµ РІРґР°Р»РѕСЃСЏ СЃС‚РІРѕСЂРёС‚Рё С€Р°Р±Р»РѕРЅ РѕС‚РІРѕСЂС–РІ";
+      const errorMessage = result.error || "Не вдалося створити шаблон отворів";
       setHoleTemplateCreateError(errorMessage);
       setStatus({ message: errorMessage, tone: "error" });
       return;
@@ -8148,7 +8148,7 @@ export default function App() {
       await loadHoleTemplateDetails(token, createdTemplateId);
     }
 
-    setStatus({ message: "РЁР°Р±Р»РѕРЅ РѕС‚РІРѕСЂС–РІ СЃС‚РІРѕСЂРµРЅРѕ", tone: "success" });
+    setStatus({ message: "Шаблон отворів створено", tone: "success" });
   }
 
   async function handleHoleTemplateEdit(event) {
@@ -11899,14 +11899,14 @@ export default function App() {
                 field: "facadeEdgeBanding",
                 mode: "edgeBanding",
                 target: "create",
-                title: language === "uk" ? "РљСЂР°Р№РєР° С„Р°СЃР°РґСѓ" : "Facade edge banding",
+                title: language === "uk" ? "Крайка фасаду" : "Facade edge banding",
                 value: newProjectForm.facadeEdgeBanding || t.notSet,
               })}
               {renderProjectOptionField({
                 field: "insideEdgeBanding",
                 mode: "edgeBanding",
                 target: "create",
-                title: language === "uk" ? "РљСЂР°Р№РєР° РєРѕСЂРїСѓСЃСѓ" : "Inside edge banding",
+                title: language === "uk" ? "Крайка корпусу" : "Inside edge banding",
                 value: newProjectForm.insideEdgeBanding || t.notSet,
               })}
               {renderProjectOptionField({
@@ -11920,7 +11920,7 @@ export default function App() {
                 field: "bottomType",
                 mode: "bottomType",
                 target: "create",
-                title: language === "uk" ? "Р’РёРґ С€СѓС…Р»СЏРґРєРё" : "Drawer type",
+                title: language === "uk" ? "Вид шухлядки" : "Drawer type",
                 value: formatProjectBottomValue(newProjectForm.bottomType),
               })}
               {renderProjectOptionField({
@@ -12084,7 +12084,7 @@ export default function App() {
                     field: "facadeEdgeBanding",
                     mode: "edgeBanding",
                     target: "edit",
-                    title: language === "uk" ? "РљСЂР°Р№РєР° С„Р°СЃР°РґСѓ" : "Facade edge banding",
+                    title: language === "uk" ? "Крайка фасаду" : "Facade edge banding",
                     value: form.facadeEdgeBanding || t.notSet,
                   })}
                   {renderProjectOptionField({
@@ -12100,7 +12100,7 @@ export default function App() {
                     field: "insideEdgeBanding",
                     mode: "edgeBanding",
                     target: "edit",
-                    title: language === "uk" ? "РљСЂР°Р№РєР° РєРѕСЂРїСѓСЃСѓ" : "Inside edge banding",
+                    title: language === "uk" ? "Крайка корпусу" : "Inside edge banding",
                     value: form.insideEdgeBanding || t.notSet,
                   })}
                   {renderProjectOptionField({
@@ -12116,7 +12116,7 @@ export default function App() {
                     field: "bottomType",
                     mode: "bottomType",
                     target: "edit",
-                    title: language === "uk" ? "Р’РёРґ С€СѓС…Р»СЏРґРєРё" : "Drawer type",
+                    title: language === "uk" ? "Вид шухлядки" : "Drawer type",
                     value: formatProjectBottomValue(form.bottomType),
                   })}
                   {renderProjectOptionField({
@@ -12945,11 +12945,11 @@ export default function App() {
                           </b>
                         </div>
                         <div>
-                          <span>{t.materialImportStrategy || "РЎС‚СЂР°С‚РµРіС–СЏ"}</span>
+                          <span>{t.materialImportStrategy || "Стратегія"}</span>
                           <b>{activeMaterialImportJob.last_strategy || t.notSet}</b>
                         </div>
                         <div>
-                          <span>{t.materialImportSourceUrl || "РЎС‚РѕСЂС–РЅРєР°"}</span>
+                          <span>{t.materialImportSourceUrl || "Сторінка"}</span>
                           <b className="material-import-source-url">
                             {activeMaterialImportJob.last_source_url || t.notSet}
                           </b>
@@ -12963,7 +12963,7 @@ export default function App() {
                       ) : null}
                       {Array.isArray(activeMaterialImportJob.debug_trace) && activeMaterialImportJob.debug_trace.length ? (
                         <details className="material-import-status-trace">
-                          <summary>{t.materialImportTrace || "РўРµС…РЅС–С‡РЅС– РґРµС‚Р°Р»С–"}</summary>
+                          <summary>{t.materialImportTrace || "Технічні деталі"}</summary>
                           <ul>
                             {activeMaterialImportJob.debug_trace.slice(-8).map((entry, index) => (
                               <li key={`${entry.stage || "trace"}-${index}`}>
@@ -13612,10 +13612,10 @@ export default function App() {
                   <details className="holes-panel holes-technical-templates">
                     <summary className="holes-technical-templates-summary">
                       <div>
-                        <strong>РўРµС…РЅС–С‡РЅС– С€Р°Р±Р»РѕРЅРё РѕС‚РІРѕСЂС–РІ</strong>
+                        <strong>Технічні шаблони отворів</strong>
                         <p>
-                          РЁР°Р±Р»РѕРЅРё Р»РёС€Р°СЋС‚СЊСЃСЏ С‚РµС…РЅС–С‡РЅРёРј РєРѕРЅС‚РµР№РЅРµСЂРѕРј РґР»СЏ С‚РѕС‡РєРё Р·Р±РµСЂРµР¶РµРЅРЅСЏ, Р°Р»Рµ РЅРµ РІРµРґСѓС‚СЊ
-                          РѕСЃРЅРѕРІРЅРёР№ СЃС†РµРЅР°СЂС–Р№.
+                          Шаблони лишаються технічним контейнером для точки збереження, але не ведуть
+                          основний сценарій.
                         </p>
                       </div>
                       <span className="service-tree-badge subtle">
@@ -13681,13 +13681,13 @@ export default function App() {
                                     <Trash2 size={14} />
                                   </button>
                                 </div>
-                                <span>{template.name || "вЂ”"}</span>
+                                <span>{template.name || "—"}</span>
                                 <span>{formatHoleTemplateType(template.template_type, t)}</span>
                                 <span>{formatHolePointSide(template.side, t)}</span>
                                 <span>{formatHoleTemplateCoordinateSystem(template.coordinate_system, t)}</span>
                                 <span>{template.is_default ? t.holePointSelectionYes : t.holePointSelectionNo}</span>
                                 <span>{template.is_active ? t.holePointSelectionYes : t.holePointSelectionNo}</span>
-                                <span>{template.notes || "вЂ”"}</span>
+                                <span>{template.notes || "—"}</span>
                               </article>
                             );
                           })}
@@ -13916,7 +13916,7 @@ export default function App() {
                           </svg>
                         </div>
                         <div className="holes-preview-legend">
-                          <span>Г - {t.holePreviewDiameter}</span>
+                          <span>Ø - {t.holePreviewDiameter}</span>
                           <span>{t.holePreviewDepth}</span>
                           <span>{t.holePreviewSide}</span>
                           <span>{t.holePreviewOperation}</span>
@@ -13952,24 +13952,24 @@ export default function App() {
                     </div>
                   )}
                   <div className="holes-preview-material-planes" aria-label={t.holeWorkspacePreview3dTitle}>
-                    <div className="holes-preview-material-planes-title">РџР»РѕС‰РёРЅРё РјР°С‚РµСЂС–Р°Р»Сѓ</div>
+                    <div className="holes-preview-material-planes-title">Площини матеріалу</div>
                     <div className="holes-preview-material-planes-flow">
                       <span className="holes-preview-material-plane-card">
-                        {holesPreviewModel.materialPlanes?.planeA?.label || "РџР»РѕС‰РёРЅР° A"}
+                        {holesPreviewModel.materialPlanes?.planeA?.label || "Площина A"}
                       </span>
                       <span className="holes-preview-material-planes-arrow" aria-hidden="true">
-                        в†’
+                        →
                       </span>
                       <span className="holes-preview-material-plane-card">
-                        {holesPreviewModel.materialPlanes?.planeB?.label || "РџР»РѕС‰РёРЅР° B"}
+                        {holesPreviewModel.materialPlanes?.planeB?.label || "Площина B"}
                       </span>
                     </div>
                   </div>
-                  <section className="holes-selected-point-panel" aria-label="Р’РёР±СЂР°РЅР° С‚РѕС‡РєР°">
+                  <section className="holes-selected-point-panel" aria-label="Вибрана точка">
                     <div className="holes-selected-point-panel-header">
                       <div>
-                        <strong>Р’РёР±СЂР°РЅР° С‚РѕС‡РєР°</strong>
-                        <p>Р”РµС‚Р°Р»С– Р°РєС‚РёРІРЅРѕС— С‚РѕС‡РєРё РѕС‚РІРѕСЂСѓ</p>
+                        <strong>Вибрана точка</strong>
+                        <p>Деталі активної точки отвору</p>
                       </div>
                       <div className="holes-selected-point-actions">
                         {selectedHolePoint ? (
@@ -14004,46 +14004,46 @@ export default function App() {
                       <div className="holes-selected-point-grid">
                         <div className="holes-selected-point-row">
                           <span>ID</span>
-                          <strong>{selectedHolePoint.id ?? "вЂ”"}</strong>
+                          <strong>{selectedHolePoint.id ?? "—"}</strong>
                         </div>
                         <div className="holes-selected-point-row">
-                          <span>РќР°Р·РІР°</span>
-                          <strong>{selectedHolePoint.label || selectedHolePoint.name || "вЂ”"}</strong>
+                          <span>Назва</span>
+                          <strong>{selectedHolePoint.label || selectedHolePoint.name || "—"}</strong>
                         </div>
                         <div className="holes-selected-point-row">
                           <span>X</span>
-                          <strong>{selectedHolePoint.x_mm ?? selectedHolePoint.x ?? "вЂ”"}</strong>
+                          <strong>{selectedHolePoint.x_mm ?? selectedHolePoint.x ?? "—"}</strong>
                         </div>
                         <div className="holes-selected-point-row">
                           <span>Y</span>
-                          <strong>{selectedHolePoint.y_mm ?? selectedHolePoint.y ?? "вЂ”"}</strong>
+                          <strong>{selectedHolePoint.y_mm ?? selectedHolePoint.y ?? "—"}</strong>
                         </div>
                         <div className="holes-selected-point-row">
-                          <span>Р”С–Р°РјРµС‚СЂ</span>
-                          <strong>{selectedHolePoint.diameter_mm ?? selectedHolePoint.diameter ?? "вЂ”"}</strong>
+                          <span>Діаметр</span>
+                          <strong>{selectedHolePoint.diameter_mm ?? selectedHolePoint.diameter ?? "—"}</strong>
                         </div>
                         <div className="holes-selected-point-row">
-                          <span>Р“Р»РёР±РёРЅР°</span>
-                          <strong>{selectedHolePoint.depth_mm ?? selectedHolePoint.depth ?? "вЂ”"}</strong>
+                          <span>Глибина</span>
+                          <strong>{selectedHolePoint.depth_mm ?? selectedHolePoint.depth ?? "—"}</strong>
                         </div>
                         <div className="holes-selected-point-row">
-                          <span>РЎС‚РѕСЂРѕРЅР°</span>
-                          <strong>{formatHolePointSide(selectedHolePoint.side, t) || selectedHolePoint.side || "вЂ”"}</strong>
+                          <span>Сторона</span>
+                          <strong>{formatHolePointSide(selectedHolePoint.side, t) || selectedHolePoint.side || "—"}</strong>
                         </div>
                         <div className="holes-selected-point-row">
-                          <span>РћРїРµСЂР°С†С–СЏ</span>
-                          <strong>{formatHolePointOperation(selectedHolePoint.operation, t) || selectedHolePoint.operation || "вЂ”"}</strong>
+                          <span>Операція</span>
+                          <strong>{formatHolePointOperation(selectedHolePoint.operation, t) || selectedHolePoint.operation || "—"}</strong>
                         </div>
                       </div>
                     ) : (
-                      <div className="holes-selected-point-empty">РўРѕС‡РєСѓ РЅРµ РІРёР±СЂР°РЅРѕ</div>
+                      <div className="holes-selected-point-empty">Точку не вибрано</div>
                     )}
                   </section>
-                  <section className="holes-workspace-save-panel" aria-label="Р—Р±РµСЂРµР¶РµРЅРЅСЏ РѕС‚РІРѕСЂС–РІ С„СѓСЂРЅС–С‚СѓСЂРё">
+                  <section className="holes-workspace-save-panel" aria-label="Збереження отворів фурнітури">
                     <div className="holes-workspace-save-copy">
-                      <strong>Р—Р±РµСЂРµРіС‚Рё РѕС‚РІРѕСЂРё С„СѓСЂРЅС–С‚СѓСЂРё</strong>
+                      <strong>Зберегти отвори фурнітури</strong>
                       <p>
-                        РџРѕС‚РѕС‡РЅРёР№ РІР°СЂС–Р°РЅС‚ РєСЂС–РїР»РµРЅРЅСЏ:{" "}
+                        Поточний варіант кріплення:{" "}
                         {selectedHoleMountingVariant?.label || normalizedSelectedHoleMountingVariantKey}
                       </p>
                     </div>
@@ -14062,50 +14062,50 @@ export default function App() {
                         type="button"
                       >
                         <Save size={16} />
-                        {selectedHoleTemplate ? "Р—Р±РµСЂРµРіС‚Рё РѕС‚РІРѕСЂРё С„СѓСЂРЅС–С‚СѓСЂРё" : "РЎС‚РІРѕСЂРёС‚Рё РѕСЃРЅРѕРІРЅРёР№ С€Р°Р±Р»РѕРЅ"}
+                        {selectedHoleTemplate ? "Зберегти отвори фурнітури" : "Створити основний шаблон"}
                       </button>
                     </div>
                   </section>
                   <details className="holes-preview-technical">
-                    <summary>РўРµС…РЅС–С‡РЅС– РґР°РЅС–</summary>
+                    <summary>Технічні дані</summary>
                   <div className="holes-preview-scene" aria-label="Scene model">
                     <div className="holes-preview-scene-title">Scene model</div>
                     <div className="holes-preview-scene-stats">
                       <div className="holes-preview-scene-stat">
-                        <span>Р¤СѓСЂРЅС–С‚СѓСЂР°:</span>
-                        <strong>{holesPreviewModel.scene?.stats?.hasFitting ? "С‚Р°Рє" : "РЅС–"}</strong>
+                        <span>Фурнітура:</span>
+                        <strong>{holesPreviewModel.scene?.stats?.hasFitting ? "так" : "ні"}</strong>
                       </div>
                       <div className="holes-preview-scene-stat">
-                        <span>РЁР°Р±Р»РѕРЅ:</span>
-                        <strong>{holesPreviewModel.scene?.stats?.hasTemplate ? "С‚Р°Рє" : "РЅС–"}</strong>
+                        <span>Шаблон:</span>
+                        <strong>{holesPreviewModel.scene?.stats?.hasTemplate ? "так" : "ні"}</strong>
                       </div>
                       <div className="holes-preview-scene-stat">
-                        <span>Р’Р°СЂС–Р°РЅС‚ РєСЂС–РїР»РµРЅРЅСЏ:</span>
-                        <strong>{holesPreviewModel.scene?.stats?.hasMountingVariant ? "С‚Р°Рє" : "РЅС–"}</strong>
+                        <span>Варіант кріплення:</span>
+                        <strong>{holesPreviewModel.scene?.stats?.hasMountingVariant ? "так" : "ні"}</strong>
                       </div>
                       <div className="holes-preview-scene-stat">
-                        <span>РџР»РѕС‰РёРЅРё:</span>
-                        <strong>{holesPreviewModel.scene?.materialPlanes ? "С‚Р°Рє" : "РЅС–"}</strong>
+                        <span>Площини:</span>
+                        <strong>{holesPreviewModel.scene?.materialPlanes ? "так" : "ні"}</strong>
                       </div>
                       <div className="holes-preview-scene-stat">
-                        <span>РљРѕРѕСЂРґРёРЅР°С‚Рё:</span>
-                        <strong>{holesPreviewModel.scene?.stats?.hasCoordinates ? "С”" : "РЅРµРјР°С”"}</strong>
+                        <span>Координати:</span>
+                        <strong>{holesPreviewModel.scene?.stats?.hasCoordinates ? "є" : "немає"}</strong>
                       </div>
                       <div className="holes-preview-scene-stat">
-                        <span>РћС‚РІРѕСЂС–РІ Сѓ СЃС†РµРЅС–:</span>
+                        <span>Отворів у сцені:</span>
                         <strong>{holesPreviewModel.scene?.stats?.holesCount ?? 0}</strong>
                       </div>
                       <div className="holes-preview-scene-stat">
-                        <span>РќРѕСЂРјР°Р»С–Р·РѕРІР°РЅРѕ С‚РѕС‡РѕРє:</span>
+                        <span>Нормалізовано точок:</span>
                         <strong>{holesPreviewModel.scene?.stats?.normalizedCount ?? 0}</strong>
                       </div>
                       <div className="holes-preview-scene-stat">
-                        <span>Hovered hole:</span>
-                        <strong>{holesPreviewModel.scene?.hoveredHoleId || "вЂ”"}</strong>
+                        <span>Наведений отвір:</span>
+                        <strong>{holesPreviewModel.scene?.hoveredHoleId || "—"}</strong>
                       </div>
                     </div>
                     <div className="holes-preview-scene-holes">
-                      <div className="holes-preview-scene-holes-title">РћС‚РІРѕСЂРё СЃС†РµРЅРё</div>
+                      <div className="holes-preview-scene-holes-title">Отвори сцени</div>
                       {holesPreviewModel.scene?.holes?.length ? (
                         <div className="holes-preview-scene-holes-list">
                           {holesPreviewModel.scene.holes.map((hole) => (
@@ -14115,86 +14115,86 @@ export default function App() {
                             >
                               <strong>
                                 #{hole.id}
-                                {Number.isFinite(hole.diameter) ? ` Г${hole.diameter}` : " ГвЂ”"}
+                                {Number.isFinite(hole.diameter) ? ` ⌀${hole.diameter}` : " ⌀—"}
                               </strong>
                               <span>
-                                x:{Number.isFinite(hole.x) ? hole.x : "вЂ”"} y:{Number.isFinite(hole.y) ? hole.y : "вЂ”"}
+                                x:{Number.isFinite(hole.x) ? hole.x : "—"} y:{Number.isFinite(hole.y) ? hole.y : "—"}
                               </span>
                             </div>
                           ))}
                         </div>
                       ) : (
-                        <div className="holes-preview-scene-empty">РћС‚РІРѕСЂРё СЃС†РµРЅРё С‰Рµ РЅРµ РґРѕРґР°РЅС–</div>
+                        <div className="holes-preview-scene-empty">Отвори сцени ще не додані</div>
                       )}
                     </div>
                   </div>
                   <div className="holes-preview-debug" aria-label={t.holeWorkspacePreview3dTitle}>
                     <div className="holes-preview-debug-row">
-                      <span className="holes-preview-debug-label">Р¤СѓСЂРЅС–С‚СѓСЂР°</span>
+                      <span className="holes-preview-debug-label">Фурнітура</span>
                       <strong className="holes-preview-debug-value">
                         {holesPreviewModel.fitting?.name ||
                           holesPreviewModel.fitting?.article ||
                           holesPreviewModel.fitting?.code ||
-                          "вЂ”"}
+                          "—"}
                       </strong>
                     </div>
                     <div className="holes-preview-debug-row">
-                      <span className="holes-preview-debug-label">РђСЂС‚РёРєСѓР»</span>
-                      <strong className="holes-preview-debug-value">{holesPreviewModel.fitting?.article || "вЂ”"}</strong>
+                      <span className="holes-preview-debug-label">Артикул</span>
+                      <strong className="holes-preview-debug-value">{holesPreviewModel.fitting?.article || "—"}</strong>
                     </div>
                     <div className="holes-preview-debug-row">
-                      <span className="holes-preview-debug-label">РЁР°Р±Р»РѕРЅ</span>
+                      <span className="holes-preview-debug-label">Шаблон</span>
                       <strong className="holes-preview-debug-value">
-                        {holesPreviewModel.template?.name || `#${holesPreviewModel.template?.id ?? "вЂ”"}`}
+                        {holesPreviewModel.template?.name || `#${holesPreviewModel.template?.id ?? "—"}`}
                       </strong>
                     </div>
                     <div className="holes-preview-debug-row">
-                      <span className="holes-preview-debug-label">Р’Р°СЂС–Р°РЅС‚ РєСЂС–РїР»РµРЅРЅСЏ</span>
+                      <span className="holes-preview-debug-label">Варіант кріплення</span>
                       <strong className="holes-preview-debug-value">
-                        {holesPreviewModel.mountingVariant?.label || "вЂ”"}
+                        {holesPreviewModel.mountingVariant?.label || "—"}
                       </strong>
                     </div>
                     <div className="holes-preview-debug-row">
-                      <span className="holes-preview-debug-label">РџР»РѕС‰РёРЅР° A</span>
-                      <strong className="holes-preview-debug-value">{holesPreviewModel.materialPlanes?.planeA?.label || "вЂ”"}</strong>
+                      <span className="holes-preview-debug-label">Площина A</span>
+                      <strong className="holes-preview-debug-value">{holesPreviewModel.materialPlanes?.planeA?.label || "—"}</strong>
                     </div>
                     <div className="holes-preview-debug-row">
-                      <span className="holes-preview-debug-label">РџР»РѕС‰РёРЅР° B</span>
-                      <strong className="holes-preview-debug-value">{holesPreviewModel.materialPlanes?.planeB?.label || "вЂ”"}</strong>
+                      <span className="holes-preview-debug-label">Площина B</span>
+                      <strong className="holes-preview-debug-value">{holesPreviewModel.materialPlanes?.planeB?.label || "—"}</strong>
                     </div>
                     <div className="holes-preview-debug-row">
-                      <span className="holes-preview-debug-label">РќР°РїСЂСЏРј</span>
+                      <span className="holes-preview-debug-label">Напрям</span>
                       <strong className="holes-preview-debug-value">
-                        {holesPreviewModel.materialPlanes?.connectionDirection || "вЂ”"}
+                        {holesPreviewModel.materialPlanes?.connectionDirection || "—"}
                       </strong>
                     </div>
                     <div className="holes-preview-debug-row">
-                      <span className="holes-preview-debug-label">РЎС‚РѕСЂРѕРЅР°</span>
+                      <span className="holes-preview-debug-label">Сторона</span>
                       <strong className="holes-preview-debug-value">
                         {holesPreviewModel.side
                           ? formatHolePointSide(holesPreviewModel.side, t) || holesPreviewModel.side
-                          : "вЂ”"}
+                          : "—"}
                       </strong>
                     </div>
                     <div className="holes-preview-debug-row">
-                      <span className="holes-preview-debug-label">РўРёРї</span>
+                      <span className="holes-preview-debug-label">Тип</span>
                       <strong className="holes-preview-debug-value">
                         {holesPreviewModel.type
                           ? formatHoleTemplateType(holesPreviewModel.type, t) || holesPreviewModel.type
-                          : "вЂ”"}
+                          : "—"}
                       </strong>
                     </div>
                     <div className="holes-preview-debug-row">
-                      <span className="holes-preview-debug-label">РўРѕС‡РѕРє</span>
+                      <span className="holes-preview-debug-label">Точок</span>
                       <strong className="holes-preview-debug-value">{holesPreviewModel.pointCount}</strong>
                     </div>
                       <div className="holes-preview-debug-row">
                         <span className="holes-preview-debug-label">Hover point</span>
-                        <strong className="holes-preview-debug-value">{holesPreviewModel.hoveredPointId || "вЂ”"}</strong>
+                        <strong className="holes-preview-debug-value">{holesPreviewModel.hoveredPointId || "—"}</strong>
                       </div>
                       <div className="holes-preview-debug-row">
-                        <span className="holes-preview-debug-label">Selected hole</span>
-                        <strong className="holes-preview-debug-value">{holesPreviewModel.selectedPointId || "вЂ”"}</strong>
+                        <span className="holes-preview-debug-label">Вибраний отвір</span>
+                        <strong className="holes-preview-debug-value">{holesPreviewModel.selectedPointId || "—"}</strong>
                       </div>
                     </div>
                   </details>
@@ -14263,7 +14263,7 @@ export default function App() {
                         </svg>
                       </div>
                       <div className="holes-preview-legend">
-                        <span>Г - {t.holePreviewDiameter}</span>
+                        <span>Ø - {t.holePreviewDiameter}</span>
                         <span>{t.holePreviewDepth}</span>
                         <span>{t.holePreviewSide}</span>
                         <span>{t.holePreviewOperation}</span>
@@ -15286,9 +15286,9 @@ export default function App() {
               <strong>{selectedProject.facade_material || t.notSet}</strong>
               <span>{t.insideMaterial}</span>
               <strong>{selectedProject.inside_material || t.notSet}</strong>
-              <span>{`${t.facadeMaterial} В· ${t.edgeBanding}`}</span>
+              <span>{`${t.facadeMaterial} · ${t.edgeBanding}`}</span>
               <strong>{selectedProject.facade_edge_banding || selectedProject.edge_banding || t.notSet}</strong>
-              <span>{`${t.insideMaterial} В· ${t.edgeBanding}`}</span>
+              <span>{`${t.insideMaterial} · ${t.edgeBanding}`}</span>
               <strong>{selectedProject.inside_edge_banding || selectedProject.edge_banding || t.notSet}</strong>
               <span>{t.created}</span>
               <strong>{formatDateTime(selectedProject.created_at, t)}</strong>
@@ -15465,7 +15465,7 @@ export default function App() {
                 />
               </label>
               <span className="service-tree-badge subtle">
-                {filteredProjectOptionItems.length} {language === "uk" ? "РїРѕР·РёС†С–Р№" : "items"}
+                {filteredProjectOptionItems.length} {language === "uk" ? "позицій" : "items"}
               </span>
             </div>
 
@@ -15481,10 +15481,10 @@ export default function App() {
                       projectOptionPicker.mode === "slideType"
                         ? item.pickerRecommended
                           ? language === "uk"
-                            ? "Р РµРєРѕРјРµРЅРґРѕРІР°РЅРѕ"
+                            ? "Рекомендовано"
                             : "Recommended"
                           : item.pickerLength
-                            ? `${item.pickerLength} РјРј`
+                            ? `${item.pickerLength} мм`
                             : t.slideType
                         : currentFittingCategoryMeta?.name || t.handleType;
 
@@ -15571,7 +15571,7 @@ export default function App() {
                         <div className="project-option-picker-card-body">
                           <div className="project-option-picker-card-topline">
                             <span className="service-tree-badge subtle">
-                              {language === "uk" ? "2 РІР°СЂС–Р°РЅС‚Рё" : "2 variants"}
+                              {language === "uk" ? "2 варіанти" : "2 variants"}
                             </span>
                           </div>
                           <strong>{item.pickerTitle || item.pickerValue || t.notSet}</strong>
@@ -16452,7 +16452,7 @@ export default function App() {
                   type="text"
                   value={
                     selectedHoleTemplate
-                      ? `${selectedHoleTemplate.id} В· ${selectedHoleTemplate.name || t.notSet}`
+                      ? `${selectedHoleTemplate.id} · ${selectedHoleTemplate.name || t.notSet}`
                       : holeSelectedTemplateId
                   }
                 />
@@ -16524,15 +16524,15 @@ export default function App() {
               </div>
 
               <div className="hole-point-coordinate-hint">
-                <strong>РџРѕС‡Р°С‚РѕРє РєРѕРѕСЂРґРёРЅР°С‚</strong>
+                <strong>Початок координат</strong>
                 <p>
-                  0,0,0 СЂРѕР·С‚Р°С€РѕРІР°РЅРѕ Сѓ РІРЅСѓС‚СЂС–С€РЅСЊРѕРјСѓ РєСѓС‚С– СЃС‚РёРєСѓ РїР°РЅРµР»РµР№. РљРѕРѕСЂРґРёРЅР°С‚Рё X/Y/Z СЂР°С…СѓР№С‚Рµ РІС–Рґ С†С–С”С— С‚РѕС‡РєРё Сѓ
-                  РЅР°РїСЂСЏРјРєР°С…, СЏРєС– РїРѕРєР°Р·Р°РЅС– РІ 3D preview.
+                  0,0,0 розташовано у внутрішньому куті стику панелей. Координати X/Y/Z рахуйте від цієї точки у
+                  напрямках, які показані в 3D preview.
                 </p>
                 <p>
-                  РџРѕС‚РѕС‡РЅРёР№ РІР°СЂС–Р°РЅС‚ РєСЂС–РїР»РµРЅРЅСЏ: {selectedHoleMountingVariant?.label || normalizedSelectedHoleMountingVariantKey}
+                  Поточний варіант кріплення: {selectedHoleMountingVariant?.label || normalizedSelectedHoleMountingVariantKey}
                   {normalizedSelectedHoleMountingVariantKey === "face_to_edge"
-                    ? " В· РґР»СЏ face_to_edge РІС–СЃСЊ X С–РґРµ СѓР·РґРѕРІР¶ РїР»Р°СЃС‚С–, Y - СѓР·РґРѕРІР¶ С‚РѕСЂС†СЏ, Z - РїРµСЂРїРµРЅРґРёРєСѓР»СЏСЂРЅРѕ РґРѕ РІСѓР·Р»Р°."
+                    ? " · для face_to_edge вісь X іде уздовж пласті, Y - уздовж торця, Z - перпендикулярно до вузла."
                     : ""}
                 </p>
               </div>
@@ -16741,7 +16741,7 @@ export default function App() {
                   type="text"
                   value={
                     selectedHoleTemplate
-                      ? `${selectedHoleTemplate.id} В· ${selectedHoleTemplate.name || t.notSet}`
+                      ? `${selectedHoleTemplate.id} · ${selectedHoleTemplate.name || t.notSet}`
                       : holePointEditForm.template_id
                   }
                 />
