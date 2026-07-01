@@ -2968,6 +2968,63 @@ Object.assign(TRANSLATIONS.uk, {
     "Ця 3D збірка побудована на основі карти розкрою. Натисніть на панель, щоб відкрити її робоче місце деталі.",
 });
 
+Object.assign(TRANSLATIONS.uk, {
+  catalog: "Довідники",
+  catalogMaterials: "Матеріали",
+  catalogFittings: "Каталог фурнітури",
+  catalogHubTitle: "Огляд довідників",
+  homeCatalogMenuTitle: "Каталоги",
+  homeOpenProjects: "Відкрити проєкти",
+  homeOpenSettings: "Налаштування профілю",
+  furniturePlatform: "MProject.furniture",
+  brandTagline: "Професійне рішення для меблевого виробництва",
+  holes: "Отвори",
+  holeTabTitle: "Отвори",
+  holeTabDescription: "Перегляд отворів для вибраної фурнітури і варіанта кріплення.",
+  holeWorkspaceConnectionVariantTitle: "Варіант кріплення",
+  holeWorkspaceFittingInfoTitle: "Інформація про фурнітуру",
+  holeWorkspacePreview3dTitle: "3D перегляд",
+  holeWorkspaceNoImage: "Без зображення",
+  holeTemplateMountingSchemeTitle: "Сторона шаблону",
+  holeTemplateSelectFitting: "Оберіть фурнітуру",
+  holeTemplateSelectTemplate: "Для цієї фурнітури немає отворів",
+  holePointTemplateRequired: "Оберіть шаблон перед створенням точки",
+  holePointCreateTitle: "Додати точку отвору",
+  holePointCreateDescription: "Створення нової точки для вибраної фурнітури та варіанта кріплення.",
+  holePointEditTitle: "Редагувати точку отвору",
+  holePreviewTitle: "2D перегляд",
+  holePreviewHelper: "Прев'ю показує збережені координати точок на масштабованій площині.",
+  holePreviewEmpty: "Точки отворів ще не додані",
+  holePreviewCoordinates: "Координати",
+  holePreviewDiameter: "Діаметр",
+  holePreviewDepth: "Глибина",
+  holePreviewSide: "Сторона",
+  holePreviewOperation: "Операція",
+  holePointAdd: "Додати точку",
+  holePointLabel: "Мітка",
+  holePointSide: "Сторона",
+  holePointOperation: "Операція",
+  holePointDepth: "Глибина, мм",
+  holePointDiameter: "Діаметр, мм",
+  holePointOrderIndex: "Порядок",
+  holePointQuantity: "Кількість",
+  holePointMirrored: "Дубльована",
+  holePointNotes: "Примітки",
+  holeTemplateColumnName: "Назва",
+  holeTemplateColumnSide: "Сторона",
+  holeTemplateColumnType: "Тип",
+  holeTemplateColumnSystem: "Система",
+  holeTemplateColumnDefault: "За замовчуванням",
+  holeTemplateColumnActive: "Активний",
+  holeTemplateColumnNotes: "Примітки",
+  holeTemplateMountingSchemePlaceholder: "Оберіть сторону деталі, до якої прив'язаний шаблон отворів.",
+  holeTemplateMountingSchemeSelected: "Обрано",
+  holeWorkspaceVariantEdgeToFace: "Торець → площина",
+  holeWorkspaceVariantFaceToEdge: "Площина → торець",
+  holeWorkspaceVariantHorizontalToVertical: "Горизонталь → вертикаль",
+  holeWorkspaceVariantVerticalToHorizontal: "Вертикаль → горизонталь",
+});
+
 function buildProjectPayload(form) {
   const normalizeText = (value) => {
     const trimmed = String(value || "").trim();
@@ -13982,24 +14039,24 @@ export default function App() {
                     </div>
                   )}
                   <div className="holes-preview-material-planes" aria-label={t.holeWorkspacePreview3dTitle}>
-                    <div className="holes-preview-material-planes-title">РџР»РѕС‰РёРЅРё РјР°С‚РµСЂС–Р°Р»Сѓ</div>
+                    <div className="holes-preview-material-planes-title">Площини матеріалу</div>
                     <div className="holes-preview-material-planes-flow">
                       <span className="holes-preview-material-plane-card">
-                        {holesPreviewModel.materialPlanes?.planeA?.label || "РџР»РѕС‰РёРЅР° A"}
+                        {holesPreviewModel.materialPlanes?.planeA?.label || "Площина A"}
                       </span>
                       <span className="holes-preview-material-planes-arrow" aria-hidden="true">
                         в†’
                       </span>
                       <span className="holes-preview-material-plane-card">
-                        {holesPreviewModel.materialPlanes?.planeB?.label || "РџР»РѕС‰РёРЅР° B"}
+                        {holesPreviewModel.materialPlanes?.planeB?.label || "Площина B"}
                       </span>
                     </div>
                   </div>
-                  <section className="holes-selected-point-panel" aria-label="Р’РёР±СЂР°РЅР° С‚РѕС‡РєР°">
+                  <section className="holes-selected-point-panel" aria-label="Вибрана точка">
                     <div className="holes-selected-point-panel-header">
                       <div>
-                        <strong>Р’РёР±СЂР°РЅР° С‚РѕС‡РєР°</strong>
-                        <p>Р”РµС‚Р°Р»С– Р°РєС‚РёРІРЅРѕС— С‚РѕС‡РєРё РѕС‚РІРѕСЂСѓ</p>
+                        <strong>Вибрана точка</strong>
+                        <p>Деталі активної точки отвору</p>
                       </div>
                       <div className="holes-selected-point-actions">
                         {selectedHolePoint ? (
@@ -14037,7 +14094,7 @@ export default function App() {
                           <strong>{selectedHolePoint.id ?? "вЂ”"}</strong>
                         </div>
                         <div className="holes-selected-point-row">
-                          <span>РќР°Р·РІР°</span>
+                          <span>Назва</span>
                           <strong>{selectedHolePoint.label || selectedHolePoint.name || "вЂ”"}</strong>
                         </div>
                         <div className="holes-selected-point-row">
@@ -14049,19 +14106,19 @@ export default function App() {
                           <strong>{selectedHolePoint.y_mm ?? selectedHolePoint.y ?? "вЂ”"}</strong>
                         </div>
                         <div className="holes-selected-point-row">
-                          <span>Р”С–Р°РјРµС‚СЂ</span>
+                          <span>Діаметр</span>
                           <strong>{selectedHolePoint.diameter_mm ?? selectedHolePoint.diameter ?? "вЂ”"}</strong>
                         </div>
                         <div className="holes-selected-point-row">
-                          <span>Р“Р»РёР±РёРЅР°</span>
+                          <span>Глибина</span>
                           <strong>{selectedHolePoint.depth_mm ?? selectedHolePoint.depth ?? "вЂ”"}</strong>
                         </div>
                         <div className="holes-selected-point-row">
-                          <span>РЎС‚РѕСЂРѕРЅР°</span>
+                          <span>Сторона</span>
                           <strong>{formatHolePointSide(selectedHolePoint.side, t) || selectedHolePoint.side || "вЂ”"}</strong>
                         </div>
                         <div className="holes-selected-point-row">
-                          <span>РћРїРµСЂР°С†С–СЏ</span>
+                          <span>Операція</span>
                           <strong>{formatHolePointOperation(selectedHolePoint.operation, t) || selectedHolePoint.operation || "вЂ”"}</strong>
                         </div>
                       </div>
