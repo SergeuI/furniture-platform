@@ -1786,7 +1786,7 @@ const TRANSLATIONS = {
     invalidCurrentPassword: "РќРµРІС–СЂРЅРёР№ РїРѕС‚РѕС‡РЅРёР№ РїР°СЂРѕР»СЊ",
     loginFailed: "РќРµ РІРґР°Р»РѕСЃСЏ СѓРІС–Р№С‚Рё",
     loginOrEmail: "\u041b\u043e\u0433\u0456\u043d \u0430\u0431\u043e email",
-    logout: "Р’РёР№С‚Рё",
+    logout: "Вийти",
     noDetails: "Р‘РµР· РґРµС‚Р°Р»РµР№",
     noCuttingItems: "РљР°СЂС‚Р° СЂРѕР·РєСЂРѕСЋ С‰Рµ РїРѕСЂРѕР¶РЅСЏ.",
     newPassword: "РќРѕРІРёР№ РїР°СЂРѕР»СЊ",
@@ -1833,7 +1833,7 @@ const TRANSLATIONS = {
     rollbackFailed: "РќРµ РІРґР°Р»РѕСЃСЏ РІС–РґРЅРѕРІРёС‚Рё",
     rollbackProject: "Р’С–РґРЅРѕРІРёС‚Рё РїСЂРѕРµРєС‚",
     room: "РљС–РјРЅР°С‚Р°",
-    save: "Р—Р±РµСЂРµРіС‚Рё",
+    save: "Зберегти",
     searchProjects: "РџРѕС€СѓРє РїСЂРѕРµРєС‚С–РІ",
     sections: "РЎРµРєС†С–С—",
     selectProject: "Р’РёР±РµСЂС–С‚СЊ РїСЂРѕРµРєС‚",
@@ -4753,12 +4753,12 @@ export default function App() {
           connectionDirection: "face_to_edge",
           planeA: {
             key: "face",
-            label: "Panel face",
+            label: "Площина фасаду",
             role: "source",
           },
           planeB: {
             key: "edge",
-            label: "Panel edge",
+            label: "Торець панелі",
             role: "target",
           },
         };
@@ -4767,12 +4767,12 @@ export default function App() {
           connectionDirection: "edge_to_edge",
           planeA: {
             key: "edge_left",
-            label: "Panel A edge",
+            label: "Торець панелі A",
             role: "source",
           },
           planeB: {
             key: "edge_right",
-            label: "Panel B edge",
+            label: "Торець панелі B",
             role: "target",
           },
         };
@@ -14123,14 +14123,14 @@ export default function App() {
                         </div>
                       </div>
                     ) : (
-                      <div className="holes-selected-point-empty">РўРѕС‡РєСѓ РЅРµ РІРёР±СЂР°РЅРѕ</div>
+                      <div className="holes-selected-point-empty">Точку не вибрано</div>
                     )}
                   </section>
-                  <section className="holes-workspace-save-panel" aria-label="Р—Р±РµСЂРµР¶РµРЅРЅСЏ РѕС‚РІРѕСЂС–РІ С„СѓСЂРЅС–С‚СѓСЂРё">
+                  <section className="holes-workspace-save-panel" aria-label="Збереження отворів фурнітури">
                     <div className="holes-workspace-save-copy">
-                      <strong>Р—Р±РµСЂРµРіС‚Рё РѕС‚РІРѕСЂРё С„СѓСЂРЅС–С‚СѓСЂРё</strong>
+                      <strong>Зберегти отвори фурнітури</strong>
                       <p>
-                        РџРѕС‚РѕС‡РЅРёР№ РІР°СЂС–Р°РЅС‚ РєСЂС–РїР»РµРЅРЅСЏ:{" "}
+                        Поточний варіант кріплення:{" "}
                         {selectedHoleMountingVariant?.label || normalizedSelectedHoleMountingVariantKey}
                       </p>
                     </div>
@@ -14149,7 +14149,7 @@ export default function App() {
                         type="button"
                       >
                         <Save size={16} />
-                        {selectedHoleTemplate ? "Р—Р±РµСЂРµРіС‚Рё РѕС‚РІРѕСЂРё С„СѓСЂРЅС–С‚СѓСЂРё" : "РЎС‚РІРѕСЂРёС‚Рё РѕСЃРЅРѕРІРЅРёР№ С€Р°Р±Р»РѕРЅ"}
+                        {selectedHoleTemplate ? "Зберегти отвори фурнітури" : "Створити основний шаблон"}
                       </button>
                     </div>
                   </section>
