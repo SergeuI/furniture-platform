@@ -569,6 +569,7 @@ const DEFAULT_HOLE_POINT_FORM = {
   order_index: "0",
   quantity: "1",
   mirrored: false,
+  is_through: true,
   notes: "",
 };
 
@@ -586,6 +587,7 @@ function buildHolePointFormFromPoint(point) {
     order_index: point?.order_index ?? 0,
     quantity: point?.quantity ?? 1,
     mirrored: Boolean(point?.mirrored),
+    is_through: !(Number.isFinite(Number(point?.depth_mm)) || Number.isFinite(Number(point?.depth))),
     notes: String(point?.notes ?? ""),
   };
 }
@@ -706,6 +708,28 @@ function getHoleSideSelectOptions(currentValue) {
   return hasKnownOption
     ? HOLE_POINT_SIDE_OPTIONS
     : [...HOLE_POINT_SIDE_OPTIONS, { value: normalizedValue, label: normalizedValue }];
+}
+
+function getHoleSideSelectOptionsForPanel(panelKey, currentValue) {
+  if (panelKey === "vertical_panel") {
+    const baseOptions = HOLE_POINT_SIDE_OPTIONS.filter((option) => option.value === "front" || option.value === "back");
+    const normalizedValue = String(currentValue || "").trim();
+    if (normalizedValue && !baseOptions.some((option) => option.value === normalizedValue)) {
+      return [...baseOptions, { value: normalizedValue, label: normalizedValue }];
+    }
+    return baseOptions;
+  }
+
+  if (panelKey === "horizontal_panel") {
+    const baseOptions = HOLE_POINT_SIDE_OPTIONS.filter((option) => option.value === "left" || option.value === "right");
+    const normalizedValue = String(currentValue || "").trim();
+    if (normalizedValue && !baseOptions.some((option) => option.value === normalizedValue)) {
+      return [...baseOptions, { value: normalizedValue, label: normalizedValue }];
+    }
+    return baseOptions;
+  }
+
+  return getHoleSideSelectOptions(currentValue);
 }
 
 function renderHoleSideOptionLabel(option, t) {
@@ -5189,6 +5213,14 @@ export default function App() {
     () => holePoints.find((point) => String(point.id) === String(selectedHolePointId)) || null,
     [holePoints, selectedHolePointId],
   );
+  const selectedHolePointPanelKey = useMemo(() => {
+    const matchingGroup = holePanelGroups.find((group) =>
+      group.points.some((point) => String(point.id) === String(selectedHolePointId)),
+    );
+
+    return matchingGroup?.key || "";
+  }, [holePanelGroups, selectedHolePointId]);
+  const holePointFormPanelKey = selectedHolePointPanelKey || (normalizedSelectedHoleMountingVariantKey === "face_to_edge" ? "vertical_panel" : "");
   const holesPreviewModel = useMemo(
     () => ({
       fitting: selectedHoleFitting,
@@ -5214,6 +5246,7 @@ export default function App() {
       selectedHolePoint,
       selectedHoleTemplate,
       holesPreviewSceneModel,
+      selectedHolePointPanelKey,
     ],
   );
   const inferStatusTone = useCallback((message) => {
@@ -8517,18 +8550,21 @@ export default function App() {
       throw new Error(t.holePointDiameterRequired);
     }
 
+    const isThrough = Boolean(form.is_through);
+    const depthValue = isThrough ? undefined : parseMaybeNumber(form.depth_mm, t.holePointDepth);
+
     const payload = {
-      label: String(form.label || "").trim() || null,
+      label: null,
       x_mm: parseMaybeNumber(form.x_mm, t.holePointX),
       y_mm: parseMaybeNumber(form.y_mm, t.holePointY),
       z_mm: parseMaybeNumber(form.z_mm, t.holePointZ),
       diameter_mm: parseMaybeNumber(diameterText, t.holePointDiameter),
-      depth_mm: parseMaybeNumber(form.depth_mm, t.holePointDepth),
+      depth_mm: depthValue,
       side: String(form.side || "").trim() || "front",
-      operation: String(form.operation || "").trim() || "drill",
-      order_index: Number.parseInt(String(form.order_index || "0").trim(), 10),
-      quantity: Number.parseInt(String(form.quantity || "1").trim(), 10),
-      mirrored: Boolean(form.mirrored),
+      operation: "drill",
+      order_index: 0,
+      quantity: 1,
+      mirrored: false,
       notes: String(form.notes || "").trim() || null,
     };
 
@@ -8543,14 +8579,6 @@ export default function App() {
     }
     if (!Number.isFinite(payload.depth_mm)) {
       payload.depth_mm = undefined;
-    }
-
-    if (!Number.isFinite(payload.order_index)) {
-      throw new Error(t.holePointOrderIndexInvalid);
-    }
-
-    if (!Number.isFinite(payload.quantity) || payload.quantity <= 0) {
-      throw new Error(t.holePointQuantityInvalid);
     }
 
     return payload;
@@ -16533,8 +16561,8 @@ export default function App() {
           >
             <header className="confirm-header">
               <div>
-                <strong>{t.holePointCreateTitle}</strong>
-                <p>{t.holePointCreateDescription}</p>
+                <strong>Додати отвір у вертикальній панелі</strong>
+                <p>Задайте координати, діаметр і спосіб глибини отвору.</p>
               </div>
               <button
                 aria-label={t.cancel}
@@ -16548,21 +16576,13 @@ export default function App() {
             </header>
 
             <form className="hole-template-form" onSubmit={handleHolePointCreate}>
-
-              <label>
-                {t.holePointLabel}
-                <input
-                  disabled={loading}
-                  onChange={(event) =>
-                    setHolePointCreateForm((current) => ({
-                      ...current,
-                      label: event.target.value,
-                    }))
-                  }
-                  type="text"
-                  value={holePointCreateForm.label}
-                />
-              </label>
+              <div className="hole-point-coordinate-hint">
+                <strong>Отвір у вертикальній панелі</strong>
+                <p>Вкажіть координати, діаметр і спосіб глибини для отвору.</p>
+                <p>
+                  Початок координат: 0,0,0 знаходиться у внутрішньому куті стику панелей. X, Y та Z рахуються від цієї точки.
+                </p>
+              </div>
 
               <div className="hole-template-form-grid">
                 <label>
@@ -16614,20 +16634,6 @@ export default function App() {
                 </label>
               </div>
 
-              <div className="hole-point-coordinate-hint">
-                <strong>РџРѕС‡Р°С‚РѕРє РєРѕРѕСЂРґРёРЅР°С‚</strong>
-                <p>
-                  0,0,0 СЂРѕР·С‚Р°С€РѕРІР°РЅРѕ Сѓ РІРЅСѓС‚СЂС–С€РЅСЊРѕРјСѓ РєСѓС‚С– СЃС‚РёРєСѓ РїР°РЅРµР»РµР№. РљРѕРѕСЂРґРёРЅР°С‚Рё X/Y/Z СЂР°С…СѓР№С‚Рµ РІС–Рґ С†С–С”С— С‚РѕС‡РєРё Сѓ
-                  РЅР°РїСЂСЏРјРєР°С…, СЏРєС– РїРѕРєР°Р·Р°РЅС– РІ 3D preview.
-                </p>
-                <p>
-                  РџРѕС‚РѕС‡РЅРёР№ РІР°СЂС–Р°РЅС‚ РєСЂС–РїР»РµРЅРЅСЏ: {selectedHoleMountingVariant?.label || normalizedSelectedHoleMountingVariantKey}
-                  {normalizedSelectedHoleMountingVariantKey === "face_to_edge"
-                    ? " В· РґР»СЏ face_to_edge РІС–СЃСЊ X С–РґРµ СѓР·РґРѕРІР¶ РїР»Р°СЃС‚С–, Y - СѓР·РґРѕРІР¶ С‚РѕСЂС†СЏ, Z - РїРµСЂРїРµРЅРґРёРєСѓР»СЏСЂРЅРѕ РґРѕ РІСѓР·Р»Р°."
-                    : ""}
-                </p>
-              </div>
-
               <div className="hole-template-form-grid">
                 <label>
                   {t.holePointDiameter}
@@ -16648,24 +16654,7 @@ export default function App() {
                 </label>
 
                 <label>
-                  {t.holePointDepth}
-                  <input
-                    disabled={loading}
-                    min="0"
-                    onChange={(event) =>
-                      setHolePointCreateForm((current) => ({
-                        ...current,
-                        depth_mm: event.target.value,
-                      }))
-                    }
-                    step="any"
-                    type="number"
-                    value={holePointCreateForm.depth_mm}
-                  />
-                </label>
-
-                <label>
-                  {t.holePointSide}
+                  Сторона
                   <select
                     disabled={loading}
                     onChange={(event) =>
@@ -16676,90 +16665,54 @@ export default function App() {
                     }
                     value={holePointCreateForm.side}
                   >
-                    {getHoleSideSelectOptions(holePointCreateForm.side).map((option) => (
+                    {getHoleSideSelectOptionsForPanel(holePointFormPanelKey, holePointCreateForm.side).map((option) => (
                       <option key={option.value} value={option.value}>
                         {renderHoleSideOptionLabel(option, t)}
                       </option>
                     ))}
                   </select>
                 </label>
-              </div>
 
-              <div className="hole-template-form-grid">
-                <label>
-                  {t.holePointOperation}
-                  <select
-                    disabled={loading}
-                    onChange={(event) =>
-                      setHolePointCreateForm((current) => ({
-                        ...current,
-                        operation: event.target.value,
-                      }))
-                    }
-                    value={holePointCreateForm.operation}
-                  >
-                    {HOLE_POINT_OPERATION_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {t[option.labelKey] || option.value}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label>
-                  {t.holePointOrderIndex}
-                  <input
-                    disabled={loading}
-                    min="0"
-                    onChange={(event) =>
-                      setHolePointCreateForm((current) => ({
-                        ...current,
-                        order_index: event.target.value,
-                      }))
-                    }
-                    step="1"
-                    type="number"
-                    value={holePointCreateForm.order_index}
-                  />
-                </label>
-
-                <label>
-                  {t.holePointQuantity}
-                  <input
-                    disabled={loading}
-                    min="1"
-                    onChange={(event) =>
-                      setHolePointCreateForm((current) => ({
-                        ...current,
-                        quantity: event.target.value,
-                      }))
-                    }
-                    step="1"
-                    type="number"
-                    value={holePointCreateForm.quantity}
-                  />
-                </label>
-              </div>
-
-              <div className="hole-template-checks">
                 <label className="material-inline-check">
                   <input
-                    checked={holePointCreateForm.mirrored}
+                    checked={holePointCreateForm.is_through}
                     disabled={loading}
                     onChange={(event) =>
                       setHolePointCreateForm((current) => ({
                         ...current,
-                        mirrored: event.target.checked,
+                        is_through: event.target.checked,
                       }))
                     }
                     type="checkbox"
                   />
-                  {t.holePointMirrored}
+                  Наскрізний отвір
                 </label>
               </div>
 
+              {!holePointCreateForm.is_through ? (
+                <div className="hole-template-form-grid">
+                  <label>
+                    Глибина, мм
+                    <input
+                      disabled={loading}
+                      min="0"
+                      onChange={(event) =>
+                        setHolePointCreateForm((current) => ({
+                          ...current,
+                          depth_mm: event.target.value,
+                        }))
+                      }
+                      required={!holePointCreateForm.is_through}
+                      step="any"
+                      type="number"
+                      value={holePointCreateForm.depth_mm}
+                    />
+                  </label>
+                </div>
+              ) : null}
+
               <label>
-                {t.holePointNotes}
+                Примітки
                 <textarea
                   disabled={loading}
                   onChange={(event) =>
@@ -16809,8 +16762,8 @@ export default function App() {
           >
             <header className="confirm-header">
               <div>
-                <strong>{t.holePointEditTitle}</strong>
-                <p>{t.holePointEditDescription}</p>
+                <strong>Редагувати отвір у вертикальній панелі</strong>
+                <p>Оновіть координати, діаметр і глибину вибраного отвору.</p>
               </div>
               <button
                 aria-label={t.cancel}
@@ -16824,21 +16777,13 @@ export default function App() {
             </header>
 
             <form className="hole-template-form" onSubmit={handleHolePointEdit}>
-
-              <label>
-                {t.holePointLabel}
-                <input
-                  disabled={loading}
-                  onChange={(event) =>
-                    setHolePointEditForm((current) => ({
-                      ...current,
-                      label: event.target.value,
-                    }))
-                  }
-                  type="text"
-                  value={holePointEditForm.label}
-                />
-              </label>
+              <div className="hole-point-coordinate-hint">
+                <strong>Отвір у вертикальній панелі</strong>
+                <p>Відредагуйте координати, діаметр і параметри глибини для отвору.</p>
+                <p>
+                  Початок координат: 0,0,0 знаходиться у внутрішньому куті стику панелей. X, Y та Z рахуються від цієї точки.
+                </p>
+              </div>
 
               <div className="hole-template-form-grid">
                 <label>
@@ -16910,24 +16855,7 @@ export default function App() {
                 </label>
 
                 <label>
-                  {t.holePointDepth}
-                  <input
-                    disabled={loading}
-                    min="0"
-                    onChange={(event) =>
-                      setHolePointEditForm((current) => ({
-                        ...current,
-                        depth_mm: event.target.value,
-                      }))
-                    }
-                    step="any"
-                    type="number"
-                    value={holePointEditForm.depth_mm}
-                  />
-                </label>
-
-                <label>
-                  {t.holePointSide}
+                  Сторона
                   <select
                     disabled={loading}
                     onChange={(event) =>
@@ -16938,90 +16866,54 @@ export default function App() {
                     }
                     value={holePointEditForm.side}
                   >
-                    {getHoleSideSelectOptions(holePointEditForm.side).map((option) => (
+                    {getHoleSideSelectOptionsForPanel(holePointFormPanelKey, holePointEditForm.side).map((option) => (
                       <option key={option.value} value={option.value}>
                         {renderHoleSideOptionLabel(option, t)}
                       </option>
                     ))}
                   </select>
                 </label>
-              </div>
 
-              <div className="hole-template-form-grid">
-                <label>
-                  {t.holePointOperation}
-                  <select
-                    disabled={loading}
-                    onChange={(event) =>
-                      setHolePointEditForm((current) => ({
-                        ...current,
-                        operation: event.target.value,
-                      }))
-                    }
-                    value={holePointEditForm.operation}
-                  >
-                    {HOLE_POINT_OPERATION_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {t[option.labelKey] || option.value}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label>
-                  {t.holePointOrderIndex}
-                  <input
-                    disabled={loading}
-                    min="0"
-                    onChange={(event) =>
-                      setHolePointEditForm((current) => ({
-                        ...current,
-                        order_index: event.target.value,
-                      }))
-                    }
-                    step="1"
-                    type="number"
-                    value={holePointEditForm.order_index}
-                  />
-                </label>
-
-                <label>
-                  {t.holePointQuantity}
-                  <input
-                    disabled={loading}
-                    min="1"
-                    onChange={(event) =>
-                      setHolePointEditForm((current) => ({
-                        ...current,
-                        quantity: event.target.value,
-                      }))
-                    }
-                    step="1"
-                    type="number"
-                    value={holePointEditForm.quantity}
-                  />
-                </label>
-              </div>
-
-              <div className="hole-template-checks">
                 <label className="material-inline-check">
                   <input
-                    checked={holePointEditForm.mirrored}
+                    checked={holePointEditForm.is_through}
                     disabled={loading}
                     onChange={(event) =>
                       setHolePointEditForm((current) => ({
                         ...current,
-                        mirrored: event.target.checked,
+                        is_through: event.target.checked,
                       }))
                     }
                     type="checkbox"
                   />
-                  {t.holePointMirrored}
+                  Наскрізний отвір
                 </label>
               </div>
 
+              {!holePointEditForm.is_through ? (
+                <div className="hole-template-form-grid">
+                  <label>
+                    Глибина, мм
+                    <input
+                      disabled={loading}
+                      min="0"
+                      onChange={(event) =>
+                        setHolePointEditForm((current) => ({
+                          ...current,
+                          depth_mm: event.target.value,
+                        }))
+                      }
+                      required={!holePointEditForm.is_through}
+                      step="any"
+                      type="number"
+                      value={holePointEditForm.depth_mm}
+                    />
+                  </label>
+                </div>
+              ) : null}
+
               <label>
-                {t.holePointNotes}
+                Примітки
                 <textarea
                   disabled={loading}
                   onChange={(event) =>
