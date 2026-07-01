@@ -685,6 +685,16 @@ function formatHoleTemplateCoordinateSystem(value, t) {
   return formatHolePointValue(value, HOLE_TEMPLATE_COORDINATE_SYSTEM_LABEL_KEYS, t);
 }
 
+function getSafeHolePointLabel(value, fallback) {
+  const raw = String(value || "").trim();
+
+  if (!raw) {
+    return fallback;
+  }
+
+  return /^[A-Za-z0-9 _.\-#]+$/.test(raw) ? raw : fallback;
+}
+
 function getHoleSideSelectOptions(currentValue) {
   const normalizedValue = String(currentValue || "").trim();
 
@@ -4823,7 +4833,7 @@ export default function App() {
       const z = numericValue(point?.z_mm);
       const diameter = numericValue(point?.diameter_mm) ?? 0;
       const depth = numericValue(point?.depth_mm);
-      const label = String(point?.label || "").trim() || `P${point?.id || index + 1}`;
+      const label = getSafeHolePointLabel(point?.label, `P${point?.id || index + 1}`);
       const operation = String(point?.operation || "").trim() || "";
       const side = String(point?.side || "").trim() || "";
 
@@ -5033,7 +5043,7 @@ export default function App() {
       const y = Number(point?.y);
       const hasX = Number.isFinite(x);
       const hasY = Number.isFinite(y);
-      const label = String(point?.label || "").trim() || `P${point?.id || index + 1}`;
+      const label = getSafeHolePointLabel(point?.label, `P${point?.id || index + 1}`);
       const diameter = Number(point?.diameter);
       const depth = Number(point?.depth);
 
@@ -7301,7 +7311,7 @@ export default function App() {
 
       return {
         id: hole?.id ?? index + 1,
-        label: String(hole?.label || `P${index + 1}`).trim() || `P${index + 1}`,
+        label: getSafeHolePointLabel(hole?.label, `P${index + 1}`),
         diameter: Number.isFinite(numericDiameter) ? numericDiameter : null,
         depth: hasDepth ? depthValue : null,
         hasDepth,
@@ -8019,7 +8029,7 @@ export default function App() {
         : [];
     const materialPlaneA = scene?.materialPlanes?.planeA?.label || "Площина A";
     const materialPlaneB = scene?.materialPlanes?.planeB?.label || "Площина B";
-    const connectionDirection = scene?.materialPlanes?.connectionDirection || "вЂ”";
+    const connectionDirection = scene?.materialPlanes?.connectionDirection || "—";
     const zoneByVariant = {
       angled_two_planes: { height: 126, width: 160, x: 266, y: 118 },
       drawer_slides: { height: 118, width: 120, x: 320, y: 110 },
@@ -8122,7 +8132,7 @@ export default function App() {
           <div className="holes-preview-schematic-head">
             <strong>Схема сцени</strong>
             <span>
-              {materialPlaneA} в†’ {materialPlaneB} В· {connectionDirection}
+              {materialPlaneA} → {materialPlaneB} · {connectionDirection}
             </span>
           </div>
         ) : null}
@@ -8227,7 +8237,7 @@ export default function App() {
                   <circle cx={point.cx} cy={point.cy} r={Math.max(point.radius + 3, 8)} />
                   <circle cx={point.cx} cy={point.cy} r={point.radius} />
                   <text x={point.cx + 10} y={point.cy - 10}>
-                    {point.hasId ? `#${point.id}` : "вЂ”"}
+                    {point.hasId ? `#${point.id}` : "—"}
                   </text>
                 </g>
               ))}
@@ -13828,7 +13838,7 @@ export default function App() {
                                 <span>x</span>
                                 <span>y</span>
                                 <span>z</span>
-                                <span>Г</span>
+                                <span>⌀</span>
                                 <span>{t.holePointColumnDepth}</span>
                                 <span>{t.holePointColumnSide}</span>
                                 <span>{t.holePointColumnOperation}</span>
@@ -13881,18 +13891,20 @@ export default function App() {
                                         <Trash2 size={14} />
                                       </button>
                                     </div>
-                                    <span className="holes-point-label-cell">{point.label || "вЂ”"}</span>
-                                    <span>{point.x_mm ?? "вЂ”"}</span>
-                                    <span>{point.y_mm ?? "вЂ”"}</span>
-                                    <span>{point.z_mm ?? "вЂ”"}</span>
-                                    <span>{point.diameter_mm ?? "вЂ”"}</span>
-                                    <span>{point.depth_mm ?? "вЂ”"}</span>
+                                    <span className="holes-point-label-cell">
+                                      {getSafeHolePointLabel(point.label, `P${point.id}`)}
+                                    </span>
+                                    <span>{point.x_mm ?? "—"}</span>
+                                    <span>{point.y_mm ?? "—"}</span>
+                                    <span>{point.z_mm ?? "—"}</span>
+                                    <span>{point.diameter_mm ?? "—"}</span>
+                                    <span>{point.depth_mm ?? "—"}</span>
                                     <span>{formatHolePointSide(point.side, t)}</span>
                                     <span>{formatHolePointOperation(point.operation, t)}</span>
                                     <span>{point.order_index}</span>
                                     <span>{point.quantity}</span>
                                     <span>{point.mirrored ? t.holePointSelectionYes : t.holePointSelectionNo}</span>
-                                    <span className="holes-point-notes-cell">{point.notes || "вЂ”"}</span>
+                                    <span className="holes-point-notes-cell">{point.notes || "—"}</span>
                                   </article>
                                 ))}
                               </div>
@@ -14003,7 +14015,7 @@ export default function App() {
                           </svg>
                         </div>
                         <div className="holes-preview-legend">
-                          <span>Г - {t.holePreviewDiameter}</span>
+                          <span>⌀ - {t.holePreviewDiameter}</span>
                           <span>{t.holePreviewDepth}</span>
                           <span>{t.holePreviewSide}</span>
                           <span>{t.holePreviewOperation}</span>
@@ -14045,7 +14057,7 @@ export default function App() {
                         {holesPreviewModel.materialPlanes?.planeA?.label || "Площина A"}
                       </span>
                       <span className="holes-preview-material-planes-arrow" aria-hidden="true">
-                        в†’
+                        →
                       </span>
                       <span className="holes-preview-material-plane-card">
                         {holesPreviewModel.materialPlanes?.planeB?.label || "Площина B"}
@@ -14091,35 +14103,40 @@ export default function App() {
                       <div className="holes-selected-point-grid">
                         <div className="holes-selected-point-row">
                           <span>ID</span>
-                          <strong>{selectedHolePoint.id ?? "вЂ”"}</strong>
+                          <strong>{selectedHolePoint.id ?? "—"}</strong>
                         </div>
                         <div className="holes-selected-point-row">
                           <span>Назва</span>
-                          <strong>{selectedHolePoint.label || selectedHolePoint.name || "вЂ”"}</strong>
+                          <strong>
+                            {getSafeHolePointLabel(
+                              selectedHolePoint.label || selectedHolePoint.name,
+                              `P${selectedHolePoint.id || ""}`.trim() || "—",
+                            )}
+                          </strong>
                         </div>
                         <div className="holes-selected-point-row">
                           <span>X</span>
-                          <strong>{selectedHolePoint.x_mm ?? selectedHolePoint.x ?? "вЂ”"}</strong>
+                          <strong>{selectedHolePoint.x_mm ?? selectedHolePoint.x ?? "—"}</strong>
                         </div>
                         <div className="holes-selected-point-row">
                           <span>Y</span>
-                          <strong>{selectedHolePoint.y_mm ?? selectedHolePoint.y ?? "вЂ”"}</strong>
+                          <strong>{selectedHolePoint.y_mm ?? selectedHolePoint.y ?? "—"}</strong>
                         </div>
                         <div className="holes-selected-point-row">
                           <span>Діаметр</span>
-                          <strong>{selectedHolePoint.diameter_mm ?? selectedHolePoint.diameter ?? "вЂ”"}</strong>
+                          <strong>{selectedHolePoint.diameter_mm ?? selectedHolePoint.diameter ?? "—"}</strong>
                         </div>
                         <div className="holes-selected-point-row">
                           <span>Глибина</span>
-                          <strong>{selectedHolePoint.depth_mm ?? selectedHolePoint.depth ?? "вЂ”"}</strong>
+                          <strong>{selectedHolePoint.depth_mm ?? selectedHolePoint.depth ?? "—"}</strong>
                         </div>
                         <div className="holes-selected-point-row">
                           <span>Сторона</span>
-                          <strong>{formatHolePointSide(selectedHolePoint.side, t) || selectedHolePoint.side || "вЂ”"}</strong>
+                          <strong>{formatHolePointSide(selectedHolePoint.side, t) || selectedHolePoint.side || "—"}</strong>
                         </div>
                         <div className="holes-selected-point-row">
                           <span>Операція</span>
-                          <strong>{formatHolePointOperation(selectedHolePoint.operation, t) || selectedHolePoint.operation || "вЂ”"}</strong>
+                          <strong>{formatHolePointOperation(selectedHolePoint.operation, t) || selectedHolePoint.operation || "—"}</strong>
                         </div>
                       </div>
                     ) : (
@@ -14350,7 +14367,7 @@ export default function App() {
                         </svg>
                       </div>
                       <div className="holes-preview-legend">
-                        <span>Г - {t.holePreviewDiameter}</span>
+                        <span>⌀ - {t.holePreviewDiameter}</span>
                         <span>{t.holePreviewDepth}</span>
                         <span>{t.holePreviewSide}</span>
                         <span>{t.holePreviewOperation}</span>
