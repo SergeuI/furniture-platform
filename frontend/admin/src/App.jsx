@@ -687,6 +687,16 @@ function formatHoleTemplateCoordinateSystem(value, t) {
   return formatHolePointValue(value, HOLE_TEMPLATE_COORDINATE_SYSTEM_LABEL_KEYS, t);
 }
 
+function formatHolePointDepthDisplay(point) {
+  const depthValue = point?.depth_mm ?? point?.depth;
+
+  if (depthValue === null || depthValue === undefined || String(depthValue).trim() === "") {
+    return "Наскрізний";
+  }
+
+  return depthValue;
+}
+
 function getSafeHolePointLabel(value, fallback) {
   const raw = String(value || "").trim();
 
@@ -8551,20 +8561,20 @@ export default function App() {
     }
 
     const isThrough = Boolean(form.is_through);
-    const depthValue = isThrough ? undefined : parseMaybeNumber(form.depth_mm, t.holePointDepth);
+    const depthText = String(form.depth_mm || "").trim();
+    const depthValue = isThrough ? null : parseMaybeNumber(depthText, t.holePointDepth);
+
+    if (!isThrough && !Number.isFinite(depthValue)) {
+      throw new Error(t.holePointDepth);
+    }
 
     const payload = {
-      label: null,
       x_mm: parseMaybeNumber(form.x_mm, t.holePointX),
       y_mm: parseMaybeNumber(form.y_mm, t.holePointY),
       z_mm: parseMaybeNumber(form.z_mm, t.holePointZ),
       diameter_mm: parseMaybeNumber(diameterText, t.holePointDiameter),
       depth_mm: depthValue,
       side: String(form.side || "").trim() || "front",
-      operation: "drill",
-      order_index: 0,
-      quantity: 1,
-      mirrored: false,
       notes: String(form.notes || "").trim() || null,
     };
 
@@ -8577,10 +8587,6 @@ export default function App() {
     if (!Number.isFinite(payload.z_mm)) {
       payload.z_mm = undefined;
     }
-    if (!Number.isFinite(payload.depth_mm)) {
-      payload.depth_mm = undefined;
-    }
-
     return payload;
   }
 
@@ -13926,7 +13932,7 @@ export default function App() {
                                     <span>{point.y_mm ?? "—"}</span>
                                     <span>{point.z_mm ?? "—"}</span>
                                     <span>{point.diameter_mm ?? "—"}</span>
-                                    <span>{point.depth_mm ?? "—"}</span>
+                                    <span>{formatHolePointDepthDisplay(point)}</span>
                                     <span>{formatHolePointSide(point.side, t)}</span>
                                     <span>{formatHolePointOperation(point.operation, t)}</span>
                                     <span>{point.order_index}</span>
@@ -14156,7 +14162,7 @@ export default function App() {
                         </div>
                         <div className="holes-selected-point-row">
                           <span>Глибина</span>
-                          <strong>{selectedHolePoint.depth_mm ?? selectedHolePoint.depth ?? "—"}</strong>
+                          <strong>{formatHolePointDepthDisplay(selectedHolePoint)}</strong>
                         </div>
                         <div className="holes-selected-point-row">
                           <span>Сторона</span>
@@ -16580,7 +16586,7 @@ export default function App() {
                 <strong>Отвір у вертикальній панелі</strong>
                 <p>Вкажіть координати, діаметр і спосіб глибини для отвору.</p>
                 <p>
-                  Початок координат: 0,0,0 знаходиться у внутрішньому куті стику панелей. X, Y та Z рахуються від цієї точки.
+                  Початок координат: 0,0,0 знаходиться на зовнішній стороні стику панелей. X, Y та Z рахуються від цієї точки.
                 </p>
               </div>
 
@@ -16781,7 +16787,7 @@ export default function App() {
                 <strong>Отвір у вертикальній панелі</strong>
                 <p>Відредагуйте координати, діаметр і параметри глибини для отвору.</p>
                 <p>
-                  Початок координат: 0,0,0 знаходиться у внутрішньому куті стику панелей. X, Y та Z рахуються від цієї точки.
+                  Початок координат: 0,0,0 знаходиться на зовнішній стороні стику панелей. X, Y та Z рахуються від цієї точки.
                 </p>
               </div>
 
