@@ -2830,6 +2830,144 @@ Object.assign(TRANSLATIONS.uk, {
   projectTemplateWallUnitTitle: "РЎС‚С–РЅРєР°",
 });
 
+Object.assign(TRANSLATIONS.uk, {
+  action: "Дія",
+  access: "Доступ",
+  active: "Активний",
+  actor: "Користувач",
+  admin: "Адмін",
+  all: "Всі",
+  applyFilters: "Застосувати",
+  audit: "Аудит",
+  brandTagline: "Професійне рішення для меблевого виробництва",
+  cancel: "Скасувати",
+  catalog: "Довідники",
+  catalogFittings: "Каталог фурнітури",
+  catalogFittingsDescription:
+    "Основний асортимент фурнітури для прорахунків з фільтрами по місту та артикулу.",
+  catalogFasteners: "Метінна фурнітура",
+  catalogFastenersDescription:
+    "Технічна фурнітура: стяжки, саморізи, кріпильні елементи та супутні позиції.",
+  catalogMaterials: "Матеріали",
+  catalogMaterialsDescription:
+    "Матеріали для виробництва, фільтри та пов’язана довідкова інформація.",
+  catalogValues: "Довідник значень",
+  catalogViyar: "Довідник Viyar",
+  clearSelection: "Очистити вибір",
+  create: "Створити",
+  createProject: "Створити проєкт",
+  createUser: "Створити користувача",
+  delete: "Видалити",
+  deleteFailed: "Не вдалося видалити",
+  details: "Деталі",
+  home: "Головна",
+  homeDescription: "Швидкий огляд каталогів, цін і стану системи.",
+  homeCatalogMenuTitle: "Каталоги",
+  homeCatalogMenuDescription:
+    "Перехід до головних довідників без пошуку їх в боковому меню.",
+  homeHeroTitle: "Головна панель",
+  homeHeroDescription:
+    "Основні каталоги, ціни за містом і статус автооновлення в одному місці.",
+  homeMetricsTitle: "Стан робочої зони",
+  homeMetricsDescription:
+    "Компактний зріз по проєктах, користувачах і довідниках.",
+  homeOpenProjects: "Відкрити проєкти",
+  homeOpenSettings: "Налаштування профілю",
+  holes: "Отвори",
+  manualServices: "Ручні послуги",
+  materials: "Матеріали",
+  myData: "Мої дані",
+  notSet: "Не вказано",
+  of: "з",
+  projects: "Проєкти",
+  readOnlyProject: "Проєкт лише для перегляду",
+  reset: "Скинути",
+  settings: "Налаштування",
+  side: "Сторона",
+  signIn: "Увійти",
+  status: "Статус",
+  top: "Зверху",
+  to: "до",
+  unableToLoadCatalog: "Не вдалося завантажити довідники",
+  unableToLoadProjects: "Не вдалося завантажити проєкти",
+  unableToLoadUsers: "Не вдалося завантажити користувачів",
+  users: "Користувачі",
+  width: "Ширина",
+  widthMax: "Ширина до",
+  widthMin: "Ширина від",
+  holeTabDescription: "Перегляд отворів для вибраної фурнітури і варіанта кріплення.",
+  holeTabSearchPlaceholder: "Пошук фурнітури",
+  holeTabTitle: "Отвори",
+  holeReadOnlyBadge: "Лише перегляд",
+  holePointsTitle: "Точки отворів",
+  holeWorkspaceConnectionVariantTitle: "Варіант кріплення",
+  holeWorkspaceFittingInfoTitle: "Інформація про фурнітуру",
+  holeWorkspacePreview3dTitle: "3D перегляд",
+  holeWorkspaceNoImage: "Без зображення",
+  holePointAdd: "Додати точку",
+  holePointCreateTitle: "Додати точку отвору",
+  holePointCreateDescription:
+    "Створення нової точки для вибраної фурнітури та варіанта кріплення.",
+  holePointEditTitle: "Редагувати точку отвору",
+  holePointTemplate: "Шаблон",
+  holePointTemplateRequired: "Оберіть шаблон перед створенням точки",
+  holeTemplateSelectTemplate: "Для цієї фурнітури немає отворів",
+  holeTemplateFitting: "Фурнітура",
+  holeTemplateFittingInfoTitle: "Фурнітура",
+  holeTemplateMountingSchemeTitle: "Сторона шаблону",
+  holeTemplateConnectionVariantTitle: "Варіант кріплення",
+  holeTemplateSelectFitting: "Оберіть фурнітуру",
+  holeTemplateCreateTitle: "Додати шаблон",
+  holeTemplateRefresh: "Оновити",
+  holeTemplateSave: "Зберегти",
+  holeTemplateSaveChanges: "Зберегти зміни",
+  holeTemplateEmpty: "Шаблони ще не додані",
+  holeTemplateDelete: "Видалити шаблон",
+  holeTemplateDeleteConfirm: "Видалити шаблон отворів",
+  holeTemplateDeleteFailed: "Не вдалося видалити шаблон отворів",
+  holeTemplateDeleteSuccess: "Шаблон отворів видалено",
+  holeTemplateEditTitle: "Редагувати шаблон отворів",
+  holeTemplateEditDescription: "Оновлення шаблону отворів для вибраної фурнітури.",
+  holeTemplateCreateDescription: "Створення нового шаблону для вибраної фурнітури.",
+  holeTemplateUpdateFailed: "Не вдалося оновити шаблон отворів",
+  holeTemplateUpdateSuccess: "Шаблон отворів оновлено",
+  holeTemplateName: "Назва",
+  holeTemplateNotes: "Примітки",
+  holeTemplateSide: "Сторона",
+  holeTemplateTitle: "Шаблони",
+  holeTemplateType: "Тип",
+  holeTemplateTypeAuto: "Авто",
+  holeTemplateTypeManual: "Ручний",
+  holeTemplateTypeSelectAuto: "Авто",
+  holeTemplateTypeSelectManual: "Ручний",
+  holeTemplateColumnId: "ID",
+  holeTemplateColumnName: "Назва",
+  holeTemplateColumnType: "Тип",
+  holeTemplateColumnSide: "Сторона",
+  holeTemplateColumnSystem: "Система",
+  holeTemplateColumnDefault: "За замовчуванням",
+  holeTemplateColumnActive: "Активний",
+  holeTemplateColumnNotes: "Примітки",
+  holeTemplateFittingRequired: "Оберіть фурнітуру перед створенням шаблону",
+  holeTemplateMountingSchemePlaceholder: "Оберіть сторону деталі, до якої прив'язаний шаблон отворів.",
+  holeTemplateMountingSchemeLeftEdge: "Лівий торець",
+  holeTemplateMountingSchemeRightEdge: "Правий торець",
+  holeTemplateMountingSchemeFrontFace: "Фасад",
+  holeTemplateMountingSchemeBackFace: "Задня площина",
+  holeTemplateMountingSchemeTop: "Верх",
+  holeTemplateMountingSchemeBottom: "Низ",
+  holeTemplateMountingSchemeSelected: "Обрано",
+  holeWorkspaceVariantEdgeToFace: "Торець → площина",
+  holeWorkspaceVariantFaceToEdge: "Площина → торець",
+  holeWorkspaceVariantHorizontalToVertical: "Горизонталь → вертикаль",
+  holeWorkspaceVariantVerticalToHorizontal: "Вертикаль → горизонталь",
+  preview3dInteractiveHint:
+    "Перетягуйте для обертання. Колесо миші або жест масштабування змінює зум. У 3D моделі показані крайки, отвори, пази та чверті.",
+  productionAssembly3d: "3D збірка",
+  productionAssemblyHint:
+    "Ця 3D збірка побудована на основі карти розкрою. Натисніть на панель, щоб відкрити її робоче місце деталі.",
+});
+
 function buildProjectPayload(form) {
   const normalizeText = (value) => {
     const trimmed = String(value || "").trim();
@@ -4475,34 +4613,34 @@ export default function App() {
   const holeMountingVariantOptions = useMemo(
     () => [
       {
-        description: "РЈСЃС‚Р°РЅРѕРІРєР° С„СѓСЂРЅС–С‚СѓСЂРё РЅР° РїР»РѕС‰РёРЅС–.",
+        description: "Установка фурнітури на площині.",
         key: "surface_mount",
         icon: surfaceMountIcon,
-        label: "РЈСЃС‚Р°РЅРѕРІРєР° С„СѓСЂРЅС–С‚СѓСЂРё РЅР° РїР»РѕС‰РёРЅС–",
+        label: "Установка фурнітури на площині",
       },
       {
-        description: "РљСЂС–РїР»РµРЅРЅСЏ РјС–Р¶ РґРІРѕРјР° РЅРµРїР°СЂР°Р»РµР»СЊРЅРёРјРё РїР»РѕС‰РёРЅР°РјРё.",
+        description: "Кріплення між двома непаралельними площинами.",
         key: "angled_two_planes",
         icon: angledTwoPlanesIcon,
-        label: "РЈСЃС‚Р°РЅРѕРІРєР° С„СѓСЂРЅС–С‚СѓСЂРё РЅР° РґРІС– РЅРµРїР°СЂР°Р»РµР»СЊРЅС– РїР»РѕС‰РёРЅРё",
+        label: "Установка фурнітури на дві непаралельні площини",
       },
       {
-        description: "РЈСЃС‚Р°РЅРѕРІРєР° РЅР° РїР»Р°cС‚С– РѕРґРЅС–С”С— С‚Р° С‚РѕСЂС†СЏ С–РЅС€РѕС— РїР°РЅРµР»С–.",
+        description: "Установка на площині однієї та торця іншої панелі.",
         key: "face_to_edge",
         icon: faceToEdgeIcon,
-        label: "РЈСЃС‚Р°РЅРѕРІРєР° РЅР° РїР»Р°cС‚С– РѕРґРЅС–С”С— С‚Р° С‚РѕСЂС†СЏ С–РЅС€РѕС— РїР°РЅРµР»С–",
+        label: "Установка на площині однієї та торця іншої панелі",
       },
       {
-        description: "РЈСЃС‚Р°РЅРѕРІРєР° С„СѓСЂРЅС–С‚СѓСЂРё РїРѕ С‚РѕСЂС†СЏС… РїР°РЅРµР»РµР№.",
+        description: "Установка фурнітури по торцях панелей.",
         key: "edge_to_edge",
         icon: edgeToEdgeIcon,
-        label: "РЈСЃС‚Р°РЅРѕРІРєР° С„СѓСЂРЅС–С‚СѓСЂРё РїРѕ С‚РѕСЂС†СЏС… РїР°РЅРµР»РµР№",
+        label: "Установка фурнітури по торцях панелей",
       },
       {
-        description: "РќР°РїСЂСЏРјРЅС– РґР»СЏ РІРёСЃСѓРІРЅРёС… РµР»РµРјРµРЅС‚С–РІ.",
+        description: "Напрямні для висувних елементів.",
         key: "drawer_slides",
         icon: drawerSlidesIcon,
-        label: "РќР°РїСЂСЏРјРЅС–",
+        label: "Напрямні",
       },
     ],
     [],
@@ -4533,9 +4671,9 @@ export default function App() {
   const holeWorkspaceSaveStatus = holeSelectedFittingId
     ? selectedHoleTemplate
       ? holeWorkspaceHasUnsavedVariantChanges
-        ? "Р„ РЅРµР·Р±РµСЂРµР¶РµРЅС– Р·РјС–РЅРё"
-        : "Р—Р±РµСЂРµР¶РµРЅРѕ"
-      : "Р“РѕС‚РѕРІРѕ РґРѕ СЃС‚РІРѕСЂРµРЅРЅСЏ"
+        ? "Є незбережені зміни"
+        : "Збережено"
+      : "Готово до створення"
     : "";
   const holesMaterialPlanesModel = useMemo(() => {
     switch (normalizedSelectedHoleMountingVariantKey) {
@@ -6284,6 +6422,10 @@ export default function App() {
       return `${manualServiceItems.length} ${t.of} ${manualServiceItems.length}`;
     }
 
+    if (isCatalogHolesView) {
+      return "";
+    }
+
     if (activeView === "settings") {
       return t.myData;
     }
@@ -6300,6 +6442,7 @@ export default function App() {
     isCatalogMaterialsView,
     isCatalogFittingsView,
     isCatalogFastenersView,
+    isCatalogHolesView,
     isCatalogManualView,
     isCatalogValuesView,
     isCatalogViyarView,
