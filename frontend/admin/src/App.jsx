@@ -11024,10 +11024,9 @@ export default function App() {
             <img
               alt={t.furniturePlatform}
               className="brand-logo"
-              src="/brand/mproject-logo-reference.jpg"
+              src="/brand/logo-mpfc.png"
             />
             <div className="auth-heading">
-              <p>{t.brandTagline}</p>
               <h1>{t.admin}</h1>
             </div>
           </div>
@@ -11046,10 +11045,9 @@ export default function App() {
             <img
               alt={t.furniturePlatform}
               className="brand-logo"
-              src="/brand/mproject-logo-reference.jpg"
+              src="/brand/logo-mpfc.png"
             />
             <div className="auth-heading">
-              <p>{t.brandTagline}</p>
               <h1>{t.admin}</h1>
             </div>
           </div>
@@ -11134,27 +11132,28 @@ export default function App() {
             <img
               alt={t.furniturePlatform}
               className="sidebar-brand-logo"
-              src="/brand/mproject-logo-reference.jpg"
+              src="/brand/logo-mpfc.png"
             />
           </button>
           <div className="brand-copy">
-            <p className="eyebrow">{t.brandTagline}</p>
             <div className="brand-copy-header">
               <h1>{t.admin}</h1>
               <div className="language-switcher compact" aria-label="Language">
                 <button
                   className={language === "en" ? "active" : ""}
+                  aria-label="English"
+                  title="English"
                   onClick={() => changeLanguage("en")}
                   type="button"
                 >
-                  EN
                 </button>
                 <button
                   className={language === "uk" ? "active" : ""}
+                  aria-label="Українська"
+                  title="Українська"
                   onClick={() => changeLanguage("uk")}
                   type="button"
                 >
-                  UA
                 </button>
               </div>
             </div>
