@@ -4768,6 +4768,9 @@ export default function App() {
   const canUseAiScan = user?.role === "admin" || user?.role === "premium" || user?.role === "pro";
   const canUsePremiumStart = user?.role === "admin" || user?.role === "premium";
   const canViewFittingHoles = user?.role === "admin" || user?.role === "premium" || user?.role === "pro";
+  const isCompactSidebarMode =
+    typeof window !== "undefined" &&
+    window.matchMedia(`(max-width: ${SIDEBAR_COLLAPSE_BREAKPOINT}px)`).matches;
 
   function closeSidebarOnMobile() {
     if (
@@ -11104,6 +11107,25 @@ export default function App() {
       onTouchStart={handleSidebarTouchStart}
     >
       {statusNotice}
+      {!isSidebarOpen && isCompactSidebarMode ? (
+        <div className="mobile-header-shell">
+          <button
+            className="mobile-brand-link"
+            onClick={() => switchView("home")}
+            type="button"
+          >
+            <img alt={t.furniturePlatform} className="mobile-brand-logo" src="/brand/logo-mpfc.png" />
+          </button>
+          <button
+            aria-label="Open menu"
+            className="sidebar-toggle-button mobile-sidebar-toggle"
+            onClick={() => setIsSidebarOpen(true)}
+            type="button"
+          >
+            <Menu size={18} />
+          </button>
+        </div>
+      ) : null}
       {isSidebarOpen ? (
         <div
           className="sidebar-backdrop"

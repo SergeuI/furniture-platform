@@ -6576,11 +6576,24 @@ tbody tr.selected {
     z-index: 24;
   }
 
+  .sidebar-brand-block {
+    gap: 6px;
+    padding-top: 0;
+  }
+
+  .sidebar-brand-link {
+    margin-top: -10px;
+  }
+
+  .sidebar-brand-logo {
+    max-height: 56px;
+  }
+
   .toolbar {
     background: rgba(244, 246, 248, 0.96);
     backdrop-filter: blur(8px);
     position: sticky;
-    top: 0;
+    top: 54px;
     z-index: 23;
   }
 
@@ -6589,6 +6602,42 @@ tbody tr.selected {
     min-width: 0;
     overflow: visible;
     width: 100%;
+  }
+
+  .mobile-header-shell {
+    align-items: center;
+    background: rgba(13, 20, 26, 0.96);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid rgba(185, 244, 194, 0.14);
+    display: flex;
+    gap: 12px;
+    justify-content: space-between;
+    padding: 10px 14px;
+    position: sticky;
+    top: 0;
+    z-index: 25;
+  }
+
+  .mobile-brand-link {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    display: inline-flex;
+    min-height: 0;
+    padding: 0;
+  }
+
+  .mobile-brand-logo {
+    display: block;
+    height: 34px;
+    object-fit: contain;
+    width: auto;
+  }
+
+  .mobile-sidebar-toggle {
+    background: #0f171c;
+    border-radius: 10px;
+    flex: 0 0 auto;
   }
 
   .sidebar.open {
@@ -6715,7 +6764,7 @@ tbody tr.selected {
   }
 
   .toolbar-heading .sidebar-toggle-button {
-    grid-row: 1 / span 2;
+    display: none;
   }
 
   .toolbar-project-controls {
