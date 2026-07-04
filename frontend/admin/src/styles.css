@@ -1569,6 +1569,10 @@ tbody tr.selected {
   min-width: 0;
 }
 
+.fitting-category-breadcrumb-top {
+  margin-top: -2px;
+}
+
 .fitting-breadcrumb-link {
   background: transparent;
   border: 0;
@@ -1586,13 +1590,13 @@ tbody tr.selected {
 
 .fitting-breadcrumb-separator {
   color: #6b7b88;
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 800;
 }
 
 .fitting-category-breadcrumb strong {
   color: #1f2933;
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 800;
   line-height: 1.2;
 }

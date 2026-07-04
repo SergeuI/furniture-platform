@@ -13618,10 +13618,29 @@ export default function App() {
             <article className="catalog-card service-catalog-card service-catalog-card-full">
               <div className="catalog-page-header">
                 <div className="service-catalog-title">
-                  <h3>{t.catalogFittings}</h3>
-                  <p>
-                    {t.fittingsManageDescription}
-                  </p>
+                  {activeFittingCategory ? (
+                    <div className="fitting-category-breadcrumb fitting-category-breadcrumb-top">
+                      <button
+                        className="fitting-breadcrumb-link"
+                        onClick={() => {
+                          setSelectedFittingCategory("");
+                          setFittingViewMode("rows");
+                        }}
+                        type="button"
+                      >
+                        {t.catalogFittings}
+                      </button>
+                      <span className="fitting-breadcrumb-separator">/</span>
+                      <strong>{currentFittingCategoryMeta?.name || t.catalogFittings}</strong>
+                    </div>
+                  ) : (
+                    <>
+                      <h3>{t.catalogFittings}</h3>
+                      <p>
+                        {t.fittingsManageDescription}
+                      </p>
+                    </>
+                  )}
                 </div>
                 <div className="service-catalog-header-actions">
                   <span className="service-tree-badge subtle">
@@ -13631,6 +13650,26 @@ export default function App() {
                     {activeFittingCategory ? visibleFittingItems.length : visibleFittingCategories.length}{" "}
                     {activeFittingCategory ? t.fittingsCount : t.fittingCategoriesCount}
                   </span>
+                  {activeFittingCategory ? (
+                    <div className="fittings-view-toggle" role="tablist" aria-label={t.catalogBrowseCategories}>
+                      <button
+                        className={`icon-button${fittingViewMode === "rows" ? " active" : ""}`}
+                        onClick={() => setFittingViewMode("rows")}
+                        title={t.fittingRowsView}
+                        type="button"
+                      >
+                        <Blocks size={16} />
+                      </button>
+                      <button
+                        className={`icon-button${fittingViewMode === "cards" ? " active" : ""}`}
+                        onClick={() => setFittingViewMode("cards")}
+                        title={t.fittingCardsView}
+                        type="button"
+                      >
+                        <LayoutGrid size={16} />
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
               </div>
 
@@ -13773,42 +13812,7 @@ export default function App() {
                     );
                   })}
                 </div>
-              ) : (
-                <div className="fitting-category-detail-head">
-                  <div className="fitting-category-breadcrumb">
-                    <button
-                      className="fitting-breadcrumb-link"
-                      onClick={() => {
-                        setSelectedFittingCategory("");
-                        setFittingViewMode("rows");
-                      }}
-                      type="button"
-                    >
-                      {t.catalogFittings}
-                    </button>
-                    <span className="fitting-breadcrumb-separator">/</span>
-                    <strong>{currentFittingCategoryMeta?.name || t.catalogFittings}</strong>
-                  </div>
-                  <div className="fittings-view-toggle" role="tablist" aria-label={t.catalogBrowseCategories}>
-                    <button
-                      className={`icon-button${fittingViewMode === "rows" ? " active" : ""}`}
-                      onClick={() => setFittingViewMode("rows")}
-                      title={t.fittingRowsView}
-                      type="button"
-                    >
-                      <Blocks size={16} />
-                    </button>
-                    <button
-                      className={`icon-button${fittingViewMode === "cards" ? " active" : ""}`}
-                      onClick={() => setFittingViewMode("cards")}
-                      title={t.fittingCardsView}
-                      type="button"
-                    >
-                      <LayoutGrid size={16} />
-                    </button>
-                  </div>
-                </div>
-              )}
+              ) : null}
 
               {activeFittingCategory && canEditOwnFittings ? (
                 <div className="fitting-create-panel">
