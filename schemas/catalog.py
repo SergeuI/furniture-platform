@@ -340,6 +340,7 @@ class FittingCatalogItemSchema(BaseModel):
     code: str | None = None
     article: str | None = None
     name: str | None = None
+    description: str | None = None
     price: float | None = None
     stock: str | None = None
     fitting_type: str | None = None
@@ -369,7 +370,7 @@ class FittingCategorySchema(BaseModel):
 
 class FittingCatalogCreateSchema(BaseModel):
     name: str = Field(
-        min_length=1,
+        default="",
         max_length=255,
     )
     article: str | None = Field(

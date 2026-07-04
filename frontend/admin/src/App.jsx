@@ -807,6 +807,11 @@ function detectFittingSourceSite(sourceUrl) {
   return "manual";
 }
 
+function looksLikeUrl(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  return Boolean(normalized) && /^(https?:\/\/|www\.|[^\s]+\.[^\s]+)/i.test(normalized);
+}
+
 function compressImageFileToDataUrl(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -4749,6 +4754,7 @@ export default function App() {
   const [fittingSearch, setFittingSearch] = useState("");
   const [selectedFittingCategory, setSelectedFittingCategory] = useState("");
   const [fittingViewMode, setFittingViewMode] = useState("rows");
+  const [fittingSourceModalOpen, setFittingSourceModalOpen] = useState(false);
   const [fittingColumnVisibility, setFittingColumnVisibility] = useState({
     price: true,
     stock: true,
@@ -10413,6 +10419,8 @@ export default function App() {
     const normalizedArticle = newFittingForm.article.trim();
     const normalizedSourceUrl = newFittingForm.source_url.trim();
     const normalizedName = newFittingForm.name.trim();
+    const inferredSourceUrl = normalizedSourceUrl || (looksLikeUrl(normalizedName) ? normalizedName : "");
+    const inferredName = looksLikeUrl(normalizedName) && inferredSourceUrl === normalizedName ? "" : normalizedName;
     const fallbackSystemName = currentFittingCategoryMeta?.name || t.fittingSystemScope;
 
     const payload = {
@@ -10422,10 +10430,10 @@ export default function App() {
       fitting_group: newFittingForm.fitting_group,
       fitting_type: newFittingForm.fitting_type,
       image_url: isSystemFitting ? null : newFittingForm.image_url.trim() || null,
-      source_url: normalizedSourceUrl || null,
+      source_url: inferredSourceUrl || null,
       is_active: Boolean(newFittingForm.is_active),
       is_system: isSystemFitting,
-      name: normalizedName || normalizedArticle || normalizedSourceUrl || (isSystemFitting ? fallbackSystemName : ""),
+      name: inferredName || normalizedArticle || (isSystemFitting ? fallbackSystemName : ""),
       price:
         isSystemFitting || newFittingForm.price === "" || newFittingForm.price === null
           ? null
@@ -10459,6 +10467,7 @@ export default function App() {
     }
 
     setStatus({ message: t.fittingCreateSuccess, tone: "success" });
+    setFittingSourceModalOpen(false);
     setNewFittingForm((current) => ({
       ...DEFAULT_FITTING_FORM,
       fitting_group: current.fitting_group,
@@ -13803,19 +13812,18 @@ export default function App() {
               )}
 
               {activeFittingCategory && canEditOwnFittings ? (
-                <form className="fitting-create-form" onSubmit={handleCreateFitting}>
-                  <label className="fitting-source-url-field">
-                    <span>{t.fittingSourceUrl}</span>
-                    <input
-                      onChange={(event) =>
-                        setNewFittingForm((current) => ({ ...current, source_url: event.target.value }))
-                      }
-                      placeholder="https://..."
-                      type="url"
-                      value={newFittingForm.source_url}
-                    />
-                    <div className="fitting-form-note">{t.fittingSourceUrlHint}</div>
-                  </label>
+                <div className="fitting-create-panel">
+                  <div className="fitting-create-panel-actions">
+                    <button
+                      className="primary-button"
+                      onClick={() => setFittingSourceModalOpen(true)}
+                      type="button"
+                    >
+                      <Plus size={16} />
+                      Додати фурнітуру через посилання
+                    </button>
+                  </div>
+                  <form className="fitting-create-form" onSubmit={handleCreateFitting}>
                   <label>
                     <span>{t.fittingType}</span>
                     <select
@@ -13912,7 +13920,8 @@ export default function App() {
                     <Plus size={16} />
                     {newFittingForm.is_system ? t.fittingAddSystem : t.fittingAddCustom}
                   </button>
-                </form>
+                  </form>
+                </div>
               ) : null}
 
               {activeFittingCategory ? (
@@ -13967,6 +13976,7 @@ export default function App() {
                             </div>
                             <div className="fitting-item-card-copy">
                               <strong>{item.name || item.code || item.article}</strong>
+                              {item.description ? <span className="fitting-item-card-description">{item.description}</span> : null}
                               <div className="fittings-table-badges">
                                 {fittingColumnVisibility.source ? renderSourceBadge(sourceMeta) : null}
                               </div>
@@ -14018,6 +14028,7 @@ export default function App() {
                                   </div>
                                   <div className="fittings-table-name-copy">
                                     <strong>{item.name || item.code || item.article}</strong>
+                                    {item.description ? <span className="fittings-table-description">{item.description}</span> : null}
                                     <div className="fittings-table-badges">
                                       {item.owner_user_id && !item.is_system ? (
                                         <span className="service-tree-badge subtle">{t.forCalculation}</span>
@@ -15656,6 +15667,64 @@ export default function App() {
           </section>
         )}
       </section>
+
+      {fittingSourceModalOpen ? (
+        <div
+          aria-modal="true"
+          className="modal-backdrop"
+          onClick={() => setFittingSourceModalOpen(false)}
+          role="dialog"
+        >
+          <section
+            className="confirm-modal fitting-source-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="confirm-header">
+              <div>
+                <strong>{t.fittingSourceUrl}</strong>
+                <p>{t.fittingSourceUrlHint}</p>
+              </div>
+              <button
+                aria-label={t.cancel}
+                className="ghost-button compact-button detail-info-button"
+                onClick={() => setFittingSourceModalOpen(false)}
+                type="button"
+              >
+                <X size={16} />
+              </button>
+            </header>
+            <form className="fitting-source-modal-form" onSubmit={handleCreateFitting}>
+              <label className="fitting-source-url-field">
+                <span>{t.fittingSourceUrl}</span>
+                <input
+                  autoFocus
+                  onChange={(event) =>
+                    setNewFittingForm((current) => ({ ...current, source_url: event.target.value }))
+                  }
+                  placeholder="https://..."
+                  type="url"
+                  value={newFittingForm.source_url}
+                />
+              </label>
+              <div className="fitting-form-note">{t.fittingAutoCityNote}</div>
+              <div className="confirm-actions fitting-source-actions">
+                <button
+                  className="ghost-button"
+                  disabled={loading}
+                  onClick={() => setFittingSourceModalOpen(false)}
+                  type="button"
+                >
+                  {t.cancel}
+                </button>
+                <button className="primary-button" disabled={loading} type="submit">
+                  <Plus size={16} />
+                  Додати фурнітуру
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      ) : null}
 
       {selectedProject && projectOverviewOpen ? (
         <div

@@ -113,6 +113,32 @@ def _first_meta_content(soup: BeautifulSoup, selectors: list[str]) -> str:
     return ""
 
 
+def _extract_description(soup: BeautifulSoup, fallback_name: str) -> str | None:
+    description = (
+        _first_meta_content(
+            soup,
+            [
+                "meta[name='description']",
+                "meta[property='og:description']",
+                "meta[name='twitter:description']",
+            ],
+        )
+        or _first_text(
+            soup,
+            [
+                ".card-info-head_description",
+                ".vr-card-info__description",
+                ".product-about__description",
+                ".product-description",
+                ".description",
+            ],
+        )
+        or fallback_name
+    )
+    description = _clean_text(description)
+    return description or None
+
+
 def _first_attr(soup: BeautifulSoup, selectors: list[str], attr: str, base_url: str) -> str | None:
     for selector in selectors:
         node = soup.select_one(selector)
@@ -283,12 +309,14 @@ def _parse_viyar_html(html: str, final_url: str) -> dict:
             final_url,
         )
     )
+    description = _extract_description(soup, name)
 
     return {
         "success": True,
         "source_site": "viyar",
         "final_url": final_url,
         "name": name or None,
+        "description": description,
         "article": article,
         "price": _extract_price(price_text),
         "price_raw": price_text or None,
@@ -390,12 +418,14 @@ def _parse_kronas_html(html: str, final_url: str) -> dict:
 
     if not image_url and article:
         image_url = f"https://kronas.com.ua/Media/images/catalog/medium/{article}.jpg"
+    description = _extract_description(soup, name)
 
     return {
         "success": True,
         "source_site": "kronas",
         "final_url": final_url,
         "name": name or None,
+        "description": description,
         "article": article,
         "price": _extract_price(price_text),
         "price_raw": price_text or None,
@@ -463,12 +493,14 @@ def _parse_generic_html(html: str, final_url: str, source_site: str) -> dict:
             ".cost",
         ],
     )
+    description = _extract_description(soup, name)
 
     return {
         "success": True,
         "source_site": source_site,
         "final_url": final_url,
         "name": name or None,
+        "description": description,
         "article": None,
         "price": _extract_price(price_text),
         "price_raw": price_text or None,
@@ -598,12 +630,14 @@ async def _parse_mt_source(source_url: str) -> dict:
             final_url,
         )
     )
+    description = _extract_description(soup, name)
 
     return {
         "success": True,
-        "source_site": "blum",
+        "source_site": "mt",
         "final_url": final_url,
         "name": name or None,
+        "description": description,
         "article": article,
         "price": _extract_price(price_text),
         "price_raw": price_text or None,

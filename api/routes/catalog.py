@@ -7,8 +7,10 @@ from fastapi import (
 )
 from fastapi.responses import Response
 from hashlib import sha256
+import json
 from threading import Lock
 from uuid import uuid4
+from urllib.parse import urlparse
 
 from api.dependencies.auth import (
     optional_current_user,
@@ -168,6 +170,21 @@ def _claim_fitting_image_warm(item_id: str | None) -> bool:
 def _release_fitting_image_warm(item_id: str | None) -> None:
     with _material_image_warm_lock:
         _fitting_images_being_warmed.discard(str(item_id or "").strip())
+
+
+def _looks_like_url(value: str | None) -> bool:
+    normalized = str(value or "").strip()
+    if not normalized:
+        return False
+
+    if normalized.lower().startswith(("http://", "https://", "www.")):
+        return True
+
+    try:
+        parsed = urlparse(normalized if "://" in normalized else f"https://{normalized}")
+        return bool(parsed.netloc or parsed.path) and "." in normalized
+    except Exception:
+        return False
 
 
 def _image_response(
@@ -1480,18 +1497,74 @@ async def create_fitting_route(
     effective_article = (payload.article or "").strip() or None
     effective_price = payload.price
     effective_stock = payload.stock
+    effective_description = None
+    source_payload: dict | None = None
+    selected_city = (payload.city or current_user.city or "").strip() or None
+    if not effective_source_url and _looks_like_url(effective_name):
+        effective_source_url = effective_name
+        effective_name = ""
+    source_site = detect_material_source_site(effective_source_url) if effective_source_url else "manual"
 
     if effective_source_url:
-        metadata = await parse_fitting_source_metadata(effective_source_url)
-        if metadata.get("success"):
-            effective_name = metadata.get("name") or effective_name
-            effective_image_url = metadata.get("image_url") or effective_image_url
-            effective_source_url = metadata.get("final_url") or effective_source_url
-            effective_article = effective_article or metadata.get("article")
-            effective_price = metadata.get("price") if metadata.get("price") is not None else effective_price
+        if source_site == "viyar":
+            ordered_cities: list[str] = []
+            if selected_city:
+                ordered_cities.append(selected_city)
+            for city_code in MATERIAL_CITY_COOKIES.keys():
+                if city_code not in ordered_cities:
+                    ordered_cities.append(city_code)
 
-    if not effective_name:
-        effective_name = effective_article or ""
+            city_prices: dict[str, float | None] = {}
+            first_result: dict | None = None
+
+            for city_code in ordered_cities:
+                try:
+                    parsed_result, _debug_payload = await fetch_viyar_product_details_by_url_traced(
+                        effective_source_url,
+                        city=city_code,
+                    )
+                except Exception:
+                    continue
+
+                if parsed_result and parsed_result.get("name") and first_result is None:
+                    first_result = parsed_result
+
+                city_prices[city_code] = parsed_result.get("price") if parsed_result else None
+
+            if first_result:
+                selected_price = city_prices.get(selected_city) if selected_city else None
+                effective_name = first_result.get("name") or effective_name
+                effective_image_url = first_result.get("image") or effective_image_url
+                effective_source_url = first_result.get("source_url") or effective_source_url
+                effective_article = effective_article or first_result.get("article")
+                effective_price = selected_price if selected_price is not None else first_result.get("price")
+                effective_description = first_result.get("description") or effective_description
+                source_payload = {
+                    "source_site": source_site,
+                    "source_url": effective_source_url,
+                    "selected_city": selected_city,
+                    "city_prices": city_prices,
+                    "parsed_item": first_result,
+                }
+        else:
+            metadata = await parse_fitting_source_metadata(effective_source_url)
+            if metadata.get("success"):
+                effective_name = metadata.get("name") or effective_name
+                effective_image_url = metadata.get("image_url") or effective_image_url
+                effective_source_url = metadata.get("final_url") or effective_source_url
+                effective_article = effective_article or metadata.get("article")
+                effective_price = metadata.get("price") if metadata.get("price") is not None else effective_price
+                effective_description = metadata.get("description") or effective_description
+                source_payload = metadata
+
+    if not effective_name and effective_article:
+        effective_name = effective_article
+
+    if effective_source_url and not effective_name.strip():
+        return {
+            "success": False,
+            "error": "Unable to parse fitting from source link",
+        }
 
     if not effective_name.strip():
         return {
@@ -1500,19 +1573,20 @@ async def create_fitting_route(
         }
 
     owner_user_id = None if payload.is_system else str(current_user.id)
-    selected_city = (payload.city or current_user.city or "").strip() or None
 
     item = create_fitting(
         city=selected_city,
         code=payload.code,
         article=effective_article,
         name=effective_name,
+        description=effective_description,
         price=effective_price,
         stock=effective_stock,
         fitting_type=payload.fitting_type,
         fitting_group=payload.fitting_group,
         image_url=effective_image_url,
         source_url=effective_source_url,
+        source_payload_json=json.dumps(source_payload, ensure_ascii=False) if source_payload else None,
         owner_user_id=owner_user_id,
         is_system=payload.is_system,
         is_active=payload.is_active,
@@ -1583,18 +1657,73 @@ async def update_fitting_route(
     effective_article = (payload.article or "").strip() or None
     effective_price = payload.price
     effective_stock = payload.stock
+    effective_description = None
+    source_payload: dict | None = None
+    if not effective_source_url and _looks_like_url(effective_name):
+        effective_source_url = effective_name
+        effective_name = ""
+    source_site = detect_material_source_site(effective_source_url) if effective_source_url else "manual"
 
     if effective_source_url:
-        metadata = await parse_fitting_source_metadata(effective_source_url)
-        if metadata.get("success"):
-            effective_name = metadata.get("name") or effective_name
-            effective_image_url = metadata.get("image_url") or effective_image_url
-            effective_source_url = metadata.get("final_url") or effective_source_url
-            effective_article = effective_article or metadata.get("article")
-            effective_price = metadata.get("price") if metadata.get("price") is not None else effective_price
+        if source_site == "viyar":
+            ordered_cities: list[str] = []
+            if selected_city:
+                ordered_cities.append(selected_city)
+            for city_code in MATERIAL_CITY_COOKIES.keys():
+                if city_code not in ordered_cities:
+                    ordered_cities.append(city_code)
 
-    if not effective_name:
-        effective_name = effective_article or ""
+            city_prices: dict[str, float | None] = {}
+            first_result: dict | None = None
+
+            for city_code in ordered_cities:
+                try:
+                    parsed_result, _debug_payload = await fetch_viyar_product_details_by_url_traced(
+                        effective_source_url,
+                        city=city_code,
+                    )
+                except Exception:
+                    continue
+
+                if parsed_result and parsed_result.get("name") and first_result is None:
+                    first_result = parsed_result
+
+                city_prices[city_code] = parsed_result.get("price") if parsed_result else None
+
+            if first_result:
+                selected_price = city_prices.get(selected_city) if selected_city else None
+                effective_name = first_result.get("name") or effective_name
+                effective_image_url = first_result.get("image") or effective_image_url
+                effective_source_url = first_result.get("source_url") or effective_source_url
+                effective_article = effective_article or first_result.get("article")
+                effective_price = selected_price if selected_price is not None else first_result.get("price")
+                effective_description = first_result.get("description") or effective_description
+                source_payload = {
+                    "source_site": source_site,
+                    "source_url": effective_source_url,
+                    "selected_city": selected_city,
+                    "city_prices": city_prices,
+                    "parsed_item": first_result,
+                }
+        else:
+            metadata = await parse_fitting_source_metadata(effective_source_url)
+            if metadata.get("success"):
+                effective_name = metadata.get("name") or effective_name
+                effective_image_url = metadata.get("image_url") or effective_image_url
+                effective_source_url = metadata.get("final_url") or effective_source_url
+                effective_article = effective_article or metadata.get("article")
+                effective_price = metadata.get("price") if metadata.get("price") is not None else effective_price
+                effective_description = metadata.get("description") or effective_description
+                source_payload = metadata
+
+    if not effective_name and effective_article:
+        effective_name = effective_article
+
+    if effective_source_url and not effective_name.strip():
+        return {
+            "success": False,
+            "error": "Unable to parse fitting from source link",
+        }
 
     item = update_fitting(
         item_id=item_id,
@@ -1602,12 +1731,14 @@ async def update_fitting_route(
         code=payload.code,
         article=effective_article,
         name=effective_name,
+        description=effective_description,
         price=effective_price,
         stock=effective_stock,
         fitting_type=payload.fitting_type,
         fitting_group=payload.fitting_group,
         image_url=effective_image_url,
         source_url=effective_source_url,
+        source_payload_json=json.dumps(source_payload, ensure_ascii=False) if source_payload else None,
         owner_user_id=owner_user_id,
         is_system=payload.is_system,
         is_active=payload.is_active,

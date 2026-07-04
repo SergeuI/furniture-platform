@@ -333,6 +333,7 @@ def _serialize_fitting(item: FittingModel) -> dict:
         "code": item.code,
         "article": item.article,
         "name": item.name,
+        "description": item.description,
         "price": item.price,
         "stock": item.stock,
         "fitting_type": category["code"],
@@ -883,12 +884,14 @@ def create_fitting(
     code: str | None,
     article: str | None,
     name: str,
+    description: str | None,
     price: float | None,
     stock: str | None,
     fitting_type: str | None,
     fitting_group: str | None,
     image_url: str | None,
     source_url: str | None,
+    source_payload_json: str | None,
     owner_user_id: str | None,
     is_system: bool,
     is_active: bool,
@@ -913,12 +916,14 @@ def create_fitting(
             code=_normalize_fitting_value(code),
             article=_normalize_fitting_value(article),
             name=name.strip(),
+            description=_normalize_fitting_value(description),
             price=_normalize_price_value(price),
             stock=_normalize_fitting_value(stock),
             fitting_type=category["code"],
             fitting_group=category["group"],
             image_url=_normalize_fitting_value(image_url),
             source_url=_normalize_fitting_value(source_url),
+            source_payload_json=_normalize_fitting_value(source_payload_json),
             owner_user_id=_normalize_fitting_value(owner_user_id),
             is_system=bool(is_system),
             is_active=bool(is_active),
@@ -964,12 +969,14 @@ def update_fitting(
     code: str | None,
     article: str | None,
     name: str,
+    description: str | None,
     price: float | None,
     stock: str | None,
     fitting_type: str | None,
     fitting_group: str | None,
     image_url: str | None,
     source_url: str | None,
+    source_payload_json: str | None,
     owner_user_id: str | None,
     is_system: bool,
     is_active: bool,
@@ -1002,6 +1009,7 @@ def update_fitting(
         item.code = _normalize_fitting_value(code)
         item.article = _normalize_fitting_value(article)
         item.name = name.strip()
+        item.description = _normalize_fitting_value(description)
         item.price = _normalize_price_value(price)
         item.stock = _normalize_fitting_value(stock)
         item.fitting_type = category["code"]
@@ -1014,6 +1022,7 @@ def update_fitting(
 
         item.image_url = normalized_image_url
         item.source_url = _normalize_fitting_value(source_url)
+        item.source_payload_json = _normalize_fitting_value(source_payload_json)
         item.owner_user_id = _normalize_fitting_value(owner_user_id)
         item.is_system = bool(is_system)
         item.is_active = bool(is_active)

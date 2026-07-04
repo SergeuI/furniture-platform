@@ -1662,6 +1662,17 @@ tbody tr.selected {
   }
 }
 
+.fitting-create-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.fitting-create-panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .fitting-create-form {
   align-items: end;
   background: #f8fafb;
@@ -1791,6 +1802,15 @@ tbody tr.selected {
   color: #24343d;
   font-size: 15px;
   line-height: 1.35;
+}
+
+.fittings-table-description,
+.fitting-item-card-description {
+  color: #60717c;
+  display: block;
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 .fittings-table-badges {
@@ -5882,6 +5902,20 @@ tbody tr.selected {
   max-width: 460px;
   padding: 20px;
   width: min(100%, 460px);
+}
+
+.fitting-source-modal {
+  max-width: 620px;
+  width: min(100%, 620px);
+}
+
+.fitting-source-modal-form {
+  display: grid;
+  gap: 14px;
+}
+
+.fitting-source-actions {
+  justify-content: flex-end;
 }
 
 .hole-template-modal {
