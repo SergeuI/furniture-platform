@@ -11,8 +11,9 @@ import os
 import re
 from playwright.async_api import async_playwright
 from bs4 import BeautifulSoup
+from services.legacy_db_config import DEFAULT_DB_PATH
 
-DB_NAME = "furniture_platform.db"
+DB_NAME = DEFAULT_DB_PATH
 BASE_URL = "https://mt.ua"
 
 # Список артикулів для парсингу (з KITS + додаткові)

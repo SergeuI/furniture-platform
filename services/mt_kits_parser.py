@@ -3,7 +3,9 @@
 from services.mt_parser import get_mt_product_from_db # ✅ Правильний імпорт з БД
 import aiosqlite
 
-DB_NAME = "furniture_platform.db"
+from services.legacy_db_config import DEFAULT_DB_PATH
+
+DB_NAME = DEFAULT_DB_PATH
 
 # 🔹 ОПИС КОМПЛЕКТІВ
 KITS = {

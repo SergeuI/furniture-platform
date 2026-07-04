@@ -6,6 +6,8 @@
 import sqlite3
 from datetime import datetime
 
+from services.legacy_db_config import DEFAULT_DB_PATH
+
 
 # =====================================================
 # CONNECT
@@ -14,7 +16,7 @@ from datetime import datetime
 
 def connect_db(
 
-    db_path="furniture_platform.db"
+    db_path=DEFAULT_DB_PATH
 ):
 
     return sqlite3.connect(
@@ -29,7 +31,7 @@ def connect_db(
 
 def init_production_db(
 
-    db_path="furniture_platform.db"
+    db_path=DEFAULT_DB_PATH
 ):
 
     connection = connect_db(
@@ -189,7 +191,7 @@ def create_order(
 
     project_name,
 
-    db_path="furniture_platform.db"
+    db_path=DEFAULT_DB_PATH
 ):
 
     connection = connect_db(
@@ -242,7 +244,7 @@ def register_part(
 
     order_id=None,
 
-    db_path="furniture_platform.db"
+    db_path=DEFAULT_DB_PATH
 ):
 
     connection = connect_db(
@@ -360,7 +362,7 @@ def update_stage(
 
     operator="",
 
-    db_path="furniture_platform.db"
+    db_path=DEFAULT_DB_PATH
 ):
 
     connection = connect_db(
@@ -409,7 +411,7 @@ def get_part(
 
     part_id,
 
-    db_path="furniture_platform.db"
+    db_path=DEFAULT_DB_PATH
 ):
 
     connection = connect_db(

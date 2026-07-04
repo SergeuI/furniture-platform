@@ -481,7 +481,40 @@ def _fetch_html(
     try:
 
         with urlopen(request, timeout=20) as response:
-            html = response.read().decode("utf-8", errors="ignore")
+            payload = response.read()
+            charset = None
+
+            try:
+                charset = response.headers.get_content_charset()
+            except Exception:
+                charset = None
+
+            encodings = [
+                charset,
+                "utf-8",
+                "utf-8-sig",
+                "windows-1251",
+                "cp1251",
+            ]
+
+            seen: set[str] = set()
+            for encoding in encodings:
+                if not encoding:
+                    continue
+
+                normalized_encoding = encoding.lower()
+                if normalized_encoding in seen:
+                    continue
+                seen.add(normalized_encoding)
+
+                try:
+                    html = payload.decode(normalized_encoding)
+                    break
+                except UnicodeDecodeError:
+                    html = None
+            else:
+                html = payload.decode("utf-8", errors="replace")
+
             final_url = getattr(response, "geturl", lambda: url)()
 
     except (HTTPError, URLError, TimeoutError):

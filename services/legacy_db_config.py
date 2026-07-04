@@ -1,9 +1,36 @@
 import os
 import sqlite3
+from pathlib import Path
 
 
-DEFAULT_DB_PATH = "furniture_platform.db"
-LEGACY_DB_PATH = "mebli_calculator.db"
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+
+def _resolve_db_path(env_name: str, default_filename: str) -> str:
+
+    raw_value = os.getenv(env_name, "").strip()
+
+    if raw_value:
+
+        path = Path(raw_value).expanduser()
+
+        if not path.is_absolute():
+
+            path = PROJECT_ROOT / path
+
+        return str(path.resolve())
+
+    return str((PROJECT_ROOT / default_filename).resolve())
+
+
+DEFAULT_DB_PATH = _resolve_db_path(
+    "FURNITURE_PLATFORM_DB_PATH",
+    "furniture_platform.db",
+)
+LEGACY_DB_PATH = _resolve_db_path(
+    "FURNITURE_LEGACY_DB_PATH",
+    "mebli_calculator.db",
+)
 
 TELEGRAM_USERS_TABLE = "telegram_users"
 TELEGRAM_PROJECTS_TABLE = "telegram_projects"

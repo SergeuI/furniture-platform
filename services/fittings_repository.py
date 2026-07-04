@@ -1,7 +1,7 @@
 import aiosqlite
+from services.legacy_db_config import DEFAULT_DB_PATH
 
-
-DB_NAME = "furniture_platform.db"
+DB_NAME = DEFAULT_DB_PATH
 
 
 async def save_fitting(

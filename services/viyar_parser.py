@@ -4,6 +4,7 @@ import asyncio
 from playwright.async_api import async_playwright
 import aiosqlite
 from bs4 import BeautifulSoup
+from services.legacy_db_config import DEFAULT_DB_PATH
 
 
 # =====================================================
@@ -21,7 +22,7 @@ logging.basicConfig(
 # DATABASE
 # =====================================================
 
-DB_NAME = "furniture_platform.db"
+DB_NAME = DEFAULT_DB_PATH
 
 
 # =====================================================

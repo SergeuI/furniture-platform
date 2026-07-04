@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import (
     CORSMiddleware
 )
+import uvicorn
 from dotenv import load_dotenv
 
 from database.init_db import (
@@ -134,3 +135,13 @@ app.include_router(
 
     tags=["Fitting Holes"]
 )
+
+
+if __name__ == "__main__":
+    uvicorn.run(
+        "main_api:app",
+        host=os.getenv("API_HOST", "127.0.0.1"),
+        port=int(os.getenv("API_PORT", "8000")),
+        reload=False,
+        log_level=os.getenv("API_LOG_LEVEL", "info").lower(),
+    )

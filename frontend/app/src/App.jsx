@@ -13,6 +13,7 @@ import {
   ExternalLink,
   Layers3,
   LayoutDashboard,
+  Menu,
   Package2,
   PlayCircle,
   RotateCcw,
@@ -2271,6 +2272,35 @@ export default function App() {
   const [offset, setOffset] = useState(0);
   const [status, setStatusState] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(
+    () => (typeof window !== "undefined" ? window.matchMedia("(min-width: 981px)").matches : true),
+  );
+  const sidebarTouchState = useRef({
+    active: false,
+    startX: 0,
+    startY: 0,
+    endX: 0,
+    endY: 0,
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return undefined;
+    }
+
+    const mediaQuery = window.matchMedia("(min-width: 981px)");
+    const syncSidebarState = () => setIsSidebarOpen(mediaQuery.matches);
+
+    syncSidebarState();
+
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", syncSidebarState);
+      return () => mediaQuery.removeEventListener("change", syncSidebarState);
+    }
+
+    mediaQuery.addListener(syncSidebarState);
+    return () => mediaQuery.removeListener(syncSidebarState);
+  }, []);
 
   const t = TRANSLATIONS[language] || TRANSLATIONS.en;
   const tariffContent = TARIFF_CONTENT[language] || TARIFF_CONTENT.en;
@@ -2286,6 +2316,70 @@ export default function App() {
       admin: "Admin",
     }[String(user?.role || "").toLowerCase()] || userRoleLabel;
   const userCityLabel = user?.city || t.notSet;
+
+  function closeSidebarOnMobile() {
+    if (typeof window !== "undefined" && window.matchMedia("(max-width: 980px)").matches) {
+      setIsSidebarOpen(false);
+    }
+  }
+
+  function handleSidebarTouchStart(event) {
+    if (typeof window === "undefined" || event.touches.length !== 1) {
+      return;
+    }
+
+    const target = event.target;
+    if (target.closest("button, a, input, select, textarea, label")) {
+      return;
+    }
+
+    const touch = event.touches[0];
+    const isMobileViewport = window.matchMedia("(max-width: 980px)").matches;
+    const edgeGestureAllowed = isSidebarOpen || touch.clientX <= 28;
+
+    if (!isMobileViewport || !edgeGestureAllowed) {
+      return;
+    }
+
+    sidebarTouchState.current = {
+      active: true,
+      startX: touch.clientX,
+      startY: touch.clientY,
+      endX: touch.clientX,
+      endY: touch.clientY,
+    };
+  }
+
+  function handleSidebarTouchMove(event) {
+    if (!sidebarTouchState.current.active || event.touches.length !== 1) {
+      return;
+    }
+
+    const touch = event.touches[0];
+    sidebarTouchState.current.endX = touch.clientX;
+    sidebarTouchState.current.endY = touch.clientY;
+  }
+
+  function finishSidebarGesture() {
+    if (!sidebarTouchState.current.active) {
+      return;
+    }
+
+    const deltaX = sidebarTouchState.current.endX - sidebarTouchState.current.startX;
+    const deltaY = sidebarTouchState.current.endY - sidebarTouchState.current.startY;
+
+    if (Math.abs(deltaX) > 48 && Math.abs(deltaX) > Math.abs(deltaY) * 1.2) {
+      setIsSidebarOpen(deltaX > 0);
+    }
+
+    sidebarTouchState.current = {
+      active: false,
+      startX: 0,
+      startY: 0,
+      endX: 0,
+      endY: 0,
+    };
+  }
   const inferStatusTone = useCallback((message) => {
     const normalizedMessage = String(message || "").toLowerCase();
 
@@ -4086,9 +4180,30 @@ export default function App() {
   }
 
   return (
-    <main className="app-shell">
+    <main
+      className="app-shell"
+      onTouchCancel={finishSidebarGesture}
+      onTouchEnd={finishSidebarGesture}
+      onTouchMove={handleSidebarTouchMove}
+      onTouchStart={handleSidebarTouchStart}
+    >
       {statusNotice}
-      <aside className="sidebar">
+      {isSidebarOpen ? (
+        <div
+          className="sidebar-backdrop"
+          onClick={() => setIsSidebarOpen(false)}
+          role="presentation"
+        />
+      ) : null}
+      <aside className={`sidebar${isSidebarOpen ? " open" : ""}`}>
+        <button
+          aria-label="Close menu"
+          className="sidebar-close-button"
+          onClick={() => setIsSidebarOpen(false)}
+          type="button"
+        >
+          <X size={18} />
+        </button>
         <div className="brand-block brand-lockup">
           <img alt="" className="brand-mark" src="/brand/mp-symbol-reference.jpg" />
           <div className="brand-copy">
@@ -4122,7 +4237,10 @@ export default function App() {
         <nav className="nav-tabs" aria-label="Application sections">
           <button
             className={activeView === "projects" ? "active" : ""}
-            onClick={() => setActiveView("projects")}
+            onClick={() => {
+              setActiveView("projects");
+              closeSidebarOnMobile();
+            }}
             type="button"
           >
             <ClipboardList size={18} />
@@ -4130,7 +4248,10 @@ export default function App() {
           </button>
           <button
             className={activeView === "create" ? "active" : ""}
-            onClick={() => setActiveView("create")}
+            onClick={() => {
+              setActiveView("create");
+              closeSidebarOnMobile();
+            }}
             type="button"
           >
             <Plus size={18} />
@@ -4139,7 +4260,10 @@ export default function App() {
           <button
             className={activeView === "details" ? "active" : ""}
             disabled={!selectedProject}
-            onClick={() => setActiveView("details")}
+            onClick={() => {
+              setActiveView("details");
+              closeSidebarOnMobile();
+            }}
             type="button"
           >
             <Eye size={18} />
@@ -4147,7 +4271,10 @@ export default function App() {
           </button>
           <button
             className={activeView === "settings" ? "active" : ""}
-            onClick={() => setActiveView("settings")}
+            onClick={() => {
+              setActiveView("settings");
+              closeSidebarOnMobile();
+            }}
             type="button"
           >
             <Info size={18} />
@@ -4155,7 +4282,14 @@ export default function App() {
           </button>
         </nav>
 
-        <button className="ghost-button logout-button" onClick={handleLogout} type="button">
+        <button
+          className="ghost-button logout-button"
+          onClick={() => {
+            closeSidebarOnMobile();
+            handleLogout();
+          }}
+          type="button"
+        >
           <LogOut size={18} />
           {t.logout}
         </button>
@@ -4164,6 +4298,14 @@ export default function App() {
       <section className="workspace">
         <header className={`toolbar${activeView === "details" ? " project-toolbar" : ""}`}>
           <div className="toolbar-heading">
+            <button
+              aria-label="Open menu"
+              className="sidebar-toggle-button"
+              onClick={() => setIsSidebarOpen(true)}
+              type="button"
+            >
+              <Menu size={18} />
+            </button>
             <h2>
               {activeView === "create"
                 ? t.createProject

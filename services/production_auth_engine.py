@@ -5,6 +5,8 @@
 
 import sqlite3
 
+from services.legacy_db_config import DEFAULT_DB_PATH
+
 from database.repositories.user_repository import (
     get_user_by_telegram_id,
 )
@@ -24,7 +26,7 @@ from services.user_roles import (
 
 def init_auth_tables(
 
-    db_path="furniture_platform.db"
+    db_path=DEFAULT_DB_PATH
 ):
 
     connection = sqlite3.connect(
@@ -64,7 +66,7 @@ def register_user(
 
     role,
 
-    db_path="furniture_platform.db"
+    db_path=DEFAULT_DB_PATH
 ):
 
     core_user = get_user_by_telegram_id(telegram_id)
@@ -120,7 +122,7 @@ def get_user_role(
 
     telegram_id,
 
-    db_path="furniture_platform.db"
+    db_path=DEFAULT_DB_PATH
 ):
 
     connection = sqlite3.connect(

@@ -1,8 +1,10 @@
 from os import getenv
 import asyncio
 import logging
+from pathlib import Path
 
 from aiogram import Bot, Dispatcher
+from aiogram.exceptions import TelegramNetworkError, TelegramUnauthorizedError
 from dotenv import load_dotenv
 
 from handlers.router import (
@@ -38,7 +40,21 @@ RUN_MT_PARSER_ON_START = getenv(
 logging.basicConfig(level=logging.INFO)
 
 
+def configure_file_logging() -> None:
+    log_path = Path(__file__).resolve().parent / "product_center_app.log"
+    file_handler = logging.FileHandler(log_path, encoding="utf-8")
+    file_handler.setLevel(logging.INFO)
+    file_handler.setFormatter(
+        logging.Formatter(
+            "[%(asctime)s] %(levelname)s %(name)s %(message)s"
+        )
+    )
+    root_logger = logging.getLogger()
+    root_logger.addHandler(file_handler)
+
+
 async def main():
+    configure_file_logging()
 
     bot = Bot(
         token=BOT_TOKEN
@@ -82,8 +98,30 @@ async def main():
     logging.info(
         "Bot startup complete, polling started"
     )
-
-    await dp.start_polling(bot)
+    logging.info("BOT_STATUS: online")
+    while True:
+        try:
+            await dp.start_polling(bot)
+            break
+        except TelegramUnauthorizedError:
+            logging.error(
+                "BOT_STATUS: unauthorized"
+            )
+            logging.error(
+                "BOT_TOKEN is invalid or revoked. Check the .env file and replace the token."
+            )
+            return
+        except TelegramNetworkError as exc:
+            logging.error("BOT_STATUS: reconnecting")
+            logging.exception(
+                "Bot polling failed because Telegram is unreachable; retrying in 15 seconds"
+            )
+            await asyncio.sleep(15)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logging.exception("Bot polling failed unexpectedly")
+            raise
 
 
 if __name__ == "__main__":

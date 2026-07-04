@@ -82,3 +82,4 @@ tmp_*
 *.pdf
 pycache_files.txt
 profile_card.png
+docs/update_packages/.update_package_state.json

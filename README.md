@@ -1,6 +1,61 @@
 # furniture-platform
 Furniture calculation platform with Telegram bot, FastAPI backend, BOM engine and CNC generation
 
+## Database safety
+
+The app now reads the SQLite file path from environment variables instead of a hardcoded filename.
+
+- `FURNITURE_PLATFORM_DB_PATH` controls the main app database
+- `FURNITURE_LEGACY_DB_PATH` controls the legacy Telegram/production helper database
+
+If the variables are not set, the app falls back to the project-root files:
+
+- `furniture_platform.db`
+- `mebli_calculator.db`
+
+All startup and migration helpers are additive:
+
+- tables are created with `CREATE TABLE IF NOT EXISTS`
+- seeds use `INSERT OR IGNORE` or matching upserts
+- no startup command drops tables or calls `delete` on user-owned project data
+
+This means you can keep a separate local copy for testing and a separate server copy for production data.
+
+### Local test setup
+
+Windows PowerShell:
+
+```powershell
+Copy-Item .\furniture_platform.db .\furniture_platform.local.db
+$env:FURNITURE_PLATFORM_DB_PATH = (Resolve-Path .\furniture_platform.local.db).Path
+$env:FURNITURE_LEGACY_DB_PATH = (Resolve-Path .\mebli_calculator.db).Path
+.\.venv\Scripts\python.exe main_api.py
+```
+
+If you also want the bot to use the same local database:
+
+```powershell
+$env:FURNITURE_PLATFORM_DB_PATH = (Resolve-Path .\furniture_platform.local.db).Path
+$env:FURNITURE_LEGACY_DB_PATH = (Resolve-Path .\mebli_calculator.db).Path
+.\.venv\Scripts\python.exe main.py
+```
+
+### Server update flow
+
+Use the server's own database file and never copy your local test DB over it.
+
+```bash
+cd /path/to/furniture-platform
+git pull
+./venv/bin/pip install -r requirements.txt
+export FURNITURE_PLATFORM_DB_PATH=/path/to/furniture-platform/furniture_platform.db
+export FURNITURE_LEGACY_DB_PATH=/path/to/furniture-platform/mebli_calculator.db
+./venv/bin/python scripts/safe_update_db.py
+sudo systemctl restart furniture-api furniture-bot
+```
+
+`scripts/safe_update_db.py` makes a backup first and then runs the same additive initialization/migration logic, so existing user data stays intact.
+
 ## Restore user access
 
 Reset an existing user's password from the project root. The password is entered

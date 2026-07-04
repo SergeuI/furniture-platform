@@ -13,6 +13,7 @@ from services.fittings_map import (
 from services.fittings_repository import (
     save_fitting
 )
+from services.legacy_db_config import DEFAULT_DB_PATH
 
 
 # =====================================================
@@ -33,7 +34,7 @@ logging.basicConfig(
 # DATABASE
 # =====================================================
 
-DB_NAME = "furniture_platform.db"
+DB_NAME = DEFAULT_DB_PATH
 
 
 # =====================================================

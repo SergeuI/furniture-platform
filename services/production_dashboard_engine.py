@@ -5,6 +5,8 @@
 
 import sqlite3
 
+from services.legacy_db_config import DEFAULT_DB_PATH
+
 
 # =====================================================
 # GET STAGE COUNTS
@@ -13,7 +15,7 @@ import sqlite3
 
 def get_stage_counts(
 
-    db_path="furniture_platform.db"
+    db_path=DEFAULT_DB_PATH
 ):
 
     connection = sqlite3.connect(
@@ -58,7 +60,7 @@ def get_stage_counts(
 
 def get_total_parts(
 
-    db_path="furniture_platform.db"
+    db_path=DEFAULT_DB_PATH
 ):
 
     connection = sqlite3.connect(
@@ -89,7 +91,7 @@ def get_total_parts(
 
 def get_completed_parts(
 
-    db_path="furniture_platform.db"
+    db_path=DEFAULT_DB_PATH
 ):
 
     connection = sqlite3.connect(
@@ -122,7 +124,7 @@ def get_completed_parts(
 
 def get_production_stats(
 
-    db_path="furniture_platform.db"
+    db_path=DEFAULT_DB_PATH
 ):
 
     total = get_total_parts(

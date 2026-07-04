@@ -3,10 +3,11 @@ import json
 import aiosqlite
 
 from dotenv import load_dotenv
+from services.legacy_db_config import DEFAULT_DB_PATH
 
 load_dotenv()
 
-DB_NAME = "furniture_platform.db"
+DB_NAME = DEFAULT_DB_PATH
 
 ADMIN_ID = os.getenv(
     "ADMIN_ID"

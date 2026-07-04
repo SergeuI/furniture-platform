@@ -11,6 +11,7 @@
   Info,
   LayoutGrid,
   MoreHorizontal,
+  Menu,
   Package,
   CircleAlert,
   LogOut,
@@ -4686,6 +4687,35 @@ export default function App() {
   const [form, setForm] = useState(projectToForm(null));
   const [status, setStatusState] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(
+    () => (typeof window !== "undefined" ? window.matchMedia("(min-width: 981px)").matches : true),
+  );
+  const sidebarTouchState = useRef({
+    active: false,
+    startX: 0,
+    startY: 0,
+    endX: 0,
+    endY: 0,
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return undefined;
+    }
+
+    const mediaQuery = window.matchMedia("(min-width: 981px)");
+    const syncSidebarState = () => setIsSidebarOpen(mediaQuery.matches);
+
+    syncSidebarState();
+
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", syncSidebarState);
+      return () => mediaQuery.removeEventListener("change", syncSidebarState);
+    }
+
+    mediaQuery.addListener(syncSidebarState);
+    return () => mediaQuery.removeListener(syncSidebarState);
+  }, []);
   const [loginLoading, setLoginLoading] = useState(false);
   const [confirmAction, setConfirmAction] = useState(null);
   const [activeView, setActiveView] = useState(
@@ -4732,6 +4762,71 @@ export default function App() {
   const canUseAiScan = user?.role === "admin" || user?.role === "premium" || user?.role === "pro";
   const canUsePremiumStart = user?.role === "admin" || user?.role === "premium";
   const canViewFittingHoles = user?.role === "admin" || user?.role === "premium" || user?.role === "pro";
+
+  function closeSidebarOnMobile() {
+    if (typeof window !== "undefined" && window.matchMedia("(max-width: 980px)").matches) {
+      setIsSidebarOpen(false);
+    }
+  }
+
+  function handleSidebarTouchStart(event) {
+    if (typeof window === "undefined" || event.touches.length !== 1) {
+      return;
+    }
+
+    const target = event.target;
+    if (target.closest("button, a, input, select, textarea, label")) {
+      return;
+    }
+
+    const touch = event.touches[0];
+    const isMobileViewport = window.matchMedia("(max-width: 980px)").matches;
+    const edgeGestureAllowed = isSidebarOpen || touch.clientX <= 28;
+
+    if (!isMobileViewport || !edgeGestureAllowed) {
+      return;
+    }
+
+    sidebarTouchState.current = {
+      active: true,
+      startX: touch.clientX,
+      startY: touch.clientY,
+      endX: touch.clientX,
+      endY: touch.clientY,
+    };
+  }
+
+  function handleSidebarTouchMove(event) {
+    if (!sidebarTouchState.current.active || event.touches.length !== 1) {
+      return;
+    }
+
+    const touch = event.touches[0];
+    sidebarTouchState.current.endX = touch.clientX;
+    sidebarTouchState.current.endY = touch.clientY;
+  }
+
+  function finishSidebarGesture() {
+    if (!sidebarTouchState.current.active) {
+      return;
+    }
+
+    const deltaX = sidebarTouchState.current.endX - sidebarTouchState.current.startX;
+    const deltaY = sidebarTouchState.current.endY - sidebarTouchState.current.startY;
+
+    if (Math.abs(deltaX) > 48 && Math.abs(deltaX) > Math.abs(deltaY) * 1.2) {
+      setIsSidebarOpen(deltaX > 0);
+    }
+
+    sidebarTouchState.current = {
+      active: false,
+      startX: 0,
+      startY: 0,
+      endX: 0,
+      endY: 0,
+    };
+  }
+
   const selectedHoleFitting = useMemo(
     () => fittingItems.find((item) => String(item.id) === String(holeSelectedFittingId)) || null,
     [fittingItems, holeSelectedFittingId],
@@ -10992,13 +11087,37 @@ export default function App() {
   }
 
   return (
-    <main className="app-shell">
+    <main
+      className="app-shell"
+      onTouchCancel={finishSidebarGesture}
+      onTouchEnd={finishSidebarGesture}
+      onTouchMove={handleSidebarTouchMove}
+      onTouchStart={handleSidebarTouchStart}
+    >
       {statusNotice}
-      <aside className="sidebar">
+      {isSidebarOpen ? (
+        <div
+          className="sidebar-backdrop"
+          onClick={() => setIsSidebarOpen(false)}
+          role="presentation"
+        />
+      ) : null}
+      <aside className={`sidebar${isSidebarOpen ? " open" : ""}`}>
+        <button
+          aria-label="Close menu"
+          className="sidebar-close-button"
+          onClick={() => setIsSidebarOpen(false)}
+          type="button"
+        >
+          <X size={18} />
+        </button>
         <div className="brand-block sidebar-brand-block">
           <button
             className="sidebar-brand-link"
-            onClick={() => switchView("home")}
+            onClick={() => {
+              switchView("home");
+              closeSidebarOnMobile();
+            }}
             type="button"
           >
             <img
@@ -11042,7 +11161,10 @@ export default function App() {
         <nav className="nav-tabs" aria-label="Admin sections">
           <button
             className={isHomeView ? "active" : ""}
-            onClick={() => switchView("home")}
+            onClick={() => {
+              switchView("home");
+              closeSidebarOnMobile();
+            }}
             type="button"
           >
             {t.home}
@@ -11053,7 +11175,10 @@ export default function App() {
                 ? "active"
                 : ""
             }
-            onClick={() => switchView("projects")}
+            onClick={() => {
+              switchView("projects");
+              closeSidebarOnMobile();
+            }}
             type="button"
           >
             {t.projects}
@@ -11061,7 +11186,10 @@ export default function App() {
           {canCreateNewProject ? (
             <button
               className={activeView === "createProject" ? "active" : ""}
-              onClick={() => switchView("createProject")}
+              onClick={() => {
+                switchView("createProject");
+                closeSidebarOnMobile();
+              }}
               type="button"
             >
               {t.createProject}
@@ -11071,14 +11199,20 @@ export default function App() {
             <>
               <button
                 className={activeView === "users" ? "active" : ""}
-                onClick={() => switchView("users")}
+                onClick={() => {
+                  switchView("users");
+                  closeSidebarOnMobile();
+                }}
                 type="button"
               >
                 {t.users}
               </button>
               <button
                 className={activeView === "audit" ? "active" : ""}
-                onClick={() => switchView("audit")}
+                onClick={() => {
+                  switchView("audit");
+                  closeSidebarOnMobile();
+                }}
                 type="button"
               >
                 {t.audit}
@@ -11089,7 +11223,10 @@ export default function App() {
             <div className={`nav-group-header${isCatalogView ? " active" : ""}`}>
               <button
                 className={`nav-group-link${isCatalogHubView || isCatalogMaterialsView || isCatalogFittingsView || isCatalogFastenersView || isCatalogHolesView ? " active" : ""}`}
-                onClick={() => switchView(user.role === "admin" ? "catalogHub" : "catalogMaterials")}
+                onClick={() => {
+                  switchView(user.role === "admin" ? "catalogHub" : "catalogMaterials");
+                  closeSidebarOnMobile();
+                }}
                 type="button"
               >
                 <span className="nav-group-title">{t.catalog}</span>
@@ -11110,14 +11247,20 @@ export default function App() {
               <div className="nav-subtabs">
                 <button
                   className={isCatalogMaterialsView ? "active" : ""}
-                  onClick={() => switchView("catalogMaterials")}
+                  onClick={() => {
+                    switchView("catalogMaterials");
+                    closeSidebarOnMobile();
+                  }}
                   type="button"
                 >
                   {t.catalogMaterials}
                 </button>
                 <button
                   className={isCatalogFittingsView ? "active" : ""}
-                  onClick={() => switchView("catalogFittings")}
+                  onClick={() => {
+                    switchView("catalogFittings");
+                    closeSidebarOnMobile();
+                  }}
                   type="button"
                 >
                   {t.catalogFittings}
@@ -11125,7 +11268,10 @@ export default function App() {
                 {canViewFittingHoles ? (
                   <button
                     className={isCatalogHolesView ? "active" : ""}
-                    onClick={() => switchView("catalogHoles")}
+                    onClick={() => {
+                      switchView("catalogHoles");
+                      closeSidebarOnMobile();
+                    }}
                     type="button"
                   >
                     {t.holeTabTitle}
@@ -11135,21 +11281,30 @@ export default function App() {
                   <>
                     <button
                       className={isCatalogViyarView ? "active" : ""}
-                      onClick={() => switchView("catalogViyar")}
+                      onClick={() => {
+                        switchView("catalogViyar");
+                        closeSidebarOnMobile();
+                      }}
                       type="button"
                     >
                       {t.catalogViyar}
                     </button>
                     <button
                       className={isCatalogManualView ? "active" : ""}
-                      onClick={() => switchView("catalogManual")}
+                      onClick={() => {
+                        switchView("catalogManual");
+                        closeSidebarOnMobile();
+                      }}
                       type="button"
                     >
                       {t.catalogManual}
                     </button>
                     <button
                       className={isCatalogValuesView ? "active" : ""}
-                      onClick={() => switchView("catalogValues")}
+                      onClick={() => {
+                        switchView("catalogValues");
+                        closeSidebarOnMobile();
+                      }}
                       type="button"
                     >
                       {t.catalogValues}
@@ -11161,14 +11316,24 @@ export default function App() {
           </div>
           <button
             className={activeView === "settings" ? "active" : ""}
-            onClick={() => switchView("settings")}
+            onClick={() => {
+              switchView("settings");
+              closeSidebarOnMobile();
+            }}
             type="button"
           >
             {t.settings}
           </button>
         </nav>
 
-        <button className="ghost-button" onClick={handleLogout} type="button">
+        <button
+          className="ghost-button"
+          onClick={() => {
+            closeSidebarOnMobile();
+            handleLogout();
+          }}
+          type="button"
+        >
           <LogOut size={18} />
           {t.logout}
         </button>
@@ -11179,6 +11344,14 @@ export default function App() {
           className={`toolbar${activeView === "projectDetails" ? " project-toolbar" : ""}`}
         >
           <div className="toolbar-heading">
+            <button
+              aria-label="Open menu"
+              className="sidebar-toggle-button"
+              onClick={() => setIsSidebarOpen(true)}
+              type="button"
+            >
+              <Menu size={18} />
+            </button>
             <h2>
               {isHomeView
                 ? t.home

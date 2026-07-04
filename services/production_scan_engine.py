@@ -17,6 +17,7 @@ from services.production_state_engine import (
 from services.production_role_engine import (
     can_access_stage
 )
+from services.legacy_db_config import DEFAULT_DB_PATH
 # =====================================================
 # PARSE BARCODE
 # Парсинг barcode
@@ -48,7 +49,7 @@ def find_part_by_barcode(
 
     barcode,
 
-    db_path="furniture_platform.db"
+    db_path=DEFAULT_DB_PATH
 ):
 
     parsed = parse_barcode(
