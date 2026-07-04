@@ -11100,7 +11100,7 @@ export default function App() {
 
   return (
     <main
-      className="app-shell"
+      className={`app-shell${!isSidebarOpen && isCompactSidebarMode ? " compact-topbar" : ""}`}
       onTouchCancel={finishSidebarGesture}
       onTouchEnd={finishSidebarGesture}
       onTouchMove={handleSidebarTouchMove}

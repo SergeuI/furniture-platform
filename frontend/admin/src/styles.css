@@ -6616,6 +6616,14 @@ tbody tr.selected {
     z-index: 23;
   }
 
+  .compact-topbar .workspace {
+    padding-top: 60px;
+  }
+
+  .compact-topbar .toolbar {
+    top: 60px;
+  }
+
   .workspace {
     height: auto;
     min-width: 0;
@@ -6632,7 +6640,9 @@ tbody tr.selected {
     gap: 12px;
     justify-content: space-between;
     padding: 10px 14px;
-    position: sticky;
+    left: 0;
+    position: fixed;
+    right: 0;
     top: 0;
     z-index: 25;
   }
