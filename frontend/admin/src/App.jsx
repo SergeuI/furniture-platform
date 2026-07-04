@@ -124,6 +124,7 @@ const API_BASE_URL = (
 );
 const ADMIN_ASSET_BASE_URL = import.meta.env.BASE_URL || "/";
 const PAGE_SIZE = 20;
+const SIDEBAR_COLLAPSE_BREAKPOINT = 1180;
 
 function buildAdminAssetUrl(path) {
   return `${ADMIN_ASSET_BASE_URL}${String(path || "").replace(/^\/+/, "")}`;
@@ -4688,7 +4689,10 @@ export default function App() {
   const [status, setStatusState] = useState(null);
   const [loading, setLoading] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(
-    () => (typeof window !== "undefined" ? window.matchMedia("(min-width: 981px)").matches : true),
+    () =>
+      (typeof window !== "undefined"
+        ? window.matchMedia(`(min-width: ${SIDEBAR_COLLAPSE_BREAKPOINT + 1}px)`).matches
+        : true),
   );
   const sidebarTouchState = useRef({
     active: false,
@@ -4703,7 +4707,9 @@ export default function App() {
       return undefined;
     }
 
-    const mediaQuery = window.matchMedia("(min-width: 981px)");
+    const mediaQuery = window.matchMedia(
+      `(min-width: ${SIDEBAR_COLLAPSE_BREAKPOINT + 1}px)`,
+    );
     const syncSidebarState = () => setIsSidebarOpen(mediaQuery.matches);
 
     syncSidebarState();
@@ -4764,7 +4770,10 @@ export default function App() {
   const canViewFittingHoles = user?.role === "admin" || user?.role === "premium" || user?.role === "pro";
 
   function closeSidebarOnMobile() {
-    if (typeof window !== "undefined" && window.matchMedia("(max-width: 980px)").matches) {
+    if (
+      typeof window !== "undefined" &&
+      window.matchMedia(`(max-width: ${SIDEBAR_COLLAPSE_BREAKPOINT}px)`).matches
+    ) {
       setIsSidebarOpen(false);
     }
   }
@@ -4780,7 +4789,9 @@ export default function App() {
     }
 
     const touch = event.touches[0];
-    const isMobileViewport = window.matchMedia("(max-width: 980px)").matches;
+    const isMobileViewport = window.matchMedia(
+      `(max-width: ${SIDEBAR_COLLAPSE_BREAKPOINT}px)`,
+    ).matches;
     const edgeGestureAllowed = isSidebarOpen || touch.clientX <= 28;
 
     if (!isMobileViewport || !edgeGestureAllowed) {

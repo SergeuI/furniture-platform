@@ -15,7 +15,10 @@ import csv
 import hashlib
 import os
 import shutil
+import shlex
 import re
+import time
+import traceback
 from datetime import datetime
 from collections import Counter
 import subprocess
@@ -136,12 +139,50 @@ def _probe_server_with_paramiko(
     ssh_key_path: str,
     server_password: str,
 ) -> tuple[bool, str]:
+    client, error = _open_paramiko_client(
+        server_host,
+        server_port,
+        server_user,
+        ssh_key_path,
+        server_password,
+    )
+    if client is None:
+        return False, error or "Не вдалося встановити SSH-з'єднання."
+
+    try:
+        stdin, stdout, stderr = client.exec_command("echo SERVER_OK", timeout=10)
+        stdout_text = stdout.read().decode("utf-8", errors="replace").strip()
+        stderr_text = stderr.read().decode("utf-8", errors="replace").strip()
+        exit_status = stdout.channel.recv_exit_status()
+
+        output_text = stdout_text or stderr_text
+        if exit_status == 0 and "SERVER_OK" in output_text:
+            return True, "SERVER_OK"
+        return False, output_text or f"SSH command finished with code {exit_status}"
+    except Exception as exc:  # pragma: no cover - depends on remote host
+        return False, str(exc)
+    finally:
+        client.close()
+
+
+def _open_paramiko_client(
+    server_host: str,
+    server_port: str,
+    server_user: str,
+    ssh_key_path: str,
+    server_password: str,
+):
     if paramiko is None:
         return (
-            False,
-            "Для перевірки по паролю потрібна бібліотека paramiko. "
+            None,
+            "Для SSH-автоматизації потрібна бібліотека paramiko. "
             "Додай її в requirements.txt і встанови залежності.",
         )
+
+    key_path = ssh_key_path.strip()
+    password = server_password.strip()
+    if not key_path and not password:
+        return None, "Потрібен або SSH key, або пароль для входу на сервер."
 
     try:
         client = paramiko.SSHClient()
@@ -158,29 +199,91 @@ def _probe_server_with_paramiko(
             "look_for_keys": False,
         }
 
-        key_path = ssh_key_path.strip()
-        password = server_password.strip()
-
         if key_path:
             connect_kwargs["key_filename"] = key_path
-        elif password:
+        if password:
             connect_kwargs["password"] = password
-        else:
-            return False, "Потрібен або SSH key, або пароль для входу на сервер."
 
         client.connect(**connect_kwargs)
-        stdin, stdout, stderr = client.exec_command("echo SERVER_OK", timeout=10)
-        stdout_text = stdout.read().decode("utf-8", errors="replace").strip()
-        stderr_text = stderr.read().decode("utf-8", errors="replace").strip()
-        exit_status = stdout.channel.recv_exit_status()
-        client.close()
+        return client, None
+    except Exception as exc:  # pragma: no cover - depends on remote host
+        return None, str(exc)
 
-        output_text = stdout_text or stderr_text
-        if exit_status == 0 and "SERVER_OK" in output_text:
-            return True, "SERVER_OK"
-        return False, output_text or f"SSH command finished with code {exit_status}"
+
+def _collect_channel_output(channel, timeout_seconds: float = 600.0) -> tuple[str, str, int]:
+    deadline = time.monotonic() + timeout_seconds
+    stdout_chunks: list[str] = []
+    stderr_chunks: list[str] = []
+
+    while True:
+        while channel.recv_ready():
+            stdout_chunks.append(channel.recv(4096).decode("utf-8", errors="replace"))
+        while channel.recv_stderr_ready():
+            stderr_chunks.append(channel.recv_stderr(4096).decode("utf-8", errors="replace"))
+
+        if channel.exit_status_ready() and not channel.recv_ready() and not channel.recv_stderr_ready():
+            break
+
+        if time.monotonic() > deadline:
+            raise TimeoutError(f"Оновлення сервера перевищило {int(timeout_seconds)} секунд.")
+
+        time.sleep(0.2)
+
+    exit_status = channel.recv_exit_status()
+    while channel.recv_ready():
+        stdout_chunks.append(channel.recv(4096).decode("utf-8", errors="replace"))
+    while channel.recv_stderr_ready():
+        stderr_chunks.append(channel.recv_stderr(4096).decode("utf-8", errors="replace"))
+
+    return "".join(stdout_chunks).strip(), "".join(stderr_chunks).strip(), exit_status
+
+
+def _run_remote_update_with_paramiko(
+    server_host: str,
+    server_port: str,
+    server_user: str,
+    ssh_key_path: str,
+    server_password: str,
+    server_path: str,
+    restart: bool,
+) -> tuple[bool, str]:
+    client, error = _open_paramiko_client(
+        server_host,
+        server_port,
+        server_user,
+        ssh_key_path,
+        server_password,
+    )
+    if client is None:
+        return False, error or "Не вдалося встановити SSH-з'єднання."
+
+    remote_path = shlex.quote(server_path.strip() or ".")
+    command_parts = [
+        f"cd {remote_path}",
+        f"git config --global --replace-all safe.directory {remote_path}",
+        "git pull",
+    ]
+    if restart:
+        command_parts.append("sudo -S -p '' systemctl restart furniture-api furniture-bot")
+
+    remote_command = " && ".join(command_parts)
+    password = server_password.strip()
+
+    try:
+        stdin, stdout, stderr = client.exec_command(remote_command, get_pty=True, timeout=60)
+        if restart and password:
+            stdin.write(password + "\n")
+            stdin.flush()
+
+        stdout_text, stderr_text, exit_status = _collect_channel_output(stdout.channel, timeout_seconds=600.0)
+        combined = "\n".join(part for part in [stdout_text, stderr_text] if part)
+        if exit_status == 0:
+            return True, combined or "Remote update completed successfully."
+        return False, combined or f"Remote command finished with code {exit_status}"
     except Exception as exc:  # pragma: no cover - depends on remote host
         return False, str(exc)
+    finally:
+        client.close()
 
 
 def format_server_block(
@@ -506,6 +609,9 @@ def build_update_package_plan(file_types: set[str]) -> list[str]:
 
     if "database" in file_types:
         add_step("Запустити `scripts/safe_update_db.py` з резервною копією.")
+
+    if "ui" in file_types:
+        add_step("Зібрати фронтенд після оновлення коду.")
 
     if "code" in file_types or "ui" in file_types:
         add_step("Перезапустити API, bot і фронтенди після оновлення.")
@@ -928,12 +1034,13 @@ class WizardApp(tk.Tk):
         self.mode = tk.StringVar(value="local")
         self.main_db = tk.StringVar(value=default_main_db())
         self.legacy_db = tk.StringVar(value=default_legacy_db())
-        self.server_path = tk.StringVar(value="/path/to/furniture-platform")
+        self.server_path = tk.StringVar(value="/opt/furniture-stage")
         self.server_host = tk.StringVar(value="")
         self.server_port = tk.StringVar(value="22")
         self.server_user = tk.StringVar(value="")
         self.ssh_key_path = tk.StringVar(value="")
         self.server_password = tk.StringVar(value="")
+        self.sudo_password = tk.StringVar(value="")
         self.backup = tk.BooleanVar(value=True)
         self.run_safe_update = tk.BooleanVar(value=True)
         self.restart_services = tk.BooleanVar(value=True)
@@ -1519,11 +1626,12 @@ class WizardApp(tk.Tk):
         self._add_entry(server_box, "User", self.server_user, 2)
         self._add_entry(server_box, "SSH key", self.ssh_key_path, 3)
         self._add_entry(server_box, "SSH password", self.server_password, 4, show="*")
+        self._add_entry(server_box, "Пароль адміна (sudo)", self.sudo_password, 5, show="*")
         ttk.Label(
             server_box,
             text="Пароль не зберігаємо в налаштуваннях. Якщо ключа немає, введи пароль вручну для перевірки.",
             style="Hint.TLabel",
-        ).grid(row=5, column=0, columnspan=2, sticky="w", pady=(4, 0))
+        ).grid(row=6, column=0, columnspan=2, sticky="w", pady=(4, 0))
 
         options = ttk.LabelFrame(body, text="Галочки", style="Card.TLabelframe")
         options.grid(row=1, column=0, sticky="nsew", padx=(0, 10), pady=(16, 0))
@@ -2072,6 +2180,7 @@ class WizardApp(tk.Tk):
 
         ttk.Button(source_box, text="Оновити перегляд", command=self.refresh_update_package_preview).pack(fill="x", pady=(12, 0))
         ttk.Button(source_box, text="Створити пакет версії", style="Primary.TButton", command=self.create_update_package).pack(fill="x", pady=(8, 0))
+        self._register_action_button("server-update", ttk.Button(source_box, text="Оновити сервер", command=self.run_server_update)).pack(fill="x", pady=(8, 0))
         ttk.Button(source_box, text="Відкрити папку пакетів", command=self.open_update_packages_folder).pack(fill="x", pady=(8, 0))
         ttk.Button(source_box, text="Відкрити інструкцію", command=self.open_workflow_doc).pack(fill="x", pady=(8, 0))
         ttk.Button(source_box, text="Скопіювати план", command=self.copy_update_package_plan).pack(fill="x", pady=(8, 0))
@@ -2329,6 +2438,7 @@ class WizardApp(tk.Tk):
             self.server_user.set(str(data.get("server_user", self.server_user.get())))
             self.ssh_key_path.set(str(data.get("ssh_key_path", self.ssh_key_path.get())))
             self.server_password.set("")
+            self.sudo_password.set("")
             self.backup.set(as_bool(data.get("backup"), self.backup.get()))
             self.run_safe_update.set(as_bool(data.get("run_safe_update"), self.run_safe_update.get()))
             self.restart_services.set(as_bool(data.get("restart_services"), self.restart_services.get()))
@@ -2370,12 +2480,13 @@ class WizardApp(tk.Tk):
         self.mode.set("local")
         self.main_db.set(default_main_db())
         self.legacy_db.set(default_legacy_db())
-        self.server_path.set("/path/to/furniture-platform")
+        self.server_path.set("/opt/furniture-stage")
         self.server_host.set("")
         self.server_port.set("22")
         self.server_user.set("")
         self.ssh_key_path.set("")
         self.server_password.set("")
+        self.sudo_password.set("")
         self.backup.set(True)
         self.run_safe_update.set(True)
         self.restart_services.set(True)
@@ -2440,6 +2551,130 @@ class WizardApp(tk.Tk):
             self.after(0, finish)
 
         threading.Thread(target=worker, daemon=True).start()
+
+    def run_server_update(self) -> None:
+        payload = self._last_update_package_payload
+        if not isinstance(payload, dict):
+            messagebox.showinfo("Немає пакета", "Спочатку створи або онови пакет версії.")
+            return
+
+        host = self.server_host.get().strip()
+        port = self.server_port.get().strip() or "22"
+        user = self.server_user.get().strip()
+        key_path = self.ssh_key_path.get().strip()
+        server_password = self.server_password.get().strip()
+        sudo_password = self.sudo_password.get().strip()
+        server_path = self.server_path.get().strip()
+
+        if not host or not user:
+            messagebox.showwarning("Не вистачає даних", "Заповни хоча б Host і User для оновлення сервера.")
+            return
+
+        if not key_path and not server_password:
+            messagebox.showwarning(
+                "Не вистачає даних",
+                "Для оновлення сервера вкажи або SSH key, або SSH password.",
+            )
+            return
+
+        source_files = [str(item) for item in payload.get("source_files", []) or []]
+        file_types = {str(item) for item in payload.get("file_types", []) or []}
+        need_db_update = "database" in file_types
+        need_restart = self.restart_services.get() and bool(file_types & {"code", "ui", "database"})
+        need_requirements = any(path.replace("\\", "/") == "requirements.txt" for path in source_files)
+        need_admin_build = any(path.replace("\\", "/").startswith("frontend/admin/") for path in source_files)
+        need_app_build = any(path.replace("\\", "/").startswith("frontend/app/") for path in source_files)
+        sudo_secret = sudo_password or server_password
+
+        if need_restart and not sudo_secret:
+            messagebox.showwarning(
+                "Не вистачає даних",
+                "Для перезапуску сервісів введи пароль адміна (sudo) або SSH пароль, якщо він підходить і для sudo.",
+            )
+            return
+
+        self._set_launch_status("Оновлення сервера: підключення...")
+        self._append_product_log("[Сервер] Починаємо автоматичне оновлення.")
+
+        self._begin_activity()
+
+        def worker() -> None:
+            try:
+                client, error = _open_paramiko_client(
+                    host,
+                    port,
+                    user,
+                    key_path,
+                    server_password,
+                )
+                if client is None:
+                    self.after(0, lambda: self._finish_remote_update(False, error or "Не вдалося підключитися до сервера."))
+                    return
+
+                transport = client.get_transport()
+                if transport is not None:
+                    transport.set_keepalive(30)
+
+                remote_steps = [
+                    f"git config --global --replace-all safe.directory {shlex.quote(server_path or '.')}",
+                    "git status --short --branch --untracked-files=all",
+                    "env GIT_TERMINAL_PROMPT=0 git pull --ff-only",
+                ]
+                if need_requirements:
+                    remote_steps.append("./venv/bin/pip install -r requirements.txt")
+                if need_db_update and self.run_safe_update.get():
+                    remote_steps.append("./venv/bin/python scripts/safe_update_db.py")
+                if need_admin_build:
+                    remote_steps.append("cd frontend/admin && npm run build")
+                if need_app_build:
+                    remote_steps.append("cd frontend/app && npm run build")
+                if need_restart:
+                    remote_steps.append("sudo -S -p '' systemctl restart furniture-api furniture-bot")
+
+                remote_path = shlex.quote(server_path or ".")
+                remote_command = f"cd {remote_path} && " + " && ".join(remote_steps)
+                self.after(0, lambda: self._set_launch_status("Оновлення сервера: git pull..."))
+                stdin, stdout, stderr = client.exec_command(remote_command, get_pty=True, timeout=120)
+                if need_restart and sudo_secret:
+                    self.after(0, lambda: self._set_launch_status("Оновлення сервера: перезапуск сервісів..."))
+                    stdin.write(sudo_secret + "\n")
+                    stdin.flush()
+
+                stdout_text, stderr_text, exit_status = _collect_channel_output(stdout.channel, timeout_seconds=900.0)
+                combined = "\n".join(part for part in [stdout_text, stderr_text] if part)
+                if exit_status == 0:
+                    self.after(0, lambda: self._finish_remote_update(True, combined or "Оновлення сервера завершено успішно."))
+                else:
+                    self.after(0, lambda: self._finish_remote_update(False, combined or f"Команда завершилась з кодом {exit_status}"))
+            except Exception as exc:  # pragma: no cover - depends on remote host
+                error_text = f"{type(exc).__name__}: {exc}" if str(exc) else type(exc).__name__
+                trace_text = traceback.format_exc(limit=3)
+                self.after(0, lambda: self._finish_remote_update(False, f"{error_text}\n{trace_text}"))
+            finally:
+                try:
+                    client.close()  # type: ignore[name-defined]
+                except Exception:
+                    pass
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _finish_remote_update(self, success: bool, output: str) -> None:
+        self._end_activity()
+        self._set_launch_status("Оновлення сервера завершено." if success else "Оновлення сервера не вдалося.")
+        message = output.strip() or "Немає додаткового виводу."
+        self._append_product_log(f"[Сервер] {message}")
+        self.record_history(
+            "server.remote_update",
+            details="Автоматичне оновлення сервера через Product Center",
+            status="ok" if success else "error",
+            extra={"output": message},
+        )
+        if success:
+            messagebox.showinfo("Готово", "Оновлення сервера виконано успішно.")
+            self._set_action_button_state("server-update", "success")
+        else:
+            messagebox.showerror("Помилка", f"Оновлення сервера не вдалося.\n{message}")
+            self._set_action_button_state("server-update", "error")
 
     def run_local_update(self) -> None:
         if self.mode.get() != "local":

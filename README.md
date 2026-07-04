@@ -48,6 +48,8 @@ Use the server's own database file and never copy your local test DB over it.
 cd /path/to/furniture-platform
 git pull
 ./venv/bin/pip install -r requirements.txt
+cd frontend/admin
+npm run build
 export FURNITURE_PLATFORM_DB_PATH=/path/to/furniture-platform/furniture_platform.db
 export FURNITURE_LEGACY_DB_PATH=/path/to/furniture-platform/mebli_calculator.db
 ./venv/bin/python scripts/safe_update_db.py
