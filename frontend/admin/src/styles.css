@@ -1560,6 +1560,43 @@ tbody tr.selected {
   grid-template-columns: minmax(0, 1fr) auto auto;
 }
 
+.fitting-category-breadcrumb {
+  align-items: center;
+  color: #24343d;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.fitting-breadcrumb-link {
+  background: transparent;
+  border: 0;
+  color: #0f766e;
+  cursor: pointer;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.2;
+  padding: 0;
+}
+
+.fitting-breadcrumb-link:hover {
+  text-decoration: underline;
+}
+
+.fitting-breadcrumb-separator {
+  color: #6b7b88;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.fitting-category-breadcrumb strong {
+  color: #1f2933;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
 .fitting-category-card {
   align-items: stretch;
   column-gap: 16px;

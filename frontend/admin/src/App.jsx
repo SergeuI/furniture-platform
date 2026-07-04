@@ -10433,7 +10433,7 @@ export default function App() {
       source_url: inferredSourceUrl || null,
       is_active: Boolean(newFittingForm.is_active),
       is_system: isSystemFitting,
-      name: inferredName || normalizedArticle || (isSystemFitting ? fallbackSystemName : ""),
+      name: inferredName || normalizedArticle || inferredSourceUrl || (isSystemFitting ? fallbackSystemName : ""),
       price:
         isSystemFitting || newFittingForm.price === "" || newFittingForm.price === null
           ? null
@@ -13775,20 +13775,19 @@ export default function App() {
                 </div>
               ) : (
                 <div className="fitting-category-detail-head">
-                  <button
-                    className="ghost-button"
-                    onClick={() => {
-                      setSelectedFittingCategory("");
-                      setFittingViewMode("rows");
-                    }}
-                    type="button"
-                  >
-                    <ChevronLeft size={16} />
-                    {t.backToFittingCategories}
-                  </button>
-                  <div className="service-catalog-title compact">
+                  <div className="fitting-category-breadcrumb">
+                    <button
+                      className="fitting-breadcrumb-link"
+                      onClick={() => {
+                        setSelectedFittingCategory("");
+                        setFittingViewMode("rows");
+                      }}
+                      type="button"
+                    >
+                      {t.catalogFittings}
+                    </button>
+                    <span className="fitting-breadcrumb-separator">/</span>
                     <strong>{currentFittingCategoryMeta?.name || t.catalogFittings}</strong>
-                    <span>{currentFittingCategoryMeta?.description || ""}</span>
                   </div>
                   <div className="fittings-view-toggle" role="tablist" aria-label={t.catalogBrowseCategories}>
                     <button
