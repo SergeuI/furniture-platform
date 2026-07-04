@@ -1,0 +1,25 @@
+{
+  "package_version": "update_0010",
+  "created_at": "2026-07-04T19:12:17+03:00",
+  "branch": "main",
+  "head_commit": "f26fe06",
+  "source_files": [
+    "product_center_history.jsonl"
+  ],
+  "file_groups": {
+    "code": [],
+    "database": [],
+    "ui": [],
+    "docs": [],
+    "other": [
+      "product_center_history.jsonl"
+    ]
+  },
+  "file_types": [
+    "other"
+  ],
+  "server_plan": [
+    "1. На сервері виконати `git pull`.",
+    "2. Оновлення не потребує окремої міграції БД або перезапуску."
+  ]
+}

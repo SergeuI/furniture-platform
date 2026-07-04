@@ -2399,8 +2399,14 @@ Object.assign(TRANSLATIONS.en, {
   fittingCode: "Code",
   fittingSource: "Source",
   fittingSourceUrl: "Source link",
+  fittingSourceUrlHint: "Paste the product page link and the catalog will try to read the name, article, image, and price.",
   fittingPrice: "Price",
   fittingStock: "Availability",
+  fittingColumns: "Columns",
+  fittingShowPrice: "Price",
+  fittingShowStock: "Availability",
+  fittingShowSource: "Source",
+  fittingAutoCityNote: "City is applied automatically from the current catalog city.",
   fittingSystemToggle: "Default in system",
   fittingAddSystem: "Add default fitting",
   fittingAddCustom: "Add fitting for calculation",
@@ -2414,6 +2420,8 @@ Object.assign(TRANSLATIONS.en, {
   fittingArticlePrompt: "Enter fitting article",
   fittingSourceUrlPrompt: "Paste source link for the fitting",
   fittingImage: "Image",
+  fittingManualArticlePlaceholder: "Optional article",
+  fittingManualPricePlaceholder: "Enter price",
   fittingImageUpload: "Upload image",
   fittingImageSelected: "Image selected",
   fittingSystemHint: "Default fitting is saved for all users from the source link.",
@@ -2539,8 +2547,14 @@ Object.assign(TRANSLATIONS.uk, {
   fittingCode: "\u041a\u043e\u0434",
   fittingSource: "\u0414\u0436\u0435\u0440\u0435\u043b\u043e",
   fittingSourceUrl: "\u041f\u043e\u0441\u0438\u043b\u0430\u043d\u043d\u044f \u043d\u0430 \u0434\u0436\u0435\u0440\u0435\u043b\u043e",
+  fittingSourceUrlHint: "\u0412\u0441\u0442\u0430\u0432\u0442\u0435 \u043f\u043e\u0441\u0438\u043b\u0430\u043d\u043d\u044f \u043d\u0430 \u0441\u0442\u043e\u0440\u0456\u043d\u043a\u0443 \u0442\u043e\u0432\u0430\u0440\u0443, \u0456 \u043a\u0430\u0442\u0430\u043b\u043e\u0433 \u0441\u043f\u0440\u043e\u0431\u0443\u0454 \u043f\u0456\u0434\u0442\u044f\u0433\u043d\u0443\u0442\u0438 \u043d\u0430\u0437\u0432\u0443, \u0430\u0440\u0442\u0438\u043a\u0443\u043b, \u043a\u0430\u0440\u0442\u0438\u043d\u043a\u0443 \u0456 \u0446\u0456\u043d\u0443.",
   fittingPrice: "\u0426\u0456\u043d\u0430",
   fittingStock: "\u041d\u0430\u044f\u0432\u043d\u0456\u0441\u0442\u044c",
+  fittingColumns: "\u041a\u043e\u043b\u043e\u043d\u043a\u0438",
+  fittingShowPrice: "\u0426\u0456\u043d\u0430",
+  fittingShowStock: "\u041d\u0430\u044f\u0432\u043d\u0456\u0441\u0442\u044c",
+  fittingShowSource: "\u0414\u0436\u0435\u0440\u0435\u043b\u043e",
+  fittingAutoCityNote: "\u041c\u0456\u0441\u0442\u043e \u043f\u0456\u0434\u0441\u0442\u0430\u0432\u043b\u044f\u0454\u0442\u044c\u0441\u044f \u0430\u0432\u0442\u043e\u043c\u0430\u0442\u0438\u0447\u043d\u043e \u0437 \u043f\u043e\u0442\u043e\u0447\u043d\u043e\u0433\u043e \u043c\u0456\u0441\u0442\u0430 \u043a\u0430\u0442\u0430\u043b\u043e\u0433\u0443.",
   fittingSystemToggle: "\u0417\u0430\u043c\u043e\u0432\u0447\u0443\u0432\u0430\u043d\u043d\u044f \u0432 \u0441\u0438\u0441\u0442\u0435\u043c\u0456",
   fittingAddSystem: "\u0414\u043e\u0434\u0430\u0442\u0438 \u0431\u0430\u0437\u043e\u0432\u0443 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0443",
   fittingAddCustom: "\u0414\u043e\u0434\u0430\u0442\u0438 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0443 \u0434\u043b\u044f \u043f\u0440\u043e\u0440\u0430\u0445\u0443\u043d\u043a\u0443",
@@ -2554,6 +2568,8 @@ Object.assign(TRANSLATIONS.uk, {
   fittingArticlePrompt: "\u0412\u043a\u0430\u0436\u0456\u0442\u044c \u0430\u0440\u0442\u0438\u043a\u0443\u043b \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0438",
   fittingSourceUrlPrompt: "\u0412\u0441\u0442\u0430\u0432\u0442\u0435 \u043f\u043e\u0441\u0438\u043b\u0430\u043d\u043d\u044f \u043d\u0430 \u0434\u0436\u0435\u0440\u0435\u043b\u043e \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0438",
   fittingImage: "\u041a\u0430\u0440\u0442\u0438\u043d\u043a\u0430",
+  fittingManualArticlePlaceholder: "\u0410\u0440\u0442\u0438\u043a\u0443\u043b \u043d\u0435\u043e\u0431\u043e\u0432'\u044f\u0437\u043a\u043e\u0432\u0438\u0439",
+  fittingManualPricePlaceholder: "\u0412\u043a\u0430\u0436\u0456\u0442\u044c \u0446\u0456\u043d\u0443",
   fittingImageUpload: "\u0417\u0430\u0432\u0430\u043d\u0442\u0430\u0436\u0438\u0442\u0438 \u043a\u0430\u0440\u0442\u0438\u043d\u043a\u0443",
   fittingImageSelected: "\u041a\u0430\u0440\u0442\u0438\u043d\u043a\u0443 \u0432\u0438\u0431\u0440\u0430\u043d\u043e",
   fittingSystemHint: "\u0421\u0438\u0441\u0442\u0435\u043c\u043d\u0430 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0430 \u0437\u0431\u0435\u0440\u0456\u0433\u0430\u0454\u0442\u044c\u0441\u044f \u0434\u043b\u044f \u0432\u0441\u0456\u0445 \u043a\u043e\u0440\u0438\u0441\u0442\u0443\u0432\u0430\u0447\u0456\u0432 \u0437 \u0434\u0436\u0435\u0440\u0435\u043b\u0430.",
@@ -4733,6 +4749,11 @@ export default function App() {
   const [fittingSearch, setFittingSearch] = useState("");
   const [selectedFittingCategory, setSelectedFittingCategory] = useState("");
   const [fittingViewMode, setFittingViewMode] = useState("rows");
+  const [fittingColumnVisibility, setFittingColumnVisibility] = useState({
+    price: true,
+    stock: true,
+    source: true,
+  });
   const [holeTemplateItems, setHoleTemplateItems] = useState([]);
   const [holeSelectedFittingId, setHoleSelectedFittingId] = useState("");
   const [holeSelectedTemplateId, setHoleSelectedTemplateId] = useState("");
@@ -10392,18 +10413,19 @@ export default function App() {
     const normalizedArticle = newFittingForm.article.trim();
     const normalizedSourceUrl = newFittingForm.source_url.trim();
     const normalizedName = newFittingForm.name.trim();
+    const fallbackSystemName = currentFittingCategoryMeta?.name || t.fittingSystemScope;
 
     const payload = {
       article: normalizedArticle || null,
-      city: (newFittingForm.city || materialSelectedCity || user?.city || "").trim() || null,
+      city: (materialSelectedCity || user?.city || "").trim() || null,
       code: null,
       fitting_group: newFittingForm.fitting_group,
       fitting_type: newFittingForm.fitting_type,
       image_url: isSystemFitting ? null : newFittingForm.image_url.trim() || null,
-      source_url: isSystemFitting ? normalizedSourceUrl || null : null,
+      source_url: normalizedSourceUrl || null,
       is_active: Boolean(newFittingForm.is_active),
       is_system: isSystemFitting,
-      name: isSystemFitting ? normalizedArticle : normalizedName,
+      name: normalizedName || normalizedArticle || normalizedSourceUrl || (isSystemFitting ? fallbackSystemName : ""),
       price:
         isSystemFitting || newFittingForm.price === "" || newFittingForm.price === null
           ? null
@@ -10417,17 +10439,12 @@ export default function App() {
       return;
     }
 
-    if (!payload.article) {
-      setStatus({ message: t.fittingArticlePrompt, tone: "error" });
-      return;
-    }
-
     if (isSystemFitting && !payload.source_url) {
       setStatus({ message: t.fittingSourceUrlPrompt, tone: "error" });
       return;
     }
 
-    if (!isSystemFitting && !payload.name) {
+    if (!payload.source_url && !payload.name) {
       setStatus({ message: t.fittingNamePrompt, tone: "error" });
       return;
     }
@@ -10444,7 +10461,6 @@ export default function App() {
     setStatus({ message: t.fittingCreateSuccess, tone: "success" });
     setNewFittingForm((current) => ({
       ...DEFAULT_FITTING_FORM,
-      city: current.city || materialSelectedCity || user?.city || "",
       fitting_group: current.fitting_group,
       fitting_type: current.fitting_type,
       is_system: canEditSystemFittings ? current.is_system : false,
@@ -13647,6 +13663,48 @@ export default function App() {
                   {t.refresh}
                 </button>
               </div>
+              <div className="fittings-columns-toolbar">
+                <span className="service-tree-badge subtle">{t.fittingColumns}</span>
+                <button
+                  className={`icon-button${fittingColumnVisibility.price ? " active" : ""}`}
+                  onClick={() =>
+                    setFittingColumnVisibility((current) => ({
+                      ...current,
+                      price: !current.price,
+                    }))
+                  }
+                  title={t.fittingShowPrice}
+                  type="button"
+                >
+                  {fittingColumnVisibility.price ? <Eye size={16} /> : <EyeOff size={16} />}
+                </button>
+                <button
+                  className={`icon-button${fittingColumnVisibility.stock ? " active" : ""}`}
+                  onClick={() =>
+                    setFittingColumnVisibility((current) => ({
+                      ...current,
+                      stock: !current.stock,
+                    }))
+                  }
+                  title={t.fittingShowStock}
+                  type="button"
+                >
+                  {fittingColumnVisibility.stock ? <Eye size={16} /> : <EyeOff size={16} />}
+                </button>
+                <button
+                  className={`icon-button${fittingColumnVisibility.source ? " active" : ""}`}
+                  onClick={() =>
+                    setFittingColumnVisibility((current) => ({
+                      ...current,
+                      source: !current.source,
+                    }))
+                  }
+                  title={t.fittingShowSource}
+                  type="button"
+                >
+                  {fittingColumnVisibility.source ? <Eye size={16} /> : <EyeOff size={16} />}
+                </button>
+              </div>
 
               {!activeFittingCategory ? (
                 <div className="fitting-category-grid">
@@ -13746,6 +13804,18 @@ export default function App() {
 
               {activeFittingCategory && canEditOwnFittings ? (
                 <form className="fitting-create-form" onSubmit={handleCreateFitting}>
+                  <label className="fitting-source-url-field">
+                    <span>{t.fittingSourceUrl}</span>
+                    <input
+                      onChange={(event) =>
+                        setNewFittingForm((current) => ({ ...current, source_url: event.target.value }))
+                      }
+                      placeholder="https://..."
+                      type="url"
+                      value={newFittingForm.source_url}
+                    />
+                    <div className="fitting-form-note">{t.fittingSourceUrlHint}</div>
+                  </label>
                   <label>
                     <span>{t.fittingType}</span>
                     <select
@@ -13777,26 +13847,38 @@ export default function App() {
                       onChange={(event) =>
                         setNewFittingForm((current) => ({ ...current, article: event.target.value }))
                       }
+                      placeholder={t.fittingManualArticlePlaceholder}
                       type="text"
                       value={newFittingForm.article}
                     />
                   </label>
                   <label>
-                    <span>{t.city}</span>
-                    <select
+                    <span>{t.fittingName}</span>
+                    <input
                       onChange={(event) =>
-                        setNewFittingForm((current) => ({ ...current, city: event.target.value }))
+                        setNewFittingForm((current) => ({ ...current, name: event.target.value }))
                       }
-                      value={newFittingForm.city}
-                    >
-                      <option value="">{t.notSet}</option>
-                      {materialCityOptions.map((cityOption) => (
-                        <option key={cityOption} value={cityOption}>
-                          {formatCatalogLabel(cityOption, t)}
-                        </option>
-                      ))}
-                    </select>
+                      placeholder={t.fittingName}
+                      type="text"
+                      value={newFittingForm.name}
+                    />
                   </label>
+                  <label>
+                    <span>{t.fittingPrice}</span>
+                    <input
+                      min="0"
+                      onChange={(event) =>
+                        setNewFittingForm((current) => ({ ...current, price: event.target.value }))
+                      }
+                      placeholder={t.fittingManualPricePlaceholder}
+                      step="0.01"
+                      type="number"
+                      value={newFittingForm.price}
+                    />
+                  </label>
+                  <div className="fitting-form-note">
+                    {t.fittingAutoCityNote}: {formatCatalogLabel(materialSelectedCity || user?.city, t)}
+                  </div>
                   {canEditSystemFittings ? (
                     <label className="toggle-label">
                       <input
@@ -13804,11 +13886,7 @@ export default function App() {
                         onChange={(event) =>
                           setNewFittingForm((current) => ({
                             ...current,
-                            image_url: event.target.checked ? "" : current.image_url,
                             is_system: event.target.checked,
-                            name: event.target.checked ? "" : current.name,
-                            price: event.target.checked ? "" : current.price,
-                            source_url: event.target.checked ? current.source_url : "",
                           }))
                         }
                         type="checkbox"
@@ -13817,60 +13895,19 @@ export default function App() {
                     </label>
                   ) : null}
                   {newFittingForm.is_system ? (
-                    <>
-                      <label>
-                        <span>{t.fittingSourceUrl}</span>
-                        <input
-                          onChange={(event) =>
-                            setNewFittingForm((current) => ({ ...current, source_url: event.target.value }))
-                          }
-                          placeholder="https://..."
-                          type="url"
-                          value={newFittingForm.source_url}
-                        />
-                      </label>
-                      <div className="fitting-form-note">
-                        {t.fittingSystemHint}
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <label>
-                        <span>{t.fittingName}</span>
-                        <input
-                          onChange={(event) =>
-                            setNewFittingForm((current) => ({ ...current, name: event.target.value }))
-                          }
-                          placeholder={t.fittingName}
-                          type="text"
-                          value={newFittingForm.name}
-                        />
-                      </label>
-                      <label>
-                        <span>{t.fittingPrice}</span>
-                        <input
-                          min="0"
-                          onChange={(event) =>
-                            setNewFittingForm((current) => ({ ...current, price: event.target.value }))
-                          }
-                          step="0.01"
-                          type="number"
-                          value={newFittingForm.price}
-                        />
-                      </label>
-                      <label>
-                        <span>{t.fittingImage}</span>
-                        <input
-                          accept="image/*"
-                          onChange={handleFittingImageSelected}
-                          type="file"
-                        />
-                      </label>
-                      <div className="fitting-form-note">
-                        {newFittingForm.image_url ? t.fittingImageSelected : t.fittingCustomHint}
-                      </div>
-                    </>
-                  )}
+                    <div className="fitting-form-note">{t.fittingSystemHint}</div>
+                  ) : null}
+                  <label>
+                    <span>{t.fittingImage}</span>
+                    <input
+                      accept="image/*"
+                      onChange={handleFittingImageSelected}
+                      type="file"
+                    />
+                  </label>
+                  <div className="fitting-form-note">
+                    {newFittingForm.image_url ? t.fittingImageSelected : t.fittingCustomHint}
+                  </div>
                   <button className="primary-button" disabled={loading} type="submit">
                     <Plus size={16} />
                     {newFittingForm.is_system ? t.fittingAddSystem : t.fittingAddCustom}
@@ -13931,15 +13968,17 @@ export default function App() {
                             <div className="fitting-item-card-copy">
                               <strong>{item.name || item.code || item.article}</strong>
                               <div className="fittings-table-badges">
-                                {renderSourceBadge(sourceMeta)}
+                                {fittingColumnVisibility.source ? renderSourceBadge(sourceMeta) : null}
                               </div>
                             </div>
                             <div className="fitting-item-card-meta">
                               <span>{t.fittingArticle}: {item.article || t.notSet}</span>
-                              <span>{t.fittingCode}: {item.code || t.notSet}</span>
-                              <span>{t.city}: {formatCatalogLabel(item.city, t)}</span>
-                              <span>{t.fittingPrice}: {item.price ?? t.notSet}</span>
-                              <span>{t.fittingStock}: {item.stock || t.notSet}</span>
+                              {fittingColumnVisibility.price ? (
+                                <span>{t.fittingPrice}: {item.price ?? t.notSet}</span>
+                              ) : null}
+                              {fittingColumnVisibility.stock ? (
+                                <span>{t.fittingStock}: {item.stock || t.notSet}</span>
+                              ) : null}
                             </div>
                           </article>
                         );
@@ -13950,11 +13989,9 @@ export default function App() {
                       <div className="fittings-table-header">
                         <span>{currentFittingCategoryMeta?.name || t.catalogFittings}</span>
                         <span>{t.fittingArticle}</span>
-                        <span>{t.fittingCode}</span>
-                        <span>{t.city}</span>
-                        <span>{t.fittingPrice}</span>
-                        <span>{t.fittingStock}</span>
-                        <span>{t.fittingSource}</span>
+                        {fittingColumnVisibility.price ? <span>{t.fittingPrice}</span> : null}
+                        {fittingColumnVisibility.stock ? <span>{t.fittingStock}</span> : null}
+                        {fittingColumnVisibility.source ? <span>{t.fittingSource}</span> : null}
                       </div>
 
                       <div className="fittings-table-list">
@@ -14015,11 +14052,9 @@ export default function App() {
                                 ) : null}
                               </div>
                               <span>{item.article || t.notSet}</span>
-                              <span>{item.code || t.notSet}</span>
-                              <span>{formatCatalogLabel(item.city, t)}</span>
-                              <span>{item.price ?? t.notSet}</span>
-                              <span>{item.stock || t.notSet}</span>
-                              {renderSourceBadge(sourceMeta)}
+                              {fittingColumnVisibility.price ? <span>{item.price ?? t.notSet}</span> : null}
+                              {fittingColumnVisibility.stock ? <span>{item.stock || t.notSet}</span> : null}
+                              {fittingColumnVisibility.source ? renderSourceBadge(sourceMeta) : null}
                             </article>
                           );
                         })}

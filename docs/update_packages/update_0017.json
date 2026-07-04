@@ -1,0 +1,43 @@
+{
+  "package_version": "update_0017",
+  "created_at": "2026-07-04T23:44:18+03:00",
+  "branch": "main",
+  "head_commit": "330ecaf",
+  "source_files": [
+    "api/routes/catalog.py",
+    "database/repositories/inventory_repository.py",
+    "frontend/admin/src/App.jsx",
+    "frontend/admin/src/styles.css",
+    "product_center_history.jsonl",
+    "product_center_settings.json"
+  ],
+  "file_groups": {
+    "code": [
+      "api/routes/catalog.py"
+    ],
+    "database": [
+      "database/repositories/inventory_repository.py"
+    ],
+    "ui": [
+      "frontend/admin/src/App.jsx",
+      "frontend/admin/src/styles.css",
+      "product_center_settings.json"
+    ],
+    "docs": [],
+    "other": [
+      "product_center_history.jsonl"
+    ]
+  },
+  "file_types": [
+    "code",
+    "database",
+    "other",
+    "ui"
+  ],
+  "server_plan": [
+    "1. На сервері виконати `git pull`.",
+    "2. Запустити `scripts/safe_update_db.py` з резервною копією.",
+    "3. Зібрати фронтенд після оновлення коду.",
+    "4. Перезапустити API, bot і фронтенди після оновлення."
+  ]
+}

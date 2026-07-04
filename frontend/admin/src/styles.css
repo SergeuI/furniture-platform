@@ -1222,6 +1222,19 @@ tbody tr.selected {
   justify-content: flex-start;
 }
 
+.fittings-columns-toolbar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 0 12px;
+}
+
+.fittings-columns-toolbar .icon-button.active {
+  background: #0f766e;
+  color: #ffffff;
+}
+
 .materials-filter {
   min-width: 180px;
 }
@@ -1656,8 +1669,17 @@ tbody tr.selected {
   border-radius: 8px;
   display: grid;
   gap: 12px;
-  grid-template-columns: repeat(5, minmax(140px, 1fr)) auto;
+  grid-template-columns: repeat(4, minmax(140px, 1fr));
   padding: 14px;
+}
+
+.fitting-source-url-field {
+  grid-column: 1 / -1;
+}
+
+.fitting-create-form .primary-button {
+  grid-column: 1 / -1;
+  justify-self: start;
 }
 
 .fitting-form-note {

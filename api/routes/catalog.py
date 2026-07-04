@@ -1481,7 +1481,7 @@ async def create_fitting_route(
     effective_price = payload.price
     effective_stock = payload.stock
 
-    if payload.is_system and effective_source_url:
+    if effective_source_url:
         metadata = await parse_fitting_source_metadata(effective_source_url)
         if metadata.get("success"):
             effective_name = metadata.get("name") or effective_name
@@ -1584,7 +1584,7 @@ async def update_fitting_route(
     effective_price = payload.price
     effective_stock = payload.stock
 
-    if payload.is_system and effective_source_url:
+    if effective_source_url:
         metadata = await parse_fitting_source_metadata(effective_source_url)
         if metadata.get("success"):
             effective_name = metadata.get("name") or effective_name

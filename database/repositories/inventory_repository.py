@@ -820,12 +820,6 @@ def list_fittings(
 
         query = db.query(FittingModel)
 
-        if city:
-            query = query.filter(
-                (FittingModel.city == city) |
-                (FittingModel.city.is_(None))
-            )
-
         if search:
             search_value = f"%{search.strip()}%"
             query = query.filter(

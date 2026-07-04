@@ -1,0 +1,32 @@
+{
+  "package_version": "update_0016",
+  "created_at": "2026-07-04T23:34:37+03:00",
+  "branch": "main",
+  "head_commit": "330ecaf",
+  "source_files": [
+    "frontend/admin/src/App.jsx",
+    "frontend/admin/src/styles.css",
+    "product_center_history.jsonl"
+  ],
+  "file_groups": {
+    "code": [],
+    "database": [],
+    "ui": [
+      "frontend/admin/src/App.jsx",
+      "frontend/admin/src/styles.css"
+    ],
+    "docs": [],
+    "other": [
+      "product_center_history.jsonl"
+    ]
+  },
+  "file_types": [
+    "other",
+    "ui"
+  ],
+  "server_plan": [
+    "1. На сервері виконати `git pull`.",
+    "2. Зібрати фронтенд після оновлення коду.",
+    "3. Перезапустити API, bot і фронтенди після оновлення."
+  ]
+}

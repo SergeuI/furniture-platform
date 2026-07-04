@@ -1,0 +1,30 @@
+{
+  "package_version": "update_0011",
+  "created_at": "2026-07-04T21:58:12+03:00",
+  "branch": "main",
+  "head_commit": "b76d0ce",
+  "source_files": [
+    "product_center_history.jsonl",
+    "product_center_settings.json"
+  ],
+  "file_groups": {
+    "code": [],
+    "database": [],
+    "ui": [
+      "product_center_settings.json"
+    ],
+    "docs": [],
+    "other": [
+      "product_center_history.jsonl"
+    ]
+  },
+  "file_types": [
+    "other",
+    "ui"
+  ],
+  "server_plan": [
+    "1. На сервері виконати `git pull`.",
+    "2. Зібрати фронтенд після оновлення коду.",
+    "3. Перезапустити API, bot і фронтенди після оновлення."
+  ]
+}
