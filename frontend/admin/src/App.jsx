@@ -13674,85 +13674,102 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="materials-toolbar fittings-toolbar">
-                <label className="service-catalog-search">
-                  <Search size={16} />
-                  <input
-                    onChange={(event) => setFittingSearch(event.target.value)}
-                    placeholder={t.viyarSearch}
-                    type="search"
-                    value={fittingSearch}
-                  />
-                </label>
-                <label>
-                  <span>{t.city}</span>
-                  <select
-                    onChange={(event) => {
-                      const nextCity = event.target.value;
-                      setMaterialSelectedCity(nextCity);
-                      loadFittingsCatalog(token, { city: nextCity });
-                    }}
-                    value={materialSelectedCity || user?.city || ""}
+              <div className="fittings-toolbar-row">
+                <div className="fittings-toolbar-main">
+                  <label className="service-catalog-search">
+                    <Search size={16} />
+                    <input
+                      onChange={(event) => setFittingSearch(event.target.value)}
+                      placeholder={t.viyarSearch}
+                      type="search"
+                      value={fittingSearch}
+                    />
+                  </label>
+                  <label>
+                    <span>{t.city}</span>
+                    <select
+                      onChange={(event) => {
+                        const nextCity = event.target.value;
+                        setMaterialSelectedCity(nextCity);
+                        loadFittingsCatalog(token, { city: nextCity });
+                      }}
+                      value={materialSelectedCity || user?.city || ""}
+                    >
+                      <option value="">{t.notSet}</option>
+                      {materialCityOptions.map((cityOption) => (
+                        <option key={cityOption} value={cityOption}>
+                          {formatCatalogLabel(cityOption, t)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <button
+                    className="ghost-button"
+                    disabled={loading}
+                    onClick={() => loadFittingsCatalog(token)}
+                    type="button"
                   >
-                    <option value="">{t.notSet}</option>
-                    {materialCityOptions.map((cityOption) => (
-                      <option key={cityOption} value={cityOption}>
-                        {formatCatalogLabel(cityOption, t)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <button
-                  className="ghost-button"
-                  disabled={loading}
-                  onClick={() => loadFittingsCatalog(token)}
-                  type="button"
-                >
-                  <RefreshCw size={16} />
-                  {t.refresh}
-                </button>
-              </div>
-              <div className="fittings-columns-toolbar">
-                <span className="service-tree-badge subtle">{t.fittingColumns}</span>
-                <button
-                  className={`icon-button${fittingColumnVisibility.price ? " active" : ""}`}
-                  onClick={() =>
-                    setFittingColumnVisibility((current) => ({
-                      ...current,
-                      price: !current.price,
-                    }))
-                  }
-                  title={t.fittingShowPrice}
-                  type="button"
-                >
-                  {fittingColumnVisibility.price ? <Eye size={16} /> : <EyeOff size={16} />}
-                </button>
-                <button
-                  className={`icon-button${fittingColumnVisibility.stock ? " active" : ""}`}
-                  onClick={() =>
-                    setFittingColumnVisibility((current) => ({
-                      ...current,
-                      stock: !current.stock,
-                    }))
-                  }
-                  title={t.fittingShowStock}
-                  type="button"
-                >
-                  {fittingColumnVisibility.stock ? <Eye size={16} /> : <EyeOff size={16} />}
-                </button>
-                <button
-                  className={`icon-button${fittingColumnVisibility.source ? " active" : ""}`}
-                  onClick={() =>
-                    setFittingColumnVisibility((current) => ({
-                      ...current,
-                      source: !current.source,
-                    }))
-                  }
-                  title={t.fittingShowSource}
-                  type="button"
-                >
-                  {fittingColumnVisibility.source ? <Eye size={16} /> : <EyeOff size={16} />}
-                </button>
+                    <RefreshCw size={16} />
+                    {t.refresh}
+                  </button>
+                </div>
+                <div className="fittings-toolbar-actions">
+                  {activeFittingCategory && canEditOwnFittings ? (
+                    <button
+                      className="primary-button"
+                      onClick={() => {
+                        setFittingCreateMode("manual");
+                        setFittingSourceModalOpen(true);
+                      }}
+                      type="button"
+                    >
+                      <Plus size={16} />
+                      Додати фурнітуру
+                    </button>
+                  ) : null}
+                  <div className="fittings-columns-toolbar">
+                    <span className="service-tree-badge subtle">{t.fittingColumns}</span>
+                    <button
+                      className={`icon-button${fittingColumnVisibility.price ? " active" : ""}`}
+                      onClick={() =>
+                        setFittingColumnVisibility((current) => ({
+                          ...current,
+                          price: !current.price,
+                        }))
+                      }
+                      title={t.fittingShowPrice}
+                      type="button"
+                    >
+                      {fittingColumnVisibility.price ? <Eye size={16} /> : <EyeOff size={16} />}
+                    </button>
+                    <button
+                      className={`icon-button${fittingColumnVisibility.stock ? " active" : ""}`}
+                      onClick={() =>
+                        setFittingColumnVisibility((current) => ({
+                          ...current,
+                          stock: !current.stock,
+                        }))
+                      }
+                      title={t.fittingShowStock}
+                      type="button"
+                    >
+                      {fittingColumnVisibility.stock ? <Eye size={16} /> : <EyeOff size={16} />}
+                    </button>
+                    <button
+                      className={`icon-button${fittingColumnVisibility.source ? " active" : ""}`}
+                      onClick={() =>
+                        setFittingColumnVisibility((current) => ({
+                          ...current,
+                          source: !current.source,
+                        }))
+                      }
+                      title={t.fittingShowSource}
+                      type="button"
+                    >
+                      {fittingColumnVisibility.source ? <Eye size={16} /> : <EyeOff size={16} />}
+                    </button>
+                  </div>
+                </div>
               </div>
 
               {!activeFittingCategory ? (
@@ -13812,24 +13829,6 @@ export default function App() {
                       </button>
                     );
                   })}
-                </div>
-              ) : null}
-
-              {activeFittingCategory && canEditOwnFittings ? (
-                <div className="fitting-create-panel">
-                  <div className="fitting-create-panel-actions">
-                    <button
-                      className="primary-button"
-                      onClick={() => {
-                        setFittingCreateMode("manual");
-                        setFittingSourceModalOpen(true);
-                      }}
-                      type="button"
-                    >
-                      <Plus size={16} />
-                      Додати фурнітуру
-                    </button>
-                  </div>
                 </div>
               ) : null}
 

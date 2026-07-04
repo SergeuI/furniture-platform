@@ -1218,8 +1218,46 @@ tbody tr.selected {
   justify-content: space-between;
 }
 
-.fittings-toolbar {
+.fittings-toolbar-row {
+  align-items: flex-end;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 12px;
   justify-content: flex-start;
+  margin: 4px 0 12px;
+}
+
+.fittings-toolbar-main {
+  align-items: flex-end;
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  gap: 12px;
+  min-width: 0;
+}
+
+.fittings-toolbar-actions {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-left: auto;
+}
+
+@media (max-width: 1200px) {
+  .fittings-toolbar-row {
+    flex-wrap: wrap;
+  }
+
+  .fittings-toolbar-main {
+    flex-basis: 100%;
+  }
+
+  .fittings-toolbar-actions {
+    margin-left: 0;
+  }
 }
 
 .fittings-columns-toolbar {
@@ -1227,7 +1265,7 @@ tbody tr.selected {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin: 4px 0 12px;
+  margin: 0;
 }
 
 .fittings-columns-toolbar .icon-button.active {
@@ -1701,17 +1739,6 @@ tbody tr.selected {
   .fitting-category-content {
     gap: 8px;
   }
-}
-
-.fitting-create-panel {
-  display: grid;
-  gap: 12px;
-}
-
-.fitting-create-panel-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
 }
 
 .fitting-create-form {
