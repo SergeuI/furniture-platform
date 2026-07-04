@@ -6542,6 +6542,13 @@ tbody tr.selected {
     overflow: auto;
   }
 
+  .app-shell {
+    display: block;
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+  }
+
   .sidebar {
     background: linear-gradient(180deg, #0c1318 0%, #0f181d 100%);
     box-shadow: 18px 0 40px rgba(13, 20, 26, 0.24);
