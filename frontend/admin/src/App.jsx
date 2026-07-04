@@ -4755,6 +4755,7 @@ export default function App() {
   const [selectedFittingCategory, setSelectedFittingCategory] = useState("");
   const [fittingViewMode, setFittingViewMode] = useState("rows");
   const [fittingSourceModalOpen, setFittingSourceModalOpen] = useState(false);
+  const [fittingCreateMode, setFittingCreateMode] = useState("manual");
   const [fittingColumnVisibility, setFittingColumnVisibility] = useState({
     price: true,
     stock: true,
@@ -13819,111 +13820,16 @@ export default function App() {
                   <div className="fitting-create-panel-actions">
                     <button
                       className="primary-button"
-                      onClick={() => setFittingSourceModalOpen(true)}
+                      onClick={() => {
+                        setFittingCreateMode("manual");
+                        setFittingSourceModalOpen(true);
+                      }}
                       type="button"
                     >
                       <Plus size={16} />
-                      Додати фурнітуру через посилання
+                      Додати фурнітуру
                     </button>
                   </div>
-                  <form className="fitting-create-form" onSubmit={handleCreateFitting}>
-                  <label>
-                    <span>{t.fittingType}</span>
-                    <select
-                      onChange={(event) =>
-                        setNewFittingForm((current) => {
-                          const category = visibleFittingCategories.find(
-                            (item) => item.code === event.target.value,
-                          );
-
-                          return {
-                            ...current,
-                            fitting_group: category?.group || current.fitting_group,
-                            fitting_type: event.target.value,
-                          };
-                        })
-                      }
-                      value={newFittingForm.fitting_type}
-                    >
-                      {(visibleFittingCategories.length ? visibleFittingCategories : fittingCategories).map((category) => (
-                        <option key={category.code} value={category.code}>
-                          {category.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    <span>{t.fittingArticle}</span>
-                    <input
-                      onChange={(event) =>
-                        setNewFittingForm((current) => ({ ...current, article: event.target.value }))
-                      }
-                      placeholder={t.fittingManualArticlePlaceholder}
-                      type="text"
-                      value={newFittingForm.article}
-                    />
-                  </label>
-                  <label>
-                    <span>{t.fittingName}</span>
-                    <input
-                      onChange={(event) =>
-                        setNewFittingForm((current) => ({ ...current, name: event.target.value }))
-                      }
-                      placeholder={t.fittingName}
-                      type="text"
-                      value={newFittingForm.name}
-                    />
-                  </label>
-                  <label>
-                    <span>{t.fittingPrice}</span>
-                    <input
-                      min="0"
-                      onChange={(event) =>
-                        setNewFittingForm((current) => ({ ...current, price: event.target.value }))
-                      }
-                      placeholder={t.fittingManualPricePlaceholder}
-                      step="0.01"
-                      type="number"
-                      value={newFittingForm.price}
-                    />
-                  </label>
-                  <div className="fitting-form-note">
-                    {t.fittingAutoCityNote}: {formatCatalogLabel(materialSelectedCity || user?.city, t)}
-                  </div>
-                  {canEditSystemFittings ? (
-                    <label className="toggle-label">
-                      <input
-                        checked={Boolean(newFittingForm.is_system)}
-                        onChange={(event) =>
-                          setNewFittingForm((current) => ({
-                            ...current,
-                            is_system: event.target.checked,
-                          }))
-                        }
-                        type="checkbox"
-                      />
-                      {newFittingForm.is_system ? t.fittingSystemScope : t.fittingCustomScope}
-                    </label>
-                  ) : null}
-                  {newFittingForm.is_system ? (
-                    <div className="fitting-form-note">{t.fittingSystemHint}</div>
-                  ) : null}
-                  <label>
-                    <span>{t.fittingImage}</span>
-                    <input
-                      accept="image/*"
-                      onChange={handleFittingImageSelected}
-                      type="file"
-                    />
-                  </label>
-                  <div className="fitting-form-note">
-                    {newFittingForm.image_url ? t.fittingImageSelected : t.fittingCustomHint}
-                  </div>
-                  <button className="primary-button" disabled={loading} type="submit">
-                    <Plus size={16} />
-                    {newFittingForm.is_system ? t.fittingAddSystem : t.fittingAddCustom}
-                  </button>
-                  </form>
                 </div>
               ) : null}
 
@@ -15684,8 +15590,12 @@ export default function App() {
           >
             <header className="confirm-header">
               <div>
-                <strong>{t.fittingSourceUrl}</strong>
-                <p>{t.fittingSourceUrlHint}</p>
+                <strong>
+                  {fittingCreateMode === "source" ? t.fittingSourceUrl : t.fittingAddCustom}
+                </strong>
+                <p>
+                  {fittingCreateMode === "source" ? t.fittingSourceUrlHint : t.fittingCustomHint}
+                </p>
               </div>
               <button
                 aria-label={t.cancel}
@@ -15697,19 +15607,136 @@ export default function App() {
               </button>
             </header>
             <form className="fitting-source-modal-form" onSubmit={handleCreateFitting}>
-              <label className="fitting-source-url-field">
-                <span>{t.fittingSourceUrl}</span>
-                <input
-                  autoFocus
+              <div className="fitting-source-mode-switch">
+                <button
+                  className={`ghost-button compact-button${fittingCreateMode === "manual" ? " active" : ""}`}
+                  onClick={() => setFittingCreateMode("manual")}
+                  type="button"
+                >
+                  Вручну
+                </button>
+                <button
+                  className={`ghost-button compact-button${fittingCreateMode === "source" ? " active" : ""}`}
+                  onClick={() => setFittingCreateMode("source")}
+                  type="button"
+                >
+                  Через посилання
+                </button>
+              </div>
+
+              <label>
+                <span>{t.fittingType}</span>
+                <select
                   onChange={(event) =>
-                    setNewFittingForm((current) => ({ ...current, source_url: event.target.value }))
+                    setNewFittingForm((current) => {
+                      const category = visibleFittingCategories.find(
+                        (item) => item.code === event.target.value,
+                      );
+
+                      return {
+                        ...current,
+                        fitting_group: category?.group || current.fitting_group,
+                        fitting_type: event.target.value,
+                      };
+                    })
                   }
-                  placeholder="https://..."
-                  type="url"
-                  value={newFittingForm.source_url}
-                />
+                  value={newFittingForm.fitting_type}
+                  >
+                  {(visibleFittingCategories.length ? visibleFittingCategories : fittingCategories).map((category) => (
+                    <option key={category.code} value={category.code}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
               </label>
-              <div className="fitting-form-note">{t.fittingAutoCityNote}</div>
+
+              {canEditSystemFittings ? (
+                <label className="toggle-label">
+                  <input
+                    checked={Boolean(newFittingForm.is_system)}
+                    onChange={(event) =>
+                      setNewFittingForm((current) => ({
+                        ...current,
+                        is_system: event.target.checked,
+                      }))
+                    }
+                    type="checkbox"
+                  />
+                  {newFittingForm.is_system ? t.fittingSystemScope : t.fittingCustomScope}
+                </label>
+              ) : null}
+
+              {newFittingForm.is_system ? (
+                <div className="fitting-form-note">{t.fittingSystemHint}</div>
+              ) : null}
+
+              {fittingCreateMode === "source" ? (
+                <>
+                  <label className="fitting-source-url-field">
+                    <span>{t.fittingSourceUrl}</span>
+                    <input
+                      autoFocus
+                      onChange={(event) =>
+                        setNewFittingForm((current) => ({ ...current, source_url: event.target.value }))
+                      }
+                      placeholder="https://..."
+                      type="url"
+                      value={newFittingForm.source_url}
+                    />
+                  </label>
+                  <div className="fitting-form-note">{t.fittingAutoCityNote}</div>
+                </>
+              ) : (
+                <>
+                  <label>
+                    <span>{t.fittingArticle}</span>
+                    <input
+                      onChange={(event) =>
+                        setNewFittingForm((current) => ({ ...current, article: event.target.value }))
+                      }
+                      placeholder={t.fittingManualArticlePlaceholder}
+                      type="text"
+                      value={newFittingForm.article}
+                    />
+                  </label>
+                  <label>
+                    <span>{t.fittingName}</span>
+                    <input
+                      onChange={(event) =>
+                        setNewFittingForm((current) => ({ ...current, name: event.target.value }))
+                      }
+                      placeholder={t.fittingName}
+                      type="text"
+                      value={newFittingForm.name}
+                    />
+                  </label>
+                  <label>
+                    <span>{t.fittingPrice}</span>
+                    <input
+                      min="0"
+                      onChange={(event) =>
+                        setNewFittingForm((current) => ({ ...current, price: event.target.value }))
+                      }
+                      placeholder={t.fittingManualPricePlaceholder}
+                      step="0.01"
+                      type="number"
+                      value={newFittingForm.price}
+                    />
+                  </label>
+                  <label>
+                    <span>{t.fittingImage}</span>
+                    <input
+                      accept="image/*"
+                      onChange={handleFittingImageSelected}
+                      type="file"
+                    />
+                  </label>
+                  <div className="fitting-form-note">
+                    {newFittingForm.image_url ? t.fittingImageSelected : t.fittingCustomHint}
+                  </div>
+                </>
+              )}
+
               <div className="confirm-actions fitting-source-actions">
                 <button
                   className="ghost-button"
@@ -15721,7 +15748,7 @@ export default function App() {
                 </button>
                 <button className="primary-button" disabled={loading} type="submit">
                   <Plus size={16} />
-                  Додати фурнітуру
+                  {fittingCreateMode === "source" ? "Додати з посилання" : "Додати фурнітуру"}
                 </button>
               </div>
             </form>

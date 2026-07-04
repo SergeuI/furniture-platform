@@ -5946,13 +5946,25 @@ tbody tr.selected {
 }
 
 .fitting-source-modal {
-  max-width: 620px;
-  width: min(100%, 620px);
+  max-width: 860px;
+  width: min(100%, 860px);
 }
 
 .fitting-source-modal-form {
   display: grid;
   gap: 14px;
+}
+
+.fitting-source-mode-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.fitting-source-mode-switch .ghost-button.active {
+  background: rgba(15, 118, 110, 0.1);
+  border-color: rgba(15, 118, 110, 0.3);
+  color: #0f766e;
 }
 
 .fitting-source-actions {
