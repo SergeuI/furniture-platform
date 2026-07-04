@@ -6533,6 +6533,14 @@ tbody tr.selected {
 }
 
 @media (max-width: 1180px) {
+  html,
+  body,
+  #root {
+    height: auto;
+    min-height: 100%;
+    overflow: auto;
+  }
+
   .app-shell,
   .content-grid {
     grid-template-columns: 1fr;
@@ -6567,7 +6575,9 @@ tbody tr.selected {
   }
 
   .workspace {
+    height: auto;
     min-width: 0;
+    overflow: visible;
     width: 100%;
   }
 
