@@ -11182,6 +11182,9 @@ export default function App() {
               </div>
             </div>
           </div>
+        </div>
+
+        <div className="sidebar-scroll">
           <div className="user-block">
             <span>{userLoginName}</span>
             <strong>{user.role}</strong>
@@ -11189,187 +11192,187 @@ export default function App() {
               {t.currentCity}: {formatCatalogLabel(user.city, t)}
             </small>
           </div>
-        </div>
 
-        <nav className="nav-tabs" aria-label="Admin sections">
-          <button
-            className={isHomeView ? "active" : ""}
-            onClick={() => {
-              switchView("home");
-              closeSidebarOnMobile();
-            }}
-            type="button"
-          >
-            {t.home}
-          </button>
-          <button
-            className={
-              activeView === "projects" || activeView === "projectDetails"
-                ? "active"
-                : ""
-            }
-            onClick={() => {
-              switchView("projects");
-              closeSidebarOnMobile();
-            }}
-            type="button"
-          >
-            {t.projects}
-          </button>
-          {canCreateNewProject ? (
+          <nav className="nav-tabs" aria-label="Admin sections">
             <button
-              className={activeView === "createProject" ? "active" : ""}
+              className={isHomeView ? "active" : ""}
               onClick={() => {
-                switchView("createProject");
+                switchView("home");
                 closeSidebarOnMobile();
               }}
               type="button"
             >
-              {t.createProject}
+              {t.home}
             </button>
-          ) : null}
-          {user.role === "admin" ? (
-            <>
+            <button
+              className={
+                activeView === "projects" || activeView === "projectDetails"
+                  ? "active"
+                  : ""
+              }
+              onClick={() => {
+                switchView("projects");
+                closeSidebarOnMobile();
+              }}
+              type="button"
+            >
+              {t.projects}
+            </button>
+            {canCreateNewProject ? (
               <button
-                className={activeView === "users" ? "active" : ""}
+                className={activeView === "createProject" ? "active" : ""}
                 onClick={() => {
-                  switchView("users");
+                  switchView("createProject");
                   closeSidebarOnMobile();
                 }}
                 type="button"
               >
-                {t.users}
+                {t.createProject}
               </button>
-              <button
-                className={activeView === "audit" ? "active" : ""}
-                onClick={() => {
-                  switchView("audit");
-                  closeSidebarOnMobile();
-                }}
-                type="button"
-              >
-                {t.audit}
-              </button>
-            </>
-          ) : null}
-          <div className={`nav-group${isCatalogView ? " active" : ""}`}>
-            <div className={`nav-group-header${isCatalogView ? " active" : ""}`}>
-              <button
-                className={`nav-group-link${isCatalogHubView || isCatalogMaterialsView || isCatalogFittingsView || isCatalogFastenersView || isCatalogHolesView ? " active" : ""}`}
-                onClick={() => {
-                  switchView(user.role === "admin" ? "catalogHub" : "catalogMaterials");
-                  closeSidebarOnMobile();
-                }}
-                type="button"
-              >
-                <span className="nav-group-title">{t.catalog}</span>
-              </button>
-              <button
-                aria-expanded={isCatalogMenuOpen}
-                className={`nav-group-toggle${isCatalogView ? " active" : ""}`}
-                onClick={() => setIsCatalogMenuOpen((current) => !current)}
-                type="button"
-              >
-                <ChevronRight
-                  className={`nav-group-icon${isCatalogMenuOpen ? " expanded" : ""}`}
-                  size={16}
-                />
-              </button>
-            </div>
-            {isCatalogMenuOpen ? (
-              <div className="nav-subtabs">
+            ) : null}
+            {user.role === "admin" ? (
+              <>
                 <button
-                  className={isCatalogMaterialsView ? "active" : ""}
+                  className={activeView === "users" ? "active" : ""}
                   onClick={() => {
-                    switchView("catalogMaterials");
+                    switchView("users");
                     closeSidebarOnMobile();
                   }}
                   type="button"
                 >
-                  {t.catalogMaterials}
+                  {t.users}
                 </button>
                 <button
-                  className={isCatalogFittingsView ? "active" : ""}
+                  className={activeView === "audit" ? "active" : ""}
                   onClick={() => {
-                    switchView("catalogFittings");
+                    switchView("audit");
                     closeSidebarOnMobile();
                   }}
                   type="button"
                 >
-                  {t.catalogFittings}
+                  {t.audit}
                 </button>
-                {canViewFittingHoles ? (
+              </>
+            ) : null}
+            <div className={`nav-group${isCatalogView ? " active" : ""}`}>
+              <div className={`nav-group-header${isCatalogView ? " active" : ""}`}>
+                <button
+                  className={`nav-group-link${isCatalogHubView || isCatalogMaterialsView || isCatalogFittingsView || isCatalogFastenersView || isCatalogHolesView ? " active" : ""}`}
+                  onClick={() => {
+                    switchView(user.role === "admin" ? "catalogHub" : "catalogMaterials");
+                    closeSidebarOnMobile();
+                  }}
+                  type="button"
+                >
+                  <span className="nav-group-title">{t.catalog}</span>
+                </button>
+                <button
+                  aria-expanded={isCatalogMenuOpen}
+                  className={`nav-group-toggle${isCatalogView ? " active" : ""}`}
+                  onClick={() => setIsCatalogMenuOpen((current) => !current)}
+                  type="button"
+                >
+                  <ChevronRight
+                    className={`nav-group-icon${isCatalogMenuOpen ? " expanded" : ""}`}
+                    size={16}
+                  />
+                </button>
+              </div>
+              {isCatalogMenuOpen ? (
+                <div className="nav-subtabs">
                   <button
-                    className={isCatalogHolesView ? "active" : ""}
+                    className={isCatalogMaterialsView ? "active" : ""}
                     onClick={() => {
-                      switchView("catalogHoles");
+                      switchView("catalogMaterials");
                       closeSidebarOnMobile();
                     }}
                     type="button"
                   >
-                    {t.holeTabTitle}
+                    {t.catalogMaterials}
                   </button>
-                ) : null}
-                {user.role === "admin" ? (
-                  <>
+                  <button
+                    className={isCatalogFittingsView ? "active" : ""}
+                    onClick={() => {
+                      switchView("catalogFittings");
+                      closeSidebarOnMobile();
+                    }}
+                    type="button"
+                  >
+                    {t.catalogFittings}
+                  </button>
+                  {canViewFittingHoles ? (
                     <button
-                      className={isCatalogViyarView ? "active" : ""}
+                      className={isCatalogHolesView ? "active" : ""}
                       onClick={() => {
-                        switchView("catalogViyar");
+                        switchView("catalogHoles");
                         closeSidebarOnMobile();
                       }}
                       type="button"
                     >
-                      {t.catalogViyar}
+                      {t.holeTabTitle}
                     </button>
-                    <button
-                      className={isCatalogManualView ? "active" : ""}
-                      onClick={() => {
-                        switchView("catalogManual");
-                        closeSidebarOnMobile();
-                      }}
-                      type="button"
-                    >
-                      {t.catalogManual}
-                    </button>
-                    <button
-                      className={isCatalogValuesView ? "active" : ""}
-                      onClick={() => {
-                        switchView("catalogValues");
-                        closeSidebarOnMobile();
-                      }}
-                      type="button"
-                    >
-                      {t.catalogValues}
-                    </button>
-                  </>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
+                  ) : null}
+                  {user.role === "admin" ? (
+                    <>
+                      <button
+                        className={isCatalogViyarView ? "active" : ""}
+                        onClick={() => {
+                          switchView("catalogViyar");
+                          closeSidebarOnMobile();
+                        }}
+                        type="button"
+                      >
+                        {t.catalogViyar}
+                      </button>
+                      <button
+                        className={isCatalogManualView ? "active" : ""}
+                        onClick={() => {
+                          switchView("catalogManual");
+                          closeSidebarOnMobile();
+                        }}
+                        type="button"
+                      >
+                        {t.catalogManual}
+                      </button>
+                      <button
+                        className={isCatalogValuesView ? "active" : ""}
+                        onClick={() => {
+                          switchView("catalogValues");
+                          closeSidebarOnMobile();
+                        }}
+                        type="button"
+                      >
+                        {t.catalogValues}
+                      </button>
+                    </>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+            <button
+              className={activeView === "settings" ? "active" : ""}
+              onClick={() => {
+                switchView("settings");
+                closeSidebarOnMobile();
+              }}
+              type="button"
+            >
+              {t.settings}
+            </button>
+          </nav>
+
           <button
-            className={activeView === "settings" ? "active" : ""}
+            className="ghost-button"
             onClick={() => {
-              switchView("settings");
               closeSidebarOnMobile();
+              handleLogout();
             }}
             type="button"
           >
-            {t.settings}
+            <LogOut size={18} />
+            {t.logout}
           </button>
-        </nav>
-
-        <button
-          className="ghost-button"
-          onClick={() => {
-            closeSidebarOnMobile();
-            handleLogout();
-          }}
-          type="button"
-        >
-          <LogOut size={18} />
-          {t.logout}
-        </button>
+        </div>
       </aside>
 
       <section className="workspace">

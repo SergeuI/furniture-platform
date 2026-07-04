@@ -6562,16 +6562,19 @@ tbody tr.selected {
   .sidebar {
     background: linear-gradient(180deg, #0c1318 0%, #0f181d 100%);
     box-shadow: 18px 0 40px rgba(13, 20, 26, 0.24);
+    display: grid;
+    gap: 0;
     height: 100dvh;
     left: 0;
     max-width: 320px;
     min-height: auto;
-    overflow-y: auto;
-    padding-top: 0;
+    overflow: hidden;
+    padding: 0;
     position: fixed;
     top: 0;
     transform: translateX(-102%);
     transition: transform 0.28s ease;
+    grid-template-rows: auto minmax(0, 1fr);
     width: min(84vw, 320px);
     z-index: 24;
   }
@@ -6579,15 +6582,14 @@ tbody tr.selected {
   .sidebar-top {
     background: linear-gradient(180deg, #0c1318 0%, #0f181d 100%);
     display: grid;
-    gap: 8px;
-    padding: 12px 16px 14px;
-    position: sticky;
-    top: 0;
+    gap: 6px;
+    padding: 10px 16px 10px;
+    position: relative;
     z-index: 2;
   }
 
   .sidebar-brand-block {
-    gap: 6px;
+    gap: 4px;
     padding-top: 0;
   }
 
@@ -6596,7 +6598,7 @@ tbody tr.selected {
   }
 
   .sidebar-brand-logo {
-    max-height: 48px;
+    max-height: 42px;
   }
 
   .sidebar-close-button {
@@ -6633,6 +6635,13 @@ tbody tr.selected {
     position: sticky;
     top: 0;
     z-index: 25;
+  }
+
+  .sidebar-scroll {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 8px 16px 16px;
   }
 
   .mobile-brand-link {
@@ -6683,7 +6692,7 @@ tbody tr.selected {
   }
 
   .toolbar-heading .sidebar-toggle-button {
-    display: none;
+    display: none !important;
   }
 
   .content-grid {
@@ -6785,7 +6794,7 @@ tbody tr.selected {
   }
 
   .toolbar-heading .sidebar-toggle-button {
-    display: none;
+    display: none !important;
   }
 
   .toolbar-project-controls {
