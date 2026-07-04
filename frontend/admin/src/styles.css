@@ -6543,7 +6543,7 @@ tbody tr.selected {
   }
 
   .app-shell {
-    display: block;
+    display: grid;
     height: auto;
     min-height: 100dvh;
     overflow: visible;
@@ -6564,6 +6564,11 @@ tbody tr.selected {
     transition: transform 0.28s ease;
     width: min(84vw, 320px);
     z-index: 24;
+  }
+
+  .workspace {
+    min-width: 0;
+    width: 100%;
   }
 
   .sidebar.open {
