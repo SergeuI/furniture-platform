@@ -2582,8 +2582,6 @@ class WizardApp(tk.Tk):
         need_db_update = "database" in file_types
         need_restart = self.restart_services.get() and bool(file_types & {"code", "ui", "database"})
         need_requirements = any(path.replace("\\", "/") == "requirements.txt" for path in source_files)
-        need_admin_build = any(path.replace("\\", "/").startswith("frontend/admin/") for path in source_files)
-        need_app_build = any(path.replace("\\", "/").startswith("frontend/app/") for path in source_files)
         sudo_secret = sudo_password or server_password
 
         if need_restart and not sudo_secret:
@@ -2624,10 +2622,7 @@ class WizardApp(tk.Tk):
                     remote_steps.append("./venv/bin/pip install -r requirements.txt")
                 if need_db_update and self.run_safe_update.get():
                     remote_steps.append("./venv/bin/python scripts/safe_update_db.py")
-                if need_admin_build:
-                    remote_steps.append("cd frontend/admin && npm run build")
-                if need_app_build:
-                    remote_steps.append("cd frontend/app && npm run build")
+                remote_steps.append("cd frontend/admin && npm run build")
                 if need_restart:
                     remote_steps.append("sudo -S -p '' systemctl restart furniture-api furniture-bot")
 
