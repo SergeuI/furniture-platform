@@ -49,6 +49,7 @@ LOCAL_API_URL = "http://127.0.0.1:8000"
 LOCAL_API_DOCS_URL = "http://127.0.0.1:8000/docs"
 LOCAL_APP_URL = "http://127.0.0.1:5175"
 LOCAL_ADMIN_URL = "http://127.0.0.1:5173"
+REMOTE_ADMIN_WEBROOT = "/var/www/furniture-admin"
 
 
 def prepare_tk_runtime() -> None:
@@ -2623,6 +2624,9 @@ class WizardApp(tk.Tk):
                 if need_db_update and self.run_safe_update.get():
                     remote_steps.append("./venv/bin/python scripts/safe_update_db.py")
                 remote_steps.append("cd frontend/admin && npm run build")
+                remote_steps.append(
+                    f"mkdir -p {shlex.quote(REMOTE_ADMIN_WEBROOT)} && cp -a frontend/admin/dist/. {shlex.quote(REMOTE_ADMIN_WEBROOT)}/",
+                )
                 if need_restart:
                     remote_steps.append("sudo -S -p '' systemctl restart furniture-api furniture-bot")
 
