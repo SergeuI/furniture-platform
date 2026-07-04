@@ -2625,7 +2625,7 @@ class WizardApp(tk.Tk):
                     remote_steps.append("./venv/bin/python scripts/safe_update_db.py")
                 remote_steps.append("cd frontend/admin && npm run build")
                 remote_steps.append(
-                    f"mkdir -p {shlex.quote(REMOTE_ADMIN_WEBROOT)} && cp -a frontend/admin/dist/. {shlex.quote(REMOTE_ADMIN_WEBROOT)}/",
+                    f"mkdir -p {shlex.quote(REMOTE_ADMIN_WEBROOT)} && cp -a dist/. {shlex.quote(REMOTE_ADMIN_WEBROOT)}/",
                 )
                 if need_restart:
                     remote_steps.append("sudo -S -p '' systemctl restart furniture-api furniture-bot")
