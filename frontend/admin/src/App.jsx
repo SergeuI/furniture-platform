@@ -11134,60 +11134,61 @@ export default function App() {
         />
       ) : null}
       <aside className={`sidebar${isSidebarOpen ? " open" : ""}`}>
-        <button
-          aria-label="Close menu"
-          className="sidebar-close-button"
-          onClick={() => setIsSidebarOpen(false)}
-          type="button"
-        >
-          <X size={18} />
-        </button>
-        <div className="brand-block sidebar-brand-block">
+        <div className="sidebar-top">
           <button
-            className="sidebar-brand-link"
-            onClick={() => {
-              switchView("home");
-              closeSidebarOnMobile();
-            }}
+            aria-label="Close menu"
+            className="sidebar-close-button"
+            onClick={() => setIsSidebarOpen(false)}
             type="button"
           >
-            <img
-              alt={t.furniturePlatform}
-              className="sidebar-brand-logo"
-              src="/brand/logo-mpfc.png"
-            />
+            <X size={18} />
           </button>
-          <div className="brand-copy">
-            <div className="brand-copy-header">
-              <h1>{t.admin}</h1>
-              <div className="language-switcher compact" aria-label="Language">
-                <button
-                  className={language === "en" ? "active" : ""}
-                  aria-label="English"
-                  title="English"
-                  onClick={() => changeLanguage("en")}
-                  type="button"
-                >
-                </button>
-                <button
-                  className={language === "uk" ? "active" : ""}
-                  aria-label="Українська"
-                  title="Українська"
-                  onClick={() => changeLanguage("uk")}
-                  type="button"
-                >
-                </button>
+          <div className="brand-block sidebar-brand-block">
+            <button
+              className="sidebar-brand-link"
+              onClick={() => {
+                switchView("home");
+                closeSidebarOnMobile();
+              }}
+              type="button"
+            >
+              <img
+                alt={t.furniturePlatform}
+                className="sidebar-brand-logo"
+                src="/brand/logo-mpfc.png"
+              />
+            </button>
+            <div className="brand-copy">
+              <div className="brand-copy-header">
+                <h1>{t.admin}</h1>
+                <div className="language-switcher compact" aria-label="Language">
+                  <button
+                    className={language === "en" ? "active" : ""}
+                    aria-label="English"
+                    title="English"
+                    onClick={() => changeLanguage("en")}
+                    type="button"
+                  >
+                  </button>
+                  <button
+                    className={language === "uk" ? "active" : ""}
+                    aria-label="Українська"
+                    title="Українська"
+                    onClick={() => changeLanguage("uk")}
+                    type="button"
+                  >
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-
-        <div className="user-block">
-          <span>{userLoginName}</span>
-          <strong>{user.role}</strong>
-          <small>
-            {t.currentCity}: {formatCatalogLabel(user.city, t)}
-          </small>
+          <div className="user-block">
+            <span>{userLoginName}</span>
+            <strong>{user.role}</strong>
+            <small>
+              {t.currentCity}: {formatCatalogLabel(user.city, t)}
+            </small>
+          </div>
         </div>
 
         <nav className="nav-tabs" aria-label="Admin sections">

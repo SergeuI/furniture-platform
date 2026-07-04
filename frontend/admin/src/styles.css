@@ -6567,7 +6567,7 @@ tbody tr.selected {
     max-width: 320px;
     min-height: auto;
     overflow-y: auto;
-    padding-top: 20px;
+    padding-top: 0;
     position: fixed;
     top: 0;
     transform: translateX(-102%);
@@ -6576,17 +6576,34 @@ tbody tr.selected {
     z-index: 24;
   }
 
+  .sidebar-top {
+    background: linear-gradient(180deg, #0c1318 0%, #0f181d 100%);
+    display: grid;
+    gap: 8px;
+    padding: 12px 16px 14px;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+
   .sidebar-brand-block {
     gap: 6px;
     padding-top: 0;
   }
 
   .sidebar-brand-link {
-    margin-top: -10px;
+    margin-top: 0;
   }
 
   .sidebar-brand-logo {
-    max-height: 56px;
+    max-height: 48px;
+  }
+
+  .sidebar-close-button {
+    position: absolute;
+    right: 12px;
+    top: 12px;
+    z-index: 3;
   }
 
   .toolbar {
@@ -6663,6 +6680,10 @@ tbody tr.selected {
   .sidebar-close-button,
   .sidebar-backdrop {
     display: block;
+  }
+
+  .toolbar-heading .sidebar-toggle-button {
+    display: none;
   }
 
   .content-grid {
