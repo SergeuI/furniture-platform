@@ -13884,7 +13884,6 @@ export default function App() {
                             </div>
                             <div className="fitting-item-card-copy">
                               <strong>{item.name || item.code || item.article}</strong>
-                              {item.description ? <span className="fitting-item-card-description">{item.description}</span> : null}
                               <div className="fittings-table-badges">
                                 {fittingColumnVisibility.source ? renderSourceBadge(sourceMeta) : null}
                               </div>
@@ -13936,7 +13935,6 @@ export default function App() {
                                   </div>
                                   <div className="fittings-table-name-copy">
                                     <strong>{item.name || item.code || item.article}</strong>
-                                    {item.description ? <span className="fittings-table-description">{item.description}</span> : null}
                                     <div className="fittings-table-badges">
                                       {item.owner_user_id && !item.is_system ? (
                                         <span className="service-tree-badge subtle">{t.forCalculation}</span>
