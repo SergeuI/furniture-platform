@@ -44,6 +44,14 @@ app = FastAPI(
 )
 
 
+@app.get("/health")
+async def health_check():
+    return {
+        "success": True,
+        "status": "ok",
+    }
+
+
 @app.on_event("startup")
 async def startup_background_services():
 

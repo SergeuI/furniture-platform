@@ -45,7 +45,7 @@ UPDATE_PACKAGES_DIR = PROJECT_ROOT / "docs" / "update_packages"
 UPDATE_PACKAGES_STATE_FILE = UPDATE_PACKAGES_DIR / ".update_package_state.json"
 PYTHON = Path(sys.executable)
 CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-LOCAL_API_URL = "http://127.0.0.1:8000"
+LOCAL_API_HEALTH_URL = "http://127.0.0.1:8000/health"
 LOCAL_API_DOCS_URL = "http://127.0.0.1:8000/docs"
 LOCAL_APP_URL = "http://127.0.0.1:5175"
 LOCAL_ADMIN_URL = "http://127.0.0.1:5173"
@@ -96,6 +96,20 @@ def format_linux_env(main_db: str, legacy_db: str) -> str:
         f'export FURNITURE_PLATFORM_DB_PATH="{main_db}"\n'
         f'export FURNITURE_LEGACY_DB_PATH="{legacy_db}"'
     )
+
+
+def remote_python_prefix() -> str:
+    return (
+        'REMOTE_PYTHON="$(if [ -x ./.venv/bin/python ]; then printf "%s" ./.venv/bin/python; '
+        'elif [ -x ./venv/bin/python ]; then printf "%s" ./venv/bin/python; '
+        'elif command -v python3 >/dev/null 2>&1; then command -v python3; '
+        'else command -v python; fi)" && '
+        'if [ -z "$REMOTE_PYTHON" ]; then echo "No Python interpreter found" >&2; exit 1; fi'
+    )
+
+
+def remote_python_step(script_args: str) -> str:
+    return f'{remote_python_prefix()} && "$REMOTE_PYTHON" {script_args}'
 
 
 def format_ssh_command(
@@ -303,9 +317,9 @@ def format_server_block(
         "",
         "cd " + server_path,
         "git pull",
-        "./venv/bin/pip install -r requirements.txt",
+        remote_python_step('-m pip install -r requirements.txt'),
         format_linux_env(main_db, legacy_db),
-        "./venv/bin/python scripts/safe_update_db.py",
+        remote_python_step('scripts/safe_update_db.py'),
     ]
     if restart:
         lines.append("sudo systemctl restart furniture-api furniture-bot")
@@ -1245,7 +1259,7 @@ class WizardApp(tk.Tk):
 
     def _service_url_for_key(self, key: str) -> str | None:
         if key == "api":
-            return LOCAL_API_URL
+            return LOCAL_API_HEALTH_URL
         if key == "frontend-app":
             return LOCAL_APP_URL
         if key == "frontend-admin":
@@ -2620,15 +2634,18 @@ class WizardApp(tk.Tk):
                     "env GIT_TERMINAL_PROMPT=0 git pull --ff-only",
                 ]
                 if need_requirements:
-                    remote_steps.append("./venv/bin/pip install -r requirements.txt")
+                    remote_steps.append(remote_python_step('-m pip install -r requirements.txt'))
                 if need_db_update and self.run_safe_update.get():
-                    remote_steps.append("./venv/bin/python scripts/safe_update_db.py")
+                    remote_steps.append(remote_python_step('scripts/safe_update_db.py'))
                 remote_steps.append("cd frontend/admin && npm run build")
                 remote_steps.append(
                     f"mkdir -p {shlex.quote(REMOTE_ADMIN_WEBROOT)} && cp -a dist/. {shlex.quote(REMOTE_ADMIN_WEBROOT)}/",
                 )
                 if need_restart:
                     remote_steps.append("sudo -S -p '' systemctl restart furniture-api furniture-bot")
+                    remote_steps.append(
+                        remote_python_step('../../scripts/wait_for_api_ready.py --url http://127.0.0.1:8000/health --timeout 90'),
+                    )
 
                 remote_path = shlex.quote(server_path or ".")
                 remote_command = f"cd {remote_path} && " + " && ".join(remote_steps)
@@ -3893,7 +3910,7 @@ class WizardApp(tk.Tk):
             return False
 
     def refresh_product_status(self) -> None:
-        api_up = self._service_responds(LOCAL_API_URL)
+        api_up = self._service_responds(LOCAL_API_HEALTH_URL)
         app_up = self._service_responds(LOCAL_APP_URL)
         admin_up = self._service_responds(LOCAL_ADMIN_URL)
 
@@ -3922,7 +3939,7 @@ class WizardApp(tk.Tk):
 
     def refresh_product_status_async(self) -> None:
         def worker() -> None:
-            api_up = self._service_responds(LOCAL_API_URL)
+            api_up = self._service_responds(LOCAL_API_HEALTH_URL)
             app_up = self._service_responds(LOCAL_APP_URL)
             admin_up = self._service_responds(LOCAL_ADMIN_URL)
 
@@ -4230,7 +4247,7 @@ class WizardApp(tk.Tk):
         def opener() -> None:
             ready = False
             for _ in range(30):
-                api_up = self._service_responds(LOCAL_API_URL)
+                api_up = self._service_responds(LOCAL_API_HEALTH_URL)
                 app_up = self._service_responds(LOCAL_APP_URL)
                 admin_up = self._service_responds(LOCAL_ADMIN_URL)
                 api_proc = self.managed_processes.get("api")
