@@ -5953,11 +5953,31 @@ export default function App() {
     [activeFittingCategory, visibleFittingCategories],
   );
   const visibleFittingItems = useMemo(
-    () =>
-      activeFittingCategory
+    () => {
+      const normalizedSearch = fittingSearch.trim().toLowerCase();
+      const categoryItems = activeFittingCategory
         ? fittingItems.filter((item) => item.fitting_type === activeFittingCategory)
-        : [],
-    [activeFittingCategory, fittingItems],
+        : [];
+
+      if (!normalizedSearch) {
+        return categoryItems;
+      }
+
+      return categoryItems.filter((item) =>
+        [
+          item.name,
+          item.article,
+          item.code,
+          item.description,
+          item.source_url,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase()
+          .includes(normalizedSearch),
+      );
+    },
+    [activeFittingCategory, fittingItems, fittingSearch],
   );
   const projectMaterialPickerItems = useMemo(
     () =>
