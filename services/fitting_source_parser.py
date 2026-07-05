@@ -48,6 +48,54 @@ def _clean_text(value: str | None) -> str:
     return " ".join(str(value or "").split()).strip()
 
 
+_PROMOTIONAL_PHRASE_PATTERNS = (
+    r"\bкупити\b",
+    r"\bкупить\b",
+    r"\bзамовити\b",
+    r"\bза\s+\d+(?:[.,]\d+)?\b",
+    r"\bдоставка\b",
+    r"\bтелефон\w*\b",
+    r"\bконсультац\w*\b",
+    r"\bлучшие\s+цены\b",
+    r"\bцены\b",
+    r"\bціни\b",
+    r"\bвыбор\b",
+    r"\bотличное\s+качество\b",
+)
+
+
+def _looks_like_promotional_copy(value: str | None) -> bool:
+    text = _clean_text(value).lower()
+    if not text:
+        return False
+    return any(re.search(pattern, text, re.IGNORECASE) for pattern in _PROMOTIONAL_PHRASE_PATTERNS)
+
+
+def _clean_product_name(value: str | None) -> str:
+    text = _clean_text(value)
+    if not text:
+        return ""
+
+    cut_points: list[int] = []
+    for pattern in _PROMOTIONAL_PHRASE_PATTERNS:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            cut_points.append(match.start())
+
+    for separator in (r"\s+[—–-]\s+", r"\s+\|\s+", r"\s+/\s+"):
+        match = re.search(separator, text)
+        if not match:
+            continue
+        tail = _clean_text(text[match.end():])
+        if tail and _looks_like_promotional_copy(tail):
+            cut_points.append(match.start())
+
+    if cut_points:
+        text = text[: min(cut_points)].strip(" -—–|/,:;.()[]")
+
+    return _clean_text(text)
+
+
 def _normalize_asset_url(value: str | None, base_url: str) -> str | None:
     asset = _clean_text(value)
 
@@ -136,6 +184,12 @@ def _extract_description(soup: BeautifulSoup, fallback_name: str) -> str | None:
         or fallback_name
     )
     description = _clean_text(description)
+    if not description:
+        return None
+    if description == _clean_product_name(fallback_name):
+        return None
+    if _looks_like_promotional_copy(description):
+        return None
     return description or None
 
 
@@ -309,6 +363,7 @@ def _parse_viyar_html(html: str, final_url: str) -> dict:
             final_url,
         )
     )
+    name = _clean_product_name(name)
     description = _extract_description(soup, name)
 
     return {
@@ -418,6 +473,7 @@ def _parse_kronas_html(html: str, final_url: str) -> dict:
 
     if not image_url and article:
         image_url = f"https://kronas.com.ua/Media/images/catalog/medium/{article}.jpg"
+    name = _clean_product_name(name)
     description = _extract_description(soup, name)
 
     return {
@@ -493,6 +549,7 @@ def _parse_generic_html(html: str, final_url: str, source_site: str) -> dict:
             ".cost",
         ],
     )
+    name = _clean_product_name(name)
     description = _extract_description(soup, name)
 
     return {
@@ -553,6 +610,7 @@ async def _parse_mt_source(source_url: str) -> dict:
         )
         or _first_text(soup, ["title"])
     )
+    name = _clean_product_name(name)
 
     article = _extract_article_from_text(final_url)
 
