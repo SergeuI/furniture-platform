@@ -1564,6 +1564,7 @@ const TRANSLATIONS = {
     holeTabPreview: "2D preview",
     holeTabPoints: "Points",
     holeTabSearchPlaceholder: "Search fittings",
+    holeTabSelectCategory: "Select category",
     holeTabTemplates: "Templates",
     holeTabTitle: "Holes",
     holeReadOnlyBadge: "Read-only",
@@ -2055,6 +2056,7 @@ Object.assign(TRANSLATIONS.uk, {
   holeTabPreview: "2D \u043f\u0435\u0440\u0435\u0433\u043b\u044f\u0434",
   holeTabPoints: "\u0422\u043e\u0447\u043a\u0438",
   holeTabSearchPlaceholder: "\u041f\u043e\u0448\u0443\u043a \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0438",
+  holeTabSelectCategory: "\u041e\u0431\u0435\u0440\u0456\u0442\u044c \u043a\u0430\u0442\u0435\u0433\u043e\u0440\u0456\u044e",
   holeTabTemplates: "\u0428\u0430\u0431\u043b\u043e\u043d\u0438",
   holeTabTitle: "\u041e\u0442\u0432\u043e\u0440\u0438",
   holeReadOnlyBadge: "\u041b\u0456\u0448\u0435 \u043f\u0435\u0440\u0435\u0433\u043b\u044f\u0434",
@@ -2993,6 +2995,7 @@ Object.assign(TRANSLATIONS.uk, {
   widthMin: "Ширина від",
   holeTabDescription: "Перегляд присадки фурнітури для вибраної фурнітури і варіанта кріплення.",
   holeTabSearchPlaceholder: "Пошук фурнітури",
+  holeTabSelectCategory: "Оберіть категорію",
   holeTabTitle: "Присадка фурнітури",
   holeReadOnlyBadge: "Лише перегляд",
   holePointsTitle: "Точки присадки",
@@ -4762,6 +4765,7 @@ export default function App() {
     source: true,
   });
   const [holeTemplateItems, setHoleTemplateItems] = useState([]);
+  const [holeSelectedFittingCategory, setHoleSelectedFittingCategory] = useState("");
   const [holeSelectedFittingId, setHoleSelectedFittingId] = useState("");
   const [holeSelectedTemplateId, setHoleSelectedTemplateId] = useState("");
   const [holeSelectedTemplate, setHoleSelectedTemplate] = useState(null);
@@ -4872,6 +4876,17 @@ export default function App() {
   const selectedHoleFitting = useMemo(
     () => fittingItems.find((item) => String(item.id) === String(holeSelectedFittingId)) || null,
     [fittingItems, holeSelectedFittingId],
+  );
+  const holeCategoryOptions = useMemo(
+    () => fittingCategories.filter((category) => Number(category.item_count) > 0),
+    [fittingCategories],
+  );
+  const holeCategoryFittingItems = useMemo(
+    () =>
+      holeSelectedFittingCategory
+        ? fittingItems.filter((item) => item.fitting_type === holeSelectedFittingCategory)
+        : [],
+    [fittingItems, holeSelectedFittingCategory],
   );
   const selectedHoleTemplate = useMemo(
     () => holeTemplateItems.find((item) => String(item.id) === String(holeSelectedTemplateId)) || holeSelectedTemplate || null,
@@ -8992,6 +9007,8 @@ export default function App() {
     if (import.meta.env.DEV) {
       console.debug("selected fitting id", nextFittingId);
     }
+    const nextFitting = fittingItems.find((item) => String(item.id) === String(nextFittingId)) || null;
+    setHoleSelectedFittingCategory(nextFitting?.fitting_type || holeSelectedFittingCategory);
     setHoleSelectedFittingId(nextFittingId);
     setHoleSelectedTemplateId("");
     setHoleSelectedTemplate(null);
@@ -9011,6 +9028,20 @@ export default function App() {
     if (templates.length) {
       await handleHoleTemplateChange(String(templates[0].id));
     }
+  }
+
+  function handleHoleFittingCategoryChange(nextCategoryCode) {
+    setHoleSelectedFittingCategory(nextCategoryCode);
+    setHoleSelectedFittingId("");
+    setHoleSelectedTemplateId("");
+    setHoleSelectedTemplate(null);
+    setHoleTemplateItems([]);
+    setHolePoints([]);
+    setSelectedHolePointId("");
+    closeHoleTemplateCreateForm();
+    closeHolePointCreateForm();
+    closeHolePointEditForm();
+    setStatus("");
   }
 
   async function handleHoleTemplateChange(nextTemplateId) {
@@ -9591,7 +9622,8 @@ export default function App() {
     }
 
     if (nextView === "catalogHoles") {
-      await loadFittingsCatalog(token);
+      await loadFittingsCatalog(token, { search: "" });
+      setHoleSelectedFittingCategory("");
       setHoleSelectedFittingId("");
       setHoleSelectedTemplateId("");
       setHoleSelectedTemplate(null);
@@ -11038,8 +11070,8 @@ export default function App() {
       return;
     }
 
-    loadFittingsCatalog(token);
-  }, [token, user?.city, isCatalogHolesView, fittingItems.length, fittingSearch]);
+    loadFittingsCatalog(token, { search: "" });
+  }, [token, user?.city, isCatalogHolesView, fittingItems.length]);
 
   useEffect(() => {
     if (!token || user?.role !== "admin" || !isCatalogViyarView) {
@@ -14023,23 +14055,29 @@ export default function App() {
               </div>
 
               <div className="holes-selector-grid">
-                <label className="service-catalog-search holes-search">
-                  <Search size={16} />
-                  <input
-                    onChange={(event) => setFittingSearch(event.target.value)}
-                    placeholder={t.holeTabSearchPlaceholder}
-                    type="search"
-                    value={fittingSearch}
-                  />
+                <label className="holes-select">
+                  <span>{t.catalogCategory}</span>
+                  <select
+                    onChange={(event) => handleHoleFittingCategoryChange(event.target.value)}
+                    value={holeSelectedFittingCategory}
+                  >
+                    <option value="">{t.holeTabSelectCategory}</option>
+                    {holeCategoryOptions.map((category) => (
+                      <option key={category.code} value={category.code}>
+                        {category.name}
+                      </option>
+                    ))}
+                  </select>
                 </label>
                 <label className="holes-select">
                   <span>{t.holeTemplateFitting}</span>
                   <select
+                    disabled={!holeSelectedFittingCategory}
                     onChange={(event) => handleHoleFittingChange(event.target.value)}
                     value={holeSelectedFittingId}
                   >
                     <option value="">{t.holeTemplateSelectFitting}</option>
-                    {fittingItems.map((item) => (
+                    {holeCategoryFittingItems.map((item) => (
                       <option key={item.id} value={item.id}>
                         {item.name || item.article || item.code || item.id}
                       </option>
