@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 5173",
-    "prebuild": "powershell -NoProfile -ExecutionPolicy Bypass -File ../../scripts/check_mojibake.ps1 -Root src",
+    "prebuild": "node ../../scripts/check_mojibake.js src",
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1 --port 4173"
   },
