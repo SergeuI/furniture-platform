@@ -288,7 +288,7 @@ const DRAWER_SLIDE_LENGTHS = [250, 300, 350, 400, 450, 500, 550, 600];
 const PROJECT_DRAWER_TYPE_PRESETS = [
   {
     id: "drawer-type-dsp",
-    image_url: "/static/project-drawers/drawer-dsp.jpg",
+    image_url: buildAdminAssetUrl("/static/project-drawers/drawer-dsp.jpg"),
     pickerSubtitleUk: "Дно шухляди з ДСП 18 мм для більш жорсткої конструкції.",
     pickerSubtitleEn: "Drawer bottom made from 18 mm board for a more rigid build.",
     pickerTitleEn: "Drawer bottom DSP",
@@ -298,7 +298,7 @@ const PROJECT_DRAWER_TYPE_PRESETS = [
   },
   {
     id: "drawer-type-hdf",
-    image_url: "/static/project-drawers/drawer-hdf.jpg",
+    image_url: buildAdminAssetUrl("/static/project-drawers/drawer-hdf.jpg"),
     pickerSubtitleUk: "Класичне дно HDF / ДВП для легкої шухляди.",
     pickerSubtitleEn: "Classic HDF drawer bottom for a lighter drawer box.",
     pickerTitleEn: "Drawer bottom HDF",
@@ -386,7 +386,7 @@ const PROJECT_TEMPLATE_PRESETS = [
       slideType: "tandem",
       bottomType: "hdf",
     },
-    image: "/static/project-start/dresser.jpg",
+    image: buildAdminAssetUrl("/static/project-start/dresser.jpg"),
     titleKey: "projectTemplateDresserTitle",
     visual: "dresser",
   },
@@ -404,7 +404,7 @@ const PROJECT_TEMPLATE_PRESETS = [
       slideType: "tandem",
       bottomType: "dsp_18",
     },
-    image: "/static/project-start/wardrobe.jpg",
+    image: buildAdminAssetUrl("/static/project-start/wardrobe.jpg"),
     titleKey: "projectTemplateWardrobeTitle",
     visual: "wardrobe",
   },
@@ -422,7 +422,7 @@ const PROJECT_TEMPLATE_PRESETS = [
       slideType: "telescopic",
       bottomType: "hdf",
     },
-    image: "/static/project-start/cabinet.jpg",
+    image: buildAdminAssetUrl("/static/project-start/cabinet.jpg"),
     titleKey: "projectTemplateCabinetTitle",
     visual: "cabinet",
   },
@@ -440,7 +440,7 @@ const PROJECT_TEMPLATE_PRESETS = [
       slideType: "tandem",
       bottomType: "dsp_18",
     },
-    image: "/static/project-start/hero-scene.png",
+    image: buildAdminAssetUrl("/static/project-start/hero-scene.png"),
     titleKey: "projectTemplateKitchenTitle",
     visual: "kitchen",
   },
@@ -458,7 +458,7 @@ const PROJECT_TEMPLATE_PRESETS = [
       slideType: "telescopic",
       bottomType: "dsp_18",
     },
-    image: "/static/project-start/hero-scene.png",
+    image: buildAdminAssetUrl("/static/project-start/hero-scene.png"),
     titleKey: "projectTemplateWallUnitTitle",
     visual: "wall-unit",
   },
@@ -476,7 +476,7 @@ const PROJECT_TEMPLATE_PRESETS = [
       slideType: "tandem",
       bottomType: "dsp_18",
     },
-    image: "/static/project-start/dresser.jpg",
+    image: buildAdminAssetUrl("/static/project-start/dresser.jpg"),
     titleKey: "projectTemplateBathroomVanityTitle",
     visual: "bathroom-vanity",
   },
@@ -494,7 +494,7 @@ const PROJECT_TEMPLATE_PRESETS = [
       slideType: "telescopic",
       bottomType: "dsp_18",
     },
-    image: "/static/project-start/wardrobe.jpg",
+    image: buildAdminAssetUrl("/static/project-start/wardrobe.jpg"),
     titleKey: "projectTemplateBathroomShelfTitle",
     visual: "bathroom-shelf",
   },
@@ -1073,67 +1073,67 @@ const FITTING_CATEGORY_VISUALS = {
   connectors_fasteners: {
     accent: "#f59e0b",
     icon: Blocks,
-    image: "/static/fittings/connectors-fasteners.png",
+    image: buildAdminAssetUrl("/static/fittings/connectors-fasteners.png"),
   },
   drawer_slides: {
     accent: "#0f766e",
     icon: ChevronRight,
-    image: "/static/fittings/drawer-slides.png",
+    image: buildAdminAssetUrl("/static/fittings/drawer-slides.png"),
   },
   handles_hooks: {
     accent: "#2563eb",
     icon: Wrench,
-    image: "/static/fittings/handles-hooks.png",
+    image: buildAdminAssetUrl("/static/fittings/handles-hooks.png"),
   },
   profiles_gola: {
     accent: "#1f6b34",
     icon: LayoutGrid,
-    image: "/static/fittings/profiles-gola.png",
+    image: buildAdminAssetUrl("/static/fittings/profiles-gola.png"),
   },
   plinth_vents: {
     accent: "#2f8ecb",
     icon: LayoutGrid,
-    image: "/static/fittings/plinth-vents.png",
+    image: buildAdminAssetUrl("/static/fittings/plinth-vents.png"),
   },
   legs_wheels: {
     accent: "#8b5cf6",
     icon: LayoutGrid,
-    image: "/static/fittings/legs-wheels.png",
+    image: buildAdminAssetUrl("/static/fittings/legs-wheels.png"),
   },
   locks_magnets: {
     accent: "#f97316",
     icon: Settings2,
-    image: "/static/fittings/locks-magnets.png",
+    image: buildAdminAssetUrl("/static/fittings/locks-magnets.png"),
   },
   wardrobe_systems: {
     accent: "#14b8a6",
     icon: LayoutGrid,
-    image: "/static/fittings/wardrobe-systems.png",
+    image: buildAdminAssetUrl("/static/fittings/wardrobe-systems.png"),
   },
   hinges: {
     accent: "#ec4899",
     icon: LayoutGrid,
-    image: "/static/fittings/hinges.png",
+    image: buildAdminAssetUrl("/static/fittings/hinges.png"),
   },
   bathroom: {
     accent: "#0ea5e9",
     icon: House,
-    image: "/static/fittings/bathroom.png",
+    image: buildAdminAssetUrl("/static/fittings/bathroom.png"),
   },
   packaging: {
     accent: "#f97316",
     icon: Package,
-    image: "/static/fittings/packaging.png",
+    image: buildAdminAssetUrl("/static/fittings/packaging.png"),
   },
   bed_components: {
     accent: "#6366f1",
     icon: LayoutGrid,
-    image: "/static/fittings/bed-components.png",
+    image: buildAdminAssetUrl("/static/fittings/bed-components.png"),
   },
   wardrobe_fillings: {
     accent: "#10b981",
     icon: LayoutGrid,
-    image: "/static/fittings/wardrobe-fillings.png",
+    image: buildAdminAssetUrl("/static/fittings/wardrobe-fillings.png"),
   },
   other_fittings: { accent: "#64748b", icon: Package },
   other_fasteners: { accent: "#92400e", icon: Blocks },
@@ -4965,7 +4965,7 @@ export default function App() {
   );
   const holeWorkspaceHasFitting = Boolean(holeSelectedFittingId);
   const holeWorkspaceHasTemplate = Boolean(selectedHoleTemplate?.id);
-  const holeWorkspaceCanPreview = holeWorkspaceHasFitting && holeWorkspaceHasTemplate;
+  const holeWorkspaceCanPreview = holeWorkspaceHasFitting;
   const holeWorkspaceSaveStatus = holeSelectedFittingId
     ? selectedHoleTemplate
       ? holeWorkspaceHasUnsavedVariantChanges
@@ -6087,7 +6087,7 @@ export default function App() {
 
           return {
             ...item,
-            image_url: item.image_url || "/static/fittings/drawer-slides.png",
+            image_url: item.image_url || buildAdminAssetUrl("/static/fittings/drawer-slides.png"),
             pickerLength: slideLength,
             pickerRecommended: slideLength === targetLength,
             pickerSubtitle: [
@@ -7341,7 +7341,6 @@ export default function App() {
 
     const fittingName = String(fitting.name || fitting.code || fitting.article || "").trim();
     const fittingArticle = String(fitting.article || "").trim();
-    const fittingDescription = String(fitting.description || "").trim();
     const fittingImageUrl = String(fitting.image_url || fitting.image || "").trim();
 
     return (
@@ -7366,11 +7365,6 @@ export default function App() {
             {fittingArticle ? (
               <div className="hole-template-fitting-info-line">
                 {t.holeTemplateFittingInfoArticle}: {fittingArticle}
-              </div>
-            ) : null}
-            {fittingDescription ? (
-              <div className="hole-template-fitting-info-line hole-template-fitting-info-description">
-                {t.holeTemplateFittingInfoDescription}: {fittingDescription}
               </div>
             ) : null}
           </div>
@@ -8174,7 +8168,6 @@ export default function App() {
 
     const fittingName = String(fitting.name || fitting.code || fitting.article || "").trim();
     const fittingArticle = String(fitting.article || "").trim();
-    const fittingDescription = String(fitting.description || "").trim();
     const fittingImageUrl = String(fitting.image_url || "").trim();
     const fittingTitle = fittingName || t.holeTemplateFitting;
     const fittingSubtitle = [fittingArticle, fitting.code].filter(Boolean).join(" В· ");
@@ -8198,9 +8191,6 @@ export default function App() {
           <div className="hole-template-fitting-info-copy">
             <strong className="hole-template-fitting-info-title">{fittingTitle}</strong>
             {fittingSubtitle ? <div className="hole-template-fitting-info-subtitle">{fittingSubtitle}</div> : null}
-            {fittingDescription ? (
-              <p className="hole-template-fitting-info-description">{fittingDescription}</p>
-            ) : null}
           </div>
         </div>
       </section>
@@ -8302,20 +8292,6 @@ export default function App() {
       surface_mount: { height: 108, width: 132, x: 242, y: 108 },
     };
     const holeZone = zoneByVariant[variantKey] || zoneByVariant.surface_mount;
-
-    if (!holeWorkspaceCanPreview) {
-      return (
-        <section className="holes-preview-schematic variant-surface_mount">
-          <div className="holes-preview-schematic-head">
-            <strong>Схема сцени</strong>
-            <span>Оберіть фурнітуру, щоб побачити схему монтажу.</span>
-          </div>
-          <div className="holes-preview-schematic-empty-state">
-            <span>Оберіть фурнітуру, щоб побачити схему монтажу.</span>
-          </div>
-        </section>
-      );
-    }
 
     function renderHolePanelBodies() {
       switch (variantKey) {
@@ -8705,10 +8681,61 @@ export default function App() {
     });
   }
 
-  function openHolePointCreateForm() {
-    if (!holeSelectedTemplateId) {
+  async function openHolePointCreateForm() {
+    if (!holeSelectedFittingId) {
       setHolePointCreateError(t.holePointTemplateRequired);
       return;
+    }
+
+    if (!holeSelectedTemplateId) {
+      const bootstrapTemplatePayload = buildHoleWorkspaceTemplatePayload(
+        {
+          name: selectedHoleFitting?.name || "Основний шаблон",
+          template_type: "manual",
+          side: "left",
+          coordinate_system: "2d",
+          is_default: true,
+          is_active: true,
+          notes: null,
+        },
+        normalizedSelectedHoleMountingVariantKey,
+      );
+
+      setLoading(true);
+
+      try {
+        const result = await createFittingHoleTemplate(token, bootstrapTemplatePayload);
+
+        if (!result.success) {
+          const errorMessage = result.error || t.holePointTemplateRequired;
+          setHolePointCreateError(errorMessage);
+          setStatus({ message: errorMessage, tone: "error" });
+          return;
+        }
+
+        const createdTemplate = result.template || result.item || result.data || null;
+        const createdTemplateId = String(createdTemplate?.id || "");
+
+        await loadHoleTemplates(token, holeSelectedFittingId);
+
+        if (createdTemplateId) {
+          setHoleSelectedTemplateId(createdTemplateId);
+          const loaded = await loadHoleTemplateDetails(token, createdTemplateId);
+          if (!loaded) {
+            const errorMessage = "Не вдалося відкрити щойно створений шаблон";
+            setHolePointCreateError(errorMessage);
+            setStatus({ message: errorMessage, tone: "error" });
+            return;
+          }
+        }
+      } catch (error) {
+        const errorMessage = error?.message || t.holePointTemplateRequired;
+        setHolePointCreateError(errorMessage);
+        setStatus({ message: errorMessage, tone: "error" });
+        return;
+      } finally {
+        setLoading(false);
+      }
     }
 
     const panelKey = selectedHolePointPanelKey || (normalizedSelectedHoleMountingVariantKey === "face_to_edge" ? "vertical_panel" : "");
@@ -8720,6 +8747,46 @@ export default function App() {
     });
     setHolePointCreateError("");
     setHolePointCreateOpen(true);
+  }
+
+  async function ensureHoleWorkspaceTemplate(fittingId, mountingVariantKey) {
+    if (!fittingId) {
+      return null;
+    }
+
+    const bootstrapTemplatePayload = buildHoleWorkspaceTemplatePayload(
+      {
+        name: selectedHoleFitting?.name || "Основний шаблон",
+        template_type: "manual",
+        side: "left",
+        coordinate_system: "2d",
+        is_default: true,
+        is_active: true,
+        notes: null,
+      },
+      mountingVariantKey,
+    );
+
+    const result = await createFittingHoleTemplate(token, bootstrapTemplatePayload);
+
+    if (!result.success) {
+      throw new Error(result.error || "Не вдалося створити базовий шаблон");
+    }
+
+    const createdTemplate = result.template || result.item || result.data || null;
+    const createdTemplateId = String(createdTemplate?.id || "");
+
+    await loadHoleTemplates(token, fittingId);
+
+    if (createdTemplateId) {
+      setHoleSelectedTemplateId(createdTemplateId);
+      const loaded = await loadHoleTemplateDetails(token, createdTemplateId);
+      if (!loaded) {
+        throw new Error("Не вдалося відкрити щойно створений шаблон");
+      }
+    }
+
+    return createdTemplateId || null;
   }
 
   function closeHolePointCreateForm() {
@@ -9043,6 +9110,20 @@ export default function App() {
     const templates = await loadHoleTemplates(token, nextFittingId);
     if (templates.length) {
       await handleHoleTemplateChange(String(templates[0].id));
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await ensureHoleWorkspaceTemplate(nextFittingId, normalizedSelectedHoleMountingVariantKey);
+      setStatus({ message: "Створено базовий шаблон для присадки", tone: "success" });
+    } catch (error) {
+      setStatus({
+        message: error?.message || "Не вдалося створити базовий шаблон для присадки",
+        tone: "error",
+      });
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -12227,7 +12308,7 @@ export default function App() {
                     <img
                       alt={t.projectStartAiTitle}
                       loading="lazy"
-                      src="/static/project-start/hero-scene.png"
+                      src={buildAdminAssetUrl("/static/project-start/hero-scene.png")}
                     />
                   </span>
                   <span className="project-start-icon pro">
@@ -12253,7 +12334,7 @@ export default function App() {
                     <img
                       alt={t.projectStartPremiumTitle}
                       loading="lazy"
-                      src="/static/project-start/hero-scene.png"
+                      src={buildAdminAssetUrl("/static/project-start/hero-scene.png")}
                     />
                   </span>
                   <span className="project-start-icon premium">
@@ -14117,7 +14198,7 @@ export default function App() {
                     </span>
                     <button
                       className="ghost-button compact-button"
-                      disabled={loading || !holeSelectedTemplateId}
+                      disabled={loading || !holeSelectedFittingId}
                       onClick={openHolePointCreateForm}
                       type="button"
                     >
@@ -14335,20 +14416,12 @@ export default function App() {
                       <h4>{t.holeWorkspacePreview3dTitle}</h4>
                     </div>
                   </div>
-                  {holeWorkspaceCanPreview ? (
-                    <HolesMountingThreePreview
-                      holes={holePoints}
-                      hoveredHoleId={hoveredHolePointId}
-                      mountingVariantKey={normalizedSelectedHoleMountingVariantKey}
-                      onHoverHole={(holeId) => setHoveredHolePointId(String(holeId))}
-                      onLeaveHole={() => setHoveredHolePointId("")}
-                      onSelectHole={(holeId) => setSelectedHolePointId(String(holeId))}
-                      selectedHoleId={selectedHolePointId}
-                    />
-                  ) : (
-                    <div className="holes-preview-stage holes-preview-stage-placeholder">
-                      <span>{t.holeWorkspacePreview3dPlaceholder}</span>
-                    </div>
+                  {renderHolesSceneSchematicPreview(
+                    holesPreviewModel.scene,
+                    (holeId) => setHoveredHolePointId(String(holeId)),
+                    () => setHoveredHolePointId(""),
+                    (holeId) => setSelectedHolePointId(String(holeId)),
+                    { showHeader: false },
                   )}
                   <div className="holes-preview-material-planes" aria-label={t.holeWorkspacePreview3dTitle}>
                     <div className="holes-preview-material-planes-title">Площини матеріалу</div>
