@@ -210,8 +210,8 @@ def _open_paramiko_client(
             "timeout": 10,
             "banner_timeout": 10,
             "auth_timeout": 10,
-            "allow_agent": False,
-            "look_for_keys": False,
+            "allow_agent": True,
+            "look_for_keys": True,
         }
 
         if key_path:
@@ -221,6 +221,12 @@ def _open_paramiko_client(
 
         client.connect(**connect_kwargs)
         return client, None
+    except paramiko.AuthenticationException:
+        return (
+            None,
+            "Authentication failed. Перевір SSH key або SSH password для цього сервера. "
+            "Якщо пароль не зберігається, введи його ще раз перед оновленням.",
+        )
     except Exception as exc:  # pragma: no cover - depends on remote host
         return None, str(exc)
 
