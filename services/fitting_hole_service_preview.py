@@ -3,6 +3,9 @@ from __future__ import annotations
 from collections import OrderedDict
 from typing import Any
 
+from database.repositories.fitting_hole_service_rule_repository import (
+    resolve_fitting_hole_service_rule,
+)
 from database.repositories.service_catalog_repository import (
     list_calculable_service_catalog_items,
 )
@@ -116,9 +119,9 @@ def _score_service_candidate(service_item: dict[str, Any], terms: list[str]) -> 
     return score
 
 
-def _find_matched_service(operation: str, services: list[dict[str, Any]]) -> tuple[dict[str, Any] | None, str]:
+def _find_auto_service(operation: str, services: list[dict[str, Any]]) -> dict[str, Any] | None:
     if operation == "mark":
-        return None, "not_calculable"
+        return None
 
     terms = _SERVICE_MATCH_TERMS.get(operation, _SERVICE_MATCH_TERMS["drill"])
     best_service: dict[str, Any] | None = None
@@ -138,9 +141,35 @@ def _find_matched_service(operation: str, services: list[dict[str, Any]]) -> tup
             best_score = score
 
     if best_service is None or best_score <= 0:
-        return None, "not_found"
+        return None
 
-    return best_service, "matched"
+    return best_service
+
+
+def _select_service_match(
+    operation: str,
+    diameter_mm: float | None,
+    depth_mm: float | None,
+    services: list[dict[str, Any]],
+) -> tuple[dict[str, Any] | None, str]:
+    if operation == "mark":
+        return None, "none"
+
+    rule = resolve_fitting_hole_service_rule(
+        operation=operation,
+        diameter_mm=diameter_mm,
+        depth_mm=depth_mm,
+    )
+    if rule:
+        service_item = rule.get("service_catalog_item")
+        if service_item and service_item.get("is_active") and service_item.get("is_calculable"):
+            return service_item, "rule"
+
+    auto_service = _find_auto_service(operation, services)
+    if auto_service:
+        return auto_service, "auto"
+
+    return None, "none"
 
 
 def build_fitting_hole_service_preview(
@@ -181,7 +210,13 @@ def build_fitting_hole_service_preview(
         group_key = _group_key(operation, diameter_mm, depth_mm)
         group = grouped_points.get(group_key)
         if group is None:
-            matched_service, match_status = _find_matched_service(operation, calculable_services)
+            matched_service, match_source = _select_service_match(
+                operation,
+                diameter_mm,
+                depth_mm,
+                calculable_services,
+            )
+            match_status = "not_calculable" if operation == "mark" else ("matched" if matched_service else "not_found")
             group = {
                 "operation": operation,
                 "label": preset.get("label") or "Операція",
@@ -199,6 +234,7 @@ def build_fitting_hole_service_preview(
                 "matched_service_currency": None,
                 "matched_service_source": None,
                 "match_status": match_status,
+                "match_source": match_source,
             }
             if matched_service:
                 group["matched_service_id"] = matched_service.get("id")

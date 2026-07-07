@@ -12,6 +12,10 @@ from schemas.fitting_holes import (
     FittingHoleBundleCreateSchema,
     FittingHoleBundleMountingVariantUpdateSchema,
     FittingHoleBundleUpdateSchema,
+    FittingHoleServiceRuleCreateSchema,
+    FittingHoleServiceRuleListResponseSchema,
+    FittingHoleServiceRuleOperationResponseSchema,
+    FittingHoleServiceRuleUpdateSchema,
     FittingHolePointCreate,
     FittingHoleServicePreviewResponseSchema,
     FittingHolePointListResponseSchema,
@@ -23,6 +27,12 @@ from schemas.fitting_holes import (
     FittingHoleTemplateListResponseSchema,
     FittingHoleTemplateOperationResponseSchema,
     FittingHoleTemplateUpdate,
+)
+from database.repositories.fitting_hole_service_rule_repository import (
+    create_fitting_hole_service_rule,
+    deactivate_fitting_hole_service_rule,
+    list_fitting_hole_service_rules,
+    update_fitting_hole_service_rule,
 )
 from services.fitting_holes_service import FittingHolesService
 from services.fitting_hole_service_preview import build_fitting_hole_service_preview
@@ -78,6 +88,26 @@ def _serialize_point(point) -> dict:
         "quantity": point.quantity,
         "mirrored": bool(point.mirrored),
         "notes": point.notes,
+    }
+
+
+def _serialize_rule(rule) -> dict:
+    return {
+        "id": rule["id"],
+        "operation": rule["operation"],
+        "diameter_min_mm": rule.get("diameter_min_mm"),
+        "diameter_max_mm": rule.get("diameter_max_mm"),
+        "depth_min_mm": rule.get("depth_min_mm"),
+        "depth_max_mm": rule.get("depth_max_mm"),
+        "service_catalog_item_id": rule["service_catalog_item_id"],
+        "source": rule.get("source"),
+        "city": rule.get("city"),
+        "is_active": bool(rule.get("is_active", True)),
+        "priority": int(rule.get("priority", 0) or 0),
+        "notes": rule.get("notes"),
+        "created_at": rule.get("created_at"),
+        "updated_at": rule.get("updated_at"),
+        "service_catalog_item": rule.get("service_catalog_item"),
     }
 
 
@@ -487,6 +517,98 @@ async def get_fitting_hole_service_preview_route(
     return {
         "success": True,
         **preview,
+    }
+
+
+@router.get(
+    "/service-rules",
+    response_model=FittingHoleServiceRuleListResponseSchema,
+)
+async def list_fitting_hole_service_rules_route(
+    current_user = Depends(require_fitting_holes_editor),
+):
+    rules = list_fitting_hole_service_rules()
+    return {
+        "success": True,
+        "rules": [
+            _serialize_rule(rule)
+            for rule in rules
+        ],
+    }
+
+
+@router.post(
+    "/service-rules",
+    response_model=FittingHoleServiceRuleOperationResponseSchema,
+)
+async def create_fitting_hole_service_rule_route(
+    payload: FittingHoleServiceRuleCreateSchema,
+    current_user = Depends(require_fitting_holes_editor),
+):
+    try:
+        rule = create_fitting_hole_service_rule(
+            payload.model_dump(exclude_unset=True),
+        )
+    except ValueError as error:
+        _raise_service_error(error)
+
+    return {
+        "success": True,
+        "rule": _serialize_rule(rule),
+    }
+
+
+@router.patch(
+    "/service-rules/{rule_id}",
+    response_model=FittingHoleServiceRuleOperationResponseSchema,
+)
+async def update_fitting_hole_service_rule_route(
+    rule_id: int,
+    payload: FittingHoleServiceRuleUpdateSchema,
+    current_user = Depends(require_fitting_holes_editor),
+):
+    try:
+        rule = update_fitting_hole_service_rule(
+            rule_id,
+            payload.model_dump(exclude_unset=True),
+        )
+    except ValueError as error:
+        _raise_service_error(error)
+
+    if not rule:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Service rule with id={rule_id} does not exist",
+        )
+
+    return {
+        "success": True,
+        "rule": _serialize_rule(rule),
+    }
+
+
+@router.delete(
+    "/service-rules/{rule_id}",
+    response_model=FittingHoleServiceRuleOperationResponseSchema,
+)
+async def delete_fitting_hole_service_rule_route(
+    rule_id: int,
+    current_user = Depends(require_fitting_holes_editor),
+):
+    try:
+        rule = deactivate_fitting_hole_service_rule(rule_id)
+    except ValueError as error:
+        _raise_service_error(error)
+
+    if not rule:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Service rule with id={rule_id} does not exist",
+        )
+
+    return {
+        "success": True,
+        "rule": _serialize_rule(rule),
     }
 
 

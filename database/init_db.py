@@ -30,6 +30,9 @@ from database.models.catalog_item import (
 from database.models.service_catalog_item import (
     ServiceCatalogItemModel
 )
+from database.models.fitting_hole_service_rule import (
+    FittingHoleServiceRuleModel
+)
 from database.models.material import (
     MaterialModel
 )

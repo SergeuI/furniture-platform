@@ -255,6 +255,35 @@ export async function getFittingHoleServicePreview(token, templateId) {
   });
 }
 
+export async function listFittingHoleServiceRules(token) {
+  return request("/fitting-holes/service-rules", {
+    headers: authHeaders(token),
+  });
+}
+
+export async function createFittingHoleServiceRule(token, payload) {
+  return request("/fitting-holes/service-rules", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateFittingHoleServiceRule(token, ruleId, payload) {
+  return request(`/fitting-holes/service-rules/${ruleId}`, {
+    method: "PATCH",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteFittingHoleServiceRule(token, ruleId) {
+  return request(`/fitting-holes/service-rules/${ruleId}`, {
+    method: "DELETE",
+    headers: authHeaders(token),
+  });
+}
+
 export async function createFittingHoleTemplate(token, payload) {
   return request("/fitting-holes/templates", {
     method: "POST",

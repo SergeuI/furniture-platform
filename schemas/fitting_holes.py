@@ -297,6 +297,7 @@ class FittingHoleServicePreviewGroupSchema(BaseModel):
     matched_service_currency: str | None = None
     matched_service_source: str | None = None
     match_status: str = "not_found"
+    match_source: str = "none"
 
 
 class FittingHoleServicePreviewSummarySchema(BaseModel):
@@ -317,4 +318,99 @@ class FittingHoleServicePreviewResponseSchema(BaseModel):
         default_factory=list
     )
     summary: FittingHoleServicePreviewSummarySchema | None = None
+    error: str | None = None
+
+
+class FittingHoleServiceRuleBaseSchema(BaseModel):
+    operation: str = Field(
+        min_length=1,
+        max_length=64,
+    )
+    diameter_min_mm: float | None = None
+    diameter_max_mm: float | None = None
+    depth_min_mm: float | None = None
+    depth_max_mm: float | None = None
+    service_catalog_item_id: str = Field(
+        min_length=1,
+        max_length=64,
+    )
+    source: str | None = Field(
+        default=None,
+        max_length=64,
+    )
+    city: str | None = Field(
+        default=None,
+        max_length=64,
+    )
+    is_active: bool = True
+    priority: int = 0
+    notes: str | None = Field(
+        default=None,
+        max_length=5000,
+    )
+
+
+class FittingHoleServiceRuleCreateSchema(FittingHoleServiceRuleBaseSchema):
+    pass
+
+
+class FittingHoleServiceRuleUpdateSchema(BaseModel):
+    operation: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=64,
+    )
+    diameter_min_mm: float | None = None
+    diameter_max_mm: float | None = None
+    depth_min_mm: float | None = None
+    depth_max_mm: float | None = None
+    service_catalog_item_id: str | None = Field(
+        default=None,
+        max_length=64,
+    )
+    source: str | None = Field(
+        default=None,
+        max_length=64,
+    )
+    city: str | None = Field(
+        default=None,
+        max_length=64,
+    )
+    is_active: bool | None = None
+    priority: int | None = None
+    notes: str | None = Field(
+        default=None,
+        max_length=5000,
+    )
+
+
+class FittingHoleServiceRuleResponseSchema(BaseModel):
+    id: int
+    operation: str
+    diameter_min_mm: float | None = None
+    diameter_max_mm: float | None = None
+    depth_min_mm: float | None = None
+    depth_max_mm: float | None = None
+    service_catalog_item_id: str
+    source: str | None = None
+    city: str | None = None
+    is_active: bool = True
+    priority: int = 0
+    notes: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    service_catalog_item: dict | None = None
+
+
+class FittingHoleServiceRuleListResponseSchema(BaseModel):
+    success: bool
+    rules: List[FittingHoleServiceRuleResponseSchema] = Field(
+        default_factory=list
+    )
+    error: str | None = None
+
+
+class FittingHoleServiceRuleOperationResponseSchema(BaseModel):
+    success: bool
+    rule: FittingHoleServiceRuleResponseSchema | None = None
     error: str | None = None

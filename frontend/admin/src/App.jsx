@@ -1594,6 +1594,9 @@ const TRANSLATIONS = {
     holeServicePreviewLoading: "Loading preliminary service estimate...",
     holeServicePreviewMarkNote: "Marking points are not included in the estimate.",
     holeServicePreviewPointCount: "Points",
+    holeServicePreviewMatchAuto: "Matched automatically",
+    holeServicePreviewMatchNone: "Service not found",
+    holeServicePreviewMatchRule: "Matched by rule",
     holeServicePreviewPreliminary: "Preliminary",
     holeServicePreviewServiceNotFound: "Service not found in the catalog.",
     holeServicePreviewServicePrice: "Price",
@@ -2148,6 +2151,9 @@ Object.assign(TRANSLATIONS.uk, {
   holeServicePreviewMarkNote:
     "Мітки не додаються до кошторису.",
   holeServicePreviewPointCount: "Точки",
+  holeServicePreviewMatchAuto: "Знайдено автоматично",
+  holeServicePreviewMatchNone: "Послугу не знайдено",
+  holeServicePreviewMatchRule: "Знайдено за правилом",
   holeServicePreviewPreliminary: "Попередньо",
   holeServicePreviewServiceNotFound: "Послугу не знайдено в довіднику.",
   holeServicePreviewServicePrice: "Ціна",
@@ -2558,6 +2564,9 @@ Object.assign(TRANSLATIONS.en, {
   holeServicePreviewMarkNote:
     "Marking points are not included in the estimate.",
   holeServicePreviewPointCount: "Points",
+  holeServicePreviewMatchAuto: "Matched automatically",
+  holeServicePreviewMatchNone: "Service not found",
+  holeServicePreviewMatchRule: "Matched by rule",
   holeServicePreviewPreliminary: "Preliminary",
   holeServicePreviewServiceNotFound: "Service not found in the catalog.",
   holeServicePreviewServicePrice: "Price",
@@ -15298,6 +15307,13 @@ export default function App() {
                                 <strong>{groupLabel}</strong>
                                 <span className={`service-tree-badge${group?.is_calculable ? " success" : " subtle"}`}>
                                   {group?.is_calculable ? t.holeServicePreviewCalculable : t.holeServicePreviewMarkNote}
+                                </span>
+                                <span className={`service-tree-badge${group?.match_source === "rule" ? " success" : " subtle"}`}>
+                                  {group?.match_source === "rule"
+                                    ? t.holeServicePreviewMatchRule
+                                    : group?.match_source === "auto"
+                                      ? t.holeServicePreviewMatchAuto
+                                      : t.holeServicePreviewMatchNone}
                                 </span>
                               </div>
                               <div className="holes-service-preview-item-meta">
