@@ -290,6 +290,13 @@ class FittingHoleServicePreviewGroupSchema(BaseModel):
     point_count: int = 0
     is_calculable: bool = True
     note: str | None = None
+    matched_service_id: str | None = None
+    matched_service_name: str | None = None
+    matched_service_unit: str | None = None
+    matched_service_price: float | None = None
+    matched_service_currency: str | None = None
+    matched_service_source: str | None = None
+    match_status: str = "not_found"
 
 
 class FittingHoleServicePreviewSummarySchema(BaseModel):

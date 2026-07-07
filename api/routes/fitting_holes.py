@@ -478,7 +478,11 @@ async def get_fitting_hole_service_preview_route(
 
         points = service.list_hole_points(template_id)
 
-    preview = build_fitting_hole_service_preview(template, points)
+    preview = build_fitting_hole_service_preview(
+        template,
+        points,
+        current_user_id=getattr(current_user, "id", None),
+    )
 
     return {
         "success": True,

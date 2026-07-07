@@ -3,6 +3,10 @@ from __future__ import annotations
 from collections import OrderedDict
 from typing import Any
 
+from database.repositories.service_catalog_repository import (
+    list_calculable_service_catalog_items,
+)
+
 
 _OPERATION_PRESETS = {
     "blind_drill": {
@@ -32,6 +36,14 @@ _OPERATION_PRESETS = {
     },
 }
 
+_SERVICE_MATCH_TERMS = {
+    "blind_drill": ["свердління", "присадка", "drilling", "prisadka", "drill"],
+    "through_drill": ["свердління", "присадка", "drilling", "prisadka", "drill"],
+    "drill": ["свердління", "присадка", "drilling", "prisadka", "drill"],
+    "milling": ["фрезерування", "milling"],
+    "slot": ["паз", "фрезерування", "milling", "groove", "slot"],
+}
+
 
 def _safe_int(value: Any, default: int = 0) -> int:
     try:
@@ -56,7 +68,98 @@ def _group_key(operation: str, diameter_mm: float | None, depth_mm: float | None
     return f"{operation}|{diameter_part}|{depth_part}"
 
 
-def build_fitting_hole_service_preview(template, points: list[Any] | None) -> dict[str, Any]:
+def _normalize_text(value: Any) -> str:
+    return " ".join(str(value or "").strip().lower().split())
+
+
+def _build_service_haystack(service_item: dict[str, Any]) -> str:
+    return " ".join(
+        part
+        for part in (
+            service_item.get("name"),
+            service_item.get("slug"),
+            service_item.get("folder_path"),
+            service_item.get("source"),
+            service_item.get("article"),
+        )
+        if part
+    ).lower()
+
+
+def _score_service_candidate(service_item: dict[str, Any], terms: list[str]) -> int:
+    haystack = _build_service_haystack(service_item)
+    if not haystack:
+        return 0
+
+    score = 0
+    slug = _normalize_text(service_item.get("slug"))
+    folder_path = _normalize_text(service_item.get("folder_path"))
+    name = _normalize_text(service_item.get("name"))
+    source = _normalize_text(service_item.get("source"))
+
+    for term in terms:
+        normalized_term = _normalize_text(term)
+        if not normalized_term:
+            continue
+
+        if normalized_term == slug or normalized_term == folder_path:
+            score += 100
+        elif normalized_term in slug or normalized_term in folder_path:
+            score += 60
+        elif normalized_term in name:
+            score += 40
+        elif normalized_term in source:
+            score += 20
+        elif normalized_term in haystack:
+            score += 10
+
+    return score
+
+
+def _find_matched_service(operation: str, services: list[dict[str, Any]]) -> tuple[dict[str, Any] | None, str]:
+    if operation == "mark":
+        return None, "not_calculable"
+
+    terms = _SERVICE_MATCH_TERMS.get(operation, _SERVICE_MATCH_TERMS["drill"])
+    best_service: dict[str, Any] | None = None
+    best_score = 0
+
+    for service_item in services:
+        if service_item.get("item_type") != "service":
+            continue
+        if not service_item.get("is_active"):
+            continue
+        if not service_item.get("is_calculable"):
+            continue
+
+        score = _score_service_candidate(service_item, terms)
+        if score > best_score:
+            best_service = service_item
+            best_score = score
+
+    if best_service is None or best_score <= 0:
+        return None, "not_found"
+
+    return best_service, "matched"
+
+
+def build_fitting_hole_service_preview(
+    template,
+    points: list[Any] | None,
+    current_user_id: str | None = None,
+) -> dict[str, Any]:
+    calculable_services = [
+        *list_calculable_service_catalog_items(
+            source="viyar",
+            user_id=current_user_id,
+        ),
+        *list_calculable_service_catalog_items(
+            source="manual",
+            user_id=current_user_id,
+            owner_user_id=current_user_id,
+        ),
+    ]
+
     grouped_points: "OrderedDict[str, dict[str, Any]]" = OrderedDict()
 
     for point in points or []:
@@ -78,6 +181,7 @@ def build_fitting_hole_service_preview(template, points: list[Any] | None) -> di
         group_key = _group_key(operation, diameter_mm, depth_mm)
         group = grouped_points.get(group_key)
         if group is None:
+            matched_service, match_status = _find_matched_service(operation, calculable_services)
             group = {
                 "operation": operation,
                 "label": preset.get("label") or "Операція",
@@ -88,7 +192,21 @@ def build_fitting_hole_service_preview(template, points: list[Any] | None) -> di
                 "point_count": 0,
                 "is_calculable": bool(preset.get("is_calculable", True)),
                 "note": preset.get("note"),
+                "matched_service_id": None,
+                "matched_service_name": None,
+                "matched_service_unit": None,
+                "matched_service_price": None,
+                "matched_service_currency": None,
+                "matched_service_source": None,
+                "match_status": match_status,
             }
+            if matched_service:
+                group["matched_service_id"] = matched_service.get("id")
+                group["matched_service_name"] = matched_service.get("name")
+                group["matched_service_unit"] = matched_service.get("unit")
+                group["matched_service_price"] = matched_service.get("effective_price")
+                group["matched_service_currency"] = matched_service.get("effective_currency")
+                group["matched_service_source"] = matched_service.get("source")
             grouped_points[group_key] = group
 
         group["quantity"] += max(_safe_int(getattr(point, "quantity", 1), 1), 1)

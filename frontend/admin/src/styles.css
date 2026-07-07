@@ -2547,6 +2547,26 @@ tbody tr.selected {
   line-height: 1.35;
 }
 
+.holes-service-preview-service {
+  display: grid;
+  gap: 6px;
+}
+
+.holes-service-preview-service strong {
+  color: #24343d;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.holes-service-preview-service-meta {
+  color: #607182;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
 .holes-service-preview-note {
   color: #8a5a2b;
   font-size: 12px;

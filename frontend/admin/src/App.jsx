@@ -1035,6 +1035,23 @@ function formatMetricValue(value) {
     : numericValue.toFixed(1).replace(/\.0$/, "");
 }
 
+function formatMoneyValue(value) {
+  if (value === null || value === undefined || value === "") {
+    return "";
+  }
+
+  const numericValue = Number(String(value).replace(",", "."));
+
+  if (!Number.isFinite(numericValue)) {
+    return String(value);
+  }
+
+  return numericValue
+    .toFixed(2)
+    .replace(/\.00$/, "")
+    .replace(/(\.\d)0$/, "$1");
+}
+
 function formatMaterialImportDiagnostic(value, limit = 280) {
   const normalized = String(value || "").replace(/\s+/g, " ").trim();
 
@@ -1577,6 +1594,11 @@ const TRANSLATIONS = {
     holeServicePreviewLoading: "Loading preliminary service estimate...",
     holeServicePreviewMarkNote: "Marking points are not included in the estimate.",
     holeServicePreviewPointCount: "Points",
+    holeServicePreviewPreliminary: "Preliminary",
+    holeServicePreviewServiceNotFound: "Service not found in the catalog.",
+    holeServicePreviewServicePrice: "Price",
+    holeServicePreviewServiceSource: "Source",
+    holeServicePreviewServiceUnit: "Unit",
     holeServicePreviewTitle: "Preliminary service estimate",
     holeTabDescription: "View hole points for the selected fitting and mounting variant.",
     holeTabPreview: "2D preview",
@@ -2126,6 +2148,11 @@ Object.assign(TRANSLATIONS.uk, {
   holeServicePreviewMarkNote:
     "Мітки не додаються до кошторису.",
   holeServicePreviewPointCount: "Точки",
+  holeServicePreviewPreliminary: "Попередньо",
+  holeServicePreviewServiceNotFound: "Послугу не знайдено в довіднику.",
+  holeServicePreviewServicePrice: "Ціна",
+  holeServicePreviewServiceSource: "Джерело",
+  holeServicePreviewServiceUnit: "Одиниця",
   holeServicePreviewTitle: "Попередній розрахунок послуг",
   assemblyClearSelection: "\u041e\u0447\u0438\u0441\u0442\u0438\u0442\u0438 \u0432\u0438\u0431\u0456\u0440",
   assemblyFocusSelected: "\u0424\u043e\u043a\u0443\u0441 \u043d\u0430 \u0434\u0435\u0442\u0430\u043b\u0456",
@@ -2531,6 +2558,11 @@ Object.assign(TRANSLATIONS.en, {
   holeServicePreviewMarkNote:
     "Marking points are not included in the estimate.",
   holeServicePreviewPointCount: "Points",
+  holeServicePreviewPreliminary: "Preliminary",
+  holeServicePreviewServiceNotFound: "Service not found in the catalog.",
+  holeServicePreviewServicePrice: "Price",
+  holeServicePreviewServiceSource: "Source",
+  holeServicePreviewServiceUnit: "Unit",
   holeServicePreviewTitle: "Preliminary service estimate",
   loading: "Loading",
   home: "Home",
@@ -15250,6 +15282,12 @@ export default function App() {
                           const groupDepth = group?.depth_mm ?? null;
                           const groupQuantity = Number(group?.quantity || 0);
                           const groupPointCount = Number(group?.point_count || 0);
+                          const matchedServicePrice = group?.matched_service_price ?? null;
+                          const matchedServiceCurrency = String(group?.matched_service_currency || "").trim();
+                          const matchedServiceTotal =
+                            matchedServicePrice === null || matchedServicePrice === undefined
+                              ? null
+                              : Number(groupQuantity || 0) * Number(matchedServicePrice || 0);
 
                           return (
                             <article
@@ -15268,6 +15306,29 @@ export default function App() {
                                 <span>{t.holeServicePreviewPointCount}: {groupPointCount}</span>
                                 <span>{t.holePointQuantity}: {groupQuantity} {group?.unit || "шт."}</span>
                               </div>
+                              {group?.match_status === "matched" ? (
+                                <div className="holes-service-preview-service">
+                                  <strong>{group?.matched_service_name || t.notSet}</strong>
+                                  <div className="holes-service-preview-service-meta">
+                                    <span>{t.holeServicePreviewServiceUnit}: {group?.matched_service_unit || t.notSet}</span>
+                                    <span>{t.holeServicePreviewServiceSource}: {group?.matched_service_source || t.notSet}</span>
+                                    {matchedServicePrice !== null && matchedServicePrice !== undefined ? (
+                                      <span>
+                                        {t.holeServicePreviewServicePrice}: {formatMoneyValue(matchedServicePrice)}{" "}
+                                        {matchedServiceCurrency || ""}
+                                      </span>
+                                    ) : null}
+                                    {matchedServiceTotal !== null && matchedServicePrice !== null && matchedServicePrice !== undefined ? (
+                                      <span>
+                                        {t.holeServicePreviewPreliminary}: {formatMoneyValue(matchedServiceTotal)}{" "}
+                                        {matchedServiceCurrency || ""}
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                </div>
+                              ) : group?.match_status === "not_found" ? (
+                                <p className="holes-service-preview-note">{t.holeServicePreviewServiceNotFound}</p>
+                              ) : null}
                               {group?.note ? (
                                 <p className="holes-service-preview-note">{group.note}</p>
                               ) : null}
