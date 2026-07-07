@@ -173,6 +173,17 @@ class FittingHolesRepository:
 
         return templates
 
+    def delete_templates_by_bundle_key(self, bundle_key: str) -> int:
+        templates = self.list_templates_by_bundle_key(bundle_key)
+        if not templates:
+            return 0
+
+        for template in templates:
+            self.session.delete(template)
+
+        self._commit()
+        return len(templates)
+
     def deactivate_template(
         self,
         template_id: int,

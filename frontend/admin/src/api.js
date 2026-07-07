@@ -206,6 +206,21 @@ export async function getFittingHoleBundle(token, bundleKey) {
   });
 }
 
+export async function updateFittingHoleBundle(token, bundleKey, payload) {
+  return request(`/fitting-holes/bundles/${encodeURIComponent(bundleKey)}`, {
+    method: "PATCH",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteFittingHoleBundle(token, bundleKey) {
+  return request(`/fitting-holes/bundles/${encodeURIComponent(bundleKey)}`, {
+    method: "DELETE",
+    headers: authHeaders(token),
+  });
+}
+
 export async function createFittingHoleBundle(token, payload) {
   return request("/fitting-holes/bundles", {
     method: "POST",

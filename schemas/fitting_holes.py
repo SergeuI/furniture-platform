@@ -185,6 +185,13 @@ class FittingHoleBundleMountingVariantUpdateSchema(BaseModel):
     )
 
 
+class FittingHoleBundleUpdateSchema(BaseModel):
+    bundle_name: str = Field(
+        min_length=1,
+        max_length=255,
+    )
+
+
 class FittingHolePointCreate(BaseModel):
     template_id: int | None = None
     label: str | None = Field(

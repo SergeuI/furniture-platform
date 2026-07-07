@@ -6091,6 +6091,13 @@ tbody tr.selected {
   justify-content: space-between;
 }
 
+.fitting-bundle-item-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .hole-bundle-details-list {
   display: grid;
   gap: 10px;

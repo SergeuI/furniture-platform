@@ -54,6 +54,7 @@ import {
   createCatalogItem,
   createUser,
   deleteFitting,
+  deleteFittingHoleBundle,
   deleteFittingHolePoint,
   deleteFittingHoleTemplate,
   deleteMaterial,
@@ -93,6 +94,7 @@ import {
   rollbackProject,
   resetUserPassword,
   updateCatalogItem,
+  updateFittingHoleBundle,
   updateFittingHoleBundleMountingVariant,
   updateFittingHoleTemplate,
   updateCatalogItemActive,
@@ -1614,7 +1616,21 @@ const TRANSLATIONS = {
     fittingBundlesTemplatesFew: "positions",
     fittingBundlesTemplatesMany: "positions",
     fittingBundleKey: "Key",
+    fittingBundleEdit: "Edit",
+    fittingBundleDelete: "Delete",
+    fittingBundleNotFound: "Fitting bundle not found.",
     fittingBundleView: "View",
+    fittingBundleUpdateTitle: "Edit fitting bundle",
+    fittingBundleUpdateDescription: "Change the bundle name for all included templates.",
+    fittingBundleNameLabel: "Bundle name",
+    fittingBundleSave: "Save changes",
+    fittingBundleUpdateSuccess: "Fitting bundle updated.",
+    fittingBundleUpdateFailed: "Unable to update fitting bundle",
+    fittingBundleDeleteTitle: "Delete fitting bundle",
+    fittingBundleDeleteConfirm:
+      "Delete fitting bundle? Its templates and hole points will be deleted too.",
+    fittingBundleDeleteSuccess: "Fitting bundle deleted.",
+    fittingBundleDeleteFailed: "Unable to delete fitting bundle",
     fittingBundleDetailsTitle: "Bundle contents",
     fittingBundleDetailsDescription: "What this bundle contains",
     fittingBundleDetailsEmpty: "No bundle contents yet.",
@@ -2155,7 +2171,22 @@ Object.assign(TRANSLATIONS.uk, {
   fittingBundlesTemplatesFew: "\u043f\u043e\u0437\u0438\u0446\u0456\u0457",
   fittingBundlesTemplatesMany: "\u043f\u043e\u0437\u0438\u0446\u0456\u0439",
   fittingBundleKey: "\u041a\u043b\u044e\u0447",
+  fittingBundleEdit: "\u0420\u0435\u0434\u0430\u0433\u0443\u0432\u0430\u0442\u0438",
+  fittingBundleDelete: "\u0412\u0438\u0434\u0430\u043b\u0438\u0442\u0438",
+  fittingBundleNotFound: "\u041a\u043e\u043c\u043f\u043b\u0435\u043a\u0442 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0438 \u043d\u0435 \u0437\u043d\u0430\u0439\u0434\u0435\u043d\u043e.",
   fittingBundleView: "\u041f\u0435\u0440\u0435\u0433\u043b\u044f\u043d\u0443\u0442\u0438",
+  fittingBundleUpdateTitle: "\u0420\u0435\u0434\u0430\u0433\u0443\u0432\u0430\u043d\u043d\u044f \u043a\u043e\u043c\u043f\u043b\u0435\u043a\u0442\u0443 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0438",
+  fittingBundleUpdateDescription:
+    "\u0417\u043c\u0456\u043d\u0456\u0442\u044c \u043d\u0430\u0437\u0432\u0443 \u043a\u043e\u043c\u043f\u043b\u0435\u043a\u0442\u0443 \u0434\u043b\u044f \u0432\u0441\u0456\u0445 \u0432\u043a\u043b\u044e\u0447\u0435\u043d\u0438\u0445 \u0448\u0430\u0431\u043b\u043e\u043d\u0456\u0432.",
+  fittingBundleNameLabel: "\u041d\u0430\u0437\u0432\u0430 \u043a\u043e\u043c\u043f\u043b\u0435\u043a\u0442\u0443",
+  fittingBundleSave: "\u0417\u0431\u0435\u0440\u0435\u0433\u0442\u0438 \u0437\u043c\u0456\u043d\u0438",
+  fittingBundleUpdateSuccess: "\u041a\u043e\u043c\u043f\u043b\u0435\u043a\u0442 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0438 \u043e\u043d\u043e\u0432\u043b\u0435\u043d\u043e.",
+  fittingBundleUpdateFailed: "\u041d\u0435 \u0432\u0434\u0430\u043b\u043e\u0441\u044f \u043e\u043d\u043e\u0432\u0438\u0442\u0438 \u043a\u043e\u043c\u043f\u043b\u0435\u043a\u0442 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0438",
+  fittingBundleDeleteTitle: "\u0412\u0438\u0434\u0430\u043b\u0438\u0442\u0438 \u043a\u043e\u043c\u043f\u043b\u0435\u043a\u0442 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0438",
+  fittingBundleDeleteConfirm:
+    "\u0412\u0438\u0434\u0430\u043b\u0438\u0442\u0438 \u043a\u043e\u043c\u043f\u043b\u0435\u043a\u0442 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0438? \u0420\u0430\u0437\u043e\u043c \u0456\u0437 \u043a\u043e\u043c\u043f\u043b\u0435\u043a\u0442\u043e\u043c \u0431\u0443\u0434\u0435 \u0432\u0438\u0434\u0430\u043b\u0435\u043d\u043e \u0439\u043e\u0433\u043e \u0448\u0430\u0431\u043b\u043e\u043d\u0438 \u0442\u0430 \u0442\u043e\u0447\u043a\u0438 \u043f\u0440\u0438\u0441\u0430\u0434\u043a\u0438.",
+  fittingBundleDeleteSuccess: "\u041a\u043e\u043c\u043f\u043b\u0435\u043a\u0442 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0438 \u0432\u0438\u0434\u0430\u043b\u0435\u043d\u043e.",
+  fittingBundleDeleteFailed: "\u041d\u0435 \u0432\u0434\u0430\u043b\u043e\u0441\u044f \u0432\u0438\u0434\u0430\u043b\u0438\u0442\u0438 \u043a\u043e\u043c\u043f\u043b\u0435\u043a\u0442 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0438",
   fittingBundleDetailsTitle: "\u0421\u043a\u043b\u0430\u0434 \u043a\u043e\u043c\u043f\u043b\u0435\u043a\u0442\u0443",
   fittingBundleDetailsDescription: "\u0429\u043e \u0432\u0445\u043e\u0434\u0438\u0442\u044c \u0443 \u0446\u0435\u0439 \u043a\u043e\u043c\u043f\u043b\u0435\u043a\u0442",
   fittingBundleDetailsEmpty: "\u0423 \u0446\u044c\u043e\u043c\u0443 \u043a\u043e\u043c\u043f\u043b\u0435\u043a\u0442\u0456 \u0449\u0435 \u043d\u0435\u043c\u0430\u0454 \u0437\u043c\u0456\u0441\u0442\u0443.",
@@ -4890,6 +4921,11 @@ export default function App() {
   const [holeBundleModalViewMode, setHoleBundleModalViewMode] = useState("list");
   const [holeBundleDraftItemIds, setHoleBundleDraftItemIds] = useState([]);
   const [holeBundleSelectedItemIds, setHoleBundleSelectedItemIds] = useState([]);
+  const [holeBundleEditOpen, setHoleBundleEditOpen] = useState(false);
+  const [holeBundleEditBundleKey, setHoleBundleEditBundleKey] = useState("");
+  const [holeBundleEditName, setHoleBundleEditName] = useState("");
+  const [holeBundleEditSaving, setHoleBundleEditSaving] = useState(false);
+  const [holeBundleEditError, setHoleBundleEditError] = useState("");
   const [holeActiveBundleKey, setHoleActiveBundleKey] = useState("");
   const [holeActiveBundleName, setHoleActiveBundleName] = useState("");
   const [holeActiveBundleMountingVariantKey, setHoleActiveBundleMountingVariantKey] = useState("");
@@ -7640,6 +7676,46 @@ export default function App() {
     setHoleBundleDraftItemIds(holeBundleSelectedItemIds);
   }
 
+  function openHoleBundleEditForm(bundle) {
+    const bundleKey = String(bundle?.bundle_key || "").trim();
+    const bundleName = String(bundle?.bundle_name || "").trim();
+
+    if (!bundleKey || !bundleName) {
+      setStatus({ message: t.fittingBundleNotFound, tone: "error" });
+      return;
+    }
+
+    setHoleBundleEditBundleKey(bundleKey);
+    setHoleBundleEditName(bundleName);
+    setHoleBundleEditError("");
+    setHoleBundleEditOpen(true);
+  }
+
+  function closeHoleBundleEditForm() {
+    setHoleBundleEditOpen(false);
+    setHoleBundleEditBundleKey("");
+    setHoleBundleEditName("");
+    setHoleBundleEditError("");
+    setHoleBundleEditSaving(false);
+  }
+
+  function openDeleteHoleBundleConfirm(bundle) {
+    const bundleKey = String(bundle?.bundle_key || "").trim();
+
+    if (!bundleKey) {
+      setStatus({ message: t.fittingBundleNotFound, tone: "error" });
+      return;
+    }
+
+    setConfirmAction({
+      type: "deleteHoleBundle",
+      title: t.fittingBundleDeleteTitle,
+      message: t.fittingBundleDeleteConfirm,
+      confirmLabel: t.delete,
+      targetId: bundleKey,
+    });
+  }
+
   function clearOpenedHoleBundle() {
     setHoleActiveBundleKey("");
     setHoleActiveBundleName("");
@@ -7650,6 +7726,90 @@ export default function App() {
     setHoleBundleSelectedItemIds([]);
     setHoleBundleDraftItemIds([]);
     handleHoleFittingCategoryChange("");
+  }
+
+  async function handleHoleBundleEditSubmit(event) {
+    event.preventDefault();
+
+    const bundleKey = String(holeBundleEditBundleKey || "").trim();
+    const bundleName = String(holeBundleEditName || "").trim();
+
+    if (!bundleKey || !bundleName) {
+      setHoleBundleEditError(t.fittingBundleNotFound);
+      return;
+    }
+
+    setHoleBundleEditSaving(true);
+    try {
+      const result = await updateFittingHoleBundle(token, bundleKey, {
+        bundle_name: bundleName,
+      });
+
+      if (!result.success) {
+        const errorMessage =
+          result.status === 404 ? t.fittingBundleNotFound : result.error || t.fittingBundleUpdateFailed;
+        setHoleBundleEditError(errorMessage);
+        setStatus({ message: errorMessage, tone: "error" });
+        return;
+      }
+
+      if (String(holeActiveBundleKey || "").trim() === bundleKey) {
+        setHoleActiveBundleName(bundleName);
+        setHoleBundleName(bundleName);
+        setHoleBundleDetails((current) =>
+          current && String(current.bundle_key || "").trim() === bundleKey
+            ? {
+                ...current,
+                bundle_name: bundleName,
+              }
+            : current,
+        );
+      }
+
+      await loadFittingBundles(token);
+      closeHoleBundleEditForm();
+      setStatus({ message: t.fittingBundleUpdateSuccess, tone: "success" });
+    } catch (error) {
+      const errorMessage = error?.status === 404 ? t.fittingBundleNotFound : error?.message || t.fittingBundleUpdateFailed;
+      setHoleBundleEditError(errorMessage);
+      setStatus({ message: errorMessage, tone: "error" });
+    } finally {
+      setHoleBundleEditSaving(false);
+    }
+  }
+
+  async function handleDeleteHoleBundle(bundleKey) {
+    const normalizedBundleKey = String(bundleKey || "").trim();
+
+    if (!normalizedBundleKey) {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const result = await deleteFittingHoleBundle(token, normalizedBundleKey);
+      if (!result.success) {
+        const errorMessage =
+          result.status === 404 ? t.fittingBundleNotFound : result.error || t.fittingBundleDeleteFailed;
+        setStatus({ message: errorMessage, tone: "error" });
+        return;
+      }
+
+      if (String(holeActiveBundleKey || "").trim() === normalizedBundleKey) {
+        clearOpenedHoleBundle();
+        setHoleBundleDetailsOpen(false);
+        setHoleBundleDetails(null);
+      }
+
+      await loadFittingBundles(token);
+      setStatus({ message: t.fittingBundleDeleteSuccess, tone: "success" });
+      closeConfirm();
+    } catch (error) {
+      const errorMessage = error?.status === 404 ? t.fittingBundleNotFound : error?.message || t.fittingBundleDeleteFailed;
+      setStatus({ message: errorMessage, tone: "error" });
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function openHoleBundleForWork(bundleDetails) {
@@ -11439,6 +11599,12 @@ export default function App() {
 
     if (confirmAction.type === "deleteHolePoint") {
       await handleDeleteHolePoint(confirmAction.targetId);
+      return;
+    }
+
+    if (confirmAction.type === "deleteHoleBundle") {
+      await handleDeleteHoleBundle(confirmAction.targetId);
+      return;
     }
   }
 
@@ -15488,6 +15654,22 @@ export default function App() {
                               t.fittingBundlesTemplatesMany,
                             )}
                           </span>
+                          <div className="fitting-bundle-item-actions">
+                            <button
+                              className="ghost-button compact-button"
+                              onClick={() => openHoleBundleEditForm(bundle)}
+                              type="button"
+                            >
+                              {t.fittingBundleEdit}
+                            </button>
+                            <button
+                              className="danger-button compact-button"
+                              onClick={() => openDeleteHoleBundleConfirm(bundle)}
+                              type="button"
+                            >
+                              {t.fittingBundleDelete}
+                            </button>
+                          </div>
                           <button
                             className="ghost-button compact-button"
                             disabled={!bundleKey}
@@ -16582,6 +16764,62 @@ export default function App() {
                 <span>{t.fittingBundleDetailsEmpty}</span>
               </div>
             )}
+          </section>
+        </div>
+      ) : null}
+
+      {holeBundleEditOpen ? (
+        <div
+          aria-modal="true"
+          className="modal-backdrop"
+          onClick={closeHoleBundleEditForm}
+          role="dialog"
+        >
+          <section
+            className="confirm-modal hole-template-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="confirm-header">
+              <div>
+                <strong>{t.fittingBundleUpdateTitle}</strong>
+                <p>{t.fittingBundleUpdateDescription}</p>
+              </div>
+              <button
+                aria-label={t.cancel}
+                className="ghost-button compact-button detail-info-button"
+                onClick={closeHoleBundleEditForm}
+                type="button"
+              >
+                <X size={16} />
+              </button>
+            </header>
+
+            <form className="hole-template-form" onSubmit={handleHoleBundleEditSubmit}>
+              <label>
+                <span>{t.fittingBundleNameLabel}</span>
+                <input
+                  disabled={holeBundleEditSaving}
+                  onChange={(event) => setHoleBundleEditName(event.target.value)}
+                  required
+                  type="text"
+                  value={holeBundleEditName}
+                />
+              </label>
+              {holeBundleEditError ? <p className="status-message error">{holeBundleEditError}</p> : null}
+              <div className="confirm-actions">
+                <button
+                  className="ghost-button"
+                  disabled={holeBundleEditSaving}
+                  onClick={closeHoleBundleEditForm}
+                  type="button"
+                >
+                  {t.cancel}
+                </button>
+                <button className="primary-button" disabled={holeBundleEditSaving} type="submit">
+                  {t.fittingBundleSave}
+                </button>
+              </div>
+            </form>
           </section>
         </div>
       ) : null}
@@ -18567,7 +18805,8 @@ export default function App() {
                 className={
                   confirmAction.type === "delete" ||
                   confirmAction.type === "deleteHoleTemplate" ||
-                  confirmAction.type === "deleteHolePoint"
+                  confirmAction.type === "deleteHolePoint" ||
+                  confirmAction.type === "deleteHoleBundle"
                     ? "danger-button"
                     : "primary-button"
                 }

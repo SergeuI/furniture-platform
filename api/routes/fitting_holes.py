@@ -11,6 +11,7 @@ from api.dependencies.auth import require_roles
 from schemas.fitting_holes import (
     FittingHoleBundleCreateSchema,
     FittingHoleBundleMountingVariantUpdateSchema,
+    FittingHoleBundleUpdateSchema,
     FittingHolePointCreate,
     FittingHolePointListResponseSchema,
     FittingHolePointOperationResponseSchema,
@@ -235,6 +236,62 @@ async def create_fitting_hole_bundle_route(
         "category_code": result.get("category_code"),
         "mounting_variant_key": result.get("mounting_variant_key"),
         "templates": serialized_templates,
+    }
+
+
+@router.patch(
+    "/bundles/{bundle_key}",
+    response_model=FittingHoleBundleResponseSchema,
+)
+async def update_fitting_hole_bundle_route(
+    bundle_key: str,
+    payload: FittingHoleBundleUpdateSchema,
+    current_user = Depends(require_fitting_holes_editor),
+):
+    try:
+        with FittingHolesService() as service:
+            result = service.update_bundle_name(
+                bundle_key,
+                payload.bundle_name,
+            )
+            serialized_templates = [
+                _serialize_template(template)
+                for template in result["templates"]
+            ]
+    except ValueError as error:
+        _raise_service_error(error)
+
+    return {
+        "success": True,
+        "bundle_key": result["bundle_key"],
+        "bundle_name": result["bundle_name"],
+        "category_code": result.get("category_code"),
+        "mounting_variant_key": result.get("mounting_variant_key"),
+        "templates": serialized_templates,
+    }
+
+
+@router.delete(
+    "/bundles/{bundle_key}",
+    response_model=FittingHoleBundleResponseSchema,
+)
+async def delete_fitting_hole_bundle_route(
+    bundle_key: str,
+    current_user = Depends(require_fitting_holes_editor),
+):
+    try:
+        with FittingHolesService() as service:
+            service.delete_bundle(bundle_key)
+    except ValueError as error:
+        _raise_service_error(error)
+
+    return {
+        "success": True,
+        "bundle_key": bundle_key,
+        "bundle_name": None,
+        "category_code": None,
+        "mounting_variant_key": None,
+        "templates": [],
     }
 
 

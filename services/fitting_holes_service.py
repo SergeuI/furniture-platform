@@ -331,6 +331,45 @@ class FittingHolesService:
             "templates": templates,
         }
 
+    def update_bundle_name(
+        self,
+        bundle_key: str,
+        bundle_name: Any,
+    ):
+        bundle_key = self._require_text(bundle_key, "bundle_key")
+        normalized_bundle_name = self._require_text(bundle_name, "bundle_name")
+
+        templates = self.repository.update_templates_by_bundle_key(
+            bundle_key,
+            bundle_name=normalized_bundle_name,
+        )
+
+        if not templates:
+            raise ValueError(f"Bundle with key={bundle_key} does not exist")
+
+        first_template = templates[0]
+        category_code = self._text_or_default(
+            getattr(first_template.fitting, "fitting_type", None)
+            or getattr(first_template.fitting, "fitting_group", None)
+            or "",
+            "",
+        )
+
+        return {
+            "bundle_key": bundle_key,
+            "bundle_name": normalized_bundle_name,
+            "category_code": category_code or None,
+            "mounting_variant_key": first_template.mounting_variant_key,
+            "templates": templates,
+        }
+
+    def delete_bundle(self, bundle_key: str) -> bool:
+        bundle_key = self._require_text(bundle_key, "bundle_key")
+        deleted_count = self.repository.delete_templates_by_bundle_key(bundle_key)
+        if not deleted_count:
+            raise ValueError(f"Bundle with key={bundle_key} does not exist")
+        return True
+
     def update_template(
         self,
         template_id: int,
