@@ -7660,6 +7660,7 @@ export default function App() {
     ).trim();
     const bundleFittingIds = getHoleBundleTemplateFittingIds(bundleDetails);
     const bundleMountingVariantKey = getHoleBundleMountingVariantKey(bundleDetails);
+    const bundleTemplateId = String(bundleDetails?.templates?.[0]?.id || "").trim();
     const firstFittingId = bundleFittingIds[0] || "";
 
     if (!bundleKey || !bundleName || !bundleFittingIds.length) {
@@ -7684,7 +7685,7 @@ export default function App() {
     }
 
     if (firstFittingId) {
-      await handleHoleFittingChange(firstFittingId);
+      await handleHoleFittingChange(firstFittingId, bundleTemplateId);
     }
 
     setSelectedHoleMountingVariantKey(bundleMountingVariantKey);
@@ -9635,7 +9636,7 @@ export default function App() {
     return true;
   }
 
-  async function handleHoleFittingChange(nextFittingId) {
+  async function handleHoleFittingChange(nextFittingId, preferredTemplateId = "") {
     if (import.meta.env.DEV) {
       console.debug("selected fitting id", nextFittingId);
     }
@@ -9658,7 +9659,10 @@ export default function App() {
 
     const templates = await loadHoleTemplates(token, nextFittingId);
     if (templates.length) {
-      await handleHoleTemplateChange(String(templates[0].id));
+      const preferredTemplate = String(preferredTemplateId || "").trim()
+        ? templates.find((template) => String(template.id) === String(preferredTemplateId)) || null
+        : null;
+      await handleHoleTemplateChange(String((preferredTemplate || templates[0] || {}).id || ""));
       return;
     }
 
