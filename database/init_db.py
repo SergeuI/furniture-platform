@@ -231,6 +231,46 @@ def upgrade_sqlite_schema():
             "TEXT NOT NULL DEFAULT 'surface_mount'"
         )
 
+        _add_column_if_missing(
+
+            connection,
+
+            "fitting_hole_templates",
+
+            "bundle_key",
+
+            "TEXT"
+        )
+
+        _add_column_if_missing(
+
+            connection,
+
+            "fitting_hole_templates",
+
+            "bundle_name",
+
+            "TEXT"
+        )
+
+        _add_column_if_missing(
+
+            connection,
+
+            "fitting_hole_templates",
+
+            "bundle_order_index",
+
+            "INTEGER NOT NULL DEFAULT 0"
+        )
+
+        connection.exec_driver_sql(
+            """
+            CREATE INDEX IF NOT EXISTS ix_fitting_hole_templates_bundle_key
+            ON fitting_hole_templates (bundle_key)
+            """
+        )
+
         connection.exec_driver_sql(
             """
             UPDATE projects

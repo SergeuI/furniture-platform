@@ -187,6 +187,24 @@ class FittingHoleTemplateModel(Base):
         nullable=True,
     )
 
+    bundle_key = Column(
+        String,
+        index=True,
+        nullable=True,
+    )
+
+    bundle_name = Column(
+        String,
+        index=True,
+        nullable=True,
+    )
+
+    bundle_order_index = Column(
+        Integer,
+        nullable=False,
+        default=0,
+    )
+
     template_type = Column(
         String,
         index=True,

@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 from typing import Any, Dict, Mapping, Optional
+from uuid import uuid4
 
 from sqlalchemy.orm import Session
 
@@ -156,6 +157,16 @@ class FittingHolesService:
 
         payload["fitting_id"] = fitting_id
         payload["name"] = self._require_text(payload.get("name"), "name")
+        bundle_name = "" if payload.get("bundle_name") is None else str(payload.get("bundle_name")).strip()
+        bundle_key = "" if payload.get("bundle_key") is None else str(payload.get("bundle_key")).strip()
+        if bundle_name and not bundle_key:
+            bundle_key = uuid4().hex
+        payload["bundle_name"] = bundle_name or None
+        payload["bundle_key"] = bundle_key or None
+        payload["bundle_order_index"] = self._require_int(
+            payload.get("bundle_order_index", 0),
+            "bundle_order_index",
+        )
         payload["template_type"] = self._text_or_default(
             payload.get("template_type"),
             "manual",
@@ -183,6 +194,13 @@ class FittingHolesService:
         fitting_id = self._require_int(fitting_id, "fitting_id")
         return self.repository.list_templates_by_fitting(fitting_id)
 
+    def list_templates_for_bundle(self, bundle_key: str):
+        bundle_key = self._require_text(bundle_key, "bundle_key")
+        return self.repository.list_templates_by_bundle_key(bundle_key)
+
+    def list_bundles(self):
+        return self.repository.list_bundles()
+
     def update_template(
         self,
         template_id: int,
@@ -201,6 +219,20 @@ class FittingHolesService:
 
         if "name" in payload:
             payload["name"] = self._require_text(payload.get("name"), "name")
+
+        if "bundle_name" in payload:
+            bundle_name = "" if payload.get("bundle_name") is None else str(payload.get("bundle_name")).strip()
+            payload["bundle_name"] = bundle_name or None
+
+        if "bundle_key" in payload:
+            bundle_key = "" if payload.get("bundle_key") is None else str(payload.get("bundle_key")).strip()
+            payload["bundle_key"] = bundle_key or None
+
+        if "bundle_order_index" in payload:
+            payload["bundle_order_index"] = self._require_int(
+                payload.get("bundle_order_index"),
+                "bundle_order_index",
+            )
 
         if "template_type" in payload and payload.get("template_type") is not None:
             payload["template_type"] = self._require_text(

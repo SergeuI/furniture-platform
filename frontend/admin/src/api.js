@@ -194,6 +194,12 @@ export async function listFittingHoleTemplatesByFitting(token, fittingId) {
   });
 }
 
+export async function listFittingHoleBundles(token) {
+  return request("/fitting-holes/bundles", {
+    headers: authHeaders(token),
+  });
+}
+
 export async function getFittingHoleTemplate(token, templateId) {
   return request(`/fitting-holes/templates/${templateId}`, {
     headers: authHeaders(token),

@@ -2,6 +2,8 @@
 
 from typing import Any, Optional
 
+from sqlalchemy import func
+
 from sqlalchemy.orm import Session
 
 from database.models.fitting import (
@@ -48,7 +50,57 @@ class FittingHolesRepository:
             .order_by(
                 FittingHoleTemplateModel.is_default.desc(),
                 FittingHoleTemplateModel.is_active.desc(),
+                FittingHoleTemplateModel.bundle_order_index.asc(),
                 FittingHoleTemplateModel.id.asc(),
+            )
+            .all()
+        )
+
+    def list_templates_by_bundle_key(
+        self,
+        bundle_key: str,
+    ) -> list[FittingHoleTemplateModel]:
+        return (
+            self.session.query(FittingHoleTemplateModel)
+            .filter(FittingHoleTemplateModel.bundle_key == bundle_key)
+            .order_by(
+                FittingHoleTemplateModel.bundle_order_index.asc(),
+                FittingHoleTemplateModel.fitting_id.asc(),
+                FittingHoleTemplateModel.id.asc(),
+            )
+            .all()
+        )
+
+    def list_bundles(
+        self,
+    ) -> list[tuple[str, str | None, int]]:
+        return (
+            self.session.query(
+                func.coalesce(
+                    FittingHoleTemplateModel.bundle_key,
+                    FittingHoleTemplateModel.bundle_name,
+                ),
+                FittingHoleTemplateModel.bundle_name,
+                func.count(FittingHoleTemplateModel.id),
+            )
+            .filter(
+                (FittingHoleTemplateModel.bundle_key.isnot(None))
+                | (FittingHoleTemplateModel.bundle_name.isnot(None))
+            )
+            .filter(
+                (FittingHoleTemplateModel.bundle_key != "")
+                | (FittingHoleTemplateModel.bundle_name != "")
+            )
+            .group_by(
+                func.coalesce(
+                    FittingHoleTemplateModel.bundle_key,
+                    FittingHoleTemplateModel.bundle_name,
+                ),
+                FittingHoleTemplateModel.bundle_name,
+            )
+            .order_by(
+                FittingHoleTemplateModel.bundle_name.asc(),
+                FittingHoleTemplateModel.bundle_key.asc(),
             )
             .all()
         )

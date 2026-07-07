@@ -13,6 +13,8 @@ from schemas.fitting_holes import (
     FittingHolePointListResponseSchema,
     FittingHolePointOperationResponseSchema,
     FittingHolePointUpdate,
+    FittingHoleBundleResponseSchema,
+    FittingHoleBundleListResponseSchema,
     FittingHoleTemplateCreate,
     FittingHoleTemplateListResponseSchema,
     FittingHoleTemplateOperationResponseSchema,
@@ -37,6 +39,9 @@ def _serialize_template(template) -> dict:
         "id": template.id,
         "fitting_id": template.fitting_id,
         "name": template.name,
+        "bundle_key": template.bundle_key,
+        "bundle_name": template.bundle_name,
+        "bundle_order_index": int(template.bundle_order_index or 0),
         "template_type": template.template_type,
         "side": template.side,
         "coordinate_system": template.coordinate_system,
@@ -125,6 +130,59 @@ async def list_fitting_hole_templates_route(
     return {
         "success": True,
         "fitting_id": fitting_id,
+        "templates": [
+            _serialize_template(template)
+            for template in templates
+        ],
+    }
+
+
+@router.get(
+    "/bundles",
+    response_model=FittingHoleBundleListResponseSchema,
+)
+async def list_fitting_hole_bundles_route(
+    current_user = Depends(require_fitting_holes_editor),
+):
+    with FittingHolesService() as service:
+        bundles = service.list_bundles()
+
+    return {
+        "success": True,
+        "bundles": [
+            {
+                "bundle_key": bundle_key,
+                "bundle_name": bundle_name,
+                "template_count": int(template_count or 0),
+            }
+            for bundle_key, bundle_name, template_count in bundles
+        ],
+    }
+
+
+@router.get(
+    "/bundles/{bundle_key}",
+    response_model=FittingHoleBundleResponseSchema,
+)
+async def list_fitting_hole_bundle_route(
+    bundle_key: str,
+    current_user = Depends(require_fitting_holes_editor),
+):
+    with FittingHolesService() as service:
+        templates = service.list_templates_for_bundle(bundle_key)
+
+    if not templates:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Bundle with key={bundle_key} does not exist",
+        )
+
+    first_template = templates[0]
+
+    return {
+        "success": True,
+        "bundle_key": bundle_key,
+        "bundle_name": first_template.bundle_name,
         "templates": [
             _serialize_template(template)
             for template in templates

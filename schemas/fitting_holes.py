@@ -14,6 +14,15 @@ class FittingHoleTemplateCreate(BaseModel):
         min_length=1,
         max_length=255,
     )
+    bundle_key: str | None = Field(
+        default=None,
+        max_length=64,
+    )
+    bundle_name: str | None = Field(
+        default=None,
+        max_length=255,
+    )
+    bundle_order_index: int = 0
     template_type: str | None = Field(
         default=None,
         max_length=64,
@@ -45,6 +54,15 @@ class FittingHoleTemplateUpdate(BaseModel):
         min_length=1,
         max_length=255,
     )
+    bundle_key: str | None = Field(
+        default=None,
+        max_length=64,
+    )
+    bundle_name: str | None = Field(
+        default=None,
+        max_length=255,
+    )
+    bundle_order_index: int | None = None
     template_type: str | None = Field(
         default=None,
         max_length=64,
@@ -73,6 +91,9 @@ class FittingHoleTemplateResponse(BaseModel):
     id: int
     fitting_id: int
     name: str | None = None
+    bundle_key: str | None = None
+    bundle_name: str | None = None
+    bundle_order_index: int = 0
     template_type: str | None = None
     side: str | None = None
     coordinate_system: str | None = None
@@ -94,6 +115,30 @@ class FittingHoleTemplateListResponseSchema(BaseModel):
 class FittingHoleTemplateOperationResponseSchema(BaseModel):
     success: bool
     template: FittingHoleTemplateResponse | None = None
+    error: str | None = None
+
+
+class FittingHoleBundleResponseSchema(BaseModel):
+    success: bool
+    bundle_key: str | None = None
+    bundle_name: str | None = None
+    templates: List[FittingHoleTemplateResponse] = Field(
+        default_factory=list
+    )
+    error: str | None = None
+
+
+class FittingHoleBundleListItemSchema(BaseModel):
+    bundle_key: str
+    bundle_name: str | None = None
+    template_count: int = 0
+
+
+class FittingHoleBundleListResponseSchema(BaseModel):
+    success: bool
+    bundles: List[FittingHoleBundleListItemSchema] = Field(
+        default_factory=list
+    )
     error: str | None = None
 
 
