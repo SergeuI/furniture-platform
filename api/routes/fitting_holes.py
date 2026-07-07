@@ -13,6 +13,7 @@ from schemas.fitting_holes import (
     FittingHoleBundleMountingVariantUpdateSchema,
     FittingHoleBundleUpdateSchema,
     FittingHolePointCreate,
+    FittingHoleServicePreviewResponseSchema,
     FittingHolePointListResponseSchema,
     FittingHolePointOperationResponseSchema,
     FittingHolePointUpdate,
@@ -24,6 +25,7 @@ from schemas.fitting_holes import (
     FittingHoleTemplateUpdate,
 )
 from services.fitting_holes_service import FittingHolesService
+from services.fitting_hole_service_preview import build_fitting_hole_service_preview
 
 
 router = APIRouter()
@@ -455,6 +457,32 @@ async def list_fitting_hole_points_route(
             _serialize_point(point)
             for point in points
         ],
+    }
+
+
+@router.get(
+    "/templates/{template_id}/service-preview",
+    response_model=FittingHoleServicePreviewResponseSchema,
+)
+async def get_fitting_hole_service_preview_route(
+    template_id: int,
+    current_user = Depends(require_fitting_holes_editor),
+):
+    with FittingHolesService() as service:
+        template = service.get_template(template_id)
+        if not template:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Template with id={template_id} does not exist",
+            )
+
+        points = service.list_hole_points(template_id)
+
+    preview = build_fitting_hole_service_preview(template, points)
+
+    return {
+        "success": True,
+        **preview,
     }
 
 

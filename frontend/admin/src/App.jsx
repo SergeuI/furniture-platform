@@ -65,6 +65,7 @@ import {
   getCurrentUser,
   getFittingHoleBundle,
   getFittingHoleTemplate,
+  getFittingHoleServicePreview,
   getFittingsCatalog,
   getMaterialDetails,
   getMaterialImportJob,
@@ -1567,6 +1568,16 @@ const TRANSLATIONS = {
     holePreviewOperation: "Operation",
     holePreviewSide: "Side",
     holePreviewTitle: "2D preview",
+    holeServicePreviewCalculable: "Included in estimate",
+    holeServicePreviewDescription:
+      "A preliminary group view of hole-related services that will later be included in the project estimate.",
+    holeServicePreviewEmpty:
+      "Add hole points to see a preliminary service estimate.",
+    holeServicePreviewFailed: "Unable to load the preliminary service estimate.",
+    holeServicePreviewLoading: "Loading preliminary service estimate...",
+    holeServicePreviewMarkNote: "Marking points are not included in the estimate.",
+    holeServicePreviewPointCount: "Points",
+    holeServicePreviewTitle: "Preliminary service estimate",
     holeTabDescription: "View hole points for the selected fitting and mounting variant.",
     holeTabPreview: "2D preview",
     holeTabPoints: "Points",
@@ -2103,6 +2114,19 @@ Object.assign(TRANSLATIONS.uk, {
 });
 
 Object.assign(TRANSLATIONS.uk, {
+  holeServicePreviewCalculable: "Додається до кошторису",
+  holeServicePreviewDescription:
+    "Попередній зведений погляд послуг присадки, які потім потраплять у кошторис проєкту.",
+  holeServicePreviewEmpty:
+    "Додайте точки присадки, щоб побачити попередній розрахунок послуг.",
+  holeServicePreviewFailed:
+    "Не вдалося завантажити попередній розрахунок послуг.",
+  holeServicePreviewLoading:
+    "Завантажуємо попередній розрахунок послуг...",
+  holeServicePreviewMarkNote:
+    "Мітки не додаються до кошторису.",
+  holeServicePreviewPointCount: "Точки",
+  holeServicePreviewTitle: "Попередній розрахунок послуг",
   assemblyClearSelection: "\u041e\u0447\u0438\u0441\u0442\u0438\u0442\u0438 \u0432\u0438\u0431\u0456\u0440",
   assemblyFocusSelected: "\u0424\u043e\u043a\u0443\u0441 \u043d\u0430 \u0434\u0435\u0442\u0430\u043b\u0456",
   assemblyLayerGrooves: "\u041f\u0430\u0437\u0438",
@@ -2495,6 +2519,19 @@ Object.assign(TRANSLATIONS.uk, {
 });
 
 Object.assign(TRANSLATIONS.en, {
+  holeServicePreviewCalculable: "Included in estimate",
+  holeServicePreviewDescription:
+    "A preliminary grouped view of hole services that will later be included in the project estimate.",
+  holeServicePreviewEmpty:
+    "Add hole points to see a preliminary service estimate.",
+  holeServicePreviewFailed:
+    "Unable to load the preliminary service estimate.",
+  holeServicePreviewLoading:
+    "Loading preliminary service estimate...",
+  holeServicePreviewMarkNote:
+    "Marking points are not included in the estimate.",
+  holeServicePreviewPointCount: "Points",
+  holeServicePreviewTitle: "Preliminary service estimate",
   loading: "Loading",
   home: "Home",
   homeDescription: "Quick overview of catalogs, prices, and system activity.",
@@ -4939,6 +4976,9 @@ export default function App() {
   const [holeSelectedTemplateId, setHoleSelectedTemplateId] = useState("");
   const [holeSelectedTemplate, setHoleSelectedTemplate] = useState(null);
   const [holePoints, setHolePoints] = useState([]);
+  const [holeServicePreview, setHoleServicePreview] = useState(null);
+  const [holeServicePreviewLoading, setHoleServicePreviewLoading] = useState(false);
+  const [holeServicePreviewError, setHoleServicePreviewError] = useState("");
   const [holeTemplateCreateOpen, setHoleTemplateCreateOpen] = useState(false);
   const [holeTemplateCreateError, setHoleTemplateCreateError] = useState("");
   const [holeTemplateCreateForm, setHoleTemplateCreateForm] = useState(DEFAULT_HOLE_TEMPLATE_FORM);
@@ -7729,6 +7769,9 @@ export default function App() {
     setHoleBundleCategoryCode("");
     setHoleBundleSelectedItemIds([]);
     setHoleBundleDraftItemIds([]);
+    setHoleServicePreview(null);
+    setHoleServicePreviewError("");
+    setHoleServicePreviewLoading(false);
     handleHoleFittingCategoryChange("");
   }
 
@@ -9748,6 +9791,8 @@ export default function App() {
       setHoleSelectedTemplate(null);
       setHolePoints([]);
       setSelectedHolePointId("");
+      setHoleServicePreview(null);
+      setHoleServicePreviewError("");
       return false;
     }
 
@@ -9775,6 +9820,8 @@ export default function App() {
       setHoleSelectedTemplate(null);
       setHolePoints([]);
       setSelectedHolePointId("");
+      setHoleServicePreview(null);
+      setHoleServicePreviewError("");
       setStatus({ message: templateResult.error || "Unable to load fitting hole template", tone: "error" });
       return false;
     }
@@ -9792,12 +9839,45 @@ export default function App() {
 
       setHolePoints([]);
       setSelectedHolePointId("");
+      setHoleServicePreview(null);
+      setHoleServicePreviewError("");
       setStatus({ message: pointsResult.error || "Unable to load fitting hole points", tone: "error" });
       return false;
     }
 
     setHolePoints(Array.isArray(pointsResult.points) ? pointsResult.points : []);
+    await loadHoleServicePreview(activeToken, templateId);
     return true;
+  }
+
+  async function loadHoleServicePreview(activeToken = token, templateId = holeSelectedTemplateId) {
+    if (!activeToken || !templateId) {
+      setHoleServicePreview(null);
+      setHoleServicePreviewError("");
+      setHoleServicePreviewLoading(false);
+      return false;
+    }
+
+    setHoleServicePreviewLoading(true);
+    try {
+      const result = await getFittingHoleServicePreview(activeToken, templateId);
+
+      if (!result.success) {
+        setHoleServicePreview(null);
+        setHoleServicePreviewError(t.holeServicePreviewFailed);
+        return false;
+      }
+
+      setHoleServicePreview(result);
+      setHoleServicePreviewError("");
+      return true;
+    } catch (error) {
+      setHoleServicePreview(null);
+      setHoleServicePreviewError(t.holeServicePreviewFailed);
+      return false;
+    } finally {
+      setHoleServicePreviewLoading(false);
+    }
   }
 
   async function handleHoleFittingChange(nextFittingId, preferredTemplateId = "") {
@@ -9811,6 +9891,9 @@ export default function App() {
     setHoleSelectedTemplate(null);
     setHoleTemplateItems([]);
     setHolePoints([]);
+    setHoleServicePreview(null);
+    setHoleServicePreviewError("");
+    setHoleServicePreviewLoading(false);
     setSelectedHolePointId("");
     closeHoleTemplateCreateForm();
     closeHolePointCreateForm();
@@ -9851,6 +9934,9 @@ export default function App() {
     setHoleSelectedTemplate(null);
     setHoleTemplateItems([]);
     setHolePoints([]);
+    setHoleServicePreview(null);
+    setHoleServicePreviewError("");
+    setHoleServicePreviewLoading(false);
     setSelectedHolePointId("");
     closeHoleTemplateCreateForm();
     closeHolePointCreateForm();
@@ -9862,6 +9948,9 @@ export default function App() {
     setHoleSelectedTemplateId(nextTemplateId);
     setHoleSelectedTemplate(null);
     setHolePoints([]);
+    setHoleServicePreview(null);
+    setHoleServicePreviewError("");
+    setHoleServicePreviewLoading(false);
     setSelectedHolePointId("");
     closeHolePointCreateForm();
     closeHolePointEditForm();
@@ -15135,6 +15224,62 @@ export default function App() {
                       <span>{t.holeTemplateSelectTemplate}</span>
                     </div>
                   )}
+                  </section>
+                  <section className="holes-preview-card holes-service-preview-card holes-workspace-preview-panel">
+                    <div className="holes-preview-header">
+                      <div>
+                        <h4>{t.holeServicePreviewTitle}</h4>
+                        <p>{t.holeServicePreviewDescription}</p>
+                      </div>
+                      <span className="service-tree-badge subtle">
+                        {(holeServicePreview?.summary?.point_count ?? holePoints.length) || 0} {t.holeServicePreviewPointCount}
+                      </span>
+                    </div>
+                    {holeServicePreviewLoading ? (
+                      <div className="empty-state compact-empty-state">
+                        <span>{t.holeServicePreviewLoading}</span>
+                      </div>
+                    ) : holeServicePreviewError ? (
+                      <p className="status-message error">{holeServicePreviewError}</p>
+                    ) : Array.isArray(holeServicePreview?.groups) && holeServicePreview.groups.length ? (
+                      <div className="holes-service-preview-list">
+                        {holeServicePreview.groups.map((group, index) => {
+                          const groupLabel = String(group?.label || "").trim() || t.notSet;
+                          const groupKey = `${String(group?.operation || "service")}-${index}`;
+                          const groupDiameter = group?.diameter_mm ?? null;
+                          const groupDepth = group?.depth_mm ?? null;
+                          const groupQuantity = Number(group?.quantity || 0);
+                          const groupPointCount = Number(group?.point_count || 0);
+
+                          return (
+                            <article
+                              className={`holes-service-preview-item${group?.is_calculable ? "" : " is-auxiliary"}`}
+                              key={groupKey}
+                            >
+                              <div className="holes-service-preview-item-head">
+                                <strong>{groupLabel}</strong>
+                                <span className={`service-tree-badge${group?.is_calculable ? " success" : " subtle"}`}>
+                                  {group?.is_calculable ? t.holeServicePreviewCalculable : t.holeServicePreviewMarkNote}
+                                </span>
+                              </div>
+                              <div className="holes-service-preview-item-meta">
+                                <span>{t.holePreviewDiameter}: {groupDiameter === null ? "—" : formatMetricValue(groupDiameter)}</span>
+                                <span>{t.holePreviewDepth}: {groupDepth === null ? "—" : formatMetricValue(groupDepth)}</span>
+                                <span>{t.holeServicePreviewPointCount}: {groupPointCount}</span>
+                                <span>{t.holePointQuantity}: {groupQuantity} {group?.unit || "шт."}</span>
+                              </div>
+                              {group?.note ? (
+                                <p className="holes-service-preview-note">{group.note}</p>
+                              ) : null}
+                            </article>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="empty-state compact-empty-state">
+                        <span>{t.holeServicePreviewEmpty}</span>
+                      </div>
+                    )}
                   </section>
                   <section className="holes-preview-card holes-preview-2d-card holes-workspace-preview-panel">
                     <div className="holes-preview-header">

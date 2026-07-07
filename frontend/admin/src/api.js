@@ -249,6 +249,12 @@ export async function listFittingHolePoints(token, templateId) {
   });
 }
 
+export async function getFittingHoleServicePreview(token, templateId) {
+  return request(`/fitting-holes/templates/${templateId}/service-preview`, {
+    headers: authHeaders(token),
+  });
+}
+
 export async function createFittingHoleTemplate(token, payload) {
   return request("/fitting-holes/templates", {
     method: "POST",

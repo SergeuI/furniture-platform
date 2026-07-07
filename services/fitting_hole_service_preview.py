@@ -1,0 +1,131 @@
+from __future__ import annotations
+
+from collections import OrderedDict
+from typing import Any
+
+
+_OPERATION_PRESETS = {
+    "blind_drill": {
+        "label": "Свердління глухого отвору",
+        "is_calculable": True,
+    },
+    "drill": {
+        "label": "Свердління",
+        "is_calculable": True,
+    },
+    "mark": {
+        "label": "Мітка",
+        "is_calculable": False,
+        "note": "Не додається до кошторису",
+    },
+    "milling": {
+        "label": "Фрезерування",
+        "is_calculable": True,
+    },
+    "slot": {
+        "label": "Паз / фрезерування паза",
+        "is_calculable": True,
+    },
+    "through_drill": {
+        "label": "Свердління наскрізного отвору",
+        "is_calculable": True,
+    },
+}
+
+
+def _safe_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _safe_float(value: Any) -> float | None:
+    if value in (None, ""):
+        return None
+
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _group_key(operation: str, diameter_mm: float | None, depth_mm: float | None) -> str:
+    diameter_part = "" if diameter_mm is None else f"{diameter_mm:.3f}"
+    depth_part = "" if depth_mm is None else f"{depth_mm:.3f}"
+    return f"{operation}|{diameter_part}|{depth_part}"
+
+
+def build_fitting_hole_service_preview(template, points: list[Any] | None) -> dict[str, Any]:
+    grouped_points: "OrderedDict[str, dict[str, Any]]" = OrderedDict()
+
+    for point in points or []:
+        operation = str(getattr(point, "operation", None) or "drill").strip() or "drill"
+        preset = _OPERATION_PRESETS.get(
+            operation,
+            {
+                "label": "Операція",
+                "is_calculable": True,
+            },
+        )
+
+        diameter_mm = _safe_float(getattr(point, "diameter_mm", None))
+        depth_mm = _safe_float(getattr(point, "depth_mm", None))
+        if operation == "mark":
+            diameter_mm = None
+            depth_mm = None
+
+        group_key = _group_key(operation, diameter_mm, depth_mm)
+        group = grouped_points.get(group_key)
+        if group is None:
+            group = {
+                "operation": operation,
+                "label": preset.get("label") or "Операція",
+                "diameter_mm": diameter_mm,
+                "depth_mm": depth_mm,
+                "quantity": 0,
+                "unit": "шт.",
+                "point_count": 0,
+                "is_calculable": bool(preset.get("is_calculable", True)),
+                "note": preset.get("note"),
+            }
+            grouped_points[group_key] = group
+
+        group["quantity"] += max(_safe_int(getattr(point, "quantity", 1), 1), 1)
+        group["point_count"] += 1
+
+    groups = list(grouped_points.values())
+    groups.sort(
+        key=lambda item: (
+            0 if item.get("is_calculable") else 1,
+            item.get("operation") or "",
+            item.get("diameter_mm") is None,
+            float(item.get("diameter_mm") or 0),
+            item.get("depth_mm") is None,
+            float(item.get("depth_mm") or 0),
+        )
+    )
+
+    summary = {
+        "groups_count": len(groups),
+        "calculable_groups_count": sum(1 for item in groups if item.get("is_calculable")),
+        "point_count": sum(int(item.get("point_count") or 0) for item in groups),
+        "calculable_point_count": sum(
+            int(item.get("point_count") or 0)
+            for item in groups
+            if item.get("is_calculable")
+        ),
+    }
+
+    fitting = getattr(template, "fitting", None)
+    category_code = getattr(fitting, "fitting_type", None) or getattr(fitting, "fitting_group", None)
+
+    return {
+        "template_id": getattr(template, "id", None),
+        "bundle_key": getattr(template, "bundle_key", None),
+        "bundle_name": getattr(template, "bundle_name", None),
+        "mounting_variant_key": getattr(template, "mounting_variant_key", None),
+        "category_code": category_code,
+        "groups": groups,
+        "summary": summary,
+    }

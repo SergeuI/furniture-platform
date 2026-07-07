@@ -278,3 +278,36 @@ class FittingHolePointOperationResponseSchema(BaseModel):
     success: bool
     point: FittingHolePointResponse | None = None
     error: str | None = None
+
+
+class FittingHoleServicePreviewGroupSchema(BaseModel):
+    operation: str
+    label: str
+    diameter_mm: float | None = None
+    depth_mm: float | None = None
+    quantity: int = 0
+    unit: str = "шт."
+    point_count: int = 0
+    is_calculable: bool = True
+    note: str | None = None
+
+
+class FittingHoleServicePreviewSummarySchema(BaseModel):
+    groups_count: int = 0
+    calculable_groups_count: int = 0
+    point_count: int = 0
+    calculable_point_count: int = 0
+
+
+class FittingHoleServicePreviewResponseSchema(BaseModel):
+    success: bool
+    template_id: int | None = None
+    bundle_key: str | None = None
+    bundle_name: str | None = None
+    mounting_variant_key: str | None = None
+    category_code: str | None = None
+    groups: List[FittingHoleServicePreviewGroupSchema] = Field(
+        default_factory=list
+    )
+    summary: FittingHoleServicePreviewSummarySchema | None = None
+    error: str | None = None

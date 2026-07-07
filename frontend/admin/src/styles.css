@@ -2505,6 +2505,55 @@ tbody tr.selected {
   padding-top: 4px;
 }
 
+.holes-service-preview-list {
+  display: grid;
+  gap: 10px;
+}
+
+.holes-service-preview-item {
+  background: linear-gradient(180deg, #ffffff 0%, #f9fbfc 100%);
+  border: 1px solid #dbe1e7;
+  border-radius: 12px;
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+}
+
+.holes-service-preview-item.is-auxiliary {
+  background: #fbfcfd;
+  border-style: dashed;
+}
+
+.holes-service-preview-item-head {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.holes-service-preview-item-head strong {
+  color: #24343d;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.holes-service-preview-item-meta {
+  color: #607182;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.holes-service-preview-note {
+  color: #8a5a2b;
+  font-size: 12px;
+  line-height: 1.35;
+  margin: 0;
+}
+
 .holes-workspace-save-panel {
   align-items: start;
   background: linear-gradient(180deg, #f8fbfd 0%, #f3f8fb 100%);
