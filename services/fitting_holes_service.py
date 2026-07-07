@@ -186,6 +186,102 @@ class FittingHolesService:
 
         return self.repository.create_template(**payload)
 
+    def create_bundle(
+        self,
+        data: Optional[Mapping[str, Any]] = None,
+        **kwargs: Any,
+    ):
+        payload = self._merge_payload(data, **kwargs)
+
+        bundle_name = self._require_text(
+            payload.get("bundle_name"),
+            "bundle_name",
+        )
+        category_key = self._text_or_default(
+            payload.get("category_key") or payload.get("category"),
+            "",
+        )
+        bundle_key = self._text_or_default(
+            payload.get("bundle_key"),
+            "",
+        ) or uuid4().hex
+        mounting_variant_key = self._normalize_mounting_variant_key(
+            payload.get("mounting_variant_key"),
+        )
+
+        fitting_ids_raw = payload.get("fitting_ids") or []
+        if not isinstance(fitting_ids_raw, (list, tuple, set)):
+            raise ValueError("fitting_ids must be a list")
+
+        fitting_ids: list[int] = []
+        seen_fitting_ids: set[int] = set()
+        fittings: list[FittingModel] = []
+
+        for item in fitting_ids_raw:
+            fitting_id = self._require_int(item, "fitting_id")
+            if fitting_id in seen_fitting_ids:
+                continue
+
+            fitting = self._ensure_fitting_exists(fitting_id)
+            fitting_category = self._text_or_default(
+                getattr(fitting, "fitting_type", None)
+                or getattr(fitting, "fitting_group", None)
+                or "",
+                "",
+            )
+            if category_key and fitting_category and fitting_category != category_key:
+                raise ValueError(
+                    f"Fitting with id={fitting_id} does not belong to category={category_key}"
+                )
+
+            seen_fitting_ids.add(fitting_id)
+            fitting_ids.append(fitting_id)
+            fittings.append(fitting)
+
+        if not fitting_ids:
+            raise ValueError("fitting_ids is required")
+
+        templates_payload: list[dict[str, Any]] = []
+        for index, fitting in enumerate(fittings):
+            template_name = self._text_or_default(
+                getattr(fitting, "name", None)
+                or getattr(fitting, "article", None)
+                or getattr(fitting, "code", None)
+                or bundle_name,
+                bundle_name,
+            )
+            templates_payload.append(
+                {
+                    "fitting_id": fitting.id,
+                    "name": template_name,
+                    "bundle_key": bundle_key,
+                    "bundle_name": bundle_name,
+                    "bundle_order_index": index,
+                    "template_type": "bundle",
+                    "coordinate_system": "2d",
+                    "mounting_variant_key": mounting_variant_key,
+                    "is_default": False,
+                    "is_active": True,
+                }
+            )
+
+        created_templates = self.repository.create_templates(templates_payload)
+        category_code = ""
+        if fittings:
+            category_code = self._text_or_default(
+                getattr(fittings[0], "fitting_type", None)
+                or getattr(fittings[0], "fitting_group", None)
+                or category_key,
+                "",
+            )
+
+        return {
+            "bundle_key": bundle_key,
+            "bundle_name": bundle_name,
+            "category_code": category_code or None,
+            "templates": created_templates,
+        }
+
     def get_template(self, template_id: int):
         template_id = self._require_int(template_id, "template_id")
         return self.repository.get_template_by_id(template_id)
@@ -200,6 +296,40 @@ class FittingHolesService:
 
     def list_bundles(self):
         return self.repository.list_bundles()
+
+    def update_bundle_mounting_variant(
+        self,
+        bundle_key: str,
+        mounting_variant_key: Any,
+    ):
+        bundle_key = self._require_text(bundle_key, "bundle_key")
+        normalized_mounting_variant_key = self._normalize_mounting_variant_key(
+            mounting_variant_key,
+        )
+
+        templates = self.repository.update_templates_by_bundle_key(
+            bundle_key,
+            mounting_variant_key=normalized_mounting_variant_key,
+        )
+
+        if not templates:
+            raise ValueError(f"Bundle with key={bundle_key} does not exist")
+
+        first_template = templates[0]
+        category_code = self._text_or_default(
+            getattr(first_template.fitting, "fitting_type", None)
+            or getattr(first_template.fitting, "fitting_group", None)
+            or "",
+            "",
+        )
+
+        return {
+            "bundle_key": bundle_key,
+            "bundle_name": first_template.bundle_name,
+            "category_code": category_code or None,
+            "mounting_variant_key": normalized_mounting_variant_key,
+            "templates": templates,
+        }
 
     def update_template(
         self,

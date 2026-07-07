@@ -47,6 +47,7 @@ import {
   createMaterial,
   createFitting,
   createFittingHoleTemplate,
+  createFittingHoleBundle,
   createFittingHolePoint,
   createManualService,
   createMyEmailChangeRequest,
@@ -61,6 +62,7 @@ import {
   confirmProjectScan,
   getCatalogAutoRefreshStatus,
   getCurrentUser,
+  getFittingHoleBundle,
   getFittingHoleTemplate,
   getFittingsCatalog,
   getMaterialDetails,
@@ -91,6 +93,7 @@ import {
   rollbackProject,
   resetUserPassword,
   updateCatalogItem,
+  updateFittingHoleBundleMountingVariant,
   updateFittingHoleTemplate,
   updateCatalogItemActive,
   updateFittingHolePoint,
@@ -1585,20 +1588,37 @@ const TRANSLATIONS = {
     holeBundleModalEmptyTitle: "No fittings in this category yet.",
     holeBundleModalEmptyDescription: "Pick another category to continue.",
     holeBundleSelectedItemsTitle: "Selected fittings",
-    holeBundleSelectedItemsCount: "items",
+    holeBundleSelectedItemsCount: "positions",
     holeBundleItemArticle: "Article",
     holeBundleItemCategory: "Category",
     holeBundleItemImageAlt: "Fitting image",
     holeBundleItemAdd: "Add",
     holeBundleItemSelected: "Selected",
+    holeBundleClearButton: "Clear bundle",
+    holeBundleOpenStatus: "Opened bundle: {name}",
+    holeBundleSaveVariantButton: "Save mounting variant",
+    holeBundleSaveVariantSuccess: "Mounting variant saved.",
+    holeBundleSaveVariantFailed: "Unable to save mounting variant",
+    holeBundleSaveButton: "Save fitting bundle",
+    holeBundleSaveSuccess: "Fitting bundle saved.",
+    holeBundleSaveFailed: "Unable to save fitting bundle",
     fittingBundlesTitle: "Fitting bundles",
     fittingBundlesDescription:
       "List of fitting bundles created on the \"Fitting holes\" page.",
     fittingBundlesEmptyTitle: "No fitting bundles yet.",
     fittingBundlesEmptyDescription: "Create a bundle on the \"Fitting holes\" page.",
-    fittingBundlesCount: "bundles",
-    fittingBundlesTemplates: "templates",
+    fittingBundlesCountOne: "bundle",
+    fittingBundlesCountFew: "bundles",
+    fittingBundlesCountMany: "bundles",
+    fittingBundlesTemplatesOne: "position",
+    fittingBundlesTemplatesFew: "positions",
+    fittingBundlesTemplatesMany: "positions",
     fittingBundleKey: "Key",
+    fittingBundleView: "View",
+    fittingBundleDetailsTitle: "Bundle contents",
+    fittingBundleDetailsDescription: "What this bundle contains",
+    fittingBundleDetailsEmpty: "No bundle contents yet.",
+    fittingBundleWorkWithMachining: "Work with fitting holes",
     unableToLoadBundles: "Unable to load fitting bundles",
     holeReadOnlyBadge: "Read-only",
     holePointsTitle: "Hole points",
@@ -2114,15 +2134,32 @@ Object.assign(TRANSLATIONS.uk, {
   holeBundleItemImageAlt: "\u0417\u043e\u0431\u0440\u0430\u0436\u0435\u043d\u043d\u044f \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0438",
   holeBundleItemAdd: "\u0414\u043e\u0434\u0430\u0442\u0438",
   holeBundleItemSelected: "\u0412\u0438\u0431\u0440\u0430\u043d\u043e",
+  holeBundleClearButton: "\u041e\u0447\u0438\u0441\u0442\u0438\u0442\u0438 \u043a\u043e\u043c\u043f\u043b\u0435\u043a\u0442",
+  holeBundleOpenStatus: "\u0412\u0456\u0434\u043a\u0440\u0438\u0442\u043e \u043a\u043e\u043c\u043f\u043b\u0435\u043a\u0442: {name}",
+  holeBundleSaveVariantButton: "\u0417\u0431\u0435\u0440\u0435\u0433\u0442\u0438 \u0432\u0430\u0440\u0456\u0430\u043d\u0442 \u043a\u0440\u0456\u043f\u043b\u0435\u043d\u043d\u044f",
+  holeBundleSaveVariantSuccess: "\u0412\u0430\u0440\u0456\u0430\u043d\u0442 \u043a\u0440\u0456\u043f\u043b\u0435\u043d\u043d\u044f \u0437\u0431\u0435\u0440\u0435\u0436\u0435\u043d\u043e.",
+  holeBundleSaveVariantFailed: "\u041d\u0435 \u0432\u0434\u0430\u043b\u043e\u0441\u044f \u0437\u0431\u0435\u0440\u0435\u0433\u0442\u0438 \u0432\u0430\u0440\u0456\u0430\u043d\u0442 \u043a\u0440\u0456\u043f\u043b\u0435\u043d\u043d\u044f",
+  holeBundleSaveButton: "\u0417\u0431\u0435\u0440\u0435\u0433\u0442\u0438 \u043a\u043e\u043c\u043f\u043b\u0435\u043a\u0442 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0438",
+  holeBundleSaveSuccess: "\u041a\u043e\u043c\u043f\u043b\u0435\u043a\u0442 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0438 \u0437\u0431\u0435\u0440\u0435\u0436\u0435\u043d\u043e.",
+  holeBundleSaveFailed: "\u041d\u0435 \u0432\u0434\u0430\u043b\u043e\u0441\u044f \u0437\u0431\u0435\u0440\u0435\u0433\u0442\u0438 \u043a\u043e\u043c\u043f\u043b\u0435\u043a\u0442 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0438",
   fittingBundlesTitle: "\u041a\u043e\u043c\u043f\u043b\u0435\u043a\u0442\u0438 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0438",
   fittingBundlesDescription:
     "\u0421\u043f\u0438\u0441\u043e\u043a \u043a\u043e\u043c\u043f\u043b\u0435\u043a\u0442\u0456\u0432 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0438, \u0441\u0442\u0432\u043e\u0440\u0435\u043d\u0438\u0445 \u043d\u0430 \u0441\u0442\u043e\u0440\u0456\u043d\u0446\u0456 \u00ab\u041f\u0440\u0438\u0441\u0430\u0434\u043a\u0430 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0438\u00bb.",
   fittingBundlesEmptyTitle: "\u041a\u043e\u043c\u043f\u043b\u0435\u043a\u0442\u0438 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0438 \u0449\u0435 \u043d\u0435 \u0441\u0442\u0432\u043e\u0440\u0435\u043d\u0456.",
   fittingBundlesEmptyDescription:
     "\u0421\u0442\u0432\u043e\u0440\u0456\u0442\u044c \u043a\u043e\u043c\u043f\u043b\u0435\u043a\u0442 \u043d\u0430 \u0441\u0442\u043e\u0440\u0456\u043d\u0446\u0456 \u00ab\u041f\u0440\u0438\u0441\u0430\u0434\u043a\u0430 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0438\u00bb.",
-  fittingBundlesCount: "\u043a\u043e\u043c\u043f\u043b\u0435\u043a\u0442\u0456\u0432",
-  fittingBundlesTemplates: "\u0448\u0430\u0431\u043b\u043e\u043d\u0456\u0432",
+  fittingBundlesCountOne: "\u043a\u043e\u043c\u043f\u043b\u0435\u043a\u0442",
+  fittingBundlesCountFew: "\u043a\u043e\u043c\u043f\u043b\u0435\u043a\u0442\u0438",
+  fittingBundlesCountMany: "\u043a\u043e\u043c\u043f\u043b\u0435\u043a\u0442\u0456\u0432",
+  fittingBundlesTemplatesOne: "\u043f\u043e\u0437\u0438\u0446\u0456\u044f",
+  fittingBundlesTemplatesFew: "\u043f\u043e\u0437\u0438\u0446\u0456\u0457",
+  fittingBundlesTemplatesMany: "\u043f\u043e\u0437\u0438\u0446\u0456\u0439",
   fittingBundleKey: "\u041a\u043b\u044e\u0447",
+  fittingBundleView: "\u041f\u0435\u0440\u0435\u0433\u043b\u044f\u043d\u0443\u0442\u0438",
+  fittingBundleDetailsTitle: "\u0421\u043a\u043b\u0430\u0434 \u043a\u043e\u043c\u043f\u043b\u0435\u043a\u0442\u0443",
+  fittingBundleDetailsDescription: "\u0429\u043e \u0432\u0445\u043e\u0434\u0438\u0442\u044c \u0443 \u0446\u0435\u0439 \u043a\u043e\u043c\u043f\u043b\u0435\u043a\u0442",
+  fittingBundleDetailsEmpty: "\u0423 \u0446\u044c\u043e\u043c\u0443 \u043a\u043e\u043c\u043f\u043b\u0435\u043a\u0442\u0456 \u0449\u0435 \u043d\u0435\u043c\u0430\u0454 \u0437\u043c\u0456\u0441\u0442\u0443.",
+  fittingBundleWorkWithMachining: "\u041f\u0440\u0430\u0446\u044e\u0432\u0430\u0442\u0438 \u0437 \u043f\u0440\u0438\u0441\u0430\u0434\u043a\u043e\u044e",
   unableToLoadBundles: "\u041d\u0435 \u0432\u0434\u0430\u043b\u043e\u0441\u044f \u0437\u0430\u0432\u0430\u043d\u0442\u0430\u0436\u0438\u0442\u0438 \u043a\u043e\u043c\u043f\u043b\u0435\u043a\u0442\u0438 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0438",
   holeReadOnlyBadge: "\u041b\u0456\u0448\u0435 \u043f\u0435\u0440\u0435\u0433\u043b\u044f\u0434",
   holePointsTitle: "\u0422\u043e\u0447\u043a\u0438 \u043e\u0442\u0432\u043e\u0440\u0456\u0432",
@@ -4853,6 +4890,14 @@ export default function App() {
   const [holeBundleModalViewMode, setHoleBundleModalViewMode] = useState("list");
   const [holeBundleDraftItemIds, setHoleBundleDraftItemIds] = useState([]);
   const [holeBundleSelectedItemIds, setHoleBundleSelectedItemIds] = useState([]);
+  const [holeActiveBundleKey, setHoleActiveBundleKey] = useState("");
+  const [holeActiveBundleName, setHoleActiveBundleName] = useState("");
+  const [holeActiveBundleMountingVariantKey, setHoleActiveBundleMountingVariantKey] = useState("");
+  const [holeBundleSaving, setHoleBundleSaving] = useState(false);
+  const [holeBundleMountingVariantSaving, setHoleBundleMountingVariantSaving] = useState(false);
+  const [holeBundleDetailsOpen, setHoleBundleDetailsOpen] = useState(false);
+  const [holeBundleDetailsLoading, setHoleBundleDetailsLoading] = useState(false);
+  const [holeBundleDetails, setHoleBundleDetails] = useState(null);
   const [holeSelectedFittingCategory, setHoleSelectedFittingCategory] = useState("");
   const [holeSelectedFittingId, setHoleSelectedFittingId] = useState("");
   const [holeSelectedTemplateId, setHoleSelectedTemplateId] = useState("");
@@ -4990,6 +5035,20 @@ export default function App() {
         .filter(Boolean),
     [fittingItems, holeBundleSelectedItemIds],
   );
+  const holeBundleCanSave = useMemo(
+    () =>
+      Boolean(String(holeBundleName || "").trim()) &&
+      Boolean(String(holeBundleCategoryCode || "").trim()) &&
+      Array.isArray(holeBundleSelectedItems) &&
+      holeBundleSelectedItems.length > 0 &&
+      !holeBundleSaving,
+    [
+      holeBundleCategoryCode,
+      holeBundleName,
+      holeBundleSaving,
+      holeBundleSelectedItems,
+    ],
+  );
   const holeBundleCategoryMeta = useMemo(
     () =>
       fittingCategories.find((item) => item.code === holeBundleCategoryCode) ||
@@ -5050,10 +5109,17 @@ export default function App() {
     () => normalizeHoleMountingVariantKey(selectedHoleTemplate?.mounting_variant_key),
     [selectedHoleTemplate],
   );
+  const normalizedActiveBundleMountingVariantKey = useMemo(
+    () => normalizeHoleWorkspaceMountingVariantKey(holeActiveBundleMountingVariantKey),
+    [holeActiveBundleMountingVariantKey],
+  );
   const holeWorkspaceHasUnsavedVariantChanges = Boolean(
-    holeSelectedFittingId &&
+    (holeSelectedFittingId &&
       selectedHoleTemplate &&
-      normalizedSelectedTemplateMountingVariantKey !== normalizedSelectedHoleMountingVariantKey,
+      normalizedSelectedTemplateMountingVariantKey !== normalizedSelectedHoleMountingVariantKey) ||
+      (holeActiveBundleKey &&
+        normalizedActiveBundleMountingVariantKey &&
+        normalizedActiveBundleMountingVariantKey !== normalizedSelectedHoleMountingVariantKey),
   );
   const holeWorkspaceHasFitting = Boolean(holeSelectedFittingId);
   const holeWorkspaceHasTemplate = Boolean(selectedHoleTemplate?.id);
@@ -7457,7 +7523,14 @@ export default function App() {
   }
 
   function getFittingBundleCategoryLabel(item) {
-    const categoryCode = String(item?.fitting_type || item?.category || item?.fitting_group || "").trim();
+    const categoryCode = String(
+      item?.fitting_type ||
+        item?.fitting_category_code ||
+        item?.category ||
+        item?.fitting_group ||
+        item?.category_code ||
+        "",
+    ).trim();
 
     if (!categoryCode) {
       return "";
@@ -7488,6 +7561,46 @@ export default function App() {
 
   function getFittingBundleItemKey(item) {
     return String(item?.id || item?.code || item?.article || "").trim();
+  }
+
+  function getHoleBundleMountingVariantKey(bundleDetails) {
+    const bundleVariantKey = String(bundleDetails?.mounting_variant_key || "").trim();
+    if (bundleVariantKey) {
+      return normalizeHoleWorkspaceMountingVariantKey(bundleVariantKey);
+    }
+
+    const templateVariantKey = Array.isArray(bundleDetails?.templates)
+      ? bundleDetails.templates
+          .map((template) => String(template?.mounting_variant_key || "").trim())
+          .find(Boolean)
+      : "";
+
+    return normalizeHoleWorkspaceMountingVariantKey(templateVariantKey);
+  }
+
+  function getHoleBundleTemplateFittingIds(bundleDetails) {
+    return Array.isArray(bundleDetails?.templates)
+      ? bundleDetails.templates
+          .map((template) => String(template?.fitting_id || template?.id || "").trim())
+          .filter(Boolean)
+      : [];
+  }
+
+  function formatUkrainianCountLabel(count, oneLabel, fewLabel, manyLabel) {
+    const normalizedCount = Number.isFinite(Number(count)) ? Math.max(0, Number(count)) : 0;
+
+    if (normalizedCount === 1) {
+      return `${normalizedCount} ${oneLabel}`;
+    }
+
+    const mod10 = normalizedCount % 10;
+    const mod100 = normalizedCount % 100;
+
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) {
+      return `${normalizedCount} ${fewLabel}`;
+    }
+
+    return `${normalizedCount} ${manyLabel}`;
   }
 
   function handleHoleBundleCategoryChange(nextCategoryCode) {
@@ -7527,6 +7640,98 @@ export default function App() {
     setHoleBundleDraftItemIds(holeBundleSelectedItemIds);
   }
 
+  function clearOpenedHoleBundle() {
+    setHoleActiveBundleKey("");
+    setHoleActiveBundleName("");
+    setHoleActiveBundleMountingVariantKey("");
+    setHoleBundleMountingVariantSaving(false);
+    setHoleBundleName("");
+    setHoleBundleCategoryCode("");
+    setHoleBundleSelectedItemIds([]);
+    setHoleBundleDraftItemIds([]);
+    handleHoleFittingCategoryChange("");
+  }
+
+  async function openHoleBundleForWork(bundleDetails) {
+    const bundleKey = String(bundleDetails?.bundle_key || "").trim();
+    const bundleName = String(bundleDetails?.bundle_name || "").trim();
+    const bundleCategoryCode = String(
+      bundleDetails?.category_code || bundleDetails?.templates?.[0]?.fitting_category_code || "",
+    ).trim();
+    const bundleFittingIds = getHoleBundleTemplateFittingIds(bundleDetails);
+    const bundleMountingVariantKey = getHoleBundleMountingVariantKey(bundleDetails);
+    const firstFittingId = bundleFittingIds[0] || "";
+
+    if (!bundleKey || !bundleName || !bundleFittingIds.length) {
+      setStatus({ message: t.fittingBundleDetailsEmpty, tone: "error" });
+      return;
+    }
+
+    setHoleBundleDetailsOpen(false);
+    await switchView("catalogHoles");
+
+    setHoleActiveBundleKey(bundleKey);
+    setHoleActiveBundleName(bundleName);
+    setHoleActiveBundleMountingVariantKey(bundleMountingVariantKey);
+    setHoleBundleMountingVariantSaving(false);
+    setHoleBundleName(bundleName);
+    setHoleBundleCategoryCode(bundleCategoryCode);
+    setHoleBundleSelectedItemIds(bundleFittingIds);
+    setHoleBundleDraftItemIds(bundleFittingIds);
+
+    if (bundleCategoryCode) {
+      setHoleSelectedFittingCategory(bundleCategoryCode);
+    }
+
+    if (firstFittingId) {
+      await handleHoleFittingChange(firstFittingId);
+    }
+
+    setSelectedHoleMountingVariantKey(bundleMountingVariantKey);
+  }
+
+  async function saveHoleBundleMountingVariant() {
+    const bundleKey = String(holeActiveBundleKey || "").trim();
+    const mountingVariantKey = normalizeHoleWorkspaceMountingVariantKey(
+      selectedHoleMountingVariantKey,
+    );
+
+    if (!token || !bundleKey) {
+      return;
+    }
+
+    setHoleBundleMountingVariantSaving(true);
+
+    try {
+      const result = await updateFittingHoleBundleMountingVariant(token, bundleKey, {
+        mounting_variant_key: mountingVariantKey,
+      });
+
+      if (!result.success) {
+        const errorMessage =
+          result.error && result.error !== "Request failed"
+            ? result.error
+            : t.holeBundleSaveVariantFailed;
+        setStatus({ message: errorMessage, tone: "error" });
+        return;
+      }
+
+      const savedVariantKey = normalizeHoleWorkspaceMountingVariantKey(
+        result.mounting_variant_key || mountingVariantKey,
+      );
+      setHoleActiveBundleMountingVariantKey(savedVariantKey);
+      setSelectedHoleMountingVariantKey(savedVariantKey);
+      setStatus({ message: t.holeBundleSaveVariantSuccess, tone: "success" });
+    } catch (error) {
+      setStatus({
+        message: error?.message || t.holeBundleSaveVariantFailed,
+        tone: "error",
+      });
+    } finally {
+      setHoleBundleMountingVariantSaving(false);
+    }
+  }
+
   function createHoleBundleDraft() {
     if (!holeBundleDraftItemIds.length) {
       return;
@@ -7534,6 +7739,91 @@ export default function App() {
 
     setHoleBundleSelectedItemIds(holeBundleDraftItemIds);
     setHoleBundleModalOpen(false);
+  }
+
+  async function saveHoleBundle() {
+    if (!token || !holeBundleCanSave) {
+      return;
+    }
+
+    const bundleName = String(holeBundleName || "").trim();
+    const categoryKey = String(holeBundleCategoryCode || "").trim();
+    const fittingIds = Array.isArray(holeBundleSelectedItems)
+      ? holeBundleSelectedItems.map((item) => Number(item?.id)).filter((itemId) => Number.isInteger(itemId))
+      : [];
+
+    if (!bundleName || !categoryKey || !fittingIds.length) {
+      return;
+    }
+
+    setHoleBundleSaving(true);
+
+    try {
+      const result = await createFittingHoleBundle(token, {
+        bundle_name: bundleName,
+        category_key: categoryKey,
+        fitting_ids: fittingIds,
+      });
+
+      if (!result.success) {
+        const errorMessage =
+          result.error && result.error !== "Request failed"
+            ? result.error
+            : t.holeBundleSaveFailed;
+        console.error("Unable to save fitting bundle", result.error, result.status);
+        setStatus({ message: errorMessage, tone: "error" });
+        return;
+      }
+
+      setHoleBundleName("");
+      setHoleBundleCategoryCode("");
+      setHoleBundleModalOpen(false);
+      setHoleBundleModalViewMode("list");
+      setHoleBundleDraftItemIds([]);
+      setHoleBundleSelectedItemIds([]);
+      setActiveView("catalogBundles");
+      setStatus({ message: t.holeBundleSaveSuccess, tone: "success" });
+    } catch (error) {
+      console.error("Unable to save fitting bundle", error);
+      setStatus({ message: t.holeBundleSaveFailed, tone: "error" });
+    } finally {
+      setHoleBundleSaving(false);
+    }
+  }
+
+  async function openHoleBundleDetails(bundle) {
+    const bundleKey = String(bundle?.bundle_key || "").trim();
+
+    if (!token || !bundleKey) {
+      return;
+    }
+
+    setHoleBundleDetailsOpen(true);
+    setHoleBundleDetailsLoading(true);
+    setHoleBundleDetails({
+      bundle_key: bundleKey,
+      bundle_name: String(bundle?.bundle_name || bundleKey).trim(),
+      category_code: String(bundle?.category_code || "").trim(),
+      templates: [],
+    });
+
+    const result = await getFittingHoleBundle(token, bundleKey);
+
+    setHoleBundleDetailsLoading(false);
+
+    if (!result.success) {
+      console.error("Unable to load fitting bundle details", result.error, result.status);
+      setStatus({ message: result.error || t.unableToLoadBundles, tone: "error" });
+      return;
+    }
+
+    setHoleBundleDetails(result);
+  }
+
+  function closeHoleBundleDetails() {
+    setHoleBundleDetailsOpen(false);
+    setHoleBundleDetailsLoading(false);
+    setHoleBundleDetails(null);
   }
 
   function renderHoleTemplateFittingInfo(fitting) {
@@ -11440,7 +11730,10 @@ export default function App() {
     }
 
     loadFittingBundles(token);
-  }, [token, isCatalogBundlesView]);
+    if (!fittingItems.length || !fittingCategories.length) {
+      loadFittingsCatalog(token, { search: "" });
+    }
+  }, [token, isCatalogBundlesView, fittingCategories.length, fittingItems.length]);
 
   useEffect(() => {
     if (!token || user?.role !== "admin" || !isCatalogViyarView) {
@@ -14482,6 +14775,38 @@ export default function App() {
                     <span>{t.holeBundleCategoryHint}</span>
                   )}
                 </div>
+                {holeActiveBundleKey ? (
+                  <div className="holes-bundle-open-status">
+                    <span>{t.holeBundleOpenStatus.replace("{name}", holeActiveBundleName || t.notSet)}</span>
+                    <div className="holes-bundle-open-status-actions">
+                      <button
+                        className="ghost-button compact-button"
+                        onClick={clearOpenedHoleBundle}
+                        type="button"
+                      >
+                        {t.holeBundleClearButton}
+                      </button>
+                      <button
+                        className="primary-button compact-button"
+                        disabled={holeBundleMountingVariantSaving || !normalizedSelectedHoleMountingVariantKey}
+                        onClick={saveHoleBundleMountingVariant}
+                        type="button"
+                      >
+                        {t.holeBundleSaveVariantButton}
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+                <div className="holes-bundle-create-actions">
+                  <button
+                    className="primary-button"
+                    disabled={!holeBundleCanSave}
+                    onClick={saveHoleBundle}
+                    type="button"
+                  >
+                    {t.holeBundleSaveButton}
+                  </button>
+                </div>
               </section>
 
               <div className="holes-selector-grid">
@@ -15098,7 +15423,12 @@ export default function App() {
                 </div>
                 <div className="service-catalog-header-actions">
                   <span className="service-tree-badge subtle">
-                    {fittingBundleItems.length} {t.fittingBundlesCount}
+                    {formatUkrainianCountLabel(
+                      fittingBundleItems.length,
+                      t.fittingBundlesCountOne,
+                      t.fittingBundlesCountFew,
+                      t.fittingBundlesCountMany,
+                    )}
                   </span>
                 </div>
               </div>
@@ -15109,6 +15439,9 @@ export default function App() {
                     const bundleName = String(bundle?.bundle_name || bundle?.bundle_key || "").trim();
                     const bundleKey = String(bundle?.bundle_key || "").trim();
                     const bundleCount = Number(bundle?.template_count || 0);
+                    const bundleCategoryLabel = getFittingBundleCategoryLabel({
+                      fitting_type: bundle?.category_code || "",
+                    });
                     const bundleUpdatedAt = String(bundle?.updated_at || bundle?.created_at || "").trim();
                     const bundleDateText = bundleUpdatedAt
                       ? (() => {
@@ -15118,26 +15451,47 @@ export default function App() {
                             : parsed.toLocaleString(language === "uk" ? "uk-UA" : "en-US");
                         })()
                       : "";
+                    const bundleKeyShort = bundleKey.length > 12 ? `${bundleKey.slice(0, 8)}…` : bundleKey;
 
                     return (
                       <article className="fitting-bundle-item" key={bundleKey || bundleName || index}>
-                        <div className="fitting-bundle-item-copy">
-                          <strong>{bundleName || t.notSet}</strong>
-                          {bundleKey ? (
-                            <span>
-                              {t.fittingBundleKey}: {bundleKey}
-                            </span>
-                          ) : null}
-                          {bundleDateText ? (
-                            <span>
-                              {bundle?.updated_at ? t.updated : t.created}: {bundleDateText}
-                            </span>
-                          ) : null}
+                        <div className="fitting-bundle-item-header">
+                          <strong className="fitting-bundle-item-name">{bundleName || t.notSet}</strong>
+                          <div className="fitting-bundle-item-subtitle">
+                            {bundleCategoryLabel ? (
+                              <span className="fitting-bundle-item-category">
+                                {t.holeBundleItemCategory}: {bundleCategoryLabel}
+                              </span>
+                            ) : null}
+                            {bundleKey ? (
+                              <span className="fitting-bundle-item-key" title={bundleKey}>
+                                {t.fittingBundleKey}: {bundleKeyShort || bundleKey}
+                              </span>
+                            ) : null}
+                            {bundleDateText ? (
+                              <span className="fitting-bundle-item-date">
+                                {bundle?.updated_at ? t.updated : t.created}: {bundleDateText}
+                              </span>
+                            ) : null}
+                          </div>
                         </div>
-                        <div className="fitting-bundle-item-meta">
+                        <div className="fitting-bundle-item-footer">
                           <span className="service-tree-badge subtle">
-                            {bundleCount} {t.fittingBundlesTemplates}
+                            {formatUkrainianCountLabel(
+                              bundleCount,
+                              t.fittingBundlesTemplatesOne,
+                              t.fittingBundlesTemplatesFew,
+                              t.fittingBundlesTemplatesMany,
+                            )}
                           </span>
+                          <button
+                            className="ghost-button compact-button"
+                            disabled={!bundleKey}
+                            onClick={() => openHoleBundleDetails(bundle)}
+                            type="button"
+                          >
+                            {t.fittingBundleView}
+                          </button>
                         </div>
                       </article>
                     );
@@ -16116,6 +16470,117 @@ export default function App() {
           </section>
         )}
       </section>
+
+      {holeBundleDetailsOpen ? (
+        <div
+          aria-modal="true"
+          className="modal-backdrop"
+          onClick={closeHoleBundleDetails}
+          role="dialog"
+        >
+          <section
+            className="confirm-modal hole-template-modal hole-bundle-details-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="confirm-header">
+              <div>
+                <strong>{t.fittingBundleDetailsTitle}</strong>
+                <p>{t.fittingBundleDetailsDescription}</p>
+              </div>
+              <button
+                aria-label={t.cancel}
+                className="ghost-button compact-button detail-info-button"
+                onClick={closeHoleBundleDetails}
+                type="button"
+              >
+                <X size={16} />
+              </button>
+            </header>
+
+            {holeBundleDetailsLoading ? (
+              <div className="empty-state compact-empty-state">
+                <span>{t.loading}</span>
+              </div>
+            ) : holeBundleDetails ? (
+              <>
+                <div className="hole-bundle-details-summary">
+                  <strong>{String(holeBundleDetails.bundle_name || holeBundleDetails.bundle_key || t.notSet)}</strong>
+                  <div className="hole-bundle-details-meta">
+                    {holeBundleDetails.category_code ? (
+                      <span>
+                        {t.holeBundleItemCategory}: {getFittingBundleCategoryLabel({
+                          fitting_type: holeBundleDetails.category_code,
+                        }) || holeBundleDetails.category_code}
+                      </span>
+                    ) : null}
+                    {holeBundleDetails.bundle_key ? (
+                      <span title={holeBundleDetails.bundle_key}>
+                        {t.fittingBundleKey}: {holeBundleDetails.bundle_key}
+                      </span>
+                    ) : null}
+                    {Array.isArray(holeBundleDetails.templates) ? (
+                      <span>
+                        {formatUkrainianCountLabel(
+                          holeBundleDetails.templates.length,
+                          t.fittingBundlesTemplatesOne,
+                          t.fittingBundlesTemplatesFew,
+                          t.fittingBundlesTemplatesMany,
+                        )}
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+
+                {Array.isArray(holeBundleDetails.templates) && holeBundleDetails.templates.length ? (
+                  <div className="hole-bundle-details-list">
+                    {holeBundleDetails.templates.map((template) => {
+                      const templateName = String(template?.name || t.notSet).trim();
+                      const templateArticle = String(template?.fitting_article || "").trim();
+                      const templateCategoryLabel = getFittingBundleCategoryLabel(template);
+
+                      return (
+                        <article className="hole-bundle-details-item" key={template.id}>
+                          <strong>{templateName}</strong>
+                          <div className="hole-bundle-details-item-meta">
+                            {templateArticle ? (
+                              <span>
+                                {t.holeBundleItemArticle}: {templateArticle}
+                              </span>
+                            ) : null}
+                            {templateCategoryLabel ? (
+                              <span>
+                                {t.holeBundleItemCategory}: {templateCategoryLabel}
+                              </span>
+                            ) : null}
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="empty-state compact-empty-state">
+                    <span>{t.fittingBundleDetailsEmpty}</span>
+                  </div>
+                )}
+                <div className="hole-bundle-details-actions">
+                  <button
+                    className="primary-button"
+                    disabled={!Array.isArray(holeBundleDetails.templates) || !holeBundleDetails.templates.length}
+                    onClick={() => openHoleBundleForWork(holeBundleDetails)}
+                    type="button"
+                  >
+                    {t.fittingBundleWorkWithMachining}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="empty-state compact-empty-state">
+                <span>{t.fittingBundleDetailsEmpty}</span>
+              </div>
+            )}
+          </section>
+        </div>
+      ) : null}
 
       {holeBundleModalOpen ? (
         <div

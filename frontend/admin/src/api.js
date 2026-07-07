@@ -200,6 +200,28 @@ export async function listFittingHoleBundles(token) {
   });
 }
 
+export async function getFittingHoleBundle(token, bundleKey) {
+  return request(`/fitting-holes/bundles/${encodeURIComponent(bundleKey)}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function createFittingHoleBundle(token, payload) {
+  return request("/fitting-holes/bundles", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateFittingHoleBundleMountingVariant(token, bundleKey, payload) {
+  return request(`/fitting-holes/bundles/${encodeURIComponent(bundleKey)}/mounting-variant`, {
+    method: "PATCH",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function getFittingHoleTemplate(token, templateId) {
   return request(`/fitting-holes/templates/${templateId}`, {
     headers: authHeaders(token),

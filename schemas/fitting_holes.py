@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import List
 
 from pydantic import (
@@ -91,6 +92,9 @@ class FittingHoleTemplateResponse(BaseModel):
     id: int
     fitting_id: int
     name: str | None = None
+    fitting_code: str | None = None
+    fitting_article: str | None = None
+    fitting_category_code: str | None = None
     bundle_key: str | None = None
     bundle_name: str | None = None
     bundle_order_index: int = 0
@@ -122,6 +126,8 @@ class FittingHoleBundleResponseSchema(BaseModel):
     success: bool
     bundle_key: str | None = None
     bundle_name: str | None = None
+    category_code: str | None = None
+    mounting_variant_key: str | None = None
     templates: List[FittingHoleTemplateResponse] = Field(
         default_factory=list
     )
@@ -131,7 +137,10 @@ class FittingHoleBundleResponseSchema(BaseModel):
 class FittingHoleBundleListItemSchema(BaseModel):
     bundle_key: str
     bundle_name: str | None = None
+    category_code: str | None = None
     template_count: int = 0
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 class FittingHoleBundleListResponseSchema(BaseModel):
@@ -140,6 +149,40 @@ class FittingHoleBundleListResponseSchema(BaseModel):
         default_factory=list
     )
     error: str | None = None
+
+
+class FittingHoleBundleCreateSchema(BaseModel):
+    bundle_name: str = Field(
+        min_length=1,
+        max_length=255,
+    )
+    category_key: str | None = Field(
+        default=None,
+        max_length=64,
+    )
+    category: str | None = Field(
+        default=None,
+        max_length=64,
+    )
+    fitting_ids: List[int] = Field(
+        default_factory=list,
+        min_length=1,
+    )
+    bundle_key: str | None = Field(
+        default=None,
+        max_length=64,
+    )
+    mounting_variant_key: str | None = Field(
+        default=None,
+        max_length=64,
+    )
+
+
+class FittingHoleBundleMountingVariantUpdateSchema(BaseModel):
+    mounting_variant_key: str = Field(
+        min_length=1,
+        max_length=64,
+    )
 
 
 class FittingHolePointCreate(BaseModel):

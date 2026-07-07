@@ -6012,6 +6012,117 @@ tbody tr.selected {
   max-width: min(1040px, calc(100vw - 48px));
 }
 
+.hole-bundle-details-modal {
+  max-width: min(900px, calc(100vw - 48px));
+}
+
+.hole-bundle-details-summary {
+  display: grid;
+  gap: 6px;
+}
+
+.hole-bundle-details-summary strong {
+  color: #24343d;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.hole-bundle-details-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+}
+
+.hole-bundle-details-meta span,
+.fitting-bundle-item-subtitle span,
+.fitting-bundle-item-key {
+  color: #607182;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.fitting-bundles-list {
+  display: grid;
+  gap: 12px;
+}
+
+.fitting-bundle-item {
+  align-items: start;
+  background: #ffffff;
+  border: 1px solid #dbe3ea;
+  border-radius: 12px;
+  display: grid;
+  gap: 12px;
+  padding: 14px 16px;
+}
+
+.fitting-bundle-item-header {
+  display: grid;
+  gap: 8px;
+}
+
+.fitting-bundle-item-name {
+  color: #1f2933;
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.fitting-bundle-item-subtitle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+}
+
+.fitting-bundle-item-key {
+  color: #7b8794;
+}
+
+.fitting-bundle-item-key,
+.fitting-bundle-item-date {
+  white-space: nowrap;
+}
+
+.fitting-bundle-item-footer {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.hole-bundle-details-list {
+  display: grid;
+  gap: 10px;
+}
+
+.hole-bundle-details-item {
+  background: #f8fafb;
+  border: 1px solid #dbe3ea;
+  border-radius: 10px;
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+}
+
+.hole-bundle-details-item strong {
+  color: #24343d;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.hole-bundle-details-item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+}
+
+.hole-bundle-details-item-meta span {
+  color: #607182;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .hole-template-form {
   flex: 1;
   display: grid;
@@ -6204,6 +6315,39 @@ tbody tr.selected {
   font-size: 12px;
   line-height: 1.45;
   min-height: 18px;
+}
+
+.holes-bundle-open-status {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: space-between;
+  margin-top: 2px;
+}
+
+.holes-bundle-open-status span {
+  color: #1f2933;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.holes-bundle-open-status-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.holes-bundle-create-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.hole-bundle-details-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
 }
 
 .hole-bundle-selected-list {

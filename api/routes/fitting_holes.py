@@ -9,6 +9,8 @@ from fastapi import (
 
 from api.dependencies.auth import require_roles
 from schemas.fitting_holes import (
+    FittingHoleBundleCreateSchema,
+    FittingHoleBundleMountingVariantUpdateSchema,
     FittingHolePointCreate,
     FittingHolePointListResponseSchema,
     FittingHolePointOperationResponseSchema,
@@ -35,10 +37,15 @@ require_fitting_holes_editor = require_roles(
 
 
 def _serialize_template(template) -> dict:
+    fitting = getattr(template, "fitting", None)
     return {
         "id": template.id,
         "fitting_id": template.fitting_id,
         "name": template.name,
+        "fitting_code": getattr(fitting, "code", None),
+        "fitting_article": getattr(fitting, "article", None),
+        "fitting_category_code": getattr(fitting, "fitting_type", None)
+        or getattr(fitting, "fitting_group", None),
         "bundle_key": template.bundle_key,
         "bundle_name": template.bundle_name,
         "bundle_order_index": int(template.bundle_order_index or 0),
@@ -126,14 +133,15 @@ async def list_fitting_hole_templates_route(
             )
 
         templates = service.list_templates_for_fitting(fitting_id)
+        serialized_templates = [
+            _serialize_template(template)
+            for template in templates
+        ]
 
     return {
         "success": True,
         "fitting_id": fitting_id,
-        "templates": [
-            _serialize_template(template)
-            for template in templates
-        ],
+        "templates": serialized_templates,
     }
 
 
@@ -153,9 +161,12 @@ async def list_fitting_hole_bundles_route(
             {
                 "bundle_key": bundle_key,
                 "bundle_name": bundle_name,
+                "category_code": category_code,
                 "template_count": int(template_count or 0),
+                "created_at": created_at,
+                "updated_at": updated_at,
             }
-            for bundle_key, bundle_name, template_count in bundles
+            for bundle_key, bundle_name, category_code, template_count, created_at, updated_at in bundles
         ],
     }
 
@@ -170,6 +181,10 @@ async def list_fitting_hole_bundle_route(
 ):
     with FittingHolesService() as service:
         templates = service.list_templates_for_bundle(bundle_key)
+        serialized_templates = [
+            _serialize_template(template)
+            for template in templates
+        ]
 
     if not templates:
         raise HTTPException(
@@ -183,10 +198,75 @@ async def list_fitting_hole_bundle_route(
         "success": True,
         "bundle_key": bundle_key,
         "bundle_name": first_template.bundle_name,
-        "templates": [
-            _serialize_template(template)
-            for template in templates
-        ],
+        "category_code": serialized_templates[0].get("fitting_category_code")
+        if serialized_templates
+        else None,
+        "mounting_variant_key": serialized_templates[0].get("mounting_variant_key")
+        if serialized_templates
+        else None,
+        "templates": serialized_templates,
+    }
+
+
+@router.post(
+    "/bundles",
+    response_model=FittingHoleBundleResponseSchema,
+)
+async def create_fitting_hole_bundle_route(
+    payload: FittingHoleBundleCreateSchema,
+    current_user = Depends(require_fitting_holes_editor),
+):
+    try:
+        with FittingHolesService() as service:
+            result = service.create_bundle(
+                payload.model_dump(exclude_unset=True),
+            )
+            serialized_templates = [
+                _serialize_template(template)
+                for template in result["templates"]
+            ]
+    except ValueError as error:
+        _raise_service_error(error)
+
+    return {
+        "success": True,
+        "bundle_key": result["bundle_key"],
+        "bundle_name": result["bundle_name"],
+        "category_code": result.get("category_code"),
+        "mounting_variant_key": result.get("mounting_variant_key"),
+        "templates": serialized_templates,
+    }
+
+
+@router.patch(
+    "/bundles/{bundle_key}/mounting-variant",
+    response_model=FittingHoleBundleResponseSchema,
+)
+async def update_fitting_hole_bundle_mounting_variant_route(
+    bundle_key: str,
+    payload: FittingHoleBundleMountingVariantUpdateSchema,
+    current_user = Depends(require_fitting_holes_editor),
+):
+    try:
+        with FittingHolesService() as service:
+            result = service.update_bundle_mounting_variant(
+                bundle_key,
+                payload.mounting_variant_key,
+            )
+            serialized_templates = [
+                _serialize_template(template)
+                for template in result["templates"]
+            ]
+    except ValueError as error:
+        _raise_service_error(error)
+
+    return {
+        "success": True,
+        "bundle_key": result["bundle_key"],
+        "bundle_name": result["bundle_name"],
+        "category_code": result.get("category_code"),
+        "mounting_variant_key": result.get("mounting_variant_key"),
+        "templates": serialized_templates,
     }
 
 

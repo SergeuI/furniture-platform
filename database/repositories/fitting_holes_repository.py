@@ -4,7 +4,7 @@ from typing import Any, Optional
 
 from sqlalchemy import func
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from database.models.fitting import (
     FittingHolePointModel,
@@ -34,11 +34,30 @@ class FittingHolesRepository:
         self.session.refresh(template)
         return template
 
+    def create_templates(
+        self,
+        templates: list[dict[str, Any]],
+    ) -> list[FittingHoleTemplateModel]:
+        created_templates = [
+            FittingHoleTemplateModel(**template_data)
+            for template_data in templates
+        ]
+        self.session.add_all(created_templates)
+        self._commit()
+        for template in created_templates:
+            self.session.refresh(template)
+        return created_templates
+
     def get_template_by_id(
         self,
         template_id: int,
     ) -> Optional[FittingHoleTemplateModel]:
-        return self.session.get(FittingHoleTemplateModel, template_id)
+        return (
+            self.session.query(FittingHoleTemplateModel)
+            .options(selectinload(FittingHoleTemplateModel.fitting))
+            .filter(FittingHoleTemplateModel.id == template_id)
+            .one_or_none()
+        )
 
     def list_templates_by_fitting(
         self,
@@ -46,6 +65,7 @@ class FittingHolesRepository:
     ) -> list[FittingHoleTemplateModel]:
         return (
             self.session.query(FittingHoleTemplateModel)
+            .options(selectinload(FittingHoleTemplateModel.fitting))
             .filter(FittingHoleTemplateModel.fitting_id == fitting_id)
             .order_by(
                 FittingHoleTemplateModel.is_default.desc(),
@@ -62,6 +82,7 @@ class FittingHolesRepository:
     ) -> list[FittingHoleTemplateModel]:
         return (
             self.session.query(FittingHoleTemplateModel)
+            .options(selectinload(FittingHoleTemplateModel.fitting))
             .filter(FittingHoleTemplateModel.bundle_key == bundle_key)
             .order_by(
                 FittingHoleTemplateModel.bundle_order_index.asc(),
@@ -73,7 +94,7 @@ class FittingHolesRepository:
 
     def list_bundles(
         self,
-    ) -> list[tuple[str, str | None, int]]:
+    ) -> list[tuple[str, str | None, str | None, int, Any, Any]]:
         return (
             self.session.query(
                 func.coalesce(
@@ -81,8 +102,15 @@ class FittingHolesRepository:
                     FittingHoleTemplateModel.bundle_name,
                 ),
                 FittingHoleTemplateModel.bundle_name,
+                func.coalesce(
+                    FittingModel.fitting_type,
+                    FittingModel.fitting_group,
+                ),
                 func.count(FittingHoleTemplateModel.id),
+                func.max(FittingHoleTemplateModel.created_at),
+                func.max(FittingHoleTemplateModel.updated_at),
             )
+            .outerjoin(FittingModel, FittingModel.id == FittingHoleTemplateModel.fitting_id)
             .filter(
                 (FittingHoleTemplateModel.bundle_key.isnot(None))
                 | (FittingHoleTemplateModel.bundle_name.isnot(None))
@@ -97,6 +125,10 @@ class FittingHolesRepository:
                     FittingHoleTemplateModel.bundle_name,
                 ),
                 FittingHoleTemplateModel.bundle_name,
+                func.coalesce(
+                    FittingModel.fitting_type,
+                    FittingModel.fitting_group,
+                ),
             )
             .order_by(
                 FittingHoleTemplateModel.bundle_name.asc(),
@@ -120,6 +152,26 @@ class FittingHolesRepository:
         self._commit()
         self.session.refresh(template)
         return template
+
+    def update_templates_by_bundle_key(
+        self,
+        bundle_key: str,
+        **data: Any,
+    ) -> list[FittingHoleTemplateModel]:
+        templates = self.list_templates_by_bundle_key(bundle_key)
+        if not templates:
+            return []
+
+        for template in templates:
+            for key, value in data.items():
+                setattr(template, key, value)
+
+        self._commit()
+
+        for template in templates:
+            self.session.refresh(template)
+
+        return templates
 
     def deactivate_template(
         self,
