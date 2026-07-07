@@ -2114,7 +2114,7 @@ Object.assign(TRANSLATIONS.uk, {
 });
 
 Object.assign(TRANSLATIONS.uk, {
-  holeServicePreviewCalculable: "Додається до кошторису",
+  holeServicePreviewCalculable: "Буде додано до кошторису",
   holeServicePreviewDescription:
     "Попередній зведений погляд послуг присадки, які потім потраплять у кошторис проєкту.",
   holeServicePreviewEmpty:
@@ -2519,7 +2519,7 @@ Object.assign(TRANSLATIONS.uk, {
 });
 
 Object.assign(TRANSLATIONS.en, {
-  holeServicePreviewCalculable: "Included in estimate",
+  holeServicePreviewCalculable: "Will be added to estimate",
   holeServicePreviewDescription:
     "A preliminary grouped view of hole services that will later be included in the project estimate.",
   holeServicePreviewEmpty:
