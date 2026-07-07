@@ -6949,6 +6949,10 @@ export default function App() {
       return `${manualServiceItems.length} ${t.of} ${manualServiceItems.length}`;
     }
 
+    if (isCatalogBundlesView) {
+      return `${fittingBundleItems.length} ${t.of} ${fittingBundleItems.length}`;
+    }
+
     if (isCatalogHolesView) {
       return "";
     }
