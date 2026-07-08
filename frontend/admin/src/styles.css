@@ -3658,6 +3658,12 @@ tbody tr.selected {
   min-width: 0;
 }
 
+.service-tree-name-stack {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
 .service-tree-name-cell strong {
   color: #24343d;
   font-size: 14px;
@@ -3820,10 +3826,51 @@ tbody tr.selected {
   color: #4a5563;
 }
 
+.service-tree-badge.muted {
+  background: #f8fafb;
+  border-color: #e3e8ee;
+  color: #6c7a86;
+}
+
+.service-tree-badge.warning {
+  background: #fff7e8;
+  border-color: #f2d59c;
+  color: #8a5b00;
+}
+
 .service-tree-badge.success {
   background: #e7f6eb;
   border-color: #b9dec4;
   color: #1f6b34;
+}
+
+.service-tree-status-badge {
+  justify-self: start;
+  font-size: 11px;
+  padding: 3px 8px;
+}
+
+.service-description-category-overview {
+  align-items: flex-start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  margin-top: 8px;
+}
+
+.service-description-category-label {
+  color: #5c6875;
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 700;
+  padding-top: 6px;
+}
+
+.service-description-category-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
 }
 
 .service-catalog-divider {

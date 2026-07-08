@@ -2114,6 +2114,7 @@ async def import_viyar_services_route(
             "service_count": result["service_count"],
             "import_audit": result.get("import_audit", {}),
             "description_audit": result.get("description_audit", {}),
+            "description_backfill_audit": result.get("description_backfill_audit", {}),
         }
     )
 
@@ -2126,6 +2127,7 @@ async def import_viyar_services_route(
         "fallback_only_import": result.get("fallback_only_import", False),
         "import_audit": result.get("import_audit"),
         "description_audit": result.get("description_audit"),
+        "description_backfill_audit": result.get("description_backfill_audit"),
         "items": result["items"],
     }
 

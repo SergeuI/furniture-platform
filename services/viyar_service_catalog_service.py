@@ -302,6 +302,165 @@ VIYAR_DESCRIPTION_STOP_MARKERS = {
 }
 
 
+VIYAR_DESCRIPTION_START_MARKERS = (
+    "опис",
+    "обмеження",
+    "технічний опис",
+    "технічні характеристики",
+    "технічна інформація",
+    "інформація",
+    "інформаційний блок",
+    "характеристики",
+    "умови",
+    "додаткова інформація",
+)
+
+VIYAR_DESCRIPTION_STOP_PREFIXES = (
+    "відгуки",
+    "питання",
+    "доставка",
+    "оплата",
+    "table",
+    "header",
+)
+
+VIYAR_DESCRIPTION_SECTION_TAGS = (
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "strong",
+    "b",
+    "p",
+    "li",
+    "div",
+    "span",
+)
+
+VIYAR_DESCRIPTION_MAX_LENGTH = 8000
+
+
+def _normalized_viyar_description_heading(value: str | None) -> str:
+
+    normalized = _normalize_text(value).lower()
+    normalized = re.sub(r"^#+\s*", "", normalized)
+
+    return normalized[:-1] if normalized.endswith(":") else normalized
+
+
+def _is_viyar_description_heading(value: str | None) -> bool:
+
+    normalized = _normalized_viyar_description_heading(value)
+
+    if not normalized or len(normalized) > 120:
+        return False
+
+    return any(
+        normalized == marker
+        or normalized.startswith(f"{marker} ")
+        or normalized.startswith(f"{marker}:")
+        for marker in VIYAR_DESCRIPTION_START_MARKERS
+    )
+
+
+def _is_viyar_description_stop_line(value: str | None) -> bool:
+
+    normalized = _normalized_viyar_description_heading(value)
+
+    if not normalized:
+        return True
+
+    if normalized in VIYAR_DESCRIPTION_STOP_MARKERS:
+        return True
+
+    return normalized.startswith(VIYAR_DESCRIPTION_STOP_PREFIXES)
+
+
+def _looks_like_viyar_full_description(value: str | None) -> bool:
+
+    normalized = _normalize_text(value)
+
+    if len(normalized) < 50:
+        return False
+
+    if "\n" in normalized:
+        return True
+
+    if len(re.findall(r"[.!?]+", normalized)) >= 2:
+        return True
+
+    lowered = normalized.lower()
+
+    return any(
+        marker in lowered
+        for marker in (
+            "обмеження",
+            "характеристик",
+            "техніч",
+            "інформаці",
+            "опис",
+        )
+    )
+
+
+def _collect_viyar_description_after_element(element) -> str | None:
+
+    collected: list[str] = []
+
+    for sibling in element.find_next_siblings():
+        sibling_text = _normalize_text(
+            getattr(sibling, "get_text", lambda *_args, **_kwargs: str(sibling))(" ", strip=True)
+        )
+
+        if not sibling_text:
+            continue
+
+        if _is_viyar_description_stop_line(sibling_text):
+            break
+
+        if _is_viyar_description_heading(sibling_text) and collected:
+            break
+
+        collected.append(sibling_text)
+
+        if len(" ".join(collected)) >= VIYAR_DESCRIPTION_MAX_LENGTH:
+            break
+
+    description = "\n".join(collected).strip()
+
+    return description if _looks_like_viyar_full_description(description) else None
+
+
+def _collect_viyar_description_from_lines(lines: list[str]) -> str | None:
+
+    for index, line in enumerate(lines):
+        if not _is_viyar_description_heading(line):
+            continue
+
+        collected: list[str] = []
+
+        for next_line in lines[index + 1 :]:
+            if _is_viyar_description_stop_line(next_line):
+                break
+
+            if _is_viyar_description_heading(next_line) and collected:
+                break
+
+            collected.append(next_line)
+
+            if len(" ".join(collected)) >= VIYAR_DESCRIPTION_MAX_LENGTH:
+                break
+
+        description = "\n".join(collected).strip()
+
+        if _looks_like_viyar_full_description(description):
+            return description
+
+    return None
+
+
 def _extract_viyar_service_full_description(html: str) -> str | None:
 
     soup = BeautifulSoup(html, "html.parser")
@@ -340,10 +499,343 @@ def _extract_viyar_service_full_description(html: str) -> str | None:
     return description or None
 
 
+def _extract_viyar_service_category(folder_path: str | None) -> str:
+
+    normalized = _normalize_text(folder_path).lower()
+
+    if "prisadka" in normalized:
+        return "drilling"
+
+    if "pokleyka_krivolineynaya" in normalized or "pokleyka" in normalized:
+        return "edgebanding"
+
+    if "porezka" in normalized:
+        return "cutting"
+
+    if "frezerovka" in normalized:
+        return "milling"
+
+    return "other"
+
+
+VIYAR_PREFERRED_DESCRIPTION_HEADINGS = (
+    "опис",
+    "обмеження",
+    "технічний опис",
+    "технічна інформація",
+    "інформація",
+    "інформаційний блок",
+    "умови",
+    "додаткова інформація",
+)
+
+VIYAR_CHARACTERISTICS_ONLY_MARKERS = (
+    "основні характеристики продукту",
+    "технічні характеристики та функціональність",
+    "тип послуги:",
+    "виробник:",
+    "країна виробник:",
+)
+
+
+def _is_viyar_preferred_description_heading(value: str | None) -> bool:
+
+    normalized = _normalized_viyar_description_heading(value)
+
+    return any(
+        normalized == marker
+        or normalized.startswith(f"{marker} ")
+        or normalized.startswith(f"{marker}:")
+        for marker in VIYAR_PREFERRED_DESCRIPTION_HEADINGS
+    )
+
+
+def _extract_viyar_preferred_description(html: str) -> str | None:
+
+    soup = BeautifulSoup(html, "html.parser")
+    lines = [
+        _normalize_text(line)
+        for line in soup.get_text("\n", strip=True).splitlines()
+    ]
+    lines = [line for line in lines if line]
+
+    for index, line in enumerate(lines):
+        if not _is_viyar_preferred_description_heading(line):
+            continue
+
+        collected: list[str] = []
+
+        for next_line in lines[index + 1 :]:
+            if _is_viyar_description_stop_line(next_line):
+                break
+
+            if _is_viyar_description_heading(next_line) and collected:
+                break
+
+            collected.append(next_line)
+
+            if len(" ".join(collected)) >= VIYAR_DESCRIPTION_MAX_LENGTH:
+                break
+
+        description = "\n".join(collected).strip()
+
+        if _looks_like_viyar_full_description(description):
+            return description
+
+    return None
+
+
+def _extract_viyar_service_full_description(html: str) -> str | None:
+
+    soup = BeautifulSoup(html, "html.parser")
+
+    preferred_description = _extract_viyar_preferred_description(html)
+    if preferred_description:
+        return preferred_description
+
+    page_text = _normalize_text(soup.get_text(" ", strip=True)).lower()
+    if any(marker in page_text for marker in VIYAR_CHARACTERISTICS_ONLY_MARKERS) and not any(
+        marker in page_text
+        for marker in (
+            "опис",
+            "обмеження",
+            "технічний опис",
+            "технічна інформація",
+            "інформаційний блок",
+            "додаткова інформація",
+            "умови",
+        )
+    ):
+        return None
+
+    for tag in soup.select(",".join(VIYAR_DESCRIPTION_SECTION_TAGS)):
+        text = _normalize_text(tag.get_text(" ", strip=True))
+
+        if not _is_viyar_description_heading(text):
+            continue
+
+        description = _collect_viyar_description_after_element(tag)
+
+        if description:
+            return description
+
+    lines = [
+        _normalize_text(line)
+        for line in soup.get_text("\n", strip=True).splitlines()
+    ]
+    lines = [line for line in lines if line]
+
+    description = _collect_viyar_description_from_lines(lines)
+
+    if description:
+        return description
+
+    fallback_paragraphs = [
+        _normalize_text(paragraph.get_text(" ", strip=True))
+        for paragraph in soup.find_all("p")
+    ]
+    fallback_paragraphs = [
+        paragraph
+        for paragraph in fallback_paragraphs
+        if paragraph and len(paragraph) >= 120
+    ]
+
+    for paragraph in fallback_paragraphs:
+        if _looks_like_viyar_full_description(paragraph):
+            return paragraph
+
+    return None
+
+
 def _fetch_viyar_service_full_description(
     source_url: str,
     use_remote: bool = True,
     cookie_override: str | None = None,
+    diagnostic: bool = False,
+) -> dict[str, Any]:
+
+    normalized_source_url = _normalize_text(source_url)
+
+    if not normalized_source_url:
+        return {
+            "full_description": None,
+            "rules_parse_status": "not_available",
+            "rules_parsed_at": None,
+            "rules_source_url": None,
+        }
+
+    if not use_remote:
+        return {
+            "full_description": None,
+            "rules_parse_status": "skipped",
+            "rules_parsed_at": None,
+            "rules_source_url": normalized_source_url,
+        }
+
+    html, auth_required, _fetch_mode = _fetch_price_page(
+        normalized_source_url,
+        use_remote=use_remote,
+        cookie_override=cookie_override,
+    )
+
+    full_description = None
+    rules_parse_status = "no_full_description"
+
+    if html and not auth_required:
+        payload = _extract_viyar_service_full_description_payload(html)
+        full_description = payload.get("full_description")
+        rules_parse_status = payload.get("rules_parse_status") or rules_parse_status
+
+    rendered_page = {}
+    rendered_html = ""
+    rendered_text = ""
+    rendered_final_url = normalized_source_url
+    rendered_success = False
+    rendered_login_required = False
+
+    if not full_description:
+        rendered_pages = _fetch_rendered_price_pages(
+            [
+                {
+                    "external_code": "viyar-service-description",
+                    "source_url": normalized_source_url,
+                }
+            ],
+            cookie_override=cookie_override,
+        )
+        rendered_page = rendered_pages.get("viyar-service-description") or {}
+        rendered_html = rendered_page.get("html") or ""
+        rendered_text = rendered_page.get("body_text") or ""
+        rendered_final_url = rendered_page.get("final_url") or normalized_source_url
+        rendered_success = bool(rendered_page.get("success"))
+        rendered_login_required = "login_required" in rendered_final_url.lower()
+
+        if rendered_success and not rendered_login_required:
+            payload = _extract_viyar_service_full_description_payload(
+                rendered_html or rendered_text
+            )
+            if payload.get("full_description"):
+                full_description = payload.get("full_description")
+                rules_parse_status = payload.get("rules_parse_status") or "parsed"
+            elif payload.get("rules_parse_status") == "needs_review":
+                rules_parse_status = "needs_review"
+
+    if not full_description and (
+        rendered_login_required
+        or (not rendered_success and not (html and not auth_required))
+    ):
+        return {
+            "full_description": None,
+            "rules_parse_status": "failed",
+            "rules_parsed_at": None,
+            "rules_source_url": rendered_final_url if rendered_page else normalized_source_url,
+        }
+
+    return {
+        "full_description": full_description,
+        "rules_parse_status": "parsed" if full_description else rules_parse_status,
+        "rules_parsed_at": datetime.utcnow() if full_description else None,
+        "rules_source_url": rendered_final_url if full_description and rendered_page else normalized_source_url,
+    }
+
+
+def _extract_viyar_service_full_description(html: str) -> str | None:
+    payload = _extract_viyar_service_full_description_payload(html)
+    return payload.get("full_description")
+
+
+def backfill_viyar_drilling_service_descriptions(
+    use_remote: bool = True,
+    cookie_override: str | None = None,
+) -> dict[str, Any]:
+
+    from database.models.service_catalog_item import ServiceCatalogItemModel
+    from database.session import SessionLocal
+
+    db = SessionLocal()
+
+    try:
+        services = (
+            db.query(ServiceCatalogItemModel)
+            .filter(ServiceCatalogItemModel.source == "viyar")
+            .filter(ServiceCatalogItemModel.item_type == "service")
+            .filter(ServiceCatalogItemModel.is_active.is_(True))
+            .filter(ServiceCatalogItemModel.folder_path == "viyar-services/prisadka")
+            .order_by(
+                ServiceCatalogItemModel.sort_order.asc(),
+                ServiceCatalogItemModel.name.asc(),
+            )
+            .all()
+        )
+
+        audit: dict[str, Any] = {
+            "total_active_services": len(services),
+            "with_source_url": 0,
+            "with_full_description": 0,
+            "without_full_description": 0,
+            "failed_articles": [],
+        }
+
+        now = datetime.utcnow()
+
+        for service in services:
+            source_url = _normalize_text(service.source_url)
+
+            if source_url:
+                audit["with_source_url"] += 1
+
+            fetch_result = _fetch_viyar_service_full_description(
+                source_url or _source_url_from_service_code(service.external_code),
+                use_remote=use_remote,
+                cookie_override=cookie_override,
+            )
+            full_description = fetch_result.get("full_description")
+            parse_status = fetch_result.get("rules_parse_status") or "no_full_description"
+
+            if full_description:
+                service.full_description = full_description
+                service.rules_source_url = fetch_result.get("rules_source_url") or source_url or service.source_url
+                service.rules_parsed_at = now
+                service.rules_parse_status = "parsed"
+                audit["with_full_description"] += 1
+                continue
+
+            if service.full_description and _normalize_text(service.full_description):
+                service.rules_source_url = fetch_result.get("rules_source_url") or source_url or service.source_url
+                service.rules_parse_status = "parsed"
+                audit["with_full_description"] += 1
+                continue
+
+            service.rules_source_url = fetch_result.get("rules_source_url") or source_url or service.source_url
+            service.rules_parsed_at = None
+            service.rules_parse_status = (
+                "failed" if parse_status == "failed" else "no_full_description"
+            )
+            audit["without_full_description"] += 1
+            audit["failed_articles"].append(service.article or service.external_code)
+
+        db.commit()
+
+        audit["failed_articles"] = sorted(
+            {
+                article
+                for article in audit["failed_articles"]
+                if article
+            }
+        )
+
+        return audit
+
+    finally:
+
+        db.close()
+
+
+def _fetch_viyar_service_full_description(
+    source_url: str,
+    use_remote: bool = True,
+    cookie_override: str | None = None,
+    diagnostic: bool = False,
 ) -> dict[str, Any]:
 
     normalized_source_url = _normalize_text(source_url)
@@ -378,14 +870,541 @@ def _fetch_viyar_service_full_description(
             "rules_source_url": normalized_source_url,
         }
 
-    full_description = _extract_viyar_service_full_description(html)
+    payload = _extract_viyar_service_full_description_payload(
+        html,
+        diagnostic=diagnostic,
+    )
+    payload["rules_source_url"] = normalized_source_url
+    return payload
 
-    return {
-        "full_description": full_description,
-        "rules_parse_status": "parsed" if full_description else "short_only",
-        "rules_parsed_at": datetime.utcnow() if full_description else None,
-        "rules_source_url": normalized_source_url,
+
+def _apply_viyar_service_full_description_fallback(
+    service,
+    *,
+    fetch_result: dict[str, Any],
+) -> bool:
+
+    full_description = _normalize_text(fetch_result.get("full_description"))
+    fetch_status = _normalize_text(fetch_result.get("rules_parse_status")).lower()
+    existing_full_description = _normalize_text(service.full_description)
+    existing_full_description_valid = _is_viyar_valid_full_description_text(existing_full_description)
+
+    if full_description:
+        service.full_description = full_description
+        service.rules_source_url = (
+            fetch_result.get("rules_source_url")
+            or service.rules_source_url
+            or service.source_url
+        )
+        service.rules_parsed_at = fetch_result.get("rules_parsed_at") or datetime.utcnow()
+        service.rules_parse_status = "parsed"
+        return True
+
+    if existing_full_description_valid:
+        service.rules_source_url = (
+            fetch_result.get("rules_source_url")
+            or service.rules_source_url
+            or service.source_url
+        )
+        service.rules_parsed_at = (
+            fetch_result.get("rules_parsed_at")
+            or service.rules_parsed_at
+            or datetime.utcnow()
+        )
+        service.rules_parse_status = "parsed"
+        return True
+
+    fallback_description = _normalize_text(service.description)
+    if _is_viyar_valid_full_description_text(fallback_description):
+        full_description = fallback_description
+
+    if not full_description:
+        service.full_description = None
+        service.rules_source_url = (
+            fetch_result.get("rules_source_url")
+            or service.rules_source_url
+            or service.source_url
+        )
+        service.rules_parsed_at = None
+        service.rules_parse_status = (
+            "needs_review" if fetch_status == "needs_review" else "no_full_description"
+        )
+        return False
+
+    service.full_description = full_description
+    service.rules_source_url = (
+        fetch_result.get("rules_source_url")
+        or service.rules_source_url
+        or service.source_url
+    )
+    service.rules_parsed_at = fetch_result.get("rules_parsed_at") or datetime.utcnow()
+    service.rules_parse_status = "parsed"
+    return True
+
+
+def backfill_viyar_service_descriptions(
+    use_remote: bool = True,
+    cookie_override: str | None = None,
+) -> dict[str, Any]:
+
+    from database.models.service_catalog_item import ServiceCatalogItemModel
+    from database.session import SessionLocal
+
+    db = SessionLocal()
+
+    try:
+        services = (
+            db.query(ServiceCatalogItemModel)
+            .filter(ServiceCatalogItemModel.source == "viyar")
+            .filter(ServiceCatalogItemModel.item_type == "service")
+            .filter(ServiceCatalogItemModel.is_active.is_(True))
+            .order_by(
+                ServiceCatalogItemModel.folder_path.asc(),
+                ServiceCatalogItemModel.sort_order.asc(),
+                ServiceCatalogItemModel.name.asc(),
+            )
+            .all()
+        )
+
+        audit: dict[str, Any] = {
+            "total_active_services": len(services),
+            "with_source_url": 0,
+            "with_short_description": 0,
+            "with_only_short_description": 0,
+            "with_full_description": 0,
+            "no_full_description": 0,
+            "without_full_description": 0,
+            "failed_downloads": 0,
+            "failed_articles": [],
+            "categories": {
+                "drilling": {
+                    "total_services": 0,
+                    "with_source_url": 0,
+                    "with_short_description": 0,
+                    "with_only_short_description": 0,
+                    "with_full_description": 0,
+                    "no_full_description": 0,
+                    "without_full_description": 0,
+                    "failed_downloads": 0,
+                },
+                "edgebanding": {
+                    "total_services": 0,
+                    "with_source_url": 0,
+                    "with_short_description": 0,
+                    "with_only_short_description": 0,
+                    "with_full_description": 0,
+                    "no_full_description": 0,
+                    "without_full_description": 0,
+                    "failed_downloads": 0,
+                },
+                "cutting": {
+                    "total_services": 0,
+                    "with_source_url": 0,
+                    "with_short_description": 0,
+                    "with_only_short_description": 0,
+                    "with_full_description": 0,
+                    "no_full_description": 0,
+                    "without_full_description": 0,
+                    "failed_downloads": 0,
+                },
+                "milling": {
+                    "total_services": 0,
+                    "with_source_url": 0,
+                    "with_short_description": 0,
+                    "with_only_short_description": 0,
+                    "with_full_description": 0,
+                    "no_full_description": 0,
+                    "without_full_description": 0,
+                    "failed_downloads": 0,
+                },
+                "other": {
+                    "total_services": 0,
+                    "with_source_url": 0,
+                    "with_short_description": 0,
+                    "with_only_short_description": 0,
+                    "with_full_description": 0,
+                    "no_full_description": 0,
+                    "without_full_description": 0,
+                    "failed_downloads": 0,
+                },
+            },
+        }
+
+        now = datetime.utcnow()
+
+        for service in services:
+            source_url = _normalize_text(service.source_url)
+
+            if source_url:
+                audit["with_source_url"] += 1
+
+            fetch_result = _fetch_viyar_service_full_description(
+                source_url or _source_url_from_service_code(service.external_code),
+                use_remote=use_remote,
+                cookie_override=cookie_override,
+            )
+            full_description = _normalize_text(fetch_result.get("full_description"))
+            parse_status = _normalize_text(fetch_result.get("rules_parse_status") or "no_full_description").lower()
+            existing_full_description = _normalize_text(service.full_description)
+            existing_full_description_valid = _is_viyar_valid_full_description_text(existing_full_description)
+
+            if full_description:
+                service.full_description = full_description
+                service.rules_source_url = fetch_result.get("rules_source_url") or source_url or service.source_url
+                service.rules_parsed_at = fetch_result.get("rules_parsed_at") or now
+                service.rules_parse_status = "parsed"
+                audit["with_full_description"] += 1
+                continue
+
+            if existing_full_description_valid:
+                service.rules_source_url = fetch_result.get("rules_source_url") or source_url or service.source_url
+                service.rules_parsed_at = fetch_result.get("rules_parsed_at") or service.rules_parsed_at or now
+                service.rules_parse_status = "parsed"
+                audit["with_full_description"] += 1
+                continue
+
+            service.full_description = None
+            service.rules_source_url = fetch_result.get("rules_source_url") or source_url or service.source_url
+            service.rules_parsed_at = None
+            service.rules_parse_status = "failed" if parse_status == "failed" else parse_status
+            if service.rules_parse_status not in {"needs_review", "failed"}:
+                service.rules_parse_status = "no_full_description"
+            if service.rules_parse_status == "failed":
+                audit["failed_downloads"] += 1
+            else:
+                audit["no_full_description"] += 1
+            audit["without_full_description"] = audit["no_full_description"]
+            audit["failed_articles"].append(service.article or service.external_code)
+
+        db.commit()
+
+        audit["failed_articles"] = sorted(
+            {
+                article
+                for article in audit["failed_articles"]
+                if article
+            }
+        )
+
+        return audit
+
+    finally:
+        db.close()
+
+
+def backfill_viyar_drilling_service_descriptions(
+    use_remote: bool = True,
+    cookie_override: str | None = None,
+) -> dict[str, Any]:
+
+    return backfill_viyar_service_descriptions(
+        use_remote=use_remote,
+        cookie_override=cookie_override,
+    )
+
+
+def _is_viyar_valid_full_description_text(value: str | None) -> bool:
+
+    normalized = _normalize_text(value)
+
+    if not normalized:
+        return False
+
+    lowered = normalized.lower()
+    noise_markers = (
+        "код:",
+        "ціна viyarpro",
+        "строки",
+        "грн/шт",
+        "основні характеристики продукту",
+        "технічні характеристики та функціональність",
+        "тип товару",
+        "тип послуги",
+        "виробник",
+        "країна виробник",
+        "viyarpro",
+    )
+
+    if "опис:" not in lowered:
+        return False
+
+    if len(normalized) < 50:
+        return False
+
+    if sum(1 for marker in noise_markers if marker in lowered) >= 3 and not any(
+        marker in lowered for marker in ("обмеження", "обладнання")
+    ):
+        return False
+
+    return True
+
+
+def _is_viyar_stale_full_description_text(value: str | None) -> bool:
+
+    normalized = _normalize_text(value)
+
+    if not normalized:
+        return False
+
+    lowered = normalized.lower()
+    has_description_block = (
+        "опис:" in lowered
+        and ("обмеження:" in lowered or "обладнання:" in lowered)
+    )
+    stale_markers = (
+        "код:",
+        "ціна viyarpro",
+        "строки",
+        "увага! колір товару",
+        "грн/шт",
+        "є/шт",
+        "основні характеристики продукту",
+        "технічні характеристики та функціональність",
+        "тип товару:",
+        "тип послуги:",
+        "виробник:",
+        "країна виробник:",
+        "viyarpro",
+    )
+
+    if has_description_block:
+        return False
+
+    return any(marker in lowered for marker in stale_markers)
+
+
+def _extract_viyar_service_full_description_payload(
+    html: str,
+    diagnostic: bool = False,
+) -> dict[str, Any]:
+
+    soup = BeautifulSoup(html, "html.parser")
+    description_section = soup.select_one("section#description")
+    characteristics_section = soup.select_one("section#characteristics")
+    diagnostics = {
+        "selected_selector": None,
+        "selected_text_length": 0,
+        "selected_text": "",
+        "has_description_section": description_section is not None,
+        "has_characteristics_section": characteristics_section is not None,
+        "candidate_blocks": [],
+        "rejected_blocks": [],
     }
+
+    def _record_candidate(selector: str, text: str, *, accepted: bool, reason: str) -> None:
+        preview = text[:300]
+        bucket = diagnostics["candidate_blocks"] if accepted else diagnostics["rejected_blocks"]
+        bucket.append(
+            {
+                "selector": selector,
+                "text_length": len(text),
+                "preview": preview,
+                "reason": reason,
+            }
+        )
+
+    def _section_lines(section) -> list[str]:
+        if section is None:
+            return []
+
+        section_soup = BeautifulSoup(str(section), "html.parser")
+        for selector in (
+            "section#characteristics",
+            ".vr-block-char",
+            "table",
+            "thead",
+            "tbody",
+            "tr",
+            "th",
+            "td",
+        ):
+            for node in section_soup.select(selector):
+                node.decompose()
+
+        lines = [
+            _normalize_text(line)
+            for line in section_soup.get_text("\n", strip=True).splitlines()
+        ]
+        return [line for line in lines if line]
+
+    def _section_text(section) -> tuple[str, str | None]:
+        if section is None:
+            return "", None
+
+        section_soup = BeautifulSoup(str(section), "html.parser")
+        for selector in (
+            "section#characteristics",
+            ".vr-block-char",
+            "table",
+            "thead",
+            "tbody",
+            "tr",
+            "th",
+            "td",
+        ):
+            for node in section_soup.select(selector):
+                node.decompose()
+
+        preferred_chunks: list[str] = []
+        selected_selector = None
+        for selector in (
+            ".vr-product-content__text",
+            ".vr-section-block_body",
+            ".vr-block-desc__list",
+        ):
+            nodes = section_soup.select(selector)
+            for node in nodes:
+                text = _normalize_text(node.get_text("\n", strip=True))
+                if text:
+                    preferred_chunks.append(text)
+                    if selected_selector is None:
+                        selected_selector = f"section#description {selector}"
+                    _record_candidate(
+                        f"section#description {selector}",
+                        text,
+                        accepted=True,
+                        reason="preferred description block",
+                    )
+
+        if preferred_chunks:
+            return "\n".join(dict.fromkeys(preferred_chunks)).strip(), selected_selector
+
+        fallback_text = _normalize_text(section_soup.get_text("\n", strip=True))
+        if fallback_text:
+            _record_candidate(
+                "section#description",
+                fallback_text,
+                accepted=True,
+                reason="fallback text inside section#description",
+            )
+        return fallback_text, "section#description" if fallback_text else None
+
+    description_text, selected_selector = _section_text(description_section)
+    characteristics_text, _characteristics_selector = _section_text(characteristics_section)
+    if characteristics_text:
+        _record_candidate(
+            "section#characteristics",
+            characteristics_text,
+            accepted=False,
+            reason="forbidden source; characteristics are not full description",
+        )
+    description_lines = _section_lines(description_section)
+    marker_index = None
+
+    for index, line in enumerate(description_lines):
+        normalized = _normalized_viyar_description_heading(line)
+        if normalized == "опис":
+            marker_index = index
+            break
+        if normalized.startswith("опис:"):
+            marker_index = index
+            break
+
+    if marker_index is not None:
+        collected: list[str] = [description_lines[marker_index]]
+        stop_markers = {
+            "характеристики",
+            "основні характеристики продукту",
+            "відгуки",
+            "питання",
+            "доставка",
+            "оплата",
+            "table",
+            "header",
+        }
+
+        for next_line in description_lines[marker_index + 1 :]:
+            next_normalized = _normalized_viyar_description_heading(next_line)
+            if next_normalized in stop_markers:
+                break
+            collected.append(next_line)
+            if len(" ".join(collected)) >= VIYAR_DESCRIPTION_MAX_LENGTH:
+                break
+
+        description_text = "\n".join(collected).strip()
+        selected_selector = selected_selector or "section#description"
+        if description_text:
+            _record_candidate(
+                selected_selector,
+                description_text,
+                accepted=True,
+                reason="description block starting from explicit marker",
+            )
+
+    if marker_index is not None and _is_viyar_valid_full_description_text(description_text):
+        payload = {
+            "full_description": description_text,
+            "rules_parse_status": "parsed",
+            "rules_parsed_at": datetime.utcnow(),
+        }
+        if diagnostic:
+            diagnostics["selected_selector"] = selected_selector or "section#description"
+            diagnostics["selected_text_length"] = len(description_text)
+            diagnostics["selected_text"] = description_text[:300]
+            payload["diagnostics"] = diagnostics
+        return payload
+
+    if description_section is not None:
+        suspicious_text = "\n".join(
+            part for part in (description_text, characteristics_text) if part
+        ).lower()
+        has_suspicious_noise = any(
+            marker in suspicious_text
+            for marker in (
+                "код:",
+                "ціна viyarpro",
+                "строки",
+                "грн/шт",
+                "основні характеристики продукту",
+                "технічні характеристики та функціональність",
+                "тип товару",
+                "тип послуги",
+                "виробник",
+                "країна виробник",
+                "viyarpro",
+            )
+        )
+
+        payload = {
+            "full_description": None,
+            "rules_parse_status": (
+                "needs_review"
+                if has_suspicious_noise
+                else "no_full_description"
+            ),
+            "rules_parsed_at": None,
+        }
+        if diagnostic:
+            diagnostics["selected_selector"] = selected_selector or "section#description"
+            diagnostics["selected_text_length"] = len(description_text)
+            diagnostics["selected_text"] = description_text[:300]
+            payload["diagnostics"] = diagnostics
+        return payload
+
+    if _is_viyar_valid_full_description_text(characteristics_text):
+        payload = {
+            "full_description": None,
+            "rules_parse_status": "needs_review",
+            "rules_parsed_at": None,
+        }
+        if diagnostic:
+            diagnostics["selected_selector"] = None
+            diagnostics["selected_text_length"] = len(characteristics_text)
+            diagnostics["selected_text"] = characteristics_text[:300]
+            payload["diagnostics"] = diagnostics
+        return payload
+
+    payload = {
+        "full_description": None,
+        "rules_parse_status": "no_full_description",
+        "rules_parsed_at": None,
+    }
+    if diagnostic:
+        diagnostics["selected_selector"] = selected_selector
+        diagnostics["selected_text_length"] = len(description_text)
+        diagnostics["selected_text"] = description_text[:300]
+        payload["diagnostics"] = diagnostics
+    return payload
 
 
 def _slugify(value: str) -> str:

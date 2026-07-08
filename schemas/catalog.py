@@ -118,9 +118,15 @@ class ServiceCatalogDescriptionAuditSchema(BaseModel):
     total_services: int = 0
     with_source_url: int = 0
     with_short_description: int = 0
+    with_only_short_description: int = 0
     with_full_description: int = 0
+    with_description_marker: int = 0
+    no_full_description: int = 0
     without_full_description: int = 0
+    without_description_marker: int = 0
+    needs_review: int = 0
     failed_downloads: int = 0
+    categories: dict = Field(default_factory=dict)
 
 
 class ServiceCatalogImportAuditSchema(BaseModel):
@@ -142,6 +148,8 @@ class ServiceCatalogSyncResponseSchema(BaseModel):
     fallback_only_import: bool = False
     import_audit: ServiceCatalogImportAuditSchema | None = None
     description_audit: ServiceCatalogDescriptionAuditSchema | None = None
+    description_backfill_audit: dict | None = None
+    drilling_description_audit: dict | None = None
     items: List[ServiceCatalogNodeSchema] = Field(
         default_factory=list
     )

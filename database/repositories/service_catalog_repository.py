@@ -21,8 +21,10 @@ from database.models.user import (
 
 from services.viyar_service_catalog_service import (
     build_viyar_service_catalog_records,
+    backfill_viyar_service_descriptions,
     fetch_viyar_service_price_updates,
     _is_blocked_viyar_service_name,
+    _extract_viyar_service_category,
 )
 
 
@@ -115,31 +117,68 @@ def get_viyar_service_description_audit(
         if not include_inactive:
             query = query.filter(ServiceCatalogItemModel.is_active.is_(True))
 
-        total_services = query.count()
-        with_source_url = query.filter(
-            ServiceCatalogItemModel.source_url.isnot(None),
-            func.trim(ServiceCatalogItemModel.source_url) != "",
-        ).count()
-        with_short_description = query.filter(
-            ServiceCatalogItemModel.description.isnot(None),
-            func.trim(ServiceCatalogItemModel.description) != "",
-        ).count()
-        with_full_description = query.filter(
-            ServiceCatalogItemModel.full_description.isnot(None),
-            func.trim(ServiceCatalogItemModel.full_description) != "",
-        ).count()
-        failed_downloads = query.filter(
-            ServiceCatalogItemModel.rules_parse_status == "failed",
-        ).count()
+        items = query.order_by(
+            ServiceCatalogItemModel.folder_path.asc(),
+            ServiceCatalogItemModel.sort_order.asc(),
+            ServiceCatalogItemModel.name.asc(),
+        ).all()
 
-        return {
-            "total_services": total_services,
-            "with_source_url": with_source_url,
-            "with_short_description": with_short_description,
-            "with_full_description": with_full_description,
-            "without_full_description": max(0, total_services - with_full_description),
-            "failed_downloads": failed_downloads,
+        def build_bucket() -> dict[str, int]:
+            return {
+                "total_services": 0,
+                "with_source_url": 0,
+                "with_short_description": 0,
+                "with_only_short_description": 0,
+                "with_full_description": 0,
+                "with_description_marker": 0,
+                "no_full_description": 0,
+                "without_full_description": 0,
+                "without_description_marker": 0,
+                "needs_review": 0,
+                "failed_downloads": 0,
+            }
+
+        audit = build_bucket()
+        audit["categories"] = {
+            "drilling": build_bucket(),
+            "edgebanding": build_bucket(),
+            "cutting": build_bucket(),
+            "milling": build_bucket(),
+            "other": build_bucket(),
         }
+
+        for item in items:
+            category = _extract_viyar_service_category(item.folder_path)
+            bucket = audit["categories"][category]
+            has_source_url = bool((item.source_url or "").strip())
+            has_short_description = bool((item.description or "").strip())
+            has_full_description = bool((item.full_description or "").strip())
+            has_description_marker = "опис:" in (item.full_description or "").lower()
+            status = (item.rules_parse_status or "").strip().lower()
+
+            for current_bucket in (audit, bucket):
+                current_bucket["total_services"] += 1
+                if has_source_url:
+                    current_bucket["with_source_url"] += 1
+                if has_short_description:
+                    current_bucket["with_short_description"] += 1
+                if has_short_description and not has_full_description:
+                    current_bucket["with_only_short_description"] += 1
+                if has_full_description:
+                    current_bucket["with_full_description"] += 1
+                if has_description_marker:
+                    current_bucket["with_description_marker"] += 1
+                if status == "failed":
+                    current_bucket["failed_downloads"] += 1
+                if status == "needs_review":
+                    current_bucket["needs_review"] += 1
+                elif status == "no_full_description" or (not has_full_description and not status):
+                    current_bucket["no_full_description"] += 1
+                if has_full_description and not has_description_marker:
+                    current_bucket["without_description_marker"] += 1
+                current_bucket["without_full_description"] = current_bucket["no_full_description"]
+
+        return audit
 
     finally:
 
@@ -255,6 +294,14 @@ def sync_viyar_service_catalog(
 
         db.commit()
 
+        description_backfill_audit = {}
+
+        if use_remote:
+            description_backfill_audit = backfill_viyar_service_descriptions(
+                use_remote=use_remote,
+                cookie_override=cookie_override,
+            )
+
         description_audit = get_viyar_service_description_audit(
             include_inactive=False,
         )
@@ -264,6 +311,8 @@ def sync_viyar_service_catalog(
                 **audit,
                 "deactivated_suspicious_count": deactivated_suspicious_count,
             },
+            "description_backfill_audit": description_backfill_audit,
+            "drilling_description_audit": description_backfill_audit,
             "description_audit": description_audit,
             "items": list_service_catalog_tree(
                 source="viyar",

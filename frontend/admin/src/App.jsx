@@ -1350,6 +1350,54 @@ function updateServiceTreeNode(nodes, itemId, updater) {
   });
 }
 
+function getViyarServiceDescriptionStatus(node, t) {
+  const fullDescription = String(node?.full_description || "").trim();
+  const hasFullDescription = Boolean(fullDescription);
+  const hasShortDescription = Boolean(String(node?.description || "").trim());
+  const parseStatus = String(node?.rules_parse_status || "").trim().toLowerCase();
+  const fullDescriptionLower = fullDescription.toLowerCase();
+  const characteristicsOnly =
+    fullDescription &&
+    (
+      fullDescriptionLower.includes("основні характеристики продукту") ||
+      fullDescriptionLower.includes("технічні характеристики та функціональність")
+    ) &&
+    !(
+      fullDescriptionLower.includes("опис") ||
+      fullDescriptionLower.includes("обмеження") ||
+      fullDescriptionLower.includes("обладнання")
+    );
+  const staleServiceText =
+    fullDescription &&
+    !(
+      fullDescriptionLower.includes("опис") &&
+      (fullDescriptionLower.includes("обмеження") ||
+        fullDescriptionLower.includes("обладнання"))
+    ) &&
+    (
+      fullDescriptionLower.includes("код:") ||
+      fullDescriptionLower.includes("ціна viyarpro") ||
+      fullDescriptionLower.includes("строки") ||
+      fullDescriptionLower.includes("увага! колір товару") ||
+      fullDescriptionLower.includes("грн/шт") ||
+      fullDescriptionLower.includes("є/шт")
+    );
+
+  if (parseStatus === "needs_review" || characteristicsOnly || staleServiceText) {
+    return { className: "warning", label: t.viyarDescriptionStatusReview };
+  }
+
+  if (hasFullDescription) {
+    return { className: "success", label: t.viyarDescriptionStatusFull };
+  }
+
+  if (hasShortDescription) {
+    return { className: "subtle", label: t.viyarDescriptionStatusShort };
+  }
+
+  return { className: "muted", label: t.viyarDescriptionStatusEmpty };
+}
+
 function ServiceCatalogTreeNode({
   collapsedFolders,
   level = 0,
@@ -1375,6 +1423,7 @@ function ServiceCatalogTreeNode({
   const hasVisiblePrice =
     node.user_price !== null &&
     node.user_price !== undefined;
+  const descriptionStatus = getViyarServiceDescriptionStatus(node, t);
   const nestedServiceCount = isFolder
     ? countServiceTreeItems(node.children || [])
     : 0;
@@ -1434,7 +1483,12 @@ function ServiceCatalogTreeNode({
           <div className="service-tree-service-line">
             <div className="service-tree-name-cell">
               <span className="service-tree-bullet service" />
-              <strong>{node.name}</strong>
+              <div className="service-tree-name-stack">
+                <strong>{node.name}</strong>
+                <span className={`service-tree-badge service-tree-status-badge ${descriptionStatus.className}`}>
+                  {descriptionStatus.label}
+                </span>
+              </div>
             </div>
             <label>
               <span>{t.viyarArticle}</span>
@@ -2619,9 +2673,20 @@ Object.assign(TRANSLATIONS.en, {
   viyarDescriptionAuditTotal: "Total",
   viyarDescriptionAuditSourceUrl: "Source URL",
   viyarDescriptionAuditShort: "Short description",
+  viyarDescriptionAuditOnlyShort: "Only short",
   viyarDescriptionAuditFull: "Full description",
   viyarDescriptionAuditMissing: "Without full description",
   viyarDescriptionAuditFailed: "Failed downloads",
+  viyarDescriptionAuditCategories: "Categories",
+  viyarCategoryDrilling: "Drilling",
+  viyarCategoryEdgebanding: "Edgebanding",
+  viyarCategoryCutting: "Cutting",
+  viyarCategoryMilling: "Milling",
+  viyarCategoryOther: "Other",
+  viyarDescriptionStatusFull: "Full description",
+  viyarDescriptionStatusShort: "Short description",
+  viyarDescriptionStatusReview: "Needs review",
+  viyarDescriptionStatusEmpty: "No description",
   viyarServicesDescription:
     "Folder tree of services prepared for future calculation and connection to project costing.",
   viyarSyncPrices: "Sync prices",
@@ -2716,9 +2781,20 @@ Object.assign(TRANSLATIONS.uk, {
   viyarDescriptionAuditTotal: "\u0412\u0441\u044c\u043e\u0433\u043e",
   viyarDescriptionAuditSourceUrl: "source_url",
   viyarDescriptionAuditShort: "\u041a\u043e\u0440\u043e\u0442\u043a\u0438\u0439 \u043e\u043f\u0438\u0441",
+  viyarDescriptionAuditOnlyShort: "\u041b\u0438\u0448\u0435 \u043a\u043e\u0440\u043e\u0442\u043a\u0438\u0439",
   viyarDescriptionAuditFull: "\u041f\u043e\u0432\u043d\u0438\u0439 \u043e\u043f\u0438\u0441",
   viyarDescriptionAuditMissing: "\u0411\u0435\u0437 \u043f\u043e\u0432\u043d\u043e\u0433\u043e \u043e\u043f\u0438\u0441\u0443",
   viyarDescriptionAuditFailed: "\u041d\u0435\u0432\u0434\u0430\u043b\u043e\u0441\u044f \u0437\u0430\u0432\u0430\u043d\u0442\u0430\u0436\u0438\u0442\u0438",
+  viyarDescriptionAuditCategories: "\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0456\u0457",
+  viyarCategoryDrilling: "\u0421\u0432\u0435\u0440\u0434\u043b\u0456\u043d\u043d\u044f",
+  viyarCategoryEdgebanding: "\u041a\u0440\u0430\u0439\u043a\u0443\u0432\u0430\u043d\u043d\u044f / \u041a\u0440\u043e\u043c\u043a\u0443\u0432\u0430\u043d\u043d\u044f",
+  viyarCategoryCutting: "\u041f\u043e\u0440\u0456\u0437\u043a\u0430",
+  viyarCategoryMilling: "\u0424\u0440\u0435\u0437\u0435\u0440\u0443\u0432\u0430\u043d\u043d\u044f",
+  viyarCategoryOther: "\u0406\u043d\u0448\u0456",
+  viyarDescriptionStatusFull: "\u041f\u043e\u0432\u043d\u0438\u0439 \u043e\u043f\u0438\u0441",
+  viyarDescriptionStatusShort: "\u041a\u043e\u0440\u043e\u0442\u043a\u0438\u0439 \u043e\u043f\u0438\u0441",
+  viyarDescriptionStatusReview: "\u041f\u043e\u0442\u0440\u0456\u0431\u043d\u0430 \u043f\u0435\u0440\u0435\u0432\u0456\u0440\u043a\u0430",
+  viyarDescriptionStatusEmpty: "\u041e\u043f\u0438\u0441\u0443 \u043d\u0435\u043c\u0430\u0454",
   viyarServicesDescription:
     "\u0414\u0435\u0440\u0435\u0432\u043e \u043f\u043e\u0441\u043b\u0443\u0433, \u043f\u0456\u0434\u0433\u043e\u0442\u043e\u0432\u043b\u0435\u043d\u0435 \u0434\u043b\u044f \u043c\u0430\u0439\u0431\u0443\u0442\u043d\u044c\u043e\u0433\u043e \u043f\u0440\u043e\u0440\u0430\u0445\u0443\u043d\u043a\u0443 \u0456 \u043f\u0440\u0438\u0432'\u044f\u0437\u043a\u0438 \u0434\u043e \u0441\u043e\u0431\u0456\u0432\u0430\u0440\u0442\u043e\u0441\u0442\u0456 \u043f\u0440\u043e\u0454\u043a\u0442\u0443.",
   viyarSyncPrices: "\u0421\u0438\u043d\u0445\u0440\u043e\u043d\u0456\u0437\u0443\u0432\u0430\u0442\u0438 \u0446\u0456\u043d\u0438",
@@ -16852,10 +16928,13 @@ export default function App() {
                         {t.viyarDescriptionAuditShort}: {viyarDescriptionAudit.with_short_description}
                       </span>
                       <span className="service-tree-badge subtle">
+                        {t.viyarDescriptionAuditOnlyShort}: {viyarDescriptionAudit.with_only_short_description}
+                      </span>
+                      <span className="service-tree-badge subtle">
                         {t.viyarDescriptionAuditFull}: {viyarDescriptionAudit.with_full_description}
                       </span>
                       <span className="service-tree-badge subtle">
-                        {t.viyarDescriptionAuditMissing}: {viyarDescriptionAudit.without_full_description}
+                        {t.viyarDescriptionAuditMissing}: {viyarDescriptionAudit.no_full_description}
                       </span>
                       <span className="service-tree-badge subtle">
                         {t.viyarDescriptionAuditFailed}: {viyarDescriptionAudit.failed_downloads}
@@ -16929,6 +17008,29 @@ export default function App() {
                   </span>
                 ) : null}
               </div>
+              {viyarDescriptionAudit?.categories ? (
+                <div className="service-description-category-overview">
+                  <span className="service-description-category-label">
+                    {t.viyarDescriptionAuditCategories}
+                  </span>
+                  <div className="service-description-category-chips">
+                    {[
+                      ["drilling", t.viyarCategoryDrilling],
+                      ["edgebanding", t.viyarCategoryEdgebanding],
+                      ["cutting", t.viyarCategoryCutting],
+                      ["milling", t.viyarCategoryMilling],
+                      ["other", t.viyarCategoryOther],
+                    ].map(([key, label]) => {
+                      const bucket = viyarDescriptionAudit.categories?.[key] || {};
+                      return (
+                        <span className="service-tree-badge subtle" key={key}>
+                          {label}: {bucket.total_services || 0} ({bucket.with_full_description || 0}/{bucket.no_full_description || 0}/{bucket.failed_downloads || 0})
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
               <div className="service-tree-table-head">
                 <span>{t.viyarService}</span>
                 <span>{t.viyarArticle}</span>
