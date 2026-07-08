@@ -26,6 +26,9 @@ from api.routes.catalog import (
 from api.routes.fitting_holes import (
     router as fitting_holes_router
 )
+from api.routes.service_drilling_rules import (
+    router as service_drilling_rules_router
+)
 from services.material_import_queue_service import (
     start_material_import_queue_loop,
     stop_material_import_queue_loop,
@@ -142,6 +145,15 @@ app.include_router(
     prefix="/fitting-holes",
 
     tags=["Fitting Holes"]
+)
+
+app.include_router(
+
+    service_drilling_rules_router,
+
+    prefix="/service-drilling-rules",
+
+    tags=["Service Drilling Rules"]
 )
 
 

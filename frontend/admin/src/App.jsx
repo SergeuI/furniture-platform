@@ -84,9 +84,13 @@ import {
   listAuditLogs,
   listCatalogItems,
   createFittingHoleServiceRule,
+  createServiceDrillingRule,
   deleteFittingHoleServiceRule,
+  deleteServiceDrillingRule,
   listFittingHoleBundles,
   listFittingHoleServiceRules,
+  listAvailableViyarDrillingServices,
+  listServiceDrillingRules,
   listFittingHolePoints,
   listFittingHoleTemplatesByFitting,
   listProjectScans,
@@ -102,6 +106,7 @@ import {
   updateFittingHoleBundleMountingVariant,
   updateFittingHoleTemplate,
   updateFittingHoleServiceRule,
+  updateServiceDrillingRule,
   updateCatalogItemActive,
   updateFittingHolePoint,
   updateMyViyarAuth,
@@ -532,6 +537,7 @@ const MATERIAL_EDGE_SLOTS = [
 
 const CATALOG_SERVICE_VIEWS = new Set([
   "catalogHub",
+  "catalogDrillingRules",
   "catalogViyar",
   "catalogManual",
   "catalogMaterials",
@@ -601,6 +607,23 @@ const DEFAULT_HOLE_SERVICE_RULE_FORM = {
   is_active: true,
   priority: 0,
   notes: "",
+};
+
+const DEFAULT_SERVICE_DRILLING_RULE_FORM = {
+  service_catalog_item_id: "",
+  rule_name: "",
+  operation_type: "drilling",
+  hole_type: "blind",
+  allowed_diameters: "",
+  allowed_depths: "",
+  material_thickness_min: "",
+  material_thickness_max: "",
+  max_blind_depth_formula: "",
+  max_blind_depth_mm: "",
+  min_edge_offset_mm: "",
+  notes: "",
+  source: "manual",
+  is_active: true,
 };
 
 function buildHolePointFormFromPoint(point) {
@@ -1206,6 +1229,58 @@ function getHoleServiceRuleMatchSourceLabel(matchSource, t) {
   return labels[matchSource] || t.holeServiceRulesMatchSourceNone;
 }
 
+function parseCommaSeparatedNumbers(value) {
+  return String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map((item) => Number(item))
+    .filter((item) => Number.isFinite(item));
+}
+
+function formatCommaSeparatedNumbers(value) {
+  if (!Array.isArray(value) || !value.length) {
+    return "";
+  }
+
+  return value
+    .map((item) => Number(item))
+    .filter((item) => Number.isFinite(item))
+    .join(", ");
+}
+
+function getServiceDrillingRuleOperationLabel(operation, t) {
+  const labels = {
+    drilling: t.drillingServiceRulesOperationDrilling,
+    edge_drilling: t.drillingServiceRulesOperationEdgeDrilling,
+    hinge_cup: t.drillingServiceRulesOperationHingeCup,
+    laser_drilling: t.drillingServiceRulesOperationLaserDrilling,
+  };
+
+  return labels[operation] || operation || t.notSet;
+}
+
+function getServiceDrillingRuleHoleTypeLabel(holeType, t) {
+  const labels = {
+    blind: t.drillingServiceRulesHoleTypeBlind,
+    edge: t.drillingServiceRulesHoleTypeEdge,
+    through: t.drillingServiceRulesHoleTypeThrough,
+  };
+
+  return labels[holeType] || holeType || t.notSet;
+}
+
+function getServiceDrillingRuleSourceLabel(source, t) {
+  const normalizedSource = String(source || "").trim();
+
+  const labels = {
+    manual: t.drillingServiceRulesSourceManual,
+    viyar: t.drillingServiceRulesSourceViyar,
+  };
+
+  return labels[normalizedSource] || t.notSet;
+}
+
 const FITTING_CATEGORY_VISUALS = {
   connectors_fasteners: {
     accent: "#f59e0b",
@@ -1296,6 +1371,10 @@ const CATALOG_TILE_VISUALS = {
   values: {
     accent: "#2f8ecb",
     icon: FileSliders,
+  },
+  drilling_rules: {
+    accent: "#b45309",
+    icon: Drill,
   },
   viyar: {
     accent: "#1f6b34",
@@ -1832,6 +1911,70 @@ const TRANSLATIONS = {
     holeServiceRulesMatchSourceRule: "Matched by rule",
     holeServiceRulesMatchSourceAuto: "Matched automatically",
     holeServiceRulesMatchSourceNone: "No service found",
+    drillingServiceRulesTitle: "Drilling service rules",
+    drillingServiceRulesNavTitle: "Drilling rules",
+    drillingServiceRulesDescription:
+      "Manual MVP rules for Viyar drilling services. Rules are linked to the main service record ID, not article.",
+    drillingServiceRulesCountOne: "rule",
+    drillingServiceRulesCountFew: "rules",
+    drillingServiceRulesCountMany: "rules",
+    drillingServiceRulesAdd: "Add rule",
+    drillingServiceRulesEditAction: "Edit",
+    drillingServiceRulesDisableAction: "Disable",
+    drillingServiceRulesSearchPlaceholder: "Search rules",
+    drillingServiceRulesLoading: "Loading drilling service rules...",
+    drillingServiceRulesFailed: "Unable to load drilling service rules.",
+    drillingServiceRulesEmptyTitle: "No drilling service rules yet.",
+    drillingServiceRulesEmptyDescription: "Create the first rule for a Viyar drilling service.",
+    drillingServiceRulesCreateTitle: "Create drilling rule",
+    drillingServiceRulesEditTitle: "Edit drilling rule",
+    drillingServiceRulesCreateDescription: "Choose a Viyar drilling service and fill the rule fields.",
+    drillingServiceRulesEditDescription: "Update the selected drilling rule.",
+    drillingServiceRulesServiceTitle: "Viyar service",
+    drillingServiceRulesServiceDescription:
+      "Pick the service by the main service record ID. Article is shown only as a reference.",
+    drillingServiceRulesServiceSearchPlaceholder: "Search Viyar services",
+    drillingServiceRulesServicePlaceholder: "Choose a service",
+    drillingServiceRulesServiceLabel: "Service",
+    drillingServiceRulesSourceManual: "Manual",
+    drillingServiceRulesSourceViyar: "Viyar",
+    drillingServiceRulesRuleNameLabel: "Rule name",
+    drillingServiceRulesArticleLabel: "Article",
+    drillingServiceRulesPriceLabel: "Price",
+    drillingServiceRulesCanonicalIdLabel: "Main service record ID",
+    drillingServiceRulesOperationLabel: "Operation type",
+    drillingServiceRulesHoleTypeLabel: "Hole type",
+    drillingServiceRulesOperationDrilling: "Drilling",
+    drillingServiceRulesOperationEdgeDrilling: "Edge drilling",
+    drillingServiceRulesOperationHingeCup: "Hinge cup drilling",
+    drillingServiceRulesOperationLaserDrilling: "Laser drilling",
+    drillingServiceRulesHoleTypeBlind: "Blind",
+    drillingServiceRulesHoleTypeThrough: "Through",
+    drillingServiceRulesHoleTypeEdge: "Edge",
+    drillingServiceRulesAllowedDiameters: "Allowed diameters",
+    drillingServiceRulesAllowedDepths: "Allowed depths",
+    drillingServiceRulesMaterialThicknessMin: "Material thickness min, mm",
+    drillingServiceRulesMaterialThicknessMax: "Material thickness max, mm",
+    drillingServiceRulesMaxBlindDepthFormula: "Max blind depth formula",
+    drillingServiceRulesMaxBlindDepthMm: "Max blind depth, mm",
+    drillingServiceRulesMinEdgeOffsetMm: "Min edge offset, mm",
+    drillingServiceRulesNotesLabel: "Notes",
+    drillingServiceRulesSourceLabel: "Source",
+    drillingServiceRulesActiveLabel: "Rule is active",
+    drillingServiceRulesInactive: "Inactive",
+    drillingServiceRulesActive: "Active",
+    drillingServiceRulesCreateButton: "Add rule",
+    drillingServiceRulesSaveFailed: "Unable to save drilling rule",
+    drillingServiceRulesCreated: "Drilling rule created.",
+    drillingServiceRulesUpdated: "Drilling rule updated.",
+    drillingServiceRulesDisabled: "Drilling rule disabled.",
+    drillingServiceRulesDeleteTitle: "Disable drilling rule",
+    drillingServiceRulesDeleteConfirm: "Disable drilling rule?",
+    drillingServiceRulesDeleteFailed: "Unable to disable drilling rule",
+    drillingServiceRulesNotFound: "Drilling rule not found.",
+    drillingServiceRulesValidationFailed: "Choose a Viyar service and fill required rule fields.",
+    drillingServiceRulesStatusLabel: "Status",
+    drillingServiceRulesSelectedServiceTitle: "Selected Viyar service",
     holeTabDescription: "View hole points for the selected fitting and mounting variant.",
     holeTabPreview: "2D preview",
     holeTabPoints: "Points",
@@ -2656,7 +2799,7 @@ Object.assign(TRANSLATIONS.en, {
   viyarCalculable: "Calculable",
   viyarAuthRequired: "Viyar authorization required for actual prices",
   basePrice: "Base price",
-  serviceUnit: "Unit",
+    serviceUnit: "Service",
   showDescription: "Description",
   hideDescription: "Hide description",
   viyarCollapseAll: "Collapse all",
@@ -2760,7 +2903,7 @@ Object.assign(TRANSLATIONS.uk, {
     "\u041f\u0435\u0440\u0441\u043e\u043d\u0430\u043b\u044c\u043d\u0443 \u0446\u0456\u043d\u0443 \u0449\u0435 \u043d\u0435 \u0441\u0438\u043d\u0445\u0440\u043e\u043d\u0456\u0437\u043e\u0432\u0430\u043d\u043e",
   viyarSyncStatus: "\u0421\u0442\u0430\u0442\u0443\u0441 \u0441\u0438\u043d\u0445\u0440\u043e\u043d\u0456\u0437\u0430\u0446\u0456\u0457",
   basePrice: "\u0411\u0430\u0437\u043e\u0432\u0430 \u0446\u0456\u043d\u0430",
-  serviceUnit: "\u041e\u0434\u0438\u043d\u0438\u0446\u044f",
+  serviceUnit: "\u041f\u043e\u0441\u043b\u0443\u0433\u0430",
   showDescription: "\u041e\u043f\u0438\u0441",
   hideDescription: "\u0421\u0445\u043e\u0432\u0430\u0442\u0438 \u043e\u043f\u0438\u0441",
   viyarAuthRequired:
@@ -3680,6 +3823,73 @@ Object.assign(TRANSLATIONS.uk, {
   holeServiceRulesMatchSourceRule: "Знайдено за правилом",
   holeServiceRulesMatchSourceAuto: "Знайдено автоматично",
   holeServiceRulesMatchSourceNone: "Послугу не знайдено",
+});
+
+Object.assign(TRANSLATIONS.uk, {
+  drillingServiceRulesTitle: "Правила послуг присадки",
+  drillingServiceRulesNavTitle: "Правила свердління",
+  drillingServiceRulesDescription:
+    "Ручний MVP для Viyar-послуг свердління. Правила зв’язуємо з основним записом послуги, а не з артикулом.",
+  drillingServiceRulesCountOne: "правило",
+  drillingServiceRulesCountFew: "правила",
+  drillingServiceRulesCountMany: "правил",
+  drillingServiceRulesAdd: "Додати правило",
+  drillingServiceRulesEditAction: "Редагувати",
+  drillingServiceRulesDisableAction: "Вимкнути",
+  drillingServiceRulesSearchPlaceholder: "Пошук правил",
+  drillingServiceRulesLoading: "Завантажуємо правила послуг присадки...",
+  drillingServiceRulesFailed: "Не вдалося завантажити правила послуг присадки.",
+  drillingServiceRulesEmptyTitle: "Правила послуг присадки ще не створені.",
+  drillingServiceRulesEmptyDescription: "Створіть перше правило для Viyar-послуги зі свердління.",
+  drillingServiceRulesCreateTitle: "Створення правила присадки",
+  drillingServiceRulesEditTitle: "Редагування правила присадки",
+  drillingServiceRulesCreateDescription: "Оберіть Viyar-послугу зі свердління та заповніть поля правила.",
+  drillingServiceRulesEditDescription: "Оновіть вибране правило присадки.",
+  drillingServiceRulesServiceTitle: "Viyar-послуга",
+  drillingServiceRulesServiceDescription:
+    "Оберіть послугу за ID основного запису послуги. Артикул показуємо лише як довідку.",
+  drillingServiceRulesServiceSearchPlaceholder: "Пошук Viyar-послуг",
+  drillingServiceRulesServicePlaceholder: "Оберіть послугу",
+  drillingServiceRulesServiceLabel: "Послуга",
+  drillingServiceRulesSourceManual: "Вручну",
+  drillingServiceRulesSourceViyar: "Viyar",
+  drillingServiceRulesRuleNameLabel: "Назва правила",
+  drillingServiceRulesArticleLabel: "Артикул",
+  drillingServiceRulesPriceLabel: "Ціна",
+  drillingServiceRulesCanonicalIdLabel: "ID основного запису послуги",
+  drillingServiceRulesOperationLabel: "Тип операції",
+  drillingServiceRulesHoleTypeLabel: "Тип отвору",
+  drillingServiceRulesOperationDrilling: "Свердління",
+  drillingServiceRulesOperationEdgeDrilling: "Торцеве свердління",
+  drillingServiceRulesOperationHingeCup: "Поглиблення під петлю",
+  drillingServiceRulesOperationLaserDrilling: "Лазерне свердління",
+  drillingServiceRulesHoleTypeBlind: "Глухий",
+  drillingServiceRulesHoleTypeThrough: "Наскрізний",
+  drillingServiceRulesHoleTypeEdge: "Торцевий",
+  drillingServiceRulesAllowedDiameters: "Дозволені діаметри",
+  drillingServiceRulesAllowedDepths: "Дозволені глибини",
+  drillingServiceRulesMaterialThicknessMin: "Мін. товщина матеріалу, мм",
+  drillingServiceRulesMaterialThicknessMax: "Макс. товщина матеріалу, мм",
+  drillingServiceRulesMaxBlindDepthFormula: "Формула макс. глибини глухого отвору",
+  drillingServiceRulesMaxBlindDepthMm: "Макс. глибина глухого отвору, мм",
+  drillingServiceRulesMinEdgeOffsetMm: "Мін. відступ від краю, мм",
+  drillingServiceRulesNotesLabel: "Нотатки",
+  drillingServiceRulesSourceLabel: "Джерело",
+  drillingServiceRulesActiveLabel: "Правило активне",
+  drillingServiceRulesInactive: "Неактивне",
+  drillingServiceRulesActive: "Активне",
+  drillingServiceRulesCreateButton: "Додати правило",
+  drillingServiceRulesSaveFailed: "Не вдалося зберегти правило присадки",
+  drillingServiceRulesCreated: "Правило присадки створено.",
+  drillingServiceRulesUpdated: "Правило присадки оновлено.",
+  drillingServiceRulesDisabled: "Правило присадки вимкнено.",
+  drillingServiceRulesDeleteTitle: "Вимкнути правило присадки",
+  drillingServiceRulesDeleteConfirm: "Вимкнути правило присадки?",
+  drillingServiceRulesDeleteFailed: "Не вдалося вимкнути правило присадки",
+  drillingServiceRulesNotFound: "Правило присадки не знайдено.",
+  drillingServiceRulesValidationFailed: "Оберіть Viyar-послугу та заповніть потрібні поля правила.",
+  drillingServiceRulesStatusLabel: "Статус",
+  drillingServiceRulesSelectedServiceTitle: "Вибрана Viyar-послуга",
 });
 
 function buildProjectPayload(form) {
@@ -5354,6 +5564,16 @@ export default function App() {
   const [holeServiceRuleServiceSourceFilter, setHoleServiceRuleServiceSourceFilter] = useState("all");
   const [holeServiceRuleServiceSearch, setHoleServiceRuleServiceSearch] = useState("");
   const [holeServiceRuleForm, setHoleServiceRuleForm] = useState(DEFAULT_HOLE_SERVICE_RULE_FORM);
+  const [drillingRuleItems, setDrillingRuleItems] = useState([]);
+  const [drillingRuleLoading, setDrillingRuleLoading] = useState(false);
+  const [drillingRuleError, setDrillingRuleError] = useState("");
+  const [drillingRuleSearch, setDrillingRuleSearch] = useState("");
+  const [drillingRuleEditorOpen, setDrillingRuleEditorOpen] = useState(false);
+  const [drillingRuleEditingId, setDrillingRuleEditingId] = useState("");
+  const [drillingRuleSaving, setDrillingRuleSaving] = useState(false);
+  const [drillingRuleServiceSearch, setDrillingRuleServiceSearch] = useState("");
+  const [drillingRuleServiceItems, setDrillingRuleServiceItems] = useState([]);
+  const [drillingRuleForm, setDrillingRuleForm] = useState(DEFAULT_SERVICE_DRILLING_RULE_FORM);
   const [holeSelectedFittingCategory, setHoleSelectedFittingCategory] = useState("");
   const [holeSelectedFittingId, setHoleSelectedFittingId] = useState("");
   const [holeSelectedTemplateId, setHoleSelectedTemplateId] = useState("");
@@ -6388,6 +6608,59 @@ export default function App() {
       ) || null,
     [holeServiceRuleForm.service_catalog_item_id, holeServiceRuleServiceOptions],
   );
+  const drillingRuleFilteredItems = useMemo(() => {
+    const query = String(drillingRuleSearch || "").trim().toLowerCase();
+
+    return drillingRuleItems.filter((item) => {
+      const haystack = [
+        item.rule_name,
+        getServiceDrillingRuleOperationLabel(item.operation_type, t),
+        getServiceDrillingRuleHoleTypeLabel(item.hole_type, t),
+        item.source,
+        item.notes,
+        item.service_catalog_item?.name,
+        item.service_catalog_item?.article,
+        item.service_catalog_item?.folder_path,
+        item.service_catalog_item?.canonical_service_catalog_item_id,
+        item.allowed_diameters?.join(", "),
+        item.allowed_depths?.join(", "),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return !query || haystack.includes(query);
+    });
+  }, [drillingRuleItems, drillingRuleSearch, t]);
+  const drillingRuleFilteredServiceItems = useMemo(() => {
+    const query = String(drillingRuleServiceSearch || "").trim().toLowerCase();
+    const selectedServiceId = String(drillingRuleForm.service_catalog_item_id || "").trim();
+
+    return drillingRuleServiceItems.filter((item) => {
+      if (selectedServiceId && String(item.id) === selectedServiceId) {
+        return true;
+      }
+
+      const haystack = [
+        item.name,
+        item.article,
+        item.folder_path,
+        item.canonical_service_catalog_item_id,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return !query || haystack.includes(query);
+    });
+  }, [drillingRuleForm.service_catalog_item_id, drillingRuleServiceItems, drillingRuleServiceSearch]);
+  const drillingRuleSelectedService = useMemo(
+    () =>
+      drillingRuleServiceItems.find(
+        (item) => String(item.id) === String(drillingRuleForm.service_catalog_item_id || ""),
+      ) || null,
+    [drillingRuleForm.service_catalog_item_id, drillingRuleServiceItems],
+  );
   const filteredViyarServiceTree = useMemo(
     () => filterServiceCatalogTree(viyarServiceTree, viyarServiceSearch),
     [viyarServiceSearch, viyarServiceTree],
@@ -6665,6 +6938,7 @@ export default function App() {
   const isCatalogHolesView = activeView === "catalogHoles";
   const isCatalogBundlesView = activeView === "catalogBundles";
   const isCatalogServiceRulesView = activeView === "catalogServiceRules";
+  const isCatalogDrillingRulesView = activeView === "catalogDrillingRules";
   const isCatalogValuesView = activeView === "catalogValues";
   const isCatalogViyarView = activeView === "catalogViyar";
   const isCatalogManualView = activeView === "catalogManual";
@@ -6677,6 +6951,7 @@ export default function App() {
     isCatalogHolesView ||
     isCatalogBundlesView ||
     isCatalogServiceRulesView ||
+    isCatalogDrillingRulesView ||
     isCatalogValuesView ||
     isCatalogViyarView ||
     isCatalogManualView;
@@ -7451,6 +7726,10 @@ export default function App() {
       return t.holeServiceRulesTitle;
     }
 
+    if (isCatalogDrillingRulesView) {
+      return t.drillingServiceRulesTitle;
+    }
+
     if (isCatalogMaterialsView) {
       return `${materialItems.length} ${t.of} ${materialItems.length}`;
     }
@@ -7487,10 +7766,15 @@ export default function App() {
       return t.myData;
     }
 
+    if (isCatalogDrillingRulesView) {
+      return t.drillingServiceRulesTitle;
+    }
+
     return auditPageLabel;
   }, [
     activeView,
     auditPageLabel,
+    isCatalogDrillingRulesView,
     catalogItems.length,
     fastenerItems.length,
     fittingItems.length,
@@ -7500,6 +7784,7 @@ export default function App() {
     isCatalogFittingsView,
     isCatalogFastenersView,
     isCatalogHolesView,
+    isCatalogDrillingRulesView,
     isCatalogManualView,
     isCatalogValuesView,
     isCatalogViyarView,
@@ -7707,6 +7992,60 @@ export default function App() {
     setViyarServiceSource(result.source || "viyar");
     setViyarServiceTree(sanitizeViyarServiceTree(result.items || []));
     setViyarDescriptionAudit(result.description_audit || null);
+  }
+
+  async function loadServiceDrillingRules(activeToken = token, viewer = user) {
+    if (!activeToken || viewer?.role !== "admin") {
+      setDrillingRuleItems([]);
+      return [];
+    }
+
+    setDrillingRuleLoading(true);
+    setLoading(true);
+    try {
+      const result = await listServiceDrillingRules(activeToken);
+
+      if (!result.success) {
+        const timeoutError = String(result.error || "").includes("Request timed out after");
+
+        if (timeoutError && drillingRuleItems.length) {
+          return drillingRuleItems;
+        }
+
+        setDrillingRuleItems([]);
+        setDrillingRuleError(result.error || t.drillingServiceRulesFailed);
+        setStatus({ message: result.error || t.drillingServiceRulesFailed, tone: "error" });
+        return [];
+      }
+
+      const rules = Array.isArray(result.rules) ? result.rules : [];
+      setDrillingRuleItems(rules);
+      setDrillingRuleError("");
+      return rules;
+    } finally {
+      setLoading(false);
+      setDrillingRuleLoading(false);
+    }
+  }
+
+  async function loadAvailableServiceDrillingRules(activeToken = token, viewer = user) {
+    if (!activeToken || viewer?.role !== "admin") {
+      setDrillingRuleServiceItems([]);
+      return [];
+    }
+
+    const result = await listAvailableViyarDrillingServices(activeToken, {
+      category: "drilling",
+    });
+
+    if (!result.success) {
+      setDrillingRuleServiceItems([]);
+      return [];
+    }
+
+    const items = Array.isArray(result.items) ? result.items : [];
+    setDrillingRuleServiceItems(items);
+    return items;
   }
 
   async function loadMaterialsCatalog(
@@ -8441,6 +8780,161 @@ export default function App() {
 
       await loadFittingHoleServiceRules(token, user);
       setStatus({ message: t.holeServiceRulesDeleted, tone: "success" });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function openServiceDrillingRuleEditor(rule = null) {
+    const selectedRule = rule && typeof rule === "object" ? rule : null;
+
+    setDrillingRuleEditingId(String(selectedRule?.id || ""));
+    setDrillingRuleForm({
+      service_catalog_item_id: String(selectedRule?.service_catalog_item_id || ""),
+      rule_name: String(selectedRule?.rule_name || ""),
+      operation_type: String(selectedRule?.operation_type || "drilling"),
+      hole_type: String(selectedRule?.hole_type || "blind"),
+      allowed_diameters: formatCommaSeparatedNumbers(selectedRule?.allowed_diameters || []),
+      allowed_depths: formatCommaSeparatedNumbers(selectedRule?.allowed_depths || []),
+      material_thickness_min:
+        selectedRule?.material_thickness_min === null || selectedRule?.material_thickness_min === undefined
+          ? ""
+          : String(selectedRule.material_thickness_min),
+      material_thickness_max:
+        selectedRule?.material_thickness_max === null || selectedRule?.material_thickness_max === undefined
+          ? ""
+          : String(selectedRule.material_thickness_max),
+      max_blind_depth_formula: String(selectedRule?.max_blind_depth_formula || ""),
+      max_blind_depth_mm:
+        selectedRule?.max_blind_depth_mm === null || selectedRule?.max_blind_depth_mm === undefined
+          ? ""
+          : String(selectedRule.max_blind_depth_mm),
+      min_edge_offset_mm:
+        selectedRule?.min_edge_offset_mm === null || selectedRule?.min_edge_offset_mm === undefined
+          ? ""
+          : String(selectedRule.min_edge_offset_mm),
+      notes: String(selectedRule?.notes || ""),
+      source: String(selectedRule?.source || "manual"),
+      is_active: selectedRule?.is_active !== false,
+    });
+    setDrillingRuleServiceSearch("");
+    setDrillingRuleError("");
+    setDrillingRuleEditorOpen(true);
+  }
+
+  function closeServiceDrillingRuleEditor() {
+    setDrillingRuleEditorOpen(false);
+    setDrillingRuleEditingId("");
+    setDrillingRuleForm(DEFAULT_SERVICE_DRILLING_RULE_FORM);
+    setDrillingRuleServiceSearch("");
+    setDrillingRuleSaving(false);
+    setDrillingRuleError("");
+  }
+
+  function openDeleteServiceDrillingRuleConfirm(rule) {
+    const ruleId = Number(rule?.id || 0);
+
+    if (!ruleId) {
+      setStatus({ message: t.drillingServiceRulesNotFound, tone: "error" });
+      return;
+    }
+
+    setConfirmAction({
+      type: "deleteServiceDrillingRule",
+      title: t.drillingServiceRulesDeleteTitle,
+      message: t.drillingServiceRulesDeleteConfirm,
+      confirmLabel: t.drillingServiceRulesDisableAction,
+      targetId: ruleId,
+    });
+  }
+
+  async function handleServiceDrillingRuleSubmit(event) {
+    event.preventDefault();
+
+    const serviceCatalogItemId = String(drillingRuleForm.service_catalog_item_id || "").trim();
+    const ruleName = String(drillingRuleForm.rule_name || "").trim();
+    const operationType = String(drillingRuleForm.operation_type || "").trim();
+    const holeType = String(drillingRuleForm.hole_type || "").trim();
+
+    if (!serviceCatalogItemId || !ruleName || !operationType || !holeType) {
+      setDrillingRuleError(t.drillingServiceRulesValidationFailed);
+      return;
+    }
+
+    const payload = {
+      service_catalog_item_id: serviceCatalogItemId,
+      rule_name: ruleName,
+      operation_type: operationType,
+      hole_type: holeType,
+      allowed_diameters: parseCommaSeparatedNumbers(drillingRuleForm.allowed_diameters),
+      allowed_depths: parseCommaSeparatedNumbers(drillingRuleForm.allowed_depths),
+      material_thickness_min:
+        drillingRuleForm.material_thickness_min === ""
+          ? null
+          : Number(drillingRuleForm.material_thickness_min),
+      material_thickness_max:
+        drillingRuleForm.material_thickness_max === ""
+          ? null
+          : Number(drillingRuleForm.material_thickness_max),
+      max_blind_depth_formula: String(drillingRuleForm.max_blind_depth_formula || "").trim() || null,
+      max_blind_depth_mm:
+        drillingRuleForm.max_blind_depth_mm === "" ? null : Number(drillingRuleForm.max_blind_depth_mm),
+      min_edge_offset_mm:
+        drillingRuleForm.min_edge_offset_mm === "" ? null : Number(drillingRuleForm.min_edge_offset_mm),
+      notes: String(drillingRuleForm.notes || "").trim() || null,
+      source: String(drillingRuleForm.source || "").trim() || null,
+      is_active: Boolean(drillingRuleForm.is_active),
+    };
+
+    setDrillingRuleSaving(true);
+    try {
+      const result = drillingRuleEditingId
+        ? await updateServiceDrillingRule(token, drillingRuleEditingId, payload)
+        : await createServiceDrillingRule(token, payload);
+
+      if (!result.success) {
+        const notFound = result.status === 404;
+        const errorMessage =
+          notFound ? t.drillingServiceRulesNotFound : result.error || t.drillingServiceRulesSaveFailed;
+        setDrillingRuleError(errorMessage);
+        setStatus({ message: errorMessage, tone: "error" });
+        return;
+      }
+
+      await loadServiceDrillingRules(token, user);
+      closeServiceDrillingRuleEditor();
+      setStatus({
+        message: drillingRuleEditingId ? t.drillingServiceRulesUpdated : t.drillingServiceRulesCreated,
+        tone: "success",
+      });
+    } catch (error) {
+      const errorMessage =
+        error?.status === 404 ? t.drillingServiceRulesNotFound : error?.message || t.drillingServiceRulesSaveFailed;
+      setDrillingRuleError(errorMessage);
+      setStatus({ message: errorMessage, tone: "error" });
+    } finally {
+      setDrillingRuleSaving(false);
+    }
+  }
+
+  async function handleDeleteServiceDrillingRule(ruleId) {
+    if (!ruleId) {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const result = await deleteServiceDrillingRule(token, ruleId);
+
+      if (!result.success) {
+        const errorMessage =
+          result.status === 404 ? t.drillingServiceRulesNotFound : result.error || t.drillingServiceRulesDeleteFailed;
+        setStatus({ message: errorMessage, tone: "error" });
+        return;
+      }
+
+      await loadServiceDrillingRules(token, user);
+      setStatus({ message: t.drillingServiceRulesDisabled, tone: "success" });
     } finally {
       setLoading(false);
     }
@@ -11220,6 +11714,10 @@ export default function App() {
       return;
     }
 
+    if (nextView === "catalogDrillingRules") {
+      return;
+    }
+
     if (nextView === "catalogViyar") {
       await loadViyarServices(token, viewer);
       return;
@@ -12697,6 +13195,15 @@ export default function App() {
   }, [token, user, isCatalogServiceRulesView]);
 
   useEffect(() => {
+    if (!token || user?.role !== "admin" || !isCatalogDrillingRulesView) {
+      return;
+    }
+
+    loadAvailableServiceDrillingRules(token, user);
+    loadServiceDrillingRules(token, user);
+  }, [token, user, isCatalogDrillingRulesView]);
+
+  useEffect(() => {
     if (!token || user?.role !== "admin" || !isCatalogViyarView) {
       return;
     }
@@ -12958,7 +13465,7 @@ export default function App() {
             <div className={`nav-group${isCatalogView ? " active" : ""}`}>
               <div className={`nav-group-header${isCatalogView ? " active" : ""}`}>
                 <button
-                  className={`nav-group-link${isCatalogHubView || isCatalogMaterialsView || isCatalogFittingsView || isCatalogFastenersView || isCatalogHolesView || isCatalogBundlesView || isCatalogServiceRulesView ? " active" : ""}`}
+                className={`nav-group-link${isCatalogHubView || isCatalogMaterialsView || isCatalogFittingsView || isCatalogFastenersView || isCatalogHolesView || isCatalogBundlesView || isCatalogServiceRulesView || isCatalogDrillingRulesView ? " active" : ""}`}
                   onClick={() => {
                     switchView(user.role === "admin" ? "catalogHub" : "catalogMaterials");
                     closeSidebarOnMobile();
@@ -13027,14 +13534,14 @@ export default function App() {
                   ) : null}
                   {user.role === "admin" ? (
                     <button
-                      className={isCatalogServiceRulesView ? "active" : ""}
+                      className={isCatalogDrillingRulesView ? "active" : ""}
                       onClick={() => {
-                        switchView("catalogServiceRules");
+                        switchView("catalogDrillingRules");
                         closeSidebarOnMobile();
                       }}
                       type="button"
                     >
-                      {t.holeServiceRulesTitle}
+                      {t.drillingServiceRulesTitle}
                     </button>
                   ) : null}
                   {user.role === "admin" ? (
@@ -13136,6 +13643,8 @@ export default function App() {
                   ? t.holeTabTitle
                 : isCatalogBundlesView
                   ? t.fittingBundlesTitle
+                : isCatalogDrillingRulesView
+                  ? t.drillingServiceRulesTitle
                 : isCatalogValuesView
                   ? t.catalogValues
                 : isCatalogViyarView
@@ -13144,6 +13653,8 @@ export default function App() {
                   ? t.catalogManual
                 : activeView === "settings"
                   ? t.settings
+                : isCatalogDrillingRulesView
+                  ? t.drillingServiceRulesTitle
                   : t.audit}
             </h2>
             {activeView === "projectDetails" && selectedProject ? (
@@ -14867,6 +15378,13 @@ export default function App() {
                       description: t.viyarServicesDescription,
                       label: t.catalogViyar,
                       onClick: () => switchView("catalogViyar"),
+                    },
+                    {
+                      key: "drilling_rules",
+                      count: drillingRuleItems.length,
+                      description: t.drillingServiceRulesDescription,
+                      label: t.drillingServiceRulesTitle,
+                      onClick: () => switchView("catalogDrillingRules"),
                     },
                     {
                       key: "manual",
@@ -16734,6 +17252,172 @@ export default function App() {
               )}
             </article>
           </section>
+        ) : isCatalogDrillingRulesView ? (
+          <section className="table-panel full-panel">
+            <article className="catalog-card service-catalog-card service-catalog-card-full">
+              <div className="catalog-page-header">
+                <div className="service-catalog-title">
+                  <h3>{t.drillingServiceRulesTitle}</h3>
+                  <p>{t.drillingServiceRulesDescription}</p>
+                </div>
+                <div className="service-catalog-header-actions">
+                  <span className="service-tree-badge subtle">
+                    {formatUkrainianCountLabel(
+                      drillingRuleFilteredItems.length,
+                      t.drillingServiceRulesCountOne,
+                      t.drillingServiceRulesCountFew,
+                      t.drillingServiceRulesCountMany,
+                    )}
+                  </span>
+                  <button
+                    className="ghost-button"
+                    disabled={drillingRuleLoading}
+                    onClick={() => loadServiceDrillingRules(token, user)}
+                    type="button"
+                  >
+                    <RefreshCw size={16} />
+                    {t.refresh}
+                  </button>
+                  <button
+                    className="primary-button"
+                    onClick={() => openServiceDrillingRuleEditor()}
+                    type="button"
+                  >
+                    <Plus size={16} />
+                    {t.drillingServiceRulesAdd}
+                  </button>
+                </div>
+              </div>
+
+              <div className="service-rules-toolbar">
+                <label className="service-catalog-search">
+                  <Search size={16} />
+                  <input
+                    onChange={(event) => setDrillingRuleSearch(event.target.value)}
+                    placeholder={t.drillingServiceRulesSearchPlaceholder}
+                    type="search"
+                    value={drillingRuleSearch}
+                  />
+                </label>
+              </div>
+
+              {drillingRuleLoading ? (
+                <div className="empty-state compact-empty-state">
+                  <span>{t.drillingServiceRulesLoading}</span>
+                </div>
+              ) : drillingRuleError ? (
+                <div className="empty-state compact-empty-state">
+                  <strong>{t.drillingServiceRulesFailed}</strong>
+                  <span>{drillingRuleError}</span>
+                </div>
+              ) : drillingRuleFilteredItems.length ? (
+                <div className="service-rules-list">
+                  {drillingRuleFilteredItems.map((rule) => {
+                    const serviceItem = rule.service_catalog_item || null;
+                    const servicePrice = serviceItem?.base_price ?? null;
+                    const serviceCurrency = serviceItem?.currency || "";
+                    const diametersText = formatCommaSeparatedNumbers(rule.allowed_diameters);
+                    const depthsText = formatCommaSeparatedNumbers(rule.allowed_depths);
+
+                    return (
+                      <article className="service-rule-card" key={rule.id}>
+                        <div className="service-rule-card-head">
+                          <div className="service-rule-card-title">
+                            <strong>{rule.rule_name || t.notSet}</strong>
+                            <span>
+                              {serviceItem?.name || t.notSet}
+                              {serviceItem?.article ? ` • ${serviceItem.article}` : ""}
+                            </span>
+                          </div>
+                          <div className="service-rule-card-actions">
+                            <button
+                              className="ghost-button compact-button"
+                              onClick={() => openServiceDrillingRuleEditor(rule)}
+                              type="button"
+                            >
+                              {t.drillingServiceRulesEditAction}
+                            </button>
+                            <button
+                              className="danger-button compact-button"
+                              onClick={() => openDeleteServiceDrillingRuleConfirm(rule)}
+                              type="button"
+                            >
+                              {t.drillingServiceRulesDisableAction}
+                            </button>
+                          </div>
+                        </div>
+                        <div className="service-rule-card-meta">
+                          <span>
+                            {t.drillingServiceRulesServiceLabel}: {serviceItem?.name || t.notSet}
+                          </span>
+                          <span>
+                            {t.drillingServiceRulesCanonicalIdLabel}:{" "}
+                            {serviceItem?.canonical_service_catalog_item_id || serviceItem?.id || t.notSet}
+                          </span>
+                          <span>
+                            {t.drillingServiceRulesArticleLabel}: {serviceItem?.article || t.notSet}
+                          </span>
+                          <span>
+                            {t.drillingServiceRulesPriceLabel}:{" "}
+                            {servicePrice !== null && servicePrice !== undefined
+                              ? `${formatMoneyValue(servicePrice)} ${serviceCurrency || ""}`.trim()
+                              : t.notSet}
+                          </span>
+                          <span>
+                            {t.drillingServiceRulesOperationLabel}:{" "}
+                            {getServiceDrillingRuleOperationLabel(rule.operation_type, t)}
+                          </span>
+                          <span>
+                            {t.drillingServiceRulesHoleTypeLabel}:{" "}
+                            {getServiceDrillingRuleHoleTypeLabel(rule.hole_type, t)}
+                          </span>
+                          {diametersText ? <span>{`${t.drillingServiceRulesAllowedDiameters}: ${diametersText}`}</span> : null}
+                          {depthsText ? <span>{`${t.drillingServiceRulesAllowedDepths}: ${depthsText}`}</span> : null}
+                          {(rule.material_thickness_min !== null && rule.material_thickness_min !== undefined) ||
+                          (rule.material_thickness_max !== null && rule.material_thickness_max !== undefined) ? (
+                            <span>
+                              {[
+                                rule.material_thickness_min !== null && rule.material_thickness_min !== undefined
+                                  ? `${t.drillingServiceRulesMaterialThicknessMin}: ${formatMetricValue(rule.material_thickness_min)}`
+                                  : "",
+                                rule.material_thickness_max !== null && rule.material_thickness_max !== undefined
+                                  ? `${t.drillingServiceRulesMaterialThicknessMax}: ${formatMetricValue(rule.material_thickness_max)}`
+                                  : "",
+                              ]
+                                .filter(Boolean)
+                                .join(", ")}
+                            </span>
+                          ) : null}
+                          {rule.max_blind_depth_formula ? (
+                            <span>{`${t.drillingServiceRulesMaxBlindDepthFormula}: ${rule.max_blind_depth_formula}`}</span>
+                          ) : null}
+                          {rule.max_blind_depth_mm !== null && rule.max_blind_depth_mm !== undefined ? (
+                            <span>{`${t.drillingServiceRulesMaxBlindDepthMm}: ${formatMetricValue(rule.max_blind_depth_mm)}`}</span>
+                          ) : null}
+                          {rule.min_edge_offset_mm !== null && rule.min_edge_offset_mm !== undefined ? (
+                            <span>{`${t.drillingServiceRulesMinEdgeOffsetMm}: ${formatMetricValue(rule.min_edge_offset_mm)}`}</span>
+                          ) : null}
+                          <span>
+                            {t.drillingServiceRulesStatusLabel}:{" "}
+                            {rule.is_active ? t.drillingServiceRulesActive : t.drillingServiceRulesInactive}
+                          </span>
+                          <span>
+                            {t.drillingServiceRulesSourceLabel}: {getServiceDrillingRuleSourceLabel(rule.source, t)}
+                          </span>
+                          {rule.notes ? <p className="service-rule-card-notes">{rule.notes}</p> : null}
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="empty-state compact-empty-state fitting-bundles-empty-state">
+                  <strong>{t.drillingServiceRulesEmptyTitle}</strong>
+                  <span>{t.drillingServiceRulesEmptyDescription}</span>
+                </div>
+              )}
+            </article>
+          </section>
         ) : isCatalogValuesView ? (
           <section className="table-panel full-panel">
             <article className="catalog-card">
@@ -18205,6 +18889,335 @@ export default function App() {
                 </button>
                 <button className="primary-button" disabled={holeServiceRuleSaving} type="submit">
                   {holeServiceRuleEditingId ? t.save : t.holeServiceRulesCreateButton}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      ) : null}
+
+      {drillingRuleEditorOpen ? (
+        <div
+          aria-modal="true"
+          className="modal-backdrop"
+          onClick={closeServiceDrillingRuleEditor}
+          role="dialog"
+        >
+          <section
+            className="confirm-modal hole-template-modal hole-service-rule-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="confirm-header">
+              <div>
+                <strong>
+                  {drillingRuleEditingId
+                    ? t.drillingServiceRulesEditTitle
+                    : t.drillingServiceRulesCreateTitle}
+                </strong>
+                <p>
+                  {drillingRuleEditingId
+                    ? t.drillingServiceRulesEditDescription
+                    : t.drillingServiceRulesCreateDescription}
+                </p>
+              </div>
+              <button
+                aria-label={t.cancel}
+                className="ghost-button compact-button detail-info-button"
+                onClick={closeServiceDrillingRuleEditor}
+                type="button"
+              >
+                <X size={16} />
+              </button>
+            </header>
+
+            <form className="hole-template-form hole-service-rule-form" onSubmit={handleServiceDrillingRuleSubmit}>
+              <div className="service-rule-service-picker">
+                <div className="service-rule-picker-header">
+                  <div>
+                    <strong>{t.drillingServiceRulesServiceTitle}</strong>
+                    <p>{t.drillingServiceRulesServiceDescription}</p>
+                  </div>
+                </div>
+                <div className="service-rule-picker-controls">
+                  <label className="service-catalog-search">
+                    <Search size={16} />
+                    <input
+                      disabled={drillingRuleSaving}
+                      onChange={(event) => setDrillingRuleServiceSearch(event.target.value)}
+                      placeholder={t.drillingServiceRulesServiceSearchPlaceholder}
+                      type="search"
+                      value={drillingRuleServiceSearch}
+                    />
+                  </label>
+                </div>
+                <label>
+                  <span>{t.drillingServiceRulesServiceLabel}</span>
+                  <select
+                    disabled={drillingRuleSaving}
+                    onChange={(event) =>
+                      setDrillingRuleForm((current) => ({
+                        ...current,
+                        service_catalog_item_id: event.target.value,
+                      }))
+                    }
+                    required
+                    value={drillingRuleForm.service_catalog_item_id}
+                  >
+                    <option value="">{t.drillingServiceRulesServicePlaceholder}</option>
+                    {drillingRuleFilteredServiceItems.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name}
+                        {item.article ? ` • ${item.article}` : ""}
+                        {item.base_price !== null && item.base_price !== undefined
+                          ? ` • ${formatMoneyValue(item.base_price)} ${item.currency || ""}`.trim()
+                          : ""}
+                        {item.canonical_service_catalog_item_id ? ` • ${item.canonical_service_catalog_item_id}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {drillingRuleSelectedService ? (
+                  <div className="service-rule-service-preview">
+                    <strong>{drillingRuleSelectedService.name || t.notSet}</strong>
+                    <span>
+                      {t.drillingServiceRulesArticleLabel}: {drillingRuleSelectedService.article || t.notSet}
+                    </span>
+                    <span>
+                      {t.drillingServiceRulesCanonicalIdLabel}:{" "}
+                      {drillingRuleSelectedService.canonical_service_catalog_item_id ||
+                        drillingRuleSelectedService.id ||
+                        t.notSet}
+                    </span>
+                    <span>
+                      {t.drillingServiceRulesPriceLabel}:{" "}
+                      {drillingRuleSelectedService.base_price !== null &&
+                      drillingRuleSelectedService.base_price !== undefined
+                        ? `${formatMoneyValue(drillingRuleSelectedService.base_price)} ${
+                            drillingRuleSelectedService.currency || ""
+                          }`.trim()
+                        : t.notSet}
+                    </span>
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="hole-service-rule-grid">
+                <label>
+                  <span>{t.drillingServiceRulesRuleNameLabel}</span>
+                  <input
+                    disabled={drillingRuleSaving}
+                    onChange={(event) =>
+                      setDrillingRuleForm((current) => ({
+                        ...current,
+                        rule_name: event.target.value,
+                      }))
+                    }
+                    required
+                    type="text"
+                    value={drillingRuleForm.rule_name}
+                  />
+                </label>
+                <label>
+                  <span>{t.drillingServiceRulesOperationLabel}</span>
+                  <select
+                    disabled={drillingRuleSaving}
+                    onChange={(event) =>
+                      setDrillingRuleForm((current) => ({
+                        ...current,
+                        operation_type: event.target.value,
+                      }))
+                    }
+                    required
+                    value={drillingRuleForm.operation_type}
+                  >
+                    <option value="drilling">{t.drillingServiceRulesOperationDrilling}</option>
+                    <option value="edge_drilling">{t.drillingServiceRulesOperationEdgeDrilling}</option>
+                    <option value="hinge_cup">{t.drillingServiceRulesOperationHingeCup}</option>
+                    <option value="laser_drilling">{t.drillingServiceRulesOperationLaserDrilling}</option>
+                  </select>
+                </label>
+                <label>
+                  <span>{t.drillingServiceRulesHoleTypeLabel}</span>
+                  <select
+                    disabled={drillingRuleSaving}
+                    onChange={(event) =>
+                      setDrillingRuleForm((current) => ({
+                        ...current,
+                        hole_type: event.target.value,
+                      }))
+                    }
+                    required
+                    value={drillingRuleForm.hole_type}
+                  >
+                    <option value="blind">{t.drillingServiceRulesHoleTypeBlind}</option>
+                    <option value="through">{t.drillingServiceRulesHoleTypeThrough}</option>
+                    <option value="edge">{t.drillingServiceRulesHoleTypeEdge}</option>
+                  </select>
+                </label>
+                <label>
+                  <span>{t.drillingServiceRulesAllowedDiameters}</span>
+                  <input
+                    disabled={drillingRuleSaving}
+                    onChange={(event) =>
+                      setDrillingRuleForm((current) => ({
+                        ...current,
+                        allowed_diameters: event.target.value,
+                      }))
+                    }
+                    placeholder="35, 26"
+                    type="text"
+                    value={drillingRuleForm.allowed_diameters}
+                  />
+                </label>
+                <label>
+                  <span>{t.drillingServiceRulesAllowedDepths}</span>
+                  <input
+                    disabled={drillingRuleSaving}
+                    onChange={(event) =>
+                      setDrillingRuleForm((current) => ({
+                        ...current,
+                        allowed_depths: event.target.value,
+                      }))
+                    }
+                    placeholder="12, 13.5"
+                    type="text"
+                    value={drillingRuleForm.allowed_depths}
+                  />
+                </label>
+                <label>
+                  <span>{t.drillingServiceRulesMaterialThicknessMin}</span>
+                  <input
+                    disabled={drillingRuleSaving}
+                    onChange={(event) =>
+                      setDrillingRuleForm((current) => ({
+                        ...current,
+                        material_thickness_min: event.target.value,
+                      }))
+                    }
+                    step="0.1"
+                    type="number"
+                    value={drillingRuleForm.material_thickness_min}
+                  />
+                </label>
+                <label>
+                  <span>{t.drillingServiceRulesMaterialThicknessMax}</span>
+                  <input
+                    disabled={drillingRuleSaving}
+                    onChange={(event) =>
+                      setDrillingRuleForm((current) => ({
+                        ...current,
+                        material_thickness_max: event.target.value,
+                      }))
+                    }
+                    step="0.1"
+                    type="number"
+                    value={drillingRuleForm.material_thickness_max}
+                  />
+                </label>
+                <label>
+                  <span>{t.drillingServiceRulesMaxBlindDepthFormula}</span>
+                  <input
+                    disabled={drillingRuleSaving}
+                    onChange={(event) =>
+                      setDrillingRuleForm((current) => ({
+                        ...current,
+                        max_blind_depth_formula: event.target.value,
+                      }))
+                    }
+                    type="text"
+                    value={drillingRuleForm.max_blind_depth_formula}
+                  />
+                </label>
+                <label>
+                  <span>{t.drillingServiceRulesMaxBlindDepthMm}</span>
+                  <input
+                    disabled={drillingRuleSaving}
+                    onChange={(event) =>
+                      setDrillingRuleForm((current) => ({
+                        ...current,
+                        max_blind_depth_mm: event.target.value,
+                      }))
+                    }
+                    step="0.1"
+                    type="number"
+                    value={drillingRuleForm.max_blind_depth_mm}
+                  />
+                </label>
+                <label>
+                  <span>{t.drillingServiceRulesMinEdgeOffsetMm}</span>
+                  <input
+                    disabled={drillingRuleSaving}
+                    onChange={(event) =>
+                      setDrillingRuleForm((current) => ({
+                        ...current,
+                        min_edge_offset_mm: event.target.value,
+                      }))
+                    }
+                    step="0.1"
+                    type="number"
+                    value={drillingRuleForm.min_edge_offset_mm}
+                  />
+                </label>
+                <label>
+                  <span>{t.drillingServiceRulesSourceLabel}</span>
+                  <select
+                    disabled={drillingRuleSaving}
+                    onChange={(event) =>
+                      setDrillingRuleForm((current) => ({
+                        ...current,
+                        source: event.target.value,
+                      }))
+                    }
+                    value={drillingRuleForm.source}
+                  >
+                    <option value="manual">{t.drillingServiceRulesSourceManual}</option>
+                    <option value="viyar">{t.drillingServiceRulesSourceViyar}</option>
+                  </select>
+                </label>
+              </div>
+
+              <label className="hole-service-rule-notes">
+                <span>{t.drillingServiceRulesNotesLabel}</span>
+                <textarea
+                  disabled={drillingRuleSaving}
+                  onChange={(event) =>
+                    setDrillingRuleForm((current) => ({
+                      ...current,
+                      notes: event.target.value,
+                    }))
+                  }
+                  rows={3}
+                  value={drillingRuleForm.notes}
+                />
+              </label>
+
+              <label className="hole-service-rule-activity">
+                <input
+                  checked={drillingRuleForm.is_active}
+                  disabled={drillingRuleSaving}
+                  onChange={(event) =>
+                    setDrillingRuleForm((current) => ({
+                      ...current,
+                      is_active: event.target.checked,
+                    }))
+                  }
+                  type="checkbox"
+                />
+                <span>{t.drillingServiceRulesActiveLabel}</span>
+              </label>
+
+              {drillingRuleError ? <p className="status-message error">{drillingRuleError}</p> : null}
+              <div className="confirm-actions hole-template-actions">
+                <button
+                  className="ghost-button"
+                  disabled={drillingRuleSaving}
+                  onClick={closeServiceDrillingRuleEditor}
+                  type="button"
+                >
+                  {t.cancel}
+                </button>
+                <button className="primary-button" disabled={drillingRuleSaving} type="submit">
+                  {drillingRuleEditingId ? t.save : t.drillingServiceRulesCreateButton}
                 </button>
               </div>
             </form>

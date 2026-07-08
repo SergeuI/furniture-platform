@@ -284,6 +284,69 @@ export async function deleteFittingHoleServiceRule(token, ruleId) {
   });
 }
 
+export async function listServiceDrillingRules(token, params = {}) {
+  const searchParams = new URLSearchParams();
+
+  if (params.include_inactive) {
+    searchParams.set("include_inactive", "true");
+  }
+
+  if (params.service_catalog_item_id) {
+    searchParams.set("service_catalog_item_id", params.service_catalog_item_id);
+  }
+
+  const query = searchParams.toString();
+
+  return request(`/service-drilling-rules${query ? `?${query}` : ""}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function getServiceDrillingRule(token, ruleId) {
+  return request(`/service-drilling-rules/${ruleId}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function createServiceDrillingRule(token, payload) {
+  return request("/service-drilling-rules", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateServiceDrillingRule(token, ruleId, payload) {
+  return request(`/service-drilling-rules/${ruleId}`, {
+    method: "PATCH",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteServiceDrillingRule(token, ruleId) {
+  return request(`/service-drilling-rules/${ruleId}`, {
+    method: "DELETE",
+    headers: authHeaders(token),
+  });
+}
+
+export async function listAvailableViyarDrillingServices(token, params = {}) {
+  const searchParams = new URLSearchParams();
+
+  searchParams.set("category", params.category || "drilling");
+
+  if (params.search) {
+    searchParams.set("search", params.search);
+  }
+
+  const query = searchParams.toString();
+
+  return request(`/service-drilling-rules/available-services${query ? `?${query}` : ""}`, {
+    headers: authHeaders(token),
+  });
+}
+
 export async function createFittingHoleTemplate(token, payload) {
   return request("/fitting-holes/templates", {
     method: "POST",
