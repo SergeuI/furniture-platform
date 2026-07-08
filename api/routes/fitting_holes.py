@@ -527,7 +527,7 @@ async def get_fitting_hole_service_preview_route(
 async def list_fitting_hole_service_rules_route(
     current_user = Depends(require_fitting_holes_editor),
 ):
-    rules = list_fitting_hole_service_rules()
+    rules = list_fitting_hole_service_rules(user_id=getattr(current_user, "id", None))
     return {
         "success": True,
         "rules": [

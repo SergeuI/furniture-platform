@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import datetime
 from pathlib import Path
 import re
 import subprocess
@@ -175,6 +176,109 @@ FALLBACK_CODE_BY_NAME = {
     for item in FALLBACK_SERVICE_FOLDERS
 }
 
+VIYAR_SERVICE_BLOCKED_NAMES = {
+    "дата",
+    "опис",
+    "обмеження",
+    "найдешевший товар",
+    "заголовок",
+    "назва",
+    "ціна",
+    "table",
+    "header",
+}
+
+VIYAR_SERVICE_BLOCKED_PREFIXES = (
+    "дата",
+    "опис",
+    "обмеж",
+    "найдешев",
+    "header",
+    "table",
+)
+
+
+def _build_viyar_service_audit() -> dict[str, int]:
+    return {
+        "total_records": 0,
+        "valid_services": 0,
+        "suspicious_records": 0,
+        "records_without_article": 0,
+        "records_without_price": 0,
+        "filtered_service_rows": 0,
+    }
+
+
+def _bump_viyar_service_audit(
+    audit: dict[str, int] | None,
+    key: str,
+    amount: int = 1,
+) -> None:
+
+    if audit is None:
+        return
+
+    audit[key] = int(audit.get(key, 0)) + amount
+
+
+def _is_blocked_viyar_service_name(value: str | None) -> bool:
+
+    normalized = _normalize_text(value)
+
+    if not normalized:
+        return True
+
+    lowered = normalized.lower()
+
+    if lowered in VIYAR_SERVICE_BLOCKED_NAMES:
+        return True
+
+    if lowered.startswith(VIYAR_SERVICE_BLOCKED_PREFIXES):
+        return True
+
+    if lowered in {
+        _normalize_text(folder["name"]).lower()
+        for folder in FALLBACK_SERVICE_FOLDERS
+    }:
+        return True
+
+    if lowered in {
+        _normalize_text(page["name"]).lower()
+        for folder in FALLBACK_SERVICE_FOLDERS
+        for page in folder.get("pages", [])
+    }:
+        return True
+
+    if re.fullmatch(r"\d{1,2}\.\d{1,2}\.\d{4}", lowered):
+        return True
+
+    return False
+
+
+def _mark_viyar_service_rejection(
+    audit: dict[str, int] | None,
+    *,
+    suspicious: bool = False,
+    missing_price: bool = False,
+) -> None:
+
+    if suspicious:
+        _bump_viyar_service_audit(audit, "suspicious_records")
+        _bump_viyar_service_audit(audit, "filtered_service_rows")
+
+    if missing_price:
+        _bump_viyar_service_audit(audit, "records_without_price")
+
+
+def _build_viyar_description_audit() -> dict[str, int]:
+    return {
+        "total_services": 0,
+        "with_source_url": 0,
+        "with_short_description": 0,
+        "with_full_description": 0,
+        "without_full_description": 0,
+        "failed_downloads": 0,
+    }
 
 
 def _normalize_text(value: str | None) -> str:
@@ -183,6 +287,105 @@ def _normalize_text(value: str | None) -> str:
         return ""
 
     return re.sub(r"\s+", " ", value).strip()
+
+
+VIYAR_DESCRIPTION_STOP_MARKERS = {
+    "характеристики",
+    "відгуки та питання",
+    "відгуки",
+    "питання",
+    "строки",
+    "доставка та оплата",
+    "доставка",
+    "оплата",
+    "показати більше",
+}
+
+
+def _extract_viyar_service_full_description(html: str) -> str | None:
+
+    soup = BeautifulSoup(html, "html.parser")
+    lines = [
+        _normalize_text(line)
+        for line in soup.get_text("\n", strip=True).splitlines()
+    ]
+    lines = [line for line in lines if line]
+
+    start_index = None
+
+    for index in range(len(lines) - 1, -1, -1):
+        lowered = lines[index].lower()
+        if lowered == "опис:" or lowered == "опис":
+            start_index = index + 1
+            break
+
+    if start_index is None:
+        return None
+
+    collected: list[str] = []
+
+    for line in lines[start_index:]:
+        lowered = line.lower()
+
+        if lowered in VIYAR_DESCRIPTION_STOP_MARKERS:
+            break
+
+        if lowered.startswith("### ") and "опис" not in lowered:
+            break
+
+        collected.append(line)
+
+    description = "\n".join(collected).strip()
+
+    return description or None
+
+
+def _fetch_viyar_service_full_description(
+    source_url: str,
+    use_remote: bool = True,
+    cookie_override: str | None = None,
+) -> dict[str, Any]:
+
+    normalized_source_url = _normalize_text(source_url)
+
+    if not normalized_source_url:
+        return {
+            "full_description": None,
+            "rules_parse_status": "not_available",
+            "rules_parsed_at": None,
+            "rules_source_url": None,
+        }
+
+    if not use_remote:
+        return {
+            "full_description": None,
+            "rules_parse_status": "skipped",
+            "rules_parsed_at": None,
+            "rules_source_url": normalized_source_url,
+        }
+
+    html, auth_required, _fetch_mode = _fetch_price_page(
+        normalized_source_url,
+        use_remote=use_remote,
+        cookie_override=cookie_override,
+    )
+
+    if not html or auth_required:
+        return {
+            "full_description": None,
+            "rules_parse_status": "failed",
+            "rules_parsed_at": None,
+            "rules_source_url": normalized_source_url,
+        }
+
+    full_description = _extract_viyar_service_full_description(html)
+
+    return {
+        "full_description": full_description,
+        "rules_parse_status": "parsed" if full_description else "short_only",
+        "rules_parsed_at": datetime.utcnow() if full_description else None,
+        "rules_source_url": normalized_source_url,
+    }
 
 
 def _slugify(value: str) -> str:
@@ -195,6 +398,7 @@ def _slugify(value: str) -> str:
 def _extract_service_entries_from_html(
     html: str,
     page: dict[str, Any],
+    audit: dict[str, int] | None = None,
 ) -> list[dict[str, Any]]:
 
     soup = BeautifulSoup(html, "html.parser")
@@ -202,11 +406,17 @@ def _extract_service_entries_from_html(
     seen_codes: set[str] = set()
 
     for card in soup.select(".vr-product__card"):
+        _bump_viyar_service_audit(audit, "total_records")
         article = _normalize_text(card.get("data-owner-id"))
         name = _normalize_text(card.get("data-sort-name"))
         raw_price = _normalize_text(card.get("data-price") or card.get("data-sort-price"))
 
-        if not name or not raw_price:
+        if _is_blocked_viyar_service_name(name):
+            _mark_viyar_service_rejection(audit, suspicious=True)
+            continue
+
+        if not raw_price:
+            _mark_viyar_service_rejection(audit, missing_price=True)
             continue
 
         try:
@@ -215,6 +425,7 @@ def _extract_service_entries_from_html(
             price, _ = _extract_price_from_text(raw_price)
 
         if price is None:
+            _mark_viyar_service_rejection(audit, missing_price=True)
             continue
 
         link = card.select_one("a.vr-card__link")
@@ -223,14 +434,18 @@ def _extract_service_entries_from_html(
         description = page.get("description")
         entry_key = article or _slugify(name)
         external_code = f"viyar-service-{page['code']}-{entry_key}"
+        resolved_article = article or _extract_article_from_text(name, source_url)
 
         if external_code in seen_codes:
             continue
 
         seen_codes.add(external_code)
+        _bump_viyar_service_audit(audit, "valid_services")
+        if not resolved_article:
+            _bump_viyar_service_audit(audit, "records_without_article")
         entries.append(
             {
-                "article": article or _extract_article_from_text(name, source_url),
+                "article": resolved_article,
                 "base_price": price,
                 "currency": "UAH",
                 "description": description,
@@ -261,10 +476,12 @@ def _extract_service_entries_from_html(
         if not cells:
             continue
 
+        _bump_viyar_service_audit(audit, "total_records")
         row_text = _normalize_text(" ".join(cells))
         price, _ = _extract_price_from_text(row_text)
 
         if price is None:
+            _mark_viyar_service_rejection(audit, missing_price=True)
             continue
 
         name_candidates = [
@@ -273,10 +490,12 @@ def _extract_service_entries_from_html(
             if _normalize_text(cell).lower() not in {"????", "????????", "???", "uah"}
         ]
         if not name_candidates:
+            _mark_viyar_service_rejection(audit, suspicious=True)
             continue
 
         name = name_candidates[0]
-        if len(name) < 3:
+        if len(name) < 3 or _is_blocked_viyar_service_name(name):
+            _mark_viyar_service_rejection(audit, suspicious=True)
             continue
 
         description = " | ".join(name_candidates[1:3]) if len(name_candidates) > 1 else page.get("description")
@@ -288,6 +507,9 @@ def _extract_service_entries_from_html(
             continue
 
         seen_codes.add(external_code)
+        _bump_viyar_service_audit(audit, "valid_services")
+        if not article:
+            _bump_viyar_service_audit(audit, "records_without_article")
         entries.append(
             {
                 "article": article,
@@ -790,11 +1012,12 @@ def _fetch_rendered_price_pages(
 def build_viyar_service_catalog_records(
     use_remote: bool = True,
     cookie_override: str | None = None,
-) -> list[dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], dict[str, int]]:
 
     folders = fetch_viyar_service_folders(
         use_remote=use_remote
     )
+    audit = _build_viyar_service_audit()
     rendered_pages = _fetch_rendered_price_pages(
         [
             {
@@ -806,6 +1029,7 @@ def build_viyar_service_catalog_records(
         ],
         cookie_override=cookie_override,
     )
+    description_details_by_source_url: dict[str, dict[str, Any]] = {}
 
     records: list[dict[str, Any]] = [
         {
@@ -872,7 +1096,7 @@ def build_viyar_service_catalog_records(
                 cookie_override=None,
             )
             discovered_entries = (
-                _extract_service_entries_from_html(html, page_meta)
+                _extract_service_entries_from_html(html, page_meta, audit=audit)
                 if html and not auth_required
                 else []
             )
@@ -884,19 +1108,32 @@ def build_viyar_service_catalog_records(
                     discovered_entries = _extract_service_entries_from_html(
                         rendered_html,
                         page_meta,
+                        audit=audit,
                     )
 
             if discovered_entries:
                 for discovered_index, entry in enumerate(discovered_entries, start=1):
+                    source_url = _normalize_text(entry.get("source_url")) or page["url"]
+                    description_details = description_details_by_source_url.get(source_url)
+
+                    if description_details is None:
+                        description_details = _fetch_viyar_service_full_description(
+                            source_url,
+                            use_remote=use_remote,
+                            cookie_override=cookie_override,
+                        )
+                        description_details_by_source_url[source_url] = description_details
+
                     records.append(
                         {
                             **entry,
+                            **description_details,
                             "folder_path": folder_path,
                             "sort_order": page_index * 1000 + discovered_index,
                         }
                     )
 
-    return records
+    return records, audit
 
 
 def fetch_viyar_service_price_updates(

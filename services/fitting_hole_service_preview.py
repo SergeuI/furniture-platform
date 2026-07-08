@@ -151,6 +151,7 @@ def _select_service_match(
     diameter_mm: float | None,
     depth_mm: float | None,
     services: list[dict[str, Any]],
+    user_id: str | None = None,
 ) -> tuple[dict[str, Any] | None, str]:
     if operation == "mark":
         return None, "none"
@@ -159,6 +160,7 @@ def _select_service_match(
         operation=operation,
         diameter_mm=diameter_mm,
         depth_mm=depth_mm,
+        user_id=user_id,
     )
     if rule:
         service_item = rule.get("service_catalog_item")
@@ -215,6 +217,7 @@ def build_fitting_hole_service_preview(
                 diameter_mm,
                 depth_mm,
                 calculable_services,
+                current_user_id,
             )
             match_status = "not_calculable" if operation == "mark" else ("matched" if matched_service else "not_found")
             group = {
@@ -240,7 +243,11 @@ def build_fitting_hole_service_preview(
                 group["matched_service_id"] = matched_service.get("id")
                 group["matched_service_name"] = matched_service.get("name")
                 group["matched_service_unit"] = matched_service.get("unit")
-                group["matched_service_price"] = matched_service.get("effective_price")
+                group["matched_service_price"] = (
+                    matched_service.get("effective_price")
+                    if matched_service.get("effective_price") is not None
+                    else matched_service.get("base_price")
+                )
                 group["matched_service_currency"] = matched_service.get("effective_currency")
                 group["matched_service_source"] = matched_service.get("source")
             grouped_points[group_key] = group

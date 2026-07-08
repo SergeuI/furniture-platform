@@ -22,6 +22,7 @@ from database.models.user import (
 from services.viyar_service_catalog_service import (
     build_viyar_service_catalog_records,
     fetch_viyar_service_price_updates,
+    _is_blocked_viyar_service_name,
 )
 
 
@@ -65,11 +66,15 @@ def _serialize_service_catalog_item(
         "item_type": item.item_type,
         "folder_path": item.folder_path,
         "description": item.description,
+        "full_description": item.full_description,
         "article": item.article,
         "unit": item.unit,
         "base_price": item.base_price,
         "currency": item.currency,
         "source_url": item.source_url,
+        "rules_source_url": item.rules_source_url,
+        "rules_parsed_at": item.rules_parsed_at,
+        "rules_parse_status": item.rules_parse_status,
         "is_calculable": item.is_calculable,
         "sort_order": item.sort_order,
         "is_active": item.is_active,
@@ -94,13 +99,60 @@ def seed_default_viyar_service_catalog():
     )
 
 
+def get_viyar_service_description_audit(
+    include_inactive: bool = False,
+) -> dict[str, int]:
+
+    db = SessionLocal()
+
+    try:
+
+        query = db.query(ServiceCatalogItemModel).filter(
+            ServiceCatalogItemModel.source == "viyar",
+            ServiceCatalogItemModel.item_type == "service",
+        )
+
+        if not include_inactive:
+            query = query.filter(ServiceCatalogItemModel.is_active.is_(True))
+
+        total_services = query.count()
+        with_source_url = query.filter(
+            ServiceCatalogItemModel.source_url.isnot(None),
+            func.trim(ServiceCatalogItemModel.source_url) != "",
+        ).count()
+        with_short_description = query.filter(
+            ServiceCatalogItemModel.description.isnot(None),
+            func.trim(ServiceCatalogItemModel.description) != "",
+        ).count()
+        with_full_description = query.filter(
+            ServiceCatalogItemModel.full_description.isnot(None),
+            func.trim(ServiceCatalogItemModel.full_description) != "",
+        ).count()
+        failed_downloads = query.filter(
+            ServiceCatalogItemModel.rules_parse_status == "failed",
+        ).count()
+
+        return {
+            "total_services": total_services,
+            "with_source_url": with_source_url,
+            "with_short_description": with_short_description,
+            "with_full_description": with_full_description,
+            "without_full_description": max(0, total_services - with_full_description),
+            "failed_downloads": failed_downloads,
+        }
+
+    finally:
+
+        db.close()
+
+
 def sync_viyar_service_catalog(
     use_remote: bool = True,
     cookie_override: str | None = None,
     deactivate_missing: bool = False,
 ) -> dict:
 
-    records = build_viyar_service_catalog_records(
+    records, audit = build_viyar_service_catalog_records(
         use_remote=use_remote,
         cookie_override=cookie_override,
     )
@@ -142,6 +194,7 @@ def sync_viyar_service_catalog(
             and imported_service_articles == 0
             and existing_active_service_count > imported_service_count
         )
+        deactivated_suspicious_count = 0
 
         for record in records:
 
@@ -185,6 +238,16 @@ def sync_viyar_service_catalog(
 
             imported_codes.add(record["external_code"])
 
+        for item in existing_items:
+            if item.item_type != "service" or not item.is_active:
+                continue
+
+            if not _is_blocked_viyar_service_name(item.name):
+                continue
+
+            item.is_active = False
+            deactivated_suspicious_count += 1
+
         if deactivate_missing and not fallback_only_import:
             for item in existing_items:
                 if item.external_code not in imported_codes:
@@ -192,7 +255,16 @@ def sync_viyar_service_catalog(
 
         db.commit()
 
+        description_audit = get_viyar_service_description_audit(
+            include_inactive=False,
+        )
+
         return {
+            "import_audit": {
+                **audit,
+                "deactivated_suspicious_count": deactivated_suspicious_count,
+            },
+            "description_audit": description_audit,
             "items": list_service_catalog_tree(
                 source="viyar",
                 include_inactive=False,
@@ -211,6 +283,7 @@ def sync_viyar_service_catalog(
                 for record in records
                 if record["item_type"] == "service"
             ),
+            "deactivated_suspicious_count": deactivated_suspicious_count,
         }
 
     finally:

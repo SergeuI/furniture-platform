@@ -6,34 +6,58 @@ from sqlalchemy import or_
 
 from database.models.fitting_hole_service_rule import FittingHoleServiceRuleModel
 from database.models.service_catalog_item import ServiceCatalogItemModel
+from database.models.user_service_catalog_price import UserServiceCatalogPriceModel
 from database.session import SessionLocal
 
 
-def _serialize_service_catalog_item(item) -> dict[str, Any] | None:
+def _serialize_service_catalog_item(item, user_price=None) -> dict[str, Any] | None:
     if not item:
         return None
 
-    effective_price = item.base_price
-    effective_currency = item.currency
+    effective_price = (
+        user_price.base_price
+        if user_price and user_price.base_price is not None
+        else item.base_price
+    )
+    effective_currency = (
+        user_price.currency
+        if user_price and user_price.currency
+        else item.currency
+    )
 
     return {
         "id": item.id,
+        "source": item.source,
+        "external_code": item.external_code,
+        "parent_external_code": item.parent_external_code,
+        "owner_user_id": item.owner_user_id,
         "name": item.name,
         "slug": item.slug,
         "item_type": item.item_type,
         "folder_path": item.folder_path,
-        "source": item.source,
+        "description": item.description,
+        "article": item.article,
         "unit": item.unit,
         "base_price": item.base_price,
         "currency": item.currency,
+        "source_url": item.source_url,
+        "is_calculable": item.is_calculable,
+        "sort_order": item.sort_order,
+        "is_active": item.is_active,
+        "last_synced_at": item.last_synced_at,
+        "price_sync_status": item.price_sync_status,
+        "price_source_label": item.price_source_label,
         "effective_price": effective_price,
         "effective_currency": effective_currency,
-        "is_calculable": item.is_calculable,
-        "is_active": item.is_active,
+        "user_price": user_price.base_price if user_price else None,
+        "user_currency": user_price.currency if user_price else None,
+        "user_last_synced_at": user_price.last_synced_at if user_price else None,
+        "user_price_sync_status": user_price.price_sync_status if user_price else None,
+        "user_price_source_label": user_price.price_source_label if user_price else None,
     }
 
 
-def _serialize_rule(rule) -> dict[str, Any]:
+def _serialize_rule(rule, user_price=None) -> dict[str, Any]:
     service_item = getattr(rule, "service_catalog_item", None)
     return {
         "id": rule.id,
@@ -50,7 +74,7 @@ def _serialize_rule(rule) -> dict[str, Any]:
         "notes": rule.notes,
         "created_at": rule.created_at,
         "updated_at": rule.updated_at,
-        "service_catalog_item": _serialize_service_catalog_item(service_item),
+        "service_catalog_item": _serialize_service_catalog_item(service_item, user_price=user_price),
     }
 
 
@@ -79,9 +103,25 @@ def _build_rule_query(db, include_inactive: bool = False):
     return query
 
 
+def _load_user_price_map(db, user_id: str | None) -> dict[str, UserServiceCatalogPriceModel]:
+    if not user_id:
+        return {}
+
+    user_prices = (
+        db.query(UserServiceCatalogPriceModel)
+        .filter(UserServiceCatalogPriceModel.user_id == user_id)
+        .all()
+    )
+    return {
+        price.service_catalog_item_id: price
+        for price in user_prices
+    }
+
+
 def list_fitting_hole_service_rules(
     include_inactive: bool = False,
     operation: str | None = None,
+    user_id: str | None = None,
 ) -> list[dict[str, Any]]:
     db = SessionLocal()
     try:
@@ -89,6 +129,7 @@ def list_fitting_hole_service_rules(
         if operation:
             query = query.filter(FittingHoleServiceRuleModel.operation == operation)
 
+        user_prices_by_item_id = _load_user_price_map(db, user_id)
         rules = (
             query.order_by(
                 FittingHoleServiceRuleModel.priority.asc(),
@@ -96,21 +137,32 @@ def list_fitting_hole_service_rules(
             )
             .all()
         )
-        return [_serialize_rule(rule) for rule in rules]
+        return [
+            _serialize_rule(rule, user_price=user_prices_by_item_id.get(rule.service_catalog_item_id))
+            for rule in rules
+        ]
     finally:
         db.close()
 
 
-def get_fitting_hole_service_rule(rule_id: int) -> dict[str, Any] | None:
+def get_fitting_hole_service_rule(
+    rule_id: int,
+    user_id: str | None = None,
+) -> dict[str, Any] | None:
     db = SessionLocal()
     try:
+        user_prices_by_item_id = _load_user_price_map(db, user_id)
         rule = (
             db.query(FittingHoleServiceRuleModel)
             .join(ServiceCatalogItemModel, ServiceCatalogItemModel.id == FittingHoleServiceRuleModel.service_catalog_item_id)
             .filter(FittingHoleServiceRuleModel.id == rule_id)
             .one_or_none()
         )
-        return _serialize_rule(rule) if rule else None
+        return (
+            _serialize_rule(rule, user_price=user_prices_by_item_id.get(rule.service_catalog_item_id))
+            if rule
+            else None
+        )
     finally:
         db.close()
 
@@ -221,6 +273,7 @@ def resolve_fitting_hole_service_rule(
     depth_mm: float | None = None,
     source: str | None = None,
     city: str | None = None,
+    user_id: str | None = None,
 ) -> dict[str, Any] | None:
     db = SessionLocal()
     try:
@@ -252,13 +305,17 @@ def resolve_fitting_hole_service_rule(
             )
             .all()
         )
+        user_prices_by_item_id = _load_user_price_map(db, user_id)
 
         for rule in rules:
             if not _matches_optional_range(diameter_mm, rule.diameter_min_mm, rule.diameter_max_mm):
                 continue
             if not _matches_optional_range(depth_mm, rule.depth_min_mm, rule.depth_max_mm):
                 continue
-            return _serialize_rule(rule)
+            return _serialize_rule(
+                rule,
+                user_price=user_prices_by_item_id.get(rule.service_catalog_item_id),
+            )
 
         return None
     finally:

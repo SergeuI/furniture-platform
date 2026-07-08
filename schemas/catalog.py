@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import datetime
 from typing import List
 
@@ -72,11 +74,15 @@ class ServiceCatalogItemSchema(BaseModel):
     item_type: str
     folder_path: str | None = None
     description: str | None = None
+    full_description: str | None = None
     article: str | None = None
     unit: str | None = None
     base_price: float | None = None
     currency: str | None = None
     source_url: str | None = None
+    rules_source_url: str | None = None
+    rules_parsed_at: datetime | None = None
+    rules_parse_status: str | None = None
     is_calculable: bool
     sort_order: int
     is_active: bool
@@ -101,10 +107,30 @@ class ServiceCatalogNodeSchema(ServiceCatalogItemSchema):
 class ServiceCatalogTreeResponseSchema(BaseModel):
     success: bool
     source: str
+    description_audit: ServiceCatalogDescriptionAuditSchema | None = None
     items: List[ServiceCatalogNodeSchema] = Field(
         default_factory=list
     )
     error: str | None = None
+
+
+class ServiceCatalogDescriptionAuditSchema(BaseModel):
+    total_services: int = 0
+    with_source_url: int = 0
+    with_short_description: int = 0
+    with_full_description: int = 0
+    without_full_description: int = 0
+    failed_downloads: int = 0
+
+
+class ServiceCatalogImportAuditSchema(BaseModel):
+    total_records: int = 0
+    valid_services: int = 0
+    suspicious_records: int = 0
+    records_without_article: int = 0
+    records_without_price: int = 0
+    filtered_service_rows: int = 0
+    deactivated_suspicious_count: int = 0
 
 
 class ServiceCatalogSyncResponseSchema(BaseModel):
@@ -114,6 +140,8 @@ class ServiceCatalogSyncResponseSchema(BaseModel):
     folder_count: int
     service_count: int
     fallback_only_import: bool = False
+    import_audit: ServiceCatalogImportAuditSchema | None = None
+    description_audit: ServiceCatalogDescriptionAuditSchema | None = None
     items: List[ServiceCatalogNodeSchema] = Field(
         default_factory=list
     )

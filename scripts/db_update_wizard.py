@@ -1156,6 +1156,7 @@ class WizardApp(tk.Tk):
             "line": "#d9e3e1",
             "success_bg": "#dcf5df",
             "success_fg": "#14532d",
+            "success": "#dcf5df",
             "warn_bg": "#fff1c9",
             "warn_fg": "#7a4b00",
             "danger_bg": "#ffd7d7",

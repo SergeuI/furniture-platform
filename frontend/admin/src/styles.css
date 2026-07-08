@@ -3801,6 +3801,7 @@ tbody tr.selected {
   font-size: 13px;
   line-height: 1.5;
   margin: 0;
+  white-space: pre-line;
 }
 
 .service-tree-badge {
@@ -6085,6 +6086,10 @@ tbody tr.selected {
   max-width: min(900px, calc(100vw - 48px));
 }
 
+.hole-service-rule-modal {
+  max-width: min(1080px, calc(100vw - 48px));
+}
+
 .hole-bundle-details-summary {
   display: grid;
   gap: 6px;
@@ -6165,6 +6170,126 @@ tbody tr.selected {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.service-rules-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.service-rules-list {
+  display: grid;
+  gap: 12px;
+}
+
+.service-rule-card {
+  background: #ffffff;
+  border: 1px solid #dbe3ea;
+  border-radius: 12px;
+  display: grid;
+  gap: 12px;
+  padding: 14px 16px;
+}
+
+.service-rule-card-head {
+  align-items: flex-start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.service-rule-card-title {
+  display: grid;
+  gap: 4px;
+}
+
+.service-rule-card-title strong {
+  color: #1f2933;
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.service-rule-card-title span {
+  color: #607182;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.service-rule-card-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.service-rule-card-meta {
+  color: #607182;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.service-rule-card-meta p {
+  color: #3a4a58;
+  margin: 0;
+  width: 100%;
+}
+
+.service-rule-service-picker {
+  background: #f8fafb;
+  border: 1px solid #dbe3ea;
+  border-radius: 12px;
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.service-rule-picker-header p {
+  color: #607182;
+  margin: 4px 0 0;
+}
+
+.service-rule-picker-controls {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.service-rule-service-preview {
+  background: #ffffff;
+  border: 1px solid #dbe3ea;
+  border-radius: 10px;
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+}
+
+.service-rule-service-preview span {
+  color: #607182;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.hole-service-rule-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.hole-service-rule-notes textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.hole-service-rule-activity {
+  align-items: center;
+  display: flex;
+  gap: 10px;
 }
 
 .hole-bundle-details-list {
@@ -6713,6 +6838,11 @@ tbody tr.selected {
 
   .hole-bundle-modal-row-meta {
     grid-column: 3 / -1;
+  }
+
+  .service-rule-picker-controls,
+  .hole-service-rule-grid {
+    grid-template-columns: 1fr;
   }
 
   .hole-template-form-grid {

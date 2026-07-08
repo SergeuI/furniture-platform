@@ -54,6 +54,7 @@ from database.repositories.catalog_repository import (
 )
 from database.repositories.service_catalog_repository import (
     create_manual_service_catalog_item,
+    get_viyar_service_description_audit,
     list_service_catalog_tree,
     sync_viyar_service_catalog,
     sync_viyar_service_prices,
@@ -1991,10 +1992,14 @@ async def list_viyar_services_tree_route(
 
     current_user = Depends(require_catalog_admin)
 ):
+    description_audit = get_viyar_service_description_audit(
+        include_inactive=include_inactive,
+    )
 
     return {
         "success": True,
         "source": "viyar",
+        "description_audit": description_audit,
         "items": list_service_catalog_tree(
             source="viyar",
             include_inactive=include_inactive,
@@ -2107,6 +2112,8 @@ async def import_viyar_services_route(
             "imported_count": result["imported_count"],
             "folder_count": result["folder_count"],
             "service_count": result["service_count"],
+            "import_audit": result.get("import_audit", {}),
+            "description_audit": result.get("description_audit", {}),
         }
     )
 
@@ -2117,6 +2124,8 @@ async def import_viyar_services_route(
         "folder_count": result["folder_count"],
         "service_count": result["service_count"],
         "fallback_only_import": result.get("fallback_only_import", False),
+        "import_audit": result.get("import_audit"),
+        "description_audit": result.get("description_audit"),
         "items": result["items"],
     }
 

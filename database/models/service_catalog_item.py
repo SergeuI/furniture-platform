@@ -82,6 +82,11 @@ class ServiceCatalogItemModel(Base):
         nullable=True,
     )
 
+    full_description = Column(
+        Text,
+        nullable=True,
+    )
+
     article = Column(
         String,
         nullable=True,
@@ -103,6 +108,21 @@ class ServiceCatalogItemModel(Base):
     )
 
     source_url = Column(
+        String,
+        nullable=True,
+    )
+
+    rules_source_url = Column(
+        String,
+        nullable=True,
+    )
+
+    rules_parsed_at = Column(
+        DateTime,
+        nullable=True,
+    )
+
+    rules_parse_status = Column(
         String,
         nullable=True,
     )

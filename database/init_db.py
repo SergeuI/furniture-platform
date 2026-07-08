@@ -300,10 +300,14 @@ def upgrade_sqlite_schema():
 
         service_catalog_columns = {
             "article": "VARCHAR",
+            "full_description": "TEXT",
             "last_synced_at": "DATETIME",
             "price_sync_status": "VARCHAR",
             "price_source_label": "VARCHAR",
             "owner_user_id": "VARCHAR",
+            "rules_source_url": "VARCHAR",
+            "rules_parsed_at": "DATETIME",
+            "rules_parse_status": "VARCHAR",
         }
 
         for column_name, column_type in service_catalog_columns.items():

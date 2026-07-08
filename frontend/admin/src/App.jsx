@@ -83,7 +83,10 @@ import {
   importMaterialFromViyar,
   listAuditLogs,
   listCatalogItems,
+  createFittingHoleServiceRule,
+  deleteFittingHoleServiceRule,
   listFittingHoleBundles,
+  listFittingHoleServiceRules,
   listFittingHolePoints,
   listFittingHoleTemplatesByFitting,
   listProjectScans,
@@ -98,6 +101,7 @@ import {
   updateFittingHoleBundle,
   updateFittingHoleBundleMountingVariant,
   updateFittingHoleTemplate,
+  updateFittingHoleServiceRule,
   updateCatalogItemActive,
   updateFittingHolePoint,
   updateMyViyarAuth,
@@ -534,6 +538,7 @@ const CATALOG_SERVICE_VIEWS = new Set([
   "catalogFittings",
   "catalogHoles",
   "catalogBundles",
+  "catalogServiceRules",
   "catalogFasteners",
   "catalogValues",
 ]);
@@ -581,6 +586,20 @@ const DEFAULT_HOLE_POINT_FORM = {
   quantity: "1",
   mirrored: false,
   is_through: true,
+  notes: "",
+};
+
+const DEFAULT_HOLE_SERVICE_RULE_FORM = {
+  operation: "drill",
+  diameter_min_mm: "",
+  diameter_max_mm: "",
+  depth_min_mm: "",
+  depth_max_mm: "",
+  service_catalog_item_id: "",
+  source: "",
+  city: "",
+  is_active: true,
+  priority: 0,
   notes: "",
 };
 
@@ -873,7 +892,8 @@ function readViyarServicesCache(userId) {
     }
 
     return {
-      items: parsed.items,
+      items: sanitizeViyarServiceTree(parsed.items),
+      descriptionAudit: parsed.descriptionAudit || null,
       priceSyncSummary: parsed.priceSyncSummary || null,
       source: parsed.source || "viyar",
       savedAt: parsed.savedAt || null,
@@ -892,7 +912,8 @@ function writeViyarServicesCache(userId, payload) {
     localStorage.setItem(
       buildViyarServicesCacheKey(userId),
       JSON.stringify({
-        items: Array.isArray(payload?.items) ? payload.items : [],
+        items: sanitizeViyarServiceTree(payload?.items || []),
+        descriptionAudit: payload?.descriptionAudit || null,
         priceSyncSummary: payload?.priceSyncSummary || null,
         source: payload?.source || "viyar",
         savedAt: new Date().toISOString(),
@@ -977,6 +998,63 @@ function filterServiceCatalogTree(nodes, query) {
   }
 
   return nodes.map(filterNode).filter(Boolean);
+}
+
+const VIYAR_SERVICE_BLOCKED_NAMES = new Set([
+  "дата",
+  "опис",
+  "обмеження",
+  "найдешевший товар",
+  "заголовок",
+  "назва",
+  "ціна",
+  "table",
+  "header",
+  "порізка",
+  "свердління",
+  "кромкування",
+  "фрезерування",
+  "додаткові послуги",
+  "крайкування криволінійне",
+  "стяжка",
+  "пакування",
+]);
+
+function isSuspiciousViyarServiceNode(node) {
+  if (!node || node.item_type !== "service") {
+    return false;
+  }
+
+  const name = String(node.name || "").trim().toLowerCase();
+  if (!name) {
+    return true;
+  }
+
+  if (VIYAR_SERVICE_BLOCKED_NAMES.has(name)) {
+    return true;
+  }
+
+  if (/^\d{1,2}\.\d{1,2}\.\d{4}$/.test(name)) {
+    return true;
+  }
+
+  return false;
+}
+
+function sanitizeViyarServiceTree(nodes) {
+  return (Array.isArray(nodes) ? nodes : [])
+    .map((node) => {
+      const children = sanitizeViyarServiceTree(node.children || []);
+      if (isSuspiciousViyarServiceNode(node)) {
+        return null;
+      }
+
+      return {
+        ...node,
+        children,
+      };
+    })
+    .filter(Boolean);
 }
 
 function collectServiceFolderCodes(nodes) {
@@ -1092,6 +1170,40 @@ function isFastenerFitting(item) {
 
 function normalizeCatalogView(view) {
   return view === "catalogFasteners" ? "catalogFittings" : view;
+}
+
+function getHoleServiceRuleOperationLabel(operation, t) {
+  const labels = {
+    blind_drill: t.holeServiceRulesOperationBlindDrill,
+    drill: t.holeServiceRulesOperationDrill,
+    mark: t.holeServiceRulesOperationMark,
+    milling: t.holeServiceRulesOperationMilling,
+    slot: t.holeServiceRulesOperationSlot,
+    through_drill: t.holeServiceRulesOperationThroughDrill,
+  };
+
+  return labels[operation] || operation || t.notSet;
+}
+
+function getHoleServiceRuleSourceLabel(source, t) {
+  const normalizedSource = String(source || "").trim();
+
+  const labels = {
+    manual: t.holeServiceRulesSourceManual,
+    viyar: t.holeServiceRulesSourceViyar,
+  };
+
+  return labels[normalizedSource] || t.holeServiceRulesSourceAny;
+}
+
+function getHoleServiceRuleMatchSourceLabel(matchSource, t) {
+  const labels = {
+    auto: t.holeServiceRulesMatchSourceAuto,
+    none: t.holeServiceRulesMatchSourceNone,
+    rule: t.holeServiceRulesMatchSourceRule,
+  };
+
+  return labels[matchSource] || t.holeServiceRulesMatchSourceNone;
 }
 
 const FITTING_CATEGORY_VISUALS = {
@@ -1252,6 +1364,7 @@ function ServiceCatalogTreeNode({
 }) {
   const [isDescriptionOpen, setIsDescriptionOpen] = useState(false);
   const isFolder = node.item_type === "folder";
+  const serviceDescription = isFolder ? node.description : (node.full_description || node.description);
   const isCollapsed =
     isFolder &&
     !searchQuery.trim() &&
@@ -1357,7 +1470,7 @@ function ServiceCatalogTreeNode({
             </label>
             <button
               className="ghost-button compact-button service-tree-inline-action"
-              disabled={!node.description}
+              disabled={!serviceDescription}
               onClick={() => setIsDescriptionOpen((current) => !current)}
               type="button"
             >
@@ -1397,13 +1510,13 @@ function ServiceCatalogTreeNode({
           </div>
         )}
       </div>
-      {node.description && isDescriptionOpen ? (
+      {serviceDescription && isDescriptionOpen ? (
         <div
           className={`service-tree-description-panel${isFolder ? " folder-description-panel" : ""}`}
           style={{ marginLeft: `${Math.max(0, (level - 1) * 18) + (isFolder ? 18 : 32)}px` }}
         >
           <strong>{t.showDescription}</strong>
-          <p>{node.description}</p>
+          <p>{serviceDescription}</p>
         </div>
       ) : null}
       {node.children?.length && !isCollapsed ? (
@@ -1603,6 +1716,68 @@ const TRANSLATIONS = {
     holeServicePreviewServiceSource: "Source",
     holeServicePreviewServiceUnit: "Unit",
     holeServicePreviewTitle: "Preliminary service estimate",
+    holeServiceRulesTitle: "Fitting hole service rules",
+    holeServiceRulesDescription:
+      "Controlled mappings from fitting-hole operations to catalog services.",
+    holeServiceRulesCountOne: "rule",
+    holeServiceRulesCountFew: "rules",
+    holeServiceRulesCountMany: "rules",
+    holeServiceRulesAdd: "Add rule",
+    holeServiceRulesSearchPlaceholder: "Search rules",
+    holeServiceRulesLoading: "Loading service rules...",
+    holeServiceRulesFailed: "Unable to load service rules.",
+    holeServiceRulesEmptyTitle: "No service rules yet.",
+    holeServiceRulesEmptyDescription: "Create the first rule to connect an operation with a service.",
+    holeServiceRulesCreateTitle: "Create service rule",
+    holeServiceRulesEditTitle: "Edit service rule",
+    holeServiceRulesCreateDescription: "Choose an operation and a catalog service for it.",
+    holeServiceRulesEditDescription: "Update the operation mapping and related service.",
+    holeServiceRulesOperationLabel: "Operation",
+    holeServiceRulesOperationDrill: "Drill",
+    holeServiceRulesOperationBlindDrill: "Blind drill",
+    holeServiceRulesOperationThroughDrill: "Through drill",
+    holeServiceRulesOperationMilling: "Milling",
+    holeServiceRulesOperationSlot: "Slot",
+    holeServiceRulesOperationMark: "Mark",
+    holeServiceRulesSourceLabel: "Rule source",
+    holeServiceRulesSourceAny: "Any source",
+    holeServiceRulesSourceViyar: "Viyar",
+    holeServiceRulesSourceManual: "Manual",
+    holeServiceRulesCityLabel: "City",
+    holeServiceRulesPriorityLabel: "Priority",
+    holeServiceRulesDiameterMin: "Diameter min, mm",
+    holeServiceRulesDiameterMax: "Diameter max, mm",
+    holeServiceRulesDepthMin: "Depth min, mm",
+    holeServiceRulesDepthMax: "Depth max, mm",
+    holeServiceRulesServiceTitle: "Catalog service",
+    holeServiceRulesServiceDescription: "Pick the service that should be matched by this rule.",
+    holeServiceRulesServiceCatalogFilterLabel: "Catalog source filter",
+    holeServiceRulesServiceSearchPlaceholder: "Search services",
+    holeServiceRulesServicePlaceholder: "Choose a service",
+    holeServiceRulesServiceLabel: "Service",
+    holeServiceRulesArticleLabel: "Article",
+    holeServiceRulesArticleMissing: "No article",
+    holeServiceRulesServiceUnit: "Unit",
+    holeServiceRulesPriceLabel: "Price",
+    holeServiceRulesNotesLabel: "Notes",
+    holeServiceRulesActiveLabel: "Rule is active",
+    holeServiceRulesInactive: "Inactive",
+    holeServiceRulesActive: "Active",
+    holeServiceRulesCreateButton: "Create",
+    holeServiceRulesSaveFailed: "Unable to save service rule",
+    holeServiceRulesCreated: "Service rule created.",
+    holeServiceRulesUpdated: "Service rule updated.",
+    holeServiceRulesDeleted: "Service rule deleted.",
+    holeServiceRulesDeleteTitle: "Delete service rule",
+    holeServiceRulesDeleteConfirm:
+      "Delete this service rule? It will no longer be available for service matching.",
+    holeServiceRulesDeleteFailed: "Unable to delete service rule",
+    holeServiceRulesNotFound: "Service rule not found.",
+    holeServiceRulesValidationFailed: "Choose an operation and a service.",
+    holeServiceRulesStatusLabel: "Status",
+    holeServiceRulesMatchSourceRule: "Matched by rule",
+    holeServiceRulesMatchSourceAuto: "Matched automatically",
+    holeServiceRulesMatchSourceNone: "No service found",
     holeTabDescription: "View hole points for the selected fitting and mounting variant.",
     holeTabPreview: "2D preview",
     holeTabPoints: "Points",
@@ -2440,6 +2615,13 @@ Object.assign(TRANSLATIONS.en, {
   viyarRefresh: "Refresh from Viyar",
   viyarSearch: "Search services",
   viyarService: "Service",
+  viyarDescriptionAuditTitle: "Description audit",
+  viyarDescriptionAuditTotal: "Total",
+  viyarDescriptionAuditSourceUrl: "Source URL",
+  viyarDescriptionAuditShort: "Short description",
+  viyarDescriptionAuditFull: "Full description",
+  viyarDescriptionAuditMissing: "Without full description",
+  viyarDescriptionAuditFailed: "Failed downloads",
   viyarServicesDescription:
     "Folder tree of services prepared for future calculation and connection to project costing.",
   viyarSyncPrices: "Sync prices",
@@ -2530,6 +2712,13 @@ Object.assign(TRANSLATIONS.uk, {
   viyarRefresh: "\u041e\u043d\u043e\u0432\u0438\u0442\u0438 \u0437 Viyar",
   viyarSearch: "\u041f\u043e\u0448\u0443\u043a \u043f\u043e\u0441\u043b\u0443\u0433",
   viyarService: "\u041f\u043e\u0441\u043b\u0443\u0433\u0430",
+  viyarDescriptionAuditTitle: "\u0410\u0443\u0434\u0438\u0442 \u043e\u043f\u0438\u0441\u0456\u0432",
+  viyarDescriptionAuditTotal: "\u0412\u0441\u044c\u043e\u0433\u043e",
+  viyarDescriptionAuditSourceUrl: "source_url",
+  viyarDescriptionAuditShort: "\u041a\u043e\u0440\u043e\u0442\u043a\u0438\u0439 \u043e\u043f\u0438\u0441",
+  viyarDescriptionAuditFull: "\u041f\u043e\u0432\u043d\u0438\u0439 \u043e\u043f\u0438\u0441",
+  viyarDescriptionAuditMissing: "\u0411\u0435\u0437 \u043f\u043e\u0432\u043d\u043e\u0433\u043e \u043e\u043f\u0438\u0441\u0443",
+  viyarDescriptionAuditFailed: "\u041d\u0435\u0432\u0434\u0430\u043b\u043e\u0441\u044f \u0437\u0430\u0432\u0430\u043d\u0442\u0430\u0436\u0438\u0442\u0438",
   viyarServicesDescription:
     "\u0414\u0435\u0440\u0435\u0432\u043e \u043f\u043e\u0441\u043b\u0443\u0433, \u043f\u0456\u0434\u0433\u043e\u0442\u043e\u0432\u043b\u0435\u043d\u0435 \u0434\u043b\u044f \u043c\u0430\u0439\u0431\u0443\u0442\u043d\u044c\u043e\u0433\u043e \u043f\u0440\u043e\u0440\u0430\u0445\u0443\u043d\u043a\u0443 \u0456 \u043f\u0440\u0438\u0432'\u044f\u0437\u043a\u0438 \u0434\u043e \u0441\u043e\u0431\u0456\u0432\u0430\u0440\u0442\u043e\u0441\u0442\u0456 \u043f\u0440\u043e\u0454\u043a\u0442\u0443.",
   viyarSyncPrices: "\u0421\u0438\u043d\u0445\u0440\u043e\u043d\u0456\u0437\u0443\u0432\u0430\u0442\u0438 \u0446\u0456\u043d\u0438",
@@ -3349,6 +3538,72 @@ Object.assign(TRANSLATIONS.uk, {
   holeWorkspaceVariantFaceToEdge: "Площина → торець",
   holeWorkspaceVariantHorizontalToVertical: "Горизонталь → вертикаль",
   holeWorkspaceVariantVerticalToHorizontal: "Вертикаль → горизонталь",
+});
+
+Object.assign(TRANSLATIONS.uk, {
+  holeServiceRulesTitle: "Правила послуг присадки",
+  holeServiceRulesDescription:
+    "Керовані зв’язки між операціями присадки та послугами каталогу.",
+  holeServiceRulesCountOne: "правило",
+  holeServiceRulesCountFew: "правила",
+  holeServiceRulesCountMany: "правил",
+  holeServiceRulesAdd: "Додати правило",
+  holeServiceRulesSearchPlaceholder: "Пошук правил",
+  holeServiceRulesLoading: "Завантажуємо правила послуг...",
+  holeServiceRulesFailed: "Не вдалося завантажити правила послуг.",
+  holeServiceRulesEmptyTitle: "Правила послуг ще не створені.",
+  holeServiceRulesEmptyDescription:
+    "Створіть перше правило, щоб пов’язати операцію з послугою.",
+  holeServiceRulesCreateTitle: "Створення правила послуги",
+  holeServiceRulesEditTitle: "Редагування правила послуги",
+  holeServiceRulesCreateDescription: "Оберіть операцію та послугу каталогу для неї.",
+  holeServiceRulesEditDescription: "Оновіть зв’язок операції та пов’язаної послуги.",
+  holeServiceRulesOperationLabel: "Операція",
+  holeServiceRulesOperationDrill: "Свердління",
+  holeServiceRulesOperationBlindDrill: "Глухе свердління",
+  holeServiceRulesOperationThroughDrill: "Наскрізне свердління",
+  holeServiceRulesOperationMilling: "Фрезерування",
+  holeServiceRulesOperationSlot: "Паз",
+  holeServiceRulesOperationMark: "Мітка",
+  holeServiceRulesSourceLabel: "Джерело правила",
+  holeServiceRulesSourceAny: "Будь-яке джерело",
+  holeServiceRulesSourceViyar: "Viyar",
+  holeServiceRulesSourceManual: "Ручне",
+  holeServiceRulesCityLabel: "Місто",
+  holeServiceRulesPriorityLabel: "Пріоритет",
+  holeServiceRulesDiameterMin: "Діаметр від, мм",
+  holeServiceRulesDiameterMax: "Діаметр до, мм",
+  holeServiceRulesDepthMin: "Глибина від, мм",
+  holeServiceRulesDepthMax: "Глибина до, мм",
+  holeServiceRulesServiceTitle: "Послуга каталогу",
+  holeServiceRulesServiceDescription: "Оберіть послугу, яку треба підставляти за цим правилом.",
+  holeServiceRulesServiceCatalogFilterLabel: "Фільтр джерела каталогу",
+  holeServiceRulesServiceSearchPlaceholder: "Пошук послуг",
+  holeServiceRulesServicePlaceholder: "Оберіть послугу",
+  holeServiceRulesServiceLabel: "Послуга",
+  holeServiceRulesArticleLabel: "Артикул",
+  holeServiceRulesArticleMissing: "Без артикула",
+  holeServiceRulesServiceUnit: "Одиниця",
+  holeServiceRulesPriceLabel: "Ціна",
+  holeServiceRulesNotesLabel: "Нотатки",
+  holeServiceRulesActiveLabel: "Правило активне",
+  holeServiceRulesInactive: "Неактивне",
+  holeServiceRulesActive: "Активне",
+  holeServiceRulesCreateButton: "Створити",
+  holeServiceRulesSaveFailed: "Не вдалося зберегти правило послуги",
+  holeServiceRulesCreated: "Правило послуги створено.",
+  holeServiceRulesUpdated: "Правило послуги оновлено.",
+  holeServiceRulesDeleted: "Правило послуги видалено.",
+  holeServiceRulesDeleteTitle: "Видалити правило послуги",
+  holeServiceRulesDeleteConfirm:
+    "Видалити це правило послуги? Його більше не буде доступно для зіставлення.",
+  holeServiceRulesDeleteFailed: "Не вдалося видалити правило послуги",
+  holeServiceRulesNotFound: "Правило послуги не знайдено.",
+  holeServiceRulesValidationFailed: "Оберіть операцію та послугу.",
+  holeServiceRulesStatusLabel: "Статус",
+  holeServiceRulesMatchSourceRule: "Знайдено за правилом",
+  holeServiceRulesMatchSourceAuto: "Знайдено автоматично",
+  holeServiceRulesMatchSourceNone: "Послугу не знайдено",
 });
 
 function buildProjectPayload(form) {
@@ -4910,6 +5165,7 @@ export default function App() {
   const [viyarServiceSource, setViyarServiceSource] = useState("viyar");
   const [viyarTreeLoading, setViyarTreeLoading] = useState(false);
   const [viyarPriceSyncSummary, setViyarPriceSyncSummary] = useState(null);
+  const [viyarDescriptionAudit, setViyarDescriptionAudit] = useState(null);
   const [viyarServiceSearch, setViyarServiceSearch] = useState("");
   const [collapsedViyarFolders, setCollapsedViyarFolders] = useState({});
   const [specificationCatalog, setSpecificationCatalog] = useState(
@@ -5012,6 +5268,16 @@ export default function App() {
   const [holeBundleDetailsOpen, setHoleBundleDetailsOpen] = useState(false);
   const [holeBundleDetailsLoading, setHoleBundleDetailsLoading] = useState(false);
   const [holeBundleDetails, setHoleBundleDetails] = useState(null);
+  const [holeServiceRuleItems, setHoleServiceRuleItems] = useState([]);
+  const [holeServiceRuleLoading, setHoleServiceRuleLoading] = useState(false);
+  const [holeServiceRuleError, setHoleServiceRuleError] = useState("");
+  const [holeServiceRuleSearch, setHoleServiceRuleSearch] = useState("");
+  const [holeServiceRuleEditorOpen, setHoleServiceRuleEditorOpen] = useState(false);
+  const [holeServiceRuleEditingId, setHoleServiceRuleEditingId] = useState("");
+  const [holeServiceRuleSaving, setHoleServiceRuleSaving] = useState(false);
+  const [holeServiceRuleServiceSourceFilter, setHoleServiceRuleServiceSourceFilter] = useState("all");
+  const [holeServiceRuleServiceSearch, setHoleServiceRuleServiceSearch] = useState("");
+  const [holeServiceRuleForm, setHoleServiceRuleForm] = useState(DEFAULT_HOLE_SERVICE_RULE_FORM);
   const [holeSelectedFittingCategory, setHoleSelectedFittingCategory] = useState("");
   const [holeSelectedFittingId, setHoleSelectedFittingId] = useState("");
   const [holeSelectedTemplateId, setHoleSelectedTemplateId] = useState("");
@@ -5951,6 +6217,101 @@ export default function App() {
 
     return walk(viyarServiceTree);
   }, [viyarServiceTree]);
+  const holeServiceRuleServiceOptions = useMemo(() => {
+    const collectServices = (nodes) =>
+      flattenServiceTree(nodes)
+        .filter(
+          (item) =>
+            item?.item_type === "service" &&
+            item?.is_active !== false &&
+            item?.is_calculable !== false,
+        )
+        .map((item) => ({
+          ...item,
+          _catalogSource: String(item?.source || "").trim() || "viyar",
+        }));
+
+    const optionsById = new Map();
+
+    [...collectServices(viyarServiceTree), ...collectServices(manualServiceItems)].forEach((item) => {
+      if (!item?.id || optionsById.has(item.id)) {
+        return;
+      }
+
+      optionsById.set(item.id, item);
+    });
+
+    return Array.from(optionsById.values()).sort((left, right) => {
+      const leftFolder = String(left.folder_path || "");
+      const rightFolder = String(right.folder_path || "");
+
+      return (
+        leftFolder.localeCompare(rightFolder, "uk") ||
+        String(left.name || "").localeCompare(String(right.name || ""), "uk")
+      );
+    });
+  }, [manualServiceItems, viyarServiceTree]);
+  const holeServiceRuleFilteredItems = useMemo(() => {
+    const query = String(holeServiceRuleSearch || "").trim().toLowerCase();
+
+    return holeServiceRuleItems.filter((item) => {
+      const haystack = [
+        item.operation,
+        getHoleServiceRuleOperationLabel(item.operation, t),
+        item.source,
+        item.city,
+        item.priority,
+        item.notes,
+        item.service_catalog_item?.name,
+        item.service_catalog_item?.article,
+        item.service_catalog_item?.folder_path,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return !query || haystack.includes(query);
+    });
+  }, [holeServiceRuleItems, holeServiceRuleSearch, t]);
+  const holeServiceRuleFilteredServiceOptions = useMemo(() => {
+    const sourceFilter = String(holeServiceRuleServiceSourceFilter || "all").trim();
+    const query = String(holeServiceRuleServiceSearch || "").trim().toLowerCase();
+    const selectedServiceId = String(holeServiceRuleForm.service_catalog_item_id || "").trim();
+
+    return holeServiceRuleServiceOptions.filter((item) => {
+      if (selectedServiceId && String(item.id) === selectedServiceId) {
+        return true;
+      }
+
+      if (sourceFilter !== "all" && item._catalogSource !== sourceFilter) {
+        return false;
+      }
+
+      if (!query) {
+        return true;
+      }
+
+      const haystack = [
+        item.name,
+        item.article,
+        item.slug,
+        item.folder_path,
+        item._catalogSource,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return haystack.includes(query);
+    });
+  }, [holeServiceRuleServiceOptions, holeServiceRuleServiceSearch, holeServiceRuleServiceSourceFilter]);
+  const holeServiceRuleSelectedService = useMemo(
+    () =>
+      holeServiceRuleServiceOptions.find(
+        (item) => String(item.id) === String(holeServiceRuleForm.service_catalog_item_id || ""),
+      ) || null,
+    [holeServiceRuleForm.service_catalog_item_id, holeServiceRuleServiceOptions],
+  );
   const filteredViyarServiceTree = useMemo(
     () => filterServiceCatalogTree(viyarServiceTree, viyarServiceSearch),
     [viyarServiceSearch, viyarServiceTree],
@@ -6039,7 +6400,8 @@ export default function App() {
     }
 
     setViyarServiceSource(cached.source || "viyar");
-    setViyarServiceTree(cached.items || []);
+    setViyarServiceTree(sanitizeViyarServiceTree(cached.items || []));
+    setViyarDescriptionAudit(cached.descriptionAudit || null);
     setViyarPriceSyncSummary(cached.priceSyncSummary || null);
 
     if (options.withStatus) {
@@ -6076,10 +6438,11 @@ export default function App() {
 
     writeViyarServicesCache(user.id, {
       items: viyarServiceTree,
+      descriptionAudit: viyarDescriptionAudit,
       priceSyncSummary: viyarPriceSyncSummary,
       source: viyarServiceSource,
     });
-  }, [user?.id, user?.role, viyarPriceSyncSummary, viyarServiceSource, viyarServiceTree]);
+  }, [user?.id, user?.role, viyarDescriptionAudit, viyarPriceSyncSummary, viyarServiceSource, viyarServiceTree]);
   useEffect(() => {
     setOwnProfileForm({
       username: user?.username || "",
@@ -6225,6 +6588,7 @@ export default function App() {
   const isCatalogFastenersView = activeView === "catalogFasteners";
   const isCatalogHolesView = activeView === "catalogHoles";
   const isCatalogBundlesView = activeView === "catalogBundles";
+  const isCatalogServiceRulesView = activeView === "catalogServiceRules";
   const isCatalogValuesView = activeView === "catalogValues";
   const isCatalogViyarView = activeView === "catalogViyar";
   const isCatalogManualView = activeView === "catalogManual";
@@ -6236,6 +6600,7 @@ export default function App() {
     isCatalogFastenersView ||
     isCatalogHolesView ||
     isCatalogBundlesView ||
+    isCatalogServiceRulesView ||
     isCatalogValuesView ||
     isCatalogViyarView ||
     isCatalogManualView;
@@ -7006,6 +7371,10 @@ export default function App() {
       return t.catalogHubTitle;
     }
 
+    if (isCatalogServiceRulesView) {
+      return t.holeServiceRulesTitle;
+    }
+
     if (isCatalogMaterialsView) {
       return `${materialItems.length} ${t.of} ${materialItems.length}`;
     }
@@ -7260,7 +7629,8 @@ export default function App() {
     }
 
     setViyarServiceSource(result.source || "viyar");
-    setViyarServiceTree(result.items || []);
+    setViyarServiceTree(sanitizeViyarServiceTree(result.items || []));
+    setViyarDescriptionAudit(result.description_audit || null);
   }
 
   async function loadMaterialsCatalog(
@@ -7404,6 +7774,48 @@ export default function App() {
     const bundles = Array.isArray(result.bundles) ? result.bundles : [];
     setFittingBundleItems(bundles);
     return bundles;
+  }
+
+  async function loadFittingHoleServiceRules(activeToken = token, viewer = user) {
+    if (!activeToken || viewer?.role !== "admin") {
+      setHoleServiceRuleItems([]);
+      return [];
+    }
+
+    if (!viyarServiceTree.length) {
+      await loadViyarServices(activeToken, viewer);
+    }
+
+    if (!manualServiceItems.length) {
+      await loadManualServices(activeToken, viewer);
+    }
+
+    setHoleServiceRuleLoading(true);
+    setLoading(true);
+    try {
+      const result = await listFittingHoleServiceRules(activeToken);
+
+      if (!result.success) {
+        const timeoutError = String(result.error || "").includes("Request timed out after");
+
+        if (timeoutError && holeServiceRuleItems.length) {
+          return holeServiceRuleItems;
+        }
+
+        setHoleServiceRuleItems([]);
+        setHoleServiceRuleError(result.error || t.holeServiceRulesFailed);
+        setStatus({ message: result.error || t.holeServiceRulesFailed, tone: "error" });
+        return [];
+      }
+
+      const rules = Array.isArray(result.rules) ? result.rules : [];
+      setHoleServiceRuleItems(rules);
+      setHoleServiceRuleError("");
+      return rules;
+    } finally {
+      setLoading(false);
+      setHoleServiceRuleLoading(false);
+    }
   }
 
   async function loadHoleTemplates(activeToken = token, fittingId = holeSelectedFittingId) {
@@ -7814,6 +8226,148 @@ export default function App() {
     setHoleServicePreviewError("");
     setHoleServicePreviewLoading(false);
     handleHoleFittingCategoryChange("");
+  }
+
+  function openHoleServiceRuleEditor(rule = null) {
+    const selectedRule = rule && typeof rule === "object" ? rule : null;
+    const selectedService = selectedRule?.service_catalog_item || null;
+    const nextSourceFilter = selectedService?._catalogSource || selectedService?.source || "all";
+
+    setHoleServiceRuleEditingId(String(selectedRule?.id || ""));
+    setHoleServiceRuleForm({
+      operation: String(selectedRule?.operation || "drill"),
+      diameter_min_mm:
+        selectedRule?.diameter_min_mm === null || selectedRule?.diameter_min_mm === undefined
+          ? ""
+          : String(selectedRule.diameter_min_mm),
+      diameter_max_mm:
+        selectedRule?.diameter_max_mm === null || selectedRule?.diameter_max_mm === undefined
+          ? ""
+          : String(selectedRule.diameter_max_mm),
+      depth_min_mm:
+        selectedRule?.depth_min_mm === null || selectedRule?.depth_min_mm === undefined
+          ? ""
+          : String(selectedRule.depth_min_mm),
+      depth_max_mm:
+        selectedRule?.depth_max_mm === null || selectedRule?.depth_max_mm === undefined
+          ? ""
+          : String(selectedRule.depth_max_mm),
+      service_catalog_item_id: String(selectedRule?.service_catalog_item_id || ""),
+      source: String(selectedRule?.source || ""),
+      city: String(selectedRule?.city || ""),
+      is_active: selectedRule?.is_active !== false,
+      priority: Number(selectedRule?.priority || 0),
+      notes: String(selectedRule?.notes || ""),
+    });
+    setHoleServiceRuleServiceSourceFilter(
+      nextSourceFilter === "viyar" || nextSourceFilter === "manual" ? nextSourceFilter : "all",
+    );
+    setHoleServiceRuleServiceSearch("");
+    setHoleServiceRuleError("");
+    setHoleServiceRuleEditorOpen(true);
+  }
+
+  function closeHoleServiceRuleEditor() {
+    setHoleServiceRuleEditorOpen(false);
+    setHoleServiceRuleEditingId("");
+    setHoleServiceRuleForm(DEFAULT_HOLE_SERVICE_RULE_FORM);
+    setHoleServiceRuleServiceSourceFilter("all");
+    setHoleServiceRuleServiceSearch("");
+    setHoleServiceRuleSaving(false);
+    setHoleServiceRuleError("");
+  }
+
+  function openDeleteHoleServiceRuleConfirm(rule) {
+    const ruleId = Number(rule?.id || 0);
+    if (!ruleId) {
+      setStatus({ message: t.holeServiceRulesNotFound, tone: "error" });
+      return;
+    }
+
+    setConfirmAction({
+      type: "deleteHoleServiceRule",
+      title: t.holeServiceRulesDeleteTitle,
+      message: t.holeServiceRulesDeleteConfirm,
+      confirmLabel: t.delete,
+      targetId: ruleId,
+    });
+  }
+
+  async function handleHoleServiceRuleSubmit(event) {
+    event.preventDefault();
+
+    const serviceCatalogItemId = String(holeServiceRuleForm.service_catalog_item_id || "").trim();
+    const operation = String(holeServiceRuleForm.operation || "").trim();
+
+    if (!serviceCatalogItemId || !operation) {
+      setHoleServiceRuleError(t.holeServiceRulesValidationFailed);
+      return;
+    }
+
+    const payload = {
+      operation,
+      diameter_min_mm: holeServiceRuleForm.diameter_min_mm === "" ? null : Number(holeServiceRuleForm.diameter_min_mm),
+      diameter_max_mm: holeServiceRuleForm.diameter_max_mm === "" ? null : Number(holeServiceRuleForm.diameter_max_mm),
+      depth_min_mm: holeServiceRuleForm.depth_min_mm === "" ? null : Number(holeServiceRuleForm.depth_min_mm),
+      depth_max_mm: holeServiceRuleForm.depth_max_mm === "" ? null : Number(holeServiceRuleForm.depth_max_mm),
+      service_catalog_item_id: serviceCatalogItemId,
+      source: String(holeServiceRuleForm.source || "").trim() || null,
+      city: String(holeServiceRuleForm.city || "").trim() || null,
+      is_active: Boolean(holeServiceRuleForm.is_active),
+      priority: Number(holeServiceRuleForm.priority || 0),
+      notes: String(holeServiceRuleForm.notes || "").trim() || null,
+    };
+
+    setHoleServiceRuleSaving(true);
+    try {
+      const result = holeServiceRuleEditingId
+        ? await updateFittingHoleServiceRule(token, holeServiceRuleEditingId, payload)
+        : await createFittingHoleServiceRule(token, payload);
+
+      if (!result.success) {
+        const notFound = result.status === 404;
+        const errorMessage = notFound ? t.holeServiceRulesNotFound : result.error || t.holeServiceRulesSaveFailed;
+        setHoleServiceRuleError(errorMessage);
+        setStatus({ message: errorMessage, tone: "error" });
+        return;
+      }
+
+      await loadFittingHoleServiceRules(token, user);
+      closeHoleServiceRuleEditor();
+      setStatus({
+        message: holeServiceRuleEditingId ? t.holeServiceRulesUpdated : t.holeServiceRulesCreated,
+        tone: "success",
+      });
+    } catch (error) {
+      const errorMessage = error?.status === 404 ? t.holeServiceRulesNotFound : error?.message || t.holeServiceRulesSaveFailed;
+      setHoleServiceRuleError(errorMessage);
+      setStatus({ message: errorMessage, tone: "error" });
+    } finally {
+      setHoleServiceRuleSaving(false);
+    }
+  }
+
+  async function handleDeleteHoleServiceRule(ruleId) {
+    if (!ruleId) {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const result = await deleteFittingHoleServiceRule(token, ruleId);
+
+      if (!result.success) {
+        const errorMessage =
+          result.status === 404 ? t.holeServiceRulesNotFound : result.error || t.holeServiceRulesDeleteFailed;
+        setStatus({ message: errorMessage, tone: "error" });
+        return;
+      }
+
+      await loadFittingHoleServiceRules(token, user);
+      setStatus({ message: t.holeServiceRulesDeleted, tone: "success" });
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function handleHoleBundleEditSubmit(event) {
@@ -10585,6 +11139,11 @@ export default function App() {
       return;
     }
 
+    if (nextView === "catalogServiceRules") {
+      await loadFittingHoleServiceRules(token, viewer);
+      return;
+    }
+
     if (nextView === "catalogViyar") {
       await loadViyarServices(token, viewer);
       return;
@@ -10959,13 +11518,22 @@ export default function App() {
     }
 
     setViyarServiceSource(result.source || "viyar");
-    setViyarServiceTree(result.items || []);
+    setViyarServiceTree(sanitizeViyarServiceTree(result.items || []));
+    setViyarDescriptionAudit(result.description_audit || null);
     setViyarPriceSyncSummary(null);
-    setStatus(
-      result.fallback_only_import
-        ? t.viyarFallbackImportNotice
-        : t.viyarImported,
-    );
+    const audit = result.import_audit || {};
+    const importMessage = result.fallback_only_import
+      ? (t.viyarFallbackImportNotice || "Fallback import was used")
+      : (t.viyarImported || "Viyar services imported");
+    const auditSummary = [
+      `${t.viyarServiceAuditTotal || "Всього"}: ${Number(audit.total_records || 0)}`,
+      `${t.viyarServiceAuditValid || "Валідних"}: ${Number(audit.valid_services || 0)}`,
+      `${t.viyarServiceAuditFiltered || "Відфільтровано"}: ${Number(audit.filtered_service_rows || 0)}`,
+      `${t.viyarServiceAuditNoArticle || "Без артикула"}: ${Number(audit.records_without_article || 0)}`,
+      `${t.viyarServiceAuditNoPrice || "Без ціни"}: ${Number(audit.records_without_price || 0)}`,
+      `${t.viyarServiceAuditDisabled || "Вимкнено"}: ${Number(audit.deactivated_suspicious_count || 0)}`,
+    ].join(", ");
+    setStatus(`${importMessage}${auditSummary ? ` | ${auditSummary}` : ""}`);
   }
 
   async function handleSyncViyarPrices() {
@@ -10982,7 +11550,7 @@ export default function App() {
     }
 
     setViyarServiceSource(result.source || "viyar");
-    setViyarServiceTree(result.items || []);
+    setViyarServiceTree(sanitizeViyarServiceTree(result.items || []));
     setViyarPriceSyncSummary({
       auth_required: Boolean(result.auth_required),
       priced_count: Number(result.priced_count || 0),
@@ -11740,6 +12308,11 @@ export default function App() {
       await handleDeleteHoleBundle(confirmAction.targetId);
       return;
     }
+
+    if (confirmAction.type === "deleteHoleServiceRule") {
+      await handleDeleteHoleServiceRule(confirmAction.targetId);
+      return;
+    }
   }
 
   async function handleRollback(versionId) {
@@ -12040,6 +12613,14 @@ export default function App() {
   }, [token, isCatalogBundlesView, fittingCategories.length, fittingItems.length]);
 
   useEffect(() => {
+    if (!token || user?.role !== "admin" || !isCatalogServiceRulesView) {
+      return;
+    }
+
+    loadFittingHoleServiceRules(token, user);
+  }, [token, user, isCatalogServiceRulesView]);
+
+  useEffect(() => {
     if (!token || user?.role !== "admin" || !isCatalogViyarView) {
       return;
     }
@@ -12301,7 +12882,7 @@ export default function App() {
             <div className={`nav-group${isCatalogView ? " active" : ""}`}>
               <div className={`nav-group-header${isCatalogView ? " active" : ""}`}>
                 <button
-                  className={`nav-group-link${isCatalogHubView || isCatalogMaterialsView || isCatalogFittingsView || isCatalogFastenersView || isCatalogHolesView ? " active" : ""}`}
+                  className={`nav-group-link${isCatalogHubView || isCatalogMaterialsView || isCatalogFittingsView || isCatalogFastenersView || isCatalogHolesView || isCatalogBundlesView || isCatalogServiceRulesView ? " active" : ""}`}
                   onClick={() => {
                     switchView(user.role === "admin" ? "catalogHub" : "catalogMaterials");
                     closeSidebarOnMobile();
@@ -12366,6 +12947,18 @@ export default function App() {
                       type="button"
                     >
                       {t.fittingBundlesTitle}
+                    </button>
+                  ) : null}
+                  {user.role === "admin" ? (
+                    <button
+                      className={isCatalogServiceRulesView ? "active" : ""}
+                      onClick={() => {
+                        switchView("catalogServiceRules");
+                        closeSidebarOnMobile();
+                      }}
+                      type="button"
+                    >
+                      {t.holeServiceRulesTitle}
                     </button>
                   ) : null}
                   {user.role === "admin" ? (
@@ -15917,6 +16510,154 @@ export default function App() {
               )}
             </article>
           </section>
+        ) : isCatalogServiceRulesView ? (
+          <section className="table-panel full-panel">
+            <article className="catalog-card service-catalog-card service-catalog-card-full">
+              <div className="catalog-page-header">
+                <div className="service-catalog-title">
+                  <h3>{t.holeServiceRulesTitle}</h3>
+                  <p>{t.holeServiceRulesDescription}</p>
+                </div>
+                <div className="service-catalog-header-actions">
+                  <span className="service-tree-badge subtle">
+                    {formatUkrainianCountLabel(
+                      holeServiceRuleFilteredItems.length,
+                      t.holeServiceRulesCountOne,
+                      t.holeServiceRulesCountFew,
+                      t.holeServiceRulesCountMany,
+                    )}
+                  </span>
+                  <button
+                    className="ghost-button"
+                    disabled={holeServiceRuleLoading}
+                    onClick={() => loadFittingHoleServiceRules(token, user)}
+                    type="button"
+                  >
+                    <RefreshCw size={16} />
+                    {t.refresh}
+                  </button>
+                  <button
+                    className="primary-button"
+                    onClick={() => openHoleServiceRuleEditor()}
+                    type="button"
+                  >
+                    <Plus size={16} />
+                    {t.holeServiceRulesAdd}
+                  </button>
+                </div>
+              </div>
+
+              <div className="service-rules-toolbar">
+                <label className="service-catalog-search">
+                  <Search size={16} />
+                  <input
+                    onChange={(event) => setHoleServiceRuleSearch(event.target.value)}
+                    placeholder={t.holeServiceRulesSearchPlaceholder}
+                    type="search"
+                    value={holeServiceRuleSearch}
+                  />
+                </label>
+              </div>
+
+              {holeServiceRuleLoading ? (
+                <div className="empty-state compact-empty-state">
+                  <span>{t.holeServiceRulesLoading}</span>
+                </div>
+              ) : holeServiceRuleError ? (
+                <div className="empty-state compact-empty-state">
+                  <strong>{t.holeServiceRulesFailed}</strong>
+                  <span>{holeServiceRuleError}</span>
+                </div>
+              ) : holeServiceRuleFilteredItems.length ? (
+                <div className="service-rules-list">
+                  {holeServiceRuleFilteredItems.map((rule) => {
+                    const serviceItem = rule.service_catalog_item || null;
+                    const servicePrice = serviceItem?.effective_price ?? serviceItem?.base_price ?? null;
+                    const serviceCurrency = serviceItem?.effective_currency || serviceItem?.currency || "";
+                    const rangeText = [
+                      rule.diameter_min_mm !== null && rule.diameter_min_mm !== undefined
+                        ? `${t.holeServiceRulesDiameterMin}: ${formatMetricValue(rule.diameter_min_mm)}`
+                        : "",
+                      rule.diameter_max_mm !== null && rule.diameter_max_mm !== undefined
+                        ? `${t.holeServiceRulesDiameterMax}: ${formatMetricValue(rule.diameter_max_mm)}`
+                        : "",
+                      rule.depth_min_mm !== null && rule.depth_min_mm !== undefined
+                        ? `${t.holeServiceRulesDepthMin}: ${formatMetricValue(rule.depth_min_mm)}`
+                        : "",
+                      rule.depth_max_mm !== null && rule.depth_max_mm !== undefined
+                        ? `${t.holeServiceRulesDepthMax}: ${formatMetricValue(rule.depth_max_mm)}`
+                        : "",
+                    ]
+                      .filter(Boolean)
+                      .join(", ");
+
+                    return (
+                      <article className="service-rule-card" key={rule.id}>
+                        <div className="service-rule-card-head">
+                          <div className="service-rule-card-title">
+                            <strong>{getHoleServiceRuleOperationLabel(rule.operation, t)}</strong>
+                            <span>
+                              {serviceItem?.name || t.notSet}
+                              {serviceItem?.article ? ` • ${serviceItem.article}` : ""}
+                            </span>
+                          </div>
+                          <div className="service-rule-card-actions">
+                            <button
+                              className="ghost-button compact-button"
+                              onClick={() => openHoleServiceRuleEditor(rule)}
+                              type="button"
+                            >
+                              {t.fittingBundleEdit}
+                            </button>
+                            <button
+                              className="danger-button compact-button"
+                              onClick={() => openDeleteHoleServiceRuleConfirm(rule)}
+                              type="button"
+                            >
+                              {t.fittingBundleDelete}
+                            </button>
+                          </div>
+                        </div>
+                        <div className="service-rule-card-meta">
+                          <span>
+                            {t.holeServiceRulesServiceLabel}: {serviceItem?.name || t.notSet}
+                          </span>
+                          <span>
+                            {t.holeServiceRulesSourceLabel}: {getHoleServiceRuleSourceLabel(rule.source, t)}
+                          </span>
+                          <span>
+                            {t.holeServiceRulesCityLabel}: {rule.city || t.notSet}
+                          </span>
+                          <span>
+                            {t.holeServiceRulesPriorityLabel}: {Number(rule.priority || 0)}
+                          </span>
+                          <span>
+                            {t.holeServiceRulesStatusLabel}:{" "}
+                            {rule.is_active ? t.holeServiceRulesActive : t.holeServiceRulesInactive}
+                          </span>
+                          {rangeText ? <span>{rangeText}</span> : null}
+                          {serviceItem ? (
+                            <span>
+                              {t.holeServiceRulesPriceLabel}:{" "}
+                              {servicePrice !== null && servicePrice !== undefined
+                                ? `${formatMoneyValue(servicePrice)} ${serviceCurrency || ""}`.trim()
+                                : t.notSet}
+                            </span>
+                          ) : null}
+                          {rule.notes ? <p className="service-rule-card-notes">{rule.notes}</p> : null}
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="empty-state compact-empty-state fitting-bundles-empty-state">
+                  <strong>{t.holeServiceRulesEmptyTitle}</strong>
+                  <span>{t.holeServiceRulesEmptyDescription}</span>
+                </div>
+              )}
+            </article>
+          </section>
         ) : isCatalogValuesView ? (
           <section className="table-panel full-panel">
             <article className="catalog-card">
@@ -16098,6 +16839,28 @@ export default function App() {
                     <span className="service-tree-badge subtle">
                       {viyarPriceSyncSummary.priced_count} / {viyarPriceSyncSummary.total_count}
                     </span>
+                  ) : null}
+                  {viyarDescriptionAudit ? (
+                    <>
+                      <span className="service-tree-badge subtle">
+                        {t.viyarDescriptionAuditTotal}: {viyarDescriptionAudit.total_services}
+                      </span>
+                      <span className="service-tree-badge subtle">
+                        {t.viyarDescriptionAuditSourceUrl}: {viyarDescriptionAudit.with_source_url}
+                      </span>
+                      <span className="service-tree-badge subtle">
+                        {t.viyarDescriptionAuditShort}: {viyarDescriptionAudit.with_short_description}
+                      </span>
+                      <span className="service-tree-badge subtle">
+                        {t.viyarDescriptionAuditFull}: {viyarDescriptionAudit.with_full_description}
+                      </span>
+                      <span className="service-tree-badge subtle">
+                        {t.viyarDescriptionAuditMissing}: {viyarDescriptionAudit.without_full_description}
+                      </span>
+                      <span className="service-tree-badge subtle">
+                        {t.viyarDescriptionAuditFailed}: {viyarDescriptionAudit.failed_downloads}
+                      </span>
+                    </>
                   ) : null}
                   <button
                     className="ghost-button"
@@ -17043,6 +17806,303 @@ export default function App() {
                 </button>
                 <button className="primary-button" disabled={holeBundleEditSaving} type="submit">
                   {t.fittingBundleSave}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      ) : null}
+
+      {holeServiceRuleEditorOpen ? (
+        <div
+          aria-modal="true"
+          className="modal-backdrop"
+          onClick={closeHoleServiceRuleEditor}
+          role="dialog"
+        >
+          <section
+            className="confirm-modal hole-template-modal hole-service-rule-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="confirm-header">
+              <div>
+                <strong>
+                  {holeServiceRuleEditingId
+                    ? t.holeServiceRulesEditTitle
+                    : t.holeServiceRulesCreateTitle}
+                </strong>
+                <p>
+                  {holeServiceRuleEditingId
+                    ? t.holeServiceRulesEditDescription
+                    : t.holeServiceRulesCreateDescription}
+                </p>
+              </div>
+              <button
+                aria-label={t.cancel}
+                className="ghost-button compact-button detail-info-button"
+                onClick={closeHoleServiceRuleEditor}
+                type="button"
+              >
+                <X size={16} />
+              </button>
+            </header>
+
+            <form className="hole-template-form hole-service-rule-form" onSubmit={handleHoleServiceRuleSubmit}>
+              <div className="hole-service-rule-grid">
+                <label>
+                  <span>{t.holeServiceRulesOperationLabel}</span>
+                  <select
+                    disabled={holeServiceRuleSaving}
+                    onChange={(event) =>
+                      setHoleServiceRuleForm((current) => ({
+                        ...current,
+                        operation: event.target.value,
+                      }))
+                    }
+                    value={holeServiceRuleForm.operation}
+                  >
+                    <option value="drill">{t.holeServiceRulesOperationDrill}</option>
+                    <option value="blind_drill">{t.holeServiceRulesOperationBlindDrill}</option>
+                    <option value="through_drill">{t.holeServiceRulesOperationThroughDrill}</option>
+                    <option value="milling">{t.holeServiceRulesOperationMilling}</option>
+                    <option value="slot">{t.holeServiceRulesOperationSlot}</option>
+                    <option value="mark">{t.holeServiceRulesOperationMark}</option>
+                  </select>
+                </label>
+                <label>
+                  <span>{t.holeServiceRulesSourceLabel}</span>
+                  <select
+                    disabled={holeServiceRuleSaving}
+                    onChange={(event) =>
+                      setHoleServiceRuleForm((current) => ({
+                        ...current,
+                        source: event.target.value,
+                      }))
+                    }
+                    value={holeServiceRuleForm.source}
+                  >
+                    <option value="">{t.holeServiceRulesSourceAny}</option>
+                    <option value="viyar">{t.holeServiceRulesSourceViyar}</option>
+                    <option value="manual">{t.holeServiceRulesSourceManual}</option>
+                  </select>
+                </label>
+                <label>
+                  <span>{t.holeServiceRulesCityLabel}</span>
+                  <input
+                    disabled={holeServiceRuleSaving}
+                    onChange={(event) =>
+                      setHoleServiceRuleForm((current) => ({
+                        ...current,
+                        city: event.target.value,
+                      }))
+                    }
+                    type="text"
+                    value={holeServiceRuleForm.city}
+                  />
+                </label>
+                <label>
+                  <span>{t.holeServiceRulesPriorityLabel}</span>
+                  <input
+                    disabled={holeServiceRuleSaving}
+                    onChange={(event) =>
+                      setHoleServiceRuleForm((current) => ({
+                        ...current,
+                        priority: event.target.value,
+                      }))
+                    }
+                    type="number"
+                    value={holeServiceRuleForm.priority}
+                  />
+                </label>
+                <label>
+                  <span>{t.holeServiceRulesDiameterMin}</span>
+                  <input
+                    disabled={holeServiceRuleSaving}
+                    onChange={(event) =>
+                      setHoleServiceRuleForm((current) => ({
+                        ...current,
+                        diameter_min_mm: event.target.value,
+                      }))
+                    }
+                    step="0.1"
+                    type="number"
+                    value={holeServiceRuleForm.diameter_min_mm}
+                  />
+                </label>
+                <label>
+                  <span>{t.holeServiceRulesDiameterMax}</span>
+                  <input
+                    disabled={holeServiceRuleSaving}
+                    onChange={(event) =>
+                      setHoleServiceRuleForm((current) => ({
+                        ...current,
+                        diameter_max_mm: event.target.value,
+                      }))
+                    }
+                    step="0.1"
+                    type="number"
+                    value={holeServiceRuleForm.diameter_max_mm}
+                  />
+                </label>
+                <label>
+                  <span>{t.holeServiceRulesDepthMin}</span>
+                  <input
+                    disabled={holeServiceRuleSaving}
+                    onChange={(event) =>
+                      setHoleServiceRuleForm((current) => ({
+                        ...current,
+                        depth_min_mm: event.target.value,
+                      }))
+                    }
+                    step="0.1"
+                    type="number"
+                    value={holeServiceRuleForm.depth_min_mm}
+                  />
+                </label>
+                <label>
+                  <span>{t.holeServiceRulesDepthMax}</span>
+                  <input
+                    disabled={holeServiceRuleSaving}
+                    onChange={(event) =>
+                      setHoleServiceRuleForm((current) => ({
+                        ...current,
+                        depth_max_mm: event.target.value,
+                      }))
+                    }
+                    step="0.1"
+                    type="number"
+                    value={holeServiceRuleForm.depth_max_mm}
+                  />
+                </label>
+              </div>
+
+              <div className="service-rule-service-picker">
+                <div className="service-rule-picker-header">
+                  <div>
+                    <strong>{t.holeServiceRulesServiceTitle}</strong>
+                    <p>{t.holeServiceRulesServiceDescription}</p>
+                  </div>
+                </div>
+                <div className="service-rule-picker-controls">
+                  <label>
+                    <span>{t.holeServiceRulesServiceCatalogFilterLabel}</span>
+                    <select
+                      disabled={holeServiceRuleSaving}
+                      onChange={(event) => setHoleServiceRuleServiceSourceFilter(event.target.value)}
+                      value={holeServiceRuleServiceSourceFilter}
+                    >
+                      <option value="all">{t.holeServiceRulesSourceAny}</option>
+                      <option value="viyar">{t.holeServiceRulesSourceViyar}</option>
+                      <option value="manual">{t.holeServiceRulesSourceManual}</option>
+                    </select>
+                  </label>
+                  <label className="service-catalog-search">
+                    <Search size={16} />
+                    <input
+                      disabled={holeServiceRuleSaving}
+                      onChange={(event) => setHoleServiceRuleServiceSearch(event.target.value)}
+                      placeholder={t.holeServiceRulesServiceSearchPlaceholder}
+                      type="search"
+                      value={holeServiceRuleServiceSearch}
+                    />
+                  </label>
+                </div>
+                <label>
+                  <span>{t.holeServiceRulesServiceLabel}</span>
+                  <select
+                    disabled={holeServiceRuleSaving}
+                    onChange={(event) =>
+                      setHoleServiceRuleForm((current) => ({
+                        ...current,
+                        service_catalog_item_id: event.target.value,
+                      }))
+                    }
+                    required
+                    value={holeServiceRuleForm.service_catalog_item_id}
+                  >
+                    <option value="">{t.holeServiceRulesServicePlaceholder}</option>
+                    {holeServiceRuleFilteredServiceOptions.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name}
+                        {item.article ? ` • ${item.article}` : ""}
+                        {item.unit ? ` • ${item.unit}` : ""}
+                        {item._catalogSource ? ` • ${getHoleServiceRuleSourceLabel(item._catalogSource, t)}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {holeServiceRuleSelectedService ? (
+                  <div className="service-rule-service-preview">
+                    <strong>{holeServiceRuleSelectedService.name || t.notSet}</strong>
+                    <span>
+                      {holeServiceRuleSelectedService.article
+                        ? `${t.holeServiceRulesArticleLabel}: ${holeServiceRuleSelectedService.article}`
+                        : t.holeServiceRulesArticleMissing}
+                    </span>
+                    <span>
+                      {t.holeServiceRulesServiceUnit}: {holeServiceRuleSelectedService.unit || t.notSet}
+                    </span>
+                    <span>
+                      {t.holeServiceRulesPriceLabel}:{" "}
+                      {holeServiceRuleSelectedService.effective_price !== null &&
+                      holeServiceRuleSelectedService.effective_price !== undefined
+                        ? `${formatMoneyValue(holeServiceRuleSelectedService.effective_price)} ${
+                            holeServiceRuleSelectedService.effective_currency ||
+                            holeServiceRuleSelectedService.currency ||
+                            ""
+                          }`.trim()
+                        : t.notSet}
+                    </span>
+                    <span>
+                      {t.holeServiceRulesSourceLabel}:{" "}
+                      {getHoleServiceRuleSourceLabel(holeServiceRuleSelectedService._catalogSource, t)}
+                    </span>
+                  </div>
+                ) : null}
+              </div>
+
+              <label className="hole-service-rule-notes">
+                <span>{t.holeServiceRulesNotesLabel}</span>
+                <textarea
+                  disabled={holeServiceRuleSaving}
+                  onChange={(event) =>
+                    setHoleServiceRuleForm((current) => ({
+                      ...current,
+                      notes: event.target.value,
+                    }))
+                  }
+                  rows={3}
+                  value={holeServiceRuleForm.notes}
+                />
+              </label>
+
+              <label className="hole-service-rule-activity">
+                <input
+                  checked={holeServiceRuleForm.is_active}
+                  disabled={holeServiceRuleSaving}
+                  onChange={(event) =>
+                    setHoleServiceRuleForm((current) => ({
+                      ...current,
+                      is_active: event.target.checked,
+                    }))
+                  }
+                  type="checkbox"
+                />
+                <span>{t.holeServiceRulesActiveLabel}</span>
+              </label>
+
+              {holeServiceRuleError ? <p className="status-message error">{holeServiceRuleError}</p> : null}
+              <div className="confirm-actions">
+                <button
+                  className="ghost-button"
+                  disabled={holeServiceRuleSaving}
+                  onClick={closeHoleServiceRuleEditor}
+                  type="button"
+                >
+                  {t.cancel}
+                </button>
+                <button className="primary-button" disabled={holeServiceRuleSaving} type="submit">
+                  {holeServiceRuleEditingId ? t.save : t.holeServiceRulesCreateButton}
                 </button>
               </div>
             </form>
@@ -19032,7 +20092,8 @@ export default function App() {
                   confirmAction.type === "delete" ||
                   confirmAction.type === "deleteHoleTemplate" ||
                   confirmAction.type === "deleteHolePoint" ||
-                  confirmAction.type === "deleteHoleBundle"
+                  confirmAction.type === "deleteHoleBundle" ||
+                  confirmAction.type === "deleteHoleServiceRule"
                     ? "danger-button"
                     : "primary-button"
                 }
