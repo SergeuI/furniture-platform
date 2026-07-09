@@ -201,7 +201,20 @@ class FittingHolePointCreate(BaseModel):
     x_mm: float | None = None
     y_mm: float | None = None
     z_mm: float | None = None
+    target_panel: str | None = Field(
+        default=None,
+        max_length=64,
+    )
+    target_surface: str | None = Field(
+        default=None,
+        max_length=64,
+    )
+    target_side: str | None = Field(
+        default=None,
+        max_length=64,
+    )
     diameter_mm: float
+    service_drilling_rule_id: int | None = None
     depth_mm: float | None = None
     side: str | None = Field(
         default=None,
@@ -229,7 +242,20 @@ class FittingHolePointUpdate(BaseModel):
     x_mm: float | None = None
     y_mm: float | None = None
     z_mm: float | None = None
+    target_panel: str | None = Field(
+        default=None,
+        max_length=64,
+    )
+    target_surface: str | None = Field(
+        default=None,
+        max_length=64,
+    )
+    target_side: str | None = Field(
+        default=None,
+        max_length=64,
+    )
     diameter_mm: float | None = None
+    service_drilling_rule_id: int | None = None
     depth_mm: float | None = None
     side: str | None = Field(
         default=None,
@@ -255,7 +281,11 @@ class FittingHolePointResponse(BaseModel):
     x_mm: float | None = None
     y_mm: float | None = None
     z_mm: float | None = None
+    target_panel: str | None = None
+    target_surface: str | None = None
+    target_side: str | None = None
     diameter_mm: float | None = None
+    service_drilling_rule_id: int | None = None
     depth_mm: float | None = None
     side: str | None = None
     operation: str | None = None

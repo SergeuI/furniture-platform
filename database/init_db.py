@@ -270,6 +270,50 @@ def upgrade_sqlite_schema():
             "INTEGER NOT NULL DEFAULT 0"
         )
 
+        _add_column_if_missing(
+
+            connection,
+
+            "fitting_hole_points",
+
+            "target_panel",
+
+            "VARCHAR"
+        )
+
+        _add_column_if_missing(
+
+            connection,
+
+            "fitting_hole_points",
+
+            "target_surface",
+
+            "VARCHAR"
+        )
+
+        _add_column_if_missing(
+
+            connection,
+
+            "fitting_hole_points",
+
+            "target_side",
+
+            "VARCHAR"
+        )
+
+        _add_column_if_missing(
+
+            connection,
+
+            "fitting_hole_points",
+
+            "service_drilling_rule_id",
+
+            "INTEGER"
+        )
+
         connection.exec_driver_sql(
             """
             CREATE INDEX IF NOT EXISTS ix_fitting_hole_templates_bundle_key

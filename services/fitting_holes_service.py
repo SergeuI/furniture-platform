@@ -6,6 +6,7 @@ from uuid import uuid4
 from sqlalchemy.orm import Session
 
 from database.models.fitting import FittingHoleTemplateModel, FittingModel
+from database.models.service_drilling_rule import ServiceDrillingRuleModel
 from database.repositories.fitting_holes_repository import FittingHolesRepository
 from database.session import SessionLocal
 
@@ -141,6 +142,14 @@ class FittingHolesService:
         if template is None:
             raise ValueError(f"Template with id={template_id} does not exist")
         return template
+
+    def _ensure_service_drilling_rule_exists(self, rule_id: int) -> ServiceDrillingRuleModel:
+        rule = self.session.get(ServiceDrillingRuleModel, rule_id)
+        if rule is None:
+            raise ValueError(f"Service drilling rule with id={rule_id} does not exist")
+        if not bool(getattr(rule, "is_active", True)):
+            raise ValueError(f"Service drilling rule with id={rule_id} is not active")
+        return rule
 
     # -------------------------
     # Templates
@@ -457,6 +466,19 @@ class FittingHolesService:
             payload.get("diameter_mm"),
             "diameter_mm",
         )
+        if "target_panel" in payload:
+            payload["target_panel"] = self._text_or_default(payload.get("target_panel"), "") or None
+        if "target_surface" in payload:
+            payload["target_surface"] = self._text_or_default(payload.get("target_surface"), "") or None
+        if "target_side" in payload:
+            payload["target_side"] = self._text_or_default(payload.get("target_side"), "") or None
+        if "service_drilling_rule_id" in payload:
+            rule_id = self._require_int(
+                payload.get("service_drilling_rule_id"),
+                "service_drilling_rule_id",
+            )
+            self._ensure_service_drilling_rule_exists(rule_id)
+            payload["service_drilling_rule_id"] = rule_id
         payload["depth_mm"] = self._optional_non_negative_float(
             payload.get("depth_mm"),
             "depth_mm",
@@ -504,6 +526,20 @@ class FittingHolesService:
                 payload.get("diameter_mm"),
                 "diameter_mm",
             )
+        if "target_panel" in payload:
+            payload["target_panel"] = self._text_or_default(payload.get("target_panel"), "") or None
+        if "target_surface" in payload:
+            payload["target_surface"] = self._text_or_default(payload.get("target_surface"), "") or None
+        if "target_side" in payload:
+            payload["target_side"] = self._text_or_default(payload.get("target_side"), "") or None
+
+        if "service_drilling_rule_id" in payload:
+            rule_id = self._require_int(
+                payload.get("service_drilling_rule_id"),
+                "service_drilling_rule_id",
+            )
+            self._ensure_service_drilling_rule_exists(rule_id)
+            payload["service_drilling_rule_id"] = rule_id
 
         if "depth_mm" in payload:
             payload["depth_mm"] = self._optional_non_negative_float(

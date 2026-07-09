@@ -46,6 +46,9 @@ TABLES = {
             x_mm FLOAT,
             y_mm FLOAT,
             z_mm FLOAT,
+            target_panel VARCHAR,
+            target_surface VARCHAR,
+            target_side VARCHAR,
             diameter_mm FLOAT,
             depth_mm FLOAT,
             side VARCHAR,
@@ -64,6 +67,12 @@ TABLES = {
 TABLE_COLUMNS = {
     "fitting_hole_templates": {
         "mounting_variant_key": "TEXT NOT NULL DEFAULT 'surface_mount'",
+    },
+    "fitting_hole_points": {
+        "target_panel": "VARCHAR",
+        "target_surface": "VARCHAR",
+        "target_side": "VARCHAR",
+        "service_drilling_rule_id": "INTEGER",
     },
 }
 

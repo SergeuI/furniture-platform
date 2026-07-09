@@ -308,8 +308,33 @@ class FittingHolePointModel(Base):
         nullable=True,
     )
 
+    target_panel = Column(
+        String,
+        index=True,
+        nullable=True,
+    )
+
+    target_surface = Column(
+        String,
+        index=True,
+        nullable=True,
+    )
+
+    target_side = Column(
+        String,
+        index=True,
+        nullable=True,
+    )
+
     diameter_mm = Column(
         Float,
+        nullable=True,
+    )
+
+    service_drilling_rule_id = Column(
+        Integer,
+        ForeignKey("service_drilling_rules.id"),
+        index=True,
         nullable=True,
     )
 

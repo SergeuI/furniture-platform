@@ -9,11 +9,14 @@ from __future__ import annotations
 import argparse
 import os
 import shutil
+import sys
 from datetime import datetime
 from pathlib import Path
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 
 def _resolve_path(raw_value: str | None, default_name: str) -> Path:
@@ -43,7 +46,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--legacy-database",
-        default=os.getenv("FURNITURE_LEGACY_DB_PATH", "mebli_calculator.db"),
+        default=os.getenv("FURNITURE_LEGACY_DB_PATH"),
         help="Path to the legacy helper database.",
     )
     parser.add_argument(
@@ -54,7 +57,7 @@ def main() -> int:
     args = parser.parse_args()
 
     database_path = _resolve_path(args.database, "furniture_platform.db")
-    legacy_database_path = _resolve_path(args.legacy_database, "mebli_calculator.db")
+    legacy_database_path = _resolve_path(args.legacy_database, "mebli_calculator.db") if args.legacy_database else None
 
     if not database_path.exists():
         raise SystemExit(f"Main database was not found: {database_path}")
@@ -62,14 +65,15 @@ def main() -> int:
     if not args.no_backup:
         main_backup = _backup_file(database_path)
         print(f"Main backup: {main_backup}")
-        if legacy_database_path.exists():
+        if legacy_database_path is not None and legacy_database_path.exists():
             legacy_backup = _backup_file(legacy_database_path)
             print(f"Legacy backup: {legacy_backup}")
-        else:
+        elif legacy_database_path is not None:
             print(f"Legacy database not found, skipping backup: {legacy_database_path}")
 
     os.environ["FURNITURE_PLATFORM_DB_PATH"] = str(database_path)
-    os.environ["FURNITURE_LEGACY_DB_PATH"] = str(legacy_database_path)
+    if legacy_database_path is not None:
+        os.environ["FURNITURE_LEGACY_DB_PATH"] = str(legacy_database_path)
 
     from database.init_db import init_database
 

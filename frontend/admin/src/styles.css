@@ -3236,6 +3236,10 @@ tbody tr.selected {
   margin: 4px 0 0;
 }
 
+.holes-three-preview-origin-note.is-hidden-legacy {
+  display: none;
+}
+
 .holes-preview-stage {
   background: #f8fbfd;
   border: 1px solid #dbe1e7;
@@ -6377,6 +6381,7 @@ tbody tr.selected {
   gap: 14px;
   min-height: 0;
   overflow-y: auto;
+  padding-bottom: 18px;
   padding-right: 4px;
 }
 
@@ -6414,6 +6419,94 @@ tbody tr.selected {
 .hole-template-error {
   color: #b42318;
   font-size: 13px;
+  margin: 0;
+}
+
+.hole-point-rule-panel {
+  background: linear-gradient(180deg, #f8fbfd 0%, #eef5f8 100%);
+  border: 1px solid #dbe5eb;
+  border-radius: 10px;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.hole-point-rule-select {
+  display: grid;
+  gap: 6px;
+}
+
+.hole-point-rule-select > span {
+  color: #5c6875;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.hole-point-rule-note {
+  color: #60717c;
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.hole-point-rule-info {
+  background: #ffffff;
+  border: 1px solid #dbe1e7;
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+}
+
+.hole-point-rule-info strong {
+  color: #1f3440;
+  font-size: 14px;
+}
+
+.hole-point-rule-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+}
+
+.hole-point-rule-meta span {
+  color: #4a5a66;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.hole-point-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.hole-point-suggestions span {
+  color: #5c6875;
+  font-size: 12px;
+  font-weight: 700;
+  margin-right: 4px;
+}
+
+.hole-point-suggestion-chip {
+  background: #e7f2f8;
+  border: 1px solid #bfd7e5;
+  border-radius: 999px;
+  color: #1b5166;
+  min-height: 30px;
+  padding: 0 10px;
+}
+
+.hole-point-suggestion-chip:hover {
+  background: #d9eef9;
+  border-color: #a8cfe3;
+  color: #124257;
+}
+
+.hole-point-rule-warning {
+  color: #b42318;
+  font-size: 12px;
   margin: 0;
 }
 
@@ -6498,6 +6591,19 @@ tbody tr.selected {
   color: #607182;
   font-size: 12px;
   line-height: 1.3;
+}
+
+.holes-mounting-variant-hint {
+  display: grid;
+  gap: 4px;
+  padding: 2px 0 4px;
+}
+
+.holes-mounting-variant-active-template,
+.holes-mounting-variant-empty-template {
+  color: #607182;
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 .hole-template-fitting-info-description {
@@ -6633,6 +6739,16 @@ tbody tr.selected {
   padding: 10px;
 }
 
+.hole-bundle-selected-item.is-clickable {
+  cursor: pointer;
+}
+
+.hole-bundle-selected-item.is-active {
+  background: linear-gradient(180deg, rgba(37, 99, 235, 0.08) 0%, rgba(37, 99, 235, 0.04) 100%);
+  border-color: rgba(37, 99, 235, 0.45);
+  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.08) inset;
+}
+
 .hole-bundle-selected-item-media {
   align-items: center;
   background: #edf2f7;
@@ -6664,6 +6780,14 @@ tbody tr.selected {
   display: grid;
   gap: 4px;
   min-width: 0;
+}
+
+.hole-bundle-selected-item-active-badge {
+  color: #1d4ed8;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-transform: uppercase;
 }
 
 .hole-bundle-selected-item-copy strong {

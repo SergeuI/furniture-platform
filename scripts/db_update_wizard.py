@@ -70,14 +70,12 @@ def default_legacy_db() -> str:
     return str((PROJECT_ROOT / "mebli_calculator.db").resolve())
 
 
-def build_local_command(main_db: str, legacy_db: str, backup: bool) -> list[str]:
+def build_local_command(main_db: str, backup: bool) -> list[str]:
     command = [
         str(PYTHON),
         str(PROJECT_ROOT / "scripts" / "safe_update_db.py"),
         "--database",
         main_db,
-        "--legacy-database",
-        legacy_db,
     ]
     if not backup:
         command.append("--no-backup")
@@ -96,6 +94,10 @@ def format_linux_env(main_db: str, legacy_db: str) -> str:
         f'export FURNITURE_PLATFORM_DB_PATH="{main_db}"\n'
         f'export FURNITURE_LEGACY_DB_PATH="{legacy_db}"'
     )
+
+
+def format_local_env(main_db: str) -> str:
+    return f'$env:FURNITURE_PLATFORM_DB_PATH = "{main_db}"'
 
 
 def remote_python_prefix() -> str:
@@ -2357,6 +2359,24 @@ class WizardApp(tk.Tk):
 
     def db_preview_text(self) -> str:
         main_db = self.main_db.get().strip()
+
+        if self.mode.get() == "local":
+            lines = [
+                "Локальний сценарій",
+                "",
+                "Змінні середовища:",
+                format_local_env(main_db),
+            ]
+            if self.run_safe_update.get():
+                lines.extend(
+                    [
+                        "",
+                        "Запуск:",
+                        " ".join(build_local_command(main_db, self.backup.get())),
+                    ]
+                )
+            return "\n".join(lines)
+
         legacy_db = self.legacy_db.get().strip()
         server_path = self.server_path.get().strip()
         server_host = self.server_host.get().strip()
@@ -2364,23 +2384,6 @@ class WizardApp(tk.Tk):
         server_user = self.server_user.get().strip()
         ssh_key_path = self.ssh_key_path.get().strip()
         server_password = self.server_password.get().strip()
-
-        if self.mode.get() == "local":
-            lines = [
-                "Локальний сценарій",
-                "",
-                "Змінні середовища:",
-                format_windows_env(main_db, legacy_db),
-            ]
-            if self.run_safe_update.get():
-                lines.extend(
-                    [
-                        "",
-                        "Запуск:",
-                        " ".join(build_local_command(main_db, legacy_db, self.backup.get())),
-                    ]
-                )
-            return "\n".join(lines)
 
         lines = [
             "Серверний сценарій",
@@ -2705,11 +2708,9 @@ class WizardApp(tk.Tk):
             return
 
         main_db = self.main_db.get().strip()
-        legacy_db = self.legacy_db.get().strip()
-        command = build_local_command(main_db, legacy_db, self.backup.get())
+        command = build_local_command(main_db, self.backup.get())
         env = os.environ.copy()
         env["FURNITURE_PLATFORM_DB_PATH"] = main_db
-        env["FURNITURE_LEGACY_DB_PATH"] = legacy_db
 
         try:
             result = subprocess.run(command, cwd=str(PROJECT_ROOT), env=env, capture_output=True, text=True, check=False)

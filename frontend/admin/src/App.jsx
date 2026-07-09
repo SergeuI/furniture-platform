@@ -39,7 +39,7 @@ import edgeToEdgeIcon from "./assets/hole-mounting/edge_to_edge.png";
 import drawerSlidesIcon from "./assets/hole-mounting/drawer_slides.png";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
-import { CanvasTexture, DoubleSide, LinearFilter } from "three";
+import { CanvasTexture, DoubleSide, LinearFilter, MOUSE } from "three";
 
 import {
   attachMaterialEdge,
@@ -580,6 +580,9 @@ const DEFAULT_HOLE_TEMPLATE_FORM = {
 const DEFAULT_HOLE_POINT_FORM = {
   template_id: "",
   panel_key: "",
+  target_panel: "",
+  target_surface: "",
+  target_side: "",
   label: "",
   x_mm: "",
   y_mm: "",
@@ -628,16 +631,23 @@ const DEFAULT_SERVICE_DRILLING_RULE_FORM = {
 
 function buildHolePointFormFromPoint(point) {
   const panelKey = String(point?.panelKey || point?.panel_key || point?.panelId || point?.panel_id || "").trim();
+  const targetPanel = String(point?.target_panel || "").trim();
+  const targetSurface = String(point?.target_surface || "").trim();
+  const targetSide = String(point?.target_side || "").trim();
+  const inferredLocation = inferFaceToEdgePointLocation(point);
   return {
     template_id: String(point?.template_id ?? ""),
     panel_key: panelKey,
+    target_panel: targetPanel || inferredLocation.targetPanel,
+    target_surface: targetSurface || inferredLocation.targetSurface,
+    target_side: targetSide || inferredLocation.targetSide,
     label: String(point?.label ?? ""),
     x_mm: point?.x_mm ?? "",
     y_mm: point?.y_mm ?? "",
     z_mm: point?.z_mm ?? "",
     diameter_mm: point?.diameter_mm ?? "",
     depth_mm: point?.depth_mm ?? "",
-    side: String(point?.side ?? "front"),
+    side: String(point?.side || targetSide || inferredLocation.targetSide || "front"),
     operation: String(point?.operation ?? "drill"),
     order_index: point?.order_index ?? 0,
     quantity: point?.quantity ?? 1,
@@ -697,6 +707,181 @@ const HOLE_POINT_SIDE_LABEL_KEYS = {
   inner: "holePointSideInner",
   outer: "holePointSideOuter",
 };
+
+function getHolePointTargetPanelLabel(value) {
+  switch (String(value || "").trim()) {
+    case "vertical_panel":
+      return "Вертикальна панель";
+    case "horizontal_panel":
+      return "Горизонтальна панель";
+    default:
+      return "Потребує уточнення";
+  }
+}
+
+function getHolePointTargetSurfaceLabel(value) {
+  switch (String(value || "").trim()) {
+    case "plane":
+      return "Площина";
+    case "edge":
+      return "Торець";
+    default:
+      return "Потребує уточнення";
+  }
+}
+
+function getHolePointTargetSideLabel(value) {
+  switch (String(value || "").trim()) {
+    case "inner_face":
+      return "Внутрішня площина";
+    case "outer_face":
+      return "Зовнішня площина";
+    case "edge_near_vertical":
+      return "Торець біля вертикальної панелі";
+    case "top_face":
+      return "Верхня площина";
+    case "bottom_face":
+      return "Нижня площина";
+    case "top_edge":
+      return "Верхній торець";
+    case "bottom_edge":
+      return "Нижній торець";
+    case "edge_far_vertical":
+      return "Торець далі від вертикальної панелі";
+    case "needs_clarification":
+      return "Потребує уточнення площини";
+    default:
+      return "Потребує уточнення";
+  }
+}
+
+function getHolePointTargetPanelOptions() {
+  return [
+    { value: "vertical_panel", label: "Вертикальна панель" },
+    { value: "horizontal_panel", label: "Горизонтальна панель" },
+  ];
+}
+
+function getHolePointTargetSurfaceOptions(targetPanel) {
+  const panel = String(targetPanel || "").trim();
+
+  if (panel === "horizontal_panel") {
+    return [
+      { value: "edge", label: "Торець" },
+      { value: "plane", label: "Площина" },
+    ];
+  }
+
+  return [
+    { value: "plane", label: "Площина" },
+    { value: "edge", label: "Торець" },
+  ];
+}
+
+function getHolePointTargetSideOptions(targetPanel, targetSurface, currentValue) {
+  const panel = String(targetPanel || "").trim();
+  const surface = String(targetSurface || "").trim();
+  const normalizedCurrentValue = String(currentValue || "").trim();
+
+  const addCurrentValue = (options) => {
+    if (normalizedCurrentValue && !options.some((option) => option.value === normalizedCurrentValue)) {
+      return [...options, { value: normalizedCurrentValue, label: getHolePointTargetSideLabel(normalizedCurrentValue) }];
+    }
+
+    return options;
+  };
+
+  if (panel === "vertical_panel") {
+    if (surface === "edge") {
+      return addCurrentValue([
+        { value: "top_edge", label: "Верхній торець" },
+        { value: "bottom_edge", label: "Нижній торець" },
+      ]);
+    }
+
+    return addCurrentValue([
+      { value: "inner_face", label: "Внутрішня площина" },
+      { value: "outer_face", label: "Зовнішня / фасадна площина" },
+      { value: "needs_clarification", label: "Потребує уточнення площини" },
+    ]);
+  }
+
+  if (panel === "horizontal_panel") {
+    if (surface === "edge") {
+      return addCurrentValue([
+        { value: "edge_near_vertical", label: "Торець біля вертикальної панелі" },
+        { value: "edge_far_vertical", label: "Інший торець" },
+      ]);
+    }
+
+    return addCurrentValue([
+      { value: "top_face", label: "Верхня площина" },
+      { value: "bottom_face", label: "Нижня площина" },
+      { value: "needs_clarification", label: "Потребує уточнення площини" },
+    ]);
+  }
+
+  return addCurrentValue([
+    { value: "needs_clarification", label: "Потребує уточнення площини" },
+  ]);
+}
+
+function inferFaceToEdgePointLocation(point) {
+  const sourcePoint = point?.source && typeof point.source === "object" ? point.source : null;
+  const targetPanel = String(point?.target_panel || sourcePoint?.target_panel || "").trim();
+  const targetSurface = String(point?.target_surface || sourcePoint?.target_surface || "").trim();
+  const targetSide = String(point?.target_side || sourcePoint?.target_side || "").trim();
+  const panelKey = String(point?.panelKey || point?.panel_key || point?.panelId || point?.panel_id || "").trim();
+  const legacySide = String(point?.side || "").trim().toLowerCase();
+
+  let resolvedTargetPanel = targetPanel;
+  let resolvedTargetSurface = targetSurface;
+  let resolvedTargetSide = targetSide;
+  let needsClarification = false;
+
+  if (!resolvedTargetPanel) {
+    if (panelKey === "horizontal_panel") {
+      resolvedTargetPanel = "horizontal_panel";
+    } else if (panelKey === "vertical_panel") {
+      resolvedTargetPanel = "vertical_panel";
+    } else if (["edge", "left", "right", "top", "bottom"].includes(legacySide)) {
+      resolvedTargetPanel = "horizontal_panel";
+    } else if (legacySide) {
+      resolvedTargetPanel = "vertical_panel";
+    }
+  }
+
+  if (!resolvedTargetSurface) {
+    if (resolvedTargetPanel === "horizontal_panel" && ["edge", "left", "right"].includes(legacySide)) {
+      resolvedTargetSurface = "edge";
+    } else if (resolvedTargetPanel === "vertical_panel" && ["front", "back", "face", "inner", "outer"].includes(legacySide)) {
+      resolvedTargetSurface = "plane";
+    } else if (resolvedTargetPanel) {
+      resolvedTargetSurface = resolvedTargetPanel === "horizontal_panel" ? "edge" : "plane";
+    }
+  }
+
+  if (!resolvedTargetSide) {
+    if (resolvedTargetPanel === "vertical_panel" && resolvedTargetSurface === "plane") {
+      resolvedTargetSide = legacySide === "back" || legacySide === "outer" ? "outer_face" : "inner_face";
+    } else if (resolvedTargetPanel === "horizontal_panel" && resolvedTargetSurface === "edge") {
+      resolvedTargetSide = "edge_near_vertical";
+    } else if (resolvedTargetPanel === "horizontal_panel" && resolvedTargetSurface === "plane") {
+      resolvedTargetSide = legacySide === "bottom" ? "bottom_face" : "top_face";
+    }
+  }
+
+  if (!resolvedTargetPanel || !resolvedTargetSurface || !resolvedTargetSide) {
+    needsClarification = true;
+  }
+
+  return {
+    needsClarification,
+    targetPanel: resolvedTargetPanel || "vertical_panel",
+    targetSide: resolvedTargetSide || "needs_clarification",
+    targetSurface: resolvedTargetSurface || "plane",
+  };
+}
 
 const HOLE_POINT_OPERATION_LABEL_KEYS = {
   drill: "holePointOperationDrill",
@@ -771,11 +956,7 @@ function getHolePointPanelDescription(panelKey) {
 }
 
 function getHolePointCoordinateHintText(panelKey) {
-  if (panelKey === "horizontal_panel") {
-    return "Початок координат: 0,0,0 знаходиться на тильній стороні горизонтальної панелі, що стикується з вертикальною. X, Y та Z рахуються від цієї точки.";
-  }
-
-  return "Початок координат: 0,0,0 знаходиться на зовнішній стороні стику панелей. X, Y та Z рахуються від цієї точки.";
+  return "Початок координат знаходиться у стику внутрішньої площини вертикальної панелі та торця горизонтальної панелі. X, Y, Z рахуються від цієї точки.";
 }
 
 function getSafeHolePointLabel(value, fallback) {
@@ -5602,6 +5783,7 @@ export default function App() {
   const [selectedHoleMountingVariantKey, setSelectedHoleMountingVariantKey] =
     useState("surface_mount");
   const [holeMountingVariantDropdownOpen, setHoleMountingVariantDropdownOpen] = useState(false);
+  const holeMountingVariantRefreshRef = useRef({ reason: "", templateId: "", variantKey: "" });
   const [newFittingForm, setNewFittingForm] = useState(DEFAULT_FITTING_FORM);
   const [autoRefreshStatus, setAutoRefreshStatus] = useState(null);
   const storedProjectId = localStorage.getItem(ACTIVE_PROJECT_ID_STORAGE_KEY) || "";
@@ -5810,6 +5992,20 @@ export default function App() {
         : "Збережено"
       : "Готово до створення"
     : "";
+  useEffect(() => {
+    if (activeView !== "catalogHoles" || holeSelectedFittingId || !holeBundleSelectedItems.length) {
+      return;
+    }
+
+    const firstBundleItem = holeBundleSelectedItems[0];
+
+    if (!firstBundleItem?.id) {
+      return;
+    }
+
+    void handleHoleFittingChange(String(firstBundleItem.id));
+  }, [activeView, handleHoleFittingChange, holeBundleSelectedItems, holeSelectedFittingId]);
+
   const holesMaterialPlanesModel = useMemo(() => {
     switch (normalizedSelectedHoleMountingVariantKey) {
       case "angled_two_planes":
@@ -6013,9 +6209,28 @@ export default function App() {
       const explicitGroupKey = String(
         point?.panelKey || point?.panel_key || point?.panelId || point?.panel_id || "",
       ).trim();
+      const targetPanel = String(point?.target_panel || "").trim();
 
       if (explicitGroupKey) {
+        if (normalizedGroups.has(explicitGroupKey)) {
+          return explicitGroupKey;
+        }
+
+        if (variantKey === "face_to_edge") {
+          if (["panel_a", "face", "vertical", "vertical_panel"].includes(explicitGroupKey)) {
+            return groupDefs[0]?.key || fallbackKey;
+          }
+
+          if (["panel_b", "edge", "horizontal", "horizontal_panel"].includes(explicitGroupKey)) {
+            return groupDefs[1]?.key || fallbackKey;
+          }
+        }
+
         return explicitGroupKey;
+      }
+
+      if (variantKey === "face_to_edge" && targetPanel) {
+        return targetPanel;
       }
 
       const side = String(point?.side || "").trim().toLowerCase();
@@ -9504,17 +9719,143 @@ export default function App() {
     return Math.max(0.24, Number(panel.args[0]) || 0.28);
   }
 
-  function readHolePreviewNumber(hole, keys, fallback = null) {
-    for (const key of keys) {
-      const parsed = Number(String(hole?.[key] ?? "").replace(",", "."));
+function readHolePreviewNumber(hole, keys, fallback = null) {
+  for (const key of keys) {
+    const parsed = Number(String(hole?.[key] ?? "").replace(",", "."));
 
       if (Number.isFinite(parsed)) {
         return parsed;
       }
     }
 
-    return fallback;
+  return fallback;
+}
+
+function getFaceToEdgeHolePlacement(layout, hole, index) {
+  const sourceHole = hole?.source && typeof hole.source === "object" ? hole.source : hole;
+  const location = inferFaceToEdgePointLocation(sourceHole);
+  const panelA = Array.isArray(layout?.panels) ? layout.panels[0] || null : null;
+  const panelB = Array.isArray(layout?.panels) ? layout.panels[1] || null : null;
+
+  if (!panelA || !panelB) {
+    return null;
   }
+
+  const panelAThickness = Number(panelA?.args?.[0]) || 0.28;
+  const panelAHeight = Number(panelA?.args?.[1]) || 2.18;
+  const panelBWidth = Number(panelB?.args?.[0]) || 1.96;
+  const panelBThickness = Number(panelB?.args?.[1]) || 0.28;
+  const originX = (Number(panelA?.position?.[0]) || 0) + panelAThickness / 2;
+  const originY = Number(panelB?.position?.[1]) || 0;
+  const originZ = ((Number(panelA?.position?.[2]) || 0) + (Number(panelB?.position?.[2]) || 0)) / 2;
+  const mmToScene = 0.01;
+  const diameterValue = readHolePreviewNumber(sourceHole, ["diameter", "diameter_mm"], 8);
+  const depthValue = readHolePreviewNumber(sourceHole, ["depth", "depth_mm"], null);
+  const xOffset = readHolePreviewNumber(sourceHole, ["x", "x_mm"], 0) * mmToScene;
+  const yOffset = readHolePreviewNumber(sourceHole, ["y", "y_mm"], 0) * mmToScene;
+  const zOffset = readHolePreviewNumber(sourceHole, ["z", "z_mm"], 0) * mmToScene;
+  const isHorizontalEdge = location.targetPanel === "horizontal_panel" && location.targetSurface === "edge";
+  const isHorizontalPlane = location.targetPanel === "horizontal_panel" && location.targetSurface === "plane";
+  const isVerticalEdge = location.targetPanel === "vertical_panel" && location.targetSurface === "edge";
+  const holeRadius = Math.max(0.028, Math.min(0.08, Number.isFinite(diameterValue) ? diameterValue * 0.005 : 0.04));
+  const holeLength = isHorizontalEdge
+    ? Math.max(0.18, Math.min(0.74, Number.isFinite(depthValue) ? Math.abs(depthValue) * mmToScene : 0.32))
+    : Math.max(0.18, Math.min(0.62, Number.isFinite(depthValue) ? Math.abs(depthValue) * mmToScene : panelAThickness));
+
+  if (isHorizontalEdge) {
+    const startX =
+      location.targetSide === "edge_far_vertical"
+        ? (Number(panelB?.position?.[0]) || 0) + panelBWidth / 2
+        : originX;
+    const directionSign = location.targetSide === "edge_far_vertical" ? -1 : 1;
+
+    return {
+      id: sourceHole?.id ?? hole?.id ?? index,
+      axis: "x",
+      centerPosition: [startX + directionSign * holeLength * 0.5 + xOffset, originY + yOffset, originZ + zOffset],
+      holeLength,
+      holeRadius,
+      isFaceToEdge: true,
+      isThrough: !Number.isFinite(depthValue) || depthValue <= 0,
+      location,
+      orderIndex: index,
+      rotation: [0, 0, Math.PI / 2],
+      targetPanel: location.targetPanel,
+      targetSide: location.targetSide,
+      targetSurface: location.targetSurface,
+    };
+  }
+
+  if (isHorizontalPlane) {
+    const isBottomFace = location.targetSide === "bottom_face";
+    const startY = isBottomFace
+      ? (Number(panelB?.position?.[1]) || 0) - panelBThickness / 2
+      : (Number(panelB?.position?.[1]) || 0) + panelBThickness / 2;
+    const directionSign = isBottomFace ? 1 : -1;
+
+    return {
+      id: sourceHole?.id ?? hole?.id ?? index,
+      axis: "y",
+      centerPosition: [originX + xOffset, startY + directionSign * holeLength * 0.5 + yOffset, originZ + zOffset],
+      holeLength,
+      holeRadius,
+      isFaceToEdge: true,
+      isThrough: !Number.isFinite(depthValue) || depthValue <= 0,
+      location,
+      orderIndex: index,
+      rotation: [0, 0, 0],
+      targetPanel: location.targetPanel,
+      targetSide: location.targetSide,
+      targetSurface: location.targetSurface,
+    };
+  }
+
+  if (isVerticalEdge) {
+    const isTopEdge = location.targetSide === "top_edge";
+    const startY = isTopEdge
+      ? (Number(panelA?.position?.[1]) || 0) + panelAHeight / 2
+      : (Number(panelA?.position?.[1]) || 0) - panelAHeight / 2;
+    const directionSign = isTopEdge ? -1 : 1;
+
+    return {
+      id: sourceHole?.id ?? hole?.id ?? index,
+      axis: "y",
+      centerPosition: [originX + xOffset, startY + directionSign * holeLength * 0.5 + yOffset, originZ + zOffset],
+      holeLength,
+      holeRadius,
+      isFaceToEdge: true,
+      isThrough: !Number.isFinite(depthValue) || depthValue <= 0,
+      location,
+      orderIndex: index,
+      rotation: [0, 0, 0],
+      targetPanel: location.targetPanel,
+      targetSide: location.targetSide,
+      targetSurface: location.targetSurface,
+    };
+  }
+
+  const isOuterFace = location.targetSide === "outer_face";
+  const startX = isOuterFace
+    ? (Number(panelA?.position?.[0]) || 0) - panelAThickness / 2
+    : originX;
+  const directionSign = isOuterFace ? 1 : -1;
+
+  return {
+    id: sourceHole?.id ?? hole?.id ?? index,
+    axis: "x",
+    centerPosition: [startX + directionSign * holeLength * 0.5 + xOffset, originY + yOffset, originZ + zOffset],
+    holeLength,
+    holeRadius,
+    isFaceToEdge: true,
+    isThrough: !Number.isFinite(depthValue) || depthValue <= 0,
+    location,
+    orderIndex: index,
+    rotation: [0, 0, Math.PI / 2],
+    targetPanel: location.targetPanel,
+    targetSide: location.targetSide,
+    targetSurface: location.targetSurface,
+  };
+}
 
   const HolesMountingThreePreview = useMemo(
     () =>
@@ -9534,6 +9875,57 @@ export default function App() {
         const markerPositions = useMemo(
           () => buildThreePreviewMarkerPositions(holes, layout.markerPlane),
           [holes, layout.markerPlane],
+        );
+        const holeVolumes = useMemo(
+          () => {
+            const isFaceToEdge = normalizeHoleWorkspaceMountingVariantKey(mountingVariantKey) === "face_to_edge";
+
+            if (isFaceToEdge) {
+              const sortedHoles = [...(Array.isArray(holes) ? holes : [])].sort((left, right) => {
+                const leftOrder = Number(left?.order_index ?? left?.orderIndex ?? 0);
+                const rightOrder = Number(right?.order_index ?? right?.orderIndex ?? 0);
+                if (leftOrder !== rightOrder) {
+                  return leftOrder - rightOrder;
+                }
+
+                return Number(left?.id ?? 0) - Number(right?.id ?? 0);
+              });
+
+              return sortedHoles
+                .map((hole, index) => getFaceToEdgeHolePlacement(layout, hole, index))
+                .filter(Boolean);
+            }
+
+            return markerPositions.map((marker) => {
+              const sideDirection = getHoleWorkspaceHoleDirection(marker.side);
+              const holeRadius = Math.max(0.045, Math.min(0.1, (marker.diameter || 0) / 110 || 0.052));
+              const panelThickness = markerPlaneThickness(layout.panels, sideDirection.axis);
+              const holeLength = marker.hasDepth
+                ? Math.max(0.18, Math.min(0.62, (marker.depth || 0) / 120 || 0.22))
+                : Math.max(0.42, panelThickness);
+              const visibleLength = holeLength;
+              const centerPosition = [
+                marker.onSurfacePosition[0] +
+                  (sideDirection.axis === "x" ? sideDirection.sign * visibleLength * 0.5 : 0),
+                marker.onSurfacePosition[1] +
+                  (sideDirection.axis === "y" ? sideDirection.sign * visibleLength * 0.5 : 0),
+                marker.onSurfacePosition[2] +
+                  (sideDirection.axis === "z" ? sideDirection.sign * visibleLength * 0.5 : 0),
+              ];
+
+              return {
+                ...marker,
+                centerPosition,
+                holeLength: visibleLength,
+                holeRadius,
+                rotation: getHoleWorkspaceHoleRotation(sideDirection.axis),
+                isThrough: !marker.hasDepth,
+                sideDirection,
+                isFaceToEdge: false,
+              };
+            });
+          },
+          [holes, layout.panels, markerPositions, mountingVariantKey],
         );
         const axisLabelTextures = useMemo(() => {
           const createAxisLabelTexture = (label, color) => {
@@ -9566,6 +9958,44 @@ export default function App() {
             z: createAxisLabelTexture("Z", "#2563eb"),
           };
         }, []);
+        const holeIdTextures = useMemo(() => {
+          const createHoleIdTexture = (label) => {
+            const canvas = document.createElement("canvas");
+            canvas.width = 128;
+            canvas.height = 128;
+            const context = canvas.getContext("2d");
+
+            if (!context) {
+              return null;
+            }
+
+            context.clearRect(0, 0, canvas.width, canvas.height);
+            context.fillStyle = "rgba(255, 255, 255, 0.86)";
+            context.beginPath();
+            context.arc(64, 64, 24, 0, Math.PI * 2);
+            context.fill();
+            context.strokeStyle = "rgba(15, 23, 42, 0.28)";
+            context.lineWidth = 4;
+            context.stroke();
+            context.fillStyle = "#0f172a";
+            context.font = "700 56px Arial, sans-serif";
+            context.textAlign = "center";
+            context.textBaseline = "middle";
+            context.fillText(label, 64, 68);
+
+            const texture = new CanvasTexture(canvas);
+            texture.minFilter = LinearFilter;
+            texture.magFilter = LinearFilter;
+            texture.needsUpdate = true;
+            return texture;
+          };
+
+          return Object.fromEntries(
+            (Array.isArray(holeVolumes) ? holeVolumes : [])
+              .filter((hole) => hole?.id !== undefined && hole?.id !== null)
+              .map((hole) => [hole.id, createHoleIdTexture(String(hole.id))]),
+          );
+        }, [holeVolumes]);
         const isFaceToEdgePreview = normalizeHoleWorkspaceMountingVariantKey(mountingVariantKey) === "face_to_edge";
         const axisLabelPresentation = isFaceToEdgePreview
           ? {
@@ -9587,136 +10017,6 @@ export default function App() {
               scale: 0.42,
             };
 
-        const holeVolumes = useMemo(
-          () =>
-            markerPositions.map((marker) => {
-              const isFaceToEdge = normalizeHoleWorkspaceMountingVariantKey(mountingVariantKey) === "face_to_edge";
-              const sideDirection = isFaceToEdge ? { axis: "x", sign: 1 } : getHoleWorkspaceHoleDirection(marker.side);
-              const holeRadius = Math.max(0.045, Math.min(0.1, (marker.diameter || 0) / 110 || 0.052));
-              const panelA = Array.isArray(layout.panels) ? layout.panels[0] || null : null;
-              const panelB = Array.isArray(layout.panels) ? layout.panels[1] || null : null;
-              const panelAThickness = Number(panelA?.args?.[0]) || 0.28;
-              const panelBWidth = Number(panelB?.args?.[0]) || 1.92;
-              const panelThickness = markerPlaneThickness(layout.panels, sideDirection.axis);
-              const holeLength = isFaceToEdge
-                ? marker.side === "edge"
-                  ? Math.max(0.18, Math.min(0.62, Number(marker.depth) ? Number(marker.depth) / 100 : 0.34))
-                  : Math.max(0.24, panelAThickness)
-                : marker.hasDepth
-                  ? Math.max(0.18, Math.min(0.62, (marker.depth || 0) / 120 || 0.22))
-                  : Math.max(0.42, panelThickness);
-              const visibleLength = holeLength;
-              const centerPosition = isFaceToEdge
-                ? [
-                    marker.side === "edge"
-                      ? (panelB?.position?.[0] || 0) - panelBWidth / 2 + visibleLength * 0.5
-                      : (panelA?.position?.[0] || 0) - panelAThickness / 2 + visibleLength * 0.5,
-                    marker.onSurfacePosition[1],
-                    marker.onSurfacePosition[2],
-                  ]
-                : [
-                    marker.onSurfacePosition[0] +
-                      (sideDirection.axis === "x" ? sideDirection.sign * visibleLength * 0.5 : 0),
-                    marker.onSurfacePosition[1] +
-                      (sideDirection.axis === "y" ? sideDirection.sign * visibleLength * 0.5 : 0),
-                    marker.onSurfacePosition[2] +
-                      (sideDirection.axis === "z" ? sideDirection.sign * visibleLength * 0.5 : 0),
-                  ];
-
-              return {
-                ...marker,
-                centerPosition,
-                holeLength: visibleLength,
-                holeRadius,
-                rotation: getHoleWorkspaceHoleRotation(sideDirection.axis),
-                isThrough: !marker.hasDepth,
-                sideDirection,
-                isFaceToEdge,
-              };
-            }),
-          [layout.panels, markerPositions, mountingVariantKey],
-        );
-
-        const faceToEdgeChannels = useMemo(() => {
-          if (normalizeHoleWorkspaceMountingVariantKey(mountingVariantKey) !== "face_to_edge") {
-            return [];
-          }
-
-          // face_to_edge preview uses a local CAD frame:
-          // origin sits on the front face of the vertical panel, +X follows the drilling direction,
-          // P1 passes through the vertical panel thickness, and P2 starts from the end face of the horizontal panel.
-          const panelA = Array.isArray(layout.panels) ? layout.panels[0] || null : null;
-          const panelB = Array.isArray(layout.panels) ? layout.panels[1] || null : null;
-
-          if (!panelA || !panelB) {
-            return [];
-          }
-
-          const panelAThickness = Number(panelA?.args?.[0]) || 0.28;
-          const panelBWidth = Number(panelB?.args?.[0]) || 1.92;
-          const panelAOuterFaceX = (Number(panelA?.position?.[0]) || 0) - panelAThickness / 2;
-          const panelAInnerFaceX = (Number(panelA?.position?.[0]) || 0) + panelAThickness / 2;
-          const panelBEdgeStartX = (Number(panelB?.position?.[0]) || 0) - panelBWidth / 2;
-          const panelCenterY = Number(panelB?.position?.[1]) || 0;
-          const panelCenterZ = ((Number(panelA?.position?.[2]) || 0) + (Number(panelB?.position?.[2]) || 0)) / 2;
-          const sortedHoles = [...(Array.isArray(holes) ? holes : [])].sort((left, right) => {
-            const leftOrder = Number(left?.order_index ?? left?.orderIndex ?? 0);
-            const rightOrder = Number(right?.order_index ?? right?.orderIndex ?? 0);
-            if (leftOrder !== rightOrder) {
-              return leftOrder - rightOrder;
-            }
-
-            return Number(left?.id ?? 0) - Number(right?.id ?? 0);
-          });
-          const firstHole =
-            sortedHoles.find((hole) => String(hole?.label || "").trim().toLowerCase() === "p1") ||
-            sortedHoles.find((hole) => String(hole?.side || "").trim() !== "edge") ||
-            sortedHoles[0] ||
-            { id: "face-through-7", label: "P1", diameter_mm: 7 };
-          const secondHole =
-            sortedHoles.find((hole) => String(hole?.label || "").trim().toLowerCase() === "p2") ||
-            sortedHoles.find((hole) => String(hole?.side || "").trim() === "edge") ||
-            sortedHoles[1] ||
-            { id: "edge-blind-45", label: "P2", diameter_mm: 4.5, depth_mm: 34, side: "edge" };
-          const firstDiameter = readHolePreviewNumber(firstHole, ["diameter", "diameter_mm"], 7);
-          const secondDiameter = readHolePreviewNumber(secondHole, ["diameter", "diameter_mm"], 4.5);
-          const secondDepth = readHolePreviewNumber(secondHole, ["depth", "depth_mm"], 34);
-          const firstRadius = Math.max(0.04, Math.min(0.075, firstDiameter / 110));
-          const secondRadius = Math.max(0.028, Math.min(0.058, secondDiameter / 110));
-          const firstLength = panelAThickness;
-          const secondLength = Math.max(0.44, Math.min(panelBWidth * 0.8, secondDepth / 52));
-
-          return [
-            {
-              center: [panelAOuterFaceX + firstLength / 2, panelCenterY, panelCenterZ],
-              depthTest: false,
-              endX: panelAOuterFaceX + firstLength,
-              id: firstHole?.id ?? "face-to-edge-p1",
-              isSelected: String(selectedHoleId) === String(firstHole?.id),
-              isHovered: String(hoveredHoleId) === String(firstHole?.id),
-              hasDepth: false,
-              length: firstLength,
-              opacity: 0.68,
-              radius: firstRadius,
-              startX: panelAOuterFaceX,
-              tone: "neutral",
-            },
-            {
-              center: [panelAInnerFaceX + secondLength / 2, panelCenterY, panelCenterZ],
-              depthTest: false,
-              endX: panelAInnerFaceX + secondLength,
-              id: secondHole?.id ?? "face-to-edge-p2",
-              isSelected: String(selectedHoleId) === String(secondHole?.id),
-              isHovered: String(hoveredHoleId) === String(secondHole?.id),
-              hasDepth: true,
-              length: secondLength,
-              opacity: 0.74,
-              radius: secondRadius,
-              startX: panelAInnerFaceX,
-              tone: "secondary",
-            },
-          ];
-        }, [holes, hoveredHoleId, layout.panels, mountingVariantKey, selectedHoleId]);
         const faceToEdgeOrigin = useMemo(() => {
           if (normalizeHoleWorkspaceMountingVariantKey(mountingVariantKey) !== "face_to_edge") {
             return null;
@@ -9731,7 +10031,7 @@ export default function App() {
 
           const panelAThickness = Number(panelA?.args?.[0]) || 0.28;
           return [
-            (Number(panelA?.position?.[0]) || 0) - panelAThickness / 2,
+            (Number(panelA?.position?.[0]) || 0) + panelAThickness / 2,
             Number(panelB?.position?.[1]) || 0,
             ((Number(panelA?.position?.[2]) || 0) + (Number(panelB?.position?.[2]) || 0)) / 2,
           ];
@@ -9743,6 +10043,12 @@ export default function App() {
           },
           [axisLabelTextures],
         );
+        useEffect(
+          () => () => {
+            Object.values(holeIdTextures).forEach((texture) => texture?.dispose?.());
+          },
+          [holeIdTextures],
+        );
 
     return (
       <div className="holes-three-preview">
@@ -9750,6 +10056,7 @@ export default function App() {
           camera={{ fov: 32, position: layout.camera }}
           className="holes-three-preview-canvas"
           dpr={[1, 1.5]}
+          onContextMenu={(event) => event.preventDefault()}
           shadows
         >
           <color attach="background" args={["#f7fbfc"]} />
@@ -9810,63 +10117,11 @@ export default function App() {
               </mesh>
             ) : null}
 
-            {mountingVariantKey === "face_to_edge" ? (
-              faceToEdgeChannels.length ? (
-                faceToEdgeChannels.map((channel) => {
-                  const isSelected = Boolean(channel.isSelected);
-                  const isHovered = Boolean(channel.isHovered);
-                  const channelColor = isSelected ? "#9fb7a2" : isHovered ? "#b8cab8" : channel.tone === "secondary" ? "#8fb58f" : "#bfd4bd";
-                  const channelOpacity = isSelected ? 0.96 : isHovered ? 0.94 : 0.9;
-                  const entryRingColor = isSelected ? "#4b5563" : isHovered ? "#667382" : "#6b7280";
-                  const exitRingColor = isSelected ? "#4b5563" : isHovered ? "#667382" : "#6b7280";
-                  const ringOpacity = isSelected ? 0.95 : isHovered ? 0.9 : 0.82;
-                  const exitOpacity = isSelected ? 0.88 : isHovered ? 0.82 : 0.72;
-
-                  return (
-                    <group
-                      key={`face-to-edge-${channel.id}`}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onSelectHole?.(channel.id);
-                      }}
-                      onPointerOut={(event) => {
-                        event.stopPropagation();
-                        onLeaveHole?.();
-                      }}
-                      onPointerOver={(event) => {
-                        event.stopPropagation();
-                        onHoverHole?.(channel.id);
-                      }}
-                      position={channel.center}
-                      renderOrder={2}
-                    >
-                      <mesh castShadow renderOrder={2} rotation={[0, 0, Math.PI / 2]}>
-                        <cylinderGeometry args={[channel.radius, channel.radius, channel.length, 24, 1, false]} />
-                        <meshStandardMaterial
-                          color={channelColor}
-                          emissive={isSelected || isHovered ? "#dff2dc" : "#8fb58f"}
-                          emissiveIntensity={isSelected || isHovered ? 0.18 : 0.06}
-                          metalness={0.12}
-                          opacity={Math.min(1, channelOpacity + 0.02)}
-                          roughness={0.28}
-                          depthWrite={false}
-                          transparent
-                        />
-                      </mesh>
-                    </group>
-                  );
-                })
-              ) : (
-                <mesh position={layout.markerPlane.origin}>
-                  <sphereGeometry args={[0.06, 20, 20]} />
-                  <meshStandardMaterial color="#94a3b8" emissive="#cbd5e1" emissiveIntensity={0.12} />
-                </mesh>
-              )
-            ) : holeVolumes.length ? (
+            {holeVolumes.length ? (
               holeVolumes.map((marker) =>
                 marker.isFaceToEdge ? (
                   <group
-                    key={`marker-${marker.id}`}
+                    key={`face-to-edge-${marker.id}`}
                     onClick={(event) => {
                       event.stopPropagation();
                       onSelectHole?.(marker.id);
@@ -9883,7 +10138,7 @@ export default function App() {
                     renderOrder={2}
                     rotation={marker.rotation}
                   >
-                    <mesh castShadow>
+                    <mesh castShadow renderOrder={2}>
                       <cylinderGeometry args={[marker.holeRadius * 0.92, marker.holeRadius * 0.92, marker.holeLength, 24, 1, false]} />
                       <meshStandardMaterial
                         color={String(selectedHoleId) === String(marker.id) ? "#4b5563" : String(hoveredHoleId) === String(marker.id) ? "#64748b" : "#6b7280"}
@@ -9914,16 +10169,16 @@ export default function App() {
                         transparent
                       />
                     </mesh>
-                    {marker.side === "edge" ? (
-                      <mesh position={[marker.holeLength / 2, 0, 0]}>
-                        <cylinderGeometry args={[marker.holeRadius * 0.92, marker.holeRadius * 0.92, 0.02, 18]} />
-                        <meshStandardMaterial
-                          color={String(selectedHoleId) === String(marker.id) ? "#d1d5db" : String(hoveredHoleId) === String(marker.id) ? "#e2e8f0" : "#c7d2da"}
+                    {holeIdTextures[marker.id] ? (
+                      <sprite position={[0, marker.holeRadius * 1.9, 0]} scale={[0.18, 0.18, 0.18]}>
+                        <spriteMaterial
+                          attach="material"
+                          depthTest={false}
                           depthWrite={false}
-                          opacity={0.72}
+                          map={holeIdTextures[marker.id] || undefined}
                           transparent
                         />
-                      </mesh>
+                      </sprite>
                     ) : null}
                   </group>
                 ) : (
@@ -9951,11 +10206,22 @@ export default function App() {
                       color={String(selectedHoleId) === String(marker.id) ? "#16a34a" : String(hoveredHoleId) === String(marker.id) ? "#0f766e" : "#6f2bd6"}
                       emissive={String(selectedHoleId) === String(marker.id) ? "#8df0ae" : String(hoveredHoleId) === String(marker.id) ? "#43d0bf" : "#b28fff"}
                       emissiveIntensity={String(selectedHoleId) === String(marker.id) ? 0.42 : 0.22}
-                      opacity={mountingVariantKey === "face_to_edge" ? 0.74 : 0.92}
+                      opacity={0.92}
                       depthWrite={false}
                       transparent
                       roughness={0.22}
                     />
+                    {holeIdTextures[marker.id] ? (
+                      <sprite position={[0, marker.holeRadius * 1.9, 0]} scale={[0.16, 0.16, 0.16]}>
+                        <spriteMaterial
+                          attach="material"
+                          depthTest={false}
+                          depthWrite={false}
+                          map={holeIdTextures[marker.id] || undefined}
+                          transparent
+                        />
+                      </sprite>
+                    ) : null}
                   </mesh>
                 ),
               )
@@ -9993,19 +10259,20 @@ export default function App() {
           </group>
           <OrbitControls
             enableDamping
-            enablePan={false}
+            enablePan
             enableRotate
             enableZoom
             maxDistance={11}
             minDistance={4.2}
-            maxPolarAngle={1.55}
-            minPolarAngle={0.42}
-            target={[0, 0, 0]}
+            maxPolarAngle={Math.PI}
+            minPolarAngle={0}
+            mouseButtons={{ LEFT: MOUSE.ROTATE, MIDDLE: MOUSE.DOLLY, RIGHT: MOUSE.PAN }}
+            target={faceToEdgeOrigin || layout.markerPlane.origin}
           />
         </Canvas>
         <div className="holes-three-preview-overlay">
           <div className="holes-three-preview-origin-note">
-            <strong>Система координат:</strong> 0,0,0 у внутрішньому куті стику панелей. Вісь X, Y, Z показані в сцені.
+            <strong>Початок координат:</strong> знаходиться у стику внутрішньої площини вертикальної панелі та торця горизонтальної панелі. X, Y, Z рахуються від цієї точки.
           </div>
           {!markerPositions.length ? (
             <div className="holes-three-preview-empty">Отвори ще не додані</div>
@@ -10086,9 +10353,38 @@ export default function App() {
                 const itemArticle = getFittingBundleItemArticle(item);
                 const itemImageUrl = getFittingBundleItemImageUrl(item);
                 const itemCategoryLabel = getFittingBundleCategoryLabel(item);
+                const itemId = String(item?.id || "");
+                const isActiveItem = Boolean(holeSelectedFittingId) && itemId === String(holeSelectedFittingId);
 
                 return (
-                  <article className="hole-bundle-selected-item" key={itemKey || itemName}>
+                  <article
+                    aria-label={itemName}
+                    className={`hole-bundle-selected-item${itemId ? " is-clickable" : ""}${isActiveItem ? " is-active" : ""}`}
+                    key={itemKey || itemName}
+                    onClick={
+                      itemId
+                        ? () => {
+                            if (String(holeSelectedFittingId) !== itemId) {
+                              void handleHoleFittingChange(itemId);
+                            }
+                          }
+                        : undefined
+                    }
+                    onKeyDown={
+                      itemId
+                        ? (event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              if (String(holeSelectedFittingId) !== itemId) {
+                                void handleHoleFittingChange(itemId);
+                              }
+                            }
+                          }
+                        : undefined
+                    }
+                    role={itemId ? "button" : undefined}
+                    tabIndex={itemId ? 0 : undefined}
+                  >
                     <div className="hole-bundle-selected-item-media">
                       {itemImageUrl ? (
                         <img alt={t.holeBundleItemImageAlt} src={itemImageUrl} />
@@ -10098,6 +10394,9 @@ export default function App() {
                     </div>
                     <div className="hole-bundle-selected-item-copy">
                       <strong>{itemName}</strong>
+                      {isActiveItem ? (
+                        <span className="hole-bundle-selected-item-active-badge">Активна для присадки</span>
+                      ) : null}
                       {itemArticle ? (
                         <span>
                           {t.holeBundleItemArticle}: {itemArticle}
@@ -10661,11 +10960,18 @@ export default function App() {
     }
 
     const panelKey = selectedHolePointPanelKey || (normalizedSelectedHoleMountingVariantKey === "face_to_edge" ? "vertical_panel" : "");
+    const defaultTargetPanel = panelKey === "horizontal_panel" ? "horizontal_panel" : "vertical_panel";
+    const defaultTargetSurface = defaultTargetPanel === "horizontal_panel" ? "edge" : "plane";
+    const defaultTargetSide = defaultTargetPanel === "horizontal_panel" ? "edge_near_vertical" : "inner_face";
 
     setHolePointCreateForm({
       ...DEFAULT_HOLE_POINT_FORM,
       template_id: holeSelectedTemplateId,
       panel_key: panelKey,
+      target_panel: defaultTargetPanel,
+      target_surface: defaultTargetSurface,
+      target_side: defaultTargetSide,
+      side: defaultTargetSide,
     });
     setHolePointCreateError("");
     setHolePointCreateOpen(true);
@@ -10777,6 +11083,9 @@ export default function App() {
     const isThrough = !isHorizontalPanel && Boolean(form.is_through);
     const depthText = String(form.depth_mm || "").trim();
     const depthValue = isThrough ? null : parseMaybeNumber(depthText, t.holePointDepth);
+    const targetPanel = String(form.target_panel || "").trim();
+    const targetSurface = String(form.target_surface || "").trim();
+    const targetSide = String(form.target_side || "").trim();
 
     if (!isThrough && !Number.isFinite(depthValue)) {
       throw new Error(t.holePointDepth);
@@ -10788,7 +11097,10 @@ export default function App() {
       z_mm: parseMaybeNumber(form.z_mm, t.holePointZ),
       diameter_mm: parseMaybeNumber(diameterText, t.holePointDiameter),
       depth_mm: depthValue,
-      side: String(form.side || "").trim() || "front",
+      target_panel: targetPanel || undefined,
+      target_surface: targetSurface || undefined,
+      target_side: targetSide || undefined,
+      side: targetSide || String(form.side || "").trim() || "front",
       notes: String(form.notes || "").trim() || null,
     };
 
@@ -10813,6 +11125,11 @@ export default function App() {
     }
 
     try {
+      holeMountingVariantRefreshRef.current = {
+        reason: "point-create",
+        templateId: String(holeSelectedTemplateId || ""),
+        variantKey: String(selectedHoleMountingVariantKey || ""),
+      };
       const payload = buildHolePointPayload(holePointCreateForm);
 
       setLoading(true);
@@ -10828,6 +11145,7 @@ export default function App() {
 
       closeHolePointCreateForm();
       const reloaded = await loadHoleTemplateDetails(token, holeSelectedTemplateId);
+      holeMountingVariantRefreshRef.current = { reason: "", templateId: "", variantKey: "" };
       if (reloaded) {
         setStatus({ message: t.holePointCreateSuccess, tone: "success" });
       }
@@ -10853,6 +11171,11 @@ export default function App() {
     }
 
     try {
+      holeMountingVariantRefreshRef.current = {
+        reason: "point-edit",
+        templateId: String(holeSelectedTemplateId || ""),
+        variantKey: String(selectedHoleMountingVariantKey || ""),
+      };
       const payload = buildHolePointPayload(holePointEditForm);
 
       setLoading(true);
@@ -10868,6 +11191,7 @@ export default function App() {
 
       closeHolePointEditForm();
       const reloaded = await loadHoleTemplateDetails(token, holeSelectedTemplateId);
+      holeMountingVariantRefreshRef.current = { reason: "", templateId: "", variantKey: "" };
       if (reloaded) {
         setStatus({ message: t.holePointUpdateSuccess, tone: "success" });
       }
@@ -10945,7 +11269,13 @@ export default function App() {
     }
 
     closeConfirm();
+    holeMountingVariantRefreshRef.current = {
+      reason: "delete-point",
+      templateId: String(holeSelectedTemplateId || ""),
+      variantKey: String(selectedHoleMountingVariantKey || ""),
+    };
     const reloaded = await loadHoleTemplateDetails(token, holeSelectedTemplateId);
+    holeMountingVariantRefreshRef.current = { reason: "", templateId: "", variantKey: "" };
     if (reloaded) {
       setStatus({ message: t.holePointDeleteSuccess, tone: "success" });
     }
@@ -10991,10 +11321,41 @@ export default function App() {
       return false;
     }
 
-    const nextTemplate = templateResult.template || holeSelectedTemplate || null;
-    setSelectedHoleMountingVariantKey(
-      normalizeHoleMountingVariantKey(nextTemplate?.mounting_variant_key),
-    );
+    const preserveVariantKey = String(holeMountingVariantRefreshRef.current?.variantKey || "").trim();
+    const preserveTemplateId = String(holeMountingVariantRefreshRef.current?.templateId || "").trim();
+    const currentVariantKey = String(selectedHoleMountingVariantKey || "").trim();
+    const templateListMatchById = holeTemplateItems.find((item) => String(item?.id || "") === String(templateId || "")) || null;
+    const templateListMatchByVariant =
+      holeTemplateItems.find(
+        (item) =>
+          normalizeHoleMountingVariantKey(item?.mounting_variant_key) === currentVariantKey,
+      ) || null;
+    const templateResultMountingVariantKey = String(templateResult.template?.mounting_variant_key || "").trim();
+    const templateResultMatchesCurrentVariant =
+      currentVariantKey &&
+      templateResultMountingVariantKey &&
+      normalizeHoleMountingVariantKey(templateResultMountingVariantKey) === currentVariantKey;
+    const nextTemplateBySelectedVariant =
+      currentVariantKey
+        ? templateListMatchByVariant ||
+          (templateResultMatchesCurrentVariant ? templateResult.template : null)
+        : null;
+    const nextTemplate =
+      preserveTemplateId && String(templateId) === preserveTemplateId && preserveVariantKey
+        ? templateResult.template || templateListMatchById || holeSelectedTemplate || null
+        : currentVariantKey
+          ? nextTemplateBySelectedVariant || null
+          : templateResult.template || templateListMatchById || templateListMatchByVariant || holeSelectedTemplate || null;
+
+    if (preserveTemplateId && String(templateId) === preserveTemplateId && preserveVariantKey) {
+      setSelectedHoleMountingVariantKey(normalizeHoleMountingVariantKey(preserveVariantKey));
+      holeMountingVariantRefreshRef.current = { reason: "", templateId: "", variantKey: "" };
+    } else if (!currentVariantKey) {
+      const nextTemplateMountingVariantKey = String(nextTemplate?.mounting_variant_key || "").trim();
+      if (nextTemplateMountingVariantKey) {
+        setSelectedHoleMountingVariantKey(normalizeHoleMountingVariantKey(nextTemplateMountingVariantKey));
+      }
+    }
     setHoleSelectedTemplate(nextTemplate);
 
     if (!pointsResult.success) {
@@ -16300,38 +16661,6 @@ export default function App() {
                 </div>
               </section>
 
-              <div className="holes-selector-grid">
-                <label className="holes-select">
-                  <span>{t.catalogCategory}</span>
-                  <select
-                    onChange={(event) => handleHoleFittingCategoryChange(event.target.value)}
-                    value={holeSelectedFittingCategory}
-                  >
-                    <option value="">{t.holeTabSelectCategory}</option>
-                    {holeCategoryOptions.map((category) => (
-                      <option key={category.code} value={category.code}>
-                        {category.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="holes-select">
-                  <span>{t.holeTemplateFitting}</span>
-                  <select
-                    disabled={!holeSelectedFittingCategory}
-                    onChange={(event) => handleHoleFittingChange(event.target.value)}
-                    value={holeSelectedFittingId}
-                  >
-                    <option value="">{t.holeTemplateSelectFitting}</option>
-                    {holeCategoryFittingItems.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.name || item.article || item.code || item.id}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-
               <div className="holes-grid">
                 <div className="holes-left-column">
                   <div className="holes-workspace-top-zone">
@@ -16371,13 +16700,14 @@ export default function App() {
                               <div className="holes-points-table-header">
                                 <span>{t.holePointColumnId}</span>
                                 <span>{t.holePointColumnLabel}</span>
+                                <span>Деталь</span>
+                                <span>Поверхня</span>
+                                <span>Сторона</span>
                                 <span>x</span>
                                 <span>y</span>
                                 <span>z</span>
                                 <span>⌀</span>
                                 <span>{t.holePointColumnDepth}</span>
-                                <span>{t.holePointColumnSide}</span>
-                                <span>{t.holePointMirrored}</span>
                                 <span>{t.holePointNotes}</span>
                               </div>
                               <div className="holes-table-list">
@@ -16424,17 +16754,35 @@ export default function App() {
                                         <Trash2 size={14} />
                                       </button>
                                     </div>
-                                    <span className="holes-point-label-cell">
-                                      {getSafeHolePointLabel(point.label, `P${point.id}`)}
-                                    </span>
-                                    <span>{point.x_mm ?? "—"}</span>
-                                    <span>{point.y_mm ?? "—"}</span>
-                                    <span>{point.z_mm ?? "—"}</span>
-                                    <span>{point.diameter_mm ?? "—"}</span>
-                                    <span>{formatHolePointDepthDisplay(point)}</span>
-                                    <span>{formatHolePointSide(point.side, t)}</span>
-                                    <span>{point.mirrored ? t.holePointSelectionYes : t.holePointSelectionNo}</span>
-                                    <span className="holes-point-notes-cell">{point.notes || "—"}</span>
+                                    {(() => {
+                                      const resolvedLocation = inferFaceToEdgePointLocation(point);
+                                      const detailValue = resolvedLocation.needsClarification
+                                        ? "Потребує уточнення площини"
+                                        : getHolePointTargetPanelLabel(resolvedLocation.targetPanel);
+                                      const surfaceValue = resolvedLocation.needsClarification
+                                        ? "Потребує уточнення площини"
+                                        : getHolePointTargetSurfaceLabel(resolvedLocation.targetSurface);
+                                      const sideValue = resolvedLocation.needsClarification
+                                        ? "Потребує уточнення площини"
+                                        : getHolePointTargetSideLabel(resolvedLocation.targetSide);
+
+                                      return (
+                                        <>
+                                          <span className="holes-point-label-cell">
+                                            {getSafeHolePointLabel(point.label, `P${point.id}`)}
+                                          </span>
+                                          <span>{detailValue}</span>
+                                          <span>{surfaceValue}</span>
+                                          <span>{sideValue}</span>
+                                          <span>{point.x_mm ?? "—"}</span>
+                                          <span>{point.y_mm ?? "—"}</span>
+                                          <span>{point.z_mm ?? "—"}</span>
+                                          <span>{point.diameter_mm ?? "—"}</span>
+                                          <span>{formatHolePointDepthDisplay(point)}</span>
+                                          <span className="holes-point-notes-cell">{point.notes || "—"}</span>
+                                        </>
+                                      );
+                                    })()}
                                   </article>
                                 ))}
                               </div>
@@ -16545,7 +16893,8 @@ export default function App() {
                       </div>
                     )}
                   </section>
-                  <section className="holes-preview-card holes-preview-2d-card holes-workspace-preview-panel">
+                  {normalizedSelectedHoleMountingVariantKey !== "face_to_edge" ? (
+                    <section className="holes-preview-card holes-preview-2d-card holes-workspace-preview-panel">
                     <div className="holes-preview-header">
                       <div>
                         <h4>{t.holePreviewTitle}</h4>
@@ -16648,7 +16997,8 @@ export default function App() {
                         <span>{t.holePreviewEmpty}</span>
                       </div>
                     )}
-                  </section>
+                    </section>
+                  ) : null}
                 </div>
 
                 <section className={`holes-preview-card holes-preview-3d-card${holeWorkspaceCanPreview ? "" : " is-placeholder"}`}>
@@ -16657,12 +17007,24 @@ export default function App() {
                       <h4>{t.holeWorkspacePreview3dTitle}</h4>
                     </div>
                   </div>
-                  {renderHolesSceneSchematicPreview(
-                    holesPreviewModel.scene,
-                    (holeId) => setHoveredHolePointId(String(holeId)),
-                    () => setHoveredHolePointId(""),
-                    (holeId) => setSelectedHolePointId(String(holeId)),
-                    { showHeader: false },
+                  {normalizedSelectedHoleMountingVariantKey === "face_to_edge" ? (
+                    <HolesMountingThreePreview
+                      holes={holesPreviewModel.scene?.holes || []}
+                      mountingVariantKey={normalizedSelectedHoleMountingVariantKey}
+                      hoveredHoleId={hoveredHolePointId}
+                      onHoverHole={(holeId) => setHoveredHolePointId(String(holeId))}
+                      onLeaveHole={() => setHoveredHolePointId("")}
+                      onSelectHole={(holeId) => setSelectedHolePointId(String(holeId))}
+                      selectedHoleId={selectedHolePointId}
+                    />
+                  ) : (
+                    renderHolesSceneSchematicPreview(
+                      holesPreviewModel.scene,
+                      (holeId) => setHoveredHolePointId(String(holeId)),
+                      () => setHoveredHolePointId(""),
+                      (holeId) => setSelectedHolePointId(String(holeId)),
+                      { showHeader: false },
+                    )
                   )}
                   <div className="holes-preview-material-planes" aria-label={t.holeWorkspacePreview3dTitle}>
                     <div className="holes-preview-material-planes-title">Площини матеріалу</div>
@@ -20847,6 +21209,92 @@ export default function App() {
 
               <div className="hole-template-form-grid">
                 <label>
+                  Деталь для отвору
+                  <select
+                    disabled={loading}
+                    onChange={(event) => {
+                      const targetPanel = event.target.value;
+                      const targetSurface = targetPanel === "horizontal_panel" ? "edge" : "plane";
+                      const targetSide = targetPanel === "horizontal_panel" ? "edge_near_vertical" : "inner_face";
+                      setHolePointCreateForm((current) => ({
+                        ...current,
+                        panel_key: targetPanel,
+                        target_panel: targetPanel,
+                        target_surface: targetSurface,
+                        target_side: targetSide,
+                        side: targetSide,
+                      }));
+                    }}
+                    value={holePointCreateForm.target_panel || holePointCreateForm.panel_key || "vertical_panel"}
+                  >
+                    {getHolePointTargetPanelOptions().map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label>
+                  Поверхня отвору
+                  <select
+                    disabled={loading}
+                    onChange={(event) => {
+                      const targetSurface = event.target.value;
+                      setHolePointCreateForm((current) => {
+                        const targetPanel = current.target_panel || current.panel_key || "vertical_panel";
+                        const targetSide =
+                          targetPanel === "horizontal_panel"
+                            ? (targetSurface === "edge" ? "edge_near_vertical" : "top_face")
+                            : (targetSurface === "edge" ? "top_edge" : "inner_face");
+
+                        return {
+                          ...current,
+                          target_panel: targetPanel,
+                          target_surface: targetSurface,
+                          target_side: targetSide,
+                          side: targetSide,
+                        };
+                      });
+                    }}
+                    value={holePointCreateForm.target_surface || "plane"}
+                  >
+                    {getHolePointTargetSurfaceOptions(holePointCreateForm.target_panel || holePointCreateForm.panel_key).map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label>
+                  Сторона
+                  <select
+                    disabled={loading}
+                    onChange={(event) =>
+                      setHolePointCreateForm((current) => ({
+                        ...current,
+                        target_side: event.target.value,
+                        side: event.target.value,
+                      }))
+                    }
+                    value={holePointCreateForm.target_side || "inner_face"}
+                  >
+                    {getHolePointTargetSideOptions(
+                      holePointCreateForm.target_panel || holePointCreateForm.panel_key,
+                      holePointCreateForm.target_surface,
+                      holePointCreateForm.target_side,
+                    ).map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <div className="hole-template-form-grid">
+                <label>
                   {t.holePointDiameter}
                   <input
                     disabled={loading}
@@ -20862,26 +21310,6 @@ export default function App() {
                     type="number"
                     value={holePointCreateForm.diameter_mm}
                   />
-                </label>
-
-                <label>
-                  {isHorizontalPanel ? "Тильна сторона" : "Сторона"}
-                  <select
-                    disabled={loading}
-                    onChange={(event) =>
-                      setHolePointCreateForm((current) => ({
-                        ...current,
-                        side: event.target.value,
-                      }))
-                    }
-                    value={holePointCreateForm.side}
-                  >
-                    {getHoleSideSelectOptionsForPanel(panelKey, holePointCreateForm.side).map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {renderHoleSideOptionLabel(option, t)}
-                      </option>
-                    ))}
-                  </select>
                 </label>
                 {!isHorizontalPanel ? (
                   <label className="material-inline-check">
@@ -21057,6 +21485,92 @@ export default function App() {
 
               <div className="hole-template-form-grid">
                 <label>
+                  Деталь для отвору
+                  <select
+                    disabled={loading}
+                    onChange={(event) => {
+                      const targetPanel = event.target.value;
+                      const targetSurface = targetPanel === "horizontal_panel" ? "edge" : "plane";
+                      const targetSide = targetPanel === "horizontal_panel" ? "edge_near_vertical" : "inner_face";
+                      setHolePointEditForm((current) => ({
+                        ...current,
+                        panel_key: targetPanel,
+                        target_panel: targetPanel,
+                        target_surface: targetSurface,
+                        target_side: targetSide,
+                        side: targetSide,
+                      }));
+                    }}
+                    value={holePointEditForm.target_panel || holePointEditForm.panel_key || "vertical_panel"}
+                  >
+                    {getHolePointTargetPanelOptions().map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label>
+                  Поверхня отвору
+                  <select
+                    disabled={loading}
+                    onChange={(event) => {
+                      const targetSurface = event.target.value;
+                      setHolePointEditForm((current) => {
+                        const targetPanel = current.target_panel || current.panel_key || "vertical_panel";
+                        const targetSide =
+                          targetPanel === "horizontal_panel"
+                            ? (targetSurface === "edge" ? "edge_near_vertical" : "top_face")
+                            : (targetSurface === "edge" ? "top_edge" : "inner_face");
+
+                        return {
+                          ...current,
+                          target_panel: targetPanel,
+                          target_surface: targetSurface,
+                          target_side: targetSide,
+                          side: targetSide,
+                        };
+                      });
+                    }}
+                    value={holePointEditForm.target_surface || "plane"}
+                  >
+                    {getHolePointTargetSurfaceOptions(holePointEditForm.target_panel || holePointEditForm.panel_key).map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label>
+                  Сторона
+                  <select
+                    disabled={loading}
+                    onChange={(event) =>
+                      setHolePointEditForm((current) => ({
+                        ...current,
+                        target_side: event.target.value,
+                        side: event.target.value,
+                      }))
+                    }
+                    value={holePointEditForm.target_side || "inner_face"}
+                  >
+                    {getHolePointTargetSideOptions(
+                      holePointEditForm.target_panel || holePointEditForm.panel_key,
+                      holePointEditForm.target_surface,
+                      holePointEditForm.target_side,
+                    ).map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <div className="hole-template-form-grid">
+                <label>
                   {t.holePointDiameter}
                   <input
                     disabled={loading}
@@ -21072,26 +21586,6 @@ export default function App() {
                     type="number"
                     value={holePointEditForm.diameter_mm}
                   />
-                </label>
-
-                <label>
-                  {isHorizontalPanel ? "Тильна сторона" : "Сторона"}
-                  <select
-                    disabled={loading}
-                    onChange={(event) =>
-                      setHolePointEditForm((current) => ({
-                        ...current,
-                        side: event.target.value,
-                      }))
-                    }
-                    value={holePointEditForm.side}
-                  >
-                    {getHoleSideSelectOptionsForPanel(panelKey, holePointEditForm.side).map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {renderHoleSideOptionLabel(option, t)}
-                      </option>
-                    ))}
-                  </select>
                 </label>
                 {!isHorizontalPanel ? (
                   <label className="material-inline-check">
@@ -21225,6 +21719,3 @@ export default function App() {
     </main>
   );
 }
-
-
-
