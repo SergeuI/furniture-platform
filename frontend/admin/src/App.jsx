@@ -635,9 +635,10 @@ function buildHolePointFormFromPoint(point) {
   const targetSurface = String(point?.target_surface || "").trim();
   const targetSide = String(point?.target_side || "").trim();
   const inferredLocation = inferFaceToEdgePointLocation(point);
+  const resolvedPanelKey = panelKey || inferredLocation.targetPanel;
   return {
     template_id: String(point?.template_id ?? ""),
-    panel_key: panelKey,
+    panel_key: resolvedPanelKey,
     target_panel: targetPanel || inferredLocation.targetPanel,
     target_surface: targetSurface || inferredLocation.targetSurface,
     target_side: targetSide || inferredLocation.targetSide,
@@ -737,6 +738,7 @@ function getHolePointTargetSideLabel(value) {
     case "outer_face":
       return "Зовнішня площина";
     case "edge_near_vertical":
+    case "edge_near_vertical_panel":
       return "Торець біля вертикальної панелі";
     case "top_face":
       return "Верхня площина";
@@ -746,6 +748,7 @@ function getHolePointTargetSideLabel(value) {
       return "Верхній торець";
     case "bottom_edge":
       return "Нижній торець";
+    case "edge_far_vertical_panel":
     case "edge_far_vertical":
       return "Торець далі від вертикальної панелі";
     case "needs_clarification":
@@ -840,6 +843,26 @@ function inferFaceToEdgePointLocation(point) {
   let needsClarification = false;
 
   if (!resolvedTargetPanel) {
+    if (["edge_near_vertical", "edge_near_vertical_panel", "edge_far_vertical", "top_edge", "bottom_edge"].includes(targetSide)) {
+      resolvedTargetPanel = "horizontal_panel";
+    } else if (["inner_face", "outer_face", "top_face", "bottom_face", "needs_clarification"].includes(targetSide)) {
+      resolvedTargetPanel = "vertical_panel";
+    }
+
+    if (!resolvedTargetPanel && ["edge", "left", "right", "top", "bottom"].includes(legacySide)) {
+      resolvedTargetPanel = "horizontal_panel";
+    } else if (!resolvedTargetPanel && legacySide) {
+      resolvedTargetPanel = "vertical_panel";
+    }
+  }
+
+  if (!resolvedTargetSurface) {
+    if (["edge_near_vertical", "edge_near_vertical_panel", "edge_far_vertical", "top_edge", "bottom_edge"].includes(targetSide)) {
+      resolvedTargetSurface = "edge";
+    } else if (["inner_face", "outer_face", "top_face", "bottom_face", "needs_clarification"].includes(targetSide)) {
+      resolvedTargetSurface = "plane";
+    }
+
     if (panelKey === "horizontal_panel") {
       resolvedTargetPanel = "horizontal_panel";
     } else if (panelKey === "vertical_panel") {
@@ -862,10 +885,22 @@ function inferFaceToEdgePointLocation(point) {
   }
 
   if (!resolvedTargetSide) {
+    if (resolvedTargetPanel === "horizontal_panel" && resolvedTargetSurface === "edge" && ["edge_near_vertical", "edge_near_vertical_panel", "edge_far_vertical"].includes(targetSide)) {
+      resolvedTargetSide = targetSide;
+    } else if (resolvedTargetPanel === "vertical_panel" && resolvedTargetSurface === "plane" && ["inner_face", "outer_face"].includes(targetSide)) {
+      resolvedTargetSide = targetSide;
+    } else if (resolvedTargetPanel === "horizontal_panel" && resolvedTargetSurface === "plane" && ["top_face", "bottom_face"].includes(targetSide)) {
+      resolvedTargetSide = targetSide;
+    }
+
     if (resolvedTargetPanel === "vertical_panel" && resolvedTargetSurface === "plane") {
       resolvedTargetSide = legacySide === "back" || legacySide === "outer" ? "outer_face" : "inner_face";
     } else if (resolvedTargetPanel === "horizontal_panel" && resolvedTargetSurface === "edge") {
-      resolvedTargetSide = "edge_near_vertical";
+      if (["edge_near_vertical", "edge_near_vertical_panel", "edge_far_vertical", "edge_far_vertical_panel"].includes(legacySide)) {
+        resolvedTargetSide = legacySide;
+      } else {
+        resolvedTargetSide = "edge_near_vertical";
+      }
     } else if (resolvedTargetPanel === "horizontal_panel" && resolvedTargetSurface === "plane") {
       resolvedTargetSide = legacySide === "bottom" ? "bottom_face" : "top_face";
     }
@@ -6210,6 +6245,7 @@ export default function App() {
         point?.panelKey || point?.panel_key || point?.panelId || point?.panel_id || "",
       ).trim();
       const targetPanel = String(point?.target_panel || "").trim();
+      const targetSide = String(point?.target_side || "").trim();
 
       if (explicitGroupKey) {
         if (normalizedGroups.has(explicitGroupKey)) {
@@ -6233,8 +6269,21 @@ export default function App() {
         return targetPanel;
       }
 
+      if (
+        variantKey === "face_to_edge" &&
+        ["edge_near_vertical", "edge_near_vertical_panel", "edge_far_vertical", "top_edge", "bottom_edge"].includes(targetSide)
+      ) {
+        return groupDefs[1]?.key || fallbackKey;
+      }
+
       const side = String(point?.side || "").trim().toLowerCase();
       if (variantKey === "face_to_edge") {
+        if (
+          ["edge_near_vertical", "edge_near_vertical_panel", "edge_far_vertical", "top_edge", "bottom_edge"].includes(side)
+        ) {
+          return groupDefs[1]?.key || fallbackKey;
+        }
+
         if (["front", "face", "back", "inner", "outer"].includes(side)) {
           return groupDefs[0]?.key || fallbackKey;
         }
@@ -6329,6 +6378,9 @@ export default function App() {
       const label = getSafeHolePointLabel(point?.label, `P${point?.id || index + 1}`);
       const diameter = Number(point?.diameter);
       const depth = Number(point?.depth);
+      const targetPanel = String(point?.target_panel || "").trim();
+      const targetSurface = String(point?.target_surface || "").trim();
+      const targetSide = String(point?.target_side || "").trim();
 
       return {
         depth: Number.isFinite(depth) ? depth : null,
@@ -6338,6 +6390,12 @@ export default function App() {
         label,
         operation: String(point?.operation || "").trim() || "",
         side: String(point?.side || "").trim() || "",
+        target_panel: targetPanel,
+        target_surface: targetSurface,
+        target_side: targetSide,
+        targetPanel,
+        targetSide,
+        targetSurface,
         source: point,
         x: hasX ? x : null,
         y: hasY ? y : null,
@@ -6427,6 +6485,12 @@ export default function App() {
           operation: point.operation,
           previewX: point.previewX,
           previewY: point.previewY,
+          target_panel: point.target_panel,
+          target_side: point.target_side,
+          target_surface: point.target_surface,
+          targetPanel: point.targetPanel,
+          targetSide: point.targetSide,
+          targetSurface: point.targetSurface,
           side: point.side,
           source: point.source,
           x: point.x,
@@ -9779,7 +9843,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
       isThrough: !Number.isFinite(depthValue) || depthValue <= 0,
       location,
       orderIndex: index,
-      rotation: [0, 0, Math.PI / 2],
+      rotation: [0, 0, -Math.PI / 2],
       targetPanel: location.targetPanel,
       targetSide: location.targetSide,
       targetSurface: location.targetSurface,
@@ -11079,28 +11143,41 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
       throw new Error(t.holePointDiameterRequired);
     }
 
-    const isHorizontalPanel = String(form.panel_key || "").trim() === "horizontal_panel";
+    const panelKey = String(form.panel_key || form.target_panel || "").trim();
+    const isHorizontalPanel = panelKey === "horizontal_panel";
     const isThrough = !isHorizontalPanel && Boolean(form.is_through);
     const depthText = String(form.depth_mm || "").trim();
     const depthValue = isThrough ? null : parseMaybeNumber(depthText, t.holePointDepth);
     const targetPanel = String(form.target_panel || "").trim();
     const targetSurface = String(form.target_surface || "").trim();
     const targetSide = String(form.target_side || "").trim();
+    const inferredLocation = inferFaceToEdgePointLocation({
+      panel_key: form.panel_key,
+      side: form.side,
+      target_panel: targetPanel,
+      target_surface: targetSurface,
+      target_side: targetSide,
+    });
+    const resolvedTargetPanel = targetPanel || inferredLocation.targetPanel;
+    const resolvedTargetSurface = targetSurface || inferredLocation.targetSurface;
+    const resolvedTargetSide = targetSide || inferredLocation.targetSide;
 
     if (!isThrough && !Number.isFinite(depthValue)) {
       throw new Error(t.holePointDepth);
     }
 
     const payload = {
+      label: String(form.label || "").trim() || undefined,
       x_mm: parseMaybeNumber(form.x_mm, t.holePointX),
       y_mm: parseMaybeNumber(form.y_mm, t.holePointY),
       z_mm: parseMaybeNumber(form.z_mm, t.holePointZ),
       diameter_mm: parseMaybeNumber(diameterText, t.holePointDiameter),
       depth_mm: depthValue,
-      target_panel: targetPanel || undefined,
-      target_surface: targetSurface || undefined,
-      target_side: targetSide || undefined,
-      side: targetSide || String(form.side || "").trim() || "front",
+      is_through: isThrough,
+      target_panel: resolvedTargetPanel || undefined,
+      target_surface: resolvedTargetSurface || undefined,
+      target_side: resolvedTargetSide || undefined,
+      side: String(form.side || "").trim() || resolvedTargetSide || "front",
       notes: String(form.notes || "").trim() || null,
     };
 
