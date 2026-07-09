@@ -727,3 +727,42 @@
 {"timestamp": "2026-07-10T01:54:31+03:00", "action": "process.start", "status": "ok", "details": "Локальний бот", "command": ["D:\\PY\\.venv\\Scripts\\pythonw.exe", "D:\\PY\\main.py"], "extra": {"cwd": "D:\\PY", "pid": 1100}}
 {"timestamp": "2026-07-10T01:54:32+03:00", "action": "process.start", "status": "ok", "details": "Frontend app", "command": ["C:\\Program Files\\nodejs\\npm.cmd", "run", "dev"], "extra": {"cwd": "D:\\PY\\frontend\\app", "pid": 33284}}
 {"timestamp": "2026-07-10T01:54:32+03:00", "action": "process.start", "status": "ok", "details": "Frontend admin", "command": ["C:\\Program Files\\nodejs\\npm.cmd", "run", "dev"], "extra": {"cwd": "D:\\PY\\frontend\\admin", "pid": 3296}}
+{"timestamp": "2026-07-10T01:56:55+03:00", "action": "git.commit", "status": "ok", "details": "Оновлення проєкту", "extra": {"output": "[main 7f59ebf] РћРЅРѕРІР»РµРЅРЅСЏ РїСЂРѕС”РєС‚Сѓ\n 2 files changed, 161 insertions(+), 8 deletions(-)"}}
+{"timestamp": "2026-07-10T01:57:11+03:00", "action": "git.push", "status": "ok", "details": "Відправка змін у віддалений репозиторій", "extra": {"output": "To https://github.com/SergeuI/furniture-platform.git\n   f3ce7fb..7f59ebf  main -> main"}}
+{"timestamp": "2026-07-10T02:06:29+03:00", "action": "process.stop_all", "status": "ok", "details": "Зупинено процес bot", "extra": {"pid": 1100}}
+{"timestamp": "2026-07-10T02:06:29+03:00", "action": "process.stop_all", "status": "ok", "details": "Зупинено процес frontend-app", "extra": {"pid": 33284}}
+{"timestamp": "2026-07-10T02:06:29+03:00", "action": "process.stop_all", "status": "ok", "details": "Зупинено процес frontend-admin", "extra": {"pid": 3296}}
+{"timestamp": "2026-07-10T02:06:32+03:00", "action": "settings.save", "status": "ok", "details": "Збережено налаштування в product_center_settings.json", "extra": {"changed": {}}}
+{"timestamp": "2026-07-10T02:06:45+03:00", "action": "process.start_full_stack", "status": "ok", "details": "Запуск всього локального продукту"}
+{"timestamp": "2026-07-10T02:06:45+03:00", "action": "process.start", "status": "ok", "details": "Локальний API", "command": ["D:\\PY\\.venv\\Scripts\\pythonw.exe", "D:\\PY\\main_api.py"], "extra": {"cwd": "D:\\PY", "pid": 2812}}
+{"timestamp": "2026-07-10T02:06:45+03:00", "action": "process.start", "status": "ok", "details": "Локальний бот", "command": ["D:\\PY\\.venv\\Scripts\\pythonw.exe", "D:\\PY\\main.py"], "extra": {"cwd": "D:\\PY", "pid": 36960}}
+{"timestamp": "2026-07-10T02:06:45+03:00", "action": "process.start", "status": "ok", "details": "Frontend app", "command": ["C:\\Program Files\\nodejs\\npm.cmd", "run", "dev"], "extra": {"cwd": "D:\\PY\\frontend\\app", "pid": 22480}}
+{"timestamp": "2026-07-10T02:06:46+03:00", "action": "process.start", "status": "ok", "details": "Frontend admin", "command": ["C:\\Program Files\\nodejs\\npm.cmd", "run", "dev"], "extra": {"cwd": "D:\\PY\\frontend\\admin", "pid": 36956}}
+{"timestamp": "2026-07-10T02:20:26+03:00", "action": "process.stop_all", "status": "ok", "details": "Зупинено процес bot", "extra": {"pid": 36960}}
+{"timestamp": "2026-07-10T02:20:26+03:00", "action": "process.stop_all", "status": "ok", "details": "Зупинено процес frontend-app", "extra": {"pid": 22480}}
+{"timestamp": "2026-07-10T02:20:27+03:00", "action": "process.stop_all", "status": "ok", "details": "Зупинено процес frontend-admin", "extra": {"pid": 36956}}
+{"timestamp": "2026-07-10T02:20:29+03:00", "action": "settings.save", "status": "ok", "details": "Збережено налаштування в product_center_settings.json", "extra": {"changed": {}}}
+{"timestamp": "2026-07-10T02:20:53+03:00", "action": "process.start_full_stack", "status": "ok", "details": "Запуск всього локального продукту"}
+{"timestamp": "2026-07-10T02:20:53+03:00", "action": "process.start", "status": "ok", "details": "Локальний API", "command": ["D:\\PY\\.venv\\Scripts\\pythonw.exe", "D:\\PY\\main_api.py"], "extra": {"cwd": "D:\\PY", "pid": 16748}}
+{"timestamp": "2026-07-10T02:20:53+03:00", "action": "process.start", "status": "ok", "details": "Локальний бот", "command": ["D:\\PY\\.venv\\Scripts\\pythonw.exe", "D:\\PY\\main.py"], "extra": {"cwd": "D:\\PY", "pid": 8600}}
+{"timestamp": "2026-07-10T02:20:54+03:00", "action": "process.start", "status": "ok", "details": "Frontend app", "command": ["C:\\Program Files\\nodejs\\npm.cmd", "run", "dev"], "extra": {"cwd": "D:\\PY\\frontend\\app", "pid": 39268}}
+{"timestamp": "2026-07-10T02:20:54+03:00", "action": "process.start", "status": "ok", "details": "Frontend admin", "command": ["C:\\Program Files\\nodejs\\npm.cmd", "run", "dev"], "extra": {"cwd": "D:\\PY\\frontend\\admin", "pid": 34136}}
+{"timestamp": "2026-07-10T02:28:32+03:00", "action": "process.stop_all", "status": "ok", "details": "Зупинено процес api", "extra": {"pid": 16748}}
+{"timestamp": "2026-07-10T02:28:32+03:00", "action": "process.stop_all", "status": "ok", "details": "Зупинено процес bot", "extra": {"pid": 8600}}
+{"timestamp": "2026-07-10T02:28:32+03:00", "action": "process.stop_all", "status": "ok", "details": "Зупинено процес frontend-app", "extra": {"pid": 39268}}
+{"timestamp": "2026-07-10T02:28:32+03:00", "action": "process.stop_all", "status": "ok", "details": "Зупинено процес frontend-admin", "extra": {"pid": 34136}}
+{"timestamp": "2026-07-10T02:28:36+03:00", "action": "settings.save", "status": "ok", "details": "Збережено налаштування в product_center_settings.json", "extra": {"changed": {}}}
+{"timestamp": "2026-07-10T02:28:49+03:00", "action": "process.start_full_stack", "status": "ok", "details": "Запуск всього локального продукту"}
+{"timestamp": "2026-07-10T02:28:49+03:00", "action": "process.start", "status": "ok", "details": "Локальний API", "command": ["D:\\PY\\.venv\\Scripts\\pythonw.exe", "D:\\PY\\main_api.py"], "extra": {"cwd": "D:\\PY", "pid": 6136}}
+{"timestamp": "2026-07-10T02:28:49+03:00", "action": "process.start", "status": "ok", "details": "Локальний бот", "command": ["D:\\PY\\.venv\\Scripts\\pythonw.exe", "D:\\PY\\main.py"], "extra": {"cwd": "D:\\PY", "pid": 14244}}
+{"timestamp": "2026-07-10T02:28:49+03:00", "action": "process.start", "status": "ok", "details": "Frontend app", "command": ["C:\\Program Files\\nodejs\\npm.cmd", "run", "dev"], "extra": {"cwd": "D:\\PY\\frontend\\app", "pid": 29420}}
+{"timestamp": "2026-07-10T02:28:49+03:00", "action": "process.start", "status": "ok", "details": "Frontend admin", "command": ["C:\\Program Files\\nodejs\\npm.cmd", "run", "dev"], "extra": {"cwd": "D:\\PY\\frontend\\admin", "pid": 13872}}
+{"timestamp": "2026-07-10T02:45:20+03:00", "action": "process.stop_all", "status": "ok", "details": "Зупинено процес bot", "extra": {"pid": 14244}}
+{"timestamp": "2026-07-10T02:45:20+03:00", "action": "process.stop_all", "status": "ok", "details": "Зупинено процес frontend-app", "extra": {"pid": 29420}}
+{"timestamp": "2026-07-10T02:45:20+03:00", "action": "process.stop_all", "status": "ok", "details": "Зупинено процес frontend-admin", "extra": {"pid": 13872}}
+{"timestamp": "2026-07-10T02:45:21+03:00", "action": "settings.save", "status": "ok", "details": "Збережено налаштування в product_center_settings.json", "extra": {"changed": {}}}
+{"timestamp": "2026-07-10T02:45:30+03:00", "action": "process.start_full_stack", "status": "ok", "details": "Запуск всього локального продукту"}
+{"timestamp": "2026-07-10T02:45:30+03:00", "action": "process.start", "status": "ok", "details": "Локальний API", "command": ["D:\\PY\\.venv\\Scripts\\pythonw.exe", "D:\\PY\\main_api.py"], "extra": {"cwd": "D:\\PY", "pid": 29364}}
+{"timestamp": "2026-07-10T02:45:30+03:00", "action": "process.start", "status": "ok", "details": "Локальний бот", "command": ["D:\\PY\\.venv\\Scripts\\pythonw.exe", "D:\\PY\\main.py"], "extra": {"cwd": "D:\\PY", "pid": 35120}}
+{"timestamp": "2026-07-10T02:45:30+03:00", "action": "process.start", "status": "ok", "details": "Frontend app", "command": ["C:\\Program Files\\nodejs\\npm.cmd", "run", "dev"], "extra": {"cwd": "D:\\PY\\frontend\\app", "pid": 8796}}
+{"timestamp": "2026-07-10T02:45:30+03:00", "action": "process.start", "status": "ok", "details": "Frontend admin", "command": ["C:\\Program Files\\nodejs\\npm.cmd", "run", "dev"], "extra": {"cwd": "D:\\PY\\frontend\\admin", "pid": 19176}}

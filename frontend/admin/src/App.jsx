@@ -918,6 +918,78 @@ function inferFaceToEdgePointLocation(point) {
   };
 }
 
+function normalizeFaceToEdgePreviewLocation(point) {
+  const sourcePoint = point?.source && typeof point.source === "object" ? point.source : point;
+  const rawTargetPanel = String(point?.target_panel || sourcePoint?.target_panel || "").trim();
+  const rawTargetSurface = String(point?.target_surface || sourcePoint?.target_surface || "").trim();
+  const rawTargetSide = String(point?.target_side || sourcePoint?.target_side || "").trim();
+  const panelKey = String(
+    point?.panelKey ||
+      point?.panel_key ||
+      point?.panelId ||
+      point?.panel_id ||
+      sourcePoint?.panelKey ||
+      sourcePoint?.panel_key ||
+      sourcePoint?.panelId ||
+      sourcePoint?.panel_id ||
+      "",
+  ).trim();
+  const side = String(point?.side || sourcePoint?.side || rawTargetSide || "").trim().toLowerCase();
+
+  if (side === "edge_near_vertical" || side === "edge_near_vertical_panel") {
+    return {
+      needsClarification: false,
+      targetPanel: "horizontal_panel",
+      targetSide: "edge_near_vertical",
+      targetSurface: "edge",
+    };
+  }
+
+  if (side === "edge_far_vertical" || side === "edge_far_vertical_panel") {
+    return {
+      needsClarification: false,
+      targetPanel: "horizontal_panel",
+      targetSide: "edge_far_vertical",
+      targetSurface: "edge",
+    };
+  }
+
+  if (side === "inner_face" || side === "outer_face") {
+    return {
+      needsClarification: false,
+      targetPanel: "vertical_panel",
+      targetSide: side,
+      targetSurface: "plane",
+    };
+  }
+
+  if (side === "top_face" || side === "bottom_face") {
+    return {
+      needsClarification: false,
+      targetPanel: "vertical_panel",
+      targetSide: side,
+      targetSurface: "plane",
+    };
+  }
+
+  if (rawTargetPanel || rawTargetSurface || rawTargetSide || panelKey) {
+    return {
+      needsClarification: false,
+      targetPanel: rawTargetPanel || "vertical_panel",
+      targetSide: rawTargetSide || "inner_face",
+      targetSurface: rawTargetSurface || (rawTargetPanel === "horizontal_panel" ? "edge" : "plane"),
+    };
+  }
+
+  const inferredLocation = inferFaceToEdgePointLocation(point);
+  return {
+    needsClarification: inferredLocation.needsClarification,
+    targetPanel: inferredLocation.targetPanel,
+    targetSide: inferredLocation.targetSide,
+    targetSurface: inferredLocation.targetSurface,
+  };
+}
+
 const HOLE_POINT_OPERATION_LABEL_KEYS = {
   drill: "holePointOperationDrill",
   through_drill: "holePointOperationThroughDrill",
@@ -6381,6 +6453,15 @@ export default function App() {
       const targetPanel = String(point?.target_panel || "").trim();
       const targetSurface = String(point?.target_surface || "").trim();
       const targetSide = String(point?.target_side || "").trim();
+      const normalizedLocation =
+        mountingVariantKey === "face_to_edge"
+          ? normalizeFaceToEdgePreviewLocation(point)
+          : {
+              needsClarification: false,
+              targetPanel,
+              targetSide,
+              targetSurface,
+            };
 
       return {
         depth: Number.isFinite(depth) ? depth : null,
@@ -6389,13 +6470,15 @@ export default function App() {
         id: point?.id ?? index + 1,
         label,
         operation: String(point?.operation || "").trim() || "",
+        panelKey: normalizedLocation.targetPanel || targetPanel || "",
+        surface: normalizedLocation.targetSurface || targetSurface || "",
         side: String(point?.side || "").trim() || "",
-        target_panel: targetPanel,
-        target_surface: targetSurface,
-        target_side: targetSide,
-        targetPanel,
-        targetSide,
-        targetSurface,
+        target_panel: normalizedLocation.targetPanel || targetPanel,
+        target_surface: normalizedLocation.targetSurface || targetSurface,
+        target_side: normalizedLocation.targetSide || targetSide,
+        targetPanel: normalizedLocation.targetPanel || targetPanel,
+        targetSide: normalizedLocation.targetSide || targetSide,
+        targetSurface: normalizedLocation.targetSurface || targetSurface,
         source: point,
         x: hasX ? x : null,
         y: hasY ? y : null,
@@ -6492,7 +6575,8 @@ export default function App() {
           targetSide: point.targetSide,
           targetSurface: point.targetSurface,
           side: point.side,
-          source: point.source,
+          rawSource: point.source,
+          source: null,
           x: point.x,
           y: point.y,
         }))
@@ -9795,6 +9879,24 @@ function readHolePreviewNumber(hole, keys, fallback = null) {
   return fallback;
 }
 
+function formatPreviewNumber(value) {
+  const parsed = Number(value);
+
+  if (!Number.isFinite(parsed)) {
+    return "n/a";
+  }
+
+  return parsed.toFixed(3).replace(/\.?0+$/, "");
+}
+
+function formatPreviewVector(values) {
+  if (!Array.isArray(values)) {
+    return "n/a";
+  }
+
+  return `[${values.map((value) => formatPreviewNumber(value)).join(", ")}]`;
+}
+
 function getFaceToEdgeHolePlacement(layout, hole, index) {
   const sourceHole = hole?.source && typeof hole.source === "object" ? hole.source : hole;
   const location = inferFaceToEdgePointLocation(sourceHole);
@@ -9825,24 +9927,48 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
   const holeLength = isHorizontalEdge
     ? Math.max(0.18, Math.min(0.74, Number.isFinite(depthValue) ? Math.abs(depthValue) * mmToScene : 0.32))
     : Math.max(0.18, Math.min(0.62, Number.isFinite(depthValue) ? Math.abs(depthValue) * mmToScene : panelAThickness));
+  const sourcePanelKey = String(sourceHole?.panelKey || sourceHole?.panel_key || sourceHole?.panelId || sourceHole?.panel_id || "").trim();
+  const sourceSurface = String(sourceHole?.surface || sourceHole?.target_surface || sourceHole?.targetSurface || "").trim();
+  const sourceSide = String(sourceHole?.side || "").trim();
+  const depthScene = Number.isFinite(depthValue) ? Math.abs(depthValue) * mmToScene : holeLength;
+  const placementFunctionName = "getFaceToEdgeHolePlacement";
+  const renderPath = "holeVolumes.map -> marker.isFaceToEdge ? group -> <cylinderGeometry/> : <mesh><cylinderGeometry/></mesh>";
 
   if (isHorizontalEdge) {
-    const startX =
+    const edgeX =
       location.targetSide === "edge_far_vertical"
         ? (Number(panelB?.position?.[0]) || 0) + panelBWidth / 2
-        : originX;
+        : (Number(panelB?.position?.[0]) || 0) - panelBWidth / 2;
     const directionSign = location.targetSide === "edge_far_vertical" ? -1 : 1;
+    const previewInset = 0.002;
+    const startPosition = [edgeX + xOffset, originY + yOffset, originZ + zOffset];
+    const directionVector = [directionSign, 0, 0];
+    const endPosition = [edgeX + directionSign * depthScene + xOffset, originY + yOffset, originZ + zOffset];
 
     return {
       id: sourceHole?.id ?? hole?.id ?? index,
+      label: String(sourceHole?.label ?? hole?.label ?? `P${index + 1}`),
       axis: "x",
-      centerPosition: [startX + directionSign * holeLength * 0.5 + xOffset, originY + yOffset, originZ + zOffset],
+      centerPosition: [
+        edgeX + directionSign * (holeLength * 0.5 + previewInset) + xOffset,
+        originY + yOffset,
+        originZ + zOffset,
+      ],
       holeLength,
       holeRadius,
       isFaceToEdge: true,
       isThrough: !Number.isFinite(depthValue) || depthValue <= 0,
       location,
       orderIndex: index,
+      placementFunctionName,
+      renderPath,
+      sourcePanelKey,
+      sourceSide,
+      sourceSurface,
+      debugDepth: depthValue,
+      debugDirectionVector: directionVector,
+      debugEndPosition: endPosition,
+      debugStartPosition: startPosition,
       rotation: [0, 0, -Math.PI / 2],
       targetPanel: location.targetPanel,
       targetSide: location.targetSide,
@@ -9856,9 +9982,13 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
       ? (Number(panelB?.position?.[1]) || 0) - panelBThickness / 2
       : (Number(panelB?.position?.[1]) || 0) + panelBThickness / 2;
     const directionSign = isBottomFace ? 1 : -1;
+    const startPosition = [originX + xOffset, startY + yOffset, originZ + zOffset];
+    const directionVector = [0, directionSign, 0];
+    const endPosition = [originX + xOffset, startY + directionSign * depthScene + yOffset, originZ + zOffset];
 
     return {
       id: sourceHole?.id ?? hole?.id ?? index,
+      label: String(sourceHole?.label ?? hole?.label ?? `P${index + 1}`),
       axis: "y",
       centerPosition: [originX + xOffset, startY + directionSign * holeLength * 0.5 + yOffset, originZ + zOffset],
       holeLength,
@@ -9867,6 +9997,15 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
       isThrough: !Number.isFinite(depthValue) || depthValue <= 0,
       location,
       orderIndex: index,
+      placementFunctionName,
+      renderPath,
+      sourcePanelKey,
+      sourceSide,
+      sourceSurface,
+      debugDepth: depthValue,
+      debugDirectionVector: directionVector,
+      debugEndPosition: endPosition,
+      debugStartPosition: startPosition,
       rotation: [0, 0, 0],
       targetPanel: location.targetPanel,
       targetSide: location.targetSide,
@@ -9880,9 +10019,13 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
       ? (Number(panelA?.position?.[1]) || 0) + panelAHeight / 2
       : (Number(panelA?.position?.[1]) || 0) - panelAHeight / 2;
     const directionSign = isTopEdge ? -1 : 1;
+    const startPosition = [originX + xOffset, startY + yOffset, originZ + zOffset];
+    const directionVector = [0, directionSign, 0];
+    const endPosition = [originX + xOffset, startY + directionSign * depthScene + yOffset, originZ + zOffset];
 
     return {
       id: sourceHole?.id ?? hole?.id ?? index,
+      label: String(sourceHole?.label ?? hole?.label ?? `P${index + 1}`),
       axis: "y",
       centerPosition: [originX + xOffset, startY + directionSign * holeLength * 0.5 + yOffset, originZ + zOffset],
       holeLength,
@@ -9891,6 +10034,15 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
       isThrough: !Number.isFinite(depthValue) || depthValue <= 0,
       location,
       orderIndex: index,
+      placementFunctionName,
+      renderPath,
+      sourcePanelKey,
+      sourceSide,
+      sourceSurface,
+      debugDepth: depthValue,
+      debugDirectionVector: directionVector,
+      debugEndPosition: endPosition,
+      debugStartPosition: startPosition,
       rotation: [0, 0, 0],
       targetPanel: location.targetPanel,
       targetSide: location.targetSide,
@@ -9903,9 +10055,13 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
     ? (Number(panelA?.position?.[0]) || 0) - panelAThickness / 2
     : originX;
   const directionSign = isOuterFace ? 1 : -1;
+  const startPosition = [startX + xOffset, originY + yOffset, originZ + zOffset];
+  const directionVector = [directionSign, 0, 0];
+  const endPosition = [startX + directionSign * depthScene + xOffset, originY + yOffset, originZ + zOffset];
 
   return {
     id: sourceHole?.id ?? hole?.id ?? index,
+    label: String(sourceHole?.label ?? hole?.label ?? `P${index + 1}`),
     axis: "x",
     centerPosition: [startX + directionSign * holeLength * 0.5 + xOffset, originY + yOffset, originZ + zOffset],
     holeLength,
@@ -9914,6 +10070,15 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
     isThrough: !Number.isFinite(depthValue) || depthValue <= 0,
     location,
     orderIndex: index,
+    placementFunctionName,
+    renderPath,
+    sourcePanelKey,
+    sourceSide,
+    sourceSurface,
+    debugDepth: depthValue,
+    debugDirectionVector: directionVector,
+    debugEndPosition: endPosition,
+    debugStartPosition: startPosition,
     rotation: [0, 0, Math.PI / 2],
     targetPanel: location.targetPanel,
     targetSide: location.targetSide,
@@ -10213,24 +10378,6 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                         depthWrite={false}
                         roughness={0.36}
                         metalness={0.18}
-                      />
-                    </mesh>
-                    <mesh position={[-marker.holeLength / 2, 0, 0]}>
-                      <torusGeometry args={[marker.holeRadius * 1.08, 0.015, 10, 24]} />
-                      <meshStandardMaterial
-                        color={String(selectedHoleId) === String(marker.id) ? "#cbd5e1" : String(hoveredHoleId) === String(marker.id) ? "#d7dde3" : "#b8c2cc"}
-                        depthWrite={false}
-                        opacity={0.85}
-                        transparent
-                      />
-                    </mesh>
-                    <mesh position={[marker.holeLength / 2, 0, 0]}>
-                      <torusGeometry args={[marker.holeRadius * 1.08, 0.015, 10, 24]} />
-                      <meshStandardMaterial
-                        color={String(selectedHoleId) === String(marker.id) ? "#cbd5e1" : String(hoveredHoleId) === String(marker.id) ? "#d7dde3" : "#b8c2cc"}
-                        depthWrite={false}
-                        opacity={0.85}
-                        transparent
                       />
                     </mesh>
                     {holeIdTextures[marker.id] ? (
