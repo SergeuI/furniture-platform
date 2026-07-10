@@ -39,7 +39,7 @@ import edgeToEdgeIcon from "./assets/hole-mounting/edge_to_edge.png";
 import drawerSlidesIcon from "./assets/hole-mounting/drawer_slides.png";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
-import { CanvasTexture, DoubleSide, LinearFilter, MOUSE } from "three";
+import { CanvasTexture, DoubleSide, Float32BufferAttribute, LinearFilter, MOUSE } from "three";
 
 import {
   attachMaterialEdge,
@@ -6447,6 +6447,7 @@ export default function App() {
       const y = Number(point?.y);
       const hasX = Number.isFinite(x);
       const hasY = Number.isFinite(y);
+      const z = Number(point?.z);
       const label = getSafeHolePointLabel(point?.label, `P${point?.id || index + 1}`);
       const diameter = Number(point?.diameter);
       const depth = Number(point?.depth);
@@ -6482,6 +6483,7 @@ export default function App() {
         source: point,
         x: hasX ? x : null,
         y: hasY ? y : null,
+        z: Number.isFinite(z) ? z : null,
       };
     });
 
@@ -6579,6 +6581,7 @@ export default function App() {
           source: null,
           x: point.x,
           y: point.y,
+          z: point.z,
         }))
       : [];
     const hoveredHole = sceneHoles.find((point) => point.isHovered) || null;
@@ -10222,10 +10225,104 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
           return Object.fromEntries(
             (Array.isArray(holeVolumes) ? holeVolumes : [])
               .filter((hole) => hole?.id !== undefined && hole?.id !== null)
-              .map((hole) => [hole.id, createHoleIdTexture(String(hole.id))]),
+            .map((hole) => [hole.id, createHoleIdTexture(String(hole.id))]),
           );
         }, [holeVolumes]);
         const isFaceToEdgePreview = normalizeHoleWorkspaceMountingVariantKey(mountingVariantKey) === "face_to_edge";
+        const faceToEdgeHoleIdTextures = useMemo(() => {
+          if (!isFaceToEdgePreview) {
+            return {};
+          }
+
+          const drawRoundedRect = (context, x, y, width, height, radius) => {
+            const cornerRadius = Math.max(0, Math.min(radius, width * 0.5, height * 0.5));
+
+            context.beginPath();
+            context.moveTo(x + cornerRadius, y);
+            context.lineTo(x + width - cornerRadius, y);
+            context.arcTo(x + width, y, x + width, y + cornerRadius, cornerRadius);
+            context.lineTo(x + width, y + height - cornerRadius);
+            context.arcTo(x + width, y + height, x + width - cornerRadius, y + height, cornerRadius);
+            context.lineTo(x + cornerRadius, y + height);
+            context.arcTo(x, y + height, x, y + height - cornerRadius, cornerRadius);
+            context.lineTo(x, y + cornerRadius);
+            context.arcTo(x, y, x + cornerRadius, y, cornerRadius);
+            context.closePath();
+          };
+
+          const createHoleIdTexture = (label, state = "default") => {
+            const canvas = document.createElement("canvas");
+            canvas.width = 160;
+            canvas.height = 96;
+            const context = canvas.getContext("2d");
+
+            if (!context) {
+              return null;
+            }
+
+            const isSelected = state === "selected";
+            const isHovered = state === "hover";
+            const bgColor = isSelected ? "rgba(219, 234, 254, 0.96)" : isHovered ? "rgba(240, 253, 250, 0.96)" : "rgba(255, 255, 255, 0.9)";
+            const strokeColor = isSelected ? "rgba(37, 99, 235, 0.7)" : isHovered ? "rgba(13, 148, 136, 0.55)" : "rgba(15, 23, 42, 0.24)";
+            const textColor = isSelected ? "#1d4ed8" : isHovered ? "#0f766e" : "#0f172a";
+            const shadowColor = isSelected ? "rgba(37, 99, 235, 0.2)" : isHovered ? "rgba(15, 118, 110, 0.18)" : "rgba(15, 23, 42, 0.12)";
+
+            context.clearRect(0, 0, canvas.width, canvas.height);
+            context.save();
+            context.shadowColor = shadowColor;
+            context.shadowBlur = isSelected ? 12 : isHovered ? 10 : 8;
+            context.shadowOffsetY = 2;
+            drawRoundedRect(context, 22, 21, 116, 54, 27);
+            context.fillStyle = bgColor;
+            context.fill();
+            context.shadowBlur = 0;
+            context.lineWidth = isSelected ? 3.5 : isHovered ? 3 : 2.5;
+            context.strokeStyle = strokeColor;
+            context.stroke();
+            context.restore();
+            context.fillStyle = textColor;
+            context.font = isSelected ? "800 46px Arial, sans-serif" : isHovered ? "800 44px Arial, sans-serif" : "700 42px Arial, sans-serif";
+            context.textAlign = "center";
+            context.textBaseline = "middle";
+            context.fillText(label, 80, 48);
+
+            const texture = new CanvasTexture(canvas);
+            texture.minFilter = LinearFilter;
+            texture.magFilter = LinearFilter;
+            texture.needsUpdate = true;
+            return texture;
+          };
+
+          return Object.fromEntries(
+            (Array.isArray(holeVolumes) ? holeVolumes : [])
+              .filter((hole) => hole?.id !== undefined && hole?.id !== null)
+              .map((hole) => {
+                const isSelected = String(selectedHoleId) === String(hole.id);
+                const isHovered = String(hoveredHoleId) === String(hole.id);
+                const state = isSelected ? "selected" : isHovered ? "hover" : "default";
+                return [hole.id, createHoleIdTexture(String(hole.id), state)];
+              }),
+          );
+        }, [holeVolumes, hoveredHoleId, isFaceToEdgePreview, selectedHoleId]);
+        const faceToEdgeLabelPlacements = useMemo(() => {
+          if (!isFaceToEdgePreview) {
+            return {};
+          }
+
+          return Object.fromEntries(
+            (Array.isArray(holeVolumes) ? holeVolumes : [])
+              .filter((marker) => marker?.isFaceToEdge)
+              .map((marker) => {
+                const sideSign = Number(marker?.orderIndex ?? 0) % 2 === 0 ? -1 : 1;
+                const lift = Number(marker?.holeRadius || 0) * 3.1 + 0.08;
+                const spread = Number(marker?.holeRadius || 0) * 0.95 + 0.06;
+                const labelPosition = [0, lift, sideSign * spread];
+                const lineEnd = [0, lift * 0.84, sideSign * spread * 0.84];
+
+                return [String(marker?.id), { labelPosition, lineEnd }];
+              }),
+          );
+        }, [holeVolumes, isFaceToEdgePreview]);
         const axisLabelPresentation = isFaceToEdgePreview
           ? {
               opacity: 0.96,
@@ -10277,6 +10374,12 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
             Object.values(holeIdTextures).forEach((texture) => texture?.dispose?.());
           },
           [holeIdTextures],
+        );
+        useEffect(
+          () => () => {
+            Object.values(faceToEdgeHoleIdTextures).forEach((texture) => texture?.dispose?.());
+          },
+          [faceToEdgeHoleIdTextures],
         );
 
     return (
@@ -10349,6 +10452,18 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
             {holeVolumes.length ? (
               holeVolumes.map((marker) =>
                 marker.isFaceToEdge ? (
+                  (() => {
+                    const isSelected = String(selectedHoleId) === String(marker.id);
+                    const isHovered = String(hoveredHoleId) === String(marker.id);
+                    const isActive = isSelected || isHovered;
+                    const holeColor = isSelected ? "#334155" : isHovered ? "#475569" : "#6b7280";
+                    const holeEmissive = isSelected ? "#f8fafc" : isHovered ? "#dbeafe" : "#cfd8e3";
+                    const holeOpacity = isSelected ? 0.92 : isHovered ? 0.78 : 0.58;
+                    const holeEmissiveIntensity = isSelected ? 0.42 : isHovered ? 0.22 : 0.08;
+                    const labelScale = isSelected ? 0.22 : isHovered ? 0.2 : 0.18;
+                    const lineColor = isSelected ? "#3b82f6" : isHovered ? "#0f766e" : "#94a3b8";
+                    const lineOpacity = isSelected ? 0.92 : isHovered ? 0.88 : 0.72;
+                    return (
                   <group
                     key={`face-to-edge-${marker.id}`}
                     onClick={(event) => {
@@ -10368,30 +10483,57 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                     rotation={marker.rotation}
                   >
                     <mesh castShadow renderOrder={2}>
-                      <cylinderGeometry args={[marker.holeRadius * 0.92, marker.holeRadius * 0.92, marker.holeLength, 24, 1, false]} />
+                      <cylinderGeometry args={[marker.holeRadius * (isSelected ? 0.96 : isHovered ? 0.94 : 0.92), marker.holeRadius * (isSelected ? 0.96 : isHovered ? 0.94 : 0.92), marker.holeLength, 24, 1, false]} />
                       <meshStandardMaterial
-                        color={String(selectedHoleId) === String(marker.id) ? "#4b5563" : String(hoveredHoleId) === String(marker.id) ? "#64748b" : "#6b7280"}
-                        emissive={String(selectedHoleId) === String(marker.id) ? "#d1d5db" : String(hoveredHoleId) === String(marker.id) ? "#cbd5e1" : "#cfd8e3"}
-                        emissiveIntensity={String(selectedHoleId) === String(marker.id) ? 0.14 : 0.08}
-                        opacity={0.58}
+                        color={holeColor}
+                        emissive={holeEmissive}
+                        emissiveIntensity={holeEmissiveIntensity}
+                        opacity={isSelected ? 0.88 : holeOpacity}
                         transparent
                         depthWrite={false}
-                        roughness={0.36}
-                        metalness={0.18}
+                        roughness={isActive ? 0.28 : 0.36}
+                        metalness={isActive ? 0.2 : 0.18}
                       />
                     </mesh>
-                    {holeIdTextures[marker.id] ? (
-                      <sprite position={[0, marker.holeRadius * 1.9, 0]} scale={[0.18, 0.18, 0.18]}>
-                        <spriteMaterial
-                          attach="material"
-                          depthTest={false}
-                          depthWrite={false}
-                          map={holeIdTextures[marker.id] || undefined}
-                          transparent
-                        />
-                      </sprite>
+                    {faceToEdgeHoleIdTextures[marker.id] ? (
+                      <>
+                        <line renderOrder={isActive ? 4 : 3}>
+                          <bufferGeometry>
+                            <bufferAttribute
+                              attach="attributes-position"
+                              args={[
+                                new Float32Array([
+                                  0,
+                                  0,
+                                  0,
+                                  faceToEdgeLabelPlacements[String(marker.id)]?.lineEnd?.[0] ?? 0,
+                                  faceToEdgeLabelPlacements[String(marker.id)]?.lineEnd?.[1] ?? marker.holeRadius * 2.4,
+                                  faceToEdgeLabelPlacements[String(marker.id)]?.lineEnd?.[2] ?? 0,
+                                ]),
+                                3,
+                              ]}
+                            />
+                          </bufferGeometry>
+                          <lineBasicMaterial color={lineColor} depthTest={false} opacity={lineOpacity} transparent />
+                        </line>
+                        <sprite
+                          position={faceToEdgeLabelPlacements[String(marker.id)]?.labelPosition || [0, marker.holeRadius * 3.1, 0.08]}
+                          renderOrder={isActive ? 5 : 4}
+                          scale={[labelScale, labelScale, labelScale]}
+                        >
+                          <spriteMaterial
+                            attach="material"
+                            depthTest={false}
+                            depthWrite={false}
+                            map={faceToEdgeHoleIdTextures[marker.id] || undefined}
+                            transparent
+                          />
+                        </sprite>
+                      </>
                     ) : null}
                   </group>
+                    );
+                  })()
                 ) : (
                   <mesh
                     castShadow
