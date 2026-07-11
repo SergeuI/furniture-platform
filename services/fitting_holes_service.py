@@ -214,8 +214,17 @@ class FittingHolesService:
             payload.get("bundle_key"),
             "",
         ) or uuid4().hex
+        explicit_template_id_raw = payload.get("template_id")
+        explicit_template_id = None
+        explicit_template = None
+        if explicit_template_id_raw not in (None, ""):
+            explicit_template_id = self._require_int(explicit_template_id_raw, "template_id")
+            explicit_template = self._ensure_template_exists(explicit_template_id)
+
         mounting_variant_key = self._normalize_mounting_variant_key(
-            payload.get("mounting_variant_key"),
+            payload.get("mounting_variant_key")
+            if payload.get("mounting_variant_key") not in (None, "")
+            else getattr(explicit_template, "mounting_variant_key", None),
         )
 
         fitting_ids_raw = payload.get("fitting_ids") or []
@@ -250,8 +259,71 @@ class FittingHolesService:
         if not fitting_ids:
             raise ValueError("fitting_ids is required")
 
+        if explicit_template is not None:
+            if explicit_template.fitting_id not in fitting_ids:
+                raise ValueError(
+                    f"Template with id={explicit_template.id} does not belong to the selected fittings"
+                )
+
+            explicit_mounting_variant_key = self._normalize_mounting_variant_key(
+                getattr(explicit_template, "mounting_variant_key", None),
+            )
+            if explicit_mounting_variant_key != mounting_variant_key:
+                raise ValueError(
+                    f"Template with id={explicit_template.id} does not match mounting_variant_key={mounting_variant_key}"
+                )
+
+        if explicit_template is not None:
+            sibling_templates = [
+                template
+                for template in self.repository.list_templates_by_bundle_key(bundle_key)
+                if template.fitting_id == explicit_template.fitting_id and template.id != explicit_template.id
+            ]
+            for template in sibling_templates:
+                self.repository.update_template(
+                    template.id,
+                    bundle_key=None,
+                    bundle_name=None,
+                    bundle_order_index=0,
+                )
+
+        created_templates: list[FittingHoleTemplateModel] = []
         templates_payload: list[dict[str, Any]] = []
         for index, fitting in enumerate(fittings):
+            matching_template = None
+            if explicit_template is not None and explicit_template.fitting_id == fitting.id:
+                matching_template = explicit_template
+            else:
+                existing_templates = self.repository.list_templates_by_fitting(fitting.id)
+                matching_variant_templates = [
+                    template
+                    for template in existing_templates
+                    if self._normalize_mounting_variant_key(getattr(template, "mounting_variant_key", None))
+                    == mounting_variant_key
+                ]
+                non_empty_templates = [
+                    template
+                    for template in matching_variant_templates
+                    if self.repository.list_hole_points_by_template(template.id)
+                ]
+                matching_template = (
+                    non_empty_templates[0]
+                    if non_empty_templates
+                    else matching_variant_templates[0]
+                    if matching_variant_templates
+                    else None
+                )
+
+            if matching_template is not None:
+                updated_template = self.repository.update_template(
+                    matching_template.id,
+                    bundle_key=bundle_key,
+                    bundle_name=bundle_name,
+                    bundle_order_index=index,
+                )
+                created_templates.append(updated_template)
+                continue
+
             template_name = self._text_or_default(
                 getattr(fitting, "name", None)
                 or getattr(fitting, "article", None)
@@ -274,7 +346,9 @@ class FittingHolesService:
                 }
             )
 
-        created_templates = self.repository.create_templates(templates_payload)
+        if templates_payload:
+            created_templates.extend(self.repository.create_templates(templates_payload))
+
         category_code = ""
         if fittings:
             category_code = self._text_or_default(

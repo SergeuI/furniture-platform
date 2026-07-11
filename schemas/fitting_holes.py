@@ -176,6 +176,7 @@ class FittingHoleBundleCreateSchema(BaseModel):
         default=None,
         max_length=64,
     )
+    template_id: int | None = None
 
 
 class FittingHoleBundleMountingVariantUpdateSchema(BaseModel):

@@ -5866,6 +5866,7 @@ export default function App() {
   const [holeSelectedFittingId, setHoleSelectedFittingId] = useState("");
   const [holeSelectedTemplateId, setHoleSelectedTemplateId] = useState("");
   const [holeSelectedTemplate, setHoleSelectedTemplate] = useState(null);
+  const [holeWorkspaceMode, setHoleWorkspaceMode] = useState("new");
   const [holePoints, setHolePoints] = useState([]);
   const [holeServicePreview, setHoleServicePreview] = useState(null);
   const [holeServicePreviewLoading, setHoleServicePreviewLoading] = useState(false);
@@ -5881,6 +5882,7 @@ export default function App() {
   const [holePointCreateOpen, setHolePointCreateOpen] = useState(false);
   const [holePointCreateError, setHolePointCreateError] = useState("");
   const [holePointCreateForm, setHolePointCreateForm] = useState(DEFAULT_HOLE_POINT_FORM);
+  const [holePointSubmitting, setHolePointSubmitting] = useState(false);
   const [holePointEditOpen, setHolePointEditOpen] = useState(false);
   const [holePointEditError, setHolePointEditError] = useState("");
   const [holePointEditForm, setHolePointEditForm] = useState(DEFAULT_HOLE_POINT_FORM);
@@ -6027,6 +6029,12 @@ export default function App() {
     () => holeTemplateItems.find((item) => String(item.id) === String(holeSelectedTemplateId)) || holeSelectedTemplate || null,
     [holeSelectedTemplate, holeSelectedTemplateId, holeTemplateItems],
   );
+  const activeHoleFittingId = String(
+    holeSelectedFittingId ||
+      selectedHoleFitting?.id ||
+      holeBundleSelectedItems?.[0]?.id ||
+      "",
+  ).trim();
   const holeMountingVariantOptions = useMemo(
     () => [
       {
@@ -6089,9 +6097,9 @@ export default function App() {
         normalizedActiveBundleMountingVariantKey &&
         normalizedActiveBundleMountingVariantKey !== normalizedSelectedHoleMountingVariantKey),
   );
-  const holeWorkspaceHasFitting = Boolean(holeSelectedFittingId);
+  const holeWorkspaceHasFitting = Boolean(activeHoleFittingId);
   const holeWorkspaceHasTemplate = Boolean(selectedHoleTemplate?.id);
-  const holeWorkspaceCanPreview = holeWorkspaceHasFitting;
+  const holeWorkspaceCanPreview = holeWorkspaceHasTemplate;
   const holeWorkspaceSaveStatus = holeSelectedFittingId
     ? selectedHoleTemplate
       ? holeWorkspaceHasUnsavedVariantChanges
@@ -6100,7 +6108,7 @@ export default function App() {
       : "Готово до створення"
     : "";
   useEffect(() => {
-    if (activeView !== "catalogHoles" || holeSelectedFittingId || !holeBundleSelectedItems.length) {
+    if (activeView !== "catalogHoles" || activeHoleFittingId || !holeBundleSelectedItems.length) {
       return;
     }
 
@@ -6110,9 +6118,8 @@ export default function App() {
       return;
     }
 
-    void handleHoleFittingChange(String(firstBundleItem.id));
-  }, [activeView, handleHoleFittingChange, holeBundleSelectedItems, holeSelectedFittingId]);
-
+    setHoleSelectedFittingId(String(firstBundleItem.id));
+  }, [activeView, activeHoleFittingId, holeBundleSelectedItems]);
   const holesMaterialPlanesModel = useMemo(() => {
     switch (normalizedSelectedHoleMountingVariantKey) {
       case "angled_two_planes":
@@ -8643,14 +8650,14 @@ export default function App() {
   }
 
   function openHoleTemplateCreateForm() {
-    if (!holeSelectedFittingId) {
+    if (!activeHoleFittingId) {
       setHoleTemplateCreateError("Оберіть фурнітуру перед створенням шаблону");
       return;
     }
 
     setHoleTemplateCreateForm({
       ...DEFAULT_HOLE_TEMPLATE_FORM,
-      fitting_id: holeSelectedFittingId,
+      fitting_id: activeHoleFittingId,
     });
     setHoleTemplateCreateError("");
     setHoleTemplateCreateOpen(true);
@@ -8690,7 +8697,7 @@ export default function App() {
     const name = String(template?.name || "").trim() || "Основний шаблон";
 
     return {
-      fitting_id: Number(holeSelectedFittingId),
+      fitting_id: Number(activeHoleFittingId || holeSelectedFittingId),
       name,
       template_type: String(template?.template_type || "manual"),
       side: String(template?.side || "left").trim() || "left",
@@ -8703,7 +8710,7 @@ export default function App() {
   }
 
   async function handleHoleWorkspaceSaveTemplate() {
-    if (!holeSelectedFittingId) {
+    if (!activeHoleFittingId) {
       setStatus({ message: "Оберіть фурнітуру перед збереженням", tone: "error" });
       return;
     }
@@ -8729,7 +8736,7 @@ export default function App() {
       const savedTemplate = result.template || result.item || result.data || null;
       const savedTemplateId = String(savedTemplate?.id || template?.id || "");
 
-      await loadHoleTemplates(token, holeSelectedFittingId);
+      await loadHoleTemplates(token, activeHoleFittingId);
 
       if (savedTemplateId) {
         setHoleSelectedTemplateId(savedTemplateId);
@@ -9006,6 +9013,7 @@ export default function App() {
     setHoleServicePreview(null);
     setHoleServicePreviewError("");
     setHoleServicePreviewLoading(false);
+    setHoleWorkspaceMode("new");
     handleHoleFittingCategoryChange("");
   }
 
@@ -9422,8 +9430,9 @@ export default function App() {
       setHoleSelectedFittingCategory(bundleCategoryCode);
     }
 
+    setHoleWorkspaceMode("existing");
     if (firstFittingId) {
-      await handleHoleFittingChange(firstFittingId, bundleTemplateId);
+      await handleHoleFittingChange(firstFittingId, bundleTemplateId, "existing");
     }
 
     setSelectedHoleMountingVariantKey(bundleMountingVariantKey);
@@ -9487,6 +9496,16 @@ export default function App() {
 
     const bundleName = String(holeBundleName || "").trim();
     const categoryKey = String(holeBundleCategoryCode || "").trim();
+    const bundleKey = String(holeActiveBundleKey || "").trim();
+    const templateId = String(
+      holeSelectedTemplateId ||
+        selectedHoleTemplate?.id ||
+        holeSelectedTemplate?.id ||
+        "",
+    ).trim();
+    const mountingVariantKey = normalizeHoleWorkspaceMountingVariantKey(
+      selectedHoleMountingVariantKey,
+    );
     const fittingIds = Array.isArray(holeBundleSelectedItems)
       ? holeBundleSelectedItems.map((item) => Number(item?.id)).filter((itemId) => Number.isInteger(itemId))
       : [];
@@ -9498,11 +9517,22 @@ export default function App() {
     setHoleBundleSaving(true);
 
     try {
-      const result = await createFittingHoleBundle(token, {
+      const payload = {
         bundle_name: bundleName,
         category_key: categoryKey,
         fitting_ids: fittingIds,
-      });
+        mounting_variant_key: mountingVariantKey,
+      };
+
+      if (bundleKey) {
+        payload.bundle_key = bundleKey;
+      }
+
+      if (templateId) {
+        payload.template_id = Number(templateId);
+      }
+
+      const result = await createFittingHoleBundle(token, payload);
 
       if (!result.success) {
         const errorMessage =
@@ -10789,13 +10819,13 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
           ) : null}
         </div>
         <div className={`holes-mounting-variant-dropdown-shell${holeMountingVariantDropdownOpen ? " is-open" : ""}`}>
-          <button
-            aria-expanded={holeMountingVariantDropdownOpen}
-            className="holes-mounting-variant-toggle"
-            disabled={!holeWorkspaceHasFitting}
-            onClick={() => setHoleMountingVariantDropdownOpen((current) => !current)}
-            type="button"
-          >
+                  <button
+                    aria-expanded={holeMountingVariantDropdownOpen}
+                    className="holes-mounting-variant-toggle"
+                    disabled={!activeHoleFittingId}
+                    onClick={() => setHoleMountingVariantDropdownOpen((current) => !current)}
+                    type="button"
+                  >
             <span className="holes-mounting-variant-toggle-mark">
               {selectedVariantIcon ? <img alt="" src={selectedVariantIcon} /> : <span>⋯</span>}
             </span>
@@ -10808,7 +10838,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
           {holeMountingVariantDropdownOpen ? (
             <div className="holes-mounting-variant-menu" role="listbox">
               {holeMountingVariantOptions.map((variant) => {
-                const isActive = holeWorkspaceHasFitting && normalizedSelectedHoleMountingVariantKey === variant.key;
+                const isActive = normalizedSelectedHoleMountingVariantKey === variant.key;
 
                 return (
                   <button
@@ -10816,7 +10846,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                     className={`holes-mounting-variant-option${isActive ? " active" : ""}`}
                     key={variant.key}
                     onClick={() => {
-                      setSelectedHoleMountingVariantKey(variant.key);
+                      handleHoleMountingVariantChange(variant.key);
                       setHoleMountingVariantDropdownOpen(false);
                     }}
                     type="button"
@@ -11126,7 +11156,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
   async function handleHoleTemplateCreate(event) {
     event.preventDefault();
 
-    if (!holeSelectedFittingId) {
+    if (!activeHoleFittingId) {
       setHoleTemplateCreateError("Оберіть фурнітуру перед створенням шаблону");
       return;
     }
@@ -11139,7 +11169,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
     }
 
     const payload = {
-      fitting_id: Number(holeSelectedFittingId),
+      fitting_id: Number(activeHoleFittingId),
       name: trimmedName,
       template_type: holeTemplateCreateForm.template_type || "manual",
       side: holeTemplateCreateForm.side || "left",
@@ -11166,7 +11196,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
       createdTemplate?.id || result.template_id || result.id || "";
 
     closeHoleTemplateCreateForm();
-    await loadHoleTemplates(token, holeSelectedFittingId);
+    await loadHoleTemplates(token, activeHoleFittingId);
 
     if (createdTemplateId) {
       setHoleSelectedTemplateId(String(createdTemplateId));
@@ -11179,7 +11209,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
   async function handleHoleTemplateEdit(event) {
     event.preventDefault();
 
-    if (!holeSelectedFittingId || !holeTemplateEditTemplateId) {
+    if (!activeHoleFittingId || !holeTemplateEditTemplateId) {
       setHoleTemplateEditError(t.holeTemplateEditFailed);
       return;
     }
@@ -11256,12 +11286,12 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
   }
 
   async function openHolePointCreateForm() {
-    if (!holeSelectedFittingId) {
+    if (!activeHoleFittingId || !selectedHoleMountingVariantKey) {
       setHolePointCreateError(t.holePointTemplateRequired);
       return;
     }
 
-    if (!holeSelectedTemplateId) {
+    if (false && !holeSelectedTemplateId) {
       const bootstrapTemplatePayload = buildHoleWorkspaceTemplatePayload(
         {
           name: selectedHoleFitting?.name || "Основний шаблон",
@@ -11326,6 +11356,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
       target_side: defaultTargetSide,
       side: defaultTargetSide,
     });
+    setHolePointSubmitting(false);
     setHolePointCreateError("");
     setHolePointCreateOpen(true);
   }
@@ -11374,6 +11405,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
     setHolePointCreateOpen(false);
     setHolePointCreateError("");
     setHolePointCreateForm(DEFAULT_HOLE_POINT_FORM);
+    setHolePointSubmitting(false);
   }
 
   function openHolePointEditForm(point) {
@@ -11385,6 +11417,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
     setHolePointEditPointId(String(point.id));
     setHolePointEditForm(buildHolePointFormFromPoint(point));
     setHolePointEditError("");
+    setHolePointSubmitting(false);
     setHolePointEditOpen(true);
   }
 
@@ -11393,6 +11426,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
     setHolePointEditError("");
     setHolePointEditForm(DEFAULT_HOLE_POINT_FORM);
     setHolePointEditPointId("");
+    setHolePointSubmitting(false);
   }
 
   function openDeleteHolePointConfirm(point) {
@@ -11484,37 +11518,57 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
 
   async function handleHolePointCreate(event) {
     event.preventDefault();
+    setHolePointSubmitting(true);
+    let activeTemplateId = String(holeSelectedTemplateId || "");
 
-    if (!holeSelectedTemplateId) {
-      setHolePointCreateError(t.holePointTemplateRequired);
-      return;
+    if (!activeTemplateId) {
+      if (holeWorkspaceMode === "new" && activeHoleFittingId && selectedHoleMountingVariantKey) {
+        try {
+          activeTemplateId = String(
+            (await ensureHoleWorkspaceTemplate(activeHoleFittingId, selectedHoleMountingVariantKey)) || "",
+          );
+          if (!activeTemplateId) {
+            activeTemplateId = String(holeSelectedTemplateId || "");
+          }
+        } catch (error) {
+          const errorMessage = error?.message || t.holePointTemplateRequired;
+          setHolePointCreateError(errorMessage);
+          setStatus({ message: errorMessage, tone: "error" });
+          setHolePointSubmitting(false);
+          return;
+        }
+      } else {
+        setHolePointCreateError(t.holePointTemplateRequired);
+        setHolePointSubmitting(false);
+        return;
+      }
     }
 
     try {
       holeMountingVariantRefreshRef.current = {
         reason: "point-create",
-        templateId: String(holeSelectedTemplateId || ""),
+        templateId: String(activeTemplateId || ""),
         variantKey: String(selectedHoleMountingVariantKey || ""),
       };
       const payload = buildHolePointPayload(holePointCreateForm);
 
-      setLoading(true);
-      const result = await createFittingHolePoint(token, holeSelectedTemplateId, payload);
-      setLoading(false);
+      const result = await createFittingHolePoint(token, activeTemplateId, payload);
 
       if (!result.success) {
         const errorMessage = result.error || t.holePointCreateFailed;
         setHolePointCreateError(errorMessage);
         setStatus({ message: errorMessage, tone: "error" });
+        setHolePointSubmitting(false);
         return;
       }
 
       closeHolePointCreateForm();
-      const reloaded = await loadHoleTemplateDetails(token, holeSelectedTemplateId);
+      const reloaded = await loadHoleTemplateDetails(token, activeTemplateId);
       holeMountingVariantRefreshRef.current = { reason: "", templateId: "", variantKey: "" };
       if (reloaded) {
         setStatus({ message: t.holePointCreateSuccess, tone: "success" });
       }
+      setHolePointSubmitting(false);
     } catch (error) {
       const errorMessage =
         error?.message === t.holePointOrderIndexInvalid ||
@@ -11523,16 +11577,18 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
           ? error.message
           : t.holePointNumericInvalid;
       setHolePointCreateError(errorMessage);
-      setLoading(false);
+      setHolePointSubmitting(false);
       return;
     }
   }
 
   async function handleHolePointEdit(event) {
     event.preventDefault();
+    setHolePointSubmitting(true);
 
     if (!holeSelectedTemplateId || !holePointEditPointId) {
       setHolePointEditError(t.holePointEditFailed);
+      setHolePointSubmitting(false);
       return;
     }
 
@@ -11544,14 +11600,13 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
       };
       const payload = buildHolePointPayload(holePointEditForm);
 
-      setLoading(true);
       const result = await updateFittingHolePoint(token, holePointEditPointId, payload);
-      setLoading(false);
 
       if (!result.success) {
         const errorMessage = result.error || t.holePointUpdateFailed;
         setHolePointEditError(errorMessage);
         setStatus({ message: errorMessage, tone: "error" });
+        setHolePointSubmitting(false);
         return;
       }
 
@@ -11561,6 +11616,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
       if (reloaded) {
         setStatus({ message: t.holePointUpdateSuccess, tone: "success" });
       }
+      setHolePointSubmitting(false);
     } catch (error) {
       const errorMessage =
         error?.message === t.holePointOrderIndexInvalid ||
@@ -11569,7 +11625,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
           ? error.message
           : t.holePointNumericInvalid;
       setHolePointEditError(errorMessage);
-      setLoading(false);
+      setHolePointSubmitting(false);
     }
   }
 
@@ -11772,7 +11828,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
     }
   }
 
-  async function handleHoleFittingChange(nextFittingId, preferredTemplateId = "") {
+  async function handleHoleFittingChange(nextFittingId, preferredTemplateId = "", workspaceMode = holeWorkspaceMode) {
     if (import.meta.env.DEV) {
       console.debug("selected fitting id", nextFittingId);
     }
@@ -11797,6 +11853,9 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
     }
 
     const templates = await loadHoleTemplates(token, nextFittingId);
+    if (workspaceMode !== "existing") {
+      return;
+    }
     if (templates.length) {
       const preferredTemplate = String(preferredTemplateId || "").trim()
         ? templates.find((template) => String(template.id) === String(preferredTemplateId)) || null
@@ -11820,6 +11879,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
   }
 
   function handleHoleFittingCategoryChange(nextCategoryCode) {
+    setHoleWorkspaceMode("new");
     setHoleSelectedFittingCategory(nextCategoryCode);
     setHoleSelectedFittingId("");
     setHoleSelectedTemplateId("");
@@ -11834,6 +11894,26 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
     closeHolePointCreateForm();
     closeHolePointEditForm();
     setStatus("");
+  }
+
+  function handleHoleMountingVariantChange(nextVariantKey) {
+    const normalizedVariantKey = normalizeHoleWorkspaceMountingVariantKey(nextVariantKey);
+    setSelectedHoleMountingVariantKey(normalizedVariantKey);
+
+    if (holeWorkspaceMode !== "new") {
+      return;
+    }
+
+    setHoleSelectedTemplateId("");
+    setHoleSelectedTemplate(null);
+    setHolePoints([]);
+    setHoleServicePreview(null);
+    setHoleServicePreviewError("");
+    setHoleServicePreviewLoading(false);
+    setSelectedHolePointId("");
+    setHoveredHolePointId("");
+    closeHolePointCreateForm();
+    closeHolePointEditForm();
   }
 
   async function handleHoleTemplateChange(nextTemplateId) {
@@ -12418,6 +12498,16 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
 
     if (nextView === "catalogHoles") {
       await loadFittingsCatalog(token, { search: "" });
+      setHoleWorkspaceMode("new");
+      setHoleActiveBundleKey("");
+      setHoleActiveBundleName("");
+      setHoleActiveBundleMountingVariantKey("");
+      setHoleBundleMountingVariantSaving(false);
+      setHoleBundleName("");
+      setHoleBundleCategoryCode("");
+      setHoleBundleSelectedItemIds([]);
+      setHoleBundleDraftItemIds([]);
+      setSelectedHoleMountingVariantKey("surface_mount");
       setHoleSelectedFittingCategory("");
       setHoleSelectedFittingId("");
       setHoleSelectedTemplateId("");
@@ -17042,7 +17132,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                     </span>
                     <button
                       className="ghost-button compact-button"
-                      disabled={loading || !holeSelectedFittingId}
+                      disabled={loading || !activeHoleFittingId || !selectedHoleMountingVariantKey}
                       onClick={openHolePointCreateForm}
                       type="button"
                     >
@@ -17050,8 +17140,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                       {t.holePointAdd}
                     </button>
                   </div>
-                  {holeSelectedTemplate ? (
-                    holePoints.length ? (
+                  {holePoints.length ? (
                       <div className="holes-panel-groups">
                         {holePanelGroups.map((group) => (
                           <section className="holes-panel-group" key={group.key}>
@@ -17160,12 +17249,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                       <div className="empty-state compact-empty-state">
                         <span>{t.holePreviewEmpty}</span>
                       </div>
-                    )
-                  ) : (
-                    <div className="empty-state compact-empty-state">
-                      <span>{t.holeTemplateSelectTemplate}</span>
-                    </div>
-                  )}
+                    )}
                   </section>
                   <section className="holes-preview-card holes-service-preview-card holes-workspace-preview-panel">
                     <div className="holes-preview-header">
@@ -17503,7 +17587,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                       </span>
                       <button
                         className="primary-button"
-                        disabled={loading || !holeSelectedFittingId}
+                        disabled={loading || !activeHoleFittingId || !selectedHoleMountingVariantKey}
                         onClick={handleHoleWorkspaceSaveTemplate}
                         type="button"
                       >
@@ -21745,7 +21829,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                 >
                   {t.cancel}
                 </button>
-                <button className="primary-button" disabled={loading || !holeSelectedTemplateId} type="submit">
+                <button className="primary-button" disabled={holePointSubmitting} type="submit">
                   <Plus size={16} />
                   {t.save}
                 </button>
@@ -22021,7 +22105,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                 >
                   {t.cancel}
                 </button>
-                <button className="primary-button" disabled={loading || !holePointEditPointId} type="submit">
+                <button className="primary-button" disabled={holePointSubmitting || !holePointEditPointId} type="submit">
                   <Save size={16} />
                   {t.holePointSaveChanges}
                 </button>

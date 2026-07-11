@@ -144,13 +144,14 @@ async def create_fitting_hole_template_route(
             template = service.create_template(
                 payload.model_dump(exclude_unset=True),
             )
+            response = {
+                "success": True,
+                "template": _serialize_template(template),
+            }
     except ValueError as error:
         _raise_service_error(error)
 
-    return {
-        "success": True,
-        "template": _serialize_template(template),
-    }
+    return response
 
 
 @router.get(
