@@ -2123,6 +2123,7 @@ class WizardApp(tk.Tk):
         self._register_action_button("db-init", ttk.Button(right, text="Ініціалізувати БД", command=self.run_init_database)).pack(fill="x")
         self._register_action_button("db-safe-update", ttk.Button(right, text="Безпечне оновлення БД", command=self.run_safe_update_db)).pack(fill="x", pady=(8, 0))
         self._register_action_button("db-repair-catalog", ttk.Button(right, text="Repair catalog data", command=self.run_repair_catalog)).pack(fill="x", pady=(8, 0))
+        self._register_action_button("db-repair-catalog-images", ttk.Button(right, text="Довантажити картинки каталогу", command=self.run_repair_catalog_images)).pack(fill="x", pady=(8, 0))
         self._register_action_button("db-seed-confirmat", ttk.Button(right, text="Seed confirmat holes", command=self.run_seed_confirmat)).pack(fill="x", pady=(8, 0))
         self._register_action_button("db-upgrade-fittings", ttk.Button(right, text="Upgrade fittings schema", command=self.run_upgrade_fittings_schema)).pack(fill="x", pady=(8, 0))
 
@@ -4341,6 +4342,35 @@ class WizardApp(tk.Tk):
             command.append("--warm-images")
         command.append("--apply")
         self._run_script_async("Repair catalog data", command, env=env, button_key="db-repair-catalog")
+
+    def run_repair_catalog_images(self) -> None:
+        should_run = messagebox.askyesno(
+            "Підтвердити довантаження",
+            "Буде створено резервну копію БД і довантажено лише відсутні картинки матеріалів, крайок та фурнітури. Назви, ціни та видимість каталогу не змінюються. Продовжити?",
+        )
+        if not should_run:
+            return
+
+        env = {
+            "FURNITURE_PLATFORM_DB_PATH": self.main_db.get().strip(),
+            "FURNITURE_LEGACY_DB_PATH": self.legacy_db.get().strip(),
+        }
+        command = python_command(
+            str(PROJECT_ROOT / "scripts" / "repair_catalog_data.py"),
+            "--database",
+            self.main_db.get().strip(),
+            "--city",
+            self.catalog_city.get().strip() or "Київ",
+            "--warm-images",
+            "--images-only",
+            "--apply",
+        )
+        self._run_script_async(
+            "Довантажити картинки каталогу",
+            command,
+            env=env,
+            button_key="db-repair-catalog-images",
+        )
 
     def run_seed_confirmat(self) -> None:
         command = python_command(
