@@ -623,31 +623,7 @@ async def get_material_image_route(
             material.get("image_cached_content_type"),
             if_none_match,
         )
-
-    image_payload = await asyncio.to_thread(
-        resolve_material_image_payload,
-        material["article"],
-        material.get("image"),
-        material.get("source_url"),
-        getattr(authorized_user, "city", None),
-        getattr(authorized_user, "viyar_cookie", None),
-    )
-
-    if not image_payload:
-        return Response(status_code=404)
-
-    if not material.get("has_cached_image"):
-        update_material_image_cache(
-            article=material["article"],
-            image_bytes=image_payload["bytes"],
-            content_type=image_payload["content_type"],
-        )
-
-    return _image_response(
-        image_payload["bytes"],
-        image_payload["content_type"],
-        if_none_match,
-    )
+    return Response(status_code=404)
 
 
 @router.get("/materials/{article}/edges/{edge_key}/image")
@@ -681,30 +657,7 @@ async def get_material_edge_image_route(
             edge_item.get("image_cached_content_type"),
             if_none_match,
         )
-
-    image_payload = resolve_material_image_payload(
-        article=str(edge_item.get("article") or article).strip(),
-        stored_image=edge_item.get("image"),
-        source_url=edge_item.get("source_url"),
-        city=getattr(authorized_user, "city", None),
-        cookie_override=getattr(authorized_user, "viyar_cookie", None),
-    )
-
-    if not image_payload:
-        return Response(status_code=404)
-
-    update_material_edge_image_cache(
-        material_article=article.strip(),
-        edge_key=edge_key.strip(),
-        image_bytes=image_payload["bytes"],
-        content_type=image_payload["content_type"],
-    )
-
-    return _image_response(
-        image_payload["bytes"],
-        image_payload["content_type"],
-        if_none_match,
-    )
+    return Response(status_code=404)
 
 
 @router.post(
@@ -1583,26 +1536,7 @@ async def get_fitting_image_route(
             fitting.get("image_cached_content_type"),
             if_none_match,
         )
-
-    image_payload = fetch_remote_image_payload(
-        fitting.get("image_url"),
-        city=fitting.get("city"),
-    )
-
-    if not image_payload:
-        return Response(status_code=404)
-
-    update_fitting_image_cache(
-        item_id=item_id,
-        image_bytes=image_payload["bytes"],
-        content_type=image_payload["content_type"],
-    )
-
-    return _image_response(
-        image_payload["bytes"],
-        image_payload["content_type"],
-        if_none_match,
-    )
+    return Response(status_code=404)
 
 
 def _can_manage_fitting_item(current_user, item: dict | None) -> bool:
