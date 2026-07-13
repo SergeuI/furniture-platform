@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -7,6 +9,7 @@ from fastapi import (
 )
 from fastapi.responses import Response
 from hashlib import sha256
+from datetime import datetime
 import json
 from threading import Lock
 from uuid import uuid4
@@ -63,11 +66,13 @@ from database.repositories.service_catalog_repository import (
 )
 from database.repositories.inventory_repository import (
     MATERIAL_EDGE_LABELS,
+    ensure_material_user_link,
     create_fitting,
     delete_fitting,
     delete_material,
     get_fitting_by_id,
     get_fitting_image_by_id,
+    get_material_by_import_identity,
     get_material_edge_image,
     get_material_by_article,
     list_fittings,
@@ -79,6 +84,7 @@ from database.repositories.inventory_repository import (
     upsert_material_edge_option,
     upsert_material_edge_price,
     upsert_material_price,
+    material_needs_full_sync,
     update_fitting,
     update_fitting_image_cache,
     update_material_edge_image_cache,
@@ -152,6 +158,60 @@ def _release_material_image_warm(article: str | None) -> None:
 
     with _material_image_warm_lock:
         _material_images_being_warmed.discard(normalized_article)
+
+
+def _normalize_import_source_url(value: str | None) -> str | None:
+    normalized = str(value or "").strip()
+    if not normalized:
+        return None
+    if "://" not in normalized:
+        normalized = f"https://{normalized}"
+    parsed = urlparse(normalized)
+    scheme = (parsed.scheme or "https").lower()
+    host = (parsed.netloc or "").lower()
+    path = parsed.path or ""
+    query = f"?{parsed.query}" if parsed.query else ""
+    fragment = f"#{parsed.fragment}" if parsed.fragment else ""
+    rebuilt = f"{scheme}://{host}{path}{query}{fragment}"
+    return rebuilt.rstrip("/") if rebuilt.endswith("/") and path not in ("", "/") else rebuilt
+
+
+def _find_material_import_match(
+    *,
+    source_url: str | None,
+    article: str | None,
+    category: str | None,
+) -> dict | None:
+    normalized_article = (article or "").strip() or None
+    normalized_source_url = _normalize_import_source_url(source_url)
+    source_site = detect_material_source_site(source_url)
+
+    return get_material_by_import_identity(
+        source=source_site,
+        product_type=(category or "").strip() or None,
+        article=normalized_article,
+        source_url=normalized_source_url,
+    )
+
+
+def _link_material_for_user(
+    *,
+    material: dict,
+    current_user,
+    source_url: str | None = None,
+) -> dict:
+    ensure_material_user_link(
+        article=material["article"],
+        user_id=str(current_user.id),
+        source=material.get("source") or detect_material_source_site(material.get("source_url") or source_url),
+        product_type=material.get("product_type") or material.get("category"),
+        source_url=material.get("source_url") or source_url,
+    )
+    return get_material_by_article(
+        material["article"],
+        viewer_user_id=str(current_user.id),
+        viewer_role=current_user.role,
+    ) or material
 
 
 def _claim_fitting_image_warm(item_id: str | None) -> bool:
@@ -478,7 +538,9 @@ def _warm_fitting_image_cache_task(fitting: dict) -> None:
     response_model=SpecificationCatalogResponseSchema
 )
 async def get_specification_catalog_route():
-    catalog = get_specification_catalog()
+    catalog = await asyncio.to_thread(
+        get_specification_catalog
+    )
 
     return {
         "success": True,
@@ -522,52 +584,7 @@ async def list_materials_route(
         viewer_role=current_user.role,
     )
 
-    for item in items:
-        if not item.get("has_cached_image") and _claim_material_image_warm(item.get("article")):
-            background_tasks.add_task(
-                _warm_material_image_cache_task,
-                item,
-                selected_city,
-                current_user.viyar_cookie,
-            )
-
-        for edge_item in item.get("edge_options", []):
-            edge_cache_key = f"edge:{item.get('article')}:{edge_item.get('edge_key')}"
-
-            if (
-                edge_item.get("image")
-                and not edge_item.get("has_cached_image")
-                and _claim_material_image_warm(edge_cache_key)
-            ):
-                background_tasks.add_task(
-                    _warm_material_edge_image_cache_task,
-                    item.get("article"),
-                    edge_item,
-                    selected_city,
-                    current_user.viyar_cookie,
-                )
-
-    if selected_city:
-        pending_material_items = [
-            item
-            for item in items
-            if item.get("article") and item.get("source_url") and (
-                item.get("current_price") is None
-                or item.get("current_price_exact") is False
-            )
-        ][:6]
-
-        for item in pending_material_items:
-            try:
-                await enqueue_material_import_job(
-                    article=item["article"],
-                    category=item.get("category") or "dsp",
-                    city=selected_city,
-                    owner_user_id=str(current_user.id),
-                    preferred_url=item.get("source_url"),
-                )
-            except Exception:
-                pass
+    # Прогрів картинок тимчасово вимкнено для діагностики швидкодії.
 
     return {
         "success": True,
@@ -591,7 +608,11 @@ async def get_material_image_route(
     if not authorized_user and access_token:
         authorized_user = get_user_from_token(access_token)
 
-    material = get_material_by_article(article.strip())
+    material = get_material_by_article(
+        article.strip(),
+        viewer_user_id=getattr(authorized_user, "id", None),
+        viewer_role=getattr(authorized_user, "role", "free") if authorized_user else "free",
+    )
 
     if not material:
         return Response(status_code=404)
@@ -603,12 +624,13 @@ async def get_material_image_route(
             if_none_match,
         )
 
-    image_payload = resolve_material_image_payload(
-        article=material["article"],
-        stored_image=material.get("image"),
-        source_url=material.get("source_url"),
-        city=getattr(authorized_user, "city", None),
-        cookie_override=getattr(authorized_user, "viyar_cookie", None),
+    image_payload = await asyncio.to_thread(
+        resolve_material_image_payload,
+        material["article"],
+        material.get("image"),
+        material.get("source_url"),
+        getattr(authorized_user, "city", None),
+        getattr(authorized_user, "viyar_cookie", None),
     )
 
     if not image_payload:
@@ -644,7 +666,13 @@ async def get_material_edge_image_route(
 
     edge_item = get_material_edge_image(article.strip(), edge_key.strip())
 
-    if not edge_item:
+    material = get_material_by_article(
+        article.strip(),
+        viewer_user_id=getattr(authorized_user, "id", None),
+        viewer_role=getattr(authorized_user, "role", "free") if authorized_user else "free",
+    )
+
+    if not edge_item or not material:
         return Response(status_code=404)
 
     if edge_item.get("image_cached_bytes"):
@@ -711,7 +739,13 @@ async def create_material_route(
     effective_name = (payload.name or "").strip() or None
     effective_owner_user_id = None if is_default else str(current_user.id)
 
-    existing_item = get_material_by_article(effective_article) if effective_article else None
+    existing_item = _find_material_import_match(
+        source_url=effective_source_url,
+        article=effective_article,
+        category=effective_category,
+    ) if effective_source_url and effective_article else (
+        get_material_by_article(effective_article) if effective_article else None
+    )
 
     if existing_item and not _can_manage_material_item(current_user, existing_item):
         if existing_item.get("is_default"):
@@ -741,6 +775,19 @@ async def create_material_route(
 
         source_site = detect_material_source_site(effective_source_url)
 
+        if existing_item and not material_needs_full_sync(existing_item):
+            item = _link_material_for_user(
+                material=existing_item,
+                current_user=current_user,
+                source_url=effective_source_url,
+            )
+            return {
+                "success": True,
+                "item": item,
+                "selected_city": selected_city,
+                "error": None,
+            }
+
         if source_site != "viyar":
             item = upsert_material(
                 article=effective_article,
@@ -750,6 +797,9 @@ async def create_material_route(
                 source_url=effective_source_url,
                 owner_user_id=effective_owner_user_id,
                 is_default=is_default,
+                source=source_site,
+                product_type=effective_category,
+                image_source_url=payload.image_url,
             )
             primary_job = await enqueue_material_import_job(
                 article=effective_article,
@@ -796,6 +846,18 @@ async def create_material_route(
             if not material:
                 raise RuntimeError("Material details were not resolved")
 
+            image_payload = prefetch_material_image_cache(
+                article=material["article"],
+                stored_image=material.get("image"),
+                source_url=material.get("source_url") or effective_source_url,
+                city=selected_city,
+                cookie_override=cookie_override,
+            )
+
+            if not image_payload or not image_payload.get("bytes"):
+                raise RuntimeError("Material image BLOB was not resolved")
+
+            now = datetime.utcnow()
             item = upsert_material(
                 article=material["article"],
                 name=material["name"],
@@ -808,6 +870,11 @@ async def create_material_route(
                 source_url=material.get("source_url") or effective_source_url,
                 owner_user_id=effective_owner_user_id,
                 is_default=is_default,
+                source=source_site,
+                product_type=effective_category,
+                image_source_url=image_payload.get("resolved_url") or material.get("image") or effective_source_url,
+                imported_at=now,
+                static_updated_at=now,
             )
 
             for city_code, price_value in prices_by_city.items():
@@ -817,23 +884,19 @@ async def create_material_route(
                     price=price_value,
                 )
 
-            try:
-                image_payload = prefetch_material_image_cache(
-                    article=material["article"],
-                    stored_image=material.get("image"),
-                    source_url=material.get("source_url") or effective_source_url,
-                    city=selected_city,
-                    cookie_override=cookie_override,
-                )
-                if image_payload:
-                    update_material_image_cache(
-                        article=material["article"],
-                        image_bytes=image_payload["bytes"],
-                        content_type=image_payload["content_type"],
-                    )
-                    item = get_material_by_article(material["article"]) or item
-            except Exception:
-                pass
+            update_material_image_cache(
+                article=material["article"],
+                image_bytes=image_payload["bytes"],
+                content_type=image_payload["content_type"],
+            )
+            ensure_material_user_link(
+                article=material["article"],
+                user_id=str(current_user.id),
+                source=source_site,
+                product_type=effective_category,
+                source_url=material.get("source_url") or effective_source_url,
+            )
+            item = get_material_by_article(material["article"]) or item
 
             item = _resolve_material_with_city_context(
                 material["article"],
@@ -876,6 +939,9 @@ async def create_material_route(
                 source_url=effective_source_url,
                 owner_user_id=effective_owner_user_id,
                 is_default=is_default,
+                source=source_site,
+                product_type=effective_category,
+                image_source_url=payload.image_url,
             )
             item = _resolve_material_with_city_context(
                 effective_article,
@@ -935,7 +1001,11 @@ async def create_material_route(
 
     manual_article = effective_article or f"manual-{current_user.id}-{uuid4().hex[:12]}"
 
-    existing_manual_item = get_material_by_article(manual_article)
+    existing_manual_item = get_material_by_article(
+        manual_article,
+        viewer_user_id=str(current_user.id),
+        viewer_role=current_user.role,
+    )
     if existing_manual_item and not _can_manage_material_item(current_user, existing_manual_item):
         return {
             "success": False,
@@ -950,11 +1020,21 @@ async def create_material_route(
         source_url=None,
         owner_user_id=str(current_user.id),
         is_default=False,
+        source="manual",
+        product_type=effective_category,
+        image_source_url=payload.image_url,
     )
     upsert_material_price(
         article=manual_article,
         city=selected_city,
         price=payload.price,
+    )
+    ensure_material_user_link(
+        article=manual_article,
+        user_id=str(current_user.id),
+        source="manual",
+        product_type=effective_category,
+        source_url=None,
     )
     item = _resolve_material_with_city_context(
         manual_article,
@@ -1004,18 +1084,18 @@ async def import_material_from_viyar_route(
             "error": "Select your city in profile settings first",
         }
 
-    existing_item = get_material_import_job_result(
-        normalized_article,
-        selected_city,
+    existing_item = _find_material_import_match(
+        source_url=payload.source_url,
+        article=normalized_article,
+        category=payload.category,
     )
 
-    if (
-        not payload.force_refresh and
-        existing_item and
-        existing_item.get("name") and
-        existing_item.get("current_price") is not None and
-        existing_item.get("current_price_exact") is not False
-    ):
+    if not payload.force_refresh and existing_item and not material_needs_full_sync(existing_item):
+        item = _link_material_for_user(
+            material=existing_item,
+            current_user=current_user,
+            source_url=payload.source_url,
+        )
         create_audit_log(
             actor_user_id=current_user.id,
             actor_email=current_user.email,
@@ -1030,44 +1110,107 @@ async def import_material_from_viyar_route(
         )
         return {
             "success": True,
-            "item": existing_item,
+            "item": item,
             "selected_city": selected_city,
             "error": None,
         }
 
     cookie_override = await _resolve_viyar_cookie_for_user(current_user)
+    try:
+        material, prices_by_city = await _collect_material_prices_for_all_cities(
+            article=normalized_article,
+            preferred_url=(payload.source_url or "").strip() or None,
+            cookie_override=cookie_override,
+            selected_city=selected_city,
+        )
 
-    job = await enqueue_material_import_job(
-        article=normalized_article,
-        category=payload.category,
-        city=selected_city,
-        owner_user_id=current_user.id,
-        preferred_url=(payload.source_url or "").strip() or None,
-    )
+        if not material:
+            raise RuntimeError("Material details were not resolved")
 
-    existing_item = get_material_import_job_result(normalized_article, selected_city)
+        image_payload = prefetch_material_image_cache(
+            article=material["article"],
+            stored_image=material.get("image"),
+            source_url=material.get("source_url") or payload.source_url,
+            city=selected_city,
+            cookie_override=cookie_override,
+        )
 
-    create_audit_log(
-        actor_user_id=current_user.id,
-        actor_email=current_user.email,
-        action="catalog.material_import_queued",
-        entity_type="material_import_job",
-        entity_id=str(job["id"]),
-        details={
-            "article": normalized_article,
-            "category": payload.category,
-            "city": selected_city,
-            "preferred_url": (payload.source_url or "").strip() or None,
+        if not image_payload or not image_payload.get("bytes"):
+            raise RuntimeError("Material image BLOB was not resolved")
+
+        now = datetime.utcnow()
+        item = upsert_material(
+            article=material["article"],
+            name=material["name"],
+            description=material.get("description"),
+            color=material.get("color"),
+            dimensions=material.get("dimensions"),
+            thickness=material.get("thickness"),
+            category=payload.category,
+            image=material.get("image"),
+            source_url=material.get("source_url") or payload.source_url,
+            owner_user_id=str(current_user.id),
+            is_default=False,
+            source=detect_material_source_site(material.get("source_url") or payload.source_url),
+            product_type=payload.category,
+            image_source_url=image_payload.get("resolved_url") or material.get("image") or payload.source_url,
+            imported_at=now,
+            static_updated_at=now,
+        )
+
+        for city_code, price_value in prices_by_city.items():
+            upsert_material_price(
+                article=material["article"],
+                city=city_code,
+                price=price_value,
+            )
+
+        update_material_image_cache(
+            article=material["article"],
+            image_bytes=image_payload["bytes"],
+            content_type=image_payload["content_type"],
+        )
+
+        ensure_material_user_link(
+            article=material["article"],
+            user_id=str(current_user.id),
+            source=detect_material_source_site(material.get("source_url") or payload.source_url),
+            product_type=payload.category,
+            source_url=material.get("source_url") or payload.source_url,
+        )
+
+        item = get_material_by_article(
+            material["article"],
+            viewer_user_id=str(current_user.id),
+            viewer_role=current_user.role,
+        ) or item
+
+        create_audit_log(
+            actor_user_id=current_user.id,
+            actor_email=current_user.email,
+            action="catalog.material_import_completed",
+            entity_type="material",
+            entity_id=item["article"],
+            details={
+                "article": item["article"],
+                "city": selected_city,
+                "source": item.get("source"),
+                "prices_cities_count": len(prices_by_city),
+            }
+        )
+
+        return {
+            "success": True,
+            "item": item,
+            "selected_city": selected_city,
+            "error": None,
         }
-    )
-
-    return {
-        "success": True,
-        "job": job,
-        "item": existing_item,
-        "selected_city": selected_city,
-        "error": "Material import queued. The system will retry automatically.",
-    }
+    except Exception as error:
+        return {
+            "success": False,
+            "error": str(error),
+            "selected_city": selected_city,
+        }
 
 
 @router.get(
@@ -1275,6 +1418,11 @@ async def attach_material_edge_route(
         thickness_label=MATERIAL_EDGE_LABELS.get(edge_key),
         image=edge_material.get("image"),
         source_url=edge_material.get("source_url") or source_url,
+        source=source_site,
+        product_type=edge_key,
+        image_source_url=edge_material.get("image"),
+        imported_at=datetime.utcnow(),
+        static_updated_at=datetime.utcnow(),
     )
 
     for city_code, price_value in prices_by_city.items():
@@ -1284,21 +1432,26 @@ async def attach_material_edge_route(
             price=price_value,
         )
 
-    edge_cache_item = {
-        "edge_key": edge_key,
-        "article": edge_material.get("article"),
-        "image": edge_material.get("image"),
-        "source_url": edge_material.get("source_url") or source_url,
-    }
-    cache_key = f"edge:{normalized_article}:{edge_key}"
-    if _claim_material_image_warm(cache_key):
-        background_tasks.add_task(
-            _warm_material_edge_image_cache_task,
-            normalized_article,
-            edge_cache_item,
-            selected_city,
-            cookie_override,
-        )
+    image_payload = resolve_material_image_payload(
+        article=str(edge_material.get("article") or normalized_article).strip(),
+        stored_image=edge_material.get("image"),
+        source_url=edge_material.get("source_url") or source_url,
+        city=selected_city,
+        cookie_override=cookie_override,
+    )
+
+    if not image_payload or not image_payload.get("bytes"):
+        return {
+            "success": False,
+            "error": "Unable to download edge image into local SQLite cache",
+        }
+
+    update_material_edge_image_cache(
+        material_article=normalized_article,
+        edge_key=edge_key,
+        image_bytes=image_payload["bytes"],
+        content_type=image_payload["content_type"],
+    )
 
     create_audit_log(
         actor_user_id=current_user.id,
@@ -1337,7 +1490,11 @@ async def delete_material_route(
     current_user = Depends(require_material_editor)
 ):
 
-    existing_item = get_material_by_article(article.strip())
+    existing_item = get_material_by_article(
+        article.strip(),
+        viewer_user_id=str(current_user.id),
+        viewer_role=current_user.role,
+    )
 
     if not existing_item:
         return {
@@ -1399,14 +1556,7 @@ async def list_fittings_route(
         fitting_group=fitting_group,
         fitting_type=fitting_type,
     )
-
-    for item in items:
-        if (
-            item.get("image_url")
-            and not item.get("has_cached_image")
-            and _claim_fitting_image_warm(item.get("id"))
-        ):
-            background_tasks.add_task(_warm_fitting_image_cache_task, item)
+    # Прогрів картинок фурнітури тимчасово вимкнено для перевірки глобального блокування API.
 
     return {
         "success": True,

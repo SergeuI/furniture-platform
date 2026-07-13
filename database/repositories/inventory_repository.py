@@ -1,6 +1,10 @@
 from collections import defaultdict
+from hashlib import sha256
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
+
+from sqlalchemy import func
+from sqlalchemy.orm import load_only
 
 from database.models.fitting import (
     FittingModel,
@@ -16,6 +20,9 @@ from database.models.material_edge_price import (
 )
 from database.models.material_price import (
     MaterialPriceModel,
+)
+from database.models.material_user_link import (
+    MaterialUserLinkModel,
 )
 from database.models.user import (
     UserModel,
@@ -39,6 +46,51 @@ def _normalize_price_value(value) -> float | None:
         return float(normalized)
     except ValueError:
         return None
+
+
+def _normalize_source(value: str | None) -> str | None:
+
+    normalized = str(value or "").strip()
+
+    return normalized or None
+
+
+def _normalize_import_source_url(value: str | None) -> str | None:
+
+    normalized = str(value or "").strip()
+
+    if not normalized:
+        return None
+
+    if "://" not in normalized:
+        normalized = f"https://{normalized}"
+
+    try:
+        parsed = urlparse(normalized)
+        scheme = (parsed.scheme or "https").lower()
+        host = (parsed.netloc or "").lower()
+        path = parsed.path or ""
+        query = f"?{parsed.query}" if parsed.query else ""
+        fragment = f"#{parsed.fragment}" if parsed.fragment else ""
+        rebuilt = f"{scheme}://{host}{path}{query}{fragment}"
+        return rebuilt.rstrip("/") if rebuilt.endswith("/") and path not in ("", "/") else rebuilt
+    except Exception:
+        return normalized
+
+
+def _normalize_import_article(value: str | None) -> str | None:
+
+    normalized = str(value or "").strip()
+
+    return normalized or None
+
+
+def _image_hash(image_bytes: bytes | None) -> str | None:
+
+    if not image_bytes:
+        return None
+
+    return sha256(image_bytes).hexdigest()
 
 
 FITTING_GROUP_LABELS = {
@@ -286,6 +338,33 @@ def _normalize_fitting_value(value: str | None) -> str | None:
     return normalized or None
 
 
+def _normalize_fitting_city_key(value: str | None) -> str | None:
+
+    normalized = _normalize_fitting_value(value)
+
+    if normalized is None:
+        return None
+
+    return normalized.casefold()
+
+
+def _get_fitting_catalog_key(item: FittingModel) -> str:
+
+    article = _normalize_fitting_value(item.article)
+    if article:
+        return f"article:{article.casefold()}"
+
+    code = _normalize_fitting_value(item.code)
+    if code:
+        return f"code:{code.casefold()}"
+
+    name = _normalize_fitting_value(item.name)
+    if name:
+        return f"name:{name.casefold()}"
+
+    return f"id:{item.id}"
+
+
 def _resolve_fitting_category(
     fitting_type: str | None,
     fitting_group: str | None,
@@ -445,6 +524,8 @@ def _serialize_material_edge(
         "image": item.image,
         "has_cached_image": bool(item.image_cached_bytes),
         "source_url": item.source_url,
+        "source": item.source,
+        "product_type": item.product_type or item.edge_key,
         "source_site": _detect_source_site(item.source_url),
         "current_price": active_price_row["price"] if active_price_row else None,
         "current_price_city": active_price_row["city"] if active_price_row else None,
@@ -464,6 +545,20 @@ def _load_material_edges_payload(
 
     edge_rows = (
         db.query(MaterialEdgeModel)
+        .options(
+            load_only(
+                MaterialEdgeModel.id,
+                MaterialEdgeModel.material_article,
+                MaterialEdgeModel.edge_key,
+                MaterialEdgeModel.article,
+                MaterialEdgeModel.name,
+                MaterialEdgeModel.thickness_label,
+                MaterialEdgeModel.image,
+                MaterialEdgeModel.source_url,
+                MaterialEdgeModel.source,
+                MaterialEdgeModel.product_type,
+            )
+        )
         .filter(MaterialEdgeModel.material_article.in_(material_articles))
         .order_by(MaterialEdgeModel.material_article.asc(), MaterialEdgeModel.edge_key.asc(), MaterialEdgeModel.id.asc())
         .all()
@@ -471,6 +566,19 @@ def _load_material_edges_payload(
 
     edge_prices = db.query(MaterialEdgePriceModel).all()
     prices_by_edge_id: dict[int, list[MaterialEdgePriceModel]] = defaultdict(list)
+    edge_articles_with_cache = {
+        (row[0], row[1])
+        for row in (
+            db.query(
+                MaterialEdgeModel.material_article,
+                MaterialEdgeModel.edge_key,
+            )
+            .filter(MaterialEdgeModel.material_article.in_(material_articles))
+            .filter(MaterialEdgeModel.image_cached_bytes.isnot(None))
+            .filter(func.length(MaterialEdgeModel.image_cached_bytes) > 0)
+            .all()
+        )
+    }
 
     for price in edge_prices:
         prices_by_edge_id[price.edge_option_id].append(price)
@@ -478,12 +586,57 @@ def _load_material_edges_payload(
     payload: dict[str, list[dict]] = defaultdict(list)
 
     for row in edge_rows:
+        sorted_prices = sorted(
+            prices_by_edge_id.get(row.id, []),
+            key=lambda price_row: ((price_row.city or ""), price_row.id),
+        )
+        normalized_prices = [
+            {
+                "city": price.city,
+                "price": _normalize_price_value(price.price),
+            }
+            for price in sorted_prices
+        ]
+        exact_price_row = next(
+            (
+                price
+                for price in normalized_prices
+                if city and price["city"] == city and price["price"] is not None
+            ),
+            None,
+        )
+        fallback_price_row = next(
+            (
+                price
+                for price in normalized_prices
+                if price["price"] is not None
+            ),
+            None,
+        )
+        active_price_row = exact_price_row if city else fallback_price_row
+
         payload[row.material_article].append(
-            _serialize_material_edge(
-                row,
-                prices_by_edge_id,
-                city=city,
-            )
+            {
+                "id": str(row.id),
+                "edge_key": row.edge_key,
+                "label": MATERIAL_EDGE_LABELS.get(row.edge_key, row.edge_key),
+                "article": row.article,
+                "name": row.name,
+                "thickness": row.thickness_label,
+                "image": row.image,
+                "has_cached_image": (
+                    row.image is not None
+                    and (row.material_article, row.edge_key) in edge_articles_with_cache
+                ),
+                "source_url": row.source_url,
+                "source": row.source,
+                "product_type": row.product_type or row.edge_key,
+                "source_site": _detect_source_site(row.source_url),
+                "current_price": active_price_row["price"] if active_price_row else None,
+                "current_price_city": active_price_row["city"] if active_price_row else None,
+                "current_price_exact": bool(exact_price_row),
+                "prices": normalized_prices,
+            }
         )
 
     return payload
@@ -530,8 +683,12 @@ def get_material_edge_image(
             "article": item.article,
             "image": item.image,
             "source_url": item.source_url,
+            "source": item.source,
+            "product_type": item.product_type or item.edge_key,
+            "image_source_url": item.image_source_url or item.image,
             "image_cached_bytes": item.image_cached_bytes,
             "image_cached_content_type": item.image_cached_content_type,
+            "image_cached_hash": item.image_cached_hash,
         }
     finally:
         db.close()
@@ -560,6 +717,7 @@ def update_material_edge_image_cache(
 
         item.image_cached_bytes = image_bytes
         item.image_cached_content_type = content_type
+        item.image_cached_hash = _image_hash(image_bytes)
         db.commit()
 
         return {
@@ -671,6 +829,182 @@ def list_inventory_cities() -> list[str]:
         db.close()
 
 
+def _material_visible_to_viewer(
+    item: MaterialModel,
+    viewer_user_id: str | None,
+    viewer_role: str | None,
+    linked_article_ids: set[str] | None = None,
+) -> bool:
+
+    if viewer_role == "admin":
+        return True
+
+    if bool(item.is_default) or item.owner_user_id is None:
+        return True
+
+    normalized_user_id = _normalize_fitting_value(viewer_user_id)
+    if normalized_user_id and item.owner_user_id == normalized_user_id:
+        return True
+
+    if linked_article_ids and item.article in linked_article_ids:
+        return True
+
+    return False
+
+
+def material_needs_full_sync(material: dict | None) -> bool:
+
+    if not material:
+        return True
+
+    required_fields = [
+        "name",
+        "source_url",
+        "source",
+        "product_type",
+        "image_source_url",
+        "imported_at",
+    ]
+
+    for field in required_fields:
+        if not material.get(field):
+            return True
+
+    prices = material.get("prices") or []
+    if not prices or not any(price.get("price") is not None for price in prices):
+        return True
+
+    cached_bytes = material.get("image_cached_bytes")
+    if not cached_bytes or len(cached_bytes) == 0:
+        return True
+
+    return False
+
+
+def _load_material_user_links(
+    db,
+    viewer_user_id: str | None,
+) -> set[str]:
+
+    normalized_user_id = _normalize_fitting_value(viewer_user_id)
+    if not normalized_user_id:
+        return set()
+
+    rows = (
+        db.query(MaterialUserLinkModel.material_article)
+        .filter(MaterialUserLinkModel.user_id == normalized_user_id)
+        .all()
+    )
+    return {row[0] for row in rows if row and row[0]}
+
+
+def get_material_by_import_identity(
+    *,
+    source: str | None,
+    product_type: str | None,
+    article: str | None,
+    source_url: str | None,
+) -> dict | None:
+
+    db = SessionLocal()
+
+    try:
+        normalized_source = _normalize_source(source)
+        normalized_product_type = _normalize_source(product_type)
+        normalized_article = _normalize_import_article(article)
+        normalized_source_url = _normalize_import_source_url(source_url)
+
+        query = db.query(MaterialModel)
+
+        if normalized_source and normalized_product_type and normalized_article:
+            item = (
+                query
+                .filter(MaterialModel.source == normalized_source)
+                .filter(MaterialModel.product_type == normalized_product_type)
+                .filter(MaterialModel.article == normalized_article)
+                .first()
+            )
+            if item:
+                return get_material_by_article(item.article)
+
+        if normalized_source_url:
+            item = (
+                query
+                .filter(MaterialModel.source_url == normalized_source_url)
+                .first()
+            )
+            if item:
+                return get_material_by_article(item.article)
+
+        if normalized_article:
+            item = (
+                query
+                .filter(MaterialModel.article == normalized_article)
+                .first()
+            )
+            if item:
+                return get_material_by_article(item.article)
+
+        return None
+    finally:
+
+        db.close()
+
+
+def ensure_material_user_link(
+    *,
+    article: str,
+    user_id: str,
+    source: str | None = None,
+    product_type: str | None = None,
+    source_url: str | None = None,
+) -> dict | None:
+
+    db = SessionLocal()
+
+    try:
+        normalized_article = _normalize_import_article(article)
+        normalized_user_id = _normalize_fitting_value(user_id)
+
+        if not normalized_article or not normalized_user_id:
+            return None
+
+        link = (
+            db.query(MaterialUserLinkModel)
+            .filter(MaterialUserLinkModel.material_article == normalized_article)
+            .filter(MaterialUserLinkModel.user_id == normalized_user_id)
+            .first()
+        )
+
+        if not link:
+            link = MaterialUserLinkModel(
+                material_article=normalized_article,
+                user_id=normalized_user_id,
+            )
+            db.add(link)
+
+        link.source = _normalize_source(source)
+        link.product_type = _normalize_source(product_type)
+        link.source_url = _normalize_import_source_url(source_url)
+
+        db.commit()
+        db.refresh(link)
+
+        return {
+            "id": str(link.id),
+            "material_article": link.material_article,
+            "user_id": link.user_id,
+            "source": link.source,
+            "product_type": link.product_type,
+            "source_url": link.source_url,
+            "created_at": link.created_at,
+        }
+
+    finally:
+
+        db.close()
+
+
 def list_materials(
     search: str | None = None,
     category: str | None = None,
@@ -683,7 +1017,26 @@ def list_materials(
 
     try:
 
-        query = db.query(MaterialModel)
+        query = db.query(MaterialModel).options(
+            load_only(
+                MaterialModel.id,
+                MaterialModel.article,
+                MaterialModel.name,
+                MaterialModel.description,
+                MaterialModel.color,
+                MaterialModel.dimensions,
+                MaterialModel.thickness,
+                MaterialModel.image,
+                MaterialModel.source_url,
+                MaterialModel.source,
+                MaterialModel.product_type,
+                MaterialModel.owner_user_id,
+                MaterialModel.category,
+                MaterialModel.tg_file_id,
+                MaterialModel.is_default,
+            )
+        )
+        linked_article_ids = _load_material_user_links(db, viewer_user_id)
 
         if category:
             query = query.filter(
@@ -691,17 +1044,14 @@ def list_materials(
             )
 
         if viewer_role and viewer_role != "admin":
-            visible_filter = (
-                MaterialModel.is_default.is_(True)
-                | (
-                    MaterialModel.owner_user_id.is_(None)
-                    & MaterialModel.source_url.isnot(None)
-                    & (MaterialModel.source_url != "")
+            query = query.filter(
+                (
+                    MaterialModel.is_default.is_(True)
+                    | MaterialModel.owner_user_id.is_(None)
+                    | (MaterialModel.owner_user_id == _normalize_fitting_value(viewer_user_id))
+                    | MaterialModel.article.in_(sorted(linked_article_ids))
                 )
             )
-            if viewer_user_id:
-                visible_filter = visible_filter | (MaterialModel.owner_user_id == str(viewer_user_id))
-            query = query.filter(visible_filter)
 
         if search:
             search_value = f"%{search.strip()}%"
@@ -721,6 +1071,16 @@ def list_materials(
 
         material_prices = db.query(MaterialPriceModel).all()
         prices_by_article: dict[str, list[MaterialPriceModel]] = defaultdict(list)
+        cached_material_articles = {
+            row[0]
+            for row in (
+                db.query(MaterialModel.article)
+                .filter(MaterialModel.article.in_([item.article for item in materials if item.article]))
+                .filter(MaterialModel.image_cached_bytes.isnot(None))
+                .filter(func.length(MaterialModel.image_cached_bytes) > 0)
+                .all()
+            )
+        }
         edges_by_article = _load_material_edges_payload(
             db,
             [item.article for item in materials if item.article],
@@ -787,7 +1147,7 @@ def list_materials(
                     "tg_file_id": item.tg_file_id,
                     "owner_user_id": item.owner_user_id,
                     "is_default": bool(item.is_default),
-                    "has_cached_image": bool(item.image_cached_bytes),
+                    "has_cached_image": item.article in cached_material_articles,
                     "prices": normalized_prices,
                     "current_price": active_price_row["price"] if active_price_row else None,
                     "current_price_city": active_price_row["city"] if active_price_row else None,
@@ -852,10 +1212,52 @@ def list_fittings(
             .all()
         )
 
-        serialized = [
-            _serialize_fitting(item)
-            for item in fittings
-        ]
+        requested_city_key = _normalize_fitting_city_key(city)
+        requested_city_value = _normalize_fitting_value(city)
+        fittings_by_key: dict[str, list[FittingModel]] = defaultdict(list)
+
+        for item in fittings:
+            fittings_by_key[_get_fitting_catalog_key(item)].append(item)
+
+        serialized = []
+
+        for fitting_rows in fittings_by_key.values():
+            selected_row = None
+            exact_city_row = None
+
+            if requested_city_key:
+                exact_city_row = next(
+                    (
+                        row
+                        for row in fitting_rows
+                        if _normalize_fitting_city_key(row.city) == requested_city_key
+                    ),
+                    None,
+                )
+
+            if exact_city_row:
+                selected_row = exact_city_row
+            else:
+                selected_row = next(
+                    (
+                        row
+                        for row in fitting_rows
+                        if _normalize_fitting_city_key(row.city) is None
+                    ),
+                    fitting_rows[0],
+                )
+
+            serialized_item = _serialize_fitting(selected_row)
+
+            if requested_city_key:
+                if exact_city_row:
+                    serialized_item["city"] = exact_city_row.city
+                    serialized_item["price"] = _normalize_price_value(exact_city_row.price)
+                else:
+                    serialized_item["city"] = requested_city_value
+                    serialized_item["price"] = None
+
+            serialized.append(serialized_item)
 
         if fitting_group:
             serialized = [
@@ -1126,7 +1528,11 @@ def update_fitting_image_cache(
         db.close()
 
 
-def get_material_by_article(article: str) -> dict | None:
+def get_material_by_article(
+    article: str,
+    viewer_user_id: str | None = None,
+    viewer_role: str | None = None,
+) -> dict | None:
 
     db = SessionLocal()
 
@@ -1139,6 +1545,14 @@ def get_material_by_article(article: str) -> dict | None:
         )
 
         if not item:
+            return None
+
+        if (viewer_user_id is not None or viewer_role is not None) and not _material_visible_to_viewer(
+            item,
+            viewer_user_id=viewer_user_id,
+            viewer_role=viewer_role,
+            linked_article_ids=_load_material_user_links(db, viewer_user_id),
+        ):
             return None
 
         if not item.image_cached_bytes and item.image:
@@ -1172,6 +1586,8 @@ def get_material_by_article(article: str) -> dict | None:
             "category": item.category,
             "image": item.image,
             "source_url": item.source_url,
+            "source": item.source,
+            "product_type": item.product_type or item.category,
             "source_site": _detect_source_site(item.source_url),
             "tg_file_id": item.tg_file_id,
             "owner_user_id": item.owner_user_id,
@@ -1179,6 +1595,27 @@ def get_material_by_article(article: str) -> dict | None:
             "has_cached_image": bool(item.image_cached_bytes),
             "image_cached_bytes": item.image_cached_bytes,
             "image_cached_content_type": item.image_cached_content_type,
+            "image_source_url": item.image_source_url or item.image,
+            "image_cached_hash": item.image_cached_hash,
+            "imported_at": item.imported_at,
+            "static_updated_at": item.static_updated_at,
+            "prices": [
+                {
+                    "city": price.city,
+                    "price": _normalize_price_value(price.price),
+                    "currency": price.currency,
+                    "availability": price.availability,
+                    "updated_at": price.updated_at,
+                }
+                for price in sorted(
+                    (
+                        db.query(MaterialPriceModel)
+                        .filter(MaterialPriceModel.article == item.article)
+                        .all()
+                    ),
+                    key=lambda row: ((row.city or ""), row.id),
+                )
+            ],
             "edge_options": _load_material_edges_payload(
                 db,
                 [item.article],
@@ -1204,6 +1641,12 @@ def upsert_material(
     tg_file_id: str | None = None,
     owner_user_id: str | None = None,
     is_default: bool | None = None,
+    source: str | None = None,
+    product_type: str | None = None,
+    image_source_url: str | None = None,
+    image_cached_hash: str | None = None,
+    imported_at: datetime | None = None,
+    static_updated_at: datetime | None = None,
 ) -> dict:
 
     db = SessionLocal()
@@ -1228,6 +1671,8 @@ def upsert_material(
         item.dimensions = dimensions
         item.thickness = thickness
         item.category = category
+        item.source = _normalize_source(source) or _detect_source_site(source_url)
+        item.product_type = _normalize_source(product_type) or category
         normalized_new_image = str(image or "").strip() or None
         normalized_old_image = str(item.image or "").strip() or None
 
@@ -1236,16 +1681,24 @@ def upsert_material(
             # serving old bytes after the parser discovers a new source image.
             item.image_cached_bytes = None
             item.image_cached_content_type = None
+            item.image_cached_hash = None
 
         item.image = normalized_new_image
+        item.image_source_url = _normalize_import_source_url(image_source_url or image)
+        if image_cached_hash is not None:
+            item.image_cached_hash = image_cached_hash
         if source_url is not None:
-            item.source_url = source_url
+            item.source_url = _normalize_import_source_url(source_url)
         if tg_file_id is not None:
             item.tg_file_id = tg_file_id
         if owner_user_id is not None or is_default is True:
             item.owner_user_id = owner_user_id
         if is_default is not None:
             item.is_default = bool(is_default)
+        if imported_at is not None and item.imported_at is None:
+            item.imported_at = imported_at
+        if static_updated_at is not None:
+            item.static_updated_at = static_updated_at
 
         db.commit()
         db.refresh(item)
@@ -1266,6 +1719,8 @@ def upsert_material(
             "category": item.category,
             "image": item.image,
             "source_url": item.source_url,
+            "source": item.source,
+            "product_type": item.product_type,
             "source_site": _detect_source_site(item.source_url),
             "tg_file_id": item.tg_file_id,
             "owner_user_id": item.owner_user_id,
@@ -1273,6 +1728,10 @@ def upsert_material(
             "has_cached_image": bool(item.image_cached_bytes),
             "image_cached_bytes": item.image_cached_bytes,
             "image_cached_content_type": item.image_cached_content_type,
+            "image_source_url": item.image_source_url,
+            "image_cached_hash": item.image_cached_hash,
+            "imported_at": item.imported_at,
+            "static_updated_at": item.static_updated_at,
         }
 
     finally:
@@ -1298,6 +1757,11 @@ def delete_material(article: str) -> dict | None:
         (
             db.query(MaterialPriceModel)
             .filter(MaterialPriceModel.article == article)
+            .delete(synchronize_session=False)
+        )
+        (
+            db.query(MaterialUserLinkModel)
+            .filter(MaterialUserLinkModel.material_article == article)
             .delete(synchronize_session=False)
         )
         db.delete(item)
@@ -1334,6 +1798,7 @@ def update_material_image_cache(
 
         item.image_cached_bytes = image_bytes
         item.image_cached_content_type = content_type
+        item.image_cached_hash = _image_hash(image_bytes)
 
         db.commit()
         db.refresh(item)
@@ -1353,6 +1818,8 @@ def upsert_material_price(
     article: str,
     city: str,
     price: float | None,
+    currency: str | None = None,
+    availability: str | None = None,
 ) -> dict:
 
     db = SessionLocal()
@@ -1376,6 +1843,8 @@ def upsert_material_price(
             db.add(row)
 
         row.price = price
+        row.currency = _normalize_source(currency)
+        row.availability = _normalize_source(availability)
         row.updated_at = datetime.utcnow()
 
         db.commit()
@@ -1402,6 +1871,11 @@ def upsert_material_edge_option(
     thickness_label: str | None,
     image: str | None,
     source_url: str | None,
+    source: str | None = None,
+    product_type: str | None = None,
+    image_source_url: str | None = None,
+    imported_at: datetime | None = None,
+    static_updated_at: datetime | None = None,
 ) -> dict:
 
     db = SessionLocal()
@@ -1432,9 +1906,17 @@ def upsert_material_edge_option(
         if normalized_image != item.image:
             item.image_cached_bytes = None
             item.image_cached_content_type = None
+            item.image_cached_hash = None
 
         item.image = normalized_image
-        item.source_url = source_url
+        item.image_source_url = _normalize_import_source_url(image_source_url or image)
+        item.source = _normalize_source(source) or _detect_source_site(source_url)
+        item.product_type = _normalize_source(product_type) or edge_key
+        item.source_url = _normalize_import_source_url(source_url)
+        if imported_at is not None and item.imported_at is None:
+            item.imported_at = imported_at
+        if static_updated_at is not None:
+            item.static_updated_at = static_updated_at
 
         db.commit()
         db.refresh(item)
@@ -1455,6 +1937,8 @@ def upsert_material_edge_price(
     edge_option_id: int | str,
     city: str,
     price: float | None,
+    currency: str | None = None,
+    availability: str | None = None,
 ) -> dict:
 
     db = SessionLocal()
@@ -1478,6 +1962,8 @@ def upsert_material_edge_price(
             db.add(row)
 
         row.price = _normalize_price_value(price)
+        row.currency = _normalize_source(currency)
+        row.availability = _normalize_source(availability)
         row.updated_at = datetime.utcnow()
 
         db.commit()

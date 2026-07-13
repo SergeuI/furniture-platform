@@ -229,6 +229,66 @@ def _extract_article_from_text(value: str | None) -> str | None:
     return match.group(0) if match else None
 
 
+def _is_disallowed_kronas_image_url(value: str | None) -> bool:
+    url = _clean_text(value).lower()
+
+    if not url:
+        return True
+
+    if url.startswith(("data:", "blob:")):
+        return True
+
+    blocked_markers = (
+        "ajax-loader.gif",
+        "lazy",
+        "loader.gif",
+        "placeholder",
+        "favicon",
+        "logo",
+        "sprite",
+    )
+
+    if any(marker in url for marker in blocked_markers):
+        return True
+
+    if url.endswith(".svg") or url.endswith(".gif"):
+        return True
+
+    return False
+
+
+def _extract_kronas_main_image_url(soup: BeautifulSoup, final_url: str) -> str | None:
+    for selector in [".js-productImage", ".productImage"]:
+        container = soup.select_one(selector)
+        if not container:
+            continue
+
+        candidates: list[str | None] = [
+            container.get("data-large"),
+            container.get("data-src"),
+        ]
+
+        image_node = (
+            container.select_one("img[itemprop='image']")
+            or container.select_one("img")
+        )
+
+        if image_node:
+            candidates.extend(
+                [
+                    image_node.get("data-src"),
+                    image_node.get("src"),
+                ]
+            )
+
+        for candidate in candidates:
+            normalized = _normalize_asset_url(candidate, final_url)
+            if normalized and not _is_disallowed_kronas_image_url(normalized):
+                return normalized
+
+    return None
+
+
 async def _fetch_html_with_browser(
     source_url: str,
     *,
@@ -437,39 +497,7 @@ def _parse_kronas_html(html: str, final_url: str) -> dict:
             ],
         )
     )
-    image_url = (
-        _first_attr(
-            soup,
-            [
-                "meta[property='og:image']",
-                "meta[name='twitter:image']",
-            ],
-            "content",
-            final_url,
-        )
-        or _first_attr(
-            soup,
-            [
-                ".product-gallery img",
-                ".product-image img",
-                "[itemprop='image']",
-                "img",
-            ],
-            "src",
-            final_url,
-        )
-        or _first_attr(
-            soup,
-            [
-                ".product-gallery img",
-                ".product-image img",
-                "[itemprop='image']",
-                "img",
-            ],
-            "data-src",
-            final_url,
-        )
-    )
+    image_url = _extract_kronas_main_image_url(soup, final_url)
 
     if not image_url and article:
         image_url = f"https://kronas.com.ua/Media/images/catalog/medium/{article}.jpg"

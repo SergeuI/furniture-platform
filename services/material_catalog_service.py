@@ -3,6 +3,7 @@ import json
 import re
 import subprocess
 import sys
+from io import BytesIO
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlparse
@@ -478,6 +479,47 @@ def _fetch_binary(
         )
 
 
+def _validate_image_payload(
+    image_bytes: bytes | None,
+    content_type: str | None,
+) -> str | None:
+
+    if not image_bytes:
+        return None
+
+    normalized_content_type = (content_type or "").split(";")[0].strip().lower()
+
+    if normalized_content_type and not normalized_content_type.startswith("image/"):
+        return None
+
+    try:
+        from PIL import Image
+    except Exception:
+        return normalized_content_type or "image/jpeg"
+
+    try:
+        with Image.open(BytesIO(image_bytes)) as image:
+            image.load()
+            image_format = (image.format or "").upper()
+            mime_map = {
+                "JPEG": "image/jpeg",
+                "JPG": "image/jpeg",
+                "PNG": "image/png",
+                "WEBP": "image/webp",
+            }
+            detected_content_type = mime_map.get(image_format)
+
+            if not detected_content_type:
+                return None
+
+            if image.width < 100 or image.height < 100:
+                return None
+
+            return detected_content_type
+    except Exception:
+        return None
+
+
 def resolve_material_image_payload(
     article: str,
     stored_image: str | None = None,
@@ -525,17 +567,14 @@ def resolve_material_image_payload(
         except Exception:
             continue
 
-        if not image_bytes:
-            continue
+        normalized_content_type = _validate_image_payload(image_bytes, content_type)
 
-        normalized_content_type = (content_type or "").split(";")[0].strip().lower()
-
-        if normalized_content_type and not normalized_content_type.startswith("image/"):
+        if not normalized_content_type:
             continue
 
         return {
             "bytes": image_bytes,
-            "content_type": normalized_content_type or "image/jpeg",
+            "content_type": normalized_content_type,
             "resolved_url": resolved_url,
         }
 
@@ -560,15 +599,12 @@ def resolve_material_image_payload(
                     city=city,
                     cookie_override=cookie_override,
                 )
-                normalized_content_type = (content_type or "").split(";")[0].strip().lower()
+                normalized_content_type = _validate_image_payload(image_bytes, content_type)
 
-                if image_bytes and (
-                    not normalized_content_type
-                    or normalized_content_type.startswith("image/")
-                ):
+                if normalized_content_type:
                     return {
                         "bytes": image_bytes,
-                        "content_type": normalized_content_type or "image/jpeg",
+                        "content_type": normalized_content_type,
                         "resolved_url": resolved_url,
                     }
         except Exception:
@@ -613,17 +649,14 @@ def fetch_remote_image_payload(
     except Exception:
         return None
 
-    normalized_content_type = (content_type or "").split(";")[0].strip().lower()
+    normalized_content_type = _validate_image_payload(image_bytes, content_type)
 
-    if not image_bytes or (
-        normalized_content_type
-        and not normalized_content_type.startswith("image/")
-    ):
+    if not normalized_content_type:
         return None
 
     return {
         "bytes": image_bytes,
-        "content_type": normalized_content_type or "image/jpeg",
+        "content_type": normalized_content_type,
         "resolved_url": resolved_url,
     }
 

@@ -42,7 +42,10 @@ async def _resolve_viyar_cookie_for_job(job: dict) -> str | None:
     if not owner_user_id:
         return None
 
-    user = get_user_by_id(owner_user_id)
+    user = await asyncio.to_thread(
+        get_user_by_id,
+        owner_user_id,
+    )
 
     if not user:
         return None
@@ -67,7 +70,8 @@ async def _resolve_viyar_cookie_for_job(job: dict) -> str | None:
     )
 
     if auth_result.get("success") and auth_result.get("cookie"):
-        update_user_viyar_session(
+        await asyncio.to_thread(
+            update_user_viyar_session,
             user_id=owner_user_id,
             viyar_cookie=auth_result["cookie"],
             status="connected",
@@ -75,7 +79,8 @@ async def _resolve_viyar_cookie_for_job(job: dict) -> str | None:
         )
         return auth_result["cookie"]
 
-    update_user_viyar_session(
+    await asyncio.to_thread(
+        update_user_viyar_session,
         user_id=owner_user_id,
         viyar_cookie=None,
         status="error",
@@ -93,12 +98,17 @@ async def enqueue_material_import_job(
     preferred_url: str | None = None,
 ) -> dict:
 
-    active_job = get_active_material_import_job(article=article, city=city)
+    active_job = await asyncio.to_thread(
+        get_active_material_import_job,
+        article=article,
+        city=city,
+    )
 
     if active_job:
         return active_job
 
-    job = create_material_import_job(
+    job = await asyncio.to_thread(
+        create_material_import_job,
         article=article,
         category=category,
         city=city,
@@ -113,21 +123,32 @@ async def enqueue_material_import_job(
 async def process_material_import_job(job_id: int, cookie_override: str | None = None) -> dict | None:
 
     async with _queue_lock:
-        running_job = mark_material_import_job_running(job_id)
+        running_job = await asyncio.to_thread(
+            mark_material_import_job_running,
+            job_id,
+        )
 
         if not running_job:
             return None
 
         try:
             effective_cookie = cookie_override or await _resolve_viyar_cookie_for_job(running_job)
+            existing_material = await asyncio.to_thread(
+                get_material_by_article,
+                running_job["article"],
+            )
+            source_site = detect_material_source_site(
+                running_job.get("preferred_url") or (existing_material or {}).get("source_url")
+            )
             material, debug_payload = await fetch_material_by_source_live_traced(
                 running_job["article"],
                 city=running_job["city"],
                 cookie_override=effective_cookie,
-                preferred_url=running_job.get("preferred_url") or (get_material_by_article(running_job["article"]) or {}).get("source_url"),
+                preferred_url=running_job.get("preferred_url") or (existing_material or {}).get("source_url"),
             )
 
-            upsert_material(
+            await asyncio.to_thread(
+                upsert_material,
                 article=material["article"],
                 name=material["name"],
                 category=running_job["category"],
@@ -148,7 +169,8 @@ async def process_material_import_job(job_id: int, cookie_override: str | None =
             )
 
             for city_code in price_cities:
-                upsert_material_price(
+                await asyncio.to_thread(
+                    upsert_material_price,
                     article=material["article"],
                     city=city_code,
                     price=material.get("price"),
@@ -163,23 +185,30 @@ async def process_material_import_job(job_id: int, cookie_override: str | None =
                     city=running_job["city"],
                     cookie_override=effective_cookie,
                 )
-                if image_payload:
-                    update_material_image_cache(
+                if not image_payload:
+                    if source_site == "kronas":
+                        raise RuntimeError("Kronas image payload did not pass validation")
+                else:
+                    await asyncio.to_thread(
+                        update_material_image_cache,
                         article=material["article"],
                         image_bytes=image_payload["bytes"],
                         content_type=image_payload["content_type"],
                     )
             except Exception:
-                pass
+                if source_site == "kronas":
+                    raise
 
-            mark_material_import_job_success(
+            await asyncio.to_thread(
+                mark_material_import_job_success,
                 job_id,
                 strategy=debug_payload.get("strategy"),
                 source_url=debug_payload.get("source_url"),
                 debug_trace=debug_payload.get("trace"),
             )
 
-            create_audit_log(
+            await asyncio.to_thread(
+                create_audit_log,
                 actor_user_id=running_job["owner_user_id"],
                 actor_email="",
                 action="catalog.material_import_job_completed",
@@ -197,7 +226,8 @@ async def process_material_import_job(job_id: int, cookie_override: str | None =
                 },
             )
         except Exception as error:
-            mark_material_import_job_retry(
+            await asyncio.to_thread(
+                mark_material_import_job_retry,
                 job_id,
                 str(error),
                 strategy=getattr(error, "strategy", None),
@@ -205,12 +235,18 @@ async def process_material_import_job(job_id: int, cookie_override: str | None =
                 debug_trace=getattr(error, "trace", None),
             )
 
-        return get_material_import_job(job_id)
+        return await asyncio.to_thread(
+            get_material_import_job,
+            job_id,
+        )
 
 
 async def process_due_material_import_jobs(limit: int = 5) -> list[dict]:
 
-    jobs = list_due_material_import_jobs(limit=limit)
+    jobs = await asyncio.to_thread(
+        list_due_material_import_jobs,
+        limit=limit,
+    )
     results = []
 
     for job in jobs:

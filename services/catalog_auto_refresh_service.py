@@ -60,7 +60,8 @@ async def _resolve_user_cookie(user_payload: dict) -> str | None:
     )
 
     if auth_result.get("success") and auth_result.get("cookie"):
-        update_user_viyar_session(
+        await asyncio.to_thread(
+            update_user_viyar_session,
             user_id=user_payload["id"],
             viyar_cookie=auth_result["cookie"],
             status="connected",
@@ -68,7 +69,8 @@ async def _resolve_user_cookie(user_payload: dict) -> str | None:
         )
         return auth_result["cookie"]
 
-    update_user_viyar_session(
+    await asyncio.to_thread(
+        update_user_viyar_session,
         user_id=user_payload["id"],
         viyar_cookie=None,
         status="error",
@@ -79,7 +81,8 @@ async def _resolve_user_cookie(user_payload: dict) -> str | None:
 
 async def refresh_stale_material_prices() -> int:
 
-    targets = list_material_price_refresh_targets(
+    targets = await asyncio.to_thread(
+        list_material_price_refresh_targets,
         stale_hours=AUTO_REFRESH_STALE_HOURS,
         limit=AUTO_REFRESH_MATERIAL_LIMIT,
     )
@@ -103,7 +106,8 @@ async def refresh_stale_material_prices() -> int:
 
 async def refresh_stale_viyar_service_prices() -> int:
 
-    users = list_users_needing_viyar_service_price_sync(
+    users = await asyncio.to_thread(
+        list_users_needing_viyar_service_price_sync,
         stale_hours=AUTO_REFRESH_STALE_HOURS,
         limit=AUTO_REFRESH_USER_LIMIT,
     )
