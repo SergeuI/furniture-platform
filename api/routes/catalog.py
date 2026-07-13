@@ -1226,43 +1226,9 @@ async def get_material_route(
             "error": "Material not found",
         }
 
-    needs_metadata_refresh = bool(
-        item.get("source_url") and (
-            not item.get("name")
-            or item.get("name") == item.get("article")
-            or not item.get("description")
-            or not item.get("dimensions")
-            or not item.get("thickness")
-            or item.get("current_price") is None
-            or any(
-                marker in str(item.get("description") or "").lower()
-                for marker in (
-                    "купить",
-                    "купити",
-                    "лучшие цены",
-                    "кращі ціни",
-                    "доставка по",
-                    "доставка до",
-                )
-            )
-        )
-    )
-
-    if needs_metadata_refresh:
-        job = await enqueue_material_import_job(
-            article=item["article"],
-            category=item.get("category") or "dsp",
-            city=selected_city or "kyiv",
-            owner_user_id=str(current_user.id),
-            preferred_url=item.get("source_url"),
-        )
-    else:
-        job = None
-
     return {
         "success": True,
         "item": item,
-        "job": job,
         "selected_city": selected_city,
     }
 
