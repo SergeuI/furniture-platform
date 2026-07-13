@@ -36,6 +36,16 @@ class MaterialPriceModel(Base):
         nullable=True,
     )
 
+    currency = Column(
+        String,
+        nullable=True,
+    )
+
+    availability = Column(
+        String,
+        nullable=True,
+    )
+
     updated_at = Column(
         DateTime,
         nullable=True,

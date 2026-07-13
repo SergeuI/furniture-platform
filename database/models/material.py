@@ -1,5 +1,6 @@
 from sqlalchemy import (
     Boolean,
+    DateTime,
     LargeBinary,
     Column,
     Integer,
@@ -61,6 +62,16 @@ class MaterialModel(Base):
         nullable=True,
     )
 
+    source = Column(
+        String,
+        nullable=True,
+    )
+
+    product_type = Column(
+        String,
+        nullable=True,
+    )
+
     owner_user_id = Column(
         String,
         index=True,
@@ -91,5 +102,25 @@ class MaterialModel(Base):
 
     image_cached_content_type = Column(
         String,
+        nullable=True,
+    )
+
+    image_source_url = Column(
+        String,
+        nullable=True,
+    )
+
+    image_cached_hash = Column(
+        String,
+        nullable=True,
+    )
+
+    imported_at = Column(
+        DateTime,
+        nullable=True,
+    )
+
+    static_updated_at = Column(
+        DateTime,
         nullable=True,
     )

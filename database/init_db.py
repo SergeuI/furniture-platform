@@ -48,6 +48,9 @@ from database.models.material_edge import (
 from database.models.material_edge_price import (
     MaterialEdgePriceModel
 )
+from database.models.material_user_link import (
+    MaterialUserLinkModel
+)
 from database.models.material_import_job import (
     MaterialImportJobModel
 )
@@ -456,6 +459,8 @@ def upgrade_sqlite_schema():
             )
 
         material_columns = {
+            "source": "VARCHAR",
+            "product_type": "VARCHAR",
             "description": "VARCHAR",
             "color": "VARCHAR",
             "dimensions": "VARCHAR",
@@ -465,6 +470,10 @@ def upgrade_sqlite_schema():
             "is_default": "BOOLEAN NOT NULL DEFAULT 0",
             "image_cached_bytes": "BLOB",
             "image_cached_content_type": "VARCHAR",
+            "image_source_url": "VARCHAR",
+            "image_cached_hash": "VARCHAR",
+            "imported_at": "DATETIME",
+            "static_updated_at": "DATETIME",
         }
 
         for column_name, column_type in material_columns.items():
@@ -481,6 +490,8 @@ def upgrade_sqlite_schema():
             )
 
         material_price_columns = {
+            "currency": "VARCHAR",
+            "availability": "VARCHAR",
             "updated_at": "DATETIME",
         }
 
@@ -531,6 +542,12 @@ def upgrade_sqlite_schema():
         material_edge_columns = {
             "image_cached_bytes": "BLOB",
             "image_cached_content_type": "VARCHAR",
+            "image_source_url": "VARCHAR",
+            "image_cached_hash": "VARCHAR",
+            "source": "VARCHAR",
+            "product_type": "VARCHAR",
+            "imported_at": "DATETIME",
+            "static_updated_at": "DATETIME",
         }
 
         for column_name, column_type in material_edge_columns.items():
@@ -540,6 +557,49 @@ def upgrade_sqlite_schema():
                 column_name,
                 column_type,
             )
+
+        _add_column_if_missing(
+            connection,
+            "material_edge_prices",
+            "currency",
+            "VARCHAR",
+        )
+
+        _add_column_if_missing(
+            connection,
+            "material_edge_prices",
+            "availability",
+            "VARCHAR",
+        )
+
+        connection.exec_driver_sql(
+            """
+            CREATE TABLE IF NOT EXISTS material_user_links (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                material_article VARCHAR NOT NULL,
+                user_id VARCHAR NOT NULL,
+                source VARCHAR,
+                product_type VARCHAR,
+                source_url VARCHAR,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(material_article, user_id)
+            )
+            """
+        )
+
+        connection.exec_driver_sql(
+            """
+            CREATE INDEX IF NOT EXISTS ix_material_user_links_material_article
+            ON material_user_links (material_article)
+            """
+        )
+
+        connection.exec_driver_sql(
+            """
+            CREATE INDEX IF NOT EXISTS ix_material_user_links_user_id
+            ON material_user_links (user_id)
+            """
+        )
 
         fitting_columns = {
             "fitting_type": "VARCHAR",

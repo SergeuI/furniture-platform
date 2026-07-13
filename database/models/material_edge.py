@@ -1,5 +1,6 @@
 from sqlalchemy import (
     Column,
+    DateTime,
     Integer,
     LargeBinary,
     String,
@@ -60,7 +61,37 @@ class MaterialEdgeModel(Base):
         nullable=True,
     )
 
+    image_source_url = Column(
+        String,
+        nullable=True,
+    )
+
+    image_cached_hash = Column(
+        String,
+        nullable=True,
+    )
+
+    source = Column(
+        String,
+        nullable=True,
+    )
+
+    product_type = Column(
+        String,
+        nullable=True,
+    )
+
     source_url = Column(
         String,
+        nullable=True,
+    )
+
+    imported_at = Column(
+        DateTime,
+        nullable=True,
+    )
+
+    static_updated_at = Column(
+        DateTime,
         nullable=True,
     )
