@@ -1916,21 +1916,22 @@ tbody tr.selected {
 }
 
 .fitting-source-logo.viyar {
-  background: #eef6ff;
-  border-color: #bfd7f7;
+  background: transparent;
+  border-color: transparent;
   color: #005bbb;
+  box-shadow: none;
+}
+
+.fitting-source-logo.kronas {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
 }
 
 .fitting-source-logo.blum {
   background: #fff4e8;
   border-color: #f2c99c;
   color: #c24a00;
-}
-
-.fitting-source-logo.kronas {
-  background: #edf8ef;
-  border-color: #b9e0c2;
-  color: #1b5a2b;
 }
 
 .fitting-source-logo.manual {

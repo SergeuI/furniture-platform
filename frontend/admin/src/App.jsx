@@ -4665,7 +4665,7 @@ function getMaterialSourceMeta(item, t) {
   const sourceSite = item?.source_site || detectFittingSourceSite(item?.source_url);
 
   if (sourceSite === "viyar") {
-    return { code: "viyar", label: "Viyar", logo: buildAdminAssetUrl("brand/source-logos/viyar.jpg") };
+    return { code: "viyar", label: "Viyar", logo: buildAdminAssetUrl("brand/source-logos/viyar.png") };
   }
 
   if (sourceSite === "blum") {
@@ -4673,7 +4673,7 @@ function getMaterialSourceMeta(item, t) {
   }
 
   if (sourceSite === "kronas") {
-    return { code: "kronas", label: "Kronas", logo: buildAdminAssetUrl("brand/source-logos/kronas.jpg") };
+    return { code: "kronas", label: "Kronas", logo: buildAdminAssetUrl("brand/source-logos/kronas.png") };
   }
 
   return { code: "manual", label: t.fittingManualSource, logo: buildAdminAssetUrl("brand/source-logos/manual.svg") };
@@ -7689,7 +7689,7 @@ export default function App() {
         code: "viyar",
         label: "Viyar",
         shortLabel: "viyar",
-        logo: buildAdminAssetUrl("brand/source-logos/viyar.jpg"),
+        logo: buildAdminAssetUrl("brand/source-logos/viyar.png"),
       };
     }
 
@@ -7707,7 +7707,7 @@ export default function App() {
         code: "kronas",
         label: "Kronas",
         shortLabel: "kronas",
-        logo: buildAdminAssetUrl("brand/source-logos/kronas.jpg"),
+        logo: buildAdminAssetUrl("brand/source-logos/kronas.png"),
       };
     }
 
