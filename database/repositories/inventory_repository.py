@@ -661,21 +661,6 @@ def get_material_edge_image(
         if not item:
             return None
 
-        if not item.image_cached_bytes and item.image:
-            cached_item = (
-                db.query(MaterialEdgeModel)
-                .filter(
-                    MaterialEdgeModel.id != item.id,
-                    MaterialEdgeModel.image == item.image,
-                    MaterialEdgeModel.image_cached_bytes.isnot(None),
-                )
-                .first()
-            )
-            if cached_item:
-                item.image_cached_bytes = cached_item.image_cached_bytes
-                item.image_cached_content_type = cached_item.image_cached_content_type
-                db.commit()
-
         return {
             "id": str(item.id),
             "material_article": item.material_article,
@@ -1475,21 +1460,6 @@ def get_fitting_image_by_id(item_id: str | int) -> dict | None:
         if not item:
             return None
 
-        if not item.image_cached_bytes and item.image_url:
-            cached_item = (
-                db.query(FittingModel)
-                .filter(
-                    FittingModel.id != item.id,
-                    FittingModel.image_url == item.image_url,
-                    FittingModel.image_cached_bytes.isnot(None),
-                )
-                .first()
-            )
-            if cached_item:
-                item.image_cached_bytes = cached_item.image_cached_bytes
-                item.image_cached_content_type = cached_item.image_cached_content_type
-                db.commit()
-
         return {
             "id": str(item.id),
             "image_url": item.image_url,
@@ -1554,21 +1524,6 @@ def get_material_by_article(
             linked_article_ids=_load_material_user_links(db, viewer_user_id),
         ):
             return None
-
-        if not item.image_cached_bytes and item.image:
-            cached_item = (
-                db.query(MaterialModel)
-                .filter(
-                    MaterialModel.id != item.id,
-                    MaterialModel.image == item.image,
-                    MaterialModel.image_cached_bytes.isnot(None),
-                )
-                .first()
-            )
-            if cached_item:
-                item.image_cached_bytes = cached_item.image_cached_bytes
-                item.image_cached_content_type = cached_item.image_cached_content_type
-                db.commit()
 
         return {
             "id": str(item.id),
