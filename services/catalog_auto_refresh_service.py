@@ -164,7 +164,8 @@ async def catalog_auto_refresh_loop():
             _auto_refresh_status["last_error"] = None
 
             service_catalog_synced = await refresh_viyar_service_catalog_if_due()
-            material_jobs_queued = await refresh_stale_material_prices()
+            material_jobs_queued = 0
+            # Temporarily disable the material full-import refresh until a dedicated price-only flow exists.
             service_users_synced = await refresh_stale_viyar_service_prices()
 
             cycle_finished_at = datetime.utcnow()
