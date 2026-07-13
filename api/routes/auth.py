@@ -41,7 +41,6 @@ from database.repositories.user_repository import (
     list_users,
     set_user_active,
     update_user_email,
-    update_user_profile,
     update_user_role,
     update_user_viyar_credentials,
     update_user_viyar_session
@@ -61,8 +60,10 @@ from database.repositories.project_repository import (
     list_projects_created_by_user,
 )
 from database.session import SessionLocal
+from database.models.audit_log import AuditLogModel
 from database.models.material import MaterialModel
 from database.models.fitting import FittingModel
+from database.models.user import UserModel
 
 from services.auth_service import (
     authenticate_user,
@@ -503,39 +504,60 @@ async def update_own_profile_route(
             username = requested_username
 
     supplied_fields = payload.model_fields_set
-    profile_updates = {}
 
-    if "phone" in supplied_fields:
-        profile_updates["phone"] = None if payload.phone is None else payload.phone.strip()
+    db = SessionLocal()
 
-    if "city" in supplied_fields:
-        profile_updates["city"] = None if payload.city is None else payload.city.strip()
+    try:
+        user = (
+            db.query(UserModel)
+            .filter(UserModel.id == current_user.id)
+            .first()
+        )
 
-    updated_user = update_user_profile(
-        user_id=current_user.id,
-        username=username,
-        mark_username_changed=mark_username_changed,
-        **profile_updates,
-    )
+        if not user:
+            return {
+                "success": False,
+                "error": "User not found",
+            }
 
-    if not updated_user:
-        return {
-            "success": False,
-            "error": "User not found",
-        }
+        if "phone" in supplied_fields:
+            user.phone = None if payload.phone is None else payload.phone.strip()
 
-    create_audit_log(
-        actor_user_id=current_user.id,
-        actor_email=current_user.email,
-        action="user.profile_updated",
-        entity_type="user",
-        entity_id=current_user.id,
-        details={
-            "phone_updated": payload.phone is not None,
-            "city_updated": payload.city is not None,
-            "username_updated": mark_username_changed,
-        }
-    )
+        if "city" in supplied_fields:
+            user.city = None if payload.city is None else payload.city.strip()
+
+        if username is not None:
+            user.username = username
+
+        if mark_username_changed:
+            user.last_username_change_at = datetime.utcnow()
+
+        db.add(
+            AuditLogModel(
+                actor_user_id=current_user.id,
+                actor_email=current_user.email,
+                action="user.profile_updated",
+                entity_type="user",
+                entity_id=current_user.id,
+                details={
+                    "phone_updated": "phone" in supplied_fields,
+                    "city_updated": "city" in supplied_fields,
+                    "username_updated": mark_username_changed,
+                },
+            )
+        )
+
+        db.commit()
+        db.refresh(user)
+
+        updated_user = user
+
+    except Exception:
+        db.rollback()
+        raise
+
+    finally:
+        db.close()
 
     return {
         "success": True,
