@@ -493,6 +493,20 @@ def git_add_paths(paths: list[str]) -> tuple[int, str]:
     return result.returncode, output
 
 
+def git_staged_paths() -> list[str]:
+    result = subprocess.run(
+        ["git", "diff", "--cached", "--name-only"],
+        cwd=str(PROJECT_ROOT),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        return []
+
+    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+
+
 def git_push() -> tuple[int, str]:
     result = subprocess.run(
         ["git", "push"],
@@ -523,9 +537,14 @@ def safe_subprocess_kwargs() -> dict:
     return kwargs
 
 
-def git_commit(message: str) -> tuple[int, str]:
+def git_commit(message: str, paths: list[str] | None = None) -> tuple[int, str]:
+    command = ["git", "commit"]
+    if paths:
+        command.extend(["--only", "-m", message, "--", *paths])
+    else:
+        command.extend(["-m", message])
     result = subprocess.run(
-        ["git", "commit", "-m", message],
+        command,
         cwd=str(PROJECT_ROOT),
         capture_output=True,
         text=True,
@@ -1695,7 +1714,7 @@ class WizardApp(tk.Tk):
 
         repo_text = PROJECT_ROOT.as_posix()
         ttk.Label(info, text=f": {repo_text}", style="Hint.TLabel").pack(anchor="w")
-        ttk.Label(info, text="Коміт працює локально: програма виконує `git add -A` і `git commit` у цьому репозиторії.", style="Hint.TLabel").pack(anchor="w", pady=(4, 0))
+        ttk.Label(info, text="Локальний коміт включає вибрані файли або вже підготовлені зміни. Кнопка “Підготувати всі” додає всі змінені файли.", style="Hint.TLabel").pack(anchor="w", pady=(4, 0))
 
         left = ttk.LabelFrame(body, text="Коміт", style="Card.TLabelframe")
         left.grid(row=1, column=0, sticky="nsew", padx=(0, 10), pady=(16, 0))
@@ -2840,6 +2859,18 @@ class WizardApp(tk.Tk):
             if 0 <= index < len(self.git_file_paths)
         ]
 
+    def _restore_git_file_selection(self, paths: list[str]) -> None:
+        if not paths:
+            return
+
+        selected_indices = [
+            index
+            for index, path in enumerate(self.git_file_paths)
+            if path in paths
+        ]
+        if selected_indices:
+            self.git_files.selection_set(selected_indices[0], selected_indices[-1])
+
     def stage_selected_changes(self) -> None:
         if not git_available():
             messagebox.showerror("Git не знайдено", "Система не бачить команду git.")
@@ -2852,8 +2883,12 @@ class WizardApp(tk.Tk):
 
         code, output = git_add_paths(paths)
         self.refresh_git_status()
+        self._restore_git_file_selection(paths)
         if code == 0:
             messagebox.showinfo("Готово", "Вибрані файли підготовлено до коміту.")
+            self._append_product_log(
+                f"[Git] Підготовлено {len(paths)} вибраних файлів."
+            )
         else:
             messagebox.showerror("Помилка", output or "Не вдалося підготувати вибрані файли.")
         self.record_history(
@@ -2863,7 +2898,6 @@ class WizardApp(tk.Tk):
             status="ok" if code == 0 else "error",
             extra={"output": output},
         )
-
     def stage_all_changes(self) -> None:
         if not git_available():
             messagebox.showerror("Git не знайдено", "Система не бачить команду git.")
@@ -2902,22 +2936,27 @@ class WizardApp(tk.Tk):
             return False
 
         paths = self.selected_git_paths()
+        staged_files = paths if paths else git_staged_paths()
         if paths:
             add_code, add_output = git_add_paths(paths)
-        else:
-            add_code, add_output = git_add_all()
-        if add_code != 0:
-            messagebox.showerror("Помилка add", add_output or "Не вдалося підготувати зміни.")
+            if add_code != 0:
+                messagebox.showerror("Помилка add", add_output or "Не вдалося підготувати вибрані файли.")
+                return False
+        elif not staged_files:
+            messagebox.showwarning(
+                "Нічого не вибрано для коміту",
+                "Спочатку вибери файли у списку або підготуй зміни кнопкою «Підготувати вибрані».",
+            )
             return False
 
-        commit_code, commit_output = git_commit(message)
+        commit_code, commit_output = git_commit(message, paths if paths else None)
         self.refresh_git_status()
         if commit_code == 0:
             messagebox.showinfo("Коміт створено", commit_output or "Локальний коміт успішно створено.")
             self.record_history(
                 "git.commit",
                 details=message,
-                files=paths,
+                files=staged_files,
                 status="ok",
                 extra={"output": commit_output},
             )
@@ -2927,12 +2966,11 @@ class WizardApp(tk.Tk):
             self.record_history(
                 "git.commit",
                 details=message,
-                files=paths,
+                files=staged_files,
                 status="error",
                 extra={"output": commit_output},
             )
             return False
-
 
     def push_current_branch(self) -> None:
         if not git_available():
@@ -2979,7 +3017,6 @@ class WizardApp(tk.Tk):
             status="ok" if code == 0 else "error",
             extra={"output": output},
         )
-
     def _append_product_log(self, text: str) -> None:
         self.product_log.insert("end", text.rstrip() + "\n")
         self.product_log.see("end")
