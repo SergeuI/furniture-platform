@@ -69,6 +69,7 @@ import {
   getFittingsCatalog,
   getMaterialDetails,
   getMaterialImportJob,
+  getMaterialImageBlob,
   getMaterialsCatalog,
   getMyViyarAuthStatus,
   getManualServicesTree,
@@ -4487,12 +4488,64 @@ function buildMaterialImageCandidates(item, token = "") {
     candidates.push(imageEndpoint);
   }
 
-  const sourceSite = item?.source_site || detectFittingSourceSite(item?.source_url);
-  if (sourceSite === "kronas" && article) {
-    candidates.push(`https://kronas.com.ua/Media/images/catalog/medium/${encodeURIComponent(article)}.jpg`);
+  return [...new Set(candidates.filter(Boolean))];
+}
+
+function MaterialImage({ item, token, alt, loading = "lazy", placeholderLabel }) {
+  const [objectUrl, setObjectUrl] = useState("");
+  const objectUrlRef = useRef("");
+
+  useEffect(() => {
+    const article = String(item?.article || "").trim();
+    let active = true;
+
+    if (objectUrlRef.current) {
+      URL.revokeObjectURL(objectUrlRef.current);
+      objectUrlRef.current = "";
+    }
+
+    setObjectUrl("");
+
+    if (!article || !token) {
+      return undefined;
+    }
+
+    (async () => {
+      const result = await getMaterialImageBlob(token, article);
+
+      if (!active) {
+        return;
+      }
+
+      if (result?.success && result.blob) {
+        const nextObjectUrl = URL.createObjectURL(result.blob);
+        objectUrlRef.current = nextObjectUrl;
+        setObjectUrl(nextObjectUrl);
+      }
+    })();
+
+    return () => {
+      active = false;
+
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current);
+        objectUrlRef.current = "";
+      }
+    };
+  }, [item?.article, item?.has_cached_image, item?.image_cached_hash, token]);
+
+  if (objectUrl) {
+    return (
+      <img
+        alt={alt}
+        decoding="async"
+        loading={loading}
+        src={objectUrl}
+      />
+    );
   }
 
-  return [...new Set(candidates.filter(Boolean))];
+  return <div className="material-card-placeholder">{placeholderLabel}</div>;
 }
 
 function buildMaterialEdgeImageCandidates(materialItem, edgeItem, token = "") {
@@ -5643,6 +5696,9 @@ export default function App() {
     () => readPersistedAdminToken(),
   );
   const tokenRef = useRef(token);
+  const activeViewRef = useRef(
+    normalizeCatalogView(localStorage.getItem(ACTIVE_VIEW_STORAGE_KEY) || "home"),
+  );
   const [user, setUser] = useState(
     () => readPersistedAdminUser(localStorage.getItem(TOKEN_STORAGE_KEY) || ""),
   );
@@ -5706,9 +5762,9 @@ export default function App() {
   const [materialItems, setMaterialItems] = useState([]);
   const [materialCategories, setMaterialCategories] = useState([]);
   const [materialCityOptions, setMaterialCityOptions] = useState(DEFAULT_CITY_OPTIONS);
-  const [materialSelectedCity, setMaterialSelectedCity] = useState("");
   const [materialCreateMode, setMaterialCreateMode] = useState("source");
   const [materialSearch, setMaterialSearch] = useState("");
+  const [materialsCatalogLoading, setMaterialsCatalogLoading] = useState(false);
   const [materialCategoryFilter, setMaterialCategoryFilter] = useState("dsp");
   const [newMaterialArticle, setNewMaterialArticle] = useState("");
   const [newMaterialSourceUrl, setNewMaterialSourceUrl] = useState("");
@@ -5769,6 +5825,7 @@ export default function App() {
   const [form, setForm] = useState(projectToForm(null));
   const [status, setStatusState] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [profileSaving, setProfileSaving] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(
     () =>
       (typeof window !== "undefined"
@@ -5812,6 +5869,7 @@ export default function App() {
   const [fittingItems, setFittingItems] = useState([]);
   const [fittingCategories, setFittingCategories] = useState([]);
   const [fittingSearch, setFittingSearch] = useState("");
+  const [fittingsCatalogLoading, setFittingsCatalogLoading] = useState(false);
   const [selectedFittingCategory, setSelectedFittingCategory] = useState("");
   const [fittingViewMode, setFittingViewMode] = useState("rows");
   const [fittingSourceModalOpen, setFittingSourceModalOpen] = useState(false);
@@ -5823,6 +5881,7 @@ export default function App() {
   });
   const [holeTemplateItems, setHoleTemplateItems] = useState([]);
   const [fittingBundleItems, setFittingBundleItems] = useState([]);
+  const [fittingBundlesLoading, setFittingBundlesLoading] = useState(false);
   const [holeBundleName, setHoleBundleName] = useState("");
   const [holeBundleCategoryCode, setHoleBundleCategoryCode] = useState("");
   const [holeBundleModalOpen, setHoleBundleModalOpen] = useState(false);
@@ -5892,6 +5951,11 @@ export default function App() {
   const [selectedHoleMountingVariantKey, setSelectedHoleMountingVariantKey] =
     useState("surface_mount");
   const [holeMountingVariantDropdownOpen, setHoleMountingVariantDropdownOpen] = useState(false);
+  const materialsCatalogRequestRef = useRef({ id: 0, pending: false });
+  const fittingsCatalogRequestRef = useRef({ id: 0, pending: false });
+  const fittingBundlesRequestRef = useRef({ id: 0, pending: false });
+  const materialDetailsRequestRef = useRef({ id: 0, article: "", open: false });
+  const bundleDetailsRequestRef = useRef({ id: 0, bundleKey: "", open: false });
   const holeMountingVariantRefreshRef = useRef({ reason: "", templateId: "", variantKey: "" });
   const [newFittingForm, setNewFittingForm] = useState(DEFAULT_FITTING_FORM);
   const [autoRefreshStatus, setAutoRefreshStatus] = useState(null);
@@ -7171,7 +7235,6 @@ export default function App() {
       phone: user?.phone || "",
       city: user?.city || "",
     });
-    setMaterialSelectedCity(user?.city || "");
     setEmailChangeForm({
       newEmail: "",
     });
@@ -7316,6 +7379,7 @@ export default function App() {
   const isCatalogViyarView = activeView === "catalogViyar";
   const isCatalogManualView = activeView === "catalogManual";
   const isCatalogHubView = activeView === "catalogHub";
+  const activeCity = (user?.city || "").trim();
   const isCatalogView =
     isCatalogHubView ||
     isCatalogMaterialsView ||
@@ -8027,16 +8091,15 @@ export default function App() {
       null;
     setNewFittingForm((current) => ({
       ...current,
-      city: materialSelectedCity || user?.city || "",
+      city: activeCity || "",
       fitting_group: defaultCategory?.group || current.fitting_group,
       fitting_type: defaultCategory?.code || current.fitting_type,
       is_system: canEditSystemFittings ? current.is_system : false,
     }));
   }, [
     canEditSystemFittings,
-    materialSelectedCity,
+    activeCity,
     selectedFittingCategory,
-    user?.city,
     visibleFittingCategories,
   ]);
 
@@ -8429,35 +8492,48 @@ export default function App() {
       return;
     }
 
-    setLoading(true);
-    const result = await getMaterialsCatalog(activeToken, {
-      category: options.category ?? materialCategoryFilter ?? "dsp",
-      city:
-        options.city ??
-        materialSelectedCity ??
-        ownProfileForm.city ??
-        user?.city ??
-        "",
-      search: options.search ?? materialSearch,
-    });
-    setLoading(false);
-
-    if (!result.success) {
-      const timeoutError = String(result.error || "").includes("Request timed out after");
-      if (timeoutError && materialItems.length) {
-        return;
-      }
-      setStatus({ message: result.error || t.unableToLoadCatalog, tone: "error" });
-      return;
+    if (materialsCatalogRequestRef.current.pending) {
+      return materialItems;
     }
 
-    setMaterialItems(result.items || []);
-    setMaterialCategories(result.categories || []);
-    setMaterialCityOptions(result.city_options?.length ? result.city_options : DEFAULT_CITY_OPTIONS);
-    setMaterialSelectedCity(result.selected_city || "");
-    setStatus((current) =>
-      String(current || "").includes("Request timed out after") ? "" : current,
-    );
+    const requestId = materialsCatalogRequestRef.current.id + 1;
+    const viewAtStart = activeViewRef.current;
+    materialsCatalogRequestRef.current = { id: requestId, pending: true };
+    setMaterialsCatalogLoading(true);
+
+    try {
+      const result = await getMaterialsCatalog(activeToken, {
+        category: options.category ?? materialCategoryFilter ?? "dsp",
+        city: options.city ?? activeCity ?? "",
+        search: options.search ?? materialSearch,
+      });
+
+      if (materialsCatalogRequestRef.current.id !== requestId || activeViewRef.current !== viewAtStart) {
+        return materialItems;
+      }
+
+      if (!result.success) {
+        const timeoutError = String(result.error || "").includes("Request timed out after");
+        if (timeoutError && materialItems.length) {
+          return materialItems;
+        }
+        setStatus({ message: result.error || t.unableToLoadCatalog, tone: "error" });
+        return [];
+      }
+      
+      setMaterialItems(result.items || []);
+      setMaterialCategories(result.categories || []);
+      setMaterialCityOptions(result.city_options?.length ? result.city_options : DEFAULT_CITY_OPTIONS);
+      setStatus((current) =>
+        String(current || "").includes("Request timed out after") ? "" : current,
+      );
+      return result.items || [];
+    } finally {
+      if (materialsCatalogRequestRef.current.id === requestId) {
+        materialsCatalogRequestRef.current.pending = false;
+        setMaterialsCatalogLoading(false);
+      }
+    }
   }
 
   async function openMaterialDetails(item) {
@@ -8465,33 +8541,51 @@ export default function App() {
       return;
     }
 
+    const requestId = materialDetailsRequestRef.current.id + 1;
+    const article = String(item.article || "").trim();
+    materialDetailsRequestRef.current = { id: requestId, article, open: true };
+
     setMaterialDetailLoading(true);
     setSelectedMaterialDetail((current) => current || item);
 
-    const result = await getMaterialDetails(
-      token,
-      item.article,
-      materialSelectedCity || ownProfileForm.city || user?.city || "",
-    );
+    try {
+      const result = await getMaterialDetails(
+        token,
+        item.article,
+        activeCity || "",
+      );
 
-    setMaterialDetailLoading(false);
+      if (
+        materialDetailsRequestRef.current.id !== requestId ||
+        materialDetailsRequestRef.current.article !== article ||
+        !materialDetailsRequestRef.current.open ||
+        activeViewRef.current !== "catalogMaterials"
+      ) {
+        return;
+      }
 
-    if (!result.success) {
-      setStatus({ message: result.error || t.unableToLoadCatalog, tone: "error" });
-      setSelectedMaterialDetail(item);
-      return;
+      if (!result.success) {
+        setStatus({ message: result.error || t.unableToLoadCatalog, tone: "error" });
+        setSelectedMaterialDetail(item);
+        return;
+      }
+
+      setSelectedMaterialDetail(result.item || item);
+      if (result.job?.id) {
+        setActiveMaterialImportJobId(result.job.id);
+        setActiveMaterialImportJob(result.job);
+      }
+      setMaterialEdgeForms({});
+      setMaterialEdgeCreateForm({ open: false, edge_key: getDefaultMaterialEdgeKey(result.item || item), source_url: "" });
+    } finally {
+      if (materialDetailsRequestRef.current.id === requestId) {
+        setMaterialDetailLoading(false);
+      }
     }
-
-    setSelectedMaterialDetail(result.item || item);
-    if (result.job?.id) {
-      setActiveMaterialImportJobId(result.job.id);
-      setActiveMaterialImportJob(result.job);
-    }
-    setMaterialEdgeForms({});
-    setMaterialEdgeCreateForm({ open: false, edge_key: getDefaultMaterialEdgeKey(result.item || item), source_url: "" });
   }
 
   function closeMaterialDetails() {
+    materialDetailsRequestRef.current.open = false;
     setSelectedMaterialDetail(null);
     setMaterialDetailLoading(false);
     setMaterialEdgeForms({});
@@ -8506,33 +8600,46 @@ export default function App() {
       return;
     }
 
-    const result = await getFittingsCatalog(activeToken, {
-      city:
-        options.city ??
-        materialSelectedCity ??
-        ownProfileForm.city ??
-        user?.city ??
-        "",
-      search: options.search ?? fittingSearch,
-    });
+    if (fittingsCatalogRequestRef.current.pending) {
+      return fittingItems;
+    }
 
-    if (!result.success) {
-      const timeoutError = String(result.error || "").includes("Request timed out after");
-      if (timeoutError && fittingItems.length) {
-        return;
+    const requestId = fittingsCatalogRequestRef.current.id + 1;
+    const viewAtStart = activeViewRef.current;
+    fittingsCatalogRequestRef.current = { id: requestId, pending: true };
+    setFittingsCatalogLoading(true);
+
+    try {
+      const result = await getFittingsCatalog(activeToken, {
+        city: options.city ?? activeCity ?? "",
+        search: options.search ?? fittingSearch,
+      });
+
+      if (fittingsCatalogRequestRef.current.id !== requestId || activeViewRef.current !== viewAtStart) {
+        return fittingItems;
+      }
+      
+      if (!result.success) {
+        const timeoutError = String(result.error || "").includes("Request timed out after");
+        if (timeoutError && fittingItems.length) {
+          return fittingItems;
+        }
+
+        setStatus({ message: result.error || t.unableToLoadCatalog, tone: "error" });
+        return [];
       }
 
-      setStatus({ message: result.error || t.unableToLoadCatalog, tone: "error" });
-      return;
-    }
-
-    setFittingItems(result.items || []);
-    setFittingCategories(result.categories || []);
-    if (result.city_options?.length) {
-      setMaterialCityOptions(result.city_options);
-    }
-    if (result.selected_city) {
-      setMaterialSelectedCity(result.selected_city);
+      setFittingItems(result.items || []);
+      setFittingCategories(result.categories || []);
+      if (result.city_options?.length) {
+        setMaterialCityOptions(result.city_options);
+      }
+      return result.items || [];
+    } finally {
+      if (fittingsCatalogRequestRef.current.id === requestId) {
+        fittingsCatalogRequestRef.current.pending = false;
+        setFittingsCatalogLoading(false);
+      }
     }
   }
 
@@ -8542,26 +8649,45 @@ export default function App() {
       return [];
     }
 
-    const result = await listFittingHoleBundles(activeToken);
+    if (fittingBundlesRequestRef.current.pending) {
+      return fittingBundleItems;
+    }
 
-    if (!result.success) {
-      const timeoutError = String(result.error || "").includes("Request timed out after");
+    const requestId = fittingBundlesRequestRef.current.id + 1;
+    const viewAtStart = activeViewRef.current;
+    fittingBundlesRequestRef.current = { id: requestId, pending: true };
+    setFittingBundlesLoading(true);
 
-      if (timeoutError && fittingBundleItems.length) {
+    try {
+      const result = await listFittingHoleBundles(activeToken);
+
+      if (fittingBundlesRequestRef.current.id !== requestId || activeViewRef.current !== viewAtStart) {
         return fittingBundleItems;
       }
 
-      setFittingBundleItems([]);
-      if (result.error) {
-        console.error("Unable to load fitting bundles", result.error, result.status);
-      }
-      setStatus({ message: t.unableToLoadBundles, tone: "error" });
-      return [];
-    }
+      if (!result.success) {
+        const timeoutError = String(result.error || "").includes("Request timed out after");
 
-    const bundles = Array.isArray(result.bundles) ? result.bundles : [];
-    setFittingBundleItems(bundles);
-    return bundles;
+        if (timeoutError && fittingBundleItems.length) {
+          return fittingBundleItems;
+        }
+
+        if (result.error) {
+          console.error("Unable to load fitting bundles", result.error, result.status);
+        }
+        setStatus({ message: t.unableToLoadBundles, tone: "error" });
+        return [];
+      }
+
+      const bundles = Array.isArray(result.bundles) ? result.bundles : [];
+      setFittingBundleItems(bundles);
+      return bundles;
+    } finally {
+      if (fittingBundlesRequestRef.current.id === requestId) {
+        fittingBundlesRequestRef.current.pending = false;
+        setFittingBundlesLoading(false);
+      }
+    }
   }
 
   async function loadFittingHoleServiceRules(activeToken = token, viewer = user) {
@@ -9550,7 +9676,6 @@ export default function App() {
       setHoleBundleModalViewMode("list");
       setHoleBundleDraftItemIds([]);
       setHoleBundleSelectedItemIds([]);
-      setActiveView("catalogBundles");
       setStatus({ message: t.holeBundleSaveSuccess, tone: "success" });
     } catch (error) {
       console.error("Unable to save fitting bundle", error);
@@ -9567,6 +9692,9 @@ export default function App() {
       return;
     }
 
+    const requestId = bundleDetailsRequestRef.current.id + 1;
+    bundleDetailsRequestRef.current = { id: requestId, bundleKey, open: true };
+
     setHoleBundleDetailsOpen(true);
     setHoleBundleDetailsLoading(true);
     setHoleBundleDetails({
@@ -9576,20 +9704,34 @@ export default function App() {
       templates: [],
     });
 
-    const result = await getFittingHoleBundle(token, bundleKey);
+    try {
+      const result = await getFittingHoleBundle(token, bundleKey);
 
-    setHoleBundleDetailsLoading(false);
+      if (
+        bundleDetailsRequestRef.current.id !== requestId ||
+        bundleDetailsRequestRef.current.bundleKey !== bundleKey ||
+        !bundleDetailsRequestRef.current.open ||
+        activeViewRef.current !== "catalogBundles"
+      ) {
+        return;
+      }
 
-    if (!result.success) {
-      console.error("Unable to load fitting bundle details", result.error, result.status);
-      setStatus({ message: result.error || t.unableToLoadBundles, tone: "error" });
-      return;
+      if (!result.success) {
+        console.error("Unable to load fitting bundle details", result.error, result.status);
+        setStatus({ message: result.error || t.unableToLoadBundles, tone: "error" });
+        return;
+      }
+
+      setHoleBundleDetails(result);
+    } finally {
+      if (bundleDetailsRequestRef.current.id === requestId) {
+        setHoleBundleDetailsLoading(false);
+      }
     }
-
-    setHoleBundleDetails(result);
   }
 
   function closeHoleBundleDetails() {
+    bundleDetailsRequestRef.current.open = false;
     setHoleBundleDetailsOpen(false);
     setHoleBundleDetailsLoading(false);
     setHoleBundleDetails(null);
@@ -11935,56 +12077,6 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
     await loadHoleTemplateDetails(token, nextTemplateId);
   }
 
-  async function handleMaterialCitySave(event) {
-    event.preventDefault();
-
-    if (!token) {
-      return;
-    }
-
-    const trimmedPhone = ownProfileForm.phone.trim();
-    const trimmedUsername = ownProfileForm.username.trim();
-    const trimmedCity = materialSelectedCity.trim();
-
-    const profilePayload = {
-      phone: trimmedPhone || null,
-      city: trimmedCity || null,
-    };
-
-    if (trimmedUsername) {
-      profilePayload.username = trimmedUsername;
-    }
-
-    setLoading(true);
-    const result = await updateMyProfile(token, profilePayload);
-    setLoading(false);
-
-    if (!result.success) {
-      setStatus({ message: result.error || t.unableToLoadCatalog, tone: "error" });
-      return;
-    }
-
-    setUser(result.user);
-    const savedCity = result.user.city || "";
-    setMaterialSelectedCity(savedCity);
-    setOwnProfileForm((current) => ({
-      ...current,
-      city: savedCity,
-    }));
-    setStatus(t.citySaved);
-    await Promise.all([
-      loadMaterialsCatalog(token, {
-        category: materialCategoryFilter,
-        city: savedCity,
-        search: materialSearch,
-      }),
-      loadFittingsCatalog(token, {
-        city: savedCity,
-        search: fittingSearch,
-      }),
-    ]);
-  }
-
   async function loadManualServices(activeToken = token, viewer = user) {
     if (!activeToken) {
       return;
@@ -12049,7 +12141,6 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
     await loadProjects(activeToken, 0);
     await loadMaterialsCatalog(activeToken, { category: "dsp", search: "" });
     await loadFittingsCatalog(activeToken, {
-      city: materialSelectedCity ?? ownProfileForm.city ?? viewer?.city ?? "",
       search: "",
     });
     await loadAutoRefreshStatus(activeToken);
@@ -12450,10 +12541,27 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
     const nextView = normalizeCatalogView(view === "catalog" ? "catalogViyar" : view);
 
     setActiveView(nextView);
+    activeViewRef.current = nextView;
     setStatus("");
+
+    if (nextView !== "catalogMaterials") {
+      materialDetailsRequestRef.current.open = false;
+      setSelectedMaterialDetail(null);
+      setMaterialDetailLoading(false);
+    }
+
+    if (nextView !== "catalogBundles") {
+      bundleDetailsRequestRef.current.open = false;
+      setHoleBundleDetailsOpen(false);
+      setHoleBundleDetailsLoading(false);
+      setHoleBundleDetails(null);
+    }
 
     if (nextView === "catalogFittings") {
       setSelectedFittingCategory("");
+    } else {
+      setOpenFittingMenuId("");
+      setFittingSourceModalOpen(false);
     }
 
     if (nextView === "home") {
@@ -12487,12 +12595,10 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
     }
 
     if (nextView === "catalogMaterials") {
-      await loadMaterialsCatalog(token);
       return;
     }
 
     if (nextView === "catalogFittings") {
-      await loadFittingsCatalog(token);
       return;
     }
 
@@ -12522,7 +12628,6 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
     }
 
     if (nextView === "catalogBundles") {
-      await loadFittingBundles(token);
       return;
     }
 
@@ -12621,36 +12726,41 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
       profilePayload.username = trimmedUsername;
     }
 
-    setLoading(true);
-    const result = await updateMyProfile(token, profilePayload);
-    setLoading(false);
+    setProfileSaving(true);
 
-    if (!result.success) {
-      setStatus(result.error || t.usernameChangeWeekly);
-      return;
+    try {
+      const result = await updateMyProfile(token, profilePayload);
+
+      if (!result.success) {
+        setStatus(result.error || t.usernameChangeWeekly);
+        return;
+      }
+
+      setUser(result.user);
+      const savedCity = result.user.city || "";
+      setOwnProfileForm({
+        username: result.user.username || "",
+        phone: result.user.phone || "",
+        city: savedCity,
+      });
+      setStatus(t.profileSaved);
+
+      const currentView = normalizeCatalogView(activeViewRef.current || activeView);
+      if (currentView === "catalogMaterials") {
+        await loadMaterialsCatalog(token, {
+          category: materialCategoryFilter,
+          city: savedCity,
+          search: materialSearch,
+        });
+      } else if (currentView === "catalogFittings" || currentView === "catalogFasteners") {
+        await loadFittingsCatalog(token, {
+          city: savedCity,
+          search: fittingSearch,
+        });
+      }
+    } finally {
+      setProfileSaving(false);
     }
-
-    setUser(result.user);
-    const savedCity = result.user.city || "";
-    setMaterialSelectedCity(savedCity);
-    setOwnProfileForm({
-      username: result.user.username || "",
-      phone: result.user.phone || "",
-      city: savedCity,
-    });
-    setStatus(t.profileSaved);
-
-    await Promise.all([
-      loadMaterialsCatalog(token, {
-        category: materialCategoryFilter,
-        city: savedCity,
-        search: materialSearch,
-      }),
-      loadFittingsCatalog(token, {
-        city: savedCity,
-        search: fittingSearch,
-      }),
-    ]);
   }
 
   async function handleOwnEmailChangeRequest(event) {
@@ -13081,7 +13191,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
   async function handleImportMaterial(event) {
     event.preventDefault();
 
-    const effectiveCity = materialSelectedCity || ownProfileForm.city || user?.city || "";
+    const effectiveCity = activeCity || "";
 
     if (!String(effectiveCity).trim()) {
       setStatus({ message: t.cityRequiredForMaterialImport, tone: "error" });
@@ -13285,7 +13395,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
     const result = await attachMaterialEdge(token, selectedMaterialDetail.article, {
       edge_key: edgeKey,
       source_url: sourceUrl,
-      city: materialSelectedCity || ownProfileForm.city || user?.city || "",
+      city: activeCity || "",
     });
     setLoading(false);
 
@@ -13386,7 +13496,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
 
     const payload = {
       article: normalizedArticle || null,
-      city: (materialSelectedCity || user?.city || "").trim() || null,
+      city: activeCity || null,
       code: null,
       fitting_group: newFittingForm.fitting_group,
       fitting_type: newFittingForm.fitting_type,
@@ -13436,7 +13546,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
       is_system: canEditSystemFittings ? current.is_system : false,
     }));
     await loadFittingsCatalog(token, {
-      city: materialSelectedCity || user?.city || "",
+      city: activeCity || "",
     });
   }
 
@@ -13838,6 +13948,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
 
   useEffect(() => {
     localStorage.setItem(ACTIVE_VIEW_STORAGE_KEY, activeView);
+    activeViewRef.current = activeView;
   }, [activeView]);
 
   useEffect(() => {
@@ -13929,14 +14040,12 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
     if (!materialItems.length) {
       loadMaterialsCatalog(token, {
         category: "dsp",
-        city: materialSelectedCity || ownProfileForm.city || user?.city || "",
         search: "",
       });
     }
 
     if (!fittingItems.length) {
       loadFittingsCatalog(token, {
-        city: materialSelectedCity || ownProfileForm.city || user?.city || "",
         search: "",
       });
     }
@@ -13945,10 +14054,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
     activeView,
     fittingItems.length,
     materialItems.length,
-    materialSelectedCity,
-    ownProfileForm.city,
     token,
-    user?.city,
   ]);
 
   useEffect(() => {
@@ -13974,7 +14080,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
     }
 
     loadMaterialsCatalog(token);
-  }, [token, user?.city, isCatalogMaterialsView, materialCategoryFilter, materialSearch]);
+  }, [token, isCatalogMaterialsView, materialCategoryFilter, materialSearch]);
 
   useEffect(() => {
     if (!token || (!isCatalogFittingsView && !isCatalogFastenersView)) {
@@ -13982,7 +14088,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
     }
 
     loadFittingsCatalog(token);
-  }, [token, user?.city, isCatalogFittingsView, isCatalogFastenersView, fittingSearch]);
+  }, [token, isCatalogFittingsView, isCatalogFastenersView, fittingSearch]);
 
   useEffect(() => {
     if (!token || !isCatalogHolesView || fittingItems.length) {
@@ -13990,7 +14096,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
     }
 
     loadFittingsCatalog(token, { search: "" });
-  }, [token, user?.city, isCatalogHolesView, fittingItems.length]);
+  }, [token, isCatalogHolesView, fittingItems.length]);
 
   useEffect(() => {
     if (!token || !isCatalogBundlesView) {
@@ -13998,10 +14104,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
     }
 
     loadFittingBundles(token);
-    if (!fittingItems.length || !fittingCategories.length) {
-      loadFittingsCatalog(token, { search: "" });
-    }
-  }, [token, isCatalogBundlesView, fittingCategories.length, fittingItems.length]);
+  }, [token, isCatalogBundlesView]);
 
   useEffect(() => {
     if (!token || user?.role !== "admin" || !isCatalogServiceRulesView) {
@@ -15773,7 +15876,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                   <div className="settings-actions">
                     <button
                       className="ghost-button"
-                      disabled={loading || !hasProfileChanges}
+                      disabled={profileSaving || !hasProfileChanges}
                       type="submit"
                     >
                       {t.saveProfile}
@@ -16291,7 +16394,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
             </div>
           </section>
         ) : isCatalogMaterialsView ? (
-          <section className="table-panel full-panel">
+          <section className="table-panel full-panel" key="catalogMaterials">
             <article className="catalog-card service-catalog-card service-catalog-card-full">
               <div className="service-catalog-header">
                 <div className="service-catalog-title">
@@ -16300,10 +16403,12 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                 </div>
                 <div className="service-catalog-header-actions">
                   <span className="service-tree-badge subtle">
-                    {t.currentCity}: {formatCatalogLabel(materialSelectedCity || user?.city, t)}
+                    {t.currentCity}: {formatCatalogLabel(activeCity, t)}
                   </span>
                   <span className="service-tree-badge subtle">
-                    {materialItems.length} {t.materialsCount}
+                    {materialsCatalogLoading && !materialItems.length
+                      ? t.loading
+                      : `${materialItems.length} ${t.materialsCount}`}
                   </span>
                 </div>
               </div>
@@ -16331,29 +16436,6 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                     ))}
                   </select>
                 </label>
-                <form className="materials-city-form" onSubmit={handleMaterialCitySave}>
-                  <label className="materials-filter">
-                    <span>{t.city}</span>
-                    <select
-                      onChange={(event) => setMaterialSelectedCity(event.target.value)}
-                      value={materialSelectedCity}
-                    >
-                      <option value="">{t.notSet}</option>
-                      {(materialCityOptions.length ? materialCityOptions : DEFAULT_CITY_OPTIONS).map((city) => (
-                        <option key={city} value={city}>
-                          {formatCatalogLabel(city, t)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <button
-                    className="ghost-button"
-                    disabled={loading || materialSelectedCity === (user?.city || "")}
-                    type="submit"
-                  >
-                    {t.saveCity}
-                  </button>
-                </form>
                 <button
                   className="ghost-button"
                   disabled={loading}
@@ -16452,7 +16534,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                     )}
                     <label>
                       {t.city}
-                      <input disabled readOnly type="text" value={formatCatalogLabel(materialSelectedCity || user?.city, t)} />
+                      <input disabled readOnly type="text" value={formatCatalogLabel(activeCity, t)} />
                     </label>
                     <button
                       className="primary-button"
@@ -16534,7 +16616,11 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                 </>
               ) : null}
 
-              {materialItems.length ? (
+              {materialsCatalogLoading && !materialItems.length ? (
+                <div className="empty-state compact-empty-state">
+                  <span>{t.loading}</span>
+                </div>
+              ) : materialItems.length ? (
                 <div className="material-card-grid">
                   {materialItems.map((item) => {
                     const sourceMeta = getMaterialSourceMeta(item, t);
@@ -16600,23 +16686,13 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                         </div>
                       ) : null}
                       <div className="material-card-media">
-                        {buildMaterialImageCandidates(item).length ? (
-                          <>
-                            <img
-                              alt={item.name || item.article}
-                              data-fallback-index="0"
-                              decoding="async"
-                              loading="lazy"
-                              onError={(event) => handleMaterialImageError(event, item, token)}
-                              src={buildMaterialImageCandidates(item, token)[0]}
-                            />
-                            <div className="material-card-placeholder" hidden>
-                              {formatCatalogLabel(item.category, t)}
-                            </div>
-                          </>
-                        ) : (
-                          <div className="material-card-placeholder">{formatCatalogLabel(item.category, t)}</div>
-                        )}
+                        <MaterialImage
+                          alt={item.name || item.article}
+                          item={item}
+                          loading="lazy"
+                          placeholderLabel={formatCatalogLabel(item.category, t)}
+                          token={token}
+                        />
                       </div>
                       <div className="material-card-body">
                         <div className="material-card-topline">
@@ -16643,7 +16719,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                     </article>
                   )})}
                 </div>
-              ) : (
+                ) : (
                 <div className="empty-state compact-empty-state">
                   <span>{t.catalogMaterialsDescription}</span>
                 </div>
@@ -16651,7 +16727,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
             </article>
           </section>
         ) : isCatalogFittingsView || isCatalogFastenersView ? (
-          <section className="table-panel full-panel">
+          <section className="table-panel full-panel" key="catalogFittings">
             <article className="catalog-card service-catalog-card service-catalog-card-full">
               <div className="catalog-page-header">
                 <div className="service-catalog-title">
@@ -16681,11 +16757,14 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                 </div>
                 <div className="service-catalog-header-actions">
                   <span className="service-tree-badge subtle">
-                    {t.currentCity}: {formatCatalogLabel(materialSelectedCity || user?.city, t)}
+                    {t.currentCity}: {formatCatalogLabel(activeCity, t)}
                   </span>
                   <span className="service-tree-badge subtle">
-                    {activeFittingCategory ? visibleFittingItems.length : visibleFittingCategories.length}{" "}
-                    {activeFittingCategory ? t.fittingsCount : t.fittingCategoriesCount}
+                    {fittingsCatalogLoading && !fittingItems.length
+                      ? t.loading
+                      : `${activeFittingCategory ? visibleFittingItems.length : visibleFittingCategories.length} ${
+                          activeFittingCategory ? t.fittingsCount : t.fittingCategoriesCount
+                        }`}
                   </span>
                   {activeFittingCategory ? (
                     <div className="fittings-view-toggle" role="tablist" aria-label={t.catalogBrowseCategories}>
@@ -16720,24 +16799,6 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                       type="search"
                       value={fittingSearch}
                     />
-                  </label>
-                  <label>
-                    <span>{t.city}</span>
-                    <select
-                      onChange={(event) => {
-                        const nextCity = event.target.value;
-                        setMaterialSelectedCity(nextCity);
-                        loadFittingsCatalog(token, { city: nextCity });
-                      }}
-                      value={materialSelectedCity || user?.city || ""}
-                    >
-                      <option value="">{t.notSet}</option>
-                      {materialCityOptions.map((cityOption) => (
-                        <option key={cityOption} value={cityOption}>
-                          {formatCatalogLabel(cityOption, t)}
-                        </option>
-                      ))}
-                    </select>
                   </label>
                   <button
                     className="ghost-button"
@@ -16870,7 +16931,11 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
 
               {activeFittingCategory ? (
               <div className="fittings-table-shell">
-                {visibleFittingItems.length ? (
+                {fittingsCatalogLoading && !fittingItems.length ? (
+                  <div className="empty-state compact-empty-state">
+                    <span>{t.loading}</span>
+                  </div>
+                ) : visibleFittingItems.length ? (
                   fittingViewMode === "cards" ? (
                     <div className="fittings-card-grid">
                       {visibleFittingItems.map((item) => {
@@ -17808,8 +17873,8 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                 </div>
               </article>
             </section>
-        ) : isCatalogBundlesView ? (
-          <section className="table-panel full-panel">
+        ) : isCatalogBundlesView && activeView === "catalogBundles" ? (
+          <section className="table-panel full-panel" key="catalogBundles">
             <article className="catalog-card service-catalog-card service-catalog-card-full">
               <div className="catalog-page-header">
                 <div className="service-catalog-title">
@@ -17818,17 +17883,23 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                 </div>
                 <div className="service-catalog-header-actions">
                   <span className="service-tree-badge subtle">
-                    {formatUkrainianCountLabel(
-                      fittingBundleItems.length,
-                      t.fittingBundlesCountOne,
-                      t.fittingBundlesCountFew,
-                      t.fittingBundlesCountMany,
-                    )}
+                    {fittingBundlesLoading && !fittingBundleItems.length
+                      ? t.loading
+                      : formatUkrainianCountLabel(
+                          fittingBundleItems.length,
+                          t.fittingBundlesCountOne,
+                          t.fittingBundlesCountFew,
+                          t.fittingBundlesCountMany,
+                        )}
                   </span>
                 </div>
               </div>
 
-              {fittingBundleItems.length ? (
+              {fittingBundlesLoading && !fittingBundleItems.length ? (
+                <div className="empty-state compact-empty-state fitting-bundles-empty-state">
+                  <span>{t.loading}</span>
+                </div>
+              ) : fittingBundleItems.length ? (
                 <div className="fitting-bundles-list">
                   {fittingBundleItems.map((bundle, index) => {
                     const bundleName = String(bundle?.bundle_name || bundle?.bundle_key || "").trim();
@@ -19244,7 +19315,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
         )}
       </section>
 
-      {holeBundleDetailsOpen ? (
+      {activeView === "catalogBundles" && holeBundleDetailsOpen ? (
         <div
           aria-modal="true"
           className="modal-backdrop"
@@ -19272,7 +19343,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
 
             {holeBundleDetailsLoading ? (
               <div className="empty-state compact-empty-state">
-                <span>{t.loading}</span>
+                <span>Завантаження складу комплекту…</span>
               </div>
             ) : holeBundleDetails ? (
               <>
@@ -19305,9 +19376,27 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                 </div>
 
                 {Array.isArray(holeBundleDetails.templates) && holeBundleDetails.templates.length ? (
-                  <div className="hole-bundle-details-list">
-                    {holeBundleDetails.templates.map((template) => {
-                      const templateName = String(template?.name || t.notSet).trim();
+                <div className="hole-bundle-details-list">
+                  {holeBundleDetails.templates.map((template) => {
+                      const matchingFitting =
+                        fittingItems.find((item) => String(item.id) === String(template?.fitting_id)) ||
+                        fittingItems.find(
+                          (item) =>
+                            String(item.article || "").trim() === String(template?.fitting_article || "").trim(),
+                        ) ||
+                        fittingItems.find(
+                          (item) =>
+                            String(item.code || "").trim() === String(template?.fitting_code || "").trim(),
+                        ) ||
+                        null;
+                      const templateName = String(
+                        matchingFitting?.name ||
+                          matchingFitting?.display_name ||
+                          template?.fitting_article ||
+                          template?.fitting_code ||
+                          template?.name ||
+                          t.notSet,
+                      ).trim();
                       const templateArticle = String(template?.fitting_article || "").trim();
                       const templateCategoryLabel = getFittingBundleCategoryLabel(template);
 
@@ -20849,25 +20938,13 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                       tabIndex={0}
                     >
                       <div className="project-option-picker-card-media">
-                        {buildMaterialImageCandidates(item).length ? (
-                          <>
-                            <img
-                              alt={item.name || item.article}
-                              data-fallback-index="0"
-                              decoding="async"
-                              loading="lazy"
-                              onError={(event) => handleMaterialImageError(event, item, token)}
-                              src={buildMaterialImageCandidates(item, token)[0]}
-                            />
-                            <div className="material-card-placeholder" hidden>
-                              {formatCatalogLabel(item.category, t)}
-                            </div>
-                          </>
-                        ) : (
-                          <div className="material-card-placeholder">
-                            {formatCatalogLabel(item.category, t)}
-                          </div>
-                        )}
+                        <MaterialImage
+                          alt={item.name || item.article}
+                          item={item}
+                          loading="lazy"
+                          placeholderLabel={formatCatalogLabel(item.category, t)}
+                          token={token}
+                        />
                       </div>
                       <div className="project-option-picker-card-body">
                         <div className="project-option-picker-card-topline">
@@ -20894,7 +20971,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                         </div>
                         <div className="project-option-picker-card-meta">
                           <span>
-                            {t.city}: {formatCatalogLabel(item.current_price_city || materialSelectedCity || user?.city, t)}
+                            {t.city}: {formatCatalogLabel(item.current_price_city || activeCity, t)}
                           </span>
                           {renderSourceBadge(getMaterialSourceMeta(item, t))}
                         </div>
@@ -20912,7 +20989,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
         </div>
       ) : null}
 
-      {selectedMaterialDetail ? (
+      {activeView === "catalogMaterials" && selectedMaterialDetail ? (
         <div
           aria-modal="true"
           className="modal-backdrop"
@@ -20940,25 +21017,13 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
 
             <div className="material-details-layout">
               <div className="material-details-media">
-                {buildMaterialImageCandidates(selectedMaterialDetail).length ? (
-                  <>
-                    <img
-                      alt={selectedMaterialDetail.name || selectedMaterialDetail.article}
-                      data-fallback-index="0"
-                      decoding="async"
-                      loading="eager"
-                      onError={(event) => handleMaterialImageError(event, selectedMaterialDetail, token)}
-                      src={buildMaterialImageCandidates(selectedMaterialDetail, token)[0]}
-                    />
-                    <div className="material-card-placeholder" hidden>
-                      {formatCatalogLabel(selectedMaterialDetail.category, t)}
-                    </div>
-                  </>
-                ) : (
-                  <div className="material-card-placeholder">
-                    {formatCatalogLabel(selectedMaterialDetail.category, t)}
-                  </div>
-                )}
+                <MaterialImage
+                  alt={selectedMaterialDetail.name || selectedMaterialDetail.article}
+                  item={selectedMaterialDetail}
+                  loading="eager"
+                  placeholderLabel={formatCatalogLabel(selectedMaterialDetail.category, t)}
+                  token={token}
+                />
               </div>
 
               <div className="material-details-content">
@@ -20986,10 +21051,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                   <div>
                     <span>{t.city}</span>
                     <strong>
-                      {formatCatalogLabel(
-                        selectedMaterialDetail.current_price_city || materialSelectedCity || user?.city,
-                        t,
-                      )}
+                      {formatCatalogLabel(selectedMaterialDetail.current_price_city || activeCity, t)}
                     </strong>
                   </div>
                   <div>
@@ -21112,11 +21174,14 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                                 token,
                               ).length ? (
                                 <>
+                                  <div className="material-edge-card-preview-placeholder material-edge-card-preview-skeleton">
+                                    {t.loading}
+                                  </div>
                                   <img
                                     alt={edgeItem.name || edgeItem.article || slot.label}
                                     data-fallback-index="0"
                                     decoding="async"
-                                    loading="lazy"
+                                    loading="eager"
                                     onError={(event) =>
                                       handleMaterialEdgeImageError(
                                         event,
@@ -21131,13 +21196,10 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                                       token,
                                     )[0]}
                                   />
-                                  <div className="material-edge-card-preview-placeholder" hidden>
-                                    {slot.label}
-                                  </div>
                                 </>
                               ) : (
                                 <div className="material-edge-card-preview-placeholder">
-                                  {slot.label}
+                                  {t.loading}
                                 </div>
                               )}
                               </div>
