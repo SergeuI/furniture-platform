@@ -30,15 +30,25 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Fetch and optionally store a single material price from Viyar.",
     )
-    parser.add_argument(
+    mode_group = parser.add_mutually_exclusive_group(required=True)
+    mode_group.add_argument(
         "--article",
-        required=True,
         help="Material article to refresh.",
+    )
+    mode_group.add_argument(
+        "--batch",
+        action="store_true",
+        help="Refresh a limited batch of Viyar materials.",
     )
     parser.add_argument(
         "--city",
         required=True,
         help="City code. For this first version only kyiv is supported.",
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        help="Batch size limit. Required for --batch and ignored for single-item mode.",
     )
     parser.add_argument(
         "--apply",
@@ -74,8 +84,59 @@ def _is_viyar_url(source_url: str | None) -> bool:
     if not source_url:
         return False
     parsed = urlparse(source_url)
+    scheme = (parsed.scheme or "").lower()
     host = (parsed.netloc or "").lower()
-    return host.endswith("viyar.ua")
+    if scheme not in {"http", "https"}:
+        return False
+    return host == "viyar.ua" or host.endswith(".viyar.ua")
+
+
+def _is_valid_viyar_candidate(source_url: str | None) -> bool:
+    return _is_viyar_url(source_url)
+
+
+def _normalize_text(value: object | None) -> str:
+    return " ".join(str(value or "").split()).strip()
+
+
+def _normalize_float(value: object | None) -> float | None:
+    if value is None or value == "":
+        return None
+    try:
+        return float(str(value).replace(",", "."))
+    except ValueError:
+        return None
+
+
+def _normalize_bool(value: object | None) -> bool:
+    return bool(value)
+
+
+def _normalize_iso_date(value: object | None) -> date | None:
+    if value is None or value == "":
+        return None
+    if isinstance(value, date) and not isinstance(value, datetime):
+        return value
+    try:
+        return date.fromisoformat(str(value))
+    except ValueError as exc:
+        raise SystemExit(f"Controlled error: invalid promo_valid_until value: {value!r}") from exc
+
+
+def _same_business_price_fields(current: dict | None, fetched: dict) -> bool:
+    if not current:
+        return False
+
+    return (
+        _normalize_float(current.get("price")) == _normalize_float(fetched.get("price"))
+        and _normalize_text(current.get("currency")) == _normalize_text(fetched.get("currency"))
+        and _normalize_text(current.get("availability")) == _normalize_text(fetched.get("availability"))
+        and _normalize_float(current.get("old_price")) == _normalize_float(fetched.get("old_price"))
+        and _normalize_bool(current.get("is_promo")) == _normalize_bool(fetched.get("is_promo"))
+        and _normalize_float(current.get("discount_percent")) == _normalize_float(fetched.get("discount_percent"))
+        and _normalize_text(current.get("promo_label")) == _normalize_text(fetched.get("promo_label"))
+        and _normalize_iso_date(current.get("promo_valid_until")) == _normalize_iso_date(fetched.get("promo_valid_until"))
+    )
 
 
 def _read_material_snapshot(
@@ -156,15 +217,6 @@ def _read_material_snapshot(
     }
 
 
-def _convert_promo_valid_until(value: str | None) -> date | None:
-    if value is None:
-        return None
-    try:
-        return date.fromisoformat(str(value))
-    except ValueError as exc:
-        raise SystemExit(f"Controlled error: invalid promo_valid_until value: {value!r}") from exc
-
-
 def _print_before(snapshot: dict) -> None:
     print("BEFORE:")
     print(f"  article: {snapshot['material']['article']}")
@@ -206,7 +258,7 @@ def _print_would_write(
     fetched: dict,
     source_checked_at: datetime,
 ) -> None:
-    promo_valid_until = _convert_promo_valid_until(fetched.get("promo_valid_until"))
+    promo_valid_until = _normalize_iso_date(fetched.get("promo_valid_until"))
     print("WOULD WRITE:")
     print(f"  article: {article}")
     print(f"  city: {city}")
@@ -221,48 +273,78 @@ def _print_would_write(
     print(f"  source_checked_at: {source_checked_at}")
 
 
-def main() -> int:
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8")
-    if hasattr(sys.stderr, "reconfigure"):
-        sys.stderr.reconfigure(encoding="utf-8")
+def _list_batch_candidates(
+    connection: sqlite3.Connection,
+    *,
+    limit: int,
+) -> tuple[list[dict], int, int]:
+    connection.row_factory = sqlite3.Row
+    cursor = connection.cursor()
+    scanned = 0
+    skipped = 0
+    candidates: list[dict] = []
 
-    args = parse_args()
-    article = (args.article or "").strip()
-    city = _normalize_city(args.city)
+    rows = cursor.execute(
+        """
+        SELECT id, article, source_url
+        FROM materials
+        WHERE NULLIF(TRIM(COALESCE(source_url, '')), '') IS NOT NULL
+        ORDER BY id ASC
+        """
+    )
 
-    database_path = _resolve_database_path()
-    before_size = database_path.stat().st_size
-    before_mtime = database_path.stat().st_mtime
+    for row in rows:
+        scanned += 1
+        source_url = row["source_url"]
+        if not _is_valid_viyar_candidate(source_url):
+            skipped += 1
+            continue
 
-    with _open_readonly_connection(database_path) as connection:
-        snapshot = _read_material_snapshot(connection, article=article, city=city)
+        candidates.append(
+            {
+                "id": row["id"],
+                "article": row["article"],
+                "source_url": source_url,
+            }
+        )
 
+        if len(candidates) >= limit:
+            break
+
+    return candidates, scanned, skipped
+
+
+def _process_single_material(
+    *,
+    article: str,
+    city: str,
+    connection: sqlite3.Connection,
+    apply_mode: bool,
+) -> tuple[str, dict | None]:
+    snapshot = _read_material_snapshot(connection, article=article, city=city)
     _print_before(snapshot)
 
     fetched = fetch_material_price_by_url(snapshot["material"]["source_url"])
     _print_fetched(fetched)
 
+    current_price = snapshot["price"]
+    if _same_business_price_fields(current_price, fetched):
+        print("Result: unchanged")
+        return "unchanged", snapshot
+
     source_checked_at = datetime.utcnow()
 
-    if not args.apply:
+    if not apply_mode:
         _print_would_write(
             article=article,
             city=city,
             fetched=fetched,
             source_checked_at=source_checked_at,
         )
-        print("Mode: DRY-RUN")
-        print("Database write performed: no")
-        print("Writer invoked: no")
-        print("External fetch performed: yes")
-        return 0
+        print("Result: would_update")
+        return "would_update", snapshot
 
-    try:
-        promo_valid_until = _convert_promo_valid_until(fetched.get("promo_valid_until"))
-    except SystemExit:
-        raise
-
+    promo_valid_until = _normalize_iso_date(fetched.get("promo_valid_until"))
     upsert_material_price(
         article=article,
         city=city,
@@ -276,12 +358,121 @@ def main() -> int:
         promo_valid_until=promo_valid_until,
         source_checked_at=source_checked_at,
     )
+    print("Result: updated")
+    return "updated", snapshot
 
-    print("Mode: APPLY")
-    print("Database write performed: yes")
-    print("Writer invoked: yes")
-    print(f"Database size before: {before_size}")
-    print(f"Database mtime before: {before_mtime}")
+
+def _run_batch(connection: sqlite3.Connection, *, city: str, limit: int, apply_mode: bool) -> int:
+    candidates, scanned, skipped = _list_batch_candidates(connection, limit=limit)
+
+    print("BATCH CANDIDATES:")
+    for candidate in candidates:
+        print(
+            f"  id={candidate['id']} article={candidate['article']} source_url={candidate['source_url']}"
+        )
+
+    counters = {
+        "mode": "APPLY" if apply_mode else "DRY-RUN",
+        "scanned": scanned,
+        "total": len(candidates),
+        "fetched": 0,
+        "would_update": 0,
+        "updated": 0,
+        "unchanged": 0,
+        "skipped": skipped,
+        "failed": 0,
+    }
+    errors: list[tuple[str, str]] = []
+
+    for candidate in candidates:
+        article = candidate["article"]
+        try:
+            result, _snapshot = _process_single_material(
+                article=article,
+                city=city,
+                connection=connection,
+                apply_mode=apply_mode,
+            )
+            counters["fetched"] += 1
+            if result == "would_update":
+                counters["would_update"] += 1
+            elif result == "updated":
+                counters["would_update"] += 1
+                counters["updated"] += 1
+            elif result == "unchanged":
+                counters["unchanged"] += 1
+        except Exception as exc:
+            counters["failed"] += 1
+            errors.append((article, _normalize_text(exc)))
+            print(f"FAILED: article={article} error={_normalize_text(exc)}")
+            continue
+
+    print("SUMMARY:")
+    for key in ("mode", "scanned", "total", "fetched", "would_update", "updated", "unchanged", "skipped", "failed"):
+        print(f"  {key}: {counters[key]}")
+
+    if errors:
+        print("ERRORS:")
+        for article, error_text in errors:
+            print(f"  article={article} error={error_text}")
+
+    return 0
+
+
+def main() -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8")
+
+    args = parse_args()
+    city = _normalize_city(args.city)
+    if args.batch and args.limit is None:
+        raise SystemExit("Controlled error: --limit is required when --batch is used.")
+    if args.limit is not None and args.limit <= 0:
+        raise SystemExit("Controlled error: --limit must be a positive integer.")
+    if not args.batch and args.limit is not None:
+        raise SystemExit("Controlled error: --limit is only supported together with --batch.")
+
+    database_path = _resolve_database_path()
+    before_size = database_path.stat().st_size
+    before_mtime = database_path.stat().st_mtime
+
+    with _open_readonly_connection(database_path) as connection:
+        if args.batch:
+            batch_result = _run_batch(
+                connection,
+                city=city,
+                limit=int(args.limit),
+                apply_mode=bool(args.apply),
+            )
+            print(f"Database size before: {before_size}")
+            print(f"Database mtime before: {before_mtime}")
+            print("Database write performed: " + ("yes" if args.apply else "no"))
+            print("Writer invoked: " + ("yes" if args.apply else "no"))
+            print("External fetch performed: yes")
+            return batch_result
+
+        article = (args.article or "").strip()
+        result, _snapshot = _process_single_material(
+            article=article,
+            city=city,
+            connection=connection,
+            apply_mode=bool(args.apply),
+        )
+
+    if args.apply:
+        print("Mode: APPLY")
+        print("Database write performed: yes")
+        print("Writer invoked: yes")
+    else:
+        print("Mode: DRY-RUN")
+        print("Database write performed: no")
+        print("Writer invoked: no")
+    print("External fetch performed: yes")
+    if args.apply:
+        print(f"Database size before: {before_size}")
+        print(f"Database mtime before: {before_mtime}")
     return 0
 
 
