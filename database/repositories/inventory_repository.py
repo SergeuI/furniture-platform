@@ -58,6 +58,23 @@ def _normalize_source(value: str | None) -> str | None:
     return normalized or None
 
 
+def _serialize_material_price_row(price: MaterialPriceModel) -> dict:
+
+    return {
+        "city": price.city,
+        "price": _normalize_price_value(price.price),
+        "currency": price.currency,
+        "availability": price.availability,
+        "old_price": _normalize_price_value(price.old_price),
+        "is_promo": bool(price.is_promo),
+        "discount_percent": _normalize_price_value(price.discount_percent),
+        "promo_label": price.promo_label,
+        "promo_valid_until": price.promo_valid_until,
+        "source_checked_at": price.source_checked_at,
+        "updated_at": price.updated_at,
+    }
+
+
 def _normalize_import_source_url(value: str | None) -> str | None:
 
     normalized = str(value or "").strip()
@@ -1086,25 +1103,22 @@ def list_materials(
                 key=lambda row: ((row.city or ""), row.id),
             )
             normalized_prices = [
-                {
-                    "city": price.city,
-                    "price": _normalize_price_value(price.price),
-                }
+                _serialize_material_price_row(price)
                 for price in sorted_prices
             ]
             exact_price_row = next(
                 (
                     price
-                    for price in normalized_prices
-                    if city and price["city"] == city and price["price"] is not None
+                    for price in sorted_prices
+                    if city and price.city == city and price.price is not None
                 ),
                 None,
             )
             fallback_price_row = next(
                 (
                     price
-                    for price in normalized_prices
-                    if price["price"] is not None
+                    for price in sorted_prices
+                    if price.price is not None
                 ),
                 None,
             )
@@ -1137,11 +1151,16 @@ def list_materials(
                     "is_default": bool(item.is_default),
                     "has_cached_image": item.article in cached_material_articles,
                     "prices": normalized_prices,
-                    "current_price": active_price_row["price"] if active_price_row else None,
-                    "current_price_city": active_price_row["city"] if active_price_row else None,
+                    "current_price": active_price_row.price if active_price_row else None,
+                    "current_price_city": active_price_row.city if active_price_row else None,
                     "current_price_exact": bool(exact_price_row),
-                    "fallback_price": fallback_price_row["price"] if fallback_price_row else None,
-                    "fallback_price_city": fallback_price_row["city"] if fallback_price_row else None,
+                    "current_price_details": (
+                        _serialize_material_price_row(active_price_row)
+                        if active_price_row
+                        else None
+                    ),
+                    "fallback_price": fallback_price_row.price if fallback_price_row else None,
+                    "fallback_price_city": fallback_price_row.city if fallback_price_row else None,
                     "edge_options": edges_by_article.get(item.article, []),
                 }
             )
@@ -1558,13 +1577,7 @@ def get_material_by_article(
             "imported_at": item.imported_at,
             "static_updated_at": item.static_updated_at,
             "prices": [
-                {
-                    "city": price.city,
-                    "price": _normalize_price_value(price.price),
-                    "currency": price.currency,
-                    "availability": price.availability,
-                    "updated_at": price.updated_at,
-                }
+                _serialize_material_price_row(price)
                 for price in sorted(
                     (
                         db.query(MaterialPriceModel)
@@ -1574,6 +1587,7 @@ def get_material_by_article(
                     key=lambda row: ((row.city or ""), row.id),
                 )
             ],
+            "current_price_details": None,
             "edge_options": _load_material_edges_payload(
                 db,
                 [item.article],

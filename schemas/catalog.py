@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import List
 
 from pydantic import (
@@ -213,6 +213,15 @@ class ManualServiceCatalogItemUpdateSchema(ManualServiceCatalogItemCreateSchema)
 class MaterialPriceSchema(BaseModel):
     city: str | None = None
     price: float | None = None
+    currency: str | None = None
+    availability: str | None = None
+    old_price: float | None = None
+    is_promo: bool = False
+    discount_percent: float | None = None
+    promo_label: str | None = None
+    promo_valid_until: date | None = None
+    source_checked_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 class MaterialEdgePriceSchema(BaseModel):
@@ -256,6 +265,7 @@ class MaterialCatalogItemSchema(BaseModel):
     current_price: float | None = None
     current_price_city: str | None = None
     current_price_exact: bool = True
+    current_price_details: MaterialPriceSchema | None = None
     prices: List[MaterialPriceSchema] = Field(default_factory=list)
     edge_options: List[MaterialEdgeOptionSchema] = Field(default_factory=list)
 
