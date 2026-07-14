@@ -1,6 +1,6 @@
 from collections import defaultdict
 from hashlib import sha256
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from urllib.parse import urlparse
 
 from sqlalchemy import func
@@ -30,6 +30,9 @@ from database.models.user import (
 from database.session import (
     SessionLocal,
 )
+
+
+_UNSET = object()
 
 
 def _normalize_price_value(value) -> float | None:
@@ -1775,6 +1778,13 @@ def upsert_material_price(
     price: float | None,
     currency: str | None = None,
     availability: str | None = None,
+    *,
+    old_price: float | None | object = _UNSET,
+    is_promo: bool | object = _UNSET,
+    discount_percent: float | None | object = _UNSET,
+    promo_label: str | None | object = _UNSET,
+    promo_valid_until: date | None | object = _UNSET,
+    source_checked_at: datetime | None | object = _UNSET,
 ) -> dict:
 
     db = SessionLocal()
@@ -1801,6 +1811,18 @@ def upsert_material_price(
         row.currency = _normalize_source(currency)
         row.availability = _normalize_source(availability)
         row.updated_at = datetime.utcnow()
+        if old_price is not _UNSET:
+            row.old_price = _normalize_price_value(old_price)
+        if is_promo is not _UNSET:
+            row.is_promo = bool(is_promo)
+        if discount_percent is not _UNSET:
+            row.discount_percent = _normalize_price_value(discount_percent)
+        if promo_label is not _UNSET:
+            row.promo_label = _normalize_source(promo_label)
+        if promo_valid_until is not _UNSET:
+            row.promo_valid_until = promo_valid_until
+        if source_checked_at is not _UNSET:
+            row.source_checked_at = source_checked_at
 
         db.commit()
         db.refresh(row)
