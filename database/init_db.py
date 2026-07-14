@@ -490,6 +490,12 @@ def upgrade_sqlite_schema():
             )
 
         material_price_columns = {
+            "old_price": "REAL",
+            "is_promo": "BOOLEAN NOT NULL DEFAULT 0",
+            "discount_percent": "REAL",
+            "promo_label": "TEXT",
+            "promo_valid_until": "DATE",
+            "source_checked_at": "DATETIME",
             "currency": "VARCHAR",
             "availability": "VARCHAR",
             "updated_at": "DATETIME",

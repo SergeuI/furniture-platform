@@ -1,9 +1,13 @@
 from sqlalchemy import (
+    Boolean,
     Column,
+    Date,
     DateTime,
     Float,
     Integer,
     String,
+    Text,
+    text,
 )
 
 from database.base import Base
@@ -33,6 +37,38 @@ class MaterialPriceModel(Base):
 
     price = Column(
         Float,
+        nullable=True,
+    )
+
+    old_price = Column(
+        Float,
+        nullable=True,
+    )
+
+    is_promo = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=text("0"),
+    )
+
+    discount_percent = Column(
+        Float,
+        nullable=True,
+    )
+
+    promo_label = Column(
+        Text,
+        nullable=True,
+    )
+
+    promo_valid_until = Column(
+        Date,
+        nullable=True,
+    )
+
+    source_checked_at = Column(
+        DateTime,
         nullable=True,
     )
 

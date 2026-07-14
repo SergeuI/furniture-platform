@@ -38,7 +38,22 @@ MATERIAL_EDGE_COLUMNS = {
     "static_updated_at": "DATETIME",
 }
 
-PRICE_COLUMNS = {
+MATERIAL_PRICE_PROMO_COLUMNS = {
+    "old_price": "REAL",
+    "is_promo": "BOOLEAN NOT NULL DEFAULT 0",
+    "discount_percent": "REAL",
+    "promo_label": "TEXT",
+    "promo_valid_until": "DATE",
+    "source_checked_at": "DATETIME",
+}
+
+MATERIAL_PRICE_COLUMNS = {
+    **MATERIAL_PRICE_PROMO_COLUMNS,
+    "currency": "TEXT",
+    "availability": "TEXT",
+}
+
+MATERIAL_EDGE_PRICE_COLUMNS = {
     "currency": "TEXT",
     "availability": "TEXT",
 }
@@ -83,6 +98,11 @@ def parse_args() -> argparse.Namespace:
         "--apply",
         action="store_true",
         help="Apply changes. Without this flag the script only prints a dry-run plan.",
+    )
+    parser.add_argument(
+        "--material-price-promo-only",
+        action="store_true",
+        help="Only inspect or apply promo columns for material_prices.",
     )
     parser.add_argument(
         "--warm-images",
@@ -131,7 +151,25 @@ def _sha256(image_bytes: bytes | None) -> str | None:
     return hashlib.sha256(image_bytes).hexdigest()
 
 
-def build_plan(connection: sqlite3.Connection) -> dict[str, object]:
+def build_plan(connection: sqlite3.Connection, *, promo_only: bool = False) -> dict[str, object]:
+    if promo_only:
+        missing_price_columns = [
+            column_name
+            for column_name in MATERIAL_PRICE_PROMO_COLUMNS
+            if column_name not in column_names(connection, "material_prices")
+        ] if table_exists(connection, "material_prices") else list(MATERIAL_PRICE_PROMO_COLUMNS)
+        return {
+            "promo_only": True,
+            "missing_tables": [],
+            "missing_indexes": [],
+            "missing_material_columns": [],
+            "missing_edge_columns": [],
+            "missing_price_columns": missing_price_columns,
+            "missing_edge_price_columns": [],
+            "material_rows": [],
+            "edge_rows": [],
+        }
+
     missing_tables = [
         table_name
         for table_name in TABLES
@@ -154,14 +192,14 @@ def build_plan(connection: sqlite3.Connection) -> dict[str, object]:
     ] if table_exists(connection, "material_edge_options") else list(MATERIAL_EDGE_COLUMNS)
     missing_price_columns = [
         column_name
-        for column_name in PRICE_COLUMNS
+        for column_name in MATERIAL_PRICE_COLUMNS
         if column_name not in column_names(connection, "material_prices")
-    ] if table_exists(connection, "material_prices") else list(PRICE_COLUMNS)
+    ] if table_exists(connection, "material_prices") else list(MATERIAL_PRICE_COLUMNS)
     missing_edge_price_columns = [
         column_name
-        for column_name in PRICE_COLUMNS
+        for column_name in MATERIAL_EDGE_PRICE_COLUMNS
         if column_name not in column_names(connection, "material_edge_prices")
-    ] if table_exists(connection, "material_edge_prices") else list(PRICE_COLUMNS)
+    ] if table_exists(connection, "material_edge_prices") else list(MATERIAL_EDGE_PRICE_COLUMNS)
 
     material_rows = []
     edge_rows = []
@@ -201,6 +239,10 @@ def print_plan(database_path: Path, plan: dict[str, object], apply: bool, backup
     print("Missing edge price columns:", ", ".join(plan["missing_edge_price_columns"]) or "none")
     print(f"Materials needing backfill: {len(plan['material_rows'])}")
     print(f"Edges needing backfill: {len(plan['edge_rows'])}")
+    if plan.get("promo_only"):
+        print("Backfill skipped: yes")
+        print("Warming skipped: yes")
+        print("Material edge prices excluded: yes")
 
 
 def _add_missing_columns(connection: sqlite3.Connection, table_name: str, column_map: dict[str, str]) -> None:
@@ -286,9 +328,9 @@ def apply_plan(connection: sqlite3.Connection, plan: dict[str, object], warm_ima
     if table_exists(connection, "material_edge_options"):
         _add_missing_columns(connection, "material_edge_options", MATERIAL_EDGE_COLUMNS)
     if table_exists(connection, "material_prices"):
-        _add_missing_columns(connection, "material_prices", PRICE_COLUMNS)
+        _add_missing_columns(connection, "material_prices", MATERIAL_PRICE_COLUMNS)
     if table_exists(connection, "material_edge_prices"):
-        _add_missing_columns(connection, "material_edge_prices", PRICE_COLUMNS)
+        _add_missing_columns(connection, "material_edge_prices", MATERIAL_EDGE_PRICE_COLUMNS)
 
     material_rows_all = connection.execute(
         """
@@ -399,16 +441,30 @@ def apply_plan(connection: sqlite3.Connection, plan: dict[str, object], warm_ima
     }
 
 
+def apply_material_price_promo_plan(connection: sqlite3.Connection) -> dict[str, int]:
+    if table_exists(connection, "material_prices"):
+        _add_missing_columns(connection, "material_prices", MATERIAL_PRICE_PROMO_COLUMNS)
+
+    connection.commit()
+    return {
+        "warmed_materials": 0,
+        "warmed_edges": 0,
+    }
+
+
 def main() -> int:
     args = parse_args()
     database_path = Path(args.database).resolve()
     ensure_safe_database(database_path)
 
     with sqlite3.connect(database_path) as connection:
-        plan = build_plan(connection)
+        promo_only = bool(args.material_price_promo_only)
+        plan = build_plan(connection, promo_only=promo_only)
         backup_path = create_backup(database_path) if args.apply else None
 
-        if args.apply:
+        if args.apply and promo_only:
+            apply_result = apply_material_price_promo_plan(connection)
+        elif args.apply:
             apply_result = apply_plan(connection, plan, warm_images=bool(args.warm_images))
         else:
             apply_result = {"warmed_materials": 0, "warmed_edges": 0}
