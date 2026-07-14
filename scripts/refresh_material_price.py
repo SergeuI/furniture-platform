@@ -8,8 +8,13 @@ optionally writes only the price row when --apply is provided.
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
+import os
 import sqlite3
+import tempfile
 import sys
+from contextlib import contextmanager
 from datetime import date, datetime
 from pathlib import Path
 from urllib.parse import urlparse
@@ -24,6 +29,11 @@ from services.legacy_db_config import DEFAULT_DB_PATH
 
 
 ALLOWED_CITY = "kyiv"
+
+if os.name == "nt":
+    import msvcrt
+else:
+    import fcntl
 
 
 def parse_args() -> argparse.Namespace:
@@ -80,6 +90,92 @@ def _resolve_database_path() -> Path:
     if not database_path.exists():
         raise SystemExit(f"Database does not exist: {database_path}")
     return database_path
+
+
+def _batch_lock_path(database_path: Path) -> Path:
+    normalized_path = os.path.normcase(str(database_path.resolve()))
+    digest = hashlib.sha256(normalized_path.encode("utf-8")).hexdigest()[:16]
+    return Path(tempfile.gettempdir()) / f"mp-furniture-material-price-{digest}.lock"
+
+
+def _read_batch_lock_metadata(lock_path: Path) -> dict | None:
+    try:
+        return json.loads(lock_path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, OSError, json.JSONDecodeError):
+        return None
+
+
+def _print_batch_lock_busy(metadata: dict | None) -> None:
+    print("Batch-оновлення цін уже виконується іншим процесом.", file=sys.stderr)
+    if metadata is not None:
+        print(
+            "Lock metadata: " + json.dumps(metadata, ensure_ascii=False, sort_keys=True),
+            file=sys.stderr,
+        )
+
+
+def _acquire_os_lock(lock_fd: int) -> None:
+    os.lseek(lock_fd, 0, os.SEEK_SET)
+    if os.name == "nt":
+        msvcrt.locking(lock_fd, msvcrt.LK_NBLCK, 1)
+    else:
+        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+
+def _release_os_lock(lock_fd: int) -> None:
+    os.lseek(lock_fd, 0, os.SEEK_SET)
+    if os.name == "nt":
+        msvcrt.locking(lock_fd, msvcrt.LK_UNLCK, 1)
+    else:
+        fcntl.flock(lock_fd, fcntl.LOCK_UN)
+
+
+def _write_batch_lock_metadata(lock_fd: int, metadata: dict) -> None:
+    payload = json.dumps(metadata, ensure_ascii=False, sort_keys=True, indent=2).encode("utf-8")
+    os.lseek(lock_fd, 0, os.SEEK_SET)
+    os.write(lock_fd, payload)
+    os.ftruncate(lock_fd, len(payload))
+    os.fsync(lock_fd)
+
+
+@contextmanager
+def _batch_process_lock(
+    database_path: Path,
+    *,
+    mode: str,
+    batch_kind: str,
+    city: str,
+) -> tuple[Path, dict]:
+    lock_path = _batch_lock_path(database_path)
+    flags = os.O_RDWR | os.O_CREAT
+    if hasattr(os, "O_BINARY"):
+        flags |= os.O_BINARY
+
+    lock_fd = os.open(lock_path, flags, 0o600)
+    try:
+        try:
+            _acquire_os_lock(lock_fd)
+        except OSError:
+            metadata = _read_batch_lock_metadata(lock_path)
+            _print_batch_lock_busy(metadata)
+            raise SystemExit(3)
+
+        metadata = {
+            "pid": os.getpid(),
+            "started_at_utc": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+            "mode": mode,
+            "batch_kind": batch_kind,
+            "city": city,
+            "database_path": str(database_path),
+            "argv": sys.argv[1:],
+        }
+        _write_batch_lock_metadata(lock_fd, metadata)
+        try:
+            yield lock_path, metadata
+        finally:
+            _release_os_lock(lock_fd)
+    finally:
+        os.close(lock_fd)
 
 
 def _open_readonly_connection(database_path: Path) -> sqlite3.Connection:
@@ -454,14 +550,20 @@ def main() -> int:
     before_size = database_path.stat().st_size
     before_mtime = database_path.stat().st_mtime
 
-    with _open_readonly_connection(database_path) as connection:
-        if args.batch:
-            batch_result = _run_batch(
-                connection,
-                city=city,
-                limit=None if args.all else int(args.limit),
-                apply_mode=bool(args.apply),
-            )
+    if args.batch:
+        with _batch_process_lock(
+            database_path,
+            mode="APPLY" if args.apply else "DRY-RUN",
+            batch_kind="all" if args.all else "limit",
+            city=city,
+        ):
+            with _open_readonly_connection(database_path) as connection:
+                batch_result = _run_batch(
+                    connection,
+                    city=city,
+                    limit=None if args.all else int(args.limit),
+                    apply_mode=bool(args.apply),
+                )
             print(f"Database size before: {before_size}")
             print(f"Database mtime before: {before_mtime}")
             print("Database write performed: " + ("yes" if args.apply else "no"))
@@ -469,6 +571,7 @@ def main() -> int:
             print("External fetch performed: yes")
             return batch_result
 
+    with _open_readonly_connection(database_path) as connection:
         article = (args.article or "").strip()
         result, _snapshot = _process_single_material(
             article=article,
