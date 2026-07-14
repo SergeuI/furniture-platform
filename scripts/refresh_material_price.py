@@ -51,11 +51,27 @@ def parse_args() -> argparse.Namespace:
         help="Batch size limit. Required for --batch and ignored for single-item mode.",
     )
     parser.add_argument(
+        "--all",
+        action="store_true",
+        help="Refresh all valid Viyar materials in batch mode.",
+    )
+    parser.add_argument(
         "--apply",
         action="store_true",
         help="Write the refreshed price row back to the database.",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.all and not args.batch:
+        parser.error("--all is only supported together with --batch.")
+    if args.limit is not None and not args.batch:
+        parser.error("--limit is only supported together with --batch.")
+    if args.batch and args.all and args.limit is not None:
+        parser.error("--limit and --all are mutually exclusive.")
+    if args.batch and not args.all and args.limit is None:
+        parser.error("--limit is required when --batch is used.")
+    if args.limit is not None and args.limit <= 0:
+        parser.error("--limit must be a positive integer.")
+    return args
 
 
 def _resolve_database_path() -> Path:
@@ -276,7 +292,7 @@ def _print_would_write(
 def _list_batch_candidates(
     connection: sqlite3.Connection,
     *,
-    limit: int,
+    limit: int | None,
 ) -> tuple[list[dict], int, int]:
     connection.row_factory = sqlite3.Row
     cursor = connection.cursor()
@@ -308,7 +324,7 @@ def _list_batch_candidates(
             }
         )
 
-        if len(candidates) >= limit:
+        if limit is not None and len(candidates) >= limit:
             break
 
     return candidates, scanned, skipped
@@ -362,7 +378,13 @@ def _process_single_material(
     return "updated", snapshot
 
 
-def _run_batch(connection: sqlite3.Connection, *, city: str, limit: int, apply_mode: bool) -> int:
+def _run_batch(
+    connection: sqlite3.Connection,
+    *,
+    city: str,
+    limit: int | None,
+    apply_mode: bool,
+) -> int:
     candidates, scanned, skipped = _list_batch_candidates(connection, limit=limit)
 
     print("BATCH CANDIDATES:")
@@ -416,7 +438,7 @@ def _run_batch(connection: sqlite3.Connection, *, city: str, limit: int, apply_m
         for article, error_text in errors:
             print(f"  article={article} error={error_text}")
 
-    return 0
+    return 1 if counters["failed"] > 0 else 0
 
 
 def main() -> int:
@@ -427,12 +449,6 @@ def main() -> int:
 
     args = parse_args()
     city = _normalize_city(args.city)
-    if args.batch and args.limit is None:
-        raise SystemExit("Controlled error: --limit is required when --batch is used.")
-    if args.limit is not None and args.limit <= 0:
-        raise SystemExit("Controlled error: --limit must be a positive integer.")
-    if not args.batch and args.limit is not None:
-        raise SystemExit("Controlled error: --limit is only supported together with --batch.")
 
     database_path = _resolve_database_path()
     before_size = database_path.stat().st_size
@@ -443,7 +459,7 @@ def main() -> int:
             batch_result = _run_batch(
                 connection,
                 city=city,
-                limit=int(args.limit),
+                limit=None if args.all else int(args.limit),
                 apply_mode=bool(args.apply),
             )
             print(f"Database size before: {before_size}")
