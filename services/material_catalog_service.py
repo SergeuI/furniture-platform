@@ -3,10 +3,11 @@ import json
 import re
 import subprocess
 import sys
+from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.parse import quote, urlparse
+from urllib.parse import parse_qsl, quote, urlencode, urlparse, urlunparse
 from urllib.request import Request, urlopen
 
 from bs4 import BeautifulSoup
@@ -409,7 +410,9 @@ def _fetch_html(
     url: str,
     city: str | None = None,
     cookie_override: str | None = None,
-) -> str:
+    *,
+    return_final_url: bool = False,
+) -> str | tuple[str, str]:
 
     request = Request(
         url,
@@ -420,6 +423,7 @@ def _fetch_html(
     )
 
     with urlopen(request, timeout=10) as response:
+        final_url = response.geturl()
         payload = response.read()
         charset = None
 
@@ -447,11 +451,17 @@ def _fetch_html(
             seen.add(normalized_encoding)
 
             try:
-                return payload.decode(normalized_encoding)
+                html = payload.decode(normalized_encoding)
+                if return_final_url:
+                    return html, final_url
+                return html
             except UnicodeDecodeError:
                 continue
 
-        return payload.decode("utf-8", errors="replace")
+        html = payload.decode("utf-8", errors="replace")
+        if return_final_url:
+            return html, final_url
+        return html
 
 
 def _fetch_binary(
@@ -477,6 +487,25 @@ def _fetch_binary(
             response.headers.get("Content-Type"),
             response.geturl(),
         )
+
+
+def _sanitize_viyar_price_url(source_url: str) -> str:
+
+    parsed = urlparse(source_url)
+
+    if not parsed.query:
+        return source_url
+
+    filtered_query = [
+        (key, value)
+        for key, value in parse_qsl(parsed.query, keep_blank_values=True)
+        if not (key == "error" and value == "login_required")
+    ]
+
+    if len(filtered_query) == len(parse_qsl(parsed.query, keep_blank_values=True)):
+        return source_url
+
+    return urlunparse(parsed._replace(query=urlencode(filtered_query, doseq=True)))
 
 
 def _validate_image_payload(
@@ -851,6 +880,173 @@ def _extract_material_from_product_html(
         "price_raw": price_text or None,
         "unit": unit_text or None,
         "source_url": source_url,
+    }
+
+
+def _extract_viyar_unit_from_product_html(soup: BeautifulSoup) -> str | None:
+
+    candidates = [
+        _first_text(
+            soup,
+            [
+                ".card-info-prices__price--row .price-actual + .text-unit",
+                ".card-info-prices__price-row .price-actual + .text-unit",
+            ],
+        )
+    ]
+    candidates.extend(node.get_text(" ", strip=True) for node in soup.select(".text-unit"))
+
+    for candidate in candidates:
+        unit = _normalize_text(candidate)
+        if not unit:
+            continue
+        lowered = unit.lower()
+        if "/" not in unit and "лист" not in lowered and "м2" not in lowered:
+            continue
+        unit = unit.replace("₴", "").replace("грн", "")
+        unit = unit.strip(" /")
+        if "/" in unit:
+            unit = unit.split("/", 1)[-1].strip()
+        unit = _normalize_text(unit)
+        if unit:
+            return unit
+
+    return None
+
+
+def _extract_viyar_promo_metadata_from_product_html(
+    soup: BeautifulSoup,
+    price: float,
+    price_text: str | None,
+) -> dict[str, object | None]:
+
+    old_price_text = _first_attr(soup, ["[data-old-price]"], "data-old-price")
+    if not old_price_text:
+        old_price_text = _first_text(
+            soup,
+            [
+                ".price-old",
+                ".card-info-prices__price-old",
+            ],
+        )
+
+    old_price = _extract_price(old_price_text)
+    if old_price is None or old_price <= 0:
+        old_price = None
+    is_promo = bool(old_price is not None and old_price > price)
+
+    discount_percent = None
+    if is_promo and old_price:
+        discount_value = ((old_price - price) / old_price) * 100
+        rounded_discount = round(discount_value)
+        discount_percent = (
+            int(rounded_discount)
+            if abs(discount_value - rounded_discount) < 1e-9
+            else round(discount_value, 2)
+        )
+
+    promo_label = None
+    for selector in [
+        ".promo-sign-badge .text--sign",
+        ".card-info-promo .text--weight--dark",
+        ".card-info-promo__body .text--weight--dark",
+    ]:
+        node = soup.select_one(selector)
+        if node:
+            label = _normalize_text(node.get_text(" ", strip=True))
+            if label and "акц" in label.lower():
+                promo_label = label
+                break
+
+    if not promo_label:
+        promo_match = re.search(r"Акція\s+\d+%", _normalize_text(soup.get_text(" ", strip=True)), re.IGNORECASE)
+        if promo_match:
+            promo_label = promo_match.group(0)
+
+    promo_valid_until = None
+    promo_period_text = _normalize_text(
+        _first_text(
+            soup,
+            [
+                ".card-info-promo__period",
+                ".card-info-promo",
+            ],
+        )
+    )
+    promo_date_match = re.search(r"Акція\s+діє\s+до\s+(\d{2}\.\d{2}\.\d{4})", promo_period_text, re.IGNORECASE)
+    if not promo_date_match:
+        promo_date_match = re.search(
+            r"(\d{2}\.\d{2}\.\d{4})",
+            promo_period_text,
+        )
+
+    if promo_date_match:
+        try:
+            promo_valid_until = datetime.strptime(promo_date_match.group(1), "%d.%m.%Y").date().isoformat()
+        except ValueError:
+            promo_valid_until = None
+
+    return {
+        "old_price": old_price,
+        "is_promo": is_promo,
+        "discount_percent": discount_percent,
+        "promo_label": promo_label,
+        "promo_valid_until": promo_valid_until,
+    }
+
+
+def _extract_viyar_current_price_from_product_html(
+    html: str,
+) -> tuple[float, float | None, str | None, str | None, str | None, dict[str, object | None]]:
+
+    soup = BeautifulSoup(html, "html.parser")
+
+    price_text = _first_attr(soup, ["[data-sort-price]"], "data-sort-price")
+    if not price_text:
+        price_text = _first_text(
+            soup,
+            [
+                'span[id*="_price"]',
+                ".price-actual",
+                ".card-info-prices__price-actual",
+                ".price-current",
+            ],
+        )
+
+    price = _extract_price(price_text)
+    if price is None:
+        raise LookupError("Viyar current price was not found on the page")
+
+    unit = _extract_viyar_unit_from_product_html(soup)
+
+    availability = "В наявності" if "В наявності" in _normalize_text(soup.get_text(" ", strip=True)) else None
+    currency = "UAH" if "₴" in _normalize_text(price_text or "") or "₴" in _normalize_text(unit or "") or "₴" in _normalize_text(html) else None
+    promo = _extract_viyar_promo_metadata_from_product_html(soup, price, price_text)
+
+    return price, promo["old_price"], currency, availability, unit, promo
+
+
+def fetch_material_price_by_url(source_url: str, cookie_override: str | None = None) -> dict:
+
+    sanitized_source_url = _sanitize_viyar_price_url(source_url)
+    html, final_url = _fetch_html(
+        sanitized_source_url,
+        cookie_override=cookie_override,
+        return_final_url=True,
+    )
+    price, old_price, currency, availability, unit, promo = _extract_viyar_current_price_from_product_html(html)
+
+    return {
+        "price": price,
+        "old_price": old_price,
+        "currency": currency,
+        "availability": availability,
+        "unit": unit,
+        "is_promo": promo["is_promo"],
+        "discount_percent": promo["discount_percent"],
+        "promo_label": promo["promo_label"],
+        "promo_valid_until": promo["promo_valid_until"],
+        "final_url": final_url,
     }
 
 
