@@ -1442,6 +1442,122 @@ function formatMoneyValue(value) {
     .replace(/(\.\d)0$/, "$1");
 }
 
+function parseCatalogNumberValue(value) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const numericValue = Number(String(value).replace(",", "."));
+
+  return Number.isFinite(numericValue) ? numericValue : null;
+}
+
+function formatCatalogPromoDate(value, language) {
+  if (!value) {
+    return "";
+  }
+
+  const parsedDate = new Date(value);
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return "";
+  }
+
+  const locale = language === "uk" ? "uk-UA" : "en-US";
+
+  try {
+    return new Intl.DateTimeFormat(locale, {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    }).format(parsedDate);
+  } catch {
+    return parsedDate.toLocaleDateString(locale);
+  }
+}
+
+function getMaterialAvailabilityLabel(value, t) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+
+  if (!text) {
+    return "";
+  }
+
+  const normalized = text.toLowerCase();
+
+  if (normalized === "в наявності" || normalized === "in stock") {
+    return t.materialPromoInStock;
+  }
+
+  if (
+    normalized === "немає в наявності" ||
+    normalized === "нема в наявності" ||
+    normalized === "out of stock"
+  ) {
+    return t.materialPromoOutOfStock;
+  }
+
+  return text;
+}
+
+function getMaterialPromoViewModel(item, t, language) {
+  const details = item?.current_price_details || null;
+
+  if (!details || details.is_promo !== true) {
+    return null;
+  }
+
+  const currentPrice = parseCatalogNumberValue(details.price);
+  const oldPrice = parseCatalogNumberValue(details.old_price);
+  const discountPercent = parseCatalogNumberValue(details.discount_percent);
+
+  if (
+    currentPrice === null ||
+    oldPrice === null ||
+    !Number.isFinite(currentPrice) ||
+    !Number.isFinite(oldPrice) ||
+    oldPrice <= currentPrice
+  ) {
+    return null;
+  }
+
+  const badgeBase = language === "uk" ? t.materialPromoSale : t.materialPromoSale;
+  const badge = Number.isFinite(discountPercent)
+    ? `${badgeBase} −${formatMoneyValue(discountPercent)}%`
+    : badgeBase;
+  const availability = getMaterialAvailabilityLabel(details.availability, t);
+  const validUntil = formatCatalogPromoDate(details.promo_valid_until, language);
+
+  return {
+    availability,
+    badge,
+    currentPrice,
+    discountPercent,
+    details,
+    oldPrice,
+    validUntil,
+  };
+}
+
+function getMaterialPromoRibbonViewModel(item, language) {
+  const details = item?.current_price_details || null;
+
+  if (!details || details.is_promo !== true) {
+    return null;
+  }
+
+  const discountPercent = parseCatalogNumberValue(details.discount_percent);
+  const validUntil = formatCatalogPromoDate(details.promo_valid_until, language);
+  const badgeText = Number.isFinite(discountPercent)
+    ? `−${formatMoneyValue(discountPercent)}%`
+    : "";
+
+  return {
+    badgeText,
+    validUntil,
+  };
+}
+
 function formatMaterialImportDiagnostic(value, limit = 280) {
   const normalized = String(value || "").replace(/\s+/g, " ").trim();
 
@@ -3578,6 +3694,11 @@ Object.assign(TRANSLATIONS.en, {
   materialImportStateSuccess: "Completed",
   materialImportStateError: "Failed",
   materialPriceForCity: "Price for city",
+  materialPromoSale: "Sale",
+  materialPromoValidUntil: "Valid until",
+  materialPromoUntil: "until",
+  materialPromoInStock: "In stock",
+  materialPromoOutOfStock: "Out of stock",
   materialCardOpen: "Open material",
   materialDetails: "Material details",
   materialDescription: "Description",
@@ -3595,6 +3716,7 @@ Object.assign(TRANSLATIONS.en, {
   materialSystemScope: "System",
   materialCustomScope: "Custom",
   deleteMaterial: "Delete material",
+  editMaterial: "Edit",
   deleteMaterialConfirm: "Delete custom material",
   materialDeleted: "Material deleted",
   refreshFromViyar: "Refresh from Viyar",
@@ -3661,6 +3783,11 @@ Object.assign(TRANSLATIONS.uk, {
   materialImportStateSuccess: "\u0417\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u043e",
   materialImportStateError: "\u041f\u043e\u043c\u0438\u043b\u043a\u0430",
   materialPriceForCity: "\u0426\u0456\u043d\u0430 \u0434\u043b\u044f \u043c\u0456\u0441\u0442\u0430",
+  materialPromoSale: "\u0410\u043a\u0446\u0456\u044f",
+  materialPromoValidUntil: "\u0414\u0456\u0454 \u0434\u043e",
+  materialPromoUntil: "\u0434\u043e",
+  materialPromoInStock: "\u0412 \u043d\u0430\u044f\u0432\u043d\u043e\u0441\u0442\u0456",
+  materialPromoOutOfStock: "\u041d\u0435\u043c\u0430\u0454 \u0432 \u043d\u0430\u044f\u0432\u043d\u043e\u0441\u0442\u0456",
   materialCardOpen: "\u0412\u0456\u0434\u043a\u0440\u0438\u0442\u0438 \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b",
   materialDetails: "\u0414\u0435\u0442\u0430\u043b\u0456 \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b\u0443",
   materialDescription: "\u041e\u043f\u0438\u0441",
@@ -3678,6 +3805,7 @@ Object.assign(TRANSLATIONS.uk, {
   materialSystemScope: "\u0421\u0438\u0441\u0442\u0435\u043c\u043d\u0438\u0439",
   materialCustomScope: "\u0412\u043b\u0430\u0441\u043d\u0438\u0439",
   deleteMaterial: "\u0412\u0438\u0434\u0430\u043b\u0438\u0442\u0438 \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b",
+  editMaterial: "\u0420\u0435\u0434\u0430\u0433\u0443\u0432\u0430\u0442\u0438",
   deleteMaterialConfirm: "\u0412\u0438\u0434\u0430\u043b\u0438\u0442\u0438 \u043a\u043e\u0440\u0438\u0441\u0442\u0443\u0432\u0430\u0446\u044c\u043a\u0438\u0439 \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b",
   materialDeleted: "\u041c\u0430\u0442\u0435\u0440\u0456\u0430\u043b \u0432\u0438\u0434\u0430\u043b\u0435\u043d\u043e",
   refreshFromViyar: "\u041e\u043d\u043e\u0432\u0438\u0442\u0438 \u0437 Viyar",
@@ -16624,6 +16752,8 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                 <div className="material-card-grid">
                   {materialItems.map((item) => {
                     const sourceMeta = getMaterialSourceMeta(item, t);
+                    const promoViewModel = getMaterialPromoViewModel(item, t, language);
+                    const promoRibbonViewModel = getMaterialPromoRibbonViewModel(item, language);
                     const canManageItem = canEditMaterialItem(user, item);
 
                     return (
@@ -16643,17 +16773,18 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                       {canManageItem ? (
                         <div className="material-card-menu">
                           <button
-                            aria-label={t.refreshFromViyar}
-                            className="icon-button material-card-menu-trigger"
+                            aria-label={t.editMaterial}
+                            className="material-card-menu-trigger"
                             onClick={(event) => {
                               event.stopPropagation();
                               setOpenMaterialMenuId((current) =>
                                 current === item.id ? "" : item.id,
                               );
                             }}
+                            title={t.editMaterial}
                             type="button"
                           >
-                            <MoreHorizontal size={16} />
+                            <Pencil size={14} />
                           </button>
                           {openMaterialMenuId === item.id ? (
                             <div className="material-card-menu-dropdown">
@@ -16693,6 +16824,18 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                           placeholderLabel={formatCatalogLabel(item.category, t)}
                           token={token}
                         />
+                        {promoRibbonViewModel ? (
+                          <div className="material-promo-ribbon" aria-hidden="true">
+                            <span className="material-promo-ribbon-badge">
+                              {promoRibbonViewModel.badgeText || t.materialPromoSale}
+                            </span>
+                            {promoRibbonViewModel.validUntil ? (
+                              <span className="material-promo-ribbon-until">
+                                {t.materialPromoUntil} {promoRibbonViewModel.validUntil}
+                              </span>
+                            ) : null}
+                          </div>
+                        ) : null}
                       </div>
                       <div className="material-card-body">
                         <div className="material-card-topline">
@@ -16705,12 +16848,31 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                         </div>
                         <strong>{item.name || item.article}</strong>
                         <div className="material-card-price">
-                          <span>{t.materialPriceForCity}</span>
-                          <b>
-                            {item.current_price !== null && item.current_price !== undefined
-                              ? `${item.current_price} UAH`
-                              : t.notSet}
-                          </b>
+                          {promoViewModel ? (
+                            <>
+                              <div className="material-promo-prices material-promo-prices-inline">
+                                <del className="material-promo-old-price">
+                                  {formatMoneyValue(promoViewModel.oldPrice)} {promoViewModel.details.currency || "UAH"}
+                                </del>
+                                <b>
+                                  {formatMoneyValue(promoViewModel.currentPrice)} {promoViewModel.details.currency || "UAH"}
+                                </b>
+                              </div>
+                              {promoViewModel.availability ? (
+                                <span className="material-promo-availability">
+                                  {promoViewModel.availability}
+                                </span>
+                              ) : null}
+                            </>
+                          ) : (
+                            <>
+                              <b>
+                                {item.current_price !== null && item.current_price !== undefined
+                                  ? `${item.current_price} UAH`
+                                  : t.notSet}
+                              </b>
+                            </>
+                          )}
                         </div>
                         <div className="material-card-meta">
                           {renderSourceBadge(sourceMeta)}
@@ -21024,9 +21186,34 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                   placeholderLabel={formatCatalogLabel(selectedMaterialDetail.category, t)}
                   token={token}
                 />
+                {(() => {
+                  const ribbon = getMaterialPromoRibbonViewModel(selectedMaterialDetail, language);
+
+                  if (!ribbon) {
+                    return null;
+                  }
+
+                  return (
+                    <div className="material-promo-ribbon" aria-hidden="true">
+                      <span className="material-promo-ribbon-badge">
+                        {ribbon.badgeText || t.materialPromoSale}
+                      </span>
+                      {ribbon.validUntil ? (
+                        <span className="material-promo-ribbon-until">
+                          {t.materialPromoUntil} {ribbon.validUntil}
+                        </span>
+                      ) : null}
+                    </div>
+                  );
+                })()}
               </div>
 
               <div className="material-details-content">
+                {(() => {
+                  const selectedMaterialPromo = getMaterialPromoViewModel(selectedMaterialDetail, t, language);
+
+                  return (
+                    <>
                 <div className="material-details-badges">
                   <span className="service-tree-badge subtle">
                     {formatCatalogLabel(selectedMaterialDetail.category, t)}
@@ -21041,18 +21228,29 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
 
                 <div className="material-details-grid">
                   <div>
-                    <span>{t.materialPriceForCity}</span>
-                    <strong>
-                      {selectedMaterialDetail.current_price !== null && selectedMaterialDetail.current_price !== undefined
-                        ? `${selectedMaterialDetail.current_price} UAH`
-                        : t.notSet}
-                    </strong>
-                  </div>
-                  <div>
-                    <span>{t.city}</span>
-                    <strong>
-                      {formatCatalogLabel(selectedMaterialDetail.current_price_city || activeCity, t)}
-                    </strong>
+                    {selectedMaterialPromo ? (
+                      <>
+                        <div className="material-promo-prices material-promo-prices-inline">
+                          <del className="material-promo-old-price">
+                            {formatMoneyValue(selectedMaterialPromo.oldPrice)} {selectedMaterialPromo.details.currency || "UAH"}
+                          </del>
+                          <strong>
+                            {formatMoneyValue(selectedMaterialPromo.currentPrice)} {selectedMaterialPromo.details.currency || "UAH"}
+                          </strong>
+                        </div>
+                        {selectedMaterialPromo.availability ? (
+                          <span className="material-promo-availability">
+                            {selectedMaterialPromo.availability}
+                          </span>
+                        ) : null}
+                      </>
+                    ) : (
+                      <strong>
+                        {selectedMaterialDetail.current_price !== null && selectedMaterialDetail.current_price !== undefined
+                          ? `${selectedMaterialDetail.current_price} UAH`
+                          : t.notSet}
+                      </strong>
+                    )}
                   </div>
                   <div>
                     <span>{t.materialColor}</span>
@@ -21072,6 +21270,9 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                   <span>{t.materialDescription}</span>
                   <p>{getMaterialDescriptionText(selectedMaterialDetail, t)}</p>
                 </div>
+                    </>
+                  );
+                })()}
               </div>
             </div>
 

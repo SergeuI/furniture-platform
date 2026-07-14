@@ -1456,7 +1456,7 @@ tbody tr.selected {
   border: 1px solid #dbe1e7;
   border-radius: 8px;
   display: grid;
-  overflow: hidden;
+  overflow: visible;
   position: relative;
 }
 
@@ -1477,15 +1477,30 @@ tbody tr.selected {
   position: absolute;
   right: 10px;
   top: 10px;
-  z-index: 2;
+  z-index: 5;
 }
 
 .material-card-menu-trigger {
-  background: rgba(255, 255, 255, 0.92);
-  border: 1px solid #dbe1e7;
-  box-shadow: 0 8px 18px rgba(13, 20, 26, 0.12);
-  height: 32px;
-  width: 32px;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(125, 140, 153, 0.2);
+  box-shadow: 0 8px 18px rgba(13, 20, 26, 0.1);
+  color: #334155;
+  height: 30px;
+  min-height: 30px;
+  padding: 0;
+  width: 30px;
+}
+
+.material-card-menu-trigger:hover {
+  background: rgba(255, 255, 255, 0.98);
+  border-color: rgba(47, 142, 203, 0.35);
+  color: #1f6b34;
+}
+
+.material-card-menu-trigger:focus-visible {
+  box-shadow: 0 0 0 3px rgba(47, 142, 203, 0.22);
+  outline: none;
 }
 
 .material-card-menu-dropdown {
@@ -1494,9 +1509,12 @@ tbody tr.selected {
   border-radius: 8px;
   box-shadow: 0 16px 30px rgba(13, 20, 26, 0.14);
   display: grid;
-  margin-top: 6px;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
   min-width: 190px;
   overflow: hidden;
+  z-index: 6;
 }
 
 .material-card-menu-action {
@@ -1523,6 +1541,7 @@ tbody tr.selected {
   display: flex;
   justify-content: center;
   overflow: hidden;
+  position: relative;
 }
 
 .material-card-media img {
@@ -1577,6 +1596,104 @@ tbody tr.selected {
 .material-card-price b {
   color: #1f6b34;
   font-size: 18px;
+}
+
+.material-promo-price-block {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.material-promo-ribbon {
+  align-items: center;
+  background: linear-gradient(180deg, rgba(13, 95, 41, 0.88), rgba(19, 119, 57, 0.58));
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  justify-content: flex-start;
+  left: 0;
+  padding: 8px 56px 9px 10px;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+  top: 0;
+  z-index: 3;
+}
+
+.material-promo-ribbon-badge {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 999px;
+  color: #0f6b34;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  padding: 4px 8px;
+  white-space: nowrap;
+}
+
+.material-promo-ribbon-until {
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  white-space: nowrap;
+}
+
+.material-promo-topline {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  min-width: 0;
+}
+
+.material-promo-badge {
+  background: linear-gradient(135deg, #1f6b34, #2f8a47);
+  border-radius: 999px;
+  color: #ffffff;
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  padding: 4px 9px;
+  white-space: nowrap;
+}
+
+.material-promo-valid-until {
+  color: #60717c;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.material-promo-prices {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.material-promo-prices-inline {
+  gap: 8px;
+}
+
+.material-promo-old-price {
+  color: #7b8894;
+  font-size: 12px;
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 2px;
+}
+
+.material-promo-availability {
+  color: #4b5563;
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 .material-card-meta {
@@ -7335,6 +7452,7 @@ tbody tr.selected {
   display: flex;
   justify-content: center;
   overflow: hidden;
+  position: relative;
 }
 
 .material-details-media img {
