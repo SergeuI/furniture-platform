@@ -193,6 +193,7 @@ def _validate_image_payload(image_url: str | None, city: str) -> tuple[dict | No
         return None, "Image payload is empty"
 
     return {
+        "bytes": image_bytes,
         "bytes_length": len(image_bytes),
         "content_type": content_type,
         "sha256": sha256(image_bytes).hexdigest(),
