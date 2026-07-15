@@ -3,7 +3,7 @@ import json
 import re
 from pathlib import Path
 from urllib.error import HTTPError
-from urllib.parse import urljoin, urlparse
+from urllib.parse import parse_qsl, urlencode, urljoin, urlparse
 
 import aiohttp
 from bs4 import BeautifulSoup
@@ -199,6 +199,200 @@ def _extract_description(soup: BeautifulSoup, fallback_name: str) -> str | None:
     if _looks_like_promotional_copy(description):
         return None
     return description or None
+
+
+def _strip_jsonld_image_size(value: str | None) -> str | None:
+    image_url = _clean_text(value)
+    if not image_url:
+        return None
+
+    parsed = urlparse(image_url)
+    if not parsed.query:
+        return image_url
+
+    query_items = [
+        (key, item_value)
+        for key, item_value in parse_qsl(parsed.query, keep_blank_values=True)
+        if key.lower() != "size"
+    ]
+    return parsed._replace(query=urlencode(query_items, doseq=True)).geturl()
+
+
+def _jsonld_type_is_product(type_value: object) -> bool:
+    if isinstance(type_value, str):
+        return type_value.rsplit("/", 1)[-1].lower() == "product"
+    if isinstance(type_value, list):
+        return any(_jsonld_type_is_product(item) for item in type_value)
+    return False
+
+
+def _iter_jsonld_product_nodes(value: object):
+    if isinstance(value, list):
+        for item in value:
+            yield from _iter_jsonld_product_nodes(item)
+        return
+
+    if not isinstance(value, dict):
+        return
+
+    if _jsonld_type_is_product(value.get("@type")):
+        yield value
+
+    graph = value.get("@graph")
+    if isinstance(graph, (dict, list)):
+        yield from _iter_jsonld_product_nodes(graph)
+
+    for key, nested_value in value.items():
+        if key == "@graph":
+            continue
+        if isinstance(nested_value, (dict, list)):
+            yield from _iter_jsonld_product_nodes(nested_value)
+
+
+def _normalize_jsonld_availability(value: object) -> str | None:
+    text = _clean_text(value)
+    if not text:
+        return None
+
+    token = text.rsplit("/", 1)[-1].lower()
+    if token == "instock":
+        return "В наявності"
+    if token == "outofstock":
+        return "Немає в наявності"
+    if token == "preorder":
+        return "Під замовлення"
+    return None
+
+
+def _normalize_jsonld_image(value: object) -> str | None:
+    if isinstance(value, list):
+        for item in value:
+            image_url = _normalize_jsonld_image(item)
+            if image_url:
+                return image_url
+        return None
+
+    if isinstance(value, dict):
+        return _strip_jsonld_image_size(
+            value.get("url")
+            or value.get("@id")
+            or value.get("contentUrl")
+            or value.get("image")
+        )
+
+    return _strip_jsonld_image_size(value if isinstance(value, str) else None)
+
+
+def _normalize_jsonld_brand(value: object) -> str | None:
+    if isinstance(value, dict):
+        return _clean_text(value.get("name")) or None
+    return _clean_text(value) or None
+
+
+def _iter_jsonld_offer_nodes(value: object):
+    if isinstance(value, list):
+        for item in value:
+            yield from _iter_jsonld_offer_nodes(item)
+        return
+
+    if isinstance(value, dict):
+        yield value
+
+
+def _extract_product_jsonld(
+    soup: BeautifulSoup,
+    fallback_name: str | None = None,
+    fallback_article: str | None = None,
+) -> dict:
+    best_node: dict | None = None
+    best_score = -1
+    normalized_fallback_name = _clean_product_name(fallback_name)
+    normalized_fallback_article = _clean_text(fallback_article) or None
+
+    for script in soup.select("script[type='application/ld+json']"):
+        raw_json = _clean_text(script.string or script.get_text(" ", strip=True))
+        if not raw_json:
+            continue
+
+        try:
+            payload = json.loads(raw_json)
+        except Exception:
+            continue
+
+        product_nodes = [node for node in _iter_jsonld_product_nodes(payload) if isinstance(node, dict)]
+        if not product_nodes:
+            continue
+
+        for node in product_nodes:
+            score = 0
+            candidate_article = _clean_text(
+                node.get("sku")
+                or node.get("mpn")
+                or node.get("productID")
+            )
+            candidate_name = _clean_product_name(node.get("name"))
+
+            if normalized_fallback_article and candidate_article == normalized_fallback_article:
+                score += 3
+
+            if normalized_fallback_name and candidate_name:
+                if candidate_name == normalized_fallback_name:
+                    score += 2
+                elif (
+                    normalized_fallback_name in candidate_name
+                    or candidate_name in normalized_fallback_name
+                ):
+                    score += 1
+
+            if score > best_score:
+                best_score = score
+                best_node = node
+
+    if not best_node:
+        return {}
+
+    name = _clean_product_name(best_node.get("name")) or None
+    description = _clean_text(best_node.get("description")) or None
+    if description and description == name:
+        description = None
+
+    image = _normalize_jsonld_image(best_node.get("image"))
+    brand = _normalize_jsonld_brand(best_node.get("brand"))
+    sku = _clean_text(
+        best_node.get("sku")
+        or best_node.get("mpn")
+        or best_node.get("productID")
+    ) or None
+
+    price = None
+    currency = None
+    availability = None
+    for offer in _iter_jsonld_offer_nodes(best_node.get("offers")):
+        if not isinstance(offer, dict):
+            continue
+        if price is None:
+            offer_price = offer.get("price")
+            if isinstance(offer_price, (int, float)):
+                price = float(offer_price)
+            else:
+                price = _extract_price(offer_price if isinstance(offer_price, str) else None)
+        if currency is None:
+            currency = _clean_text(offer.get("priceCurrency")) or None
+        if availability is None:
+            availability = _normalize_jsonld_availability(offer.get("availability"))
+        if price is not None and currency is not None and availability is not None:
+            break
+
+    return {
+        "name": name,
+        "sku": sku,
+        "description": description,
+        "brand": brand,
+        "image": image,
+        "price": price,
+        "currency": currency,
+        "availability": availability,
+    }
 
 
 def _first_attr(soup: BeautifulSoup, selectors: list[str], attr: str, base_url: str) -> str | None:
@@ -468,7 +662,22 @@ def _parse_viyar_html(html: str, final_url: str) -> dict:
         )
     )
     name = _clean_product_name(name)
-    description = _extract_description(soup, name)
+    jsonld = _extract_product_jsonld(soup, fallback_name=name, fallback_article=article)
+
+    article = article or jsonld.get("sku")
+    name = name or jsonld.get("name")
+    image_url = image_url or jsonld.get("image")
+
+    price = _extract_price(price_text)
+    price_raw = price_text or None
+    if price is None and jsonld.get("price") is not None:
+        price = jsonld.get("price")
+        price_raw = str(jsonld.get("price"))
+
+    description = _clean_text(jsonld.get("description")) or None
+    normalized_name = _clean_product_name(name)
+    if description and normalized_name and description == normalized_name:
+        description = None
 
     return {
         "success": True,
@@ -477,10 +686,13 @@ def _parse_viyar_html(html: str, final_url: str) -> dict:
         "name": name or None,
         "description": description,
         "article": article,
-        "price": _extract_price(price_text),
-        "price_raw": price_text or None,
+        "price": price,
+        "price_raw": price_raw,
         "unit": unit or None,
         "image_url": image_url or None,
+        "brand": jsonld.get("brand"),
+        "currency": jsonld.get("currency"),
+        "availability": jsonld.get("availability"),
     }
 
 
