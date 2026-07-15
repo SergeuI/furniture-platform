@@ -4774,6 +4774,10 @@ function canEditMaterialItem(user, item) {
     return false;
   }
 
+  if (user.role === "admin") {
+    return true;
+  }
+
   if (!hasProCatalogAccess(user)) {
     return false;
   }

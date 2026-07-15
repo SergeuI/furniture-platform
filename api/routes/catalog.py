@@ -1220,7 +1220,7 @@ async def get_material_route(
             "error": "Material not found",
         }
 
-    if not item.get("is_default") and item.get("owner_user_id") != str(current_user.id):
+    if current_user.role != "admin" and not item.get("is_default") and item.get("owner_user_id") != str(current_user.id):
         return {
             "success": False,
             "error": "Material not found",
