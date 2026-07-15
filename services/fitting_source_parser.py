@@ -299,6 +299,31 @@ def _iter_jsonld_offer_nodes(value: object):
         yield value
 
 
+def _extract_viyar_characteristics(container: BeautifulSoup | object) -> dict[str, str]:
+    if not container:
+        return {}
+
+    rows = container.select("tr.vr-block-char__tr") if hasattr(container, "select") else []
+    characteristics: dict[str, str] = {}
+
+    for row in rows:
+        name_node = row.select_one(".vr-block-char__name")
+        value_node = row.select_one(".vr-block-char__value")
+        if not name_node or not value_node:
+            continue
+
+        name = _clean_text(name_node.get_text(" ", strip=True)).rstrip(":").strip()
+        value = _clean_text(value_node.get_text(" ", strip=True))
+        if not name or not value:
+            continue
+        if name in characteristics and characteristics[name]:
+            continue
+
+        characteristics[name] = value
+
+    return characteristics
+
+
 def _extract_product_jsonld(
     soup: BeautifulSoup,
     fallback_name: str | None = None,
@@ -663,6 +688,7 @@ def _parse_viyar_html(html: str, final_url: str) -> dict:
     )
     name = _clean_product_name(name)
     jsonld = _extract_product_jsonld(soup, fallback_name=name, fallback_article=article)
+    characteristics = _extract_viyar_characteristics(soup)
 
     article = article or jsonld.get("sku")
     name = name or jsonld.get("name")
@@ -679,6 +705,8 @@ def _parse_viyar_html(html: str, final_url: str) -> dict:
     if description and normalized_name and description == normalized_name:
         description = None
 
+    brand = jsonld.get("brand") or characteristics.get("Виробник")
+
     return {
         "success": True,
         "source_site": "viyar",
@@ -690,9 +718,10 @@ def _parse_viyar_html(html: str, final_url: str) -> dict:
         "price_raw": price_raw,
         "unit": unit or None,
         "image_url": image_url or None,
-        "brand": jsonld.get("brand"),
+        "brand": brand,
         "currency": jsonld.get("currency"),
         "availability": jsonld.get("availability"),
+        "characteristics": characteristics,
     }
 
 
