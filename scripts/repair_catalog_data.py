@@ -1,8 +1,11 @@
 import argparse
+import hashlib
+import os
 import shutil
 import sqlite3
 import sys
 from datetime import datetime
+from io import BytesIO
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
@@ -44,6 +47,237 @@ def _normalize_viyar_image_url(url: str | None) -> str | None:
         netloc = f"{auth}@{netloc}"
 
     return urlunsplit((parsed.scheme, netloc, parsed.path, parsed.query, parsed.fragment))
+
+
+def _resolve_database_path(explicit_database: str | None) -> Path:
+    if explicit_database:
+        return Path(explicit_database).expanduser().resolve()
+
+    env_database = os.environ.get("FURNITURE_PLATFORM_DB_PATH")
+    if env_database:
+        return Path(env_database).expanduser().resolve()
+
+    return (PROJECT_ROOT / "furniture_platform.db").resolve()
+
+
+def _fetch_material_by_article(
+    connection: sqlite3.Connection,
+    article: str,
+) -> sqlite3.Row:
+    rows = connection.execute(
+        """
+        SELECT id, article, name, image, source_url, image_cached_bytes,
+               image_cached_content_type, image_cached_hash
+        FROM materials
+        WHERE article = ?
+        ORDER BY id
+        """,
+        (article,),
+    ).fetchall()
+
+    if len(rows) != 1:
+        raise ValueError(
+            f"Expected exactly one materials row for article {article}, found {len(rows)}"
+        )
+
+    return rows[0]
+
+
+def _load_local_jpeg_payload(image_path: Path) -> dict:
+    if not image_path.is_file():
+        raise ValueError(f"Image file was not found: {image_path}")
+
+    image_bytes = image_path.read_bytes()
+    if not image_bytes:
+        raise ValueError(f"Image file is empty: {image_path}")
+
+    try:
+        from PIL import Image
+    except Exception:
+        raise ValueError("Pillow is required to validate --image-file JPEG payloads")
+    else:
+        try:
+            with Image.open(BytesIO(image_bytes)) as image:
+                image.load()
+                if (image.format or "").upper() != "JPEG":
+                    raise ValueError(f"Image file is not a JPEG: {image_path}")
+        except Exception as exc:
+            raise ValueError(f"Image file is not a valid JPEG: {image_path} ({exc})") from exc
+
+    return {
+        "bytes": image_bytes,
+        "content_type": "image/jpeg",
+        "sha256": hashlib.sha256(image_bytes).hexdigest(),
+    }
+
+
+def _build_point_image_payload(
+    row: sqlite3.Row,
+    image_file: str | None,
+    city: str | None,
+) -> dict:
+    if image_file:
+        image_path = Path(image_file).expanduser()
+        payload = _load_local_jpeg_payload(image_path)
+        return {
+            "source": "file",
+            "image_file": str(image_path.resolve()),
+            "bytes": payload["bytes"],
+            "content_type": payload["content_type"],
+            "sha256": payload["sha256"],
+        }
+
+    image_url = row["image"]
+    payload = fetch_remote_image_payload(image_url, city=city)
+    if not payload:
+        raise ValueError(
+            f"Remote image could not be loaded for article {row['article']}"
+        )
+
+    return {
+        "source": "remote",
+        "image_file": None,
+        "bytes": payload["bytes"],
+        "content_type": payload["content_type"],
+        "sha256": hashlib.sha256(payload["bytes"]).hexdigest(),
+    }
+
+
+def _point_image_change_fields(
+    row: sqlite3.Row,
+    payload: dict,
+) -> list[str]:
+    current_bytes = row["image_cached_bytes"]
+    current_content_type = row["image_cached_content_type"]
+    current_hash = row["image_cached_hash"]
+
+    changed_fields: list[str] = []
+
+    if current_bytes != payload["bytes"]:
+        changed_fields.append("image_cached_bytes")
+    if current_content_type != payload["content_type"]:
+        changed_fields.append("image_cached_content_type")
+    if current_hash != payload["sha256"]:
+        changed_fields.append("image_cached_hash")
+
+    return changed_fields
+
+
+def _print_point_image_preview(
+    database_path: Path,
+    row: sqlite3.Row,
+    payload: dict,
+    changed_fields: list[str],
+    can_write: bool,
+) -> None:
+    current_bytes = row["image_cached_bytes"] or b""
+    current_size = len(current_bytes)
+    new_size = len(payload["bytes"])
+    existing_image = row["image_cached_bytes"] is not None and len(row["image_cached_bytes"]) > 0
+
+    print(f"Database path: {database_path}")
+    print(f"Article: {row['article']}")
+    print(f"Name: {row['name']}")
+    print(f"Image source: {payload['source']}")
+    if payload["image_file"]:
+        print(f"Image file: {payload['image_file']}")
+    print(f"Current BLOB size: {current_size}")
+    print(f"New BLOB size: {new_size}")
+    print(f"Content type: {payload['content_type']}")
+    print(f"SHA-256: {payload['sha256']}")
+    print(f"Fields to change: {', '.join(changed_fields) if changed_fields else 'none'}")
+    print(f"Existing image already present: {'yes' if existing_image else 'no'}")
+    if existing_image and not can_write:
+        print("Replacement blocked: existing image is protected without --replace-existing-image")
+    print("Database write performed: no")
+
+
+def _apply_point_image_update(
+    connection: sqlite3.Connection,
+    article: str,
+    payload: dict,
+) -> None:
+    connection.execute(
+        """
+        UPDATE materials
+        SET image_cached_bytes = ?, image_cached_content_type = ?, image_cached_hash = ?
+        WHERE article = ?
+        """,
+        (payload["bytes"], payload["content_type"], payload["sha256"], article),
+    )
+
+
+def _verify_point_image_update(
+    connection: sqlite3.Connection,
+    article: str,
+    payload: dict,
+) -> None:
+    row = connection.execute(
+        """
+        SELECT image_cached_bytes, image_cached_content_type, image_cached_hash
+        FROM materials
+        WHERE article = ?
+        """,
+        (article,),
+    ).fetchone()
+
+    if row is None:
+        raise ValueError(f"Material disappeared after update for article {article}")
+
+    if len(row["image_cached_bytes"] or b"") != len(payload["bytes"]):
+        raise ValueError(f"Post-update BLOB size mismatch for article {article}")
+
+    if row["image_cached_content_type"] != payload["content_type"]:
+        raise ValueError(f"Post-update content type mismatch for article {article}")
+
+    if row["image_cached_hash"] != payload["sha256"]:
+        raise ValueError(f"Post-update SHA-256 mismatch for article {article}")
+
+
+def _run_point_image_mode(
+    connection: sqlite3.Connection,
+    database_path: Path,
+    article: str,
+    image_file: str | None,
+    city: str | None,
+    apply_changes: bool,
+    replace_existing_image: bool,
+) -> int:
+    row = _fetch_material_by_article(connection, article)
+    existing_image = row["image_cached_bytes"] is not None and len(row["image_cached_bytes"]) > 0
+    if existing_image and not replace_existing_image and not image_file:
+        payload = {
+            "source": "existing",
+            "image_file": None,
+            "bytes": row["image_cached_bytes"] or b"",
+            "content_type": row["image_cached_content_type"] or "",
+            "sha256": row["image_cached_hash"] or hashlib.sha256(row["image_cached_bytes"] or b"").hexdigest(),
+        }
+        changed_fields: list[str] = []
+    else:
+        payload = _build_point_image_payload(row, image_file, city)
+        changed_fields = _point_image_change_fields(row, payload)
+    can_write = apply_changes and (not existing_image or replace_existing_image)
+
+    _print_point_image_preview(database_path, row, payload, changed_fields, can_write)
+
+    if not apply_changes:
+        return 0
+
+    if existing_image and not replace_existing_image:
+        return 0
+
+    if not changed_fields:
+        return 0
+
+    backup_path = _backup_database(database_path)
+    print(f"Backup: {backup_path}")
+    connection.execute("BEGIN")
+    _apply_point_image_update(connection, article, payload)
+    _verify_point_image_update(connection, article, payload)
+    connection.commit()
+    print("Database write performed: yes")
+    return 0
 
 
 def _restore_catalog_visibility(connection: sqlite3.Connection) -> dict:
@@ -363,14 +597,26 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Repair persisted catalog visibility and optionally cache images in SQLite."
     )
-    parser.add_argument("--database", default="furniture_platform.db")
+    parser.add_argument("--database", default=None)
     parser.add_argument("--city", default=None)
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--warm-images", action="store_true")
     parser.add_argument("--images-only", action="store_true")
+    parser.add_argument("--article", default=None)
+    parser.add_argument("--image-file", default=None)
+    parser.add_argument("--replace-existing-image", action="store_true")
     args = parser.parse_args()
 
-    database_path = Path(args.database).resolve()
+    if args.article and not args.images_only:
+        parser.error("--article can only be used together with --images-only")
+    if args.image_file and not (args.images_only and args.article):
+        parser.error("--image-file can only be used together with --images-only and --article")
+    if args.replace_existing_image and not (args.images_only and args.article and args.image_file):
+        parser.error(
+            "--replace-existing-image can only be used together with --images-only, --article and --image-file"
+        )
+
+    database_path = _resolve_database_path(args.database)
     if not database_path.is_file():
         raise SystemExit(f"Database was not found: {database_path}")
 
@@ -382,7 +628,26 @@ def main() -> int:
         reused_images = None
         visibility = None
 
-        if args.images_only:
+        if args.images_only and args.article:
+            try:
+                exit_code = _run_point_image_mode(
+                    connection,
+                    database_path,
+                    args.article,
+                    args.image_file,
+                    args.city,
+                    args.apply,
+                    args.replace_existing_image,
+                )
+            except Exception as exc:
+                try:
+                    connection.rollback()
+                except Exception:
+                    pass
+                print(f"Error: {exc}", file=sys.stderr)
+                print("Database write performed: no")
+                exit_code = 1
+        elif args.images_only:
             preview = _images_only_preview(connection)
 
             if not args.apply:
