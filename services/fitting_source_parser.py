@@ -2,6 +2,7 @@ import asyncio
 import json
 import re
 from pathlib import Path
+from urllib.error import HTTPError
 from urllib.parse import urljoin, urlparse
 
 import aiohttp
@@ -19,6 +20,13 @@ DEFAULT_HEADERS = {
 }
 
 MT_AUTH_PATH = Path(__file__).with_name("mt_auth.json")
+
+
+def _material_catalog_service():
+    # Import lazily to avoid a module-level cycle with material_catalog_service.
+    from services import material_catalog_service
+
+    return material_catalog_service
 
 
 def _format_browser_runtime_error(error: Exception) -> str:
@@ -323,6 +331,42 @@ async def _fetch_html_with_browser(
     return final_url, html
 
 
+async def _fetch_html(
+    url: str,
+) -> tuple[int, str, str]:
+    material_catalog_service = _material_catalog_service()
+
+    try:
+        html, final_url = await asyncio.to_thread(
+            material_catalog_service._fetch_html,
+            url,
+            None,
+            None,
+            return_final_url=True,
+        )
+        return 200, final_url, html
+    except HTTPError as error:
+        payload = error.read() if hasattr(error, "read") else b""
+        charset = None
+
+        try:
+            charset = error.headers.get_content_charset() if error.headers else None
+        except Exception:
+            charset = None
+
+        html = ""
+        for encoding in (charset, "utf-8", "utf-8-sig", "windows-1251", "cp1251"):
+            if not encoding:
+                continue
+            try:
+                html = payload.decode(encoding, errors="replace")
+                break
+            except Exception:
+                continue
+
+        return int(getattr(error, "code", 0) or 0), getattr(error, "url", url) or url, html
+
+
 def _parse_viyar_html(html: str, final_url: str) -> dict:
     soup = BeautifulSoup(html, "html.parser")
 
@@ -594,6 +638,31 @@ def _parse_generic_html(html: str, final_url: str, source_site: str) -> dict:
     }
 
 
+def _attach_page_diagnostics(
+    result: dict,
+    *,
+    requested_url: str,
+    final_url: str,
+    http_status: int | None,
+    transport: str,
+    warnings: list[str] | None = None,
+    errors: list[str] | None = None,
+) -> dict:
+    enriched = dict(result)
+    normalized_requested_url = _clean_text(requested_url)
+    normalized_final_url = _clean_text(final_url) or normalized_requested_url
+
+    enriched["requested_url"] = normalized_requested_url
+    enriched["final_url"] = normalized_final_url
+    enriched["http_status"] = http_status
+    enriched["redirect"] = normalized_final_url != normalized_requested_url
+    enriched["transport"] = transport
+    enriched["error_login_required"] = "error=login_required" in normalized_final_url.lower()
+    enriched["warnings"] = warnings or []
+    enriched["errors"] = errors or []
+    return enriched
+
+
 async def _fetch_html(url: str) -> tuple[int, str, str]:
     timeout = aiohttp.ClientTimeout(total=30)
 
@@ -745,41 +814,111 @@ async def parse_fitting_source_metadata(source_url: str) -> dict:
 
     try:
         if source_site == "mt":
-            return await _parse_mt_source(normalized_url)
+            result = await _parse_mt_source(normalized_url)
+            return _attach_page_diagnostics(
+                result,
+                requested_url=normalized_url,
+                final_url=result.get("final_url") or normalized_url,
+                http_status=200 if result.get("success") else 0,
+                transport="Playwright",
+            )
 
+        fetch_error: Exception | None = None
+        transport = "HTTP"
         try:
             status, final_url, html = await _fetch_html(normalized_url)
-        except Exception:
+        except Exception as error:
+            fetch_error = error
             status, final_url, html = 0, normalized_url, ""
 
-        if source_site == "kronas" and status in {0, 403}:
-            final_url, html = await _fetch_html_with_browser(
-                normalized_url,
-                wait_ms=5000,
-            )
-            status = 200
-
         if status != 200:
-            return {
-                "success": False,
-                "error": f"Unable to load source page: HTTP {status}",
-                "source_site": source_site,
-            }
+            browser_error: Exception | None = None
+            try:
+                final_url, html = await _fetch_html_with_browser(
+                    normalized_url,
+                    wait_ms=5000 if source_site == "viyar" else 2000,
+                )
+                status = 200
+                fetch_error = None
+                transport = "Playwright"
+            except Exception as error:
+                browser_error = error
+                transport = "Playwright"
+
+            if status != 200:
+                raw_error = browser_error or fetch_error
+                error_message = _format_browser_runtime_error(raw_error) if raw_error else f"Unable to load source page: HTTP {status}"
+                return _attach_page_diagnostics(
+                    {
+                        "success": False,
+                        "error": error_message,
+                        "source_site": source_site,
+                    },
+                    requested_url=normalized_url,
+                    final_url=final_url,
+                    http_status=status,
+                    transport=transport,
+                    errors=[error_message],
+                )
+
+        if "error=login_required" in (final_url or "").lower():
+            return _attach_page_diagnostics(
+                {
+                    "success": False,
+                    "error": "login_required",
+                    "source_site": source_site,
+                },
+                requested_url=normalized_url,
+                final_url=final_url,
+                http_status=status,
+                transport=transport,
+                errors=["login_required"],
+            )
 
         if source_site == "viyar":
-            return _parse_viyar_html(html, final_url)
-        if source_site == "kronas":
-            return _parse_kronas_html(html, final_url)
-        return _parse_generic_html(html, final_url, source_site)
+            result = _parse_viyar_html(html, final_url)
+            return _attach_page_diagnostics(
+                result,
+                requested_url=normalized_url,
+                final_url=final_url,
+                http_status=status,
+                transport=transport,
+            )
+        elif source_site == "kronas":
+            result = _parse_kronas_html(html, final_url)
+        else:
+            result = _parse_generic_html(html, final_url, source_site)
+
+        return _attach_page_diagnostics(
+            result,
+            requested_url=normalized_url,
+            final_url=final_url,
+            http_status=status,
+            transport=transport,
+        )
     except asyncio.TimeoutError:
-        return {
-            "success": False,
-            "error": "Source page timed out",
-            "source_site": source_site,
-        }
+        return _attach_page_diagnostics(
+            {
+                "success": False,
+                "error": "Source page timed out",
+                "source_site": source_site,
+            },
+            requested_url=normalized_url,
+            final_url=normalized_url,
+            http_status=0,
+            transport="HTTP",
+            errors=["Source page timed out"],
+        )
     except Exception as error:
-        return {
-            "success": False,
-            "error": _format_browser_runtime_error(error),
-            "source_site": source_site,
-        }
+        return _attach_page_diagnostics(
+            {
+                "success": False,
+                "error": _format_browser_runtime_error(error),
+                "source_site": source_site,
+            },
+            requested_url=normalized_url,
+            final_url=normalized_url,
+            http_status=0,
+            transport="HTTP",
+            errors=[_format_browser_runtime_error(error)],
+        )
