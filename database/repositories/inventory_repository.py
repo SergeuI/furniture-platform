@@ -1,6 +1,7 @@
 from collections import defaultdict
 from hashlib import sha256
 from datetime import date, datetime, timedelta
+from typing import Sequence
 from urllib.parse import urlparse
 
 from sqlalchemy import func
@@ -32,6 +33,9 @@ from database.models.user import (
 )
 from database.session import (
     SessionLocal,
+)
+from services.fitting_image_gallery_service import (
+    PreparedFittingGalleryImage,
 )
 
 
@@ -470,6 +474,28 @@ def _serialize_fitting_image_blob(item: FittingImageModel) -> dict:
         "image_cached_bytes": item.image_cached_bytes,
         "image_cached_content_type": item.image_cached_content_type,
     }
+
+
+def _add_prepared_fitting_gallery_images(
+    db,
+    *,
+    fitting_id: int,
+    prepared_gallery_images: Sequence[PreparedFittingGalleryImage],
+) -> None:
+    db.add_all(
+        [
+            FittingImageModel(
+                fitting_id=fitting_id,
+                sort_order=image.sort_order,
+                is_primary=image.is_primary,
+                source_url=image.source_url,
+                image_cached_bytes=image.image_bytes,
+                image_cached_content_type=image.content_type,
+                image_sha256=image.sha256,
+            )
+            for image in prepared_gallery_images
+        ]
+    )
 
 
 def _detect_source_site(source_url: str | None) -> str:
@@ -1326,6 +1352,7 @@ def create_fitting(
     is_system: bool,
     is_active: bool,
     sort_order: int = 0,
+    prepared_gallery_images: Sequence[PreparedFittingGalleryImage] | None = None,
 ) -> dict:
 
     db = SessionLocal()
@@ -1341,6 +1368,13 @@ def create_fitting(
             stock,
         )
 
+        gallery_images = list(prepared_gallery_images or [])
+        primary_gallery_image = gallery_images[0] if gallery_images else None
+        normalized_image_url = _normalize_fitting_value(image_url)
+
+        if primary_gallery_image:
+            normalized_image_url = primary_gallery_image.source_url
+
         item = FittingModel(
             city=_normalize_fitting_value(city),
             code=_normalize_fitting_value(code),
@@ -1351,19 +1385,34 @@ def create_fitting(
             stock=_normalize_fitting_value(stock),
             fitting_type=category["code"],
             fitting_group=category["group"],
-            image_url=_normalize_fitting_value(image_url),
+            image_url=normalized_image_url,
             source_url=_normalize_fitting_value(source_url),
             source_payload_json=_normalize_fitting_value(source_payload_json),
             owner_user_id=_normalize_fitting_value(owner_user_id),
             is_system=bool(is_system),
             is_active=bool(is_active),
             sort_order=int(sort_order or 0),
+            image_cached_bytes=primary_gallery_image.image_bytes if primary_gallery_image else None,
+            image_cached_content_type=primary_gallery_image.content_type if primary_gallery_image else None,
         )
         db.add(item)
+        db.flush()
+
+        if gallery_images:
+            _add_prepared_fitting_gallery_images(
+                db,
+                fitting_id=item.id,
+                prepared_gallery_images=gallery_images,
+            )
+
         db.commit()
         db.refresh(item)
 
         return _serialize_fitting(item)
+
+    except Exception:
+        db.rollback()
+        raise
 
     finally:
 

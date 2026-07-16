@@ -1,5 +1,7 @@
 import asyncio
 
+import logging
+
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -119,6 +121,11 @@ from services.viyar_auth_service import (
 from services.fitting_source_parser import (
     parse_fitting_source_metadata,
 )
+from services.fitting_image_gallery_service import (
+    FittingGalleryPreparationError,
+    normalize_fitting_gallery_image_urls,
+    prepare_fitting_gallery_images,
+)
 from services.auth_service import (
     get_user_from_token,
 )
@@ -141,6 +148,7 @@ from services.catalog_auto_refresh_service import (
 )
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 _material_image_warm_lock = Lock()
 _material_images_being_warmed: set[str] = set()
@@ -1699,6 +1707,7 @@ async def create_fitting_route(
     effective_stock = payload.stock
     effective_description = None
     source_payload: dict | None = None
+    prepared_gallery_images = None
     selected_city = (payload.city or current_user.city or "").strip() or None
     if not effective_source_url and _looks_like_url(effective_name):
         effective_source_url = effective_name
@@ -1750,12 +1759,49 @@ async def create_fitting_route(
             metadata = await parse_fitting_source_metadata(effective_source_url)
             if metadata.get("success"):
                 effective_name = metadata.get("name") or effective_name
-                effective_image_url = metadata.get("image_url") or effective_image_url
                 effective_source_url = metadata.get("final_url") or effective_source_url
                 effective_article = effective_article or metadata.get("article")
                 effective_price = metadata.get("price") if metadata.get("price") is not None else effective_price
                 effective_description = metadata.get("description") or effective_description
                 source_payload = metadata
+                metadata_image_urls = metadata.get("image_urls") or []
+
+                if not metadata_image_urls:
+                    logger.warning(
+                        "Fitting gallery import failed: source returned no image_urls",
+                        extra={
+                            "source_url": effective_source_url,
+                            "source_site": source_site,
+                        },
+                    )
+                    return {
+                        "success": False,
+                        "error": "Source link does not contain gallery images",
+                    }
+
+                try:
+                    prepared_gallery_images = prepare_fitting_gallery_images(
+                        normalize_fitting_gallery_image_urls(metadata_image_urls),
+                        fetcher=lambda source_url: fetch_remote_image_payload(
+                            source_url,
+                            city=selected_city,
+                        ),
+                    )
+                except FittingGalleryPreparationError as error:
+                    logger.warning(
+                        "Fitting gallery import failed",
+                        extra={
+                            "source_url": effective_source_url,
+                            "source_site": source_site,
+                            "error": str(error),
+                        },
+                    )
+                    return {
+                        "success": False,
+                        "error": "Unable to prepare fitting gallery",
+                    }
+
+                effective_image_url = prepared_gallery_images[0].source_url
 
     if not effective_name and effective_article:
         effective_name = effective_article
@@ -1791,9 +1837,10 @@ async def create_fitting_route(
         is_system=payload.is_system,
         is_active=payload.is_active,
         sort_order=payload.sort_order,
+        prepared_gallery_images=prepared_gallery_images,
     )
 
-    if item.get("image_url") and _claim_fitting_image_warm(item.get("id")):
+    if not prepared_gallery_images and item.get("image_url") and _claim_fitting_image_warm(item.get("id")):
         background_tasks.add_task(_warm_fitting_image_cache_task, item)
 
     create_audit_log(
