@@ -4,11 +4,8 @@ import argparse
 import json
 import sqlite3
 import sys
-from dataclasses import dataclass
-from hashlib import sha256
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qsl, urlencode, urlparse
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -16,6 +13,12 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from services.fitting_source_parser import parse_fitting_source_metadata
+from services.fitting_image_gallery_service import (
+    FittingGalleryPreparationError,
+    PreparedFittingGalleryImage,
+    normalize_fitting_gallery_image_urls,
+    prepare_fitting_gallery_images,
+)
 from services.material_catalog_service import fetch_remote_image_payload
 
 
@@ -33,16 +36,6 @@ EXPECTED_REQUIRED_COLUMNS = {
     "created_at",
     "updated_at",
 }
-
-
-@dataclass(frozen=True)
-class GalleryImage:
-    sort_order: int
-    is_primary: bool
-    source_url: str
-    image_bytes: bytes
-    content_type: str
-    image_sha256: str
 
 
 def _normalize_text(value: object | None) -> str | None:
@@ -147,147 +140,9 @@ def _load_gallery_rows(connection: sqlite3.Connection, fitting_id: int) -> list[
     ).fetchall()
 
 
-def _normalize_image_url(value: object | None) -> str | None:
-    url = _normalize_text(value)
-    if not url:
-        return None
-
-    parsed = urlparse(url)
-    if parsed.scheme.lower() not in {"http", "https"} or not parsed.netloc:
-        return None
-
-    query_items = [
-        (key, item_value)
-        for key, item_value in parse_qsl(parsed.query, keep_blank_values=True)
-        if key.lower() != "size"
-    ]
-    return parsed._replace(query=urlencode(query_items, doseq=True), fragment="").geturl()
-
-
-def _normalize_image_urls(values: object | None) -> list[str]:
-    if not isinstance(values, list):
-        return []
-
-    normalized: list[str] = []
-    seen: set[str] = set()
-    for value in values:
-        url = _normalize_image_url(value)
-        if not url or url in seen:
-            continue
-        seen.add(url)
-        normalized.append(url)
-    return normalized
-
-
-def _detect_content_type(image_bytes: bytes) -> str | None:
-    try:
-        from PIL import Image
-    except Exception:
-        return None
-
-    from io import BytesIO
-
-    try:
-        with Image.open(BytesIO(image_bytes)) as image:
-            image.load()
-            image_format = (image.format or "").upper()
-    except Exception:
-        return None
-
-    mime_map = {
-        "JPEG": "image/jpeg",
-        "JPG": "image/jpeg",
-        "PNG": "image/png",
-    }
-    return mime_map.get(image_format)
-
-
-def _sha256_hex(image_bytes: bytes) -> str:
-    return sha256(image_bytes).hexdigest()
-
-
-def _build_gallery_images(
-    *,
-    fitting_row: sqlite3.Row,
-    image_urls: list[str],
-) -> list[GalleryImage]:
-    if not image_urls:
-        raise SystemExit("Parser did not return image_urls.")
-
-    cached_bytes = fitting_row["image_cached_bytes"]
-    cached_content_type = _normalize_text(fitting_row["image_cached_content_type"])
-
-    if not cached_bytes:
-        raise SystemExit("Main fitting image cache is empty.")
-    if not cached_content_type:
-        raise SystemExit("Main fitting image content type is missing.")
-
-    detected_main_content_type = _detect_content_type(cached_bytes)
-    if detected_main_content_type and detected_main_content_type != cached_content_type:
-        raise SystemExit(
-            "Main fitting image content type mismatch: "
-            f"stored={cached_content_type}, detected={detected_main_content_type}"
-        )
-
-    gallery_images: list[GalleryImage] = []
-    seen_hashes: set[str] = set()
-    next_sort_order = 0
-
-    main_source_url = image_urls[0]
-    main_hash = _sha256_hex(cached_bytes)
-    gallery_images.append(
-        GalleryImage(
-            sort_order=next_sort_order,
-            is_primary=True,
-            source_url=main_source_url,
-            image_bytes=cached_bytes,
-            content_type=cached_content_type,
-            image_sha256=main_hash,
-        )
-    )
-    seen_hashes.add(main_hash)
-    next_sort_order += 1
-
-    for source_url in image_urls[1:]:
-        payload = fetch_remote_image_payload(source_url, city=_normalize_text(fitting_row["city"]))
-        if not payload:
-            raise SystemExit(f"Unable to validate gallery image: {source_url}")
-
-        image_bytes = payload.get("bytes")
-        content_type = _normalize_text(payload.get("content_type"))
-        if not image_bytes or not content_type:
-            raise SystemExit(f"Gallery image payload is empty: {source_url}")
-
-        detected_content_type = _detect_content_type(image_bytes)
-        if detected_content_type and detected_content_type != content_type:
-            raise SystemExit(
-                "Gallery image content type mismatch: "
-                f"stored={content_type}, detected={detected_content_type}"
-            )
-
-        image_sha256 = _sha256_hex(image_bytes)
-        if image_sha256 in seen_hashes:
-            continue
-
-        seen_hashes.add(image_sha256)
-        gallery_images.append(
-            GalleryImage(
-                sort_order=next_sort_order,
-                is_primary=False,
-                source_url=source_url,
-                image_bytes=image_bytes,
-                content_type=content_type,
-                image_sha256=image_sha256,
-            )
-        )
-        next_sort_order += 1
-
-    return gallery_images
-
-
 def _gallery_matches_current(
     current_rows: list[sqlite3.Row],
-    expected_images: list[GalleryImage],
+    expected_images: list[PreparedFittingGalleryImage],
 ) -> bool:
     if len(current_rows) != len(expected_images):
         return False
@@ -301,7 +156,7 @@ def _gallery_matches_current(
             return False
         if _normalize_text(current_row["image_cached_content_type"]) != expected_image.content_type:
             return False
-        if _normalize_text(current_row["image_sha256"]) != expected_image.image_sha256:
+        if _normalize_text(current_row["image_sha256"]) != expected_image.sha256:
             return False
 
     return True
@@ -330,7 +185,7 @@ def _print_preview(
     fitting_row: sqlite3.Row,
     image_urls: list[str],
     current_rows: list[sqlite3.Row],
-    expected_images: list[GalleryImage],
+    expected_images: list[PreparedFittingGalleryImage],
 ) -> None:
     print("Mode: DRY-RUN")
     print(f"Database: {database_path}")
@@ -364,7 +219,7 @@ def _insert_gallery_rows(
     connection: sqlite3.Connection,
     *,
     fitting_id: int,
-    expected_images: list[GalleryImage],
+    expected_images: list[PreparedFittingGalleryImage],
 ) -> None:
     connection.execute("BEGIN IMMEDIATE")
     try:
@@ -388,7 +243,7 @@ def _insert_gallery_rows(
                     image.source_url,
                     image.image_bytes,
                     image.content_type,
-                    image.image_sha256,
+                    image.sha256,
                 )
                 for image in expected_images
             ],
@@ -403,7 +258,7 @@ def _validate_apply_prerequisites(
     *,
     fitting_row: sqlite3.Row,
     image_urls: list[str],
-    expected_images: list[GalleryImage],
+    expected_images: list[PreparedFittingGalleryImage],
     current_rows: list[sqlite3.Row],
 ) -> tuple[bool, str | None]:
     if _gallery_matches_current(current_rows, expected_images):
@@ -432,9 +287,6 @@ def _validate_apply_prerequisites(
 
     if sum(1 for image in expected_images if image.is_primary) != 1:
         return False, "Gallery must contain exactly one primary image"
-
-    if _normalize_text(fitting_row["source"]) != "viyar":
-        return False, "Gallery backfill is supported only for source=viyar"
 
     return True, None
 
@@ -476,12 +328,29 @@ def run(argv: list[str] | None = None) -> int:
         if not parsed.get("success"):
             raise SystemExit(parsed.get("error") or "Parser failed")
 
-        image_urls = _normalize_image_urls(parsed.get("image_urls"))
         current_rows = _load_gallery_rows(connection, args.fitting_id)
-        expected_images = _build_gallery_images(
-            fitting_row=fitting_row,
-            image_urls=image_urls,
-        )
+        existing_primary_bytes = fitting_row["image_cached_bytes"]
+        existing_primary_content_type = _normalize_text(fitting_row["image_cached_content_type"])
+        if not existing_primary_bytes:
+            raise SystemExit("Main fitting image cache is empty.")
+        if not existing_primary_content_type:
+            raise SystemExit("Main fitting image content type is missing.")
+
+        try:
+            image_urls = normalize_fitting_gallery_image_urls(parsed.get("image_urls") or [])
+            expected_images = list(
+                prepare_fitting_gallery_images(
+                    image_urls,
+                    existing_primary_bytes=existing_primary_bytes,
+                    existing_primary_content_type=existing_primary_content_type,
+                    fetcher=lambda source_url: fetch_remote_image_payload(
+                        source_url,
+                        city=_normalize_text(fitting_row["city"]),
+                    ),
+                )
+            )
+        except FittingGalleryPreparationError as error:
+            raise SystemExit(str(error))
 
         if not args.apply:
             _print_preview(
