@@ -404,6 +404,23 @@ class FittingCatalogItemSchema(BaseModel):
     sort_order: int = 0
 
 
+class FittingCatalogDetailItemSchema(FittingCatalogItemSchema):
+    id: int
+    brand: str | None = None
+    currency: str | None = None
+    unit: str | None = None
+    availability: str | None = None
+    characteristics: dict[str, str] = Field(default_factory=dict)
+    parsed_at: datetime | None = None
+    price_updated_at: datetime | None = None
+
+
+class FittingCatalogDetailResponseSchema(BaseModel):
+    success: bool
+    item: FittingCatalogDetailItemSchema | None = None
+    error: str | None = None
+
+
 class FittingCategorySchema(BaseModel):
     code: str
     name: str

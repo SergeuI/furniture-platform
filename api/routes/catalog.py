@@ -4,6 +4,7 @@ from fastapi import (
     APIRouter,
     BackgroundTasks,
     Depends,
+    HTTPException,
     Header,
     Query,
 )
@@ -28,6 +29,7 @@ from schemas.catalog import (
     CatalogItemListResponseSchema,
     CatalogItemOperationResponseSchema,
     FittingCatalogCreateSchema,
+    FittingCatalogDetailResponseSchema,
     FittingCatalogListResponseSchema,
     FittingCatalogOperationResponseSchema,
     FittingCatalogUpdateSchema,
@@ -46,6 +48,9 @@ from schemas.catalog import (
     ServiceCatalogSyncResponseSchema,
     ServiceCatalogTreeResponseSchema,
     SpecificationCatalogResponseSchema
+)
+from database.models.fitting import (
+    FittingModel,
 )
 from database.repositories.catalog_repository import (
     ALLOWED_CATALOG_CATEGORIES,
@@ -80,6 +85,7 @@ from database.repositories.inventory_repository import (
     list_inventory_cities,
     list_material_categories,
     list_materials,
+    _serialize_fitting,
     upsert_material,
     upsert_material_edge_option,
     upsert_material_edge_price,
@@ -89,6 +95,9 @@ from database.repositories.inventory_repository import (
     update_fitting_image_cache,
     update_material_edge_image_cache,
     update_material_image_cache,
+)
+from database.session import (
+    SessionLocal,
 )
 from database.repositories.material_import_job_repository import (
     get_material_import_job,
@@ -246,6 +255,96 @@ def _looks_like_url(value: str | None) -> bool:
         return bool(parsed.netloc or parsed.path) and "." in normalized
     except Exception:
         return False
+
+
+def _normalize_fitting_detail_text(value: object | None) -> str | None:
+    text = " ".join(str(value or "").split()).strip()
+    return text or None
+
+
+def _safe_parse_source_payload_json(value: object | None) -> dict[str, object]:
+    if value is None:
+        return {}
+
+    if isinstance(value, dict):
+        return value
+
+    raw_text = _normalize_fitting_detail_text(value)
+    if not raw_text:
+        return {}
+
+    try:
+        parsed = json.loads(raw_text)
+    except Exception:
+        return {}
+
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _normalize_fitting_characteristics(value: object | None) -> dict[str, str]:
+    if not isinstance(value, dict):
+        return {}
+
+    normalized: dict[str, str] = {}
+    for raw_key, raw_value in value.items():
+        key = _normalize_fitting_detail_text(raw_key)
+        if not key:
+            continue
+
+        if raw_value is None:
+            continue
+
+        if isinstance(raw_value, (str, int, float, bool)):
+            normalized_value = _normalize_fitting_detail_text(raw_value)
+        else:
+            continue
+
+        if not normalized_value:
+            continue
+
+        if key in normalized and normalized[key]:
+            continue
+
+        normalized[key] = normalized_value
+
+    return normalized
+
+
+def _serialize_fitting_detail(item: FittingModel) -> dict:
+    serialized = dict(_serialize_fitting(item))
+    serialized["id"] = int(item.id)
+    source_payload = _safe_parse_source_payload_json(item.source_payload_json)
+    parsed_item = source_payload.get("parsed_item") if isinstance(source_payload, dict) else {}
+    preview_payload = source_payload.get("preview") if isinstance(source_payload, dict) else {}
+    parsed_item_dict = parsed_item if isinstance(parsed_item, dict) else {}
+    preview_dict = preview_payload if isinstance(preview_payload, dict) else {}
+    source_site = _normalize_fitting_detail_text(item.source) or detect_material_source_site(item.source_url)
+    parsed_characteristics = _normalize_fitting_characteristics(parsed_item_dict.get("characteristics"))
+    parsed_description = _normalize_fitting_detail_text(parsed_item_dict.get("description"))
+    parsed_brand = _normalize_fitting_detail_text(parsed_item_dict.get("brand"))
+    parsed_currency = _normalize_fitting_detail_text(parsed_item_dict.get("currency"))
+    parsed_unit = _normalize_fitting_detail_text(parsed_item_dict.get("normalized_unit") or parsed_item_dict.get("unit"))
+    parsed_availability = _normalize_fitting_detail_text(parsed_item_dict.get("availability"))
+    parsed_at = item.parsed_at or _normalize_fitting_detail_text(preview_dict.get("parsed_at"))
+    price_updated_at = item.price_updated_at or _normalize_fitting_detail_text(preview_dict.get("price_updated_at"))
+
+    serialized.update(
+        {
+            "brand": _normalize_fitting_detail_text(item.brand) or parsed_brand,
+            "currency": _normalize_fitting_detail_text(item.currency) or parsed_currency,
+            "unit": _normalize_fitting_detail_text(item.unit) or parsed_unit,
+            "availability": parsed_availability or _normalize_fitting_detail_text(item.stock),
+            "characteristics": parsed_characteristics,
+            "parsed_at": parsed_at,
+            "price_updated_at": price_updated_at,
+            "source_site": source_site,
+            "description": _normalize_fitting_detail_text(item.description) or parsed_description,
+            "has_cached_image": bool(item.image_cached_bytes),
+            "image_cached_content_type": item.image_cached_content_type,
+        }
+    )
+
+    return serialized
 
 
 def _image_response(
@@ -1503,6 +1602,34 @@ async def get_fitting_image_route(
             if_none_match,
         )
     return Response(status_code=404)
+
+
+@router.get(
+    "/fittings/{item_id}",
+    response_model=FittingCatalogDetailResponseSchema,
+)
+async def get_fitting_detail_route(
+    item_id: str,
+    current_user = Depends(require_catalog_reader),
+):
+
+    db = SessionLocal()
+    try:
+        item = (
+            db.query(FittingModel)
+            .filter(FittingModel.id == int(item_id))
+            .first()
+        )
+    finally:
+        db.close()
+
+    if not item:
+        raise HTTPException(status_code=404, detail="Fitting not found")
+
+    return {
+        "success": True,
+        "item": _serialize_fitting_detail(item),
+    }
 
 
 def _can_manage_fitting_item(current_user, item: dict | None) -> bool:
