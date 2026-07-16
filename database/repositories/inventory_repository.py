@@ -9,6 +9,9 @@ from sqlalchemy.orm import load_only
 from database.models.fitting import (
     FittingModel,
 )
+from database.models.fitting_image import (
+    FittingImageModel,
+)
 from database.models.material import (
     MaterialModel,
 )
@@ -448,6 +451,24 @@ def _serialize_fitting(item: FittingModel) -> dict:
         "is_system": bool(item.is_system),
         "is_active": bool(item.is_active),
         "sort_order": item.sort_order or 0,
+    }
+
+
+def _serialize_fitting_image_metadata(item: FittingImageModel) -> dict:
+    return {
+        "id": int(item.id),
+        "sort_order": int(item.sort_order or 0),
+        "is_primary": bool(item.is_primary),
+        "content_type": item.image_cached_content_type,
+    }
+
+
+def _serialize_fitting_image_blob(item: FittingImageModel) -> dict:
+    return {
+        "id": int(item.id),
+        "fitting_id": int(item.fitting_id),
+        "image_cached_bytes": item.image_cached_bytes,
+        "image_cached_content_type": item.image_cached_content_type,
     }
 
 
@@ -1365,6 +1386,75 @@ def get_fitting_by_id(item_id: str | int) -> dict | None:
             return None
 
         return _serialize_fitting(item)
+
+    finally:
+
+        db.close()
+
+
+def list_fitting_images(fitting_id: str | int) -> list[dict]:
+
+    db = SessionLocal()
+
+    try:
+
+        rows = (
+            db.query(FittingImageModel)
+            .options(
+                load_only(
+                    FittingImageModel.id,
+                    FittingImageModel.fitting_id,
+                    FittingImageModel.sort_order,
+                    FittingImageModel.is_primary,
+                    FittingImageModel.image_cached_content_type,
+                )
+            )
+            .filter(FittingImageModel.fitting_id == int(fitting_id))
+            .order_by(
+                FittingImageModel.sort_order.asc(),
+                FittingImageModel.id.asc(),
+            )
+            .all()
+        )
+
+        return [
+            _serialize_fitting_image_metadata(row)
+            for row in rows
+        ]
+
+    finally:
+
+        db.close()
+
+
+def get_fitting_image(
+    fitting_id: str | int,
+    image_id: str | int,
+) -> dict | None:
+
+    db = SessionLocal()
+
+    try:
+
+        row = (
+            db.query(FittingImageModel)
+            .options(
+                load_only(
+                    FittingImageModel.id,
+                    FittingImageModel.fitting_id,
+                    FittingImageModel.image_cached_bytes,
+                    FittingImageModel.image_cached_content_type,
+                )
+            )
+            .filter(FittingImageModel.fitting_id == int(fitting_id))
+            .filter(FittingImageModel.id == int(image_id))
+            .first()
+        )
+
+        if not row or not row.image_cached_bytes or not row.image_cached_content_type:
+            return None
+
+        return _serialize_fitting_image_blob(row)
 
     finally:
 

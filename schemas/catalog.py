@@ -404,6 +404,13 @@ class FittingCatalogItemSchema(BaseModel):
     sort_order: int = 0
 
 
+class FittingCatalogImageSchema(BaseModel):
+    id: int
+    sort_order: int
+    is_primary: bool
+    content_type: str
+
+
 class FittingCatalogDetailItemSchema(FittingCatalogItemSchema):
     id: int
     brand: str | None = None
@@ -411,6 +418,7 @@ class FittingCatalogDetailItemSchema(FittingCatalogItemSchema):
     unit: str | None = None
     availability: str | None = None
     characteristics: dict[str, str] = Field(default_factory=dict)
+    images: List[FittingCatalogImageSchema] = Field(default_factory=list)
     parsed_at: datetime | None = None
     price_updated_at: datetime | None = None
 

@@ -75,11 +75,13 @@ from database.repositories.inventory_repository import (
     create_fitting,
     delete_fitting,
     delete_material,
+    get_fitting_image,
     get_fitting_by_id,
     get_fitting_image_by_id,
     get_material_by_import_identity,
     get_material_edge_image,
     get_material_by_article,
+    list_fitting_images,
     list_fittings,
     list_fitting_categories,
     list_inventory_cities,
@@ -1604,6 +1606,24 @@ async def get_fitting_image_route(
     return Response(status_code=404)
 
 
+@router.get("/fittings/{item_id}/images/{image_id}")
+async def get_fitting_gallery_image_route(
+    item_id: str,
+    image_id: str,
+    if_none_match: str | None = Header(default=None, alias="If-None-Match"),
+):
+    fitting_image = get_fitting_image(item_id, image_id)
+
+    if not fitting_image:
+        return Response(status_code=404)
+
+    return _image_response(
+        fitting_image["image_cached_bytes"],
+        fitting_image.get("image_cached_content_type"),
+        if_none_match,
+    )
+
+
 @router.get(
     "/fittings/{item_id}",
     response_model=FittingCatalogDetailResponseSchema,
@@ -1620,16 +1640,18 @@ async def get_fitting_detail_route(
             .filter(FittingModel.id == int(item_id))
             .first()
         )
+        if not item:
+            raise HTTPException(status_code=404, detail="Fitting not found")
+
+        serialized_item = _serialize_fitting_detail(item)
+        serialized_item["images"] = list_fitting_images(item_id)
+
+        return {
+            "success": True,
+            "item": serialized_item,
+        }
     finally:
         db.close()
-
-    if not item:
-        raise HTTPException(status_code=404, detail="Fitting not found")
-
-    return {
-        "success": True,
-        "item": _serialize_fitting_detail(item),
-    }
 
 
 def _can_manage_fitting_item(current_user, item: dict | None) -> bool:
