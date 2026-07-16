@@ -67,6 +67,7 @@ import {
   getFittingHoleTemplate,
   getFittingHoleServicePreview,
   getFittingsCatalog,
+  getFittingDetails,
   getMaterialDetails,
   getMaterialImportJob,
   getMaterialImageBlob,
@@ -3423,6 +3424,8 @@ Object.assign(TRANSLATIONS.en, {
   catalogFasteners: "Fasteners",
   catalogFastenersDescription:
     "Technical fasteners such as confirmats, screws, connectors, and related items.",
+  fittings: "Fittings",
+  handles_hooks: "Handles and hooks",
   fittingName: "Name",
   fittingType: "Fitting type",
   fittingGroup: "Catalog section",
@@ -3431,6 +3434,15 @@ Object.assign(TRANSLATIONS.en, {
   fittingSource: "Source",
   fittingSourceUrl: "Source link",
   fittingSourceUrlHint: "Paste the product page link and the catalog will try to read the name, article, image, and price.",
+  fittingDetails: "Fitting details",
+  fittingDetailsLoading: "Loading fitting details...",
+  fittingDetailsFailed: "Unable to load fitting details.",
+  fittingRetry: "Retry",
+  fittingCharacteristics: "Characteristics",
+  fittingNoCharacteristics: "No characteristics",
+  fittingOpenSource: "Open source page",
+  fittingDescription: "Description",
+  brand: "Brand",
   fittingPrice: "Price",
   fittingStock: "Availability",
   fittingColumns: "Columns",
@@ -3575,6 +3587,8 @@ Object.assign(TRANSLATIONS.uk, {
   catalogFasteners: "\u041c\u0435\u0442\u0438\u0437\u043d\u0430 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0430",
   catalogFastenersDescription:
     "\u0422\u0435\u0445\u043d\u0456\u0447\u043d\u0430 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0430: \u0441\u0442\u044f\u0436\u043a\u0438, \u0441\u0430\u043c\u043e\u0440\u0456\u0437\u0438, \u043a\u0440\u0456\u043f\u0438\u043b\u044c\u043d\u0456 \u0435\u043b\u0435\u043c\u0435\u043d\u0442\u0438 \u0442\u0430 \u0441\u0443\u043f\u0443\u0442\u043d\u0456 \u043f\u043e\u0437\u0438\u0446\u0456\u0457.",
+  fittings: "\u0424\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0430",
+  handles_hooks: "\u0420\u0443\u0447\u043a\u0438 \u0442\u0430 \u0433\u0430\u0447\u043a\u0438",
   fittingName: "\u041d\u0430\u0437\u0432\u0430",
   fittingType: "\u0422\u0438\u043f \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0438",
   fittingGroup: "\u0420\u043e\u0437\u0434\u0456\u043b \u043a\u0430\u0442\u0430\u043b\u043e\u0433\u0443",
@@ -3583,6 +3597,15 @@ Object.assign(TRANSLATIONS.uk, {
   fittingSource: "\u0414\u0436\u0435\u0440\u0435\u043b\u043e",
   fittingSourceUrl: "\u041f\u043e\u0441\u0438\u043b\u0430\u043d\u043d\u044f \u043d\u0430 \u0434\u0436\u0435\u0440\u0435\u043b\u043e",
   fittingSourceUrlHint: "\u0412\u0441\u0442\u0430\u0432\u0442\u0435 \u043f\u043e\u0441\u0438\u043b\u0430\u043d\u043d\u044f \u043d\u0430 \u0441\u0442\u043e\u0440\u0456\u043d\u043a\u0443 \u0442\u043e\u0432\u0430\u0440\u0443, \u0456 \u043a\u0430\u0442\u0430\u043b\u043e\u0433 \u0441\u043f\u0440\u043e\u0431\u0443\u0454 \u043f\u0456\u0434\u0442\u044f\u0433\u043d\u0443\u0442\u0438 \u043d\u0430\u0437\u0432\u0443, \u0430\u0440\u0442\u0438\u043a\u0443\u043b, \u043a\u0430\u0440\u0442\u0438\u043d\u043a\u0443 \u0456 \u0446\u0456\u043d\u0443.",
+  fittingDetails: "\u0414\u0435\u0442\u0430\u043b\u0456 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0438",
+  fittingDetailsLoading: "\u0417\u0430\u0432\u0430\u043d\u0442\u0430\u0436\u0435\u043d\u043d\u044f \u0434\u0435\u0442\u0430\u043b\u0435\u0439 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0438...",
+  fittingDetailsFailed: "\u041d\u0435 \u0432\u0434\u0430\u043b\u043e\u0441\u044f \u0437\u0430\u0432\u0430\u043d\u0442\u0430\u0436\u0438\u0442\u0438 \u0434\u0435\u0442\u0430\u043b\u0456 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0438.",
+  fittingRetry: "\u041f\u043e\u0432\u0442\u043e\u0440\u0438\u0442\u0438",
+  fittingCharacteristics: "\u0425\u0430\u0440\u0430\u043a\u0442\u0435\u0440\u0438\u0441\u0442\u0438\u043a\u0438",
+  fittingNoCharacteristics: "\u0425\u0430\u0440\u0430\u043a\u0442\u0435\u0440\u0438\u0441\u0442\u0438\u043a \u043d\u0435\u043c\u0430\u0454",
+  fittingOpenSource: "\u0412\u0456\u0434\u043a\u0440\u0438\u0442\u0438 \u0434\u0436\u0435\u0440\u0435\u043b\u043e",
+  fittingDescription: "\u041e\u043f\u0438\u0441",
+  brand: "\u0411\u0440\u0435\u043d\u0434",
   fittingPrice: "\u0426\u0456\u043d\u0430",
   fittingStock: "\u041d\u0430\u044f\u0432\u043d\u0456\u0441\u0442\u044c",
   fittingColumns: "\u041a\u043e\u043b\u043e\u043d\u043a\u0438",
@@ -3699,6 +3722,7 @@ Object.assign(TRANSLATIONS.en, {
   materialPromoUntil: "until",
   materialPromoInStock: "In stock",
   materialPromoOutOfStock: "Out of stock",
+  fittingAvailabilityPreOrder: "Pre-order",
   materialCardOpen: "Open material",
   materialDetails: "Material details",
   materialDescription: "Description",
@@ -3788,6 +3812,7 @@ Object.assign(TRANSLATIONS.uk, {
   materialPromoUntil: "\u0434\u043e",
   materialPromoInStock: "\u0412 \u043d\u0430\u044f\u0432\u043d\u043e\u0441\u0442\u0456",
   materialPromoOutOfStock: "\u041d\u0435\u043c\u0430\u0454 \u0432 \u043d\u0430\u044f\u0432\u043d\u043e\u0441\u0442\u0456",
+  fittingAvailabilityPreOrder: "\u041f\u0456\u0434 \u0437\u0430\u043c\u043e\u0432\u043b\u0435\u043d\u043d\u044f",
   materialCardOpen: "\u0412\u0456\u0434\u043a\u0440\u0438\u0442\u0438 \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b",
   materialDetails: "\u0414\u0435\u0442\u0430\u043b\u0456 \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b\u0443",
   materialDescription: "\u041e\u043f\u0438\u0441",
@@ -4552,6 +4577,95 @@ function formatCatalogLabel(value, t) {
   }
 
   return t[value] || value;
+}
+
+function formatReadableCatalogValue(value, t) {
+  const normalized = String(value || "").replace(/\s+/g, " ").trim();
+
+  if (!normalized) {
+    return "";
+  }
+
+  return formatCatalogLabel(normalized, t);
+}
+
+function formatCatalogSystemValue(rawValue, fallbackValue, t) {
+  const normalizedRaw = String(rawValue || "").replace(/\s+/g, " ").trim();
+
+  if (normalizedRaw) {
+    const localizedRaw = formatCatalogLabel(normalizedRaw, t);
+
+    if (localizedRaw && localizedRaw !== normalizedRaw) {
+      return localizedRaw;
+    }
+  }
+
+  const normalizedFallback = String(fallbackValue || "").replace(/\s+/g, " ").trim();
+
+  if (!normalizedFallback || /[_-]/.test(normalizedFallback)) {
+    return "";
+  }
+
+  return normalizedFallback;
+}
+
+function formatFittingUnitLabel(unit, language) {
+  const normalized = String(unit || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase()
+    .replace(/[.]+$/, "");
+
+  if (!normalized) {
+    return "";
+  }
+
+  const pieceUnits = new Set(["шт", "pcs", "piece", "pieces"]);
+
+  if (pieceUnits.has(normalized)) {
+    return language === "uk" ? "шт" : "pcs";
+  }
+
+  return String(unit || "").replace(/\s+/g, " ").trim();
+}
+
+function getFittingAvailabilityLabel(value, t) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+
+  if (!text) {
+    return t.notSet;
+  }
+
+  const normalized = text.toLowerCase();
+
+  if (normalized === "в наявності" || normalized === "in stock") {
+    return t.materialPromoInStock;
+  }
+
+  if (normalized === "немає в наявності" || normalized === "нема в наявності" || normalized === "out of stock") {
+    return t.materialPromoOutOfStock;
+  }
+
+  if (normalized === "під замовлення" || normalized === "pre-order" || normalized === "pre order") {
+    return t.fittingAvailabilityPreOrder;
+  }
+
+  return text;
+}
+
+function formatFittingPriceValue(item, language, t) {
+  const price = item?.price;
+
+  if (price === null || price === undefined || price === "") {
+    return t.notSet;
+  }
+
+  const amount = formatMoneyValue(price);
+  const currency = String(item?.currency || "").trim();
+  const unit = formatFittingUnitLabel(item?.unit || item?.price_unit || item?.measure_unit || "", language);
+  const pricePart = [amount, currency].filter(Boolean).join(" ").trim();
+
+  return unit ? `${pricePart} / ${unit}` : pricePart;
 }
 
 function getSlideLengthForDepth(depth) {
@@ -6011,6 +6125,9 @@ export default function App() {
     stock: true,
     source: true,
   });
+  const [selectedFittingDetail, setSelectedFittingDetail] = useState(null);
+  const [fittingDetailLoading, setFittingDetailLoading] = useState(false);
+  const [fittingDetailError, setFittingDetailError] = useState("");
   const [holeTemplateItems, setHoleTemplateItems] = useState([]);
   const [fittingBundleItems, setFittingBundleItems] = useState([]);
   const [fittingBundlesLoading, setFittingBundlesLoading] = useState(false);
@@ -6087,6 +6204,9 @@ export default function App() {
   const fittingsCatalogRequestRef = useRef({ id: 0, pending: false });
   const fittingBundlesRequestRef = useRef({ id: 0, pending: false });
   const materialDetailsRequestRef = useRef({ id: 0, article: "", open: false });
+  const fittingDetailsRequestRef = useRef({ id: 0, itemId: "", open: false });
+  const fittingDetailsReturnFocusRef = useRef(null);
+  const fittingDetailsCloseButtonRef = useRef(null);
   const bundleDetailsRequestRef = useRef({ id: 0, bundleKey: "", open: false });
   const holeMountingVariantRefreshRef = useRef({ reason: "", templateId: "", variantKey: "" });
   const [newFittingForm, setNewFittingForm] = useState(DEFAULT_FITTING_FORM);
@@ -7850,6 +7970,20 @@ export default function App() {
       logo: buildAdminAssetUrl("brand/source-logos/manual.svg"),
     };
   };
+  const selectedFittingTypeLabel = selectedFittingDetail
+    ? formatCatalogSystemValue(
+        selectedFittingDetail.fitting_type,
+        selectedFittingDetail.fitting_type_name,
+        t,
+      )
+    : "";
+  const selectedFittingGroupLabel = selectedFittingDetail
+    ? formatCatalogSystemValue(
+        selectedFittingDetail.fitting_group,
+        selectedFittingDetail.fitting_group_name,
+        t,
+      )
+    : "";
 
   const closeProjectOptionPicker = useCallback(() => {
     setProjectOptionPicker({
@@ -8723,6 +8857,106 @@ export default function App() {
     setMaterialEdgeForms({});
     setMaterialEdgeCreateForm({ open: false, edge_key: "edge_08", source_url: "" });
   }
+
+  async function openFittingDetails(item, returnFocusTarget = null) {
+    if (!token || !item?.id) {
+      return;
+    }
+
+    const itemId = String(item.id || "").trim();
+
+    if (!itemId) {
+      return;
+    }
+
+    const requestId = fittingDetailsRequestRef.current.id + 1;
+    const viewAtStart = activeViewRef.current;
+
+    fittingDetailsRequestRef.current = {
+      id: requestId,
+      itemId,
+      open: true,
+    };
+    setOpenFittingMenuId("");
+    if (returnFocusTarget && typeof returnFocusTarget.focus === "function") {
+      fittingDetailsReturnFocusRef.current = returnFocusTarget;
+    }
+    setFittingDetailLoading(true);
+    setFittingDetailError("");
+    setSelectedFittingDetail(item);
+
+    try {
+      const result = await getFittingDetails(token, itemId);
+
+      if (
+        fittingDetailsRequestRef.current.id !== requestId ||
+        fittingDetailsRequestRef.current.itemId !== itemId ||
+        !fittingDetailsRequestRef.current.open ||
+        !["catalogFittings", "catalogFasteners"].includes(activeViewRef.current) ||
+        activeViewRef.current !== viewAtStart
+      ) {
+        return;
+      }
+
+      if (!result.success) {
+        setFittingDetailError(result.error || t.fittingDetailsFailed);
+        setSelectedFittingDetail(item);
+        return;
+      }
+
+      setSelectedFittingDetail(result.item || item);
+      setFittingDetailError("");
+    } finally {
+      if (fittingDetailsRequestRef.current.id === requestId) {
+        setFittingDetailLoading(false);
+      }
+    }
+  }
+
+  function closeFittingDetails() {
+    fittingDetailsRequestRef.current.open = false;
+    setSelectedFittingDetail(null);
+    setFittingDetailLoading(false);
+    setFittingDetailError("");
+
+    if (
+      typeof window !== "undefined" &&
+      fittingDetailsReturnFocusRef.current &&
+      typeof fittingDetailsReturnFocusRef.current.focus === "function"
+    ) {
+      window.requestAnimationFrame(() => {
+        fittingDetailsReturnFocusRef.current?.focus?.();
+      });
+    }
+  }
+
+  useEffect(() => {
+    if (!selectedFittingDetail) {
+      return undefined;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeFittingDetails();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    const focusTimer = window.setTimeout(() => {
+      fittingDetailsCloseButtonRef.current?.focus?.();
+    }, 0);
+
+    return () => {
+      window.clearTimeout(focusTimer);
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [selectedFittingDetail]);
 
   async function loadFittingsCatalog(
     activeToken = token,
@@ -12680,6 +12914,14 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
       materialDetailsRequestRef.current.open = false;
       setSelectedMaterialDetail(null);
       setMaterialDetailLoading(false);
+    }
+
+    if (nextView !== "catalogFittings" && nextView !== "catalogFasteners") {
+      fittingDetailsRequestRef.current.open = false;
+      fittingDetailsReturnFocusRef.current = null;
+      setSelectedFittingDetail(null);
+      setFittingDetailLoading(false);
+      setFittingDetailError("");
     }
 
     if (nextView !== "catalogBundles") {
@@ -17107,7 +17349,20 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                       {visibleFittingItems.map((item) => {
                         const sourceMeta = getFittingSourceMeta(item);
                         return (
-                          <article className="fitting-item-card" key={item.id}>
+                          <article
+                            className="fitting-item-card fitting-item-card-clickable"
+                            key={item.id}
+                            onClick={(event) => openFittingDetails(item, event.currentTarget)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                openFittingDetails(item, event.currentTarget);
+                              }
+                            }}
+                            role="button"
+                            tabIndex={0}
+                            aria-label={`${t.fittingDetails}: ${item.name || item.article || t.notSet}`}
+                          >
                             <div className="fitting-item-card-head">
                               <div className="fitting-item-card-preview">
                                 {buildFittingImageCandidates(item).length ? (
@@ -17127,9 +17382,10 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                                 <div className="material-card-menu fitting-row-menu">
                                   <button
                                     className="icon-button material-card-menu-trigger"
-                                    onClick={() =>
+                                    onClick={(event) => {
+                                      event.stopPropagation();
                                       setOpenFittingMenuId((current) => (current === item.id ? "" : item.id))
-                                    }
+                                    }}
                                     type="button"
                                   >
                                     <MoreHorizontal size={16} />
@@ -17138,7 +17394,10 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                                     <div className="material-card-menu-dropdown">
                                       <button
                                         className="material-card-menu-action danger"
-                                        onClick={() => openDeleteFittingConfirm(item)}
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+                                          openDeleteFittingConfirm(item);
+                                        }}
                                         type="button"
                                       >
                                         <Trash2 size={14} />
@@ -17183,7 +17442,20 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                           const sourceMeta = getFittingSourceMeta(item);
 
                           return (
-                            <article className="fittings-table-row" key={item.id}>
+                            <article
+                              className="fittings-table-row fitting-table-row-clickable"
+                              key={item.id}
+                              onClick={(event) => openFittingDetails(item, event.currentTarget)}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter" || event.key === " ") {
+                                  event.preventDefault();
+                                  openFittingDetails(item, event.currentTarget);
+                                }
+                              }}
+                              role="button"
+                              tabIndex={0}
+                              aria-label={`${t.fittingDetails}: ${item.name || item.article || t.notSet}`}
+                            >
                               <div className="fittings-table-name">
                                 <div className="fittings-table-name-main">
                                   <div className="fittings-table-thumb">
@@ -17213,9 +17485,10 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                                   <div className="material-card-menu fitting-row-menu">
                                     <button
                                       className="icon-button material-card-menu-trigger"
-                                      onClick={() =>
+                                      onClick={(event) => {
+                                        event.stopPropagation();
                                         setOpenFittingMenuId((current) => (current === item.id ? "" : item.id))
-                                      }
+                                      }}
                                       type="button"
                                     >
                                       <MoreHorizontal size={16} />
@@ -17224,7 +17497,10 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                                       <div className="material-card-menu-dropdown">
                                         <button
                                           className="material-card-menu-action danger"
-                                          onClick={() => openDeleteFittingConfirm(item)}
+                                          onClick={(event) => {
+                                            event.stopPropagation();
+                                            openDeleteFittingConfirm(item);
+                                          }}
                                           type="button"
                                         >
                                           <Trash2 size={14} />
@@ -21438,6 +21714,167 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                 <p className="empty-inline-note material-edge-empty-note">{t.materialEdgeSlotEmpty}</p>
               )}
             </section>
+          </section>
+        </div>
+      ) : null}
+
+      {selectedFittingDetail ? (
+        <div
+          aria-modal="true"
+          className="modal-backdrop"
+          onClick={closeFittingDetails}
+          role="dialog"
+        >
+          <section
+            className="confirm-modal material-details-modal fitting-details-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="confirm-header">
+              <div>
+                <strong>{t.fittingDetails}</strong>
+                <p>{selectedFittingDetail.name || selectedFittingDetail.article || t.notSet}</p>
+              </div>
+              <button
+                ref={fittingDetailsCloseButtonRef}
+                aria-label={t.cancel}
+                className="ghost-button compact-button detail-info-button"
+                onClick={closeFittingDetails}
+                type="button"
+              >
+                <X size={16} />
+              </button>
+            </header>
+
+            {fittingDetailError ? (
+              <div className="fitting-details-error">
+                <span>{fittingDetailError}</span>
+                <button
+                  className="ghost-button compact-button"
+                  onClick={() => openFittingDetails(selectedFittingDetail)}
+                  type="button"
+                >
+                  <RefreshCw size={14} />
+                  {t.fittingRetry}
+                </button>
+              </div>
+            ) : null}
+
+            {fittingDetailLoading ? (
+              <div className="fitting-details-loading">
+                <span className="service-tree-badge subtle">{t.fittingDetailsLoading}</span>
+              </div>
+            ) : null}
+
+            <div className="fitting-details-layout">
+              <div className="fitting-details-media">
+                {buildFittingImageCandidates(selectedFittingDetail).length ? (
+                  <img
+                    alt={selectedFittingDetail.name || selectedFittingDetail.article || t.catalogFittings}
+                    data-fallback-index="0"
+                    decoding="async"
+                    loading="eager"
+                    onError={(event) => handleFittingImageError(event, selectedFittingDetail)}
+                    src={buildFittingImageCandidates(selectedFittingDetail)[0]}
+                  />
+                ) : (
+                  <div className="material-card-placeholder">
+                    {selectedFittingDetail.has_cached_image ? t.loading : t.notSet}
+                  </div>
+                )}
+                <div className="fitting-details-meta">
+                  <span className="service-tree-badge subtle">
+                    {getFittingSourceMeta(selectedFittingDetail).label}
+                  </span>
+                  {selectedFittingDetail.article ? (
+                    <span className="service-tree-badge subtle">
+                      {selectedFittingDetail.article}
+                    </span>
+                  ) : null}
+                  {selectedFittingDetail.brand ? (
+                    <span className="service-tree-badge subtle">
+                      {selectedFittingDetail.brand}
+                    </span>
+                  ) : null}
+                </div>
+                {selectedFittingDetail.source_url ? (
+                  <a
+                    className="fitting-details-source-link"
+                    href={selectedFittingDetail.source_url}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    {t.fittingOpenSource}
+                  </a>
+                ) : null}
+              </div>
+
+              <div className="fitting-details-content">
+                <div className="fitting-details-grid">
+                  <div>
+                    <span>{t.city}</span>
+                    <strong>{formatCatalogLabel(selectedFittingDetail.city, t)}</strong>
+                  </div>
+                  <div>
+                    <span>{t.fittingArticle}</span>
+                    <strong>{selectedFittingDetail.article || t.notSet}</strong>
+                  </div>
+                  <div>
+                    <span>{t.fittingPrice}</span>
+                    <strong>{formatFittingPriceValue(selectedFittingDetail, language, t)}</strong>
+                  </div>
+                  <div>
+                    <span>{t.fittingStock}</span>
+                    <strong>{getFittingAvailabilityLabel(selectedFittingDetail.availability, t)}</strong>
+                  </div>
+                  {selectedFittingTypeLabel ? (
+                    <div>
+                      <span>{t.fittingType}</span>
+                      <strong>{selectedFittingTypeLabel}</strong>
+                    </div>
+                  ) : null}
+                  {selectedFittingGroupLabel ? (
+                    <div>
+                      <span>{t.fittingGroup}</span>
+                      <strong>{selectedFittingGroupLabel}</strong>
+                    </div>
+                  ) : null}
+                  {String(selectedFittingDetail.brand || "").trim() ? (
+                    <div>
+                      <span>{t.brand}</span>
+                      <strong>{selectedFittingDetail.brand}</strong>
+                    </div>
+                  ) : null}
+                </div>
+
+                {selectedFittingDetail.description ? (
+                  <div className="fitting-details-description">
+                    <span>{t.fittingDescription}</span>
+                    <p>{selectedFittingDetail.description}</p>
+                  </div>
+                ) : null}
+
+                <div className="fitting-details-characteristics">
+                  <div className="fitting-details-section-header">
+                    <strong>{t.fittingCharacteristics}</strong>
+                    <span className="service-tree-badge subtle">
+                      {Object.keys(selectedFittingDetail.characteristics || {}).length}
+                    </span>
+                  </div>
+                  {Object.entries(selectedFittingDetail.characteristics || {}).length ? (
+                    <dl className="fitting-details-characteristics-list">
+                      {Object.entries(selectedFittingDetail.characteristics || {}).map(([name, value]) => (
+                        <div className="fitting-details-characteristic" key={name}>
+                          <dt>{name}</dt>
+                          <dd>{String(value)}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  ) : (
+                    <p className="fitting-details-empty">{t.fittingNoCharacteristics}</p>
+                  )}
+                </div>
+              </div>
+            </div>
           </section>
         </div>
       ) : null}

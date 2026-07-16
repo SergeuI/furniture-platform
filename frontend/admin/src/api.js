@@ -240,6 +240,22 @@ export async function getFittingsCatalog(token, params = {}) {
   });
 }
 
+export async function getFittingDetails(token, itemId) {
+  const normalizedItemId = String(itemId || "").trim();
+
+  if (!normalizedItemId) {
+    return {
+      success: false,
+      error: "Fitting item ID is required",
+      status: 0,
+    };
+  }
+
+  return request(`/catalog/fittings/${encodeURIComponent(normalizedItemId)}`, {
+    headers: authHeaders(token),
+  });
+}
+
 export async function createFitting(token, payload) {
   return request("/catalog/fittings", {
     method: "POST",

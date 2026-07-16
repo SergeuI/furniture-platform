@@ -1937,6 +1937,16 @@ tbody tr.selected {
   padding: 10px 14px;
 }
 
+.fitting-table-row-clickable {
+  cursor: pointer;
+  transition: background-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+}
+
+.fitting-table-row-clickable:hover {
+  background: #f9fbfc;
+  box-shadow: inset 0 0 0 1px #dbe4ea;
+}
+
 .fittings-table-row:first-child {
   border-top: 0;
 }
@@ -3490,6 +3500,18 @@ tbody tr.selected {
   display: grid;
   gap: 12px;
   padding: 14px;
+}
+
+.fitting-item-card-clickable {
+  cursor: pointer;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+}
+
+.fitting-item-card-clickable:hover,
+.fitting-item-card-clickable:focus-visible {
+  border-color: #b7c4cf;
+  box-shadow: 0 14px 28px rgba(18, 31, 38, 0.08);
+  transform: translateY(-1px);
 }
 
 .fitting-item-card-head {
@@ -7263,6 +7285,183 @@ tbody tr.selected {
   max-height: calc(100vh - 32px);
   overflow: auto;
   width: 100%;
+}
+
+.fitting-details-modal {
+  max-width: min(1120px, calc(100vw - 48px));
+}
+
+.fitting-details-modal .confirm-header {
+  background: #ffffff;
+  border-bottom: 1px solid #dbe4ea;
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.fitting-details-error,
+.fitting-details-loading {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.fitting-details-layout {
+  display: grid;
+  gap: 20px;
+  align-items: start;
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+}
+
+.fitting-details-media {
+  background: #f8fafb;
+  border: 1px solid #dbe4ea;
+  border-radius: 14px;
+  display: grid;
+  gap: 12px;
+  height: fit-content;
+  padding: 16px;
+  position: sticky;
+  top: 72px;
+}
+
+.fitting-details-media img {
+  display: block;
+  max-height: 360px;
+  object-fit: contain;
+  width: 100%;
+}
+
+.fitting-details-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.fitting-details-source-link {
+  color: #0f766e;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.fitting-details-source-link:hover {
+  text-decoration: underline;
+}
+
+.fitting-details-content {
+  display: grid;
+  gap: 20px;
+}
+
+.fitting-details-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.fitting-details-grid > div,
+.fitting-details-description,
+.fitting-details-characteristics {
+  background: #ffffff;
+  border: 1px solid #dbe4ea;
+  border-radius: 12px;
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+}
+
+.fitting-details-grid > div span,
+.fitting-details-description span {
+  color: #607182;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+}
+
+.fitting-details-grid > div strong {
+  color: #24343d;
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.fitting-details-description p {
+  color: #32424e;
+  margin: 0;
+}
+
+.fitting-details-section-header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.fitting-details-characteristics-list {
+  background: #ffffff;
+  border: 1px solid #dbe4ea;
+  border-radius: 12px;
+  display: grid;
+  gap: 0;
+  margin: 0;
+  overflow: hidden;
+}
+
+.fitting-details-characteristic {
+  align-items: center;
+  background: #ffffff;
+  border-top: 1px solid #e3e9ee;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(180px, 0.95fr) minmax(0, 1.05fr);
+  min-height: 48px;
+  padding: 10px 14px;
+}
+
+.fitting-details-characteristic:first-child {
+  border-top: 0;
+}
+
+.fitting-details-characteristic dt {
+  color: #24343d;
+  font-weight: 600;
+}
+
+.fitting-details-characteristic dd {
+  color: #52606d;
+  margin: 0;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.fitting-details-empty {
+  color: #607182;
+  margin: 0;
+}
+
+@media (max-width: 960px) {
+  .fitting-details-layout,
+  .fitting-details-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .fitting-details-media {
+    position: static;
+    top: auto;
+  }
+
+  .fitting-details-characteristic {
+    gap: 4px;
+    grid-template-columns: minmax(0, 1fr);
+    min-height: 42px;
+  }
+
+  .fitting-details-characteristic dd {
+    text-align: left;
+  }
 }
 
 .project-option-picker-modal {
