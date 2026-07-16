@@ -171,6 +171,82 @@ export async function getMaterialImageBlob(token, article, timeoutMs = 30000) {
   }
 }
 
+export async function getFittingImageBlob(token, itemId, imageId, timeoutMs = 30000) {
+  const normalizedItemId = String(itemId || "").trim();
+  const normalizedImageId = String(imageId || "").trim();
+
+  if (!normalizedItemId || !normalizedImageId) {
+    return {
+      success: false,
+      status: 0,
+      error: "Fitting and image IDs are required",
+    };
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  const imagePath = `/catalog/fittings/${encodeURIComponent(normalizedItemId)}/images/${encodeURIComponent(normalizedImageId)}`;
+
+  try {
+    const response = await fetch(`${API_BASE_URL}${imagePath}`, {
+      headers: authHeaders(token),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        const authHeader = String(authHeaders(token).Authorization || "");
+        const authToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
+        if (authToken) {
+          window.dispatchEvent(
+            new CustomEvent("furniture-admin-unauthorized", {
+              detail: {
+                token: authToken,
+                path: imagePath,
+                status: response.status,
+              },
+            }),
+          );
+        }
+      }
+
+      return {
+        success: false,
+        status: response.status,
+        error: `HTTP ${response.status}`,
+      };
+    }
+
+    const blob = await response.blob();
+
+    if (!blob || !blob.size) {
+      return {
+        success: false,
+        status: response.status,
+        error: "Empty image response",
+      };
+    }
+
+    return {
+      success: true,
+      status: response.status,
+      blob,
+      contentType: response.headers.get("Content-Type") || blob.type || "",
+    };
+  } catch (error) {
+    return {
+      success: false,
+      status: 0,
+      error:
+        error?.name === "AbortError"
+          ? `Request timed out after ${Math.round(timeoutMs / 1000)} seconds`
+          : error?.message || "Network request failed",
+    };
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 export async function login(email, password) {
   return request("/auth/login", {
     method: "POST",

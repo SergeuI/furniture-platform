@@ -31,6 +31,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { Component, Suspense, lazy, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import surfaceMountIcon from "./assets/hole-mounting/surface_mount.png";
 import angledTwoPlanesIcon from "./assets/hole-mounting/angled_two_planes.png";
@@ -68,6 +69,7 @@ import {
   getFittingHoleServicePreview,
   getFittingsCatalog,
   getFittingDetails,
+  getFittingImageBlob,
   getMaterialDetails,
   getMaterialImportJob,
   getMaterialImageBlob,
@@ -3438,6 +3440,21 @@ Object.assign(TRANSLATIONS.en, {
   fittingDetailsLoading: "Loading fitting details...",
   fittingDetailsFailed: "Unable to load fitting details.",
   fittingRetry: "Retry",
+  fittingImagePrevious: "Previous image",
+  fittingImageNext: "Next image",
+  fittingImageSelect: "Select image",
+  fittingImagesLoading: "Loading images...",
+  fittingImagesFailed: "Failed to load images.",
+  fittingImagesRetry: "Try again",
+  fittingEnlargeImage: "Enlarge image",
+  fittingPreviewClose: "Close preview",
+  fittingZoomIn: "Zoom in",
+  fittingZoomOut: "Zoom out",
+  fittingResetZoom: "Reset zoom",
+  fittingPreviewTitle: "Image preview",
+  fittingPreviewZoom: "Zoom",
+  fittingPreviewDragHint: "Drag the image to move it.",
+  fittingPreviewZoomHint: "Click zoom in to enlarge the photo.",
   fittingCharacteristics: "Characteristics",
   fittingNoCharacteristics: "No characteristics",
   fittingOpenSource: "Open source page",
@@ -3601,6 +3618,21 @@ Object.assign(TRANSLATIONS.uk, {
   fittingDetailsLoading: "\u0417\u0430\u0432\u0430\u043d\u0442\u0430\u0436\u0435\u043d\u043d\u044f \u0434\u0435\u0442\u0430\u043b\u0435\u0439 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0438...",
   fittingDetailsFailed: "\u041d\u0435 \u0432\u0434\u0430\u043b\u043e\u0441\u044f \u0437\u0430\u0432\u0430\u043d\u0442\u0430\u0436\u0438\u0442\u0438 \u0434\u0435\u0442\u0430\u043b\u0456 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0438.",
   fittingRetry: "\u041f\u043e\u0432\u0442\u043e\u0440\u0438\u0442\u0438",
+  fittingImagePrevious: "\u041f\u043e\u043f\u0435\u0440\u0435\u0434\u043d\u0454 \u0444\u043e\u0442\u043e",
+  fittingImageNext: "\u041d\u0430\u0441\u0442\u0443\u043f\u043d\u0435 \u0444\u043e\u0442\u043e",
+  fittingImageSelect: "\u041e\u0431\u0440\u0430\u0442\u0438 \u0444\u043e\u0442\u043e",
+  fittingImagesLoading: "\u0417\u0430\u0432\u0430\u043d\u0442\u0430\u0436\u0435\u043d\u043d\u044f \u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0456\u0439...",
+  fittingImagesFailed: "\u041d\u0435 \u0432\u0434\u0430\u043b\u043e\u0441\u044f \u0437\u0430\u0432\u0430\u043d\u0442\u0430\u0436\u0438\u0442\u0438 \u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0456\u0457.",
+  fittingImagesRetry: "\u0421\u043f\u0440\u043e\u0431\u0443\u0432\u0430\u0442\u0438 \u0449\u0435 \u0440\u0430\u0437",
+  fittingEnlargeImage: "\u0417\u0431\u0456\u043b\u044c\u0448\u0438\u0442\u0438 \u0444\u043e\u0442\u043e",
+  fittingPreviewClose: "\u0417\u0430\u043a\u0440\u0438\u0442\u0438 \u043f\u0435\u0440\u0435\u0433\u043b\u044f\u0434",
+  fittingZoomIn: "\u0417\u0431\u0456\u043b\u044c\u0448\u0438\u0442\u0438",
+  fittingZoomOut: "\u0417\u043c\u0435\u043d\u0448\u0438\u0442\u0438",
+  fittingResetZoom: "\u0421\u043a\u0438\u043d\u0443\u0442\u0438 \u043c\u0430\u0441\u0448\u0442\u0430\u0431",
+  fittingPreviewTitle: "\u041f\u0435\u0440\u0435\u0433\u043b\u044f\u0434 \u0444\u043e\u0442\u043e",
+  fittingPreviewZoom: "\u041c\u0430\u0441\u0448\u0442\u0430\u0431",
+  fittingPreviewDragHint: "\u0422\u044f\u0433\u043d\u0456\u0442\u044c \u0444\u043e\u0442\u043e, \u0449\u043e\u0431 \u043f\u0435\u0440\u0435\u043c\u0456\u0441\u0442\u0438\u0442\u0438 \u0439\u043e\u0433\u043e.",
+  fittingPreviewZoomHint: "\u041d\u0430\u0442\u0438\u0441\u043d\u0456\u0442\u044c \u00ab\u0417\u0431\u0456\u043b\u044c\u0448\u0438\u0442\u0438\u00bb, \u0449\u043e\u0431 \u043f\u0435\u0440\u0435\u0433\u043b\u044f\u043d\u0443\u0442\u0438 \u0444\u043e\u0442\u043e.",
   fittingCharacteristics: "\u0425\u0430\u0440\u0430\u043a\u0442\u0435\u0440\u0438\u0441\u0442\u0438\u043a\u0438",
   fittingNoCharacteristics: "\u0425\u0430\u0440\u0430\u043a\u0442\u0435\u0440\u0438\u0441\u0442\u0438\u043a \u043d\u0435\u043c\u0430\u0454",
   fittingOpenSource: "\u0412\u0456\u0434\u043a\u0440\u0438\u0442\u0438 \u0434\u0436\u0435\u0440\u0435\u043b\u043e",
@@ -4788,6 +4820,618 @@ function MaterialImage({ item, token, alt, loading = "lazy", placeholderLabel })
   }
 
   return <div className="material-card-placeholder">{placeholderLabel}</div>;
+}
+
+function FittingDetailGallery({ item, token, t, loading = false }) {
+  const [galleryEntries, setGalleryEntries] = useState([]);
+  const [galleryLoading, setGalleryLoading] = useState(false);
+  const [galleryError, setGalleryError] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [reloadNonce, setReloadNonce] = useState(0);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewZoom, setPreviewZoom] = useState(100);
+  const [previewPosition, setPreviewPosition] = useState({ x: 0, y: 0 });
+  const [previewDragging, setPreviewDragging] = useState(false);
+  const objectUrlsRef = useRef([]);
+  const previewDragRef = useRef({
+    pointerId: null,
+    startX: 0,
+    startY: 0,
+    originX: 0,
+    originY: 0,
+  });
+
+  const fittingId = String(item?.id || "").trim();
+  const gallerySignature = useMemo(
+    () =>
+      Array.isArray(item?.images)
+        ? item.images
+            .map((image) => {
+              const imageId = String(image?.id || "").trim();
+
+              if (!imageId) {
+                return "";
+              }
+
+              return `${imageId}:${Number(image?.sort_order ?? 0)}:${image?.is_primary ? 1 : 0}:${String(
+                image?.content_type || "",
+              )}`;
+            })
+            .join("|")
+        : "",
+    [item?.images],
+  );
+  const galleryImages = useMemo(() => {
+    if (!Array.isArray(item?.images)) {
+      return [];
+    }
+
+    return [...item.images]
+      .filter((image) => String(image?.id || "").trim())
+      .sort((left, right) => {
+        const leftSort = Number(left?.sort_order ?? 0);
+        const rightSort = Number(right?.sort_order ?? 0);
+
+        if (leftSort !== rightSort) {
+          return leftSort - rightSort;
+        }
+
+        return Number(left?.id ?? 0) - Number(right?.id ?? 0);
+      });
+  }, [gallerySignature]);
+  const hasGalleryImages = galleryImages.length > 0;
+  const isGalleryBusy = loading || galleryLoading;
+  const activeEntry = galleryEntries[activeIndex] || galleryEntries[0] || null;
+  const fallbackImageUrl = hasGalleryImages ? "" : buildFittingImageCandidates(item)[0] || "";
+  const previewImageSrc = hasGalleryImages ? activeEntry?.objectUrl || "" : fallbackImageUrl;
+  const canNavigate = galleryEntries.length > 1;
+
+  const resetPreviewTransform = useCallback(() => {
+    setPreviewZoom(100);
+    setPreviewPosition({ x: 0, y: 0 });
+    setPreviewDragging(false);
+    previewDragRef.current = {
+      pointerId: null,
+      startX: 0,
+      startY: 0,
+      originX: 0,
+      originY: 0,
+    };
+  }, []);
+
+  const closePreview = useCallback(() => {
+    setPreviewOpen(false);
+    resetPreviewTransform();
+  }, [resetPreviewTransform]);
+
+  const openPreview = useCallback(() => {
+    if (!previewImageSrc) {
+      return;
+    }
+
+    setPreviewOpen(true);
+    resetPreviewTransform();
+  }, [previewImageSrc, resetPreviewTransform]);
+
+  const changePreviewZoom = useCallback(
+    (delta) => {
+      setPreviewZoom((current) => {
+        const nextZoom = Math.min(400, Math.max(100, current + delta));
+
+        if (nextZoom === 100) {
+          setPreviewPosition({ x: 0, y: 0 });
+          setPreviewDragging(false);
+          previewDragRef.current = {
+            pointerId: null,
+            startX: 0,
+            startY: 0,
+            originX: 0,
+            originY: 0,
+          };
+        }
+
+        return nextZoom;
+      });
+    },
+    [],
+  );
+
+  useEffect(() => {
+    let active = true;
+    const createdUrls = [];
+
+    const revokeUrls = (urls) => {
+      urls.forEach((url) => {
+        try {
+          URL.revokeObjectURL(url);
+        } catch {
+          // Ignore cleanup errors.
+        }
+      });
+    };
+
+    objectUrlsRef.current.forEach((url) => {
+      try {
+        URL.revokeObjectURL(url);
+      } catch {
+        // Ignore cleanup errors.
+      }
+    });
+    objectUrlsRef.current = [];
+    setGalleryEntries([]);
+    setGalleryError(false);
+    setActiveIndex(0);
+    closePreview();
+
+    if (!fittingId || !hasGalleryImages) {
+      setGalleryLoading(false);
+
+      return () => {
+        active = false;
+        revokeUrls(createdUrls);
+      };
+    }
+
+    setGalleryLoading(true);
+
+    (async () => {
+      try {
+        const nextEntries = [];
+
+        for (const image of galleryImages) {
+          const imageId = String(image?.id || "").trim();
+          const result = await getFittingImageBlob(token, fittingId, imageId);
+
+          if (!result.success || !result.blob) {
+            throw new Error(result.error || "Failed to load image");
+          }
+
+          const objectUrl = URL.createObjectURL(result.blob);
+          createdUrls.push(objectUrl);
+          nextEntries.push({
+            id: imageId,
+            sort_order: Number(image?.sort_order ?? 0),
+            is_primary: Boolean(image?.is_primary),
+            content_type: result.contentType || image?.content_type || "image/jpeg",
+            objectUrl,
+          });
+        }
+
+        if (!active) {
+          revokeUrls(createdUrls);
+          return;
+        }
+
+        objectUrlsRef.current = [...createdUrls];
+        setGalleryEntries(nextEntries);
+      } catch {
+        revokeUrls(createdUrls);
+
+        if (active) {
+          setGalleryError(true);
+        }
+      } finally {
+        if (active) {
+          setGalleryLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      active = false;
+      revokeUrls(createdUrls);
+      revokeUrls(objectUrlsRef.current);
+      objectUrlsRef.current = [];
+    };
+  }, [closePreview, fittingId, galleryImages, hasGalleryImages, reloadNonce, token]);
+
+  useEffect(() => {
+    resetPreviewTransform();
+  }, [activeIndex, previewImageSrc, resetPreviewTransform]);
+
+  useEffect(() => {
+    if (!hasGalleryImages || galleryEntries.length <= 1) {
+      return undefined;
+    }
+
+    const handleKeyDown = (event) => {
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        setActiveIndex((current) => (current - 1 + galleryEntries.length) % galleryEntries.length);
+        return;
+      }
+
+      if (event.key === "ArrowRight") {
+        event.preventDefault();
+        setActiveIndex((current) => (current + 1) % galleryEntries.length);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [galleryEntries.length, hasGalleryImages]);
+
+  useEffect(() => {
+    if (!previewOpen) {
+      return undefined;
+    }
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        closePreview();
+        return;
+      }
+
+      if (!galleryEntries.length) {
+        return;
+      }
+
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        event.stopPropagation();
+        setActiveIndex((current) => (current - 1 + galleryEntries.length) % galleryEntries.length);
+        return;
+      }
+
+      if (event.key === "ArrowRight") {
+        event.preventDefault();
+        event.stopPropagation();
+        setActiveIndex((current) => (current + 1) % galleryEntries.length);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown, true);
+
+    return () => window.removeEventListener("keydown", handleKeyDown, true);
+  }, [closePreview, galleryEntries.length, previewOpen]);
+
+  const handlePreviewPointerDown = useCallback(
+    (event) => {
+      if (previewZoom <= 100) {
+        return;
+      }
+
+      previewDragRef.current = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        originX: previewPosition.x,
+        originY: previewPosition.y,
+      };
+      setPreviewDragging(true);
+
+      try {
+        event.currentTarget.setPointerCapture(event.pointerId);
+      } catch {
+        // Ignore pointer capture failures.
+      }
+    },
+    [previewPosition.x, previewPosition.y, previewZoom],
+  );
+
+  const handlePreviewPointerMove = useCallback(
+    (event) => {
+      if (!previewDragging || previewDragRef.current.pointerId !== event.pointerId) {
+        return;
+      }
+
+      const deltaX = event.clientX - previewDragRef.current.startX;
+      const deltaY = event.clientY - previewDragRef.current.startY;
+
+      setPreviewPosition({
+        x: previewDragRef.current.originX + deltaX,
+        y: previewDragRef.current.originY + deltaY,
+      });
+    },
+    [previewDragging],
+  );
+
+  const handlePreviewWheel = useCallback(
+    (event) => {
+      event.preventDefault();
+
+      if (event.deltaY < 0) {
+        changePreviewZoom(25);
+        return;
+      }
+
+      if (event.deltaY > 0) {
+        changePreviewZoom(-25);
+      }
+    },
+    [changePreviewZoom],
+  );
+
+  const finishPreviewDrag = useCallback((event) => {
+    if (previewDragRef.current.pointerId !== event.pointerId) {
+      return;
+    }
+
+    setPreviewDragging(false);
+
+    try {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    } catch {
+      // Ignore pointer capture cleanup failures.
+    }
+
+    previewDragRef.current.pointerId = null;
+  }, []);
+
+  const previewOverlay = previewOpen && previewImageSrc && typeof document !== "undefined"
+    ? createPortal(
+    <div
+      aria-modal="true"
+      className="fitting-details-preview-backdrop"
+      onClick={closePreview}
+      role="dialog"
+    >
+      <section
+        className="fitting-details-preview-panel"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <header className="fitting-details-preview-header">
+          <strong>{t.fittingPreviewTitle}</strong>
+          <div className="fitting-details-preview-actions">
+            <span className="fitting-details-preview-zoom">
+              {t.fittingPreviewZoom}: {previewZoom}%
+            </span>
+            <button
+              aria-label={t.fittingZoomOut}
+              className="ghost-button compact-button fitting-details-preview-control"
+              disabled={previewZoom <= 100}
+              onClick={() => changePreviewZoom(-25)}
+              type="button"
+            >
+              -
+            </button>
+            <button
+              aria-label={t.fittingZoomIn}
+              className="ghost-button compact-button fitting-details-preview-control"
+              disabled={previewZoom >= 400}
+              onClick={() => changePreviewZoom(25)}
+              type="button"
+            >
+              +
+            </button>
+            <button
+              aria-label={t.fittingResetZoom}
+              className="ghost-button compact-button fitting-details-preview-control"
+              disabled={previewZoom === 100 && previewPosition.x === 0 && previewPosition.y === 0}
+              onClick={resetPreviewTransform}
+              type="button"
+            >
+              {t.fittingResetZoom}
+            </button>
+            <button
+              aria-label={t.fittingPreviewClose}
+              className="ghost-button compact-button detail-info-button fitting-details-preview-close"
+              onClick={closePreview}
+              type="button"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </header>
+
+        <div className="fitting-details-preview-stage-shell">
+          {galleryEntries.length > 1 ? (
+            <button
+              aria-label={t.fittingImagePrevious}
+              className="fitting-details-gallery-nav fitting-details-gallery-nav-prev fitting-details-preview-nav"
+              onClick={() =>
+                setActiveIndex((current) => (current - 1 + galleryEntries.length) % galleryEntries.length)
+              }
+              type="button"
+            >
+              <ChevronLeft size={20} />
+            </button>
+          ) : null}
+          {galleryEntries.length > 1 ? (
+            <button
+              aria-label={t.fittingImageNext}
+              className="fitting-details-gallery-nav fitting-details-gallery-nav-next fitting-details-preview-nav"
+              onClick={() => setActiveIndex((current) => (current + 1) % galleryEntries.length)}
+              type="button"
+            >
+              <ChevronRight size={20} />
+            </button>
+          ) : null}
+
+          <div
+            className={`fitting-details-preview-stage${previewZoom > 100 ? " zoomed" : ""}${previewDragging ? " dragging" : ""}`}
+            onPointerDown={handlePreviewPointerDown}
+            onPointerLeave={finishPreviewDrag}
+            onPointerMove={handlePreviewPointerMove}
+            onPointerUp={finishPreviewDrag}
+            onPointerCancel={finishPreviewDrag}
+            onWheel={handlePreviewWheel}
+            role="presentation"
+          >
+            <img
+              alt={item?.name || item?.article || t.catalogFittings}
+              className="fitting-details-preview-image"
+              decoding="async"
+              draggable="false"
+              loading="eager"
+              src={previewImageSrc}
+              style={{
+                transform: `translate(${previewPosition.x}px, ${previewPosition.y}px) scale(${previewZoom / 100})`,
+              }}
+            />
+          </div>
+        </div>
+
+        <div className="fitting-details-preview-footer">
+          {galleryEntries.length > 1 ? (
+            <span className="fitting-details-preview-count">
+              {activeIndex + 1} / {galleryEntries.length}
+            </span>
+          ) : null}
+          <p className="fitting-details-preview-hint">
+            {previewZoom > 100
+              ? t.fittingPreviewDragHint
+              : t.fittingPreviewZoomHint}
+          </p>
+        </div>
+      </section>
+    </div>
+    , document.body)
+    : null;
+
+  if (hasGalleryImages) {
+    if (isGalleryBusy && !galleryEntries.length && !galleryError) {
+      return (
+        <>
+          <div className="fitting-details-gallery fitting-details-gallery-loading">
+            <div className="material-card-placeholder">{t.fittingImagesLoading}</div>
+          </div>
+          {previewOverlay}
+        </>
+      );
+    }
+
+    if (galleryError) {
+      return (
+        <>
+          <div className="fitting-details-gallery fitting-details-gallery-error">
+            <div className="material-card-placeholder fitting-details-gallery-error-state">
+              <span>{t.fittingImagesFailed}</span>
+              <button
+                className="ghost-button compact-button"
+                onClick={() => setReloadNonce((current) => current + 1)}
+                type="button"
+              >
+                <RefreshCw size={14} />
+                {t.fittingImagesRetry}
+              </button>
+            </div>
+          </div>
+          {previewOverlay}
+        </>
+      );
+    }
+
+    if (!galleryEntries.length) {
+      return (
+        <>
+          <div className="fitting-details-gallery fitting-details-gallery-loading">
+            <div className="material-card-placeholder">{t.fittingImagesLoading}</div>
+          </div>
+          {previewOverlay}
+        </>
+      );
+    }
+
+    return (
+      <>
+        <div className="fitting-details-gallery">
+          <div className="fitting-details-gallery-stage">
+            <button
+              aria-label={t.fittingEnlargeImage}
+              className="fitting-details-gallery-open-preview"
+              onClick={openPreview}
+              type="button"
+            >
+              <img
+                alt={item?.name || item?.article || t.catalogFittings}
+                className="fitting-details-gallery-image"
+                decoding="async"
+                loading="eager"
+                src={activeEntry?.objectUrl || ""}
+              />
+            </button>
+            {canNavigate ? (
+              <>
+                <button
+                  aria-label={t.fittingImagePrevious}
+                  className="fitting-details-gallery-nav fitting-details-gallery-nav-prev"
+                  onClick={() =>
+                    setActiveIndex((current) => (current - 1 + galleryEntries.length) % galleryEntries.length)
+                  }
+                  type="button"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                <button
+                  aria-label={t.fittingImageNext}
+                  className="fitting-details-gallery-nav fitting-details-gallery-nav-next"
+                  onClick={() => setActiveIndex((current) => (current + 1) % galleryEntries.length)}
+                  type="button"
+                >
+                  <ChevronRight size={16} />
+                </button>
+                <span className="fitting-details-gallery-count">
+                  {activeIndex + 1} / {galleryEntries.length}
+                </span>
+              </>
+            ) : null}
+          </div>
+
+          {canNavigate ? (
+            <div className="fitting-details-gallery-thumbs" role="list">
+              {galleryEntries.map((entry, index) => (
+                <button
+                  aria-label={t.fittingImageSelect}
+                  className={`fitting-details-gallery-thumb${index === activeIndex ? " active" : ""}`}
+                  key={entry.id}
+                  onClick={() => setActiveIndex(index)}
+                  type="button"
+                >
+                  <img alt="" decoding="async" loading="lazy" src={entry.objectUrl} />
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+        {previewOverlay}
+      </>
+    );
+  }
+
+  if (loading) {
+    return (
+      <>
+        <div className="material-card-placeholder">{t.fittingImagesLoading}</div>
+        {previewOverlay}
+      </>
+    );
+  }
+
+  if (!fallbackImageUrl) {
+    return (
+      <>
+        <div className="material-card-placeholder">{t.notSet}</div>
+        {previewOverlay}
+      </>
+    );
+  }
+
+  return (
+    <>
+      <div className="fitting-details-gallery fitting-details-gallery-fallback">
+        <button
+          aria-label={t.fittingEnlargeImage}
+          className="fitting-details-gallery-open-preview fitting-details-gallery-open-preview-fallback"
+          onClick={openPreview}
+          type="button"
+        >
+          <img
+            alt={item?.name || item?.article || t.catalogFittings}
+            className="fitting-details-gallery-image"
+            decoding="async"
+            loading="eager"
+            onError={(event) => handleFittingImageError(event, item)}
+            src={fallbackImageUrl}
+          />
+        </button>
+      </div>
+      {previewOverlay}
+    </>
+  );
 }
 
 function buildMaterialEdgeImageCandidates(materialItem, edgeItem, token = "") {
@@ -21767,20 +22411,12 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
 
             <div className="fitting-details-layout">
               <div className="fitting-details-media">
-                {buildFittingImageCandidates(selectedFittingDetail).length ? (
-                  <img
-                    alt={selectedFittingDetail.name || selectedFittingDetail.article || t.catalogFittings}
-                    data-fallback-index="0"
-                    decoding="async"
-                    loading="eager"
-                    onError={(event) => handleFittingImageError(event, selectedFittingDetail)}
-                    src={buildFittingImageCandidates(selectedFittingDetail)[0]}
-                  />
-                ) : (
-                  <div className="material-card-placeholder">
-                    {selectedFittingDetail.has_cached_image ? t.loading : t.notSet}
-                  </div>
-                )}
+                <FittingDetailGallery
+                  item={selectedFittingDetail}
+                  loading={fittingDetailLoading}
+                  t={t}
+                  token={token}
+                />
                 <div className="fitting-details-meta">
                   <span className="service-tree-badge subtle">
                     {getFittingSourceMeta(selectedFittingDetail).label}
