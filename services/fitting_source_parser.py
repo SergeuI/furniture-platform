@@ -218,6 +218,23 @@ def _strip_jsonld_image_size(value: str | None) -> str | None:
     return parsed._replace(query=urlencode(query_items, doseq=True)).geturl()
 
 
+def _normalize_image_url_for_list(value: object) -> str | None:
+    image_url = _clean_text(value if isinstance(value, str) else None)
+    if not image_url:
+        return None
+
+    parsed = urlparse(image_url)
+    if parsed.scheme.lower() not in {"http", "https"} or not parsed.netloc:
+        return None
+
+    query_items = [
+        (key, item_value)
+        for key, item_value in parse_qsl(parsed.query, keep_blank_values=True)
+        if key.lower() != "size"
+    ]
+    return parsed._replace(query=urlencode(query_items, doseq=True), fragment="").geturl()
+
+
 def _jsonld_type_is_product(type_value: object) -> bool:
     if isinstance(type_value, str):
         return type_value.rsplit("/", 1)[-1].lower() == "product"
@@ -280,7 +297,62 @@ def _normalize_jsonld_image(value: object) -> str | None:
             or value.get("image")
         )
 
-    return _strip_jsonld_image_size(value if isinstance(value, str) else None)
+    return _normalize_image_url_for_list(value)
+
+
+def _normalize_jsonld_image_list(value: object) -> list[str]:
+    if isinstance(value, list):
+        normalized: list[str] = []
+        for item in value:
+            normalized.extend(_normalize_jsonld_image_list(item))
+        return _dedupe_preserve_order(normalized)
+
+    if isinstance(value, dict):
+        for key in ("url", "@id", "contentUrl", "image"):
+            normalized = _normalize_jsonld_image_list(value.get(key))
+            if normalized:
+                return normalized
+        return []
+
+    image_url = _normalize_image_url_for_list(value)
+    return [image_url] if image_url else []
+
+
+def _dedupe_preserve_order(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    deduped: list[str] = []
+
+    for value in values:
+        if value in seen:
+            continue
+        seen.add(value)
+        deduped.append(value)
+
+    return deduped
+
+
+def _normalize_fitting_image_urls(result: dict) -> dict:
+    enriched = dict(result)
+    normalized_image_urls: list[str] = []
+
+    raw_image_urls = enriched.get("image_urls")
+    if isinstance(raw_image_urls, list):
+        for item in raw_image_urls:
+            normalized = _normalize_image_url_for_list(item)
+            if normalized:
+                normalized_image_urls.append(normalized)
+
+    normalized_main_image = _normalize_image_url_for_list(enriched.get("image_url"))
+    if normalized_main_image:
+        normalized_image_urls = [
+            normalized_main_image,
+            *[value for value in normalized_image_urls if value != normalized_main_image],
+        ]
+    else:
+        normalized_image_urls = _dedupe_preserve_order(normalized_image_urls)
+
+    enriched["image_urls"] = normalized_image_urls
+    return enriched
 
 
 def _normalize_jsonld_brand(value: object) -> str | None:
@@ -381,7 +453,8 @@ def _extract_product_jsonld(
     if description and description == name:
         description = None
 
-    image = _normalize_jsonld_image(best_node.get("image"))
+    image_urls = _normalize_jsonld_image_list(best_node.get("image"))
+    image = image_urls[0] if image_urls else None
     brand = _normalize_jsonld_brand(best_node.get("brand"))
     sku = _clean_text(
         best_node.get("sku")
@@ -414,6 +487,7 @@ def _extract_product_jsonld(
         "description": description,
         "brand": brand,
         "image": image,
+        "image_urls": image_urls,
         "price": price,
         "currency": currency,
         "availability": availability,
@@ -693,6 +767,31 @@ def _parse_viyar_html(html: str, final_url: str) -> dict:
     article = article or jsonld.get("sku")
     name = name or jsonld.get("name")
     image_url = image_url or jsonld.get("image")
+    jsonld_image_urls = jsonld.get("image_urls")
+    image_urls = _normalize_fitting_image_urls(
+        {
+            "image_url": image_url,
+            "image_urls": (
+                [
+                    *(
+                        [image_url]
+                        if image_url
+                        else []
+                    ),
+                    *(
+                        jsonld_image_urls
+                        if isinstance(jsonld_image_urls, list)
+                        else []
+                    ),
+                ]
+                if image_url or isinstance(jsonld_image_urls, list)
+                else []
+            ),
+        }
+    )["image_urls"]
+
+    if not image_url and image_urls:
+        image_url = image_urls[0]
 
     price = _extract_price(price_text)
     price_raw = price_text or None
@@ -718,6 +817,7 @@ def _parse_viyar_html(html: str, final_url: str) -> dict:
         "price_raw": price_raw,
         "unit": unit or None,
         "image_url": image_url or None,
+        "image_urls": image_urls,
         "brand": brand,
         "currency": jsonld.get("currency"),
         "availability": jsonld.get("availability"),
@@ -889,7 +989,7 @@ def _attach_page_diagnostics(
     warnings: list[str] | None = None,
     errors: list[str] | None = None,
 ) -> dict:
-    enriched = dict(result)
+    enriched = _normalize_fitting_image_urls(result)
     normalized_requested_url = _clean_text(requested_url)
     normalized_final_url = _clean_text(final_url) or normalized_requested_url
 
