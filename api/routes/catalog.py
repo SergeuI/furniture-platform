@@ -1716,45 +1716,58 @@ async def create_fitting_route(
 
     if effective_source_url:
         if source_site == "viyar":
-            ordered_cities: list[str] = []
-            if selected_city:
-                ordered_cities.append(selected_city)
-            for city_code in MATERIAL_CITY_COOKIES.keys():
-                if city_code not in ordered_cities:
-                    ordered_cities.append(city_code)
-
-            city_prices: dict[str, float | None] = {}
-            first_result: dict | None = None
-
-            for city_code in ordered_cities:
-                try:
-                    parsed_result, _debug_payload = await fetch_viyar_product_details_by_url_traced(
-                        effective_source_url,
-                        city=city_code,
-                    )
-                except Exception:
-                    continue
-
-                if parsed_result and parsed_result.get("name") and first_result is None:
-                    first_result = parsed_result
-
-                city_prices[city_code] = parsed_result.get("price") if parsed_result else None
-
-            if first_result:
-                selected_price = city_prices.get(selected_city) if selected_city else None
-                effective_name = first_result.get("name") or effective_name
-                effective_image_url = first_result.get("image") or effective_image_url
-                effective_source_url = first_result.get("source_url") or effective_source_url
-                effective_article = effective_article or first_result.get("article")
-                effective_price = selected_price if selected_price is not None else first_result.get("price")
-                effective_description = first_result.get("description") or effective_description
+            metadata = await parse_fitting_source_metadata(effective_source_url)
+            if metadata.get("success"):
+                effective_name = metadata.get("name") or effective_name
+                effective_image_url = metadata.get("image_url") or effective_image_url
+                effective_source_url = metadata.get("final_url") or effective_source_url
+                effective_article = effective_article or metadata.get("article")
+                effective_price = metadata.get("price") if metadata.get("price") is not None else effective_price
+                effective_description = metadata.get("description") or effective_description
                 source_payload = {
                     "source_site": source_site,
                     "source_url": effective_source_url,
                     "selected_city": selected_city,
-                    "city_prices": city_prices,
-                    "parsed_item": first_result,
+                    "parsed_item": metadata,
                 }
+
+                metadata_image_urls = metadata.get("image_urls") or []
+                if not metadata_image_urls:
+                    logger.warning(
+                        "Fitting gallery import failed: source returned no image_urls",
+                        extra={
+                            "source_url": effective_source_url,
+                            "source_site": source_site,
+                        },
+                    )
+                    return {
+                        "success": False,
+                        "error": "Source link does not contain gallery images",
+                    }
+
+                try:
+                    prepared_gallery_images = prepare_fitting_gallery_images(
+                        normalize_fitting_gallery_image_urls(metadata_image_urls),
+                        fetcher=lambda source_url: fetch_remote_image_payload(
+                            source_url,
+                            city=selected_city,
+                        ),
+                    )
+                except FittingGalleryPreparationError as error:
+                    logger.warning(
+                        "Fitting gallery import failed",
+                        extra={
+                            "source_url": effective_source_url,
+                            "source_site": source_site,
+                            "error": str(error),
+                        },
+                    )
+                    return {
+                        "success": False,
+                        "error": "Unable to prepare fitting gallery",
+                    }
+
+                effective_image_url = prepared_gallery_images[0].source_url
         else:
             metadata = await parse_fitting_source_metadata(effective_source_url)
             if metadata.get("success"):
