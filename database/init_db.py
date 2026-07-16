@@ -59,6 +59,9 @@ from database.models.fitting import (
     FittingHoleTemplateModel,
     FittingModel,
 )
+from database.models.fitting_image import (
+    FittingImageModel,
+)
 from database.models.user_service_catalog_price import (
     UserServiceCatalogPriceModel
 )
