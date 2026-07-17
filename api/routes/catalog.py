@@ -1704,7 +1704,9 @@ async def create_fitting_route(
     effective_source_url = (payload.source_url or "").strip() or None
     effective_article = (payload.article or "").strip() or None
     effective_price = payload.price
-    effective_stock = payload.stock
+    effective_stock = (payload.stock or "").strip() or None
+    effective_source = None
+    effective_brand = None
     effective_description = None
     source_payload: dict | None = None
     prepared_gallery_images = None
@@ -1723,6 +1725,10 @@ async def create_fitting_route(
                 effective_source_url = metadata.get("final_url") or effective_source_url
                 effective_article = effective_article or metadata.get("article")
                 effective_price = metadata.get("price") if metadata.get("price") is not None else effective_price
+                effective_source = (metadata.get("source_site") or "").strip() or None
+                effective_brand = (metadata.get("brand") or "").strip() or None
+                if not effective_stock:
+                    effective_stock = (metadata.get("availability") or "").strip() or None
                 effective_description = metadata.get("description") or effective_description
                 source_payload = {
                     "source_site": source_site,
@@ -1775,6 +1781,10 @@ async def create_fitting_route(
                 effective_source_url = metadata.get("final_url") or effective_source_url
                 effective_article = effective_article or metadata.get("article")
                 effective_price = metadata.get("price") if metadata.get("price") is not None else effective_price
+                effective_source = (metadata.get("source_site") or "").strip() or None
+                effective_brand = (metadata.get("brand") or "").strip() or None
+                if not effective_stock:
+                    effective_stock = (metadata.get("availability") or "").strip() or None
                 effective_description = metadata.get("description") or effective_description
                 source_payload = metadata
                 metadata_image_urls = metadata.get("image_urls") or []
@@ -1841,6 +1851,8 @@ async def create_fitting_route(
         description=effective_description,
         price=effective_price,
         stock=effective_stock,
+        source=effective_source,
+        brand=effective_brand,
         fitting_type=payload.fitting_type,
         fitting_group=payload.fitting_group,
         image_url=effective_image_url,
