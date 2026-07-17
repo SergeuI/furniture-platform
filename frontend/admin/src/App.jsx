@@ -136,6 +136,8 @@ const LANGUAGE_STORAGE_KEY = "furniture_admin_language";
 const ACTIVE_VIEW_STORAGE_KEY = "furniture_admin_active_view";
 const ACTIVE_PROJECT_ID_STORAGE_KEY = "furniture_admin_active_project_id";
 const ACTIVE_PROJECT_TAB_STORAGE_KEY = "furniture_admin_active_project_tab";
+const FITTING_CATEGORY_STORAGE_KEY = "furniture_admin_fitting_category";
+const FITTING_VIEW_MODE_STORAGE_KEY = "furniture_admin_fitting_view_mode";
 const ADMIN_TOKEN_HASH_KEY = "mproject_token";
 const ADMIN_LOGOUT_HASH_KEY = "mproject_logout";
 const VIYAR_SERVICES_CACHE_PREFIX = "furniture_admin_viyar_services_cache";
@@ -1601,6 +1603,10 @@ function isFastenerFitting(item) {
 
 function normalizeCatalogView(view) {
   return view === "catalogFasteners" ? "catalogFittings" : view;
+}
+
+function normalizeFittingViewMode(viewMode) {
+  return viewMode === "cards" ? "cards" : "rows";
 }
 
 function getHoleServiceRuleOperationLabel(operation, t) {
@@ -6764,8 +6770,12 @@ export default function App() {
   const [fittingCategories, setFittingCategories] = useState([]);
   const [fittingSearch, setFittingSearch] = useState("");
   const [fittingsCatalogLoading, setFittingsCatalogLoading] = useState(false);
-  const [selectedFittingCategory, setSelectedFittingCategory] = useState("");
-  const [fittingViewMode, setFittingViewMode] = useState("rows");
+  const [selectedFittingCategory, setSelectedFittingCategory] = useState(
+    () => localStorage.getItem(FITTING_CATEGORY_STORAGE_KEY) || "",
+  );
+  const [fittingViewMode, setFittingViewMode] = useState(
+    () => normalizeFittingViewMode(localStorage.getItem(FITTING_VIEW_MODE_STORAGE_KEY) || "rows"),
+  );
   const [fittingSourceModalOpen, setFittingSourceModalOpen] = useState(false);
   const [fittingCreateMode, setFittingCreateMode] = useState("manual");
   const [fittingColumnVisibility, setFittingColumnVisibility] = useState({
@@ -13293,6 +13303,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
     localStorage.removeItem(TOKEN_STORAGE_KEY);
     localStorage.removeItem(USER_STORAGE_KEY);
     localStorage.removeItem(ACTIVE_VIEW_STORAGE_KEY);
+    localStorage.removeItem(FITTING_CATEGORY_STORAGE_KEY);
     localStorage.removeItem(ACTIVE_PROJECT_ID_STORAGE_KEY);
     localStorage.removeItem(ACTIVE_PROJECT_TAB_STORAGE_KEY);
     setToken("");
@@ -13345,6 +13356,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
     setSelectedPartDetail(null);
     setSelectedCuttingPartCode(null);
     setSelectedEdgeSide(null);
+    setSelectedFittingCategory("");
     setHistoryLoaded(false);
     setProductionLoaded(false);
     setActiveProjectTab("data");
@@ -13579,9 +13591,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
       setHoleBundleDetails(null);
     }
 
-    if (nextView === "catalogFittings") {
-      setSelectedFittingCategory("");
-    } else {
+    if (nextView !== "catalogFittings") {
       setOpenFittingMenuId("");
       setFittingSourceModalOpen(false);
     }
@@ -14992,6 +15002,19 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
     localStorage.setItem(ACTIVE_VIEW_STORAGE_KEY, activeView);
     activeViewRef.current = activeView;
   }, [activeView]);
+
+  useEffect(() => {
+    if (selectedFittingCategory) {
+      localStorage.setItem(FITTING_CATEGORY_STORAGE_KEY, selectedFittingCategory);
+      return;
+    }
+
+    localStorage.removeItem(FITTING_CATEGORY_STORAGE_KEY);
+  }, [selectedFittingCategory]);
+
+  useEffect(() => {
+    localStorage.setItem(FITTING_VIEW_MODE_STORAGE_KEY, fittingViewMode);
+  }, [fittingViewMode]);
 
   useEffect(() => {
     if (activeView === "projectDetails" && selectedProject?.id) {
@@ -17810,13 +17833,12 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                   {activeFittingCategory ? (
                     <div className="fitting-category-breadcrumb fitting-category-breadcrumb-top">
                       <button
-                        className="fitting-breadcrumb-link"
-                        onClick={() => {
-                          setSelectedFittingCategory("");
-                          setFittingViewMode("rows");
-                        }}
-                        type="button"
-                      >
+                      className="fitting-breadcrumb-link"
+                      onClick={() => {
+                        setSelectedFittingCategory("");
+                      }}
+                      type="button"
+                    >
                         {t.catalogFittings}
                       </button>
                       <span className="fitting-breadcrumb-separator">/</span>
@@ -17958,14 +17980,13 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                     return (
                       <button
                         className="catalog-choice-card fitting-category-card"
-                        key={category.code}
-                        onClick={() => {
-                          setSelectedFittingCategory(category.code);
-                          setFittingViewMode("rows");
-                          setNewFittingForm((current) => ({
-                            ...current,
-                            fitting_group: category.group,
-                            fitting_type: category.code,
+                      key={category.code}
+                      onClick={() => {
+                        setSelectedFittingCategory(category.code);
+                        setNewFittingForm((current) => ({
+                          ...current,
+                          fitting_group: category.group,
+                          fitting_type: category.code,
                           }));
                         }}
                         type="button"
