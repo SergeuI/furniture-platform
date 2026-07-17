@@ -3471,8 +3471,10 @@ Object.assign(TRANSLATIONS.en, {
   fittingAddSystem: "Add default fitting",
   fittingAddCustom: "Add fitting for calculation",
   fittingCreateSuccess: "Fitting added",
-  fittingDelete: "Delete fitting",
-  fittingDeleteConfirm: "Delete fitting",
+    fittingDelete: "Delete fitting",
+    fittingDeleted: "Fitting deleted",
+    fittingDeletedCount: "{count} city rows deleted",
+    fittingDeleteConfirm: "Delete fitting",
   fittingCustomScope: "My fitting",
   fittingSystemScope: "System fitting",
   fittingNamePrompt: "Enter fitting name",
@@ -3649,8 +3651,10 @@ Object.assign(TRANSLATIONS.uk, {
   fittingAddSystem: "\u0414\u043e\u0434\u0430\u0442\u0438 \u0431\u0430\u0437\u043e\u0432\u0443 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0443",
   fittingAddCustom: "\u0414\u043e\u0434\u0430\u0442\u0438 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0443 \u0434\u043b\u044f \u043f\u0440\u043e\u0440\u0430\u0445\u0443\u043d\u043a\u0443",
   fittingCreateSuccess: "\u0424\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0443 \u0434\u043e\u0434\u0430\u043d\u043e",
-  fittingDelete: "\u0412\u0438\u0434\u0430\u043b\u0438\u0442\u0438 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0443",
-  fittingDeleteConfirm: "\u0412\u0438\u0434\u0430\u043b\u0438\u0442\u0438 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0443",
+    fittingDelete: "\u0412\u0438\u0434\u0430\u043b\u0438\u0442\u0438 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0443",
+    fittingDeleted: "\u0424\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0443 \u0432\u0438\u0434\u0430\u043b\u0435\u043d\u043e",
+    fittingDeletedCount: "\u0412\u0438\u0434\u0430\u043b\u0435\u043d\u043e {count} city-\u0440\u044f\u0434\u043a\u0456\u0432",
+    fittingDeleteConfirm: "\u0412\u0438\u0434\u0430\u043b\u0438\u0442\u0438 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0443",
   fittingCustomScope: "\u041c\u043e\u044f \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0430",
   fittingSystemScope: "\u0421\u0438\u0441\u0442\u0435\u043c\u043d\u0430 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0430",
   fittingNamePrompt: "\u0412\u043a\u0430\u0436\u0456\u0442\u044c \u043d\u0430\u0437\u0432\u0443 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0438",
@@ -14464,17 +14468,37 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
     }
 
     setLoading(true);
-    const result = await deleteFitting(token, itemId);
-    setLoading(false);
+    try {
+      const result = await deleteFitting(token, itemId);
 
-    if (!result.success) {
-      setStatus({ message: result.error || t.deleteFailed, tone: "error" });
-      return;
+      if (!result.success) {
+        setStatus({ message: result.error || t.deleteFailed, tone: "error" });
+        return;
+      }
+
+      const deletedArticle = String(result.item?.article || "");
+      const selectedArticle = String(selectedFittingDetail?.article || "");
+      if (
+        selectedFittingDetail &&
+        (String(selectedFittingDetail.id) === String(itemId) ||
+          (deletedArticle && selectedArticle === deletedArticle))
+      ) {
+        closeFittingDetails();
+      }
+
+      await loadFittingsCatalog(token);
+
+      const deletedCount = Number(result.deleted_count || 0);
+      const successMessage =
+        deletedCount > 1
+          ? t.fittingDeletedCount.replace("{count}", String(deletedCount))
+          : t.fittingDeleted;
+
+      setStatus({ message: successMessage, tone: "success" });
+      closeConfirm();
+    } finally {
+      setLoading(false);
     }
-
-    setFittingItems((current) => current.filter((item) => item.id !== itemId));
-    setStatus({ message: t.fittingDelete, tone: "success" });
-    closeConfirm();
   }
 
   async function handleFittingImageSelected(event) {

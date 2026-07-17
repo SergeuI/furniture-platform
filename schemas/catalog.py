@@ -488,6 +488,10 @@ class FittingCatalogUpdateSchema(FittingCatalogCreateSchema):
 
 class FittingCatalogOperationResponseSchema(BaseModel):
     success: bool
+    selected_item_id: str | None = None
+    deleted_count: int = 0
+    deleted_ids: List[str] = Field(default_factory=list)
+    deleted_cities: List[str] = Field(default_factory=list)
     item: FittingCatalogItemSchema | None = None
     error: str | None = None
 

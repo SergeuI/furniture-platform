@@ -2047,7 +2047,13 @@ async def delete_fitting_route(
             "error": "You do not have permission to delete this fitting",
         }
 
-    item = delete_fitting(item_id)
+    result = delete_fitting(item_id)
+
+    if not result or not result.get("success"):
+        return {
+            "success": False,
+            "error": "Unable to delete fitting",
+        }
 
     create_audit_log(
         actor_user_id=current_user.id,
@@ -2055,13 +2061,10 @@ async def delete_fitting_route(
         action="catalog.fitting_deleted",
         entity_type="fitting",
         entity_id=item_id,
-        details=item or existing_item,
+        details=result,
     )
 
-    return {
-        "success": True,
-        "item": item or existing_item,
-    }
+    return result
 
 
 @router.get(

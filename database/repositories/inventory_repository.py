@@ -392,6 +392,67 @@ def _get_fitting_catalog_key(item: FittingModel) -> str:
     return f"id:{item.id}"
 
 
+def _normalize_fitting_delete_key(value: str | None) -> str | None:
+
+    normalized = _normalize_fitting_value(value)
+
+    if normalized is None:
+        return None
+
+    return normalized.casefold()
+
+
+def _build_fitting_delete_signature(item: FittingModel) -> dict[str, object | None]:
+
+    return {
+        "catalog_key": _get_fitting_catalog_key(item),
+        "source": _normalize_fitting_delete_key(item.source),
+        "source_url": _normalize_fitting_delete_key(item.source_url),
+        "is_system": bool(item.is_system),
+        "owner_user_id": _normalize_fitting_delete_key(item.owner_user_id),
+    }
+
+
+def _fitting_matches_delete_signature(
+    candidate: FittingModel,
+    signature: dict[str, object | None],
+) -> bool:
+
+    return (
+        _get_fitting_catalog_key(candidate) == signature["catalog_key"]
+        and _normalize_fitting_delete_key(candidate.source) == signature["source"]
+        and _normalize_fitting_delete_key(candidate.source_url) == signature["source_url"]
+        and bool(candidate.is_system) == bool(signature["is_system"])
+        and _normalize_fitting_delete_key(candidate.owner_user_id) == signature["owner_user_id"]
+    )
+
+
+def _list_fitting_delete_candidates(db, item: FittingModel) -> list[FittingModel]:
+
+    query = db.query(FittingModel)
+
+    article = _normalize_fitting_value(item.article)
+    code = _normalize_fitting_value(item.code)
+    name = _normalize_fitting_value(item.name)
+
+    if article:
+        query = query.filter(FittingModel.article == article)
+    elif code:
+        query = query.filter(FittingModel.code == code)
+    elif name:
+        query = query.filter(FittingModel.name == name)
+    else:
+        query = query.filter(FittingModel.id == item.id)
+
+    return (
+        query.order_by(
+            FittingModel.city.asc().nullsfirst(),
+            FittingModel.id.asc(),
+        )
+        .all()
+    )
+
+
 def _resolve_fitting_category(
     fitting_type: str | None,
     fitting_group: str | None,
@@ -1601,11 +1662,58 @@ def delete_fitting(item_id: str | int) -> dict | None:
         if not item:
             return None
 
-        serialized = _serialize_fitting(item)
-        db.delete(item)
+        signature = _build_fitting_delete_signature(item)
+        candidates = _list_fitting_delete_candidates(db, item)
+        rows_to_delete = [
+            candidate
+            for candidate in candidates
+            if _fitting_matches_delete_signature(candidate, signature)
+        ]
+
+        if (
+            _get_fitting_catalog_key(item).startswith("name:")
+            and len(rows_to_delete) > 1
+        ):
+            return None
+
+        if not rows_to_delete:
+            rows_to_delete = [item]
+
+        row_ids = [int(row.id) for row in rows_to_delete]
+        deleted_items = [
+            _serialize_fitting(row)
+            for row in rows_to_delete
+        ]
+        deleted_ids = [row["id"] for row in deleted_items]
+        deleted_cities = [
+            row["city"]
+            for row in deleted_items
+            if row.get("city") is not None
+        ]
+
+        for row in rows_to_delete:
+            db.delete(row)
+
+        db.query(FittingImageModel).filter(
+            FittingImageModel.fitting_id.in_(row_ids)
+        ).delete(synchronize_session=False)
+
         db.commit()
 
-        return serialized
+        primary_item = deleted_items[0] if deleted_items else _serialize_fitting(item)
+
+        return {
+            "success": True,
+            "selected_item_id": str(item.id),
+            "deleted_count": len(deleted_items),
+            "deleted_ids": deleted_ids,
+            "deleted_cities": deleted_cities,
+            "item": primary_item,
+        }
+
+    except Exception:
+        db.rollback()
+        return None
 
     finally:
 
