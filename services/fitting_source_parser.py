@@ -590,6 +590,268 @@ def _extract_kronas_main_image_url(soup: BeautifulSoup, final_url: str) -> str |
     return None
 
 
+def _extract_first_node_text(soup: BeautifulSoup, selectors: list[str], attr: str) -> str:
+    for selector in selectors:
+        node = soup.select_one(selector)
+        if not node:
+            continue
+        value = _clean_text(node.get(attr) or node.get_text(" ", strip=True))
+        if value:
+            return value
+    return ""
+
+
+def _normalize_kronas_currency(value: str | None) -> str | None:
+    text = _clean_text(value)
+    if not text:
+        return None
+
+    lowered = text.lower()
+    if lowered in {"грн", "гривня", "гривні", "гривень", "uah", "₴"}:
+        return "UAH"
+
+    upper = text.upper()
+    if upper in {"UAH", "USD", "EUR"}:
+        return upper
+
+    return None
+
+
+def _extract_kronas_price(soup: BeautifulSoup) -> tuple[float | None, str | None]:
+    price_node = soup.select_one("[itemprop='price']")
+    if price_node:
+        raw_price = _clean_text(
+            price_node.get("content")
+            or price_node.get("data-price")
+            or price_node.get_text(" ", strip=True)
+        )
+        price = _extract_price(raw_price)
+        if price is not None:
+            return price, raw_price or None
+
+    price_node = soup.select_one("#price[data-price]")
+    if price_node:
+        raw_price = _clean_text(price_node.get("data-price"))
+        price = _extract_price(raw_price)
+        if price is not None:
+            return price, raw_price or None
+
+    raw_price = _first_text(
+        soup,
+        [
+            ".productPriceBlock__price",
+            "[class*='price']",
+            ".product-price",
+            ".price",
+            ".cost",
+        ],
+    )
+    return _extract_price(raw_price), raw_price or None
+
+
+def _extract_kronas_currency(soup: BeautifulSoup, fallback_text: str | None = None) -> str | None:
+    currency = _normalize_kronas_currency(
+        _extract_first_node_text(
+            soup,
+            [
+                "meta[itemprop='priceCurrency']",
+                "[itemprop='priceCurrency']",
+                ".productPriceBlock__currency",
+                ".priceCurrency",
+            ],
+            "content",
+        )
+    )
+    if currency:
+        return currency
+
+    if fallback_text and "грн" in _clean_text(fallback_text).lower():
+        return "UAH"
+
+    return None
+
+
+def _extract_kronas_availability(soup: BeautifulSoup) -> str | None:
+    raw_value = _extract_first_node_text(
+        soup,
+        [
+            ".productLabel",
+            ".productPriceBlock__label",
+            ".product-price__label",
+        ],
+        "content",
+    )
+
+    if not raw_value:
+        return None
+
+    lowered = raw_value.lower()
+    availability_map = {
+        "є в наявності": "В наявності",
+        "есть в наличии": "В наявності",
+        "в наличии": "В наявності",
+        "в наявності": "В наявності",
+        "немає в наявності": "Немає в наявності",
+        "нет в наличии": "Немає в наявності",
+        "під замовлення": "Під замовлення",
+        "под заказ": "Під замовлення",
+    }
+
+    for source_text, target_text in availability_map.items():
+        if source_text in lowered:
+            return target_text
+
+    return None
+
+
+def _extract_kronas_characteristics(soup: BeautifulSoup) -> dict[str, str]:
+    characteristics: dict[str, str] = {}
+    seen_pairs: set[tuple[str, str]] = set()
+
+    for container in soup.select(".productAttr"):
+        for key_node in container.select(".productAttr__key"):
+            key = _clean_text(key_node.get_text(" ", strip=True)).rstrip(":").strip()
+            if not key:
+                continue
+
+            value_node = key_node.find_next(class_="productAttr__value")
+            if not value_node:
+                continue
+
+            value = _clean_text(value_node.get_text(" ", strip=True))
+            if not value:
+                continue
+
+            normalized_pair = (key, value)
+            if normalized_pair in seen_pairs:
+                continue
+
+            seen_pairs.add(normalized_pair)
+            if key not in characteristics:
+                characteristics[key] = value
+
+    return characteristics
+
+
+def _extract_kronas_description(soup: BeautifulSoup, product_name: str | None) -> str | None:
+    description = (
+        _first_meta_content(
+            soup,
+            [
+                "meta[itemprop='description']",
+                "meta[name='description']",
+                "meta[property='og:description']",
+            ],
+        )
+        or _first_text(
+            soup,
+            [
+                ".productTabs__content.is-active .view-text > p:first-of-type",
+            ],
+        )
+    )
+
+    description = _clean_text(description)
+    if not description:
+        return None
+
+    if product_name and description == _clean_product_name(product_name):
+        return None
+
+    if _looks_like_promotional_copy(description):
+        return None
+
+    return description or None
+
+
+def _is_disallowed_kronas_gallery_url(value: str | None) -> bool:
+    url = _clean_text(value).lower()
+    if not url:
+        return True
+
+    if url.startswith(("data:", "blob:")):
+        return True
+
+    if "/media/images/catalog/big/" in url:
+        return True
+
+    blocked_markers = (
+        "ajax-loader.gif",
+        "banner",
+        "icon",
+        "lazy",
+        "loader.gif",
+        "logo",
+        "placeholder",
+        "recommend",
+        "related",
+        "review",
+        "sprite",
+    )
+
+    return any(marker in url for marker in blocked_markers)
+
+
+def _extract_kronas_gallery_urls(soup: BeautifulSoup, final_url: str) -> list[str]:
+    collected: list[str] = []
+    slider = soup.select_one(".productImageBlock__slider")
+    if not slider:
+        return collected
+
+    for node in slider.select(".js-productImage, img, source"):
+        candidates = [
+            node.get("data-src"),
+            node.get("src"),
+            node.get("srcset"),
+        ]
+
+        image_node = node.select_one("img[data-src]") or node.select_one("img")
+        if image_node:
+            candidates.extend(
+                [
+                    image_node.get("data-src"),
+                    image_node.get("src"),
+                ]
+            )
+
+        for candidate in candidates:
+            normalized = _normalize_asset_url(candidate, final_url)
+            if normalized and not _is_disallowed_kronas_gallery_url(normalized):
+                collected.append(normalized)
+                break
+
+    return _dedupe_preserve_order(collected)
+
+
+def _extract_kronas_article(soup: BeautifulSoup, final_url: str) -> str | None:
+    selectors = [
+        "#artikul[itemprop='sku']",
+        "input[name='artikulu']",
+        "[itemprop='mpn']",
+        "#artikul",
+        ".product-code",
+        ".sku",
+        "[class*='articul']",
+        "[class*='article']",
+    ]
+
+    for selector in selectors:
+        node = soup.select_one(selector)
+        if not node:
+            continue
+
+        if node.name == "input":
+            candidate = _clean_text(node.get("value"))
+        else:
+            candidate = _clean_text(node.get("content") or node.get_text(" ", strip=True))
+
+        article = _extract_article_from_text(candidate)
+        if article:
+            return article
+
+    return _extract_article_from_text(final_url)
+
+
 async def _fetch_html_with_browser(
     source_url: str,
     *,
@@ -832,6 +1094,7 @@ def _parse_kronas_html(html: str, final_url: str) -> dict:
         _first_text(
             soup,
             [
+                "h1[itemprop='name']",
                 "h1",
                 ".product-title",
                 ".page-title",
@@ -847,47 +1110,25 @@ def _parse_kronas_html(html: str, final_url: str) -> dict:
         or _first_text(soup, ["title"])
     )
 
-    article = (
-        _extract_article_from_text(
-            _first_text(
-                soup,
-                [
-                    "[itemprop='sku']",
-                    "#artikul",
-                    ".product-code",
-                    ".sku",
-                    "[class*='articul']",
-                    "[class*='article']",
-                ],
-            )
-        )
-        or _extract_article_from_text(final_url)
-    )
-
-    price_text = (
-        _first_meta_content(
-            soup,
-            [
-                "[itemprop='price']",
-            ],
-        )
-        or _first_text(
-            soup,
-            [
-                ".productPriceBlock__price",
-                "[class*='price']",
-                ".product-price",
-                ".price",
-                ".cost",
-            ],
-        )
-    )
-    image_url = _extract_kronas_main_image_url(soup, final_url)
-
-    if not image_url and article:
-        image_url = f"https://kronas.com.ua/Media/images/catalog/medium/{article}.jpg"
     name = _clean_product_name(name)
-    description = _extract_description(soup, name)
+    article = _extract_kronas_article(soup, final_url)
+    price, price_raw = _extract_kronas_price(soup)
+    gallery_urls = _extract_kronas_gallery_urls(soup, final_url)
+    image_url = gallery_urls[0] if gallery_urls else None
+    if not image_url and article:
+        image_url = f"https://kronas.com.ua/Media/images/catalog/original/{article}.jpg"
+        gallery_urls = [image_url]
+    elif image_url and not gallery_urls:
+        gallery_urls = [image_url]
+
+    description = _extract_kronas_description(soup, name)
+    characteristics = _extract_kronas_characteristics(soup)
+    brand = characteristics.get("Производитель") or characteristics.get("Виробник")
+    unit = characteristics.get("Единица измерения") or characteristics.get("Одиниця виміру")
+    availability = _extract_kronas_availability(soup)
+    currency = _extract_kronas_currency(soup, price_raw)
+    if not currency and price_raw and "грн" in price_raw.lower():
+        currency = "UAH"
 
     return {
         "success": True,
@@ -896,10 +1137,15 @@ def _parse_kronas_html(html: str, final_url: str) -> dict:
         "name": name or None,
         "description": description,
         "article": article,
-        "price": _extract_price(price_text),
-        "price_raw": price_text or None,
-        "unit": None,
+        "price": price,
+        "price_raw": price_raw,
+        "unit": unit or None,
         "image_url": image_url or None,
+        "image_urls": gallery_urls,
+        "brand": brand or None,
+        "currency": currency,
+        "availability": availability,
+        "characteristics": characteristics,
     }
 
 
