@@ -325,6 +325,8 @@ def _serialize_fitting_detail(item: FittingModel) -> dict:
     serialized["id"] = int(item.id)
     source_payload = _safe_parse_source_payload_json(item.source_payload_json)
     parsed_item = source_payload.get("parsed_item") if isinstance(source_payload, dict) else {}
+    if not isinstance(parsed_item, dict):
+        parsed_item = source_payload if isinstance(source_payload, dict) else {}
     preview_payload = source_payload.get("preview") if isinstance(source_payload, dict) else {}
     parsed_item_dict = parsed_item if isinstance(parsed_item, dict) else {}
     preview_dict = preview_payload if isinstance(preview_payload, dict) else {}
@@ -1786,7 +1788,12 @@ async def create_fitting_route(
                 if not effective_stock:
                     effective_stock = (metadata.get("availability") or "").strip() or None
                 effective_description = metadata.get("description") or effective_description
-                source_payload = metadata
+                source_payload = {
+                    "source_site": source_site,
+                    "source_url": effective_source_url,
+                    "selected_city": selected_city,
+                    "parsed_item": metadata,
+                }
                 metadata_image_urls = metadata.get("image_urls") or []
 
                 if not metadata_image_urls:
@@ -1986,7 +1993,12 @@ async def update_fitting_route(
                 effective_article = effective_article or metadata.get("article")
                 effective_price = metadata.get("price") if metadata.get("price") is not None else effective_price
                 effective_description = metadata.get("description") or effective_description
-                source_payload = metadata
+                source_payload = {
+                    "source_site": source_site,
+                    "source_url": effective_source_url,
+                    "selected_city": selected_city,
+                    "parsed_item": metadata,
+                }
 
     if not effective_name and effective_article:
         effective_name = effective_article
