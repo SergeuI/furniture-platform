@@ -1651,6 +1651,59 @@ def update_fitting(
         db.close()
 
 
+def update_fitting_price_fields(
+    *,
+    item_id: str | int,
+    price: float | None | object = _UNSET,
+    stock: str | None | object = _UNSET,
+    currency: str | None | object = _UNSET,
+    parsed_at: datetime | None | object = _UNSET,
+    price_updated_at: datetime | None | object = _UNSET,
+) -> dict | None:
+
+    db = SessionLocal()
+
+    try:
+
+        item = (
+            db.query(FittingModel)
+            .filter(FittingModel.id == int(item_id))
+            .first()
+        )
+
+        if not item:
+            return None
+
+        if price is not _UNSET:
+            item.price = _normalize_price_value(price)
+        if stock is not _UNSET:
+            item.stock = _normalize_fitting_value(stock)
+        if currency is not _UNSET:
+            item.currency = _normalize_fitting_value(currency)
+        if parsed_at is not _UNSET:
+            item.parsed_at = parsed_at
+        if price_updated_at is not _UNSET:
+            item.price_updated_at = price_updated_at
+
+        db.commit()
+        db.refresh(item)
+
+        return {
+            "id": str(item.id),
+            "article": item.article,
+            "city": item.city,
+            "price": item.price,
+            "stock": item.stock,
+            "currency": item.currency,
+            "parsed_at": item.parsed_at,
+            "price_updated_at": item.price_updated_at,
+        }
+
+    finally:
+
+        db.close()
+
+
 def delete_fitting(item_id: str | int) -> dict | None:
 
     db = SessionLocal()
