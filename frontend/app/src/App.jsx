@@ -35,6 +35,12 @@ import {
 import { Component, Fragment, Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import {
+  buildTrialCountdown,
+  formatTrialCountdown,
+  getSubscriptionLabel,
+} from "../../shared/trialStatus.js";
+
+import {
   changeOwnPassword,
   confirmProjectScan,
   createMyEmailChangeRequest,
@@ -192,7 +198,7 @@ const TARIFF_CONTENT = {
     included: "Included",
     unavailable: "Unavailable",
     plans: [
-      { id: "trial", name: "Trial", price: "Free", period: "14 days or 20 AI operations", audience: "Evaluate the full system", summary: "Temporary full access for a real project and automation test.", cta: "Try Trial" },
+      { id: "trial", name: "Trial", price: "Free", period: "7 days or 20 AI operations", audience: "Evaluate the full system", summary: "Temporary full access for a real project and automation test.", cta: "Try Trial" },
       { id: "free", name: "Free", price: "UAH 0", period: "No time limit", audience: "Basic calculations", summary: "Manual design, drawings, and estimates for a small project list.", cta: "Start free" },
       { id: "pro", name: "PRO", price: "UAH 999", period: "per month", audience: "Designers and makers", summary: "AI recognition, automatic cutting, production exports, and more active projects.", cta: "Choose PRO", recommended: true },
       { id: "business", name: "Business", price: "UAH 2,999", period: "per month", audience: "Furniture production teams", summary: "Unlimited automation, team workflows, own databases, API, and personal support.", cta: "Choose Business" },
@@ -2210,6 +2216,8 @@ export default function App() {
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [publicProfileMenuOpen, setPublicProfileMenuOpen] = useState(false);
+  const [trialClockNow, setTrialClockNow] = useState(() => Date.now());
+  const trialRefreshTriggeredRef = useRef(false);
   const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [showRegisterPassword, setShowRegisterPassword] = useState(false);
   const [showOwnCurrentPassword, setShowOwnCurrentPassword] = useState(false);
@@ -2307,15 +2315,48 @@ export default function App() {
   const canUseAiScan = user?.role === "admin" || user?.role === "premium" || user?.role === "pro";
   const canUsePremiumStart = user?.role === "admin" || user?.role === "premium";
   const userLoginName = user?.username || user?.email?.split("@")[0] || "";
-  const userRoleLabel = String(user?.role || "").toUpperCase();
-  const userTierLabel =
-    {
-      free: "Free",
-      pro: "PRO",
-      premium: "Premium",
-      admin: "Admin",
-    }[String(user?.role || "").toLowerCase()] || userRoleLabel;
+  const userTierLabel = getSubscriptionLabel(user, language);
   const userCityLabel = user?.city || t.notSet;
+  const trialCountdown = useMemo(
+    () => buildTrialCountdown(user, trialClockNow),
+    [trialClockNow, user],
+  );
+  const trialMessage = useMemo(
+    () => formatTrialCountdown(trialCountdown, language),
+    [language, trialCountdown],
+  );
+
+  useEffect(() => {
+    if (!trialCountdown || trialCountdown.state !== "active") {
+      return undefined;
+    }
+
+    setTrialClockNow(Date.now());
+    const timerId = window.setInterval(() => {
+      setTrialClockNow(Date.now());
+    }, 60000);
+
+    return () => window.clearInterval(timerId);
+  }, [trialCountdown]);
+
+  useEffect(() => {
+    trialRefreshTriggeredRef.current = false;
+  }, [user?.id, user?.effective_plan, user?.trial_ends_at]);
+
+  useEffect(() => {
+    if (
+      !token ||
+      !trialCountdown ||
+      trialCountdown.state !== "expired" ||
+      trialRefreshTriggeredRef.current
+    ) {
+      return undefined;
+    }
+
+    trialRefreshTriggeredRef.current = true;
+    loadUser(token);
+    return undefined;
+  }, [token, trialCountdown, user?.effective_plan, user?.trial_ends_at]);
 
   function closeSidebarOnMobile() {
     if (typeof window !== "undefined" && window.matchMedia("(max-width: 980px)").matches) {
@@ -4231,8 +4272,30 @@ export default function App() {
 
         <div className="user-block">
           <span>{userLoginName}</span>
-          <strong>{user.role}</strong>
+          <strong>{userTierLabel}</strong>
         </div>
+
+        {trialCountdown ? (
+          <div
+            className={`trial-status${trialCountdown.state === "expired" ? " expired" : ""}`}
+            role="status"
+          >
+            <div className="trial-status-heading">
+              {trialCountdown.state === "expired" ? (
+                <CircleAlert aria-hidden="true" size={16} />
+              ) : (
+                <BadgeCheck aria-hidden="true" size={16} />
+              )}
+              <strong>{language === "uk" ? "Пробний доступ" : "Trial access"}</strong>
+            </div>
+            <p>{trialMessage}</p>
+            {trialCountdown.state === "active" ? (
+              <small className="trial-status-note">
+                {language === "uk" ? "Після завершення: Free" : "After trial: Free"}
+              </small>
+            ) : null}
+          </div>
+        ) : null}
 
         <nav className="nav-tabs" aria-label="Application sections">
           <button
@@ -4522,7 +4585,7 @@ export default function App() {
                   <span>{t.projectStartDescription}</span>
                 </div>
                 <span className="project-start-current-tier">
-                  {String(user?.role || "free").toUpperCase()}
+                  {userTierLabel}
                 </span>
               </div>
               <div className="project-start-grid">

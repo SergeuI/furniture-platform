@@ -227,7 +227,8 @@ def register_user(
 
     email: str,
 
-    password: str
+    password: str,
+    role: str | None = None
 ):
 
     normalized_email = email.strip().lower()
@@ -238,7 +239,11 @@ def register_user(
 
         return None
 
-    role = ROLE_ADMIN if count_users() == 0 else ROLE_USER
+    resolved_role = (
+        normalize_user_role(role)
+        if role is not None
+        else (ROLE_ADMIN if count_users() == 0 else ROLE_USER)
+    )
 
     return create_user(
 
@@ -248,7 +253,7 @@ def register_user(
             password
         ),
 
-        role=normalize_user_role(role)
+        role=resolved_role
     )
 
 

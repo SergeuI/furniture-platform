@@ -129,6 +129,9 @@ from services.fitting_image_gallery_service import (
 from services.auth_service import (
     get_user_from_token,
 )
+from services.subscription_service import (
+    has_paid_feature_access,
+)
 from services.material_import_queue_service import (
     enqueue_material_import_job,
     get_material_import_job_result,
@@ -465,7 +468,7 @@ def _can_manage_material_item(current_user, item: dict | None) -> bool:
     if not item:
         return False
 
-    if current_user.role not in ("admin", "premium", "pro"):
+    if not has_paid_feature_access(current_user):
         return False
 
     if item.get("is_default"):
@@ -791,7 +794,7 @@ async def create_material_route(
 
     is_default = bool(payload.is_default)
 
-    if is_default and current_user.role not in ("admin", "premium", "pro"):
+    if is_default and not has_paid_feature_access(current_user):
         return {
             "success": False,
             "error": "Only admin, Premium or PRO can create default materials",
@@ -1673,7 +1676,7 @@ def _can_manage_fitting_item(current_user, item: dict | None) -> bool:
         return True
 
     return (
-        current_user.role in ("premium", "pro") and
+        has_paid_feature_access(current_user) and
         not item.get("is_system") and
         item.get("owner_user_id") == str(current_user.id)
     )

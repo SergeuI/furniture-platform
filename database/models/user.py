@@ -106,6 +106,20 @@ class UserModel(Base):
         nullable=True
     )
 
+    trial_started_at = Column(
+
+        DateTime,
+
+        nullable=True
+    )
+
+    trial_ends_at = Column(
+
+        DateTime,
+
+        nullable=True
+    )
+
     viyar_email = Column(
 
         String,

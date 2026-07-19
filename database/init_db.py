@@ -382,6 +382,8 @@ def upgrade_sqlite_schema():
             "city": "VARCHAR",
             "telegram_id": "VARCHAR",
             "last_username_change_at": "DATETIME",
+            "trial_started_at": "DATETIME",
+            "trial_ends_at": "DATETIME",
             "viyar_email": "VARCHAR",
             "viyar_password_secret": "VARCHAR",
             "viyar_cookie": "VARCHAR",

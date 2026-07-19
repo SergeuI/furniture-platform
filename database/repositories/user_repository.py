@@ -11,6 +11,10 @@ from datetime import datetime
 from services.user_roles import (
     normalize_user_role,
 )
+from services.subscription_service import (
+    build_trial_window,
+    should_grant_trial_on_create,
+)
 
 
 _UNSET = object()
@@ -26,7 +30,8 @@ def create_user(
 
     password_hash: str,
 
-    role: str = "free"
+    role: str = "free",
+    grant_trial: bool | None = None,
 ):
 
     db = SessionLocal()
@@ -43,6 +48,11 @@ def create_user(
 
             role=normalize_user_role(role)
         )
+
+        if grant_trial is not False and should_grant_trial_on_create(role):
+            trial_started_at, trial_ends_at = build_trial_window()
+            user.trial_started_at = trial_started_at
+            user.trial_ends_at = trial_ends_at
 
         db.add(user)
 

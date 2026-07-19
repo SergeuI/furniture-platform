@@ -380,6 +380,47 @@ tbody tr.selected {
   font-size: 12px;
 }
 
+.trial-status {
+  background: rgba(57, 211, 83, 0.12);
+  border: 1px solid rgba(57, 211, 83, 0.24);
+  border-radius: 18px;
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 14px 16px;
+}
+
+.trial-status.expired {
+  background: rgba(255, 106, 106, 0.12);
+  border-color: rgba(255, 106, 106, 0.26);
+}
+
+.trial-status-heading {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.trial-status-heading strong {
+  color: #ffffff;
+  font-size: 13px;
+  text-transform: none;
+}
+
+.trial-status p {
+  color: #d8e5e8;
+  font-size: 13px;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.trial-status-note {
+  color: #f3f7f7;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
 .language-switcher {
   display: grid;
   gap: 8px;

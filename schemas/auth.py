@@ -197,6 +197,16 @@ class UserResponseSchema(BaseModel):
 
     role: str
 
+    effective_plan: str = "free"
+
+    is_trial_active: bool = False
+
+    trial_started_at: datetime | None = None
+
+    trial_ends_at: datetime | None = None
+
+    trial_seconds_remaining: int = 0
+
     is_active: bool
 
     last_username_change_at: datetime | None = None

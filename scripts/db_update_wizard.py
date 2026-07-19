@@ -1090,6 +1090,7 @@ class WizardApp(tk.Tk):
         self.catalog_city = tk.StringVar(value="Київ")
         self.catalog_warm_images = tk.BooleanVar(value=True)
         self.auto_refresh = tk.BooleanVar(value=True)
+        self.allow_local_registration = tk.BooleanVar(value=False)
         self.map_search = tk.StringVar(value="")
         self.history_search = tk.StringVar(value="")
         self.history_filter = tk.StringVar(value="Усі")
@@ -2155,6 +2156,17 @@ class WizardApp(tk.Tk):
         params.pack(fill="x", pady=(12, 0))
         self._add_entry(params, "Місто", self.catalog_city, 0)
         ttk.Checkbutton(params, text="Прогрівати зображення", variable=self.catalog_warm_images).grid(row=1, column=0, sticky="w", pady=(4, 0))
+        ttk.Checkbutton(
+            params,
+            text="Дозволити локальну реєстрацію",
+            variable=self.allow_local_registration,
+        ).grid(row=2, column=0, sticky="w", pady=(4, 0))
+        ttk.Label(
+            params,
+            text="Після зміни цього прапорця локальний API потрібно перезапустити.",
+            style="Hint.TLabel",
+            justify="left",
+        ).grid(row=3, column=0, sticky="w", pady=(4, 0))
 
         log_box = ttk.LabelFrame(body, text="Журнал дій", style="Card.TLabelframe")
         log_box.grid(row=2, column=0, columnspan=2, sticky="nsew", pady=(16, 0))
@@ -2457,6 +2469,7 @@ class WizardApp(tk.Tk):
             "catalog_city": self.catalog_city.get(),
             "catalog_warm_images": self.catalog_warm_images.get(),
             "auto_refresh": self.auto_refresh.get(),
+            "allow_local_registration": self.allow_local_registration.get(),
             "map_search": self.map_search.get(),
             "history_search": self.history_search.get(),
             "history_filter": self.history_filter.get(),
@@ -2491,6 +2504,7 @@ class WizardApp(tk.Tk):
             self.catalog_city.set(str(data.get("catalog_city", self.catalog_city.get())))
             self.catalog_warm_images.set(as_bool(data.get("catalog_warm_images"), self.catalog_warm_images.get()))
             self.auto_refresh.set(as_bool(data.get("auto_refresh"), self.auto_refresh.get()))
+            self.allow_local_registration.set(as_bool(data.get("allow_local_registration"), self.allow_local_registration.get()))
             self.map_search.set(str(data.get("map_search", self.map_search.get())))
             self.history_search.set(str(data.get("history_search", self.history_search.get())))
             self.history_filter.set(str(data.get("history_filter", self.history_filter.get())))
@@ -2539,6 +2553,7 @@ class WizardApp(tk.Tk):
         self.catalog_city.set("Київ")
         self.catalog_warm_images.set(True)
         self.auto_refresh.set(True)
+        self.allow_local_registration.set(False)
         self.map_search.set("")
         self.history_search.set("")
         self.history_filter.set("Усі")
@@ -4319,6 +4334,7 @@ class WizardApp(tk.Tk):
         env = {
             "FURNITURE_PLATFORM_DB_PATH": self.main_db.get().strip(),
             "FURNITURE_LEGACY_DB_PATH": self.legacy_db.get().strip(),
+            "FURNITURE_ALLOW_LOCAL_PUBLIC_REGISTRATION": "1" if self.allow_local_registration.get() else "0",
         }
         self._start_managed_process(
             "api",

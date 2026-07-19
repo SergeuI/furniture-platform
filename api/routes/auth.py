@@ -4,6 +4,7 @@ from fastapi import (
     Query
 )
 import asyncio
+import os
 from datetime import datetime, timedelta
 
 from api.dependencies.auth import (
@@ -83,11 +84,17 @@ from services.viyar_auth_service import (
 )
 from services.user_roles import (
     ALLOWED_USER_ROLES,
+    ROLE_USER,
     normalize_user_role,
+)
+from services.subscription_service import (
+    build_subscription_status,
 )
 
 
 router = APIRouter()
+
+LOCAL_PUBLIC_REGISTRATION_ENV = "FURNITURE_ALLOW_LOCAL_PUBLIC_REGISTRATION"
 
 require_auth_admin = require_roles(
     [
@@ -120,6 +127,8 @@ def _serialize_user(
         "role": normalize_user_role(user.role),
 
         "last_username_change_at": user.last_username_change_at,
+
+        **build_subscription_status(user),
 
         "viyar_email": user.viyar_email,
 
@@ -184,6 +193,16 @@ def _normalize_route_error(error_text: str | None, fallback: str) -> str:
     return text or fallback
 
 
+def _is_local_public_registration_enabled() -> bool:
+
+    value = os.getenv(
+        LOCAL_PUBLIC_REGISTRATION_ENV,
+        "",
+    ).strip().lower()
+
+    return value in {"1", "true", "yes", "on"}
+
+
 @router.get("/public-overview")
 async def public_overview_route():
 
@@ -206,7 +225,7 @@ async def public_overview_route():
 
         return {
             "success": True,
-            "registration_enabled": True,
+            "registration_enabled": _is_local_public_registration_enabled(),
             "stats": {
                 "projects_total": count_projects(),
                 "materials_total": materials_total,
@@ -234,7 +253,7 @@ async def register_route(
     payload: RegisterUserSchema
 ):
 
-    if count_users() > 0:
+    if not _is_local_public_registration_enabled():
 
         return {
 
@@ -247,7 +266,8 @@ async def register_route(
 
         email=payload.email,
 
-        password=payload.password
+        password=payload.password,
+        role=ROLE_USER,
     )
 
     if not user:

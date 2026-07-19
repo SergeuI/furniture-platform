@@ -33,6 +33,12 @@ import {
 import { Component, Suspense, lazy, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
+import {
+  buildTrialCountdown,
+  formatTrialCountdown,
+  getSubscriptionLabel,
+} from "../../shared/trialStatus.js";
+
 import surfaceMountIcon from "./assets/hole-mounting/surface_mount.png";
 import angledTwoPlanesIcon from "./assets/hole-mounting/angled_two_planes.png";
 import faceToEdgeIcon from "./assets/hole-mounting/face_to_edge.png";
@@ -6761,6 +6767,8 @@ export default function App() {
     return () => mediaQuery.removeListener(syncSidebarState);
   }, []);
   const [loginLoading, setLoginLoading] = useState(false);
+  const [trialClockNow, setTrialClockNow] = useState(() => Date.now());
+  const trialRefreshTriggeredRef = useRef(false);
   const [confirmAction, setConfirmAction] = useState(null);
   const [activeView, setActiveView] = useState(
     () => normalizeCatalogView(localStorage.getItem(ACTIVE_VIEW_STORAGE_KEY) || "home"),
@@ -6874,12 +6882,53 @@ export default function App() {
 
   const t = TRANSLATIONS[language] || TRANSLATIONS.en;
   const userLoginName = user?.username || user?.email?.split("@")[0] || "";
+  const userTierLabel = getSubscriptionLabel(user, language);
   const canUseAiScan = user?.role === "admin" || user?.role === "premium" || user?.role === "pro";
   const canUsePremiumStart = user?.role === "admin" || user?.role === "premium";
   const canViewFittingHoles = user?.role === "admin" || user?.role === "premium" || user?.role === "pro";
+  const trialCountdown = useMemo(
+    () => buildTrialCountdown(user, trialClockNow),
+    [trialClockNow, user],
+  );
+  const trialMessage = useMemo(
+    () => formatTrialCountdown(trialCountdown, language),
+    [language, trialCountdown],
+  );
   const isCompactSidebarMode =
     typeof window !== "undefined" &&
     window.matchMedia(`(max-width: ${SIDEBAR_COLLAPSE_BREAKPOINT}px)`).matches;
+
+  useEffect(() => {
+    if (!trialCountdown || trialCountdown.state !== "active") {
+      return undefined;
+    }
+
+    setTrialClockNow(Date.now());
+    const timerId = window.setInterval(() => {
+      setTrialClockNow(Date.now());
+    }, 60000);
+
+    return () => window.clearInterval(timerId);
+  }, [trialCountdown]);
+
+  useEffect(() => {
+    trialRefreshTriggeredRef.current = false;
+  }, [user?.id, user?.effective_plan, user?.trial_ends_at]);
+
+  useEffect(() => {
+    if (
+      !token ||
+      !trialCountdown ||
+      trialCountdown.state !== "expired" ||
+      trialRefreshTriggeredRef.current
+    ) {
+      return undefined;
+    }
+
+    trialRefreshTriggeredRef.current = true;
+    loadUser(token);
+    return undefined;
+  }, [token, trialCountdown, user?.effective_plan, user?.trial_ends_at]);
 
   function closeSidebarOnMobile() {
     if (
@@ -15380,11 +15429,33 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
         <div className="sidebar-scroll">
           <div className="user-block">
             <span>{userLoginName}</span>
-            <strong>{user.role}</strong>
+            <strong>{userTierLabel}</strong>
             <small>
               {t.currentCity}: {formatCatalogLabel(user.city, t)}
             </small>
           </div>
+
+          {trialCountdown ? (
+            <div
+              className={`trial-status${trialCountdown.state === "expired" ? " expired" : ""}`}
+              role="status"
+            >
+              <div className="trial-status-heading">
+                {trialCountdown.state === "expired" ? (
+                  <CircleAlert aria-hidden="true" size={16} />
+                ) : (
+                  <CheckCircle2 aria-hidden="true" size={16} />
+                )}
+                <strong>{language === "uk" ? "Пробний доступ" : "Trial access"}</strong>
+              </div>
+              <p>{trialMessage}</p>
+              {trialCountdown.state === "active" ? (
+                <small className="trial-status-note">
+                  {language === "uk" ? "Після завершення: Free" : "After trial: Free"}
+                </small>
+              ) : null}
+            </div>
+          ) : null}
 
           <nav className="nav-tabs" aria-label="Admin sections">
             <button
@@ -16298,7 +16369,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                   <span>{t.projectStartDescription}</span>
                 </div>
                 <span className="project-start-current-tier">
-                  {(user?.role || "free").toUpperCase()}
+                  {userTierLabel}
                 </span>
               </div>
 
