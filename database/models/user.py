@@ -56,6 +56,20 @@ class UserModel(Base):
         nullable=True
     )
 
+    registration_status = Column(
+
+        String,
+
+        nullable=True
+    )
+
+    phone_verified_at = Column(
+
+        DateTime,
+
+        nullable=True
+    )
+
     city = Column(
 
         String,

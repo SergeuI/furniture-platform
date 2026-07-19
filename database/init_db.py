@@ -12,6 +12,10 @@ from database.models.project import (
 from database.models.project_version import (
     ProjectVersionModel
 )
+from database.models.registration_identity import (
+    RegistrationChallengeModel,
+    RegistrationIdentityModel,
+)
 from database.models.project_scan_session import (
     ProjectScanSessionModel
 )
@@ -379,8 +383,10 @@ def upgrade_sqlite_schema():
         user_columns = {
             "username": "VARCHAR",
             "phone": "VARCHAR",
+            "registration_status": "VARCHAR",
             "city": "VARCHAR",
             "telegram_id": "VARCHAR",
+            "phone_verified_at": "DATETIME",
             "last_username_change_at": "DATETIME",
             "trial_started_at": "DATETIME",
             "trial_ends_at": "DATETIME",
@@ -405,6 +411,79 @@ def upgrade_sqlite_schema():
 
                 column_type
             )
+
+        connection.exec_driver_sql(
+            """
+            CREATE TABLE IF NOT EXISTS registration_identities (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                identity_type VARCHAR NOT NULL,
+                identity_value_normalized VARCHAR NOT NULL,
+                first_user_id VARCHAR,
+                verified_at DATETIME,
+                trial_used_at DATETIME,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(identity_type, identity_value_normalized)
+            )
+            """
+        )
+
+        connection.exec_driver_sql(
+            """
+            CREATE INDEX IF NOT EXISTS ix_registration_identities_identity_type
+            ON registration_identities (identity_type)
+            """
+        )
+
+        connection.exec_driver_sql(
+            """
+            CREATE INDEX IF NOT EXISTS ix_registration_identities_identity_value_normalized
+            ON registration_identities (identity_value_normalized)
+            """
+        )
+
+        connection.exec_driver_sql(
+            """
+            CREATE TABLE IF NOT EXISTS registration_challenges (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id VARCHAR,
+                channel VARCHAR NOT NULL,
+                token_hash VARCHAR(64) NOT NULL,
+                expected_identity_type VARCHAR NOT NULL,
+                expected_identity_value_normalized VARCHAR NOT NULL,
+                status VARCHAR NOT NULL DEFAULT 'pending',
+                attempts_count INTEGER NOT NULL DEFAULT 0,
+                max_attempts INTEGER NOT NULL DEFAULT 5,
+                expires_at DATETIME NOT NULL,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                verified_at DATETIME,
+                consumed_at DATETIME,
+                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(token_hash)
+            )
+            """
+        )
+
+        connection.exec_driver_sql(
+            """
+            CREATE INDEX IF NOT EXISTS ix_registration_challenges_user_id
+            ON registration_challenges (user_id)
+            """
+        )
+
+        connection.exec_driver_sql(
+            """
+            CREATE INDEX IF NOT EXISTS ix_registration_challenges_status
+            ON registration_challenges (status)
+            """
+        )
+
+        connection.exec_driver_sql(
+            """
+            CREATE INDEX IF NOT EXISTS ix_registration_challenges_expires_at
+            ON registration_challenges (expires_at)
+            """
+        )
 
         connection.exec_driver_sql(
             """
