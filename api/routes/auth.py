@@ -3,6 +3,8 @@ from fastapi import (
     Depends,
     Query
 )
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
 import asyncio
 import os
 from datetime import datetime, timedelta
@@ -20,6 +22,10 @@ from schemas.auth import (
     CurrentUserResponseSchema,
     LoginUserSchema,
     PasswordResetRequestSchema,
+    RegistrationConfirmRequestSchema,
+    RegistrationConfirmResponseSchema,
+    RegistrationStartRequestSchema,
+    RegistrationStartResponseSchema,
     RegisterUserSchema,
     ReviewUserChangeRequestSchema,
     AdminUserDetailsResponseSchema,
@@ -71,9 +77,14 @@ from services.auth_service import (
     change_user_password,
     create_access_token,
     create_managed_user,
+    RegistrationLoginBlockedError,
     register_user,
     reset_user_password,
     username_is_available,
+)
+from services.registration_onboarding_service import (
+    confirm_pending_phone_registration,
+    start_pending_phone_registration,
 )
 from services.credential_cipher import (
     decrypt_secret,
@@ -300,6 +311,40 @@ async def register_route(
     }
 
 
+@router.post(
+    "/registration/start",
+    response_model=RegistrationStartResponseSchema,
+)
+async def registration_start_route(
+    payload: RegistrationStartRequestSchema,
+):
+    resolved_username = payload.username if payload.username is not None else payload.name
+
+    response = start_pending_phone_registration(
+        name=payload.name,
+        username=resolved_username,
+        email=payload.email,
+        password=payload.password,
+        phone=payload.phone,
+    )
+
+    return JSONResponse(
+        content=jsonable_encoder(response)
+    )
+
+
+@router.post(
+    "/registration/confirm",
+    response_model=RegistrationConfirmResponseSchema,
+)
+async def registration_confirm_route(
+    payload: RegistrationConfirmRequestSchema,
+):
+    return confirm_pending_phone_registration(
+        token=payload.token,
+    )
+
+
 # =====================================================
 # CREATE USER
 # =====================================================
@@ -417,12 +462,18 @@ async def login_route(
     payload: LoginUserSchema
 ):
 
-    user = authenticate_user(
+    try:
+        user = authenticate_user(
 
-        email=payload.email,
+            email=payload.email,
 
-        password=payload.password
-    )
+            password=payload.password
+        )
+    except RegistrationLoginBlockedError as error:
+        return {
+            "success": False,
+            "error": str(error),
+        }
 
     if not user:
 

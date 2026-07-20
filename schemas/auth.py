@@ -177,6 +177,94 @@ class ReviewUserChangeRequestSchema(BaseModel):
     )
 
 
+class RegistrationStartRequestSchema(BaseModel):
+
+    name: str | None = Field(
+        default=None,
+        min_length=3,
+        max_length=64
+    )
+
+    username: str | None = Field(
+        default=None,
+        min_length=3,
+        max_length=64
+    )
+
+    email: str = Field(
+        min_length=3,
+        max_length=255
+    )
+
+    password: str = Field(
+        min_length=8,
+        max_length=128
+    )
+
+    phone: str = Field(
+        min_length=3,
+        max_length=64
+    )
+
+
+class RegistrationStartResponseSchema(BaseModel):
+
+    success: bool
+
+    user_id: str | None = None
+
+    challenge_id: int | None = None
+
+    challenge_status: str | None = None
+
+    registration_status: str | None = None
+
+    phone_verified: bool = False
+
+    trial_granted: bool = False
+
+    effective_plan: str = "free"
+
+    trial_ends_at: datetime | None = None
+
+    message: str | None = None
+
+    debug_verification_token: str | None = None
+
+    error: str | None = None
+
+
+class RegistrationConfirmRequestSchema(BaseModel):
+
+    token: str = Field(
+        min_length=1,
+        max_length=255
+    )
+
+
+class RegistrationConfirmResponseSchema(BaseModel):
+
+    success: bool
+
+    user_id: str | None = None
+
+    challenge_id: int | None = None
+
+    challenge_status: str | None = None
+
+    registration_status: str | None = None
+
+    phone_verified: bool = False
+
+    trial_granted: bool = False
+
+    effective_plan: str = "free"
+
+    trial_ends_at: datetime | None = None
+
+    error: str | None = None
+
+
 # =====================================================
 # AUTH RESPONSES
 # =====================================================

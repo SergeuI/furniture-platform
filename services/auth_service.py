@@ -21,6 +21,12 @@ from services.user_roles import (
 )
 
 
+class RegistrationLoginBlockedError(Exception):
+    def __init__(self, message: str):
+        super().__init__(message)
+        self.message = message
+
+
 PASSWORD_HASH_ITERATIONS = 260000
 
 TOKEN_TTL_SECONDS = 60 * 60 * 24
@@ -378,6 +384,20 @@ def authenticate_user(
     ):
 
         return None
+
+    normalized_registration_status = str(
+        user.registration_status or ""
+    ).strip().lower()
+
+    if normalized_registration_status == "pending_phone":
+        raise RegistrationLoginBlockedError(
+            "Підтвердьте номер телефону, щоб завершити реєстрацію."
+        )
+
+    if normalized_registration_status == "blocked":
+        raise RegistrationLoginBlockedError(
+            "Обліковий запис заблоковано."
+        )
 
     return user
 
