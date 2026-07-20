@@ -7,6 +7,8 @@ from fastapi.middleware.cors import (
 import uvicorn
 from dotenv import load_dotenv
 
+load_dotenv()
+
 from database.init_db import (
     init_database
 )
@@ -37,8 +39,6 @@ from services.catalog_auto_refresh_service import (
     start_catalog_auto_refresh_loop,
     stop_catalog_auto_refresh_loop,
 )
-
-load_dotenv()
 init_database()
 
 app = FastAPI(

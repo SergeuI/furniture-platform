@@ -1,5 +1,9 @@
 from aiogram import Router, F
 import aiosqlite
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from services.db_service import (
 
     cache_image,
@@ -9,7 +13,6 @@ from services.db_service import (
     seed_materials
 )
 import os
-from dotenv import load_dotenv
 from handlers.materials import (
     router as materials_router,
      show_material_types
@@ -46,10 +49,6 @@ from handlers.production import (
 from handlers.categories import (
     router as categories_router
 )
-
-load_dotenv()
-
-
 
 router = Router()
 

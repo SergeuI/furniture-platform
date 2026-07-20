@@ -7,6 +7,8 @@ from aiogram import Bot, Dispatcher
 from aiogram.exceptions import TelegramNetworkError, TelegramUnauthorizedError
 from dotenv import load_dotenv
 
+load_dotenv()
+
 from handlers.router import (
     router,
     seed_materials,
@@ -28,8 +30,6 @@ from services.production_database_engine import (
     init_production_db,
 )
 from services.scheduler import start_scheduler
-
-load_dotenv()
 
 BOT_TOKEN = getenv("BOT_TOKEN")
 RUN_MT_PARSER_ON_START = getenv(
