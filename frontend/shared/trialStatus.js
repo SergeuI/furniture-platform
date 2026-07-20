@@ -44,6 +44,30 @@ function pluralizeCount(value, forms) {
   return forms[2];
 }
 
+export function parseUtcDateTime(value) {
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : new Date(value.getTime());
+  }
+
+  if (typeof value === "number") {
+    const parsedFromNumber = new Date(value);
+    return Number.isNaN(parsedFromNumber.getTime()) ? null : parsedFromNumber;
+  }
+
+  const rawValue = String(value ?? "").trim();
+  if (!rawValue) {
+    return null;
+  }
+
+  const normalizedValue = rawValue.replace(/\s+/, "T");
+  const hasTimezoneSuffix = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(normalizedValue);
+  const parsedValue = new Date(
+    hasTimezoneSuffix ? normalizedValue : `${normalizedValue}Z`,
+  );
+
+  return Number.isNaN(parsedValue.getTime()) ? null : parsedValue;
+}
+
 export function getSubscriptionLabel(user, language = "en") {
   const planKey = normalizePlanKey(user);
   const labels = PLAN_LABELS[language] || PLAN_LABELS.en;
@@ -61,13 +85,13 @@ export function buildTrialCountdown(user, now = Date.now()) {
     return null;
   }
 
-  const endsAt = user.trial_ends_at ? new Date(user.trial_ends_at) : null;
-  if (!endsAt || Number.isNaN(endsAt.getTime())) {
+  const endsAt = parseUtcDateTime(user.trial_ends_at);
+  if (!endsAt) {
     return null;
   }
 
-  const currentTime = now instanceof Date ? now : new Date(now);
-  if (Number.isNaN(currentTime.getTime())) {
+  const currentTime = now instanceof Date ? now : parseUtcDateTime(now);
+  if (!currentTime) {
     return null;
   }
 
