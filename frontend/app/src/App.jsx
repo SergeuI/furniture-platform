@@ -771,9 +771,9 @@ Object.assign(TRANSLATIONS.en, {
   registrationRequestCode: "Get code",
   registrationTelegramConfirm: "Confirm via Telegram",
   registrationTelegramCreated: "Telegram confirmation link created. Open Telegram to continue.",
-  registrationTelegramDescription: "Open Telegram and confirm the phone number with the button below.",
+  registrationTelegramDescription: "After confirmation, return to this page. Registration will finish automatically.",
   registrationTelegramExpired: "Telegram confirmation expired. Start registration again.",
-  registrationTelegramInstruction: "Confirm your phone number through Telegram to finish registration.",
+  registrationTelegramInstruction: "Open Telegram, start the bot, and share your phone number.",
   registrationTelegramOpen: "Open Telegram",
   registrationTelegramTitle: "Telegram confirmation",
   registrationTelegramWaiting: "Waiting for Telegram confirmation...",
@@ -804,9 +804,9 @@ Object.assign(TRANSLATIONS.uk, {
   registrationRequestCode: "Отримати код",
   registrationTelegramConfirm: "Підтвердити через Telegram",
   registrationTelegramCreated: "Додано посилання для підтвердження через Telegram. Відкрийте Telegram, щоб продовжити.",
-  registrationTelegramDescription: "Відкрийте Telegram і підтвердьте номер телефону кнопкою нижче.",
+  registrationTelegramDescription: "Після підтвердження поверніться на цю сторінку. Реєстрація завершиться автоматично.",
   registrationTelegramExpired: "Підтвердження Telegram застаріло. Започніть реєстрацію знову.",
-  registrationTelegramInstruction: "Підтвердіть номер через Telegram, щоб завершити реєстрацію.",
+  registrationTelegramInstruction: "Відкрийте Telegram, запустіть бота та поділіться своїм номером телефону.",
   registrationTelegramOpen: "Відкрити Telegram",
   registrationTelegramTitle: "Підтвердження через Telegram",
   registrationTelegramWaiting: "Чекаємо підтвердження в Telegram...",
@@ -2446,6 +2446,8 @@ export default function App() {
 
   const t = TRANSLATIONS[language] || TRANSLATIONS.en;
   const tariffContent = TARIFF_CONTENT[language] || TARIFF_CONTENT.en;
+  const isTelegramConfirmationMode = Boolean(registrationTelegramConfirmationUrl);
+  const hasLocalRegistrationCode = Boolean(registrationStartResponse?.debug_verification_code);
   const canUseAiScan = user?.role === "admin" || user?.role === "premium" || user?.role === "pro";
   const canUsePremiumStart = user?.role === "admin" || user?.role === "premium";
   const userLoginName = user?.username || user?.email?.split("@")[0] || "";
@@ -4491,75 +4493,58 @@ export default function App() {
                           : `Confirm ${maskRegistrationPhone(registerForm.phone)}.`}
                       </p>
 
-                      {registrationTelegramConfirmationUrl ? (
+                      {isTelegramConfirmationMode ? (
                         <p className="public-auth-step-copy">{t.registrationTelegramInstruction}</p>
                       ) : null}
 
-                      {registrationTelegramConfirmationUrl ? (
-                        <div className="public-local-code-box" hidden={Boolean(registrationTelegramConfirmationUrl)}>
+                      {isTelegramConfirmationMode ? (
+                        <div className="public-local-code-box">
                           <div className="public-local-code-copy">
                             <strong>{t.registrationTelegramTitle}</strong>
-                            <p>
-                              {registrationTelegramWaiting
-                                ? t.registrationTelegramWaiting
-                                : t.registrationTelegramDescription}
-                            </p>
+                            <p>{t.registrationTelegramDescription}</p>
                           </div>
-                          <div className="public-auth-secondary-actions">
-                            <button
-                              className="primary-button"
-                              onClick={() => {
-                                setRegistrationTelegramWaiting(true);
-                                setRegistrationTelegramStartedAt(Date.now());
-                                window.open(
-                                  registrationTelegramConfirmationUrl,
-                                  "_blank",
-                                  "noopener,noreferrer",
-                                );
-                                setStatus({ message: t.registrationTelegramWaiting, tone: "info" });
-                              }}
-                              type="button"
-                            >
-                              <BadgeCheck size={18} />
-                              {t.registrationTelegramConfirm}
-                            </button>
-                            <button
-                              className="public-auth-text-button"
-                              onClick={() => {
-                                window.open(
-                                  registrationTelegramConfirmationUrl,
-                                  "_blank",
-                                  "noopener,noreferrer",
-                                );
-                              }}
-                              type="button"
-                            >
-                              {t.registrationTelegramOpen}
-                            </button>
-                          </div>
+                          <button
+                            className="primary-button public-auth-telegram-button"
+                            onClick={() => {
+                              setRegistrationTelegramWaiting(true);
+                              setRegistrationTelegramStartedAt(Date.now());
+                              window.open(
+                                registrationTelegramConfirmationUrl,
+                                "_blank",
+                                "noopener,noreferrer",
+                              );
+                              setStatus({ message: t.registrationTelegramWaiting, tone: "info" });
+                            }}
+                            type="button"
+                          >
+                            <ExternalLink size={18} />
+                            {t.registrationTelegramOpen}
+                          </button>
                         </div>
                       ) : null}
 
-                      <label hidden={Boolean(registrationTelegramConfirmationUrl)}>
-                        {t.registrationCode}
-                        <input
-                          autoComplete="one-time-code"
-                          inputMode="numeric"
-                          maxLength={6}
-                          pattern="[0-9]*"
-                          onChange={(event) =>
-                            setRegisterForm((current) => ({
-                              ...current,
-                              confirmationCode: normalizeRegistrationCodeInput(event.target.value),
-                            }))
-                          }
-                          required
-                          type="text"
-                          value={registerForm.confirmationCode}
-                        />
-                      </label>
+                      {!isTelegramConfirmationMode ? (
+                        <label>
+                          {t.registrationCode}
+                          <input
+                            autoComplete="one-time-code"
+                            inputMode="numeric"
+                            maxLength={6}
+                            pattern="[0-9]*"
+                            onChange={(event) =>
+                              setRegisterForm((current) => ({
+                                ...current,
+                                confirmationCode: normalizeRegistrationCodeInput(event.target.value),
+                              }))
+                            }
+                            required
+                            type="text"
+                            value={registerForm.confirmationCode}
+                          />
+                        </label>
+                      ) : null}
 
-                      {registrationStartResponse?.debug_verification_code ? (
+                      {hasLocalRegistrationCode ? (
                         <div className="public-local-code-box">
                           <div className="public-local-code-copy">
                             <strong>{t.registrationLocalCodeTitle}</strong>
@@ -4603,7 +4588,7 @@ export default function App() {
                             </button>
                           </div>
                         </div>
-                      ) : (
+                      ) : isTelegramConfirmationMode ? null : (
                         <p className="public-auth-step-copy">{t.registrationCodeCreated}</p>
                       )}
                     </>
@@ -4633,12 +4618,10 @@ export default function App() {
                           <UserPlus size={18} />
                           {t.registrationRequestCode}
                         </>
-                      ) : (
+                      ) : isTelegramConfirmationMode ? null : (
                         <>
                           <BadgeCheck size={18} />
-                          {registrationTelegramConfirmationUrl
-                            ? t.registrationTelegramConfirm
-                            : t.registrationVerifyPhone}
+                          {t.registrationVerifyPhone}
                         </>
                       )}
                     </button>

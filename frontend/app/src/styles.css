@@ -1993,6 +1993,12 @@ tbody tr.selected {
   padding: 14px;
 }
 
+.public-auth-telegram-button {
+  justify-content: center;
+  min-height: 46px;
+  width: 100%;
+}
+
 .public-local-code-copy {
   display: grid;
   gap: 4px;
