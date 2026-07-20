@@ -1091,6 +1091,7 @@ class WizardApp(tk.Tk):
         self.catalog_warm_images = tk.BooleanVar(value=True)
         self.auto_refresh = tk.BooleanVar(value=True)
         self.allow_local_registration = tk.BooleanVar(value=False)
+        self.allow_local_registration_test_mode = tk.BooleanVar(value=False)
         self.map_search = tk.StringVar(value="")
         self.history_search = tk.StringVar(value="")
         self.history_filter = tk.StringVar(value="Усі")
@@ -2167,6 +2168,17 @@ class WizardApp(tk.Tk):
             style="Hint.TLabel",
             justify="left",
         ).grid(row=3, column=0, sticky="w", pady=(4, 0))
+        ttk.Checkbutton(
+            params,
+            text="Локальний тест підтвердження телефону",
+            variable=self.allow_local_registration_test_mode,
+        ).grid(row=4, column=0, sticky="w", pady=(8, 0))
+        ttk.Label(
+            params,
+            text="Після зміни цього прапорця локальний API потрібно перезапустити.",
+            style="Hint.TLabel",
+            justify="left",
+        ).grid(row=5, column=0, sticky="w", pady=(4, 0))
 
         log_box = ttk.LabelFrame(body, text="Журнал дій", style="Card.TLabelframe")
         log_box.grid(row=2, column=0, columnspan=2, sticky="nsew", pady=(16, 0))
@@ -2470,6 +2482,7 @@ class WizardApp(tk.Tk):
             "catalog_warm_images": self.catalog_warm_images.get(),
             "auto_refresh": self.auto_refresh.get(),
             "allow_local_registration": self.allow_local_registration.get(),
+            "allow_local_registration_test_mode": self.allow_local_registration_test_mode.get(),
             "map_search": self.map_search.get(),
             "history_search": self.history_search.get(),
             "history_filter": self.history_filter.get(),
@@ -2505,6 +2518,9 @@ class WizardApp(tk.Tk):
             self.catalog_warm_images.set(as_bool(data.get("catalog_warm_images"), self.catalog_warm_images.get()))
             self.auto_refresh.set(as_bool(data.get("auto_refresh"), self.auto_refresh.get()))
             self.allow_local_registration.set(as_bool(data.get("allow_local_registration"), self.allow_local_registration.get()))
+            self.allow_local_registration_test_mode.set(
+                as_bool(data.get("allow_local_registration_test_mode"), self.allow_local_registration_test_mode.get())
+            )
             self.map_search.set(str(data.get("map_search", self.map_search.get())))
             self.history_search.set(str(data.get("history_search", self.history_search.get())))
             self.history_filter.set(str(data.get("history_filter", self.history_filter.get())))
@@ -2554,6 +2570,7 @@ class WizardApp(tk.Tk):
         self.catalog_warm_images.set(True)
         self.auto_refresh.set(True)
         self.allow_local_registration.set(False)
+        self.allow_local_registration_test_mode.set(False)
         self.map_search.set("")
         self.history_search.set("")
         self.history_filter.set("Усі")
@@ -4331,10 +4348,27 @@ class WizardApp(tk.Tk):
         threading.Thread(target=opener, daemon=True).start()
 
     def start_local_api(self) -> None:
+        existing = self.managed_processes.get("api")
+        if existing and existing.poll() is None:
+            existing.terminate()
+            try:
+                existing.wait(timeout=5)
+            except Exception:
+                existing.kill()
+            self.managed_processes.pop("api", None)
+
+        mode_label = "enabled" if self.allow_local_registration_test_mode.get() else "disabled"
+        self.record_history(
+            "registration.test_mode",
+            details=f"Local phone verification test mode: {mode_label}",
+            status="ok",
+        )
+        self._append_product_log(f"Local phone verification test mode: {mode_label}")
         env = {
             "FURNITURE_PLATFORM_DB_PATH": self.main_db.get().strip(),
             "FURNITURE_LEGACY_DB_PATH": self.legacy_db.get().strip(),
             "FURNITURE_ALLOW_LOCAL_PUBLIC_REGISTRATION": "1" if self.allow_local_registration.get() else "0",
+            "FURNITURE_REGISTRATION_LOCAL_TEST_MODE": "true" if self.allow_local_registration_test_mode.get() else "false",
         }
         self._start_managed_process(
             "api",

@@ -211,8 +211,6 @@ class RegistrationStartResponseSchema(BaseModel):
 
     success: bool
 
-    user_id: str | None = None
-
     challenge_id: int | None = None
 
     challenge_status: str | None = None
@@ -229,24 +227,26 @@ class RegistrationStartResponseSchema(BaseModel):
 
     message: str | None = None
 
-    debug_verification_token: str | None = None
+    debug_verification_code: str | None = None
 
     error: str | None = None
 
 
 class RegistrationConfirmRequestSchema(BaseModel):
 
-    token: str = Field(
+    challenge_id: int = Field(
+        gt=0
+    )
+
+    code: str = Field(
         min_length=1,
-        max_length=255
+        max_length=32
     )
 
 
 class RegistrationConfirmResponseSchema(BaseModel):
 
     success: bool
-
-    user_id: str | None = None
 
     challenge_id: int | None = None
 

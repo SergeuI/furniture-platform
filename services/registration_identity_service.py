@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hmac
 import hashlib
 import secrets
 import re
@@ -13,6 +14,7 @@ from database.models.registration_identity import (
     RegistrationIdentityModel,
 )
 from database.session import SessionLocal
+from services.auth_service import TOKEN_SECRET
 
 
 IDENTITY_PHONE = "phone"
@@ -28,7 +30,7 @@ CHALLENGE_EXPIRED = "expired"
 CHALLENGE_BLOCKED = "blocked"
 CHALLENGE_CONSUMED = "consumed"
 
-DEFAULT_CHALLENGE_TTL_SECONDS = 15 * 60
+DEFAULT_CHALLENGE_TTL_SECONDS = 10 * 60
 DEFAULT_CHALLENGE_MAX_ATTEMPTS = 5
 
 
@@ -86,7 +88,11 @@ def hash_registration_token(raw_token: str) -> str:
     token = str(raw_token or "").strip()
     if not token:
         raise ValueError("Registration token is required")
-    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+    return hmac.new(
+        TOKEN_SECRET.encode("utf-8"),
+        token.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
 
 
 def _get_session():

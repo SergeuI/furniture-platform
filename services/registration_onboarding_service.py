@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hmac
 import secrets
 from datetime import datetime, timedelta
 
@@ -64,6 +65,27 @@ def _resolve_username(name: str | None = None, username: str | None = None) -> s
     return text
 
 
+def _generate_registration_code() -> str:
+    return f"{secrets.randbelow(1_000_000):06d}"
+
+
+def _normalize_registration_code(code: str) -> str:
+    normalized = "".join(str(code or "").split())
+    if len(normalized) != 6 or not normalized.isdigit():
+        raise ValueError("Verification code must contain exactly 6 digits")
+    return normalized
+
+
+def _format_registration_code(code: str) -> str:
+    normalized = _normalize_registration_code(code)
+    return f"{normalized[:3]} {normalized[3:]}"
+
+
+def _hash_registration_code(challenge_id: int, code: str) -> str:
+    normalized_code = _normalize_registration_code(code)
+    return hash_registration_token(f"{challenge_id}:{normalized_code}")
+
+
 def _build_user_status_payload(user, *, now: datetime | None = None) -> dict:
     subscription = build_subscription_status(user, now=now)
     return {
@@ -97,13 +119,12 @@ def _build_registration_response(
     user,
     challenge,
     message: str | None = None,
-    debug_verification_token: str | None = None,
+    debug_verification_code: str | None = None,
     error: str | None = None,
     now: datetime | None = None,
 ) -> dict:
     response = {
         "success": success,
-        "user_id": getattr(user, "id", None),
         "challenge_id": getattr(challenge, "id", None),
         "challenge_status": getattr(challenge, "status", None),
         "message": message,
@@ -113,8 +134,8 @@ def _build_registration_response(
     if user:
         response.update(_build_user_status_payload(user, now=now))
 
-    if debug_verification_token is not None:
-        response["debug_verification_token"] = debug_verification_token
+    if debug_verification_code is not None:
+        response["debug_verification_code"] = debug_verification_code
 
     return response
 
@@ -134,7 +155,7 @@ def start_pending_phone_registration(
     name: str | None = None,
     username: str | None = None,
     local_test_mode: bool | None = None,
-    debug_verification_token: str | None = None,
+    debug_verification_code: str | None = None,
     now: datetime | None = None,
 ) -> dict:
     try:
@@ -149,7 +170,9 @@ def start_pending_phone_registration(
 
     current_time = now or _utcnow()
     debug_mode = _is_enabled(local_test_mode)
-    token = debug_verification_token or secrets.token_urlsafe(32)
+    verification_code = _normalize_registration_code(
+        debug_verification_code if debug_verification_code is not None else _generate_registration_code()
+    )
     db = SessionLocal()
 
     try:
@@ -180,7 +203,7 @@ def start_pending_phone_registration(
         challenge = RegistrationChallengeModel(
             user_id=user.id,
             channel=LOCAL_TEST_CHANNEL,
-            token_hash=hash_registration_token(token),
+            token_hash=secrets.token_hex(32),
             expected_identity_type=IDENTITY_PHONE,
             expected_identity_value_normalized=normalized_phone,
             status=CHALLENGE_PENDING,
@@ -189,6 +212,8 @@ def start_pending_phone_registration(
             expires_at=current_time + timedelta(seconds=DEFAULT_CHALLENGE_TTL_SECONDS),
         )
         db.add(challenge)
+        db.flush()
+        challenge.token_hash = _hash_registration_code(challenge.id, verification_code)
         db.commit()
         db.refresh(user)
         db.refresh(challenge)
@@ -198,11 +223,11 @@ def start_pending_phone_registration(
             user=user,
             challenge=challenge,
             message=(
-                "Debug verification token returned for local test mode"
+                "Local verification code returned for local test mode"
                 if debug_mode
                 else "Pending registration created; delivery channel is not connected yet"
             ),
-            debug_verification_token=token if debug_mode else None,
+            debug_verification_code=verification_code if debug_mode else None,
             now=current_time,
         )
     except IntegrityError:
@@ -224,11 +249,12 @@ def start_pending_phone_registration(
 
 def confirm_pending_phone_registration(
     *,
-    token: str,
+    challenge_id: int,
+    code: str,
     now: datetime | None = None,
 ) -> dict:
     try:
-        token_hash = hash_registration_token(token)
+        normalized_code = _normalize_registration_code(code)
     except ValueError as error:
         return {
             "success": False,
@@ -239,7 +265,7 @@ def confirm_pending_phone_registration(
     db = SessionLocal()
 
     try:
-        challenge = _get_challenge_by_token_hash_in_session(db, token_hash)
+        challenge = _get_challenge_by_id_in_session(db, challenge_id)
 
         if not challenge:
             return {
@@ -261,6 +287,19 @@ def confirm_pending_phone_registration(
             return {
                 "success": False,
                 "error": "Challenge expired",
+                "challenge_id": challenge.id,
+            }
+
+        expected_hash = _hash_registration_code(challenge.id, normalized_code)
+        if not hmac.compare_digest(challenge.token_hash or "", expected_hash):
+            challenge.attempts_count += 1
+            if challenge.attempts_count >= challenge.max_attempts:
+                challenge.status = CHALLENGE_BLOCKED
+            db.commit()
+            db.refresh(challenge)
+            return {
+                "success": False,
+                "error": "Verification code does not match challenge",
                 "challenge_id": challenge.id,
             }
 
@@ -335,4 +374,3 @@ def confirm_pending_phone_registration(
         raise
     finally:
         db.close()
-

@@ -28,7 +28,7 @@ from schemas.auth import (
 )
 from services.auth_service import hash_password
 from services import registration_onboarding_service as onboarding
-from services.registration_identity_service import CHALLENGE_CONSUMED, CHALLENGE_PENDING
+from services.registration_identity_service import CHALLENGE_BLOCKED, CHALLENGE_CONSUMED, CHALLENGE_PENDING
 
 
 class RegistrationOnboardingFlowTests(unittest.IsolatedAsyncioTestCase):
@@ -55,7 +55,7 @@ class RegistrationOnboardingFlowTests(unittest.IsolatedAsyncioTestCase):
             self.assertFalse(response["phone_verified"])
             self.assertFalse(response["trial_granted"])
             self.assertEqual(response["effective_plan"], "free")
-            self.assertIsNone(response.get("debug_verification_token"))
+            self.assertIsNone(response.get("debug_verification_code"))
 
             db = session_factory()
             try:
@@ -166,7 +166,8 @@ class RegistrationOnboardingFlowTests(unittest.IsolatedAsyncioTestCase):
 
                 confirm_response = await auth.registration_confirm_route(
                     RegistrationConfirmRequestSchema(
-                        token=start_response["debug_verification_token"],
+                        challenge_id=start_response["challenge_id"],
+                        code=start_response["debug_verification_code"],
                     )
                 )
 
@@ -218,7 +219,10 @@ class RegistrationOnboardingFlowTests(unittest.IsolatedAsyncioTestCase):
                     )
                 ))
                 await auth.registration_confirm_route(
-                    RegistrationConfirmRequestSchema(token=first_start["debug_verification_token"])
+                    RegistrationConfirmRequestSchema(
+                        challenge_id=first_start["challenge_id"],
+                        code=first_start["debug_verification_code"],
+                    )
                 )
 
                 second_start = self._response_json(await auth.registration_start_route(
@@ -230,7 +234,10 @@ class RegistrationOnboardingFlowTests(unittest.IsolatedAsyncioTestCase):
                     )
                 ))
                 second_confirm = await auth.registration_confirm_route(
-                    RegistrationConfirmRequestSchema(token=second_start["debug_verification_token"])
+                    RegistrationConfirmRequestSchema(
+                        challenge_id=second_start["challenge_id"],
+                        code=second_start["debug_verification_code"],
+                    )
                 )
 
             self.assertTrue(second_confirm["success"])
@@ -327,8 +334,149 @@ class RegistrationOnboardingFlowTests(unittest.IsolatedAsyncioTestCase):
                     )
                 ))
 
-            self.assertIsNone(disabled_response.get("debug_verification_token"))
-            self.assertIsNotNone(enabled_response.get("debug_verification_token"))
+            self.assertIsNone(disabled_response.get("debug_verification_code"))
+            self.assertIsNotNone(enabled_response.get("debug_verification_code"))
+
+    async def test_registration_code_supports_leading_zero_and_is_hashed_in_db(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            session_factory = self._create_session_factory(Path(tmpdir) / "registration.db")
+            fixed_now = datetime(2026, 1, 1, 12, 0, 0)
+
+            with mock.patch.object(onboarding, "SessionLocal", session_factory), mock.patch.object(
+                onboarding.secrets,
+                "randbelow",
+                return_value=4271,
+            ), mock.patch.object(
+                onboarding,
+                "_utcnow",
+                return_value=fixed_now,
+            ), mock.patch.dict(
+                os.environ,
+                {onboarding.LOCAL_TEST_ENV: "true"},
+                clear=True,
+            ):
+                start_response = self._response_json(await auth.registration_start_route(
+                    RegistrationStartRequestSchema(
+                        name="Leading Zero",
+                        email="leading-zero@example.com",
+                        password="Password123",
+                        phone="+380501234567",
+                    )
+                ))
+
+                confirm_response = await auth.registration_confirm_route(
+                    RegistrationConfirmRequestSchema(
+                        challenge_id=start_response["challenge_id"],
+                        code=start_response["debug_verification_code"],
+                    )
+                )
+
+            self.assertEqual(start_response["debug_verification_code"], "004271")
+            self.assertTrue(confirm_response["success"])
+
+            db = session_factory()
+            try:
+                challenge = db.query(RegistrationChallengeModel).first()
+            finally:
+                db.close()
+
+            self.assertIsNotNone(challenge)
+            assert challenge is not None
+            self.assertEqual(challenge.expires_at - fixed_now, timedelta(minutes=10))
+            self.assertNotEqual(challenge.token_hash, "004271")
+            self.assertEqual(len(challenge.token_hash), 64)
+            self.assertTrue(all(char in "0123456789abcdef" for char in challenge.token_hash))
+
+    async def test_same_code_stays_bound_to_challenge_id(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            session_factory = self._create_session_factory(Path(tmpdir) / "registration.db")
+
+            with mock.patch.object(onboarding, "SessionLocal", session_factory), mock.patch.object(
+                onboarding.secrets,
+                "randbelow",
+                side_effect=[123456, 123456],
+            ), mock.patch.dict(
+                os.environ,
+                {onboarding.LOCAL_TEST_ENV: "true"},
+                clear=True,
+            ):
+                first_start = self._response_json(await auth.registration_start_route(
+                    RegistrationStartRequestSchema(
+                        name="First Code User",
+                        email="first-code@example.com",
+                        password="Password123",
+                        phone="+380501234567",
+                    )
+                ))
+                second_start = self._response_json(await auth.registration_start_route(
+                    RegistrationStartRequestSchema(
+                        name="Second Code User",
+                        email="second-code@example.com",
+                        password="Password123",
+                        phone="+380501234568",
+                    )
+                ))
+
+                first_confirm = await auth.registration_confirm_route(
+                    RegistrationConfirmRequestSchema(
+                        challenge_id=first_start["challenge_id"],
+                        code=first_start["debug_verification_code"],
+                    )
+                )
+                second_confirm = await auth.registration_confirm_route(
+                    RegistrationConfirmRequestSchema(
+                        challenge_id=second_start["challenge_id"],
+                        code=second_start["debug_verification_code"],
+                    )
+                )
+
+            self.assertTrue(first_confirm["success"])
+            self.assertTrue(second_confirm["success"])
+            self.assertEqual(first_start["debug_verification_code"], second_start["debug_verification_code"])
+
+    async def test_wrong_code_blocks_after_five_attempts(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            session_factory = self._create_session_factory(Path(tmpdir) / "registration.db")
+
+            with mock.patch.object(onboarding, "SessionLocal", session_factory), mock.patch.object(
+                onboarding.secrets,
+                "randbelow",
+                return_value=123456,
+            ), mock.patch.dict(
+                os.environ,
+                {onboarding.LOCAL_TEST_ENV: "true"},
+                clear=True,
+            ):
+                start_response = self._response_json(await auth.registration_start_route(
+                    RegistrationStartRequestSchema(
+                        name="Blocked Attempts",
+                        email="blocked-attempts@example.com",
+                        password="Password123",
+                        phone="+380501234567",
+                    )
+                ))
+
+                wrong_attempts = []
+                for _ in range(5):
+                    wrong_attempts.append(await auth.registration_confirm_route(
+                        RegistrationConfirmRequestSchema(
+                            challenge_id=start_response["challenge_id"],
+                            code="000000",
+                        )
+                    ))
+
+            self.assertEqual(wrong_attempts[-1]["error"], "Verification code does not match challenge")
+
+            db = session_factory()
+            try:
+                challenge = db.query(RegistrationChallengeModel).first()
+            finally:
+                db.close()
+
+            self.assertIsNotNone(challenge)
+            assert challenge is not None
+            self.assertEqual(challenge.attempts_count, 5)
+            self.assertEqual(challenge.status, CHALLENGE_BLOCKED)
 
     async def test_confirm_rolls_back_on_failure_after_atomic_claim(self) -> None:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
@@ -357,7 +505,8 @@ class RegistrationOnboardingFlowTests(unittest.IsolatedAsyncioTestCase):
                     with self.assertRaises(RuntimeError):
                         await auth.registration_confirm_route(
                             RegistrationConfirmRequestSchema(
-                                token=start_response["debug_verification_token"],
+                                challenge_id=start_response["challenge_id"],
+                                code=start_response["debug_verification_code"],
                             )
                         )
             finally:
@@ -402,23 +551,26 @@ class RegistrationOnboardingFlowTests(unittest.IsolatedAsyncioTestCase):
                 ))
                 confirm_response = await auth.registration_confirm_route(
                     RegistrationConfirmRequestSchema(
-                        token=start_response["debug_verification_token"],
+                        challenge_id=start_response["challenge_id"],
+                        code=start_response["debug_verification_code"],
                     )
                 )
                 invalid_response = await auth.registration_confirm_route(
                     RegistrationConfirmRequestSchema(
-                        token="missing-token",
+                        challenge_id=start_response["challenge_id"],
+                        code="123456",
                     )
                 )
                 consumed_response = await auth.registration_confirm_route(
                     RegistrationConfirmRequestSchema(
-                        token=start_response["debug_verification_token"],
+                        challenge_id=start_response["challenge_id"],
+                        code=start_response["debug_verification_code"],
                     )
                 )
 
             self.assertTrue(confirm_response["success"])
             self.assertFalse(invalid_response["success"])
-            self.assertEqual(invalid_response["error"], "Challenge not found")
+            self.assertEqual(invalid_response["error"], "Challenge is consumed")
             self.assertFalse(consumed_response["success"])
             self.assertEqual(consumed_response["error"], "Challenge is consumed")
 
@@ -477,8 +629,9 @@ class RegistrationOnboardingHttpTests(unittest.TestCase):
                     self.assertEqual(start_response.status_code, 200)
                     start_payload = start_response.json()
                     self.assertTrue(start_payload["success"])
+                    self.assertNotIn("user_id", start_payload)
                     self.assertEqual(start_payload["registration_status"], onboarding.REGISTRATION_STATUS_PENDING_PHONE)
-                    self.assertIn("debug_verification_token", start_payload)
+                    self.assertIn("debug_verification_code", start_payload)
 
                     duplicate_response = client.post(
                         "/auth/registration/start",
@@ -505,7 +658,8 @@ class RegistrationOnboardingHttpTests(unittest.TestCase):
                     confirm_response = client.post(
                         "/auth/registration/confirm",
                         json={
-                            "token": start_payload["debug_verification_token"],
+                            "challenge_id": start_payload["challenge_id"],
+                            "code": start_payload["debug_verification_code"],
                         },
                     )
                     self.assertEqual(confirm_response.status_code, 200)
@@ -673,17 +827,19 @@ class RegistrationOnboardingHttpTests(unittest.TestCase):
                         },
                     )
                     self.assertEqual(start_response.status_code, 200)
-                    token = start_response.json()["debug_verification_token"]
+                    challenge_id = start_response.json()["challenge_id"]
+                    code = start_response.json()["debug_verification_code"]
 
                     with mock.patch.object(
                         onboarding,
                         "_utcnow",
-                        return_value=datetime.utcnow() + timedelta(days=2),
+                        return_value=datetime.utcnow() + timedelta(minutes=11),
                     ):
                         confirm_response = client.post(
                             "/auth/registration/confirm",
                             json={
-                                "token": token,
+                                "challenge_id": challenge_id,
+                                "code": code,
                             },
                         )
 

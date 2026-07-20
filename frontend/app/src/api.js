@@ -75,13 +75,17 @@ export async function login(email, password) {
   });
 }
 
-export async function register(email, password) {
-  return request("/auth/register", {
+export async function startRegistration(payload) {
+  return request("/auth/registration/start", {
     method: "POST",
-    body: JSON.stringify({
-      email,
-      password,
-    }),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function confirmRegistration(payload) {
+  return request("/auth/registration/confirm", {
+    method: "POST",
+    body: JSON.stringify(payload),
   });
 }
 

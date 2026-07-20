@@ -341,7 +341,8 @@ async def registration_confirm_route(
     payload: RegistrationConfirmRequestSchema,
 ):
     return confirm_pending_phone_registration(
-        token=payload.token,
+        challenge_id=payload.challenge_id,
+        code=payload.code,
     )
 
 

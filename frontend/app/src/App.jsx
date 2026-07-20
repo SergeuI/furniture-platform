@@ -41,6 +41,7 @@ import {
 } from "../../shared/trialStatus.js";
 
 import {
+  confirmRegistration,
   changeOwnPassword,
   confirmProjectScan,
   createMyEmailChangeRequest,
@@ -57,9 +58,9 @@ import {
   listProjectScans,
   listProjects,
   login,
-  register,
   requestPasswordReset,
   scanProjectFile,
+  startRegistration,
   updateMyProfile,
   updateProjectPartEdges,
   updateProjectPartMachining,
@@ -79,6 +80,62 @@ const TELEGRAM_BOT_URL =
 const YOUTUBE_CHANNEL_URL = import.meta.env.VITE_YOUTUBE_CHANNEL_URL || "https://www.youtube.com/";
 const ADMIN_TOKEN_HASH_KEY = "mproject_token";
 const ADMIN_LOGOUT_HASH_KEY = "mproject_logout";
+const REGISTRATION_PASSWORD_MIN_LENGTH = 8;
+const REGISTRATION_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const REGISTRATION_PHONE_PATTERN = /^\+\d{8,15}$/;
+
+
+function normalizeRegistrationPhoneInput(value) {
+  return String(value || "").replace(/[\s().-]+/g, "").trim();
+}
+
+
+function isValidRegistrationEmail(value) {
+  return REGISTRATION_EMAIL_PATTERN.test(String(value || "").trim());
+}
+
+
+function isValidRegistrationPassword(value) {
+  return String(value || "").length >= REGISTRATION_PASSWORD_MIN_LENGTH;
+}
+
+
+function isValidRegistrationPhone(value) {
+  return REGISTRATION_PHONE_PATTERN.test(normalizeRegistrationPhoneInput(value));
+}
+
+
+function maskRegistrationPhone(value) {
+  const normalized = normalizeRegistrationPhoneInput(value);
+  if (!normalized) {
+    return "";
+  }
+
+  if (normalized.length <= 5) {
+    return normalized;
+  }
+
+  const visiblePrefix = normalized.slice(0, 4);
+  const visibleSuffix = normalized.slice(-3);
+  const hiddenCount = Math.max(normalized.length - visiblePrefix.length - visibleSuffix.length, 0);
+
+  return `${visiblePrefix}${"•".repeat(hiddenCount)}${visibleSuffix}`;
+}
+
+
+function normalizeRegistrationCodeInput(value) {
+  return String(value || "").replace(/\D+/g, "").slice(0, 6);
+}
+
+
+function formatRegistrationCodeDisplay(value) {
+  const normalized = normalizeRegistrationCodeInput(value);
+  if (normalized.length <= 3) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, 3)} ${normalized.slice(3)}`;
+}
 
 const TARIFF_CONTENT = {
   uk: {
@@ -692,6 +749,56 @@ const TRANSLATIONS = {
     width: "Ширина",
   },
 };
+
+Object.assign(TRANSLATIONS.en, {
+  registrationBack: "Back",
+  registrationCode: "Verification code",
+  registrationCodeAutofilled: "Local test code created and inserted automatically",
+  registrationCodeCopied: "Confirmation code copied",
+  registrationCodeCreated: "Code created. Continue with confirmation.",
+  registrationCodeHint: "Enter the 6-digit code.",
+  registrationCompleteFree: "Registration complete. Active plan: Free.",
+  registrationCompleteTrial: "Registration complete. Full access activated for 7 days.",
+  registrationContinue: "Continue",
+  registrationEmailInvalid: "Enter a valid email address.",
+  registrationLocalCodeHint: "This block is available only in local test mode.",
+  registrationLocalCodeTitle: "Local test code",
+  registrationName: "Name",
+  registrationPasswordTooShort: "Password must be at least 8 characters long.",
+  registrationPhone: "Phone number",
+  registrationPhoneInvalid: "Enter a phone number in international format, for example +380XXXXXXXXX.",
+  registrationRequestCode: "Get code",
+  registrationStepOne: "Step 1 of 3",
+  registrationStepTwo: "Step 2 of 3",
+  registrationStepThree: "Step 3 of 3",
+  registrationUseLocalCode: "Use code",
+  registrationVerifyPhone: "Verify code",
+});
+
+Object.assign(TRANSLATIONS.uk, {
+  registrationBack: "Назад",
+  registrationCode: "Код підтвердження",
+  registrationCodeAutofilled: "Локальний тестовий код створено та підставлено автоматично",
+  registrationCodeCopied: "Код підтвердження скопійовано",
+  registrationCodeCreated: "Код створено. Переходьте до підтвердження.",
+  registrationCodeHint: "Введіть 6-значний код.",
+  registrationCompleteFree: "Реєстрацію завершено. Активовано тариф Free.",
+  registrationCompleteTrial: "Реєстрацію завершено. Повний доступ активовано на 7 днів.",
+  registrationContinue: "Продовжити",
+  registrationEmailInvalid: "Введіть коректний email.",
+  registrationLocalCodeHint: "Цей блок доступний тільки в локальному тестовому режимі.",
+  registrationLocalCodeTitle: "Локальний тестовий код",
+  registrationName: "Ім'я",
+  registrationPasswordTooShort: "Пароль має містити щонайменше 8 символів.",
+  registrationPhone: "Номер телефону",
+  registrationPhoneInvalid: "Введіть номер у міжнародному форматі, наприклад +380XXXXXXXXX.",
+  registrationRequestCode: "Отримати код",
+  registrationStepOne: "Крок 1 з 3",
+  registrationStepTwo: "Крок 2 з 3",
+  registrationStepThree: "Крок 3 з 3",
+  registrationUseLocalCode: "Підставити код",
+  registrationVerifyPhone: "Підтвердити код",
+});
 
 Object.assign(TRANSLATIONS.en, {
   clearEdge: "Clear edge",
@@ -2223,11 +2330,17 @@ export default function App() {
   const [showOwnCurrentPassword, setShowOwnCurrentPassword] = useState(false);
   const [showOwnNewPassword, setShowOwnNewPassword] = useState(false);
   const [resetPasswordEmail, setResetPasswordEmail] = useState("");
+  const [registrationStep, setRegistrationStep] = useState(1);
+  const [registrationChallengeId, setRegistrationChallengeId] = useState(null);
   const [registerForm, setRegisterForm] = useState({
+    name: "",
     email: "",
     password: "",
     confirmPassword: "",
+    phone: "",
+    confirmationCode: "",
   });
+  const [registrationStartResponse, setRegistrationStartResponse] = useState(null);
   const [publicOverview, setPublicOverview] = useState({
     registration_enabled: true,
     stats: {
@@ -2624,6 +2737,35 @@ export default function App() {
     setLanguage(nextLanguage);
   }
 
+  function resetRegistrationFlow(prefillEmail = "") {
+    setRegistrationStep(1);
+    setRegistrationStartResponse(null);
+    setRegistrationChallengeId(null);
+    setRegisterForm({
+      name: "",
+      email: prefillEmail,
+      password: "",
+      confirmPassword: "",
+      phone: "",
+      confirmationCode: "",
+    });
+    setShowRegisterPassword(false);
+  }
+
+  async function copyRegistrationCode(code) {
+    const text = String(code || "").trim();
+    if (!text || !navigator?.clipboard?.writeText) {
+      return false;
+    }
+
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   function scrollToAuthPanel() {
     setAuthModalOpen(true);
   }
@@ -2782,32 +2924,108 @@ export default function App() {
   async function handleRegister(event) {
     event.preventDefault();
 
-    if (registerForm.password !== registerForm.confirmPassword) {
-      setStatus({ message: t.passwordsDoNotMatch, tone: "error" });
+    if (registrationStep === 1) {
+      if (!isValidRegistrationEmail(registerForm.email)) {
+        setStatus({ message: t.registrationEmailInvalid, tone: "error" });
+        return;
+      }
+
+      if (!isValidRegistrationPassword(registerForm.password)) {
+        setStatus({ message: t.registrationPasswordTooShort, tone: "error" });
+        return;
+      }
+
+      if (registerForm.password !== registerForm.confirmPassword) {
+        setStatus({ message: t.passwordsDoNotMatch, tone: "error" });
+        return;
+      }
+
+      setRegistrationStep(2);
+      setStatus("");
       return;
     }
 
-    setLoading(true);
-    const result = await register(registerForm.email, registerForm.password);
-    setLoading(false);
+    if (registrationStep === 2) {
+      if (!isValidRegistrationPhone(registerForm.phone)) {
+        setStatus({ message: t.registrationPhoneInvalid, tone: "error" });
+        return;
+      }
 
-    if (!result.success) {
-      setStatus({ message: result.error || t.registrationFailed, tone: "error" });
+      setLoading(true);
+      const result = await startRegistration({
+        name: registerForm.name.trim(),
+        email: registerForm.email.trim(),
+        password: registerForm.password,
+        phone: registerForm.phone.trim(),
+      });
+      setLoading(false);
+
+      if (!result.success) {
+        setStatus({ message: result.error || t.registrationFailed, tone: "error" });
+        return;
+      }
+
+      setRegistrationStartResponse(result);
+      setRegistrationChallengeId(result.challenge_id || null);
+      setRegisterForm((current) => ({
+        ...current,
+        confirmationCode: result.debug_verification_code || "",
+      }));
+      setRegistrationStep(3);
+      setStatus(
+        result.debug_verification_code
+          ? { message: t.registrationCodeAutofilled, tone: "success" }
+          : { message: t.registrationCodeCreated, tone: "info" },
+      );
       return;
     }
 
-    localStorage.setItem(TOKEN_STORAGE_KEY, result.access_token);
-    setToken(result.access_token);
-    setUser(result.user);
-    setAuthModalOpen(false);
-    setPublicProfileMenuOpen(false);
-    setWorkspaceOpen(false);
-    setRegisterForm({
-      email: "",
-      password: "",
-      confirmPassword: "",
-    });
-    setStatus({ message: t.landingRegistrationSuccess, tone: "success" });
+    if (registrationStep === 3) {
+      const confirmationCode = normalizeRegistrationCodeInput(registerForm.confirmationCode);
+      if (!confirmationCode) {
+        setStatus({ message: t.registrationCodeHint, tone: "error" });
+        return;
+      }
+
+      if (!registrationChallengeId) {
+        setStatus({ message: t.registrationFailed, tone: "error" });
+        return;
+      }
+
+      setLoading(true);
+      const result = await confirmRegistration({
+        challenge_id: registrationChallengeId,
+        code: confirmationCode,
+      });
+      setLoading(false);
+
+      if (!result.success) {
+        setStatus({ message: result.error || t.registrationFailed, tone: "error" });
+        if (
+          result.error === "Challenge expired" ||
+          result.error === "Challenge not found" ||
+          result.error === "Challenge is consumed" ||
+          result.error === "Challenge is blocked" ||
+          result.error === "User not found" ||
+          result.error === "User registration is not pending"
+        ) {
+          resetRegistrationFlow(registerForm.email.trim());
+        }
+        return;
+      }
+
+      const nextEmail = registerForm.email.trim();
+      resetRegistrationFlow(nextEmail);
+      setEmail(nextEmail);
+      setPassword("");
+      setAuthMode("login");
+      setStatus({
+        message: result.trial_granted
+          ? t.registrationCompleteTrial
+          : t.registrationCompleteFree,
+        tone: "success",
+      });
+    }
   }
 
   async function handlePasswordResetRequest(event) {
@@ -2848,6 +3066,7 @@ export default function App() {
     });
     setShowOwnCurrentPassword(false);
     setShowOwnNewPassword(false);
+    resetRegistrationFlow();
     setProjects([]);
     setSelectedProject(null);
     setBomItems([]);
@@ -3741,6 +3960,7 @@ export default function App() {
                         window.open(adminUrl, "_blank", "noopener,noreferrer");
                         return;
                       }
+                      resetRegistrationFlow(email.trim());
                       setAuthMode("register");
                       setAuthModalOpen(true);
                     }}
@@ -3923,6 +4143,7 @@ export default function App() {
             className="public-auth-modal"
             onMouseDown={(event) => {
               if (event.target === event.currentTarget) {
+                resetRegistrationFlow();
                 setAuthModalOpen(false);
               }
             }}
@@ -3932,7 +4153,10 @@ export default function App() {
               <button
                 aria-label="Close"
                 className="public-auth-close"
-                onClick={() => setAuthModalOpen(false)}
+                onClick={() => {
+                  resetRegistrationFlow();
+                  setAuthModalOpen(false);
+                }}
                 type="button"
               >
                 <X size={18} />
@@ -3948,6 +4172,7 @@ export default function App() {
                   onClick={() => {
                     setStatus("");
                     setAuthMode("login");
+                    resetRegistrationFlow();
                   }}
                   type="button"
                 >
@@ -3958,6 +4183,7 @@ export default function App() {
                   onClick={() => {
                     setStatus("");
                     setAuthMode("register");
+                    resetRegistrationFlow(email.trim());
                   }}
                   type="button"
                 >
@@ -4021,70 +4247,229 @@ export default function App() {
                 </form>
               ) : authMode === "register" ? (
                 <form className="login-panel public-login-panel" onSubmit={handleRegister}>
-                  <label>
-                    {t.email}
-                    <input
-                      autoComplete="email"
-                      onChange={(event) =>
-                        setRegisterForm((current) => ({
-                          ...current,
-                          email: event.target.value,
-                        }))
-                      }
-                      required
-                      type="email"
-                      value={registerForm.email}
-                    />
-                  </label>
+                  <div className="public-auth-step-indicator">
+                    <span>
+                      {registrationStep === 1
+                        ? t.registrationStepOne
+                        : registrationStep === 2
+                          ? t.registrationStepTwo
+                          : t.registrationStepThree}
+                    </span>
+                  </div>
 
-                  <label>
-                    {t.password}
-                    <span className="public-password-field">
-                      <input
-                        autoComplete="new-password"
-                        minLength={8}
-                        onChange={(event) =>
-                          setRegisterForm((current) => ({
-                            ...current,
-                            password: event.target.value,
-                          }))
-                        }
-                        required
-                        type={showRegisterPassword ? "text" : "password"}
-                        value={registerForm.password}
-                      />
+                  {registrationStep === 1 ? (
+                    <>
+                      <label>
+                        {t.registrationName}
+                        <input
+                          autoComplete="name"
+                          onChange={(event) =>
+                            setRegisterForm((current) => ({
+                              ...current,
+                              name: event.target.value,
+                            }))
+                          }
+                          required
+                          type="text"
+                          value={registerForm.name}
+                        />
+                      </label>
+
+                      <label>
+                        {t.email}
+                        <input
+                          autoComplete="email"
+                          onChange={(event) =>
+                            setRegisterForm((current) => ({
+                              ...current,
+                              email: event.target.value,
+                            }))
+                          }
+                          required
+                          type="email"
+                          value={registerForm.email}
+                        />
+                      </label>
+
+                      <label>
+                        {t.password}
+                        <span className="public-password-field">
+                          <input
+                            autoComplete="new-password"
+                            minLength={8}
+                            onChange={(event) =>
+                              setRegisterForm((current) => ({
+                                ...current,
+                                password: event.target.value,
+                              }))
+                            }
+                            required
+                            type={showRegisterPassword ? "text" : "password"}
+                            value={registerForm.password}
+                          />
+                          <button
+                            aria-label={t.showPassword}
+                            className="public-password-toggle"
+                            onClick={() => setShowRegisterPassword((current) => !current)}
+                            type="button"
+                          >
+                            <Eye size={17} />
+                          </button>
+                        </span>
+                      </label>
+
+                      <label>
+                        {t.confirmPassword}
+                        <input
+                          autoComplete="new-password"
+                          minLength={8}
+                          onChange={(event) =>
+                            setRegisterForm((current) => ({
+                              ...current,
+                              confirmPassword: event.target.value,
+                            }))
+                          }
+                          required
+                          type={showRegisterPassword ? "text" : "password"}
+                          value={registerForm.confirmPassword}
+                        />
+                      </label>
+                    </>
+                  ) : registrationStep === 2 ? (
+                    <>
+                      <p className="public-auth-step-copy">
+                        {language === "uk"
+                          ? "Номер потрібен для захисту пробного періоду та відновлення доступу."
+                          : "The phone number is needed to protect the trial period and restore access."}
+                      </p>
+
+                      <label>
+                        {t.registrationPhone}
+                        <input
+                          autoComplete="tel"
+                          inputMode="tel"
+                          onChange={(event) =>
+                            setRegisterForm((current) => ({
+                              ...current,
+                              phone: event.target.value,
+                            }))
+                          }
+                          placeholder="+380XXXXXXXXX"
+                          required
+                          type="tel"
+                          value={registerForm.phone}
+                        />
+                      </label>
+                    </>
+                  ) : (
+                    <>
+                      <p className="public-auth-step-copy">
+                        {language === "uk"
+                          ? `Підтвердіть номер ${maskRegistrationPhone(registerForm.phone)}.`
+                          : `Confirm ${maskRegistrationPhone(registerForm.phone)}.`}
+                      </p>
+
+                      <label>
+                        {t.registrationCode}
+                        <input
+                          autoComplete="one-time-code"
+                          inputMode="numeric"
+                          maxLength={6}
+                          pattern="[0-9]*"
+                          onChange={(event) =>
+                            setRegisterForm((current) => ({
+                              ...current,
+                              confirmationCode: normalizeRegistrationCodeInput(event.target.value),
+                            }))
+                          }
+                          required
+                          type="text"
+                          value={registerForm.confirmationCode}
+                        />
+                      </label>
+
+                      {registrationStartResponse?.debug_verification_code ? (
+                        <div className="public-local-code-box">
+                          <div className="public-local-code-copy">
+                            <strong>{t.registrationLocalCodeTitle}</strong>
+                            <p>{t.registrationLocalCodeHint}</p>
+                          </div>
+                          <code className="public-local-code-value">
+                            {formatRegistrationCodeDisplay(registrationStartResponse.debug_verification_code)}
+                          </code>
+                          <div className="public-auth-secondary-actions">
+                            <button
+                              className="public-auth-text-button"
+                              onClick={async () => {
+                                const copied = await copyRegistrationCode(
+                                  registrationStartResponse.debug_verification_code,
+                                );
+                                setStatus({
+                                  message: copied
+                                    ? t.registrationCodeCopied
+                                    : t.registrationFailed,
+                                  tone: copied ? "success" : "error",
+                                });
+                              }}
+                              type="button"
+                            >
+                              {language === "uk" ? "Скопіювати код" : "Copy code"}
+                            </button>
+                            <button
+                              className="public-auth-text-button"
+                              onClick={() => {
+                                setRegisterForm((current) => ({
+                                  ...current,
+                                  confirmationCode: normalizeRegistrationCodeInput(
+                                    registrationStartResponse.debug_verification_code || "",
+                                  ),
+                                }));
+                                setStatus({ message: t.registrationCodeAutofilled, tone: "success" });
+                              }}
+                              type="button"
+                            >
+                              {t.registrationUseLocalCode}
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="public-auth-step-copy">{t.registrationCodeCreated}</p>
+                      )}
+                    </>
+                  )}
+
+                  <div className="public-auth-secondary-actions">
+                    {registrationStep > 1 ? (
                       <button
-                        aria-label={t.showPassword}
-                        className="public-password-toggle"
-                        onClick={() => setShowRegisterPassword((current) => !current)}
+                        className="public-auth-text-button"
+                        onClick={() => {
+                          setStatus("");
+                          setRegistrationStep((current) => Math.max(current - 1, 1));
+                        }}
                         type="button"
                       >
-                        <Eye size={17} />
+                        {t.registrationBack}
                       </button>
-                    </span>
-                  </label>
-
-                  <label>
-                    {t.confirmPassword}
-                    <input
-                      autoComplete="new-password"
-                      minLength={8}
-                      onChange={(event) =>
-                        setRegisterForm((current) => ({
-                          ...current,
-                          confirmPassword: event.target.value,
-                        }))
-                      }
-                      required
-                      type={showRegisterPassword ? "text" : "password"}
-                      value={registerForm.confirmPassword}
-                    />
-                  </label>
-
-                  <button className="primary-button" disabled={loading} type="submit">
-                    <UserPlus size={18} />
-                    {t.landingRegisterAction}
-                  </button>
+                    ) : null}
+                    <button className="primary-button" disabled={loading} type="submit">
+                      {registrationStep === 1 ? (
+                        <>
+                          <ArrowRight size={18} />
+                          {t.registrationContinue}
+                        </>
+                      ) : registrationStep === 2 ? (
+                        <>
+                          <UserPlus size={18} />
+                          {t.registrationRequestCode}
+                        </>
+                      ) : (
+                        <>
+                          <BadgeCheck size={18} />
+                          {t.registrationVerifyPhone}
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </form>
               ) : (
                 <form className="login-panel public-login-panel" onSubmit={handlePasswordResetRequest}>
