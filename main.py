@@ -99,6 +99,7 @@ async def main():
         "Bot startup complete, polling started"
     )
     logging.info("BOT_STATUS: online")
+    await bot.delete_webhook(drop_pending_updates=True)
     while True:
         try:
             await dp.start_polling(bot)

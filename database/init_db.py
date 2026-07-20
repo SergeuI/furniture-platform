@@ -449,6 +449,7 @@ def upgrade_sqlite_schema():
                 user_id VARCHAR,
                 channel VARCHAR NOT NULL,
                 token_hash VARCHAR(64) NOT NULL,
+                status_token_hash VARCHAR(64),
                 expected_identity_type VARCHAR NOT NULL,
                 expected_identity_value_normalized VARCHAR NOT NULL,
                 status VARCHAR NOT NULL DEFAULT 'pending',
@@ -459,7 +460,8 @@ def upgrade_sqlite_schema():
                 verified_at DATETIME,
                 consumed_at DATETIME,
                 updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(token_hash)
+                UNIQUE(token_hash),
+                UNIQUE(status_token_hash)
             )
             """
         )

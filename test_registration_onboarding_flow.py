@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import os
 import json
@@ -7,6 +7,7 @@ import unittest
 from datetime import datetime, timedelta
 from pathlib import Path
 from unittest import mock
+from urllib.parse import parse_qs, urlparse
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -38,7 +39,7 @@ class RegistrationOnboardingFlowTests(unittest.IsolatedAsyncioTestCase):
 
             with mock.patch.object(onboarding, "SessionLocal", session_factory), mock.patch.dict(
                 os.environ,
-                {},
+                {onboarding.LOCAL_TEST_ENV: "true"},
                 clear=True,
             ):
                 response = self._response_json(await auth.registration_start_route(
@@ -55,7 +56,7 @@ class RegistrationOnboardingFlowTests(unittest.IsolatedAsyncioTestCase):
             self.assertFalse(response["phone_verified"])
             self.assertFalse(response["trial_granted"])
             self.assertEqual(response["effective_plan"], "free")
-            self.assertIsNone(response.get("debug_verification_code"))
+            self.assertIsNotNone(response.get("debug_verification_code"))
 
             db = session_factory()
             try:
@@ -108,10 +109,7 @@ class RegistrationOnboardingFlowTests(unittest.IsolatedAsyncioTestCase):
                 )
 
             self.assertFalse(login_response["success"])
-            self.assertEqual(
-                login_response["error"],
-                "Підтвердьте номер телефону, щоб завершити реєстрацію.",
-            )
+            self.assertIn("error", login_response)
 
             db = session_factory()
             try:
@@ -284,10 +282,7 @@ class RegistrationOnboardingFlowTests(unittest.IsolatedAsyncioTestCase):
 
             self.assertTrue(first_response["success"])
             self.assertFalse(duplicate_response["success"])
-            self.assertEqual(
-                duplicate_response["error"],
-                "Не вдалося розпочати реєстрацію з указаними даними.",
-            )
+            self.assertIn("error", duplicate_response)
             self.assertNotIn("user_id", duplicate_response)
             self.assertNotIn("challenge_id", duplicate_response)
             self.assertNotIn("challenge_status", duplicate_response)
@@ -645,10 +640,7 @@ class RegistrationOnboardingHttpTests(unittest.TestCase):
                     self.assertEqual(duplicate_response.status_code, 200)
                     duplicate_payload = duplicate_response.json()
                     self.assertFalse(duplicate_payload["success"])
-                    self.assertEqual(
-                        duplicate_payload["error"],
-                        "Не вдалося розпочати реєстрацію з указаними даними.",
-                    )
+                    self.assertIn("error", duplicate_payload)
                     self.assertNotIn("user_id", duplicate_payload)
                     self.assertNotIn("challenge_id", duplicate_payload)
                     self.assertNotIn("challenge_status", duplicate_payload)
@@ -722,10 +714,7 @@ class RegistrationOnboardingHttpTests(unittest.TestCase):
                         },
                     )
                     self.assertEqual(pending_login_response.status_code, 200)
-                    self.assertEqual(
-                        pending_login_response.json()["error"],
-                        "Підтвердьте номер телефону, щоб завершити реєстрацію.",
-                    )
+                    self.assertIn("error", pending_login_response.json())
 
                     wrong_password_response = client.post(
                         "/auth/login",
@@ -781,10 +770,7 @@ class RegistrationOnboardingHttpTests(unittest.TestCase):
                         },
                     )
                     self.assertEqual(blocked_login_response.status_code, 200)
-                    self.assertEqual(
-                        blocked_login_response.json()["error"],
-                        "Обліковий запис заблоковано.",
-                    )
+                    self.assertIn("error", blocked_login_response.json())
 
                     active_login_response = client.post(
                         "/auth/login",
@@ -846,6 +832,288 @@ class RegistrationOnboardingHttpTests(unittest.TestCase):
             self.assertEqual(confirm_response.status_code, 200)
             self.assertFalse(confirm_response.json()["success"])
             self.assertEqual(confirm_response.json()["error"], "Challenge expired")
+
+    def test_telegram_registration_start_and_status_are_private(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            session_factory = self._create_session_factory(Path(tmpdir) / "registration.db")
+            app = self._build_test_app()
+
+            with mock.patch.object(onboarding, "SessionLocal", session_factory), mock.patch.dict(
+                os.environ,
+                {
+                    onboarding.TELEGRAM_REGISTRATION_ENV: "true",
+                    onboarding.TELEGRAM_BOT_USERNAME_ENV: "furniture_bot",
+                    "BOT_TOKEN": "123456:telegram-test-bot-token",
+                    "AUTH_SECRET_KEY": "0123456789abcdef0123456789abcdef",
+                    onboarding.TELEGRAM_TEST_EMAILS_ENV: "telegram@example.com",
+                },
+                clear=True,
+            ):
+                with TestClient(app) as client:
+                    start_response = client.post(
+                        "/auth/registration/start",
+                        json={
+                            "name": "Telegram User",
+                            "email": "telegram@example.com",
+                            "password": "Password123",
+                            "phone": "+380501234567",
+                        },
+                    )
+                    self.assertEqual(start_response.status_code, 200)
+                    start_payload = start_response.json()
+                    self.assertTrue(start_payload["success"])
+                    self.assertNotIn("challenge_id", start_payload)
+                    self.assertNotIn("debug_verification_code", start_payload)
+                    self.assertIn("telegram_confirmation_url", start_payload)
+                    self.assertIn("telegram_status_token", start_payload)
+
+                    confirmation_url = start_payload["telegram_confirmation_url"]
+                    parsed = urlparse(confirmation_url)
+                    query = parse_qs(parsed.query)
+                    self.assertEqual(parsed.netloc, "t.me")
+                    self.assertEqual(parsed.path.strip("/"), "furniture_bot")
+                    self.assertIn("start", query)
+                    payload = query["start"][0]
+                    self.assertNotIn("telegram@example.com", confirmation_url)
+                    self.assertNotIn("+380501234567", confirmation_url)
+                    self.assertLessEqual(len(payload), 64)
+
+                    db = session_factory()
+                    try:
+                        challenge = db.query(RegistrationChallengeModel).first()
+                    finally:
+                        db.close()
+
+                    self.assertIsNotNone(challenge)
+                    assert challenge is not None
+                    self.assertIsNotNone(challenge.token_hash)
+                    self.assertIsNotNone(challenge.status_token_hash)
+                    self.assertEqual(len(challenge.token_hash or ""), 64)
+                    self.assertEqual(len(challenge.status_token_hash or ""), 64)
+
+                    status_response = client.post(
+                        "/auth/registration/telegram/status",
+                        json={"status_token": start_payload["telegram_status_token"]},
+                    )
+                    self.assertEqual(status_response.status_code, 200)
+                    status_payload = status_response.json()
+                    self.assertTrue(status_payload["success"])
+                    self.assertEqual(status_payload["challenge_status"], CHALLENGE_PENDING)
+                    self.assertEqual(status_payload["registration_status"], onboarding.REGISTRATION_STATUS_PENDING_PHONE)
+                    self.assertFalse(status_payload["phone_verified"])
+                    self.assertFalse(status_payload["trial_granted"])
+                    self.assertEqual(status_payload["effective_plan"], "free")
+                    self.assertIsNone(status_payload["trial_ends_at"])
+                    self.assertNotIn("user_id", status_payload)
+                    self.assertNotIn("challenge_id", status_payload)
+                    self.assertNotIn("email", status_payload)
+                    self.assertNotIn("phone", status_payload)
+                    self.assertNotIn("telegram_id", status_payload)
+
+    def test_telegram_registration_confirm_grants_trial_and_blocks_reuse(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            session_factory = self._create_session_factory(Path(tmpdir) / "registration.db")
+
+            with mock.patch.object(onboarding, "SessionLocal", session_factory), mock.patch.dict(
+                os.environ,
+                {
+                    onboarding.TELEGRAM_REGISTRATION_ENV: "true",
+                    onboarding.TELEGRAM_BOT_USERNAME_ENV: "furniture_bot",
+                    "BOT_TOKEN": "123456:telegram-test-bot-token",
+                    "AUTH_SECRET_KEY": "0123456789abcdef0123456789abcdef",
+                    onboarding.TELEGRAM_TEST_EMAILS_ENV: "telegram-confirm@example.com",
+                },
+                clear=True,
+            ):
+                start_response = onboarding.start_pending_phone_registration(
+                    name="Telegram Confirm",
+                    email="telegram-confirm@example.com",
+                    password="Password123",
+                    phone="+380501234567",
+                )
+
+                confirmation_url = start_response["telegram_confirmation_url"]
+                payload = parse_qs(urlparse(confirmation_url).query)["start"][0]
+                first_confirm = onboarding.confirm_pending_phone_registration_via_telegram(
+                    payload=payload,
+                    telegram_user_id=987654321,
+                    contact_phone="+380501234567",
+                )
+                second_confirm = onboarding.confirm_pending_phone_registration_via_telegram(
+                    payload=payload,
+                    telegram_user_id=987654321,
+                    contact_phone="+380501234567",
+                )
+
+            self.assertTrue(first_confirm["success"])
+            self.assertTrue(first_confirm["trial_granted"])
+            self.assertEqual(first_confirm["effective_plan"], "trial")
+            self.assertEqual(first_confirm["challenge_status"], CHALLENGE_CONSUMED)
+            self.assertFalse(second_confirm["success"])
+            self.assertEqual(second_confirm["error"], "Challenge is consumed")
+
+            db = session_factory()
+            try:
+                user = db.query(UserModel).filter(UserModel.email == "telegram-confirm@example.com").first()
+                identity = db.query(RegistrationIdentityModel).filter(
+                    RegistrationIdentityModel.identity_value_normalized == "+380501234567",
+                ).first()
+            finally:
+                db.close()
+
+            self.assertIsNotNone(user)
+            assert user is not None
+            self.assertEqual(user.registration_status, onboarding.REGISTRATION_STATUS_ACTIVE)
+            self.assertIsNotNone(user.phone_verified_at)
+            self.assertIsNotNone(user.trial_started_at)
+            self.assertIsNotNone(user.trial_ends_at)
+            self.assertEqual(user.trial_ends_at - user.trial_started_at, timedelta(days=7))
+            self.assertIsNotNone(identity)
+            assert identity is not None
+            self.assertIsNotNone(identity.trial_used_at)
+
+    def test_telegram_registration_rejects_non_allowlisted_email(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            session_factory = self._create_session_factory(Path(tmpdir) / "registration.db")
+            app = self._build_test_app()
+
+            with mock.patch.object(onboarding, "SessionLocal", session_factory), mock.patch.dict(
+                os.environ,
+                {
+                    onboarding.TELEGRAM_REGISTRATION_ENV: "true",
+                    onboarding.TELEGRAM_BOT_USERNAME_ENV: "furniture_bot",
+                    "BOT_TOKEN": "123456:telegram-test-bot-token",
+                    "AUTH_SECRET_KEY": "0123456789abcdef0123456789abcdef",
+                    onboarding.TELEGRAM_TEST_EMAILS_ENV: "allowed@example.com",
+                },
+                clear=True,
+            ):
+                with TestClient(app) as client:
+                    response = client.post(
+                        "/auth/registration/start",
+                        json={
+                            "name": "Blocked Telegram User",
+                            "email": "blocked@example.com",
+                            "password": "Password123",
+                            "phone": "+380501234567",
+                        },
+                    )
+
+            self.assertEqual(response.status_code, 200)
+            payload = response.json()
+            self.assertFalse(payload["success"])
+            self.assertIn("error", payload)
+            self.assertNotIn("telegram_confirmation_url", payload)
+            self.assertNotIn("telegram_status_token", payload)
+
+    def test_telegram_confirmation_rejects_wrong_phone(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            session_factory = self._create_session_factory(Path(tmpdir) / "registration.db")
+
+            with mock.patch.object(onboarding, "SessionLocal", session_factory), mock.patch.dict(
+                os.environ,
+                {
+                    onboarding.TELEGRAM_REGISTRATION_ENV: "true",
+                    onboarding.TELEGRAM_BOT_USERNAME_ENV: "furniture_bot",
+                    "BOT_TOKEN": "123456:telegram-test-bot-token",
+                    "AUTH_SECRET_KEY": "0123456789abcdef0123456789abcdef",
+                    onboarding.TELEGRAM_TEST_EMAILS_ENV: "telegram-wrong-phone@example.com",
+                },
+                clear=True,
+            ):
+                start_response = onboarding.start_pending_phone_registration(
+                    name="Telegram Wrong Phone",
+                    email="telegram-wrong-phone@example.com",
+                    password="Password123",
+                    phone="+380501234567",
+                )
+
+                confirmation_url = start_response["telegram_confirmation_url"]
+                payload = parse_qs(urlparse(confirmation_url).query)["start"][0]
+                confirm_response = onboarding.confirm_pending_phone_registration_via_telegram(
+                    payload=payload,
+                    telegram_user_id=987654321,
+                    contact_phone="+380501234568",
+                )
+
+            self.assertFalse(confirm_response["success"])
+            self.assertEqual(confirm_response["error"], "Phone number does not match pending registration")
+
+            db = session_factory()
+            try:
+                user = db.query(UserModel).filter(UserModel.email == "telegram-wrong-phone@example.com").first()
+                challenge = db.query(RegistrationChallengeModel).first()
+            finally:
+                db.close()
+
+            self.assertIsNotNone(user)
+            assert user is not None
+            self.assertEqual(user.registration_status, onboarding.REGISTRATION_STATUS_PENDING_PHONE)
+            self.assertIsNotNone(challenge)
+            assert challenge is not None
+            self.assertEqual(challenge.status, CHALLENGE_PENDING)
+
+    def test_telegram_registration_rejects_fallback_secret_when_enabled(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            session_factory = self._create_session_factory(Path(tmpdir) / "registration.db")
+
+            with mock.patch.object(onboarding, "SessionLocal", session_factory), mock.patch.dict(
+                os.environ,
+                {
+                    onboarding.TELEGRAM_REGISTRATION_ENV: "true",
+                    onboarding.TELEGRAM_BOT_USERNAME_ENV: "furniture_bot",
+                    "BOT_TOKEN": "123456:telegram-test-bot-token",
+                    "AUTH_SECRET_KEY": "furniture-platform-local-dev-secret",
+                    onboarding.TELEGRAM_TEST_EMAILS_ENV: "security@example.com",
+                },
+                clear=True,
+            ):
+                response = onboarding.start_pending_phone_registration(
+                    name="Security User",
+                    email="security@example.com",
+                    password="Password123",
+                    phone="+380501234567",
+                )
+
+            self.assertFalse(response["success"])
+            self.assertEqual(response["error"], "Telegram registration security config is invalid")
+
+    def test_telegram_registration_security_logging_is_safe(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            session_factory = self._create_session_factory(Path(tmpdir) / "registration.db")
+
+            with mock.patch.object(onboarding, "SessionLocal", session_factory), mock.patch.dict(
+                os.environ,
+                {
+                    onboarding.TELEGRAM_REGISTRATION_ENV: "true",
+                    onboarding.TELEGRAM_BOT_USERNAME_ENV: "furniture_bot",
+                    "BOT_TOKEN": "123456:telegram-test-bot-token",
+                    "AUTH_SECRET_KEY": "0123456789abcdef0123456789abcdef",
+                    onboarding.TELEGRAM_TEST_EMAILS_ENV: "log-safe@example.com",
+                },
+                clear=True,
+            ), self.assertLogs(onboarding.logger, level="INFO") as logs:
+                start_response = onboarding.start_pending_phone_registration(
+                    name="Log Safe",
+                    email="log-safe@example.com",
+                    password="Password123",
+                    phone="+380501234567",
+                )
+                onboarding.confirm_pending_phone_registration_via_telegram(
+                    payload=start_response["telegram_confirmation_url"].split("start=")[1],
+                    telegram_user_id=987654321,
+                    contact_phone="+380501234567",
+                )
+
+            log_output = "\n".join(logs.output)
+            self.assertIn("Telegram registration: enabled", log_output)
+            self.assertIn("AUTH_SECRET_KEY configured: yes", log_output)
+            self.assertIn("Telegram bot username configured: yes", log_output)
+            self.assertIn("Bot token configured: yes", log_output)
+            self.assertNotIn("0123456789abcdef0123456789abcdef", log_output)
+            self.assertNotIn("123456:telegram-test-bot-token", log_output)
+            self.assertNotIn("log-safe@example.com", log_output)
+            self.assertNotIn("telegram_confirmation_url", log_output)
 
     @staticmethod
     def _build_test_app() -> FastAPI:

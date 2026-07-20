@@ -89,6 +89,13 @@ export async function confirmRegistration(payload) {
   });
 }
 
+export async function getRegistrationTelegramStatus(payload) {
+  return request("/auth/registration/telegram/status", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function requestPasswordReset(email) {
   return request("/auth/password-reset-request", {
     method: "POST",

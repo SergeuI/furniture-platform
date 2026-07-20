@@ -229,6 +229,10 @@ class RegistrationStartResponseSchema(BaseModel):
 
     debug_verification_code: str | None = None
 
+    telegram_confirmation_url: str | None = None
+
+    telegram_status_token: str | None = None
+
     error: str | None = None
 
 
@@ -249,6 +253,33 @@ class RegistrationConfirmResponseSchema(BaseModel):
     success: bool
 
     challenge_id: int | None = None
+
+    challenge_status: str | None = None
+
+    registration_status: str | None = None
+
+    phone_verified: bool = False
+
+    trial_granted: bool = False
+
+    effective_plan: str = "free"
+
+    trial_ends_at: datetime | None = None
+
+    error: str | None = None
+
+
+class RegistrationTelegramStatusRequestSchema(BaseModel):
+
+    status_token: str = Field(
+        min_length=1,
+        max_length=128
+    )
+
+
+class RegistrationTelegramStatusResponseSchema(BaseModel):
+
+    success: bool
 
     challenge_status: str | None = None
 

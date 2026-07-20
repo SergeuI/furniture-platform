@@ -31,6 +31,9 @@ from handlers.drawers import (
 from handlers.drawer_bottoms import (
     router as drawer_bottoms_router
 )
+from handlers.registration import (
+    router as registration_router
+)
 from handlers.profile import (
     router as profile_router
 )
@@ -71,6 +74,9 @@ router.include_router(
 )
 router.include_router(
     drawer_bottoms_router
+)
+router.include_router(
+    registration_router
 )
 router.include_router(
     profile_router

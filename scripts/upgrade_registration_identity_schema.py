@@ -40,6 +40,7 @@ TABLES = {
             user_id VARCHAR,
             channel VARCHAR NOT NULL,
             token_hash VARCHAR(64) NOT NULL,
+            status_token_hash VARCHAR(64),
             expected_identity_type VARCHAR NOT NULL,
             expected_identity_value_normalized VARCHAR NOT NULL,
             status VARCHAR NOT NULL DEFAULT 'pending',
@@ -50,7 +51,8 @@ TABLES = {
             verified_at DATETIME,
             consumed_at DATETIME,
             updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(token_hash)
+            UNIQUE(token_hash),
+            UNIQUE(status_token_hash)
         )
     """,
 }
@@ -69,6 +71,7 @@ TABLE_COLUMNS = {
         "user_id": "VARCHAR",
         "channel": "VARCHAR NOT NULL",
         "token_hash": "VARCHAR(64) NOT NULL",
+        "status_token_hash": "VARCHAR(64)",
         "expected_identity_type": "VARCHAR NOT NULL",
         "expected_identity_value_normalized": "VARCHAR NOT NULL",
         "status": "VARCHAR NOT NULL DEFAULT 'pending'",
@@ -102,6 +105,10 @@ INDEXES = {
     "ix_registration_challenges_expires_at": (
         "CREATE INDEX IF NOT EXISTS ix_registration_challenges_expires_at "
         "ON registration_challenges (expires_at)"
+    ),
+    "uq_registration_challenges_status_token_hash": (
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_registration_challenges_status_token_hash "
+        "ON registration_challenges (status_token_hash)"
     ),
 }
 

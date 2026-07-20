@@ -17,6 +17,8 @@ class Form(StatesGroup):
 
     dimensions = State()
 
+    telegram_registration = State()
+
     width = State()
 
     height = State()
@@ -61,4 +63,4 @@ state_map = {
     "Form.height": "введення висоти",
     "Form.depth": "введення глибини",
     None: "головне меню"
-}    
+}

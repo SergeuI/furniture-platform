@@ -87,6 +87,10 @@ class RegistrationChallengeModel(Base):
             "token_hash",
             name="uq_registration_challenges_token_hash",
         ),
+        UniqueConstraint(
+            "status_token_hash",
+            name="uq_registration_challenges_status_token_hash",
+        ),
         Index(
             "ix_registration_challenges_user_id",
             "user_id",
@@ -120,6 +124,12 @@ class RegistrationChallengeModel(Base):
     token_hash = Column(
         String(64),
         nullable=False,
+        unique=True,
+    )
+
+    status_token_hash = Column(
+        String(64),
+        nullable=True,
         unique=True,
     )
 

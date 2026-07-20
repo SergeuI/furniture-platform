@@ -44,6 +44,8 @@ class UpgradeRegistrationIdentitySchemaTests(unittest.TestCase):
                 self.assertTrue(self._table_exists(connection, "registration_challenges"))
                 self.assertTrue(self._index_exists(connection, "ix_registration_identities_identity_type"))
                 self.assertTrue(self._index_exists(connection, "ix_registration_challenges_status"))
+                self.assertIn("status_token_hash", self._column_names(connection, "registration_challenges"))
+                self.assertTrue(self._index_exists(connection, "uq_registration_challenges_status_token_hash"))
 
                 dry_plan = upgrade_registration_identity_schema._build_plan(connection)
                 self.assertEqual(dry_plan["user_columns"], [])

@@ -26,6 +26,8 @@ from schemas.auth import (
     RegistrationConfirmResponseSchema,
     RegistrationStartRequestSchema,
     RegistrationStartResponseSchema,
+    RegistrationTelegramStatusRequestSchema,
+    RegistrationTelegramStatusResponseSchema,
     RegisterUserSchema,
     ReviewUserChangeRequestSchema,
     AdminUserDetailsResponseSchema,
@@ -84,6 +86,7 @@ from services.auth_service import (
 )
 from services.registration_onboarding_service import (
     confirm_pending_phone_registration,
+    get_telegram_registration_status,
     start_pending_phone_registration,
 )
 from services.credential_cipher import (
@@ -343,6 +346,18 @@ async def registration_confirm_route(
     return confirm_pending_phone_registration(
         challenge_id=payload.challenge_id,
         code=payload.code,
+    )
+
+
+@router.post(
+    "/registration/telegram/status",
+    response_model=RegistrationTelegramStatusResponseSchema,
+)
+async def registration_telegram_status_route(
+    payload: RegistrationTelegramStatusRequestSchema,
+):
+    return get_telegram_registration_status(
+        status_token=payload.status_token,
     )
 
 

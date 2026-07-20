@@ -45,6 +45,7 @@ import {
   changeOwnPassword,
   confirmProjectScan,
   createMyEmailChangeRequest,
+  getRegistrationTelegramStatus,
   generateProject,
   getPublicOverview,
   getCuttingExportFormats,
@@ -768,6 +769,14 @@ Object.assign(TRANSLATIONS.en, {
   registrationPhone: "Phone number",
   registrationPhoneInvalid: "Enter a phone number in international format, for example +380XXXXXXXXX.",
   registrationRequestCode: "Get code",
+  registrationTelegramConfirm: "Confirm via Telegram",
+  registrationTelegramCreated: "Telegram confirmation link created. Open Telegram to continue.",
+  registrationTelegramDescription: "Open Telegram and confirm the phone number with the button below.",
+  registrationTelegramExpired: "Telegram confirmation expired. Start registration again.",
+  registrationTelegramInstruction: "Confirm your phone number through Telegram to finish registration.",
+  registrationTelegramOpen: "Open Telegram",
+  registrationTelegramTitle: "Telegram confirmation",
+  registrationTelegramWaiting: "Waiting for Telegram confirmation...",
   registrationStepOne: "Step 1 of 3",
   registrationStepTwo: "Step 2 of 3",
   registrationStepThree: "Step 3 of 3",
@@ -793,6 +802,14 @@ Object.assign(TRANSLATIONS.uk, {
   registrationPhone: "Номер телефону",
   registrationPhoneInvalid: "Введіть номер у міжнародному форматі, наприклад +380XXXXXXXXX.",
   registrationRequestCode: "Отримати код",
+  registrationTelegramConfirm: "Підтвердити через Telegram",
+  registrationTelegramCreated: "Додано посилання для підтвердження через Telegram. Відкрийте Telegram, щоб продовжити.",
+  registrationTelegramDescription: "Відкрийте Telegram і підтвердьте номер телефону кнопкою нижче.",
+  registrationTelegramExpired: "Підтвердження Telegram застаріло. Започніть реєстрацію знову.",
+  registrationTelegramInstruction: "Підтвердіть номер через Telegram, щоб завершити реєстрацію.",
+  registrationTelegramOpen: "Відкрити Telegram",
+  registrationTelegramTitle: "Підтвердження через Telegram",
+  registrationTelegramWaiting: "Чекаємо підтвердження в Telegram...",
   registrationStepOne: "Крок 1 з 3",
   registrationStepTwo: "Крок 2 з 3",
   registrationStepThree: "Крок 3 з 3",
@@ -2332,6 +2349,10 @@ export default function App() {
   const [resetPasswordEmail, setResetPasswordEmail] = useState("");
   const [registrationStep, setRegistrationStep] = useState(1);
   const [registrationChallengeId, setRegistrationChallengeId] = useState(null);
+  const [registrationTelegramStatusToken, setRegistrationTelegramStatusToken] = useState("");
+  const [registrationTelegramConfirmationUrl, setRegistrationTelegramConfirmationUrl] = useState("");
+  const [registrationTelegramWaiting, setRegistrationTelegramWaiting] = useState(false);
+  const [registrationTelegramStartedAt, setRegistrationTelegramStartedAt] = useState(0);
   const [registerForm, setRegisterForm] = useState({
     name: "",
     email: "",
@@ -2470,6 +2491,79 @@ export default function App() {
     loadUser(token);
     return undefined;
   }, [token, trialCountdown, user?.effective_plan, user?.trial_ends_at]);
+
+  useEffect(() => {
+    if (
+      !registrationTelegramWaiting ||
+      !registrationTelegramStatusToken ||
+      !registrationTelegramConfirmationUrl
+    ) {
+      return undefined;
+    }
+
+    let cancelled = false;
+    const startedAt = registrationTelegramStartedAt || Date.now();
+    const timeoutMs = 10 * 60 * 1000;
+
+    const pollTelegramStatus = async () => {
+      if (cancelled) {
+        return;
+      }
+
+      if (Date.now() - startedAt >= timeoutMs) {
+        setStatus({ message: t.registrationTelegramExpired, tone: "error" });
+        resetRegistrationFlow(registerForm.email.trim());
+        return;
+      }
+
+      const result = await getRegistrationTelegramStatus({
+        status_token: registrationTelegramStatusToken,
+      });
+
+      if (cancelled) {
+        return;
+      }
+
+      if (!result.success) {
+        if (result.error === "Registration status not found") {
+          setStatus({ message: t.registrationTelegramExpired, tone: "error" });
+          resetRegistrationFlow(registerForm.email.trim());
+        }
+        return;
+      }
+
+      if (result.registration_status === "active" || result.challenge_status === "consumed") {
+        finishRegistrationSuccess(result);
+        return;
+      }
+
+      if (result.challenge_status === "expired" || result.challenge_status === "blocked") {
+        setStatus({
+          message: result.challenge_status === "expired"
+            ? t.registrationTelegramExpired
+            : t.registrationFailed,
+          tone: "error",
+        });
+        resetRegistrationFlow(registerForm.email.trim());
+      }
+    };
+
+    pollTelegramStatus();
+    const timerId = window.setInterval(pollTelegramStatus, 2500);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timerId);
+    };
+  }, [
+    finishRegistrationSuccess,
+    registrationTelegramConfirmationUrl,
+    registrationTelegramStartedAt,
+    registrationTelegramStatusToken,
+    registrationTelegramWaiting,
+    registerForm.email,
+    t,
+  ]);
 
   function closeSidebarOnMobile() {
     if (typeof window !== "undefined" && window.matchMedia("(max-width: 980px)").matches) {
@@ -2741,6 +2835,10 @@ export default function App() {
     setRegistrationStep(1);
     setRegistrationStartResponse(null);
     setRegistrationChallengeId(null);
+    setRegistrationTelegramStatusToken("");
+    setRegistrationTelegramConfirmationUrl("");
+    setRegistrationTelegramWaiting(false);
+    setRegistrationTelegramStartedAt(0);
     setRegisterForm({
       name: "",
       email: prefillEmail,
@@ -2750,6 +2848,20 @@ export default function App() {
       confirmationCode: "",
     });
     setShowRegisterPassword(false);
+  }
+
+  function finishRegistrationSuccess(result) {
+    const nextEmail = registerForm.email.trim();
+    resetRegistrationFlow(nextEmail);
+    setEmail(nextEmail);
+    setPassword("");
+    setAuthMode("login");
+    setStatus({
+      message: result.trial_granted
+        ? t.registrationCompleteTrial
+        : t.registrationCompleteFree,
+      tone: "success",
+    });
   }
 
   async function copyRegistrationCode(code) {
@@ -2967,6 +3079,10 @@ export default function App() {
 
       setRegistrationStartResponse(result);
       setRegistrationChallengeId(result.challenge_id || null);
+      setRegistrationTelegramStatusToken(result.telegram_status_token || "");
+      setRegistrationTelegramConfirmationUrl(result.telegram_confirmation_url || "");
+      setRegistrationTelegramWaiting(false);
+      setRegistrationTelegramStartedAt(0);
       setRegisterForm((current) => ({
         ...current,
         confirmationCode: result.debug_verification_code || "",
@@ -2975,12 +3091,28 @@ export default function App() {
       setStatus(
         result.debug_verification_code
           ? { message: t.registrationCodeAutofilled, tone: "success" }
-          : { message: t.registrationCodeCreated, tone: "info" },
+          : result.telegram_confirmation_url
+            ? { message: t.registrationTelegramCreated, tone: "info" }
+            : { message: t.registrationCodeCreated, tone: "info" },
       );
       return;
     }
 
     if (registrationStep === 3) {
+      if (registrationTelegramConfirmationUrl) {
+        if (!registrationTelegramWaiting) {
+          setRegistrationTelegramWaiting(true);
+          setRegistrationTelegramStartedAt(Date.now());
+          window.open(
+            registrationTelegramConfirmationUrl,
+            "_blank",
+            "noopener,noreferrer",
+          );
+        }
+        setStatus({ message: t.registrationTelegramWaiting, tone: "info" });
+        return;
+      }
+
       const confirmationCode = normalizeRegistrationCodeInput(registerForm.confirmationCode);
       if (!confirmationCode) {
         setStatus({ message: t.registrationCodeHint, tone: "error" });
@@ -3014,17 +3146,7 @@ export default function App() {
         return;
       }
 
-      const nextEmail = registerForm.email.trim();
-      resetRegistrationFlow(nextEmail);
-      setEmail(nextEmail);
-      setPassword("");
-      setAuthMode("login");
-      setStatus({
-        message: result.trial_granted
-          ? t.registrationCompleteTrial
-          : t.registrationCompleteFree,
-        tone: "success",
-      });
+      finishRegistrationSuccess(result);
     }
   }
 
@@ -4337,7 +4459,7 @@ export default function App() {
                     </>
                   ) : registrationStep === 2 ? (
                     <>
-                      <p className="public-auth-step-copy">
+                      <p className="public-auth-step-copy" hidden={Boolean(registrationTelegramConfirmationUrl)}>
                         {language === "uk"
                           ? "Номер потрібен для захисту пробного періоду та відновлення доступу."
                           : "The phone number is needed to protect the trial period and restore access."}
@@ -4363,13 +4485,62 @@ export default function App() {
                     </>
                   ) : (
                     <>
-                      <p className="public-auth-step-copy">
+                      <p className="public-auth-step-copy" hidden={Boolean(registrationTelegramConfirmationUrl)}>
                         {language === "uk"
                           ? `Підтвердіть номер ${maskRegistrationPhone(registerForm.phone)}.`
                           : `Confirm ${maskRegistrationPhone(registerForm.phone)}.`}
                       </p>
 
-                      <label>
+                      {registrationTelegramConfirmationUrl ? (
+                        <p className="public-auth-step-copy">{t.registrationTelegramInstruction}</p>
+                      ) : null}
+
+                      {registrationTelegramConfirmationUrl ? (
+                        <div className="public-local-code-box" hidden={Boolean(registrationTelegramConfirmationUrl)}>
+                          <div className="public-local-code-copy">
+                            <strong>{t.registrationTelegramTitle}</strong>
+                            <p>
+                              {registrationTelegramWaiting
+                                ? t.registrationTelegramWaiting
+                                : t.registrationTelegramDescription}
+                            </p>
+                          </div>
+                          <div className="public-auth-secondary-actions">
+                            <button
+                              className="primary-button"
+                              onClick={() => {
+                                setRegistrationTelegramWaiting(true);
+                                setRegistrationTelegramStartedAt(Date.now());
+                                window.open(
+                                  registrationTelegramConfirmationUrl,
+                                  "_blank",
+                                  "noopener,noreferrer",
+                                );
+                                setStatus({ message: t.registrationTelegramWaiting, tone: "info" });
+                              }}
+                              type="button"
+                            >
+                              <BadgeCheck size={18} />
+                              {t.registrationTelegramConfirm}
+                            </button>
+                            <button
+                              className="public-auth-text-button"
+                              onClick={() => {
+                                window.open(
+                                  registrationTelegramConfirmationUrl,
+                                  "_blank",
+                                  "noopener,noreferrer",
+                                );
+                              }}
+                              type="button"
+                            >
+                              {t.registrationTelegramOpen}
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
+
+                      <label hidden={Boolean(registrationTelegramConfirmationUrl)}>
                         {t.registrationCode}
                         <input
                           autoComplete="one-time-code"
@@ -4465,7 +4636,9 @@ export default function App() {
                       ) : (
                         <>
                           <BadgeCheck size={18} />
-                          {t.registrationVerifyPhone}
+                          {registrationTelegramConfirmationUrl
+                            ? t.registrationTelegramConfirm
+                            : t.registrationVerifyPhone}
                         </>
                       )}
                     </button>
