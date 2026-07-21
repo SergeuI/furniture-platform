@@ -129,9 +129,6 @@ from services.fitting_image_gallery_service import (
 from services.auth_service import (
     get_user_from_token,
 )
-from services.subscription_service import (
-    has_paid_feature_access,
-)
 from services.material_import_queue_service import (
     enqueue_material_import_job,
     get_material_import_job_result,
@@ -392,6 +389,7 @@ require_catalog_admin = require_roles(
 require_catalog_reader = require_roles(
     [
         "admin",
+        "trial",
         "premium",
         "pro",
         "free",
@@ -468,11 +466,11 @@ def _can_manage_material_item(current_user, item: dict | None) -> bool:
     if not item:
         return False
 
-    if not has_paid_feature_access(current_user):
-        return False
+    if current_user.role == "admin":
+        return True
 
     if item.get("is_default"):
-        return True
+        return False
 
     return item.get("owner_user_id") == str(current_user.id)
 
@@ -503,7 +501,11 @@ def _resolve_material_with_city_context(
             for item in items
             if str(item.get("article") or "").strip() == normalized_article
         ),
-        get_material_by_article(normalized_article),
+        get_material_by_article(
+            normalized_article,
+            viewer_user_id=str(current_user.id),
+            viewer_role=current_user.role,
+        ),
     )
 
 
@@ -792,13 +794,13 @@ async def create_material_route(
             "error": "Select your city in profile settings first",
         }
 
-    is_default = bool(payload.is_default)
-
-    if is_default and not has_paid_feature_access(current_user):
+    if payload.is_default and current_user.role != "admin":
         return {
             "success": False,
-            "error": "Only admin, Premium or PRO can create default materials",
+            "error": "Only admin can create system materials",
         }
+
+    is_default = current_user.role == "admin"
 
     effective_category = (payload.category or "dsp").strip() or "dsp"
     effective_source_url = (payload.source_url or "").strip() or None
@@ -1206,6 +1208,7 @@ async def import_material_from_viyar_route(
             raise RuntimeError("Material image BLOB was not resolved")
 
         now = datetime.utcnow()
+        is_default = current_user.role == "admin"
         item = upsert_material(
             article=material["article"],
             name=material["name"],
@@ -1216,8 +1219,8 @@ async def import_material_from_viyar_route(
             category=payload.category,
             image=material.get("image"),
             source_url=material.get("source_url") or payload.source_url,
-            owner_user_id=str(current_user.id),
-            is_default=False,
+            owner_user_id=None if is_default else str(current_user.id),
+            is_default=is_default,
             source=detect_material_source_site(material.get("source_url") or payload.source_url),
             product_type=payload.category,
             image_source_url=image_payload.get("resolved_url") or material.get("image") or payload.source_url,
@@ -1329,12 +1332,6 @@ async def get_material_route(
     )
 
     if not item:
-        return {
-            "success": False,
-            "error": "Material not found",
-        }
-
-    if current_user.role != "admin" and not item.get("is_default") and item.get("owner_user_id") != str(current_user.id):
         return {
             "success": False,
             "error": "Material not found",
@@ -1603,17 +1600,30 @@ async def list_fittings_route(
 @router.get("/fittings/{item_id}/image")
 async def get_fitting_image_route(
     item_id: str,
+    access_token: str | None = Query(default=None),
     if_none_match: str | None = Header(default=None, alias="If-None-Match"),
+    current_user = Depends(optional_current_user),
 ):
-    fitting = get_fitting_image_by_id(item_id)
+    authorized_user = current_user
+
+    if not authorized_user and access_token:
+        authorized_user = get_user_from_token(access_token)
+
+    fitting = get_fitting_by_id(
+        item_id,
+        viewer_user_id=getattr(authorized_user, "id", None),
+        viewer_role=getattr(authorized_user, "role", "free") if authorized_user else "free",
+    )
 
     if not fitting:
         return Response(status_code=404)
 
-    if fitting.get("image_cached_bytes"):
+    fitting_image = get_fitting_image_by_id(item_id)
+
+    if fitting_image and fitting_image.get("image_cached_bytes"):
         return _image_response(
-            fitting["image_cached_bytes"],
-            fitting.get("image_cached_content_type"),
+            fitting_image["image_cached_bytes"],
+            fitting_image.get("image_cached_content_type"),
             if_none_match,
         )
     return Response(status_code=404)
@@ -1623,8 +1633,24 @@ async def get_fitting_image_route(
 async def get_fitting_gallery_image_route(
     item_id: str,
     image_id: str,
+    access_token: str | None = Query(default=None),
     if_none_match: str | None = Header(default=None, alias="If-None-Match"),
+    current_user = Depends(optional_current_user),
 ):
+    authorized_user = current_user
+
+    if not authorized_user and access_token:
+        authorized_user = get_user_from_token(access_token)
+
+    fitting = get_fitting_by_id(
+        item_id,
+        viewer_user_id=getattr(authorized_user, "id", None),
+        viewer_role=getattr(authorized_user, "role", "free") if authorized_user else "free",
+    )
+
+    if not fitting:
+        return Response(status_code=404)
+
     fitting_image = get_fitting_image(item_id, image_id)
 
     if not fitting_image:
@@ -1645,26 +1671,21 @@ async def get_fitting_detail_route(
     item_id: str,
     current_user = Depends(require_catalog_reader),
 ):
+    item = get_fitting_by_id(
+        item_id,
+        viewer_user_id=current_user.id,
+        viewer_role=current_user.role,
+    )
 
-    db = SessionLocal()
-    try:
-        item = (
-            db.query(FittingModel)
-            .filter(FittingModel.id == int(item_id))
-            .first()
-        )
-        if not item:
-            raise HTTPException(status_code=404, detail="Fitting not found")
+    if not item:
+        raise HTTPException(status_code=404, detail="Fitting not found")
 
-        serialized_item = _serialize_fitting_detail(item)
-        serialized_item["images"] = list_fitting_images(item_id)
+    item["images"] = list_fitting_images(item_id)
 
-        return {
-            "success": True,
-            "item": serialized_item,
-        }
-    finally:
-        db.close()
+    return {
+        "success": True,
+        "item": item,
+    }
 
 
 def _can_manage_fitting_item(current_user, item: dict | None) -> bool:
@@ -1676,7 +1697,6 @@ def _can_manage_fitting_item(current_user, item: dict | None) -> bool:
         return True
 
     return (
-        has_paid_feature_access(current_user) and
         not item.get("is_system") and
         item.get("owner_user_id") == str(current_user.id)
     )
@@ -1695,14 +1715,10 @@ async def create_fitting_route(
     if payload.is_system and current_user.role != "admin":
         return {
             "success": False,
-            "error": "Only admin can create default fittings",
+            "error": "Only admin can create system fittings",
         }
 
-    if payload.is_system and not (payload.source_url or "").strip():
-        return {
-            "success": False,
-            "error": "Source URL is required for default fittings",
-        }
+    is_system = current_user.role == "admin"
 
     effective_name = (payload.name or "").strip()
     effective_image_url = payload.image_url
@@ -1851,7 +1867,7 @@ async def create_fitting_route(
             "error": "Fitting name is required",
         }
 
-    owner_user_id = None if payload.is_system else str(current_user.id)
+    owner_user_id = None if is_system else str(current_user.id)
 
     item = create_fitting(
         city=selected_city,
@@ -1869,7 +1885,7 @@ async def create_fitting_route(
         source_url=effective_source_url,
         source_payload_json=json.dumps(source_payload, ensure_ascii=False) if source_payload else None,
         owner_user_id=owner_user_id,
-        is_system=payload.is_system,
+        is_system=is_system,
         is_active=payload.is_active,
         sort_order=payload.sort_order,
         prepared_gallery_images=prepared_gallery_images,
@@ -1904,7 +1920,11 @@ async def update_fitting_route(
     current_user = Depends(require_fitting_editor),
 ):
 
-    existing_item = get_fitting_by_id(item_id)
+    existing_item = get_fitting_by_id(
+        item_id,
+        viewer_user_id=str(current_user.id),
+        viewer_role=current_user.role,
+    )
 
     if not existing_item:
         return {
@@ -1918,19 +1938,8 @@ async def update_fitting_route(
             "error": "You do not have permission to edit this fitting",
         }
 
-    if payload.is_system and current_user.role != "admin":
-        return {
-            "success": False,
-            "error": "Only admin can manage default fittings",
-        }
-
-    if payload.is_system and not (payload.source_url or "").strip():
-        return {
-            "success": False,
-            "error": "Source URL is required for default fittings",
-        }
-
-    owner_user_id = None if payload.is_system else existing_item.get("owner_user_id") or str(current_user.id)
+    owner_user_id = existing_item.get("owner_user_id")
+    is_system = bool(existing_item.get("is_system"))
     selected_city = (payload.city or current_user.city or "").strip() or None
 
     effective_name = (payload.name or "").strip()
@@ -2027,7 +2036,7 @@ async def update_fitting_route(
         source_url=effective_source_url,
         source_payload_json=json.dumps(source_payload, ensure_ascii=False) if source_payload else None,
         owner_user_id=owner_user_id,
-        is_system=payload.is_system,
+        is_system=is_system,
         is_active=payload.is_active,
         sort_order=payload.sort_order,
     )
@@ -2060,7 +2069,11 @@ async def delete_fitting_route(
     current_user = Depends(require_fitting_editor),
 ):
 
-    existing_item = get_fitting_by_id(item_id)
+    existing_item = get_fitting_by_id(
+        item_id,
+        viewer_user_id=str(current_user.id),
+        viewer_role=current_user.role,
+    )
 
     if not existing_item:
         return {

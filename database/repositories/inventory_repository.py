@@ -965,6 +965,25 @@ def _material_visible_to_viewer(
     return False
 
 
+def _fitting_visible_to_viewer(
+    item: FittingModel,
+    viewer_user_id: str | None,
+    viewer_role: str | None,
+) -> bool:
+
+    if viewer_role == "admin":
+        return True
+
+    if bool(item.is_system):
+        return True
+
+    normalized_user_id = _normalize_fitting_value(viewer_user_id)
+    if normalized_user_id and item.owner_user_id == normalized_user_id:
+        return True
+
+    return False
+
+
 def material_needs_full_sync(material: dict | None) -> bool:
 
     if not material:
@@ -1484,7 +1503,11 @@ def create_fitting(
         db.close()
 
 
-def get_fitting_by_id(item_id: str | int) -> dict | None:
+def get_fitting_by_id(
+    item_id: str | int,
+    viewer_user_id: str | None = None,
+    viewer_role: str | None = None,
+) -> dict | None:
 
     db = SessionLocal()
 
@@ -1497,6 +1520,13 @@ def get_fitting_by_id(item_id: str | int) -> dict | None:
         )
 
         if not item:
+            return None
+
+        if (viewer_user_id is not None or viewer_role is not None) and not _fitting_visible_to_viewer(
+            item,
+            viewer_user_id=viewer_user_id,
+            viewer_role=viewer_role,
+        ):
             return None
 
         return _serialize_fitting(item)
