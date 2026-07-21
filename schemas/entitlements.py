@@ -149,6 +149,7 @@ class FeatureResponse(BaseModel):
     category: str
     value_type: str
     enum_options_json: list[str] | None = None
+    is_system: bool = False
     is_active: bool
     sort_order: int
     created_at: datetime | None = None

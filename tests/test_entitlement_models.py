@@ -37,6 +37,7 @@ class EntitlementModelTests(unittest.TestCase):
                 db.refresh(feature)
 
                 self.assertTrue(feature.is_active)
+                self.assertFalse(feature.is_system)
                 self.assertEqual(feature.sort_order, 0)
                 self.assertIsNotNone(feature.created_at)
                 self.assertIsNotNone(feature.updated_at)

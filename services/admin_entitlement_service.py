@@ -180,6 +180,7 @@ class AdminEntitlementService:
             "category": feature.category,
             "value_type": feature.value_type,
             "enum_options_json": feature.enum_options_json,
+            "is_system": bool(feature.is_system),
             "is_active": bool(feature.is_active),
             "sort_order": int(feature.sort_order or 0),
             "created_at": feature.created_at,
@@ -298,6 +299,7 @@ class AdminEntitlementService:
             category=category,
             value_type=value_type,
             enum_options_json=enum_options_json,
+            is_system=False,
             is_active=is_active,
             sort_order=sort_order,
         )

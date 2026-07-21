@@ -39,6 +39,7 @@ class AdminEntitlementServiceTests(unittest.TestCase):
                 )
 
                 self.assertEqual(result["feature"]["feature_key"], "ai_scan_limit")
+                self.assertFalse(result["feature"]["is_system"])
                 self.assertEqual(len(result["matrix_row"].keys()), 5)
 
                 feature = repo.get_feature_by_key("ai_scan_limit")
@@ -529,6 +530,7 @@ class AdminEntitlementServiceTests(unittest.TestCase):
         value_type: str,
         sort_order: int = 0,
         enum_options_json: list[str] | None = None,
+        is_system: bool = False,
     ) -> EntitlementFeatureModel:
         feature = EntitlementFeatureModel(
             feature_key=feature_key,
@@ -536,6 +538,7 @@ class AdminEntitlementServiceTests(unittest.TestCase):
             category=category,
             value_type=value_type,
             enum_options_json=enum_options_json,
+            is_system=is_system,
             sort_order=sort_order,
         )
         session.add(feature)

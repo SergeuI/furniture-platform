@@ -11,6 +11,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.sql import func
 
@@ -55,6 +56,10 @@ class EntitlementFeatureModel(Base):
             "ix_entitlement_features_category",
             "category",
         ),
+        Index(
+            "ix_entitlement_features_is_system",
+            "is_system",
+        ),
     )
 
     id = Column(
@@ -91,6 +96,13 @@ class EntitlementFeatureModel(Base):
     enum_options_json = Column(
         JSON,
         nullable=True,
+    )
+
+    is_system = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=text("0"),
     )
 
     is_active = Column(

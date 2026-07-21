@@ -79,6 +79,34 @@ class AdminEntitlementsApiTests(unittest.TestCase):
                 body = response.json()
                 self.assertTrue(body["success"])
                 self.assertEqual(body["feature"]["feature_key"], "ai_scan_limit")
+                self.assertFalse(body["feature"]["is_system"])
+                self.assertFalse(body["matrix_row"]["feature"]["is_system"])
+
+    def test_admin_post_feature_rejects_is_system_payload(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._client_context(Path(tmpdir) / "entitlements.db") as client:
+                with self._admin_auth():
+                    response = client.post(
+                        "/admin/entitlements/features",
+                        headers=self._auth_headers(),
+                        json={
+                            "feature_key": "ai_scan_limit",
+                            "name_uk": "AI scan limit",
+                            "category": "limits",
+                            "value_type": "integer",
+                            "is_system": True,
+                        },
+                    )
+
+                self.assertEqual(response.status_code, 422)
+                with self._admin_auth():
+                    self.assertEqual(
+                        client.get(
+                            "/admin/entitlements/features",
+                            headers=self._auth_headers(),
+                        ).json()["features"],
+                        [],
+                    )
 
     def test_duplicate_feature_key_returns_conflict_without_sql_or_traceback(self) -> None:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
@@ -134,6 +162,37 @@ class AdminEntitlementsApiTests(unittest.TestCase):
                 self.assertEqual(response.status_code, 200)
                 self.assertEqual(response.json()["feature"]["name_uk"], "Новий рівень підтримки")
 
+    def test_admin_patch_feature_rejects_is_system_payload(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._client_context(Path(tmpdir) / "entitlements.db") as client:
+                with self._admin_auth():
+                    create_response = client.post(
+                        "/admin/entitlements/features",
+                        headers=self._auth_headers(),
+                        json={
+                            "feature_key": "support_level",
+                            "name_uk": "Support level",
+                            "category": "support",
+                            "value_type": "text",
+                        },
+                    )
+                    feature_id = create_response.json()["feature"]["id"]
+                    response = client.patch(
+                        f"/admin/entitlements/features/{feature_id}",
+                        headers=self._auth_headers(),
+                        json={
+                            "is_system": True,
+                        },
+                    )
+
+                self.assertEqual(response.status_code, 422)
+                with self._admin_auth():
+                    feature = client.get(
+                        "/admin/entitlements/features",
+                        headers=self._auth_headers(),
+                    ).json()["features"][0]
+                    self.assertFalse(feature["is_system"])
+
     def test_admin_get_matrix_returns_200(self) -> None:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             with self._client_context(Path(tmpdir) / "entitlements.db") as client:
@@ -154,6 +213,7 @@ class AdminEntitlementsApiTests(unittest.TestCase):
                     )
                 self.assertEqual(response.status_code, 200)
                 self.assertEqual(len(response.json()["matrix"]), 1)
+                self.assertFalse(response.json()["matrix"][0]["feature"]["is_system"])
 
     def test_admin_put_matrix_returns_200(self) -> None:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
