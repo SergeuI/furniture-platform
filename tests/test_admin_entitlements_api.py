@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 import tempfile
 import unittest
 from contextlib import contextmanager
@@ -246,6 +247,100 @@ class AdminEntitlementsApiTests(unittest.TestCase):
                 self.assertEqual(response.status_code, 200)
                 self.assertEqual(response.json()["updated_count"], 1)
 
+    def test_admin_registry_sync_preview_reports_missing_system_registry(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            db_path = Path(tmpdir) / "entitlements.db"
+            with self._client_context(db_path) as client:
+                with self._admin_auth():
+                    response = client.get(
+                        "/admin/entitlements/registry-sync/preview",
+                        headers=self._auth_headers(),
+                    )
+
+                self.assertEqual(response.status_code, 200)
+                body = response.json()
+                self.assertTrue(body["success"])
+                self.assertTrue(body["can_apply"])
+                self.assertEqual(len(body["new_features"]), 14)
+                self.assertEqual(len(body["conflicts"]), 0)
+                self.assertEqual(len(body["missing_plan_rows"]), 0)
+                self.assertEqual(len(body["db_system_features_missing_from_registry"]), 0)
+                self.assertEqual(self._count_rows(db_path, "entitlement_features"), 0)
+                self.assertEqual(self._count_rows(db_path, "plan_entitlements"), 0)
+                self.assertEqual(self._count_rows(db_path, "audit_logs"), 0)
+
+    def test_admin_registry_sync_apply_creates_registry_and_is_idempotent(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            db_path = Path(tmpdir) / "entitlements.db"
+            with self._client_context(db_path) as client:
+                with self._admin_auth():
+                    first_response = client.post(
+                        "/admin/entitlements/registry-sync/apply",
+                        headers=self._auth_headers(),
+                    )
+
+                self.assertEqual(first_response.status_code, 200)
+                first_body = first_response.json()
+                self.assertTrue(first_body["success"])
+                self.assertTrue(first_body["applied"])
+                self.assertEqual(len(first_body["created_features"]), 14)
+                self.assertEqual(len(first_body["created_plan_rows"]), 56)
+
+                with self._admin_auth():
+                    second_response = client.post(
+                        "/admin/entitlements/registry-sync/apply",
+                        headers=self._auth_headers(),
+                    )
+
+                self.assertEqual(second_response.status_code, 200)
+                second_body = second_response.json()
+                self.assertFalse(second_body["applied"])
+                self.assertEqual(len(second_body["created_features"]), 0)
+                self.assertEqual(len(second_body["created_plan_rows"]), 0)
+                self.assertEqual(self._count_rows(db_path, "entitlement_features"), 14)
+                self.assertEqual(self._count_rows(db_path, "plan_entitlements"), 56)
+                self.assertEqual(self._count_rows(db_path, "audit_logs"), 1)
+
+    def test_admin_registry_sync_apply_rejects_custom_feature_conflict(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            db_path = Path(tmpdir) / "entitlements.db"
+            with self._client_context(db_path) as client:
+                with self._admin_auth():
+                    create_response = client.post(
+                        "/admin/entitlements/features",
+                        headers=self._auth_headers(),
+                        json={
+                            "feature_key": "materials.view",
+                            "name_uk": "Custom duplicate",
+                            "category": "materials",
+                            "value_type": "boolean",
+                        },
+                    )
+
+                self.assertEqual(create_response.status_code, 201)
+
+                with self._admin_auth():
+                    preview_response = client.get(
+                        "/admin/entitlements/registry-sync/preview",
+                        headers=self._auth_headers(),
+                    )
+
+                self.assertEqual(preview_response.status_code, 200)
+                preview_body = preview_response.json()
+                self.assertEqual(len(preview_body["conflicts"]), 1)
+                self.assertEqual(preview_body["conflicts"][0]["reason"], "custom_feature_collision")
+
+                with self._admin_auth():
+                    apply_response = client.post(
+                        "/admin/entitlements/registry-sync/apply",
+                        headers=self._auth_headers(),
+                    )
+
+                self.assertEqual(apply_response.status_code, 409)
+                self.assertEqual(self._count_rows(db_path, "entitlement_features"), 1)
+                self.assertEqual(self._count_rows(db_path, "plan_entitlements"), 4)
+                self.assertEqual(self._count_rows(db_path, "audit_logs"), 1)
+
     def test_invalid_payload_returns_422(self) -> None:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             with self._client_context(Path(tmpdir) / "entitlements.db") as client:
@@ -390,6 +485,15 @@ class AdminEntitlementsApiTests(unittest.TestCase):
     @staticmethod
     def _auth_headers() -> dict[str, str]:
         return {"Authorization": "Bearer test-token"}
+
+    @staticmethod
+    def _count_rows(database_path: Path, table_name: str) -> int:
+        connection = sqlite3.connect(database_path)
+        try:
+            cursor = connection.execute(f"SELECT COUNT(*) FROM {table_name}")
+            return int(cursor.fetchone()[0])
+        finally:
+            connection.close()
 
     @contextmanager
     def _admin_auth(self):

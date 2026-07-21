@@ -1,6 +1,9 @@
-const API_BASE_URL = (
-  import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? "" : "/api")
-);
+function resolveApiBaseUrl() {
+  const env = typeof import.meta !== "undefined" && import.meta && import.meta.env ? import.meta.env : {};
+  return env.VITE_API_BASE_URL || (env.DEV ? "" : "/api");
+}
+
+export const API_BASE_URL = resolveApiBaseUrl();
 
 function extractErrorMessage(payload) {
   if (payload?.detail?.error) {
@@ -562,6 +565,63 @@ export async function deleteFittingHolePoint(token, pointId) {
 
 export async function getCatalogAutoRefreshStatus(token) {
   return request("/catalog/auto-refresh/status", {
+    headers: authHeaders(token),
+  });
+}
+
+export async function getEntitlementFeatures(token, activeOnly = false) {
+  const searchParams = new URLSearchParams();
+
+  if (activeOnly) {
+    searchParams.set("active_only", "true");
+  }
+
+  const query = searchParams.toString();
+
+  return request(`/admin/entitlements/features${query ? `?${query}` : ""}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function createEntitlementFeature(token, payload) {
+  return request("/admin/entitlements/features", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateEntitlementFeature(token, featureId, payload) {
+  return request(`/admin/entitlements/features/${featureId}`, {
+    method: "PATCH",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getEntitlementMatrix(token) {
+  return request("/admin/entitlements/matrix", {
+    headers: authHeaders(token),
+  });
+}
+
+export async function updateEntitlementMatrix(token, payload) {
+  return request("/admin/entitlements/matrix", {
+    method: "PUT",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function previewEntitlementRegistrySync(token) {
+  return request("/admin/entitlements/registry-sync/preview", {
+    headers: authHeaders(token),
+  });
+}
+
+export async function applyEntitlementRegistrySync(token) {
+  return request("/admin/entitlements/registry-sync/apply", {
+    method: "POST",
     headers: authHeaders(token),
   });
 }

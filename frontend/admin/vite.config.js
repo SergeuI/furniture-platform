@@ -23,6 +23,7 @@ export default defineConfig(({ command }) => ({
       "/project": "http://127.0.0.1:8000",
       "/catalog": "http://127.0.0.1:8000",
       "/audit": "http://127.0.0.1:8000",
+      "/admin": "http://127.0.0.1:8000",
       "/fitting-holes": "http://127.0.0.1:8000",
       "/service-drilling-rules": "http://127.0.0.1:8000",
     },

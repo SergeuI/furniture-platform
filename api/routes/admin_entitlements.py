@@ -8,6 +8,8 @@ from sqlalchemy.exc import IntegrityError
 from api.dependencies.auth import require_roles
 from database.session import SessionLocal
 from schemas.entitlements import (
+    EntitlementRegistrySyncApplyResponse,
+    EntitlementRegistrySyncPreviewResponse,
     FeatureCreateRequest,
     FeatureListResponse,
     FeatureOperationResponse,
@@ -17,6 +19,7 @@ from schemas.entitlements import (
     MatrixUpdateResponse,
 )
 from services.admin_entitlement_service import AdminEntitlementService
+from services.entitlement_registry_sync_service import EntitlementRegistrySyncService
 
 
 router = APIRouter()
@@ -45,6 +48,12 @@ def _raise_service_error(error: ValueError) -> None:
         ) from error
 
     if "вже існує" in lowered or "дублікат" in lowered or "duplicate" in lowered:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"success": False, "error": detail},
+        ) from error
+
+    if "registry sync has conflicts" in lowered or ("registry sync" in lowered and "conflict" in lowered):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={"success": False, "error": detail},
@@ -155,6 +164,48 @@ async def update_matrix_route(
             payload.rows,
             actor_user_id=str(current_user.id),
             actor_email=current_user.email,
+        )
+    except ValueError as error:
+        _raise_service_error(error)
+
+    return {
+        "success": True,
+        **result,
+    }
+
+
+@router.get(
+    "/registry-sync/preview",
+    response_model=EntitlementRegistrySyncPreviewResponse,
+)
+async def preview_registry_sync_route(
+    current_user = Depends(require_admin_entitlements),
+    service: AdminEntitlementService = Depends(get_admin_entitlement_service),
+):
+    sync_service = EntitlementRegistrySyncService(session=service.session)
+    plan = sync_service.plan_sync()
+    return {
+        "success": True,
+        "can_apply": not bool(plan["conflicts"]),
+        **plan,
+        "summary": plan,
+    }
+
+
+@router.post(
+    "/registry-sync/apply",
+    response_model=EntitlementRegistrySyncApplyResponse,
+)
+async def apply_registry_sync_route(
+    current_user = Depends(require_admin_entitlements),
+    service: AdminEntitlementService = Depends(get_admin_entitlement_service),
+):
+    sync_service = EntitlementRegistrySyncService(session=service.session)
+    try:
+        result = sync_service.apply_sync(
+            actor_user_id=str(current_user.id),
+            actor_email=current_user.email,
+            source="admin-api",
         )
     except ValueError as error:
         _raise_service_error(error)

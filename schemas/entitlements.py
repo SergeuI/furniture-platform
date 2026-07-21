@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 import re
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -247,4 +248,29 @@ class MatrixUpdateResponse(BaseModel):
     success: bool
     updated_count: int = 0
     matrix: list[MatrixRowResponse] = Field(default_factory=list)
+    error: str | None = None
+
+
+class EntitlementRegistrySyncPreviewResponse(BaseModel):
+    success: bool
+    can_apply: bool = False
+    new_features: list[dict[str, Any]] = Field(default_factory=list)
+    metadata_updates: list[dict[str, Any]] = Field(default_factory=list)
+    missing_plan_rows: list[dict[str, Any]] = Field(default_factory=list)
+    conflicts: list[dict[str, Any]] = Field(default_factory=list)
+    unchanged: list[str] = Field(default_factory=list)
+    registry_features_missing_from_db: list[str] = Field(default_factory=list)
+    db_system_features_missing_from_registry: list[str] = Field(default_factory=list)
+    summary: dict[str, Any] | None = None
+    error: str | None = None
+
+
+class EntitlementRegistrySyncApplyResponse(BaseModel):
+    success: bool
+    applied: bool = False
+    created_features: list[str] = Field(default_factory=list)
+    updated_features: list[str] = Field(default_factory=list)
+    created_plan_rows: list[dict[str, Any]] = Field(default_factory=list)
+    orphaned_system_feature_keys: list[str] = Field(default_factory=list)
+    summary: dict[str, Any] | None = None
     error: str | None = None

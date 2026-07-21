@@ -38,6 +38,7 @@ import {
   formatTrialCountdown,
   getSubscriptionLabel,
 } from "../../shared/trialStatus.js";
+import EntitlementsAdminPage from "./components/EntitlementsAdminPage.jsx";
 
 import surfaceMountIcon from "./assets/hole-mounting/surface_mount.png";
 import angledTwoPlanesIcon from "./assets/hole-mounting/angled_two_planes.png";
@@ -6732,6 +6733,7 @@ export default function App() {
   const [status, setStatusState] = useState(null);
   const [loading, setLoading] = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
+  const [entitlementsHasUnsavedChanges, setEntitlementsHasUnsavedChanges] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(
     () =>
       (typeof window !== "undefined"
@@ -9173,6 +9175,10 @@ export default function App() {
 
     if (activeView === "settings") {
       return t.myData;
+    }
+
+    if (activeView === "entitlements") {
+      return "Тарифи та права";
     }
 
     if (isCatalogDrillingRulesView) {
@@ -13349,6 +13355,18 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
   }
 
   function handleLogout() {
+    if (
+      activeView === "entitlements" &&
+      entitlementsHasUnsavedChanges &&
+      !window.confirm(
+        language === "uk"
+          ? "У тарифній матриці є незбережені зміни. Вийти без збереження?"
+          : "There are unsaved changes in the entitlements matrix. Sign out without saving?",
+      )
+    ) {
+      return;
+    }
+
     localStorage.removeItem(TOKEN_STORAGE_KEY);
     localStorage.removeItem(USER_STORAGE_KEY);
     localStorage.removeItem(ACTIVE_VIEW_STORAGE_KEY);
@@ -13615,6 +13633,19 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
   async function switchView(view, viewer = user) {
     const nextView = normalizeCatalogView(view === "catalog" ? "catalogViyar" : view);
 
+    if (
+      activeView === "entitlements" &&
+      entitlementsHasUnsavedChanges &&
+      nextView !== "entitlements" &&
+      !window.confirm(
+        language === "uk"
+          ? "У тарифній матриці є незбережені зміни. Залишити сторінку?"
+          : "There are unsaved changes in the entitlements matrix. Leave this page?",
+      )
+    ) {
+      return;
+    }
+
     setActiveView(nextView);
     activeViewRef.current = nextView;
     setStatus("");
@@ -13738,6 +13769,11 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
 
     if (nextView === "audit") {
       await loadAuditLogs(token, auditOffset, viewer);
+      return;
+    }
+
+    if (nextView === "entitlements") {
+      return;
     }
   }
 
@@ -15022,7 +15058,12 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
         }
 
         if (activeView && activeView !== "projects") {
-          if (CATALOG_SERVICE_VIEWS.has(activeView) || activeView === "users" || activeView === "audit") {
+          if (
+            CATALOG_SERVICE_VIEWS.has(activeView) ||
+            activeView === "users" ||
+            activeView === "audit" ||
+            activeView === "entitlements"
+          ) {
             return;
           }
 
@@ -15051,6 +15092,20 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
     localStorage.setItem(ACTIVE_VIEW_STORAGE_KEY, activeView);
     activeViewRef.current = activeView;
   }, [activeView]);
+
+  useEffect(() => {
+    if (!entitlementsHasUnsavedChanges) {
+      return undefined;
+    }
+
+    const handleBeforeUnload = (event) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [entitlementsHasUnsavedChanges]);
 
   useEffect(() => {
     if (selectedFittingCategory) {
@@ -15516,6 +15571,16 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                 >
                   {t.audit}
                 </button>
+                <button
+                  className={activeView === "entitlements" ? "active" : ""}
+                  onClick={() => {
+                    switchView("entitlements");
+                    closeSidebarOnMobile();
+                  }}
+                  type="button"
+                >
+                  Тарифи та права
+                </button>
               </>
             ) : null}
             <div className={`nav-group${isCatalogView ? " active" : ""}`}>
@@ -15709,8 +15774,8 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                   ? t.catalogManual
                 : activeView === "settings"
                   ? t.settings
-                : isCatalogDrillingRulesView
-                  ? t.drillingServiceRulesTitle
+                : activeView === "entitlements"
+                  ? "Тарифи та права"
                   : t.audit}
             </h2>
             {activeView === "projectDetails" && selectedProject ? (
@@ -17223,6 +17288,14 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
               </article>
             </div>
           </section>
+        ) : activeView === "entitlements" ? (
+          <EntitlementsAdminPage
+            language={language}
+            onDirtyChange={setEntitlementsHasUnsavedChanges}
+            onStatus={setStatus}
+            token={token}
+            user={user}
+          />
         ) : activeView === "users" ? (
           <section className="table-panel full-panel">
             <form className="create-user-form" onSubmit={handleCreateUser}>
