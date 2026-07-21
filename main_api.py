@@ -25,6 +25,9 @@ from api.routes.audit import (
 from api.routes.catalog import (
     router as catalog_router
 )
+from api.routes.admin_entitlements import (
+    router as admin_entitlements_router,
+)
 from api.routes.fitting_holes import (
     router as fitting_holes_router
 )
@@ -136,6 +139,15 @@ app.include_router(
     prefix="/catalog",
 
     tags=["Catalog"]
+)
+
+app.include_router(
+
+    admin_entitlements_router,
+
+    prefix="/admin/entitlements",
+
+    tags=["Admin Entitlements"]
 )
 
 app.include_router(
