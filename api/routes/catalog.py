@@ -1671,16 +1671,29 @@ async def get_fitting_detail_route(
     item_id: str,
     current_user = Depends(require_catalog_reader),
 ):
-    item = get_fitting_by_id(
+    fitting = get_fitting_by_id(
         item_id,
         viewer_user_id=current_user.id,
         viewer_role=current_user.role,
     )
 
-    if not item:
+    if not fitting:
         raise HTTPException(status_code=404, detail="Fitting not found")
 
-    item["images"] = list_fitting_images(item_id)
+    db = SessionLocal()
+    try:
+        fitting_model = (
+            db.query(FittingModel)
+            .filter(FittingModel.id == int(item_id))
+            .first()
+        )
+        if not fitting_model:
+            raise HTTPException(status_code=404, detail="Fitting not found")
+
+        item = _serialize_fitting_detail(fitting_model)
+        item["images"] = list_fitting_images(item_id)
+    finally:
+        db.close()
 
     return {
         "success": True,

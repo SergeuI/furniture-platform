@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
+from hashlib import sha256
 from unittest.mock import patch
 
 from fastapi import FastAPI
@@ -22,6 +24,7 @@ from database.models import entitlement_feature  # noqa: F401
 from database.models.fitting import FittingModel
 from database.models import fitting_hole_service_rule  # noqa: F401
 from database.models import fitting_image  # noqa: F401
+from database.models.fitting_image import FittingImageModel
 from database.models.material import MaterialModel
 from database.models import material_edge  # noqa: F401
 from database.models import material_edge_price  # noqa: F401
@@ -510,6 +513,123 @@ class CatalogVisibilityTests(unittest.TestCase):
                     headers=self._auth_headers("trial-token"),
                 )
                 self.assertEqual(image.status_code, 404)
+
+    def test_fitting_detail_returns_characteristics_and_images(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
+                with session_factory() as session:
+                    system_fitting = FittingModel(
+                        name="Стяжка VB 35/16, чорна (79642) Hettich",
+                        article="57839",
+                        fitting_type="connector",
+                        fitting_group="fittings",
+                        owner_user_id=None,
+                        is_system=True,
+                        is_active=True,
+                        source="viyar",
+                        source_url="https://example.com/system-fitting",
+                        unit=None,
+                        currency=None,
+                        description=None,
+                        brand=None,
+                        stock=None,
+                        parsed_at=datetime(2026, 7, 21, 10, 30, 0),
+                        price_updated_at=datetime(2026, 7, 21, 11, 15, 0),
+                        source_payload_json=json.dumps(
+                            {
+                                "parsed_item": {
+                                    "characteristics": {
+                                        "Тип товару": "Стяжки",
+                                        "Тип стяжки": "Полицетримач",
+                                        "Тип шліца": "PZ2",
+                                        "Виробник": "Hettich",
+                                        "Вага, кг": "0.0049",
+                                        "Глибина сверління, мм": "12,5",
+                                        "Країна виробник": "Німеччина",
+                                        "Товщина плити max, мм": "16",
+                                        "Довжина (L), мм": "16",
+                                        "Діаметр, мм": "20",
+                                        "Матеріал виготовлення": "Метал, пластик",
+                                        "Колір": "Чорний",
+                                    },
+                                    "description": "Стяжка VB 35/16, чорна (79642) Hettich",
+                                    "brand": "Hettich",
+                                    "currency": "UAH",
+                                    "normalized_unit": "шт",
+                                    "availability": "В наявності",
+                                }
+                            },
+                            ensure_ascii=False,
+                        ),
+                    )
+                    private_fitting = FittingModel(
+                        name="Private Fitting",
+                        article="PRIVATE-57839",
+                        fitting_type="connector",
+                        fitting_group="fittings",
+                        owner_user_id="owner-1",
+                        is_system=False,
+                        is_active=True,
+                    )
+                    session.add_all([system_fitting, private_fitting])
+                    session.flush()
+                    session.add(
+                        FittingImageModel(
+                            fitting_id=system_fitting.id,
+                            sort_order=0,
+                            is_primary=True,
+                            source_url="https://example.com/system-fitting-image.png",
+                            image_cached_bytes=b"fitting-image-bytes",
+                            image_cached_content_type="image/png",
+                            image_sha256=sha256(b"fitting-image-bytes").hexdigest(),
+                        )
+                    )
+                    session.commit()
+                    system_fitting_id = str(system_fitting.id)
+                    private_fitting_id = str(private_fitting.id)
+
+                admin_response = client.get(
+                    f"/catalog/fittings/{system_fitting_id}",
+                    headers=self._auth_headers("admin-token"),
+                )
+                self.assertEqual(admin_response.status_code, 200)
+                self.assertTrue(admin_response.json()["success"])
+                admin_item = admin_response.json()["item"]
+                self.assertEqual(admin_item["id"], int(system_fitting_id))
+                self.assertEqual(admin_item["source_site"], "viyar")
+                self.assertEqual(admin_item["brand"], "Hettich")
+                self.assertEqual(admin_item["currency"], "UAH")
+                self.assertEqual(admin_item["unit"], "шт")
+                self.assertEqual(admin_item["availability"], "В наявності")
+                self.assertEqual(admin_item["description"], "Стяжка VB 35/16, чорна (79642) Hettich")
+                self.assertTrue(admin_item["characteristics"])
+                self.assertEqual(admin_item["characteristics"]["Тип товару"], "Стяжки")
+                self.assertEqual(len(admin_item["images"]), 1)
+                self.assertEqual(admin_item["images"][0]["content_type"], "image/png")
+
+                trial_response = client.get(
+                    f"/catalog/fittings/{system_fitting_id}",
+                    headers=self._auth_headers("trial-token"),
+                )
+                self.assertEqual(trial_response.status_code, 200)
+                self.assertTrue(trial_response.json()["success"])
+                trial_item = trial_response.json()["item"]
+                self.assertEqual(trial_item["characteristics"]["Виробник"], "Hettich")
+                self.assertEqual(len(trial_item["images"]), 1)
+
+                private_response = client.get(
+                    f"/catalog/fittings/{private_fitting_id}",
+                    headers=self._auth_headers("trial-token"),
+                )
+                self.assertEqual(private_response.status_code, 404)
+
+                admin_private_response = client.get(
+                    f"/catalog/fittings/{private_fitting_id}",
+                    headers=self._auth_headers("admin-token"),
+                )
+                self.assertEqual(admin_private_response.status_code, 200)
+                self.assertTrue(admin_private_response.json()["success"])
+                self.assertEqual(admin_private_response.json()["item"]["id"], int(private_fitting_id))
 
     @contextmanager
     def _catalog_context(self, database_path: Path, users_by_token: dict[str, UserStub] | None = None):
