@@ -16,6 +16,12 @@ from database.models.registration_identity import (
     RegistrationChallengeModel,
     RegistrationIdentityModel,
 )
+from database.models.entitlement_feature import (
+    EntitlementFeatureModel,
+)
+from database.models.plan_entitlement import (
+    PlanEntitlementModel,
+)
 from database.models.project_scan_session import (
     ProjectScanSessionModel
 )
