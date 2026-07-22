@@ -32,6 +32,11 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 from scripts.maintenance_preview import create_preview_file as create_maintenance_preview_file
+from scripts.maintenance_server_control import (
+    run_disable as run_maintenance_server_disable,
+    run_enable as run_maintenance_server_enable,
+    run_status as run_maintenance_server_status,
+)
 from scripts.maintenance_server_audit import (
     audit_server as audit_maintenance_server,
     audit_server_privileged as audit_privileged_maintenance_server,
@@ -1103,6 +1108,7 @@ class WizardApp(tk.Tk):
         )
         self.maintenance_eta = tk.StringVar(value="Найближчим часом")
         self.maintenance_preview_status = tk.StringVar(value="Серверний режим ще не налаштовано.")
+        self.maintenance_server_control_status = tk.StringVar(value="Статус технічних робіт ще не перевірено.")
         self.maintenance_server_audit_status = tk.StringVar(value="Перевірку ще не виконано.")
         self.maintenance_server_audit_summary = tk.StringVar(
             value="Натисни «Перевірити сервер», щоб запустити read-only аудит production nginx."
@@ -1110,6 +1116,9 @@ class WizardApp(tk.Tk):
         self._maintenance_server_audit_report = ""
         self._maintenance_server_audit_window: tk.Toplevel | None = None
         self._maintenance_server_audit_running = False
+        self._maintenance_server_control_running = False
+        self._maintenance_server_control_last_result: object | None = None
+        self._maintenance_server_control_details_window: tk.Toplevel | None = None
         self.map_search = tk.StringVar(value="")
         self.history_search = tk.StringVar(value="")
         self.history_filter = tk.StringVar(value="Усі")
@@ -2182,30 +2191,41 @@ class WizardApp(tk.Tk):
             justify="left",
             wraplength=420,
         ).grid(row=2, column=0, sticky="w", pady=(6, 0))
+        ttk.Label(
+            maintenance_box,
+            textvariable=self.maintenance_server_control_status,
+            style="Hint.TLabel",
+            justify="left",
+            wraplength=420,
+        ).grid(row=3, column=0, sticky="w", pady=(6, 0))
         maintenance_actions = ttk.Frame(maintenance_box)
-        maintenance_actions.grid(row=3, column=0, sticky="ew", pady=(10, 0))
+        maintenance_actions.grid(row=4, column=0, sticky="ew", pady=(10, 0))
         maintenance_actions.columnconfigure(0, weight=1)
         maintenance_actions.columnconfigure(1, weight=1)
         maintenance_actions.columnconfigure(2, weight=1)
+        maintenance_actions.columnconfigure(3, weight=1)
+        maintenance_actions.columnconfigure(4, weight=1)
         ttk.Button(maintenance_actions, text="Переглянути заглушку", command=self.preview_maintenance_page).grid(row=0, column=0, sticky="ew")
-        ttk.Button(maintenance_actions, text="Увімкнути техроботи", state="disabled").grid(row=0, column=1, sticky="ew", padx=8)
-        ttk.Button(maintenance_actions, text="Вимкнути техроботи", state="disabled").grid(row=0, column=2, sticky="ew")
+        ttk.Button(maintenance_actions, text="Оновити статус", command=self.refresh_maintenance_server_control_status).grid(row=0, column=1, sticky="ew", padx=8)
+        ttk.Button(maintenance_actions, text="Увімкнути техроботи", command=self.run_maintenance_server_enable).grid(row=0, column=2, sticky="ew", padx=8)
+        ttk.Button(maintenance_actions, text="Вимкнути техроботи", command=self.run_maintenance_server_disable).grid(row=0, column=3, sticky="ew")
+        ttk.Button(maintenance_actions, text="Деталі", command=self.open_maintenance_server_control_details).grid(row=0, column=4, sticky="ew", padx=(8, 0))
         ttk.Label(
             maintenance_box,
             textvariable=self.maintenance_server_audit_status,
             style="Hint.TLabel",
             justify="left",
             wraplength=420,
-        ).grid(row=4, column=0, sticky="w", pady=(8, 0))
+        ).grid(row=5, column=0, sticky="w", pady=(8, 0))
         ttk.Label(
             maintenance_box,
             textvariable=self.maintenance_server_audit_summary,
             style="Hint.TLabel",
             justify="left",
             wraplength=420,
-        ).grid(row=5, column=0, sticky="w", pady=(4, 0))
+        ).grid(row=6, column=0, sticky="w", pady=(4, 0))
         maintenance_audit_actions = ttk.Frame(maintenance_box)
-        maintenance_audit_actions.grid(row=6, column=0, sticky="ew", pady=(10, 0))
+        maintenance_audit_actions.grid(row=7, column=0, sticky="ew", pady=(10, 0))
         maintenance_audit_actions.columnconfigure(0, weight=1)
         maintenance_audit_actions.columnconfigure(1, weight=1)
         maintenance_audit_actions.columnconfigure(2, weight=1)
@@ -2218,7 +2238,7 @@ class WizardApp(tk.Tk):
             style="Hint.TLabel",
             justify="left",
             wraplength=420,
-        ).grid(row=7, column=0, sticky="w", pady=(8, 0))
+        ).grid(row=8, column=0, sticky="w", pady=(8, 0))
 
         params = ttk.LabelFrame(right, text="Параметри", style="Card.TLabelframe")
         params.pack(fill="x", pady=(12, 0))
@@ -3860,6 +3880,309 @@ class WizardApp(tk.Tk):
 
         self.maintenance_preview_status.set(f"Готово: {preview_path}")
         self._open_path(preview_path)
+
+    def _finish_maintenance_server_control(self, result: object | None = None, error_text: str | None = None) -> None:
+        self._maintenance_server_control_running = False
+        self._end_activity()
+
+        if error_text is not None:
+            self._maintenance_server_control_last_result = None
+            self.maintenance_server_control_status.set(f"Помилка: {error_text}")
+            self._append_product_log(f"[Технічні роботи] {error_text}")
+            messagebox.showerror("Не вдалося виконати дію", error_text)
+            return
+
+        if result is None:
+            return
+
+        control_result = result
+        self._maintenance_server_control_last_result = control_result
+        action = str(getattr(control_result, "action", "status"))
+        status_label = str(getattr(control_result, "status_label", "unknown"))
+        stage = str(getattr(control_result, "stage", "unknown"))
+        exit_code = getattr(control_result, "exit_code", None)
+        exit_code_text = "n/a" if exit_code is None else str(exit_code)
+        message_text = str(getattr(control_result, "message", "")).strip() or "Готово."
+        self.maintenance_server_control_status.set(
+            f"{message_text} | stage={stage} | exit={exit_code_text} | "
+            f"nginx={getattr(control_result, 'nginx_status', 'unknown')} | "
+            f"public={getattr(control_result, 'public_http', 'n/a')} | "
+            f"admin={getattr(control_result, 'admin_http', 'n/a')} | "
+            f"openapi={getattr(control_result, 'openapi_http', 'n/a')} | "
+            f"image={getattr(control_result, 'image_http', 'n/a')}"
+        )
+        enabled_state = getattr(control_result, "enabled", None)
+        if enabled_state is True:
+            preview_status = "Технічні роботи увімкнені"
+        elif enabled_state is False:
+            preview_status = "Технічні роботи вимкнені"
+        else:
+            preview_status = "Статус технічних робіт не визначено"
+        self.maintenance_preview_status.set(preview_status)
+        publish_related = bool(getattr(control_result, "local_html_path", None) or getattr(control_result, "remote_html_path", None))
+        if action == "publish" or publish_related:
+            self._append_product_log(
+                f"[Технічні роботи] maintenance.publish: {status_label} | stage={stage} | exit={exit_code_text} | {message_text}"
+            )
+            self.record_history(
+                "maintenance.publish",
+                status="ok" if getattr(control_result, "success", False) else "error",
+                details=f"stage={stage}; exit={exit_code_text}; {message_text}",
+                extra={
+                    "stage": stage,
+                    "exit_code": exit_code,
+                    "message": message_text,
+                },
+            )
+        else:
+            self._append_product_log(f"[Технічні роботи] {action}: {status_label}")
+        if not getattr(control_result, "success", False):
+            messagebox.showwarning("Дію завершено з попередженнями", message_text)
+
+    def open_maintenance_server_control_details(self) -> None:
+        result = self._maintenance_server_control_last_result
+        if result is None:
+            messagebox.showinfo(
+                "Немає даних",
+                "Спочатку натисни «Оновити статус», «Увімкнути техроботи» або «Вимкнути техроботи».",
+            )
+            return
+
+        if (
+            self._maintenance_server_control_details_window is not None
+            and self._maintenance_server_control_details_window.winfo_exists()
+        ):
+            window = self._maintenance_server_control_details_window
+            window.deiconify()
+            window.lift()
+            window.focus_force()
+            return
+
+        window = tk.Toplevel(self)
+        window.title("Деталі технічних робіт")
+        window.geometry("920x700")
+        window.minsize(700, 480)
+        window.transient(self)
+        window.columnconfigure(0, weight=1)
+        window.rowconfigure(1, weight=1)
+        self._maintenance_server_control_details_window = window
+
+        header = ttk.Frame(window, style="Root.TFrame", padding=16)
+        header.grid(row=0, column=0, sticky="ew")
+        header.columnconfigure(0, weight=1)
+        ttk.Label(header, text="Деталі технічних робіт", style="Section.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Label(
+            header,
+            text="Тут показано лише безпечні дані: stage, код завершення, очищені stdout/stderr та шляхи до файлів.",
+            style="Hint.TLabel",
+            justify="left",
+        ).grid(row=1, column=0, sticky="w", pady=(6, 0))
+
+        body = ttk.Frame(window, style="Root.TFrame", padding=(16, 0, 16, 16))
+        body.grid(row=1, column=0, sticky="nsew")
+        body.columnconfigure(0, weight=1)
+        body.rowconfigure(0, weight=1)
+
+        text = tk.Text(
+            body,
+            wrap="word",
+            bg="#fbfaf7",
+            fg="#1f2a29",
+            relief="flat",
+            borderwidth=0,
+            padx=12,
+            pady=12,
+        )
+        text.grid(row=0, column=0, sticky="nsew")
+        scroll = ttk.Scrollbar(body, orient="vertical", command=text.yview)
+        scroll.grid(row=0, column=1, sticky="ns")
+        text.configure(yscrollcommand=scroll.set)
+
+        def value_or_na(value: object) -> str:
+            if value is None:
+                return "n/a"
+            text_value = str(value).strip()
+            return text_value or "n/a"
+
+        lines = [
+            f"Action: {value_or_na(getattr(result, 'action', None))}",
+            f"Success: {value_or_na(getattr(result, 'success', None))}",
+            f"Stage: {value_or_na(getattr(result, 'stage', None))}",
+            f"Exit code: {value_or_na(getattr(result, 'exit_code', None))}",
+            f"Status label: {value_or_na(getattr(result, 'status_label', None))}",
+            f"Message: {value_or_na(getattr(result, 'message', None))}",
+            "",
+            "Safe stdout:",
+            value_or_na(getattr(result, 'safe_stdout', None)),
+            "",
+            "Safe stderr:",
+            value_or_na(getattr(result, 'safe_stderr', None)),
+            "",
+            f"Local HTML SHA-256: {value_or_na(getattr(result, 'local_html_sha256', None))}",
+            f"Local image SHA-256: {value_or_na(getattr(result, 'local_image_sha256', None))}",
+            f"Remote HTML SHA-256: {value_or_na(getattr(result, 'remote_html_sha256', None))}",
+            f"Remote image SHA-256: {value_or_na(getattr(result, 'remote_image_sha256', None))}",
+            f"Local HTML path: {value_or_na(getattr(result, 'local_html_path', None))}",
+            f"Local image path: {value_or_na(getattr(result, 'local_image_path', None))}",
+            f"Remote HTML path: {value_or_na(getattr(result, 'remote_html_path', None))}",
+            f"Remote image path: {value_or_na(getattr(result, 'remote_image_path', None))}",
+        ]
+        text.insert("1.0", "\n".join(lines))
+        text.configure(state="disabled")
+
+    def refresh_maintenance_server_control_status(self) -> None:
+        if self._maintenance_server_control_running:
+            return
+
+        server_host = self.server_host.get().strip()
+        server_port = self.server_port.get().strip() or "22"
+        server_user = self.server_user.get().strip()
+        ssh_key_path = self.ssh_key_path.get().strip()
+        server_password = self.server_password.get().strip()
+
+        if not server_host or not server_user:
+            messagebox.showwarning(
+                "Дані сервера",
+                "Для перевірки статусу потрібні введені адреса сервера і SSH-користувач.",
+            )
+            return
+
+        sudo_password = self._prompt_sudo_password()
+        if sudo_password is None:
+            self.maintenance_server_control_status.set("Перевірку скасовано.")
+            return
+
+        self._maintenance_server_control_running = True
+        self.maintenance_server_control_status.set("Перевіряю статус...")
+        self._begin_activity()
+
+        def finish(result: object | None = None, error_text: str | None = None) -> None:
+            self._finish_maintenance_server_control(result=result, error_text=error_text)
+
+        def worker() -> None:
+            try:
+                result = run_maintenance_server_status(
+                    server_host,
+                    server_port,
+                    server_user,
+                    ssh_key_path,
+                    server_password,
+                    sudo_password,
+                )
+            except Exception as exc:  # pragma: no cover - remote dependent
+                self.after(0, lambda: finish(error_text=str(exc)))
+                return
+            self.after(0, lambda: finish(result=result))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def run_maintenance_server_enable(self) -> None:
+        if self._maintenance_server_control_running:
+            return
+
+        if not messagebox.askyesno(
+            "Увімкнути техроботи",
+            "Сайт, адмінка та API будуть тимчасово недоступні для користувачів і повернуть сторінку технічних робіт. Продовжити?",
+        ):
+            return
+
+        server_host = self.server_host.get().strip()
+        server_port = self.server_port.get().strip() or "22"
+        server_user = self.server_user.get().strip()
+        ssh_key_path = self.ssh_key_path.get().strip()
+        server_password = self.server_password.get().strip()
+        message = self.maintenance_message.get().strip()
+        eta = self.maintenance_eta.get().strip()
+
+        if not server_host or not server_user:
+            messagebox.showwarning(
+                "Дані сервера",
+                "Для увімкнення техробіт потрібні введені адреса сервера і SSH-користувач.",
+            )
+            return
+
+        sudo_password = self._prompt_sudo_password()
+        if sudo_password is None:
+            self.maintenance_server_control_status.set("Увімкнення скасовано.")
+            return
+
+        self._maintenance_server_control_running = True
+        self.maintenance_server_control_status.set("Підготовка сторінки і увімкнення...")
+        self._begin_activity()
+
+        def finish(result: object | None = None, error_text: str | None = None) -> None:
+            self._finish_maintenance_server_control(result=result, error_text=error_text)
+
+        def worker() -> None:
+            try:
+                result = run_maintenance_server_enable(
+                    server_host,
+                    server_port,
+                    server_user,
+                    ssh_key_path,
+                    server_password,
+                    sudo_password,
+                    message,
+                    eta,
+                )
+            except Exception as exc:  # pragma: no cover - remote dependent
+                self.after(0, lambda: finish(error_text=str(exc)))
+                return
+            self.after(0, lambda: finish(result=result))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def run_maintenance_server_disable(self) -> None:
+        if self._maintenance_server_control_running:
+            return
+
+        if not messagebox.askyesno(
+            "Вимкнути техроботи",
+            "Сайт, адмінка та API знову стануть доступними для користувачів. Продовжити?",
+        ):
+            return
+
+        server_host = self.server_host.get().strip()
+        server_port = self.server_port.get().strip() or "22"
+        server_user = self.server_user.get().strip()
+        ssh_key_path = self.ssh_key_path.get().strip()
+        server_password = self.server_password.get().strip()
+
+        if not server_host or not server_user:
+            messagebox.showwarning(
+                "Дані сервера",
+                "Для вимкнення техробіт потрібні введені адреса сервера і SSH-користувач.",
+            )
+            return
+
+        sudo_password = self._prompt_sudo_password()
+        if sudo_password is None:
+            self.maintenance_server_control_status.set("Вимкнення скасовано.")
+            return
+
+        self._maintenance_server_control_running = True
+        self.maintenance_server_control_status.set("Вимикаю техроботи...")
+        self._begin_activity()
+
+        def finish(result: object | None = None, error_text: str | None = None) -> None:
+            self._finish_maintenance_server_control(result=result, error_text=error_text)
+
+        def worker() -> None:
+            try:
+                result = run_maintenance_server_disable(
+                    server_host,
+                    server_port,
+                    server_user,
+                    ssh_key_path,
+                    server_password,
+                    sudo_password,
+                )
+            except Exception as exc:  # pragma: no cover - remote dependent
+                self.after(0, lambda: finish(error_text=str(exc)))
+                return
+            self.after(0, lambda: finish(result=result))
+
+        threading.Thread(target=worker, daemon=True).start()
 
     def _prompt_sudo_password(self) -> str | None:
         dialog = tk.Toplevel(self)

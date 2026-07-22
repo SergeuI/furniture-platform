@@ -193,6 +193,43 @@ class MaintenanceServerAuditTests(unittest.TestCase):
         self.assertTrue(any("listen 443 ssl;" in line for line in result.listen_lines))
         self.assertIn("Привілейована перевірка успішна.", result.summary)
 
+    def test_collect_channel_output_times_out_and_closes_channel(self) -> None:
+        class FakeChannel:
+            def __init__(self) -> None:
+                self.closed = False
+                self.shutdown_called = False
+
+            def recv_ready(self) -> bool:
+                return False
+
+            def recv_stderr_ready(self) -> bool:
+                return False
+
+            def exit_status_ready(self) -> bool:
+                return False
+
+            def recv(self, _size: int) -> bytes:
+                return b""
+
+            def recv_stderr(self, _size: int) -> bytes:
+                return b""
+
+            def shutdown(self) -> None:
+                self.shutdown_called = True
+
+            def close(self) -> None:
+                self.closed = True
+
+        channel = FakeChannel()
+        with patch.object(maintenance_audit.time, "monotonic", side_effect=[0.0, 2.0]), patch.object(
+            maintenance_audit.time, "sleep"
+        ) as sleep_mock:
+            with self.assertRaises(TimeoutError):
+                maintenance_audit._collect_channel_output(channel, timeout_seconds=1.0, poll_interval=0.01)
+
+        self.assertTrue(channel.shutdown_called or channel.closed)
+        sleep_mock.assert_not_called()
+
     def test_privileged_audit_reports_full_nginx_config_paths_and_routes(self) -> None:
         class FakeStdin:
             def __init__(self) -> None:
@@ -327,6 +364,75 @@ class MaintenanceServerAuditTests(unittest.TestCase):
         self.assertTrue(all("reload" not in command for command, *_ in fake_client.calls))
         self.assertTrue(all("restart" not in command for command, *_ in fake_client.calls))
         self.assertTrue(all("write" not in command.lower() for command, *_ in fake_client.calls))
+
+    def test_privileged_audit_uses_sixty_second_privileged_timeout(self) -> None:
+        class FakeStdin:
+            def __init__(self) -> None:
+                self.written = ""
+                self.closed = False
+
+            def write(self, text: str) -> None:
+                self.written += text
+
+            def flush(self) -> None:
+                pass
+
+            def close(self) -> None:
+                self.closed = True
+
+        class FakeStream:
+            def __init__(self, channel: SimpleNamespace, stderr_text: str = "") -> None:
+                self.channel = channel
+                self._stderr_text = stderr_text
+
+            def read(self) -> bytes:
+                return self._stderr_text.encode("utf-8")
+
+        class FakeClient:
+            def __init__(self, outputs: dict[str, tuple[int, str, str]]) -> None:
+                self.outputs = outputs
+                self.calls: list[tuple[str, bool, float | None]] = []
+
+            def exec_command(self, command: str, get_pty: bool = False, timeout: float | None = None):
+                self.calls.append((command, get_pty, timeout))
+                exit_code, stdout_text, stderr_text = self.outputs[command]
+                channel = SimpleNamespace(stdout_text=stdout_text, stderr_text=stderr_text, exit_status=exit_code)
+                stdin = FakeStdin()
+                return stdin, FakeStream(channel), FakeStream(channel, stderr_text)
+
+            def close(self) -> None:
+                pass
+
+        outputs: dict[str, tuple[int, str, str]] = {
+            "id": (0, "uid=1000(mpc) gid=1000(mpc)", ""),
+            "groups": (0, "mpc sudo", ""),
+            "systemctl is-active nginx": (0, "active", ""),
+            "systemctl status nginx --no-pager -l": (0, "nginx service status", ""),
+            "ss -ltn": (0, "LISTEN 0 128 0.0.0.0:80 0.0.0.0:* LISTEN 0 128 0.0.0.0:443 0.0.0.0:*", ""),
+            PRIVILEGED_NGINX_COMMAND: (0, "nginx config", ""),
+        }
+        for path in DEFAULT_CHECK_PATHS:
+            outputs[f"test -e {path} && echo EXISTS || echo MISSING"] = (0, "EXISTS", "")
+            outputs[f"test -w {path} && echo WRITABLE || echo NOT_WRITABLE"] = (0, "WRITABLE", "")
+
+        fake_client = FakeClient(outputs)
+
+        with patch.object(maintenance_audit, "_open_paramiko_client", return_value=(fake_client, None)), patch.object(
+            maintenance_audit,
+            "_collect_channel_output",
+            side_effect=lambda channel, timeout_seconds=120.0: (channel.stdout_text, channel.stderr_text, channel.exit_status),
+        ):
+            result = audit_server_privileged(
+                "example.com",
+                "22",
+                "deploy",
+                "~/.ssh/id_ed25519",
+                "",
+                "sudo-secret",
+            )
+
+        self.assertTrue(result.success)
+        self.assertEqual(fake_client.calls[-1][2], 60.0)
 
     def test_privileged_audit_reports_sudo_denied_without_leaking_password(self) -> None:
         class FakeStdin:

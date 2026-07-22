@@ -91,7 +91,7 @@ def _open_paramiko_client(
             "username": server_user,
             "timeout": 10,
             "banner_timeout": 10,
-            "auth_timeout": 10,
+            "auth_timeout": 15,
             "allow_agent": True,
             "look_for_keys": True,
         }
@@ -105,7 +105,18 @@ def _open_paramiko_client(
         return None, str(exc)
 
 
-def _collect_channel_output(channel, timeout_seconds: float = 120.0) -> tuple[str, str, int]:
+def _close_channel_like(channel) -> None:
+    for attr in ("shutdown", "close"):
+        close = getattr(channel, attr, None)
+        if callable(close):
+            try:
+                close()
+            except Exception:
+                pass
+            return
+
+
+def _collect_channel_output(channel, timeout_seconds: float = 120.0, poll_interval: float = 0.05) -> tuple[str, str, int]:
     deadline = time.monotonic() + timeout_seconds
     stdout_chunks: list[str] = []
     stderr_chunks: list[str] = []
@@ -115,29 +126,37 @@ def _collect_channel_output(channel, timeout_seconds: float = 120.0) -> tuple[st
             stdout_chunks.append(channel.recv(4096).decode("utf-8", errors="replace"))
         while channel.recv_stderr_ready():
             stderr_chunks.append(channel.recv_stderr(4096).decode("utf-8", errors="replace"))
-        if channel.exit_status_ready() and not channel.recv_ready() and not channel.recv_stderr_ready():
+        if channel.exit_status_ready():
             break
         if time.monotonic() > deadline:
+            _close_channel_like(channel)
             raise TimeoutError(f"Audit command exceeded {int(timeout_seconds)} seconds.")
-        time.sleep(0.1)
+        time.sleep(poll_interval)
 
-    exit_status = channel.recv_exit_status()
     while channel.recv_ready():
         stdout_chunks.append(channel.recv(4096).decode("utf-8", errors="replace"))
     while channel.recv_stderr_ready():
         stderr_chunks.append(channel.recv_stderr(4096).decode("utf-8", errors="replace"))
+    exit_status = channel.recv_exit_status()
     return "".join(stdout_chunks).strip(), "".join(stderr_chunks).strip(), exit_status
 
 
 def _run_ssh_command(client, command: str, timeout_seconds: float = 120.0) -> CommandResult:
     stdin, stdout, stderr = client.exec_command(command, timeout=timeout_seconds)
-    stdout_text, stderr_text, exit_status = _collect_channel_output(stdout.channel, timeout_seconds=timeout_seconds)
-    stderr_extra = stderr.read().decode("utf-8", errors="replace").strip()
-    if stderr_extra and stderr_text:
-        stderr_text = "\n".join(part for part in [stderr_text, stderr_extra] if part)
-    elif stderr_extra:
-        stderr_text = stderr_extra
-    return CommandResult(command=command, exit_code=exit_status, stdout=stdout_text, stderr=stderr_text)
+    try:
+        stdout_text, stderr_text, exit_status = _collect_channel_output(stdout.channel, timeout_seconds=timeout_seconds)
+        stderr_extra = stderr.read().decode("utf-8", errors="replace").strip()
+        if stderr_extra and stderr_text:
+            stderr_text = "\n".join(part for part in [stderr_text, stderr_extra] if part)
+        elif stderr_extra:
+            stderr_text = stderr_extra
+        return CommandResult(command=command, exit_code=exit_status, stdout=stdout_text, stderr=stderr_text)
+    finally:
+        for stream in (stdin, stdout, stderr):
+            try:
+                stream.close()
+            except Exception:
+                pass
 
 
 def _extract_lines(pattern: str, text: str) -> list[str]:
@@ -486,20 +505,34 @@ def _run_ssh_command_with_input(
     timeout_seconds: float = 120.0,
 ) -> CommandResult:
     stdin, stdout, stderr = client.exec_command(command, get_pty=True, timeout=timeout_seconds)
-    if input_text:
-        stdin.write(input_text + "\n")
-        stdin.flush()
     try:
-        stdin.close()
-    except Exception:
-        pass
-    stdout_text, stderr_text, exit_status = _collect_channel_output(stdout.channel, timeout_seconds=timeout_seconds)
-    stderr_extra = stderr.read().decode("utf-8", errors="replace").strip()
-    if stderr_extra and stderr_text:
-        stderr_text = "\n".join(part for part in [stderr_text, stderr_extra] if part)
-    elif stderr_extra:
-        stderr_text = stderr_extra
-    return CommandResult(command=command, exit_code=exit_status, stdout=stdout_text, stderr=stderr_text)
+        if input_text:
+            stdin.write(input_text + "\n")
+            stdin.flush()
+        shutdown_write = getattr(stdin, "shutdown_write", None)
+        if callable(shutdown_write):
+            try:
+                shutdown_write()
+            except Exception:
+                pass
+        else:
+            try:
+                stdin.close()
+            except Exception:
+                pass
+        stdout_text, stderr_text, exit_status = _collect_channel_output(stdout.channel, timeout_seconds=timeout_seconds)
+        stderr_extra = stderr.read().decode("utf-8", errors="replace").strip()
+        if stderr_extra and stderr_text:
+            stderr_text = "\n".join(part for part in [stderr_text, stderr_extra] if part)
+        elif stderr_extra:
+            stderr_text = stderr_extra
+        return CommandResult(command=command, exit_code=exit_status, stdout=stdout_text, stderr=stderr_text)
+    finally:
+        for stream in (stdin, stdout, stderr):
+            try:
+                stream.close()
+            except Exception:
+                pass
 
 
 def _privileged_config_failure_reason(output_text: str) -> str:
@@ -792,6 +825,7 @@ def audit_server_privileged(
     server_password: str,
     sudo_password: str,
 ) -> AuditResult:
+    privileged_timeout_seconds = 60.0
     client = None
     try:
         client, error = _open_paramiko_client(server_host, server_port, server_user, ssh_key_path, server_password)
@@ -845,7 +879,12 @@ def audit_server_privileged(
             command_results.append(result)
 
         try:
-            config_result = _run_ssh_command_with_input(client, PRIVILEGED_NGINX_COMMAND, password)
+            config_result = _run_ssh_command_with_input(
+                client,
+                PRIVILEGED_NGINX_COMMAND,
+                password,
+                timeout_seconds=privileged_timeout_seconds,
+            )
         except Exception as exc:  # pragma: no cover - remote dependent
             config_result = CommandResult(command=PRIVILEGED_NGINX_COMMAND, exit_code=1, stdout="", stderr=str(exc))
         command_results.append(config_result)
