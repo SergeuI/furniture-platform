@@ -117,6 +117,77 @@ class CatalogVisibilityTests(unittest.TestCase):
                     self.assertIn("System Fitting", {item["name"] for item in fittings})
                     self.assertNotIn("Private Fitting", {item["name"] for item in fittings})
 
+    def test_admin_can_filter_materials_by_ownership_scope_without_mixing_types(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
+                with session_factory() as session:
+                    session.add_all(
+                        [
+                            MaterialModel(
+                                article="ADMIN-SYS",
+                                name="Admin System",
+                                category="dsp",
+                                owner_user_id=None,
+                                is_default=True,
+                            ),
+                            MaterialModel(
+                                article="ADMIN-MINE",
+                                name="Admin Private",
+                                category="dsp",
+                                owner_user_id="admin-user",
+                                is_default=False,
+                            ),
+                            MaterialModel(
+                                article="USER-PRIVATE",
+                                name="User Private",
+                                category="dsp",
+                                owner_user_id="other-user",
+                                is_default=False,
+                            ),
+                            MaterialModel(
+                                article="ORPHAN",
+                                name="Orphan Material",
+                                category="dsp",
+                                owner_user_id=None,
+                                is_default=False,
+                            ),
+                        ]
+                    )
+                    session.commit()
+
+                system_response = client.get(
+                    "/catalog/materials?ownership_scope=system",
+                    headers=self._auth_headers("admin-token"),
+                )
+                self.assertEqual(system_response.status_code, 200)
+                system_articles = {item["article"] for item in system_response.json()["items"]}
+                self.assertEqual(system_articles, {"ADMIN-SYS"})
+                self.assertNotIn("ORPHAN", system_articles)
+
+                mine_response = client.get(
+                    "/catalog/materials?ownership_scope=mine",
+                    headers=self._auth_headers("admin-token"),
+                )
+                self.assertEqual(mine_response.status_code, 200)
+                mine_articles = {item["article"] for item in mine_response.json()["items"]}
+                self.assertEqual(mine_articles, {"ADMIN-MINE"})
+
+                users_response = client.get(
+                    "/catalog/materials?ownership_scope=users",
+                    headers=self._auth_headers("admin-token"),
+                )
+                self.assertEqual(users_response.status_code, 200)
+                users_articles = {item["article"] for item in users_response.json()["items"]}
+                self.assertEqual(users_articles, {"USER-PRIVATE"})
+
+                all_response = client.get(
+                    "/catalog/materials?ownership_scope=all",
+                    headers=self._auth_headers("admin-token"),
+                )
+                self.assertEqual(all_response.status_code, 200)
+                all_articles = {item["article"] for item in all_response.json()["items"]}
+                self.assertEqual(all_articles, {"ADMIN-SYS", "ADMIN-MINE", "USER-PRIVATE", "ORPHAN"})
+
     def test_trial_user_can_open_system_material_and_fitting_details(self) -> None:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):

@@ -285,6 +285,10 @@ export async function getMaterialsCatalog(token, params = {}) {
     searchParams.set("city", params.city);
   }
 
+  if (params.ownership_scope) {
+    searchParams.set("ownership_scope", params.ownership_scope);
+  }
+
   const query = searchParams.toString();
 
   return request(`/catalog/materials${query ? `?${query}` : ""}`, {

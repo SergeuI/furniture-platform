@@ -965,6 +965,16 @@ def _material_visible_to_viewer(
     return False
 
 
+def _normalize_material_ownership_scope(value: str | None) -> str:
+
+    normalized = str(value or "").strip().casefold()
+
+    if normalized in {"system", "mine", "users", "all"}:
+        return normalized
+
+    return "all"
+
+
 def _fitting_visible_to_viewer(
     item: FittingModel,
     viewer_user_id: str | None,
@@ -1163,6 +1173,7 @@ def list_materials(
     city: str | None = None,
     viewer_user_id: str | None = None,
     viewer_role: str | None = None,
+    ownership_scope: str | None = None,
 ) -> list[dict]:
 
     db = SessionLocal()
@@ -1195,7 +1206,26 @@ def list_materials(
                 MaterialModel.category == category,
             )
 
-        if viewer_role and viewer_role != "admin":
+        normalized_ownership_scope = _normalize_material_ownership_scope(ownership_scope)
+
+        if viewer_role == "admin":
+            if normalized_ownership_scope == "system":
+                query = query.filter(
+                    MaterialModel.is_default.is_(True),
+                    MaterialModel.owner_user_id.is_(None),
+                )
+            elif normalized_ownership_scope == "mine":
+                query = query.filter(
+                    MaterialModel.is_default.is_(False),
+                    MaterialModel.owner_user_id == _normalize_fitting_value(viewer_user_id),
+                )
+            elif normalized_ownership_scope == "users":
+                query = query.filter(
+                    MaterialModel.is_default.is_(False),
+                    MaterialModel.owner_user_id.isnot(None),
+                    MaterialModel.owner_user_id != _normalize_fitting_value(viewer_user_id),
+                )
+        elif viewer_role and viewer_role != "admin":
             query = query.filter(
                 (
                     (

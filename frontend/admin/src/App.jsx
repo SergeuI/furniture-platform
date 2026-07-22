@@ -5507,6 +5507,55 @@ function canDeleteMaterialItem(user, item) {
   return canEditMaterialItem(user, item);
 }
 
+function getMaterialOwnershipScopeLabel(scope, language) {
+  const labels = language === "en"
+    ? {
+        system: "System",
+        mine: "My private",
+        users: "Users' private",
+        all: "All",
+      }
+    : {
+        system: "Системні",
+        mine: "Мої приватні",
+        users: "Користувацькі",
+        all: "Всі",
+      };
+
+  return labels[String(scope || "all")] || labels.all;
+}
+
+function getMaterialOwnershipTypeLabel(item, currentUser, language) {
+  if (item?.is_default && !item?.owner_user_id) {
+    return language === "en" ? "System" : "Системний";
+  }
+
+  if (item?.owner_user_id && String(item.owner_user_id) === String(currentUser?.id || "")) {
+    return language === "en" ? "My private" : "Мій приватний";
+  }
+
+  if (item?.owner_user_id) {
+    return language === "en" ? "Users' private" : "Користувацький";
+  }
+
+  return language === "en" ? "Invalid" : "Некоректний";
+}
+
+function getMaterialOwnerLabel(item, currentUser, language) {
+  if (!item?.owner_user_id) {
+    return null;
+  }
+
+  if (String(item.owner_user_id) === String(currentUser?.id || "")) {
+    return language === "en" ? "Owner: me" : "Власник: я";
+  }
+
+  const ownerId = String(item.owner_user_id).trim();
+  return language === "en"
+    ? `Owner: user #${ownerId}`
+    : `Власник: користувач #${ownerId}`;
+}
+
 function getMaterialSourceMeta(item, t) {
   const sourceSite = item?.source_site || detectFittingSourceSite(item?.source_url);
 
@@ -6613,6 +6662,7 @@ export default function App() {
   const [materialSearch, setMaterialSearch] = useState("");
   const [materialsCatalogLoading, setMaterialsCatalogLoading] = useState(false);
   const [materialCategoryFilter, setMaterialCategoryFilter] = useState("dsp");
+  const [materialOwnershipScope, setMaterialOwnershipScope] = useState("system");
   const [newMaterialArticle, setNewMaterialArticle] = useState("");
   const [newMaterialSourceUrl, setNewMaterialSourceUrl] = useState("");
   const [newMaterialName, setNewMaterialName] = useState("");
@@ -9442,6 +9492,10 @@ export default function App() {
         category: options.category ?? materialCategoryFilter ?? "dsp",
         city: options.city ?? activeCity ?? "",
         search: options.search ?? materialSearch,
+        ownership_scope:
+          user?.role === "admin"
+            ? (options.ownershipScope ?? materialOwnershipScope ?? "all")
+            : undefined,
       });
 
       if (materialsCatalogRequestRef.current.id !== requestId || activeViewRef.current !== viewAtStart) {
@@ -15208,7 +15262,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
     }
 
     loadMaterialsCatalog(token);
-  }, [token, isCatalogMaterialsView, materialCategoryFilter, materialSearch]);
+  }, [token, user?.role, isCatalogMaterialsView, materialCategoryFilter, materialSearch, materialOwnershipScope]);
 
   useEffect(() => {
     if (!token || (!isCatalogFittingsView && !isCatalogFastenersView)) {
@@ -17604,6 +17658,20 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                     ))}
                   </select>
                 </label>
+                {user?.role === "admin" ? (
+                  <label className="materials-filter">
+                    <span>{language === "en" ? "Ownership" : "Власність"}</span>
+                    <select
+                      onChange={(event) => setMaterialOwnershipScope(event.target.value)}
+                      value={materialOwnershipScope}
+                    >
+                      <option value="system">{getMaterialOwnershipScopeLabel("system", language)}</option>
+                      <option value="mine">{getMaterialOwnershipScopeLabel("mine", language)}</option>
+                      <option value="users">{getMaterialOwnershipScopeLabel("users", language)}</option>
+                      <option value="all">{getMaterialOwnershipScopeLabel("all", language)}</option>
+                    </select>
+                  </label>
+                ) : null}
                 <button
                   className="ghost-button"
                   disabled={loading}
@@ -17887,6 +17955,11 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                           <span className="service-tree-badge subtle">
                             {formatCatalogLabel(item.category, t)}
                           </span>
+                          {user?.role === "admin" ? (
+                            <span className="service-tree-badge subtle">
+                              {getMaterialOwnershipTypeLabel(item, user, language)}
+                            </span>
+                          ) : null}
                           {item.display_article ? (
                             <span className="material-card-article">{item.display_article}</span>
                           ) : null}
@@ -22295,6 +22368,11 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                   <span className="service-tree-badge subtle">
                     {formatCatalogLabel(selectedMaterialDetail.category, t)}
                   </span>
+                  {user?.role === "admin" ? (
+                    <span className="service-tree-badge subtle">
+                      {getMaterialOwnershipTypeLabel(selectedMaterialDetail, user, language)}
+                    </span>
+                  ) : null}
                   {selectedMaterialDetail.display_article ? (
                     <span className="service-tree-badge subtle">
                       {selectedMaterialDetail.display_article}
@@ -22302,6 +22380,14 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                   ) : null}
                   {renderSourceBadge(getMaterialSourceMeta(selectedMaterialDetail, t))}
                 </div>
+                {user?.role === "admin" ? (
+                  <div className="material-details-owner">
+                    <span>{language === "en" ? "Owner" : "Власник"}</span>
+                    <strong>
+                      {getMaterialOwnerLabel(selectedMaterialDetail, user, language) || (language === "en" ? "Not set" : "Не вказано")}
+                    </strong>
+                  </div>
+                ) : null}
 
                 <div className="material-details-grid">
                   <div>

@@ -743,6 +743,7 @@ async def list_materials_route(
     search: str | None = Query(default=None),
     category: str | None = Query(default=None),
     city: str | None = Query(default=None),
+    ownership_scope: str | None = Query(default=None),
     current_user = Depends(require_catalog_reader)
 ):
 
@@ -753,6 +754,7 @@ async def list_materials_route(
         city=selected_city,
         viewer_user_id=str(current_user.id),
         viewer_role=current_user.role,
+        ownership_scope=ownership_scope if current_user.role == "admin" else None,
     )
 
     # Прогрів картинок тимчасово вимкнено для діагностики швидкодії.
