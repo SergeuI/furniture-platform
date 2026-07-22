@@ -20,6 +20,7 @@ from api.routes import catalog
 from database.base import Base
 from database.models import audit_log  # noqa: F401
 from database.models import catalog_item  # noqa: F401
+from database.models.entitlement_feature import EntitlementFeatureModel
 from database.models import entitlement_feature  # noqa: F401
 from database.models.fitting import FittingModel
 from database.models import fitting_hole_service_rule  # noqa: F401
@@ -32,6 +33,7 @@ from database.models import material_import_job  # noqa: F401
 from database.models import material_price  # noqa: F401
 from database.models import material_user_link  # noqa: F401
 from database.models import plan_entitlement  # noqa: F401
+from database.models.plan_entitlement import PlanEntitlementModel
 from database.models import project  # noqa: F401
 from database.models import project_scan_session  # noqa: F401
 from database.models import project_version  # noqa: F401
@@ -42,6 +44,7 @@ from database.models import user  # noqa: F401
 from database.models import user_change_request  # noqa: F401
 from database.models import user_service_catalog_price  # noqa: F401
 from database.repositories import inventory_repository
+import services.entitlement_service as entitlement_service
 
 
 def _enable_foreign_keys(dbapi_connection, connection_record) -> None:
@@ -99,7 +102,7 @@ class CatalogVisibilityTests(unittest.TestCase):
                     )
                     session.commit()
 
-                for role in ("trial", "free"):
+                for role in ("trial", "free", "pro", "premium", "business"):
                     materials = inventory_repository.list_materials(
                         viewer_user_id=f"{role}-user",
                         viewer_role=role,
@@ -260,21 +263,135 @@ class CatalogVisibilityTests(unittest.TestCase):
                 with session_factory() as session:
                     self.assertIsNone(session.query(MaterialModel).filter(MaterialModel.article == article).one_or_none())
 
-    def test_free_user_cannot_create_material(self) -> None:
+    def test_free_user_can_create_three_materials_but_not_a_fourth(self) -> None:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
-            with self._catalog_context(Path(tmpdir) / "catalog.db") as (_session_factory, client):
-                response = client.post(
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
+                with session_factory() as session:
+                    session.add_all(
+                        [
+                            MaterialModel(
+                                article="ADMIN-SYSTEM-MAT",
+                                name="Admin System Material",
+                                category="dsp",
+                                owner_user_id=None,
+                                is_default=True,
+                            ),
+                            MaterialModel(
+                                article="OTHER-PRIVATE-MAT",
+                                name="Other Private Material",
+                                category="dsp",
+                                owner_user_id="someone-else",
+                                is_default=False,
+                            ),
+                        ]
+                    )
+                    session.commit()
+
+                quota_response = client.get(
+                    "/catalog/materials",
+                    headers=self._auth_headers("free-token"),
+                )
+                self.assertEqual(quota_response.status_code, 200)
+                self.assertTrue(quota_response.json()["success"])
+                quota = quota_response.json()["material_quota"]
+                self.assertEqual(quota["owned_count"], 0)
+                self.assertEqual(quota["limit"], 3)
+                self.assertFalse(quota["is_unlimited"])
+                self.assertTrue(quota["can_create"])
+
+                system_visible = client.get(
+                    "/catalog/materials/ADMIN-SYSTEM-MAT",
+                    headers=self._auth_headers("free-token"),
+                )
+                self.assertEqual(system_visible.status_code, 200)
+                self.assertTrue(system_visible.json()["success"])
+
+                foreign_hidden = client.get(
+                    "/catalog/materials/OTHER-PRIVATE-MAT",
+                    headers=self._auth_headers("free-token"),
+                )
+                self.assertEqual(foreign_hidden.status_code, 200)
+                self.assertFalse(foreign_hidden.json()["success"])
+
+                created_articles = []
+                for index in range(1, 4):
+                    response = client.post(
+                        "/catalog/materials",
+                        json={
+                            "article": f"FREE-MAT-{index}",
+                            "name": f"Free Material {index}",
+                            "category": "dsp",
+                            "city": "kyiv",
+                            "price": 12.5 + index,
+                        },
+                        headers=self._auth_headers("free-token"),
+                    )
+                    self.assertEqual(response.status_code, 200)
+                    self.assertTrue(response.json()["success"])
+                    created_articles.append(response.json()["item"]["article"])
+
+                quota_response = client.get(
+                    "/catalog/materials",
+                    headers=self._auth_headers("free-token"),
+                )
+                self.assertEqual(quota_response.status_code, 200)
+                quota = quota_response.json()["material_quota"]
+                self.assertEqual(quota["owned_count"], 3)
+                self.assertEqual(quota["limit"], 3)
+                self.assertFalse(quota["can_create"])
+
+                own_detail = client.get(
+                    f"/catalog/materials/{created_articles[0]}",
+                    headers=self._auth_headers("free-token"),
+                )
+                self.assertEqual(own_detail.status_code, 200)
+                self.assertTrue(own_detail.json()["success"])
+                self.assertEqual(own_detail.json()["item"]["article"], created_articles[0])
+
+                blocked = client.post(
                     "/catalog/materials",
                     json={
-                        "article": "FREE-MAT",
-                        "name": "Free Material",
+                        "article": "FREE-MAT-4",
+                        "name": "Free Material 4",
                         "category": "dsp",
                         "city": "kyiv",
-                        "price": 12.5,
+                        "price": 16.5,
                     },
                     headers=self._auth_headers("free-token"),
                 )
-                self.assertEqual(response.status_code, 403)
+                self.assertEqual(blocked.status_code, 403)
+                self.assertEqual(blocked.json()["detail"]["error"], "Material ownership limit reached")
+
+                deleted = client.delete(
+                    f"/catalog/materials/{created_articles[0]}",
+                    headers=self._auth_headers("free-token"),
+                )
+                self.assertEqual(deleted.status_code, 200)
+                self.assertTrue(deleted.json()["success"])
+
+                quota_response = client.get(
+                    "/catalog/materials",
+                    headers=self._auth_headers("free-token"),
+                )
+                self.assertEqual(quota_response.status_code, 200)
+                quota = quota_response.json()["material_quota"]
+                self.assertEqual(quota["owned_count"], 2)
+                self.assertEqual(quota["limit"], 3)
+                self.assertTrue(quota["can_create"])
+
+                created_after_delete = client.post(
+                    "/catalog/materials",
+                    json={
+                        "article": "FREE-MAT-4",
+                        "name": "Free Material 4",
+                        "category": "dsp",
+                        "city": "kyiv",
+                        "price": 16.5,
+                    },
+                    headers=self._auth_headers("free-token"),
+                )
+                self.assertEqual(created_after_delete.status_code, 200)
+                self.assertTrue(created_after_delete.json()["success"])
 
     def test_admin_created_material_is_system_and_visible_to_trial(self) -> None:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
@@ -326,6 +443,36 @@ class CatalogVisibilityTests(unittest.TestCase):
                 )
                 self.assertEqual(denied_delete.status_code, 200)
                 self.assertFalse(denied_delete.json()["success"])
+
+                with session_factory() as session:
+                    before_system = session.query(MaterialModel).filter(MaterialModel.article == article).one()
+                    before_system_name = before_system.name
+
+                free_update = client.post(
+                    "/catalog/materials",
+                    json={
+                        "article": article,
+                        "name": "Blocked Update",
+                        "category": "dsp",
+                        "city": "kyiv",
+                        "price": 42.0,
+                    },
+                    headers=self._auth_headers("free-token"),
+                )
+                self.assertEqual(free_update.status_code, 200)
+                self.assertTrue(free_update.json()["success"])
+                self.assertEqual(free_update.json()["item"]["article"], article)
+
+                with session_factory() as session:
+                    after_system = session.query(MaterialModel).filter(MaterialModel.article == article).one()
+                    self.assertEqual(after_system.name, before_system_name)
+
+                free_delete = client.delete(
+                    f"/catalog/materials/{article}",
+                    headers=self._auth_headers("free-token"),
+                )
+                self.assertEqual(free_delete.status_code, 200)
+                self.assertFalse(free_delete.json()["success"])
 
     def test_trial_user_cannot_see_private_material_by_id_or_image(self) -> None:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
@@ -687,9 +834,45 @@ class CatalogVisibilityTests(unittest.TestCase):
         with (
             patch.object(inventory_repository, "SessionLocal", side_effect=session_factory),
             patch.object(catalog, "SessionLocal", side_effect=session_factory),
+            patch.object(entitlement_service, "SessionLocal", side_effect=session_factory),
             patch.object(auth_dependencies, "get_user_from_token", side_effect=_resolve_user),
             patch.object(catalog, "get_user_from_token", side_effect=_resolve_user),
         ):
+            with session_factory() as session:
+                feature = EntitlementFeatureModel(
+                    feature_key="materials.max_owned",
+                    name_uk="Максимальна кількість власних матеріалів",
+                    category="materials",
+                    sort_order=50,
+                    value_type="integer",
+                )
+                session.add(feature)
+                session.flush()
+                session.add_all(
+                    [
+                        PlanEntitlementModel(
+                            feature_id=feature.id,
+                            plan_code="trial",
+                            is_unlimited=True,
+                        ),
+                        PlanEntitlementModel(
+                            feature_id=feature.id,
+                            plan_code="free",
+                            integer_value=3,
+                        ),
+                        PlanEntitlementModel(
+                            feature_id=feature.id,
+                            plan_code="pro",
+                            is_unlimited=True,
+                        ),
+                        PlanEntitlementModel(
+                            feature_id=feature.id,
+                            plan_code="business",
+                            is_unlimited=True,
+                        ),
+                    ]
+                )
+                session.commit()
             with TestClient(app) as client:
                 yield session_factory, client
 

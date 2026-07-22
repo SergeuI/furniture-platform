@@ -952,7 +952,7 @@ def _material_visible_to_viewer(
     if viewer_role == "admin":
         return True
 
-    if bool(item.is_default) or item.owner_user_id is None:
+    if bool(item.is_default) and item.owner_user_id is None:
         return True
 
     normalized_user_id = _normalize_fitting_value(viewer_user_id)
@@ -1137,6 +1137,26 @@ def ensure_material_user_link(
         db.close()
 
 
+def count_owned_private_materials(owner_user_id: str | None) -> int:
+
+    normalized_owner_user_id = _normalize_fitting_value(owner_user_id)
+    if not normalized_owner_user_id:
+        return 0
+
+    db = SessionLocal()
+
+    try:
+        return (
+            db.query(func.count(MaterialModel.id))
+            .filter(MaterialModel.owner_user_id == normalized_owner_user_id)
+            .filter(MaterialModel.is_default.is_(False))
+            .scalar()
+            or 0
+        )
+    finally:
+        db.close()
+
+
 def list_materials(
     search: str | None = None,
     category: str | None = None,
@@ -1178,8 +1198,10 @@ def list_materials(
         if viewer_role and viewer_role != "admin":
             query = query.filter(
                 (
-                    MaterialModel.is_default.is_(True)
-                    | MaterialModel.owner_user_id.is_(None)
+                    (
+                        MaterialModel.is_default.is_(True)
+                        & MaterialModel.owner_user_id.is_(None)
+                    )
                     | (MaterialModel.owner_user_id == _normalize_fitting_value(viewer_user_id))
                     | MaterialModel.article.in_(sorted(linked_article_ids))
                 )

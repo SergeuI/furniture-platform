@@ -74,6 +74,7 @@ from database.repositories.service_catalog_repository import (
 from database.repositories.inventory_repository import (
     MATERIAL_EDGE_LABELS,
     ensure_material_user_link,
+    count_owned_private_materials,
     create_fitting,
     delete_fitting,
     delete_material,
@@ -128,6 +129,9 @@ from services.fitting_image_gallery_service import (
 )
 from services.auth_service import (
     get_user_from_token,
+)
+from services.entitlement_service import (
+    EntitlementService,
 )
 from services.material_import_queue_service import (
     enqueue_material_import_job,
@@ -408,8 +412,10 @@ require_manual_service_editor = require_roles(
 require_material_editor = require_roles(
     [
         "admin",
+        "trial",
         "premium",
         "pro",
+        "free",
     ]
 )
 
@@ -473,6 +479,55 @@ def _can_manage_material_item(current_user, item: dict | None) -> bool:
         return False
 
     return item.get("owner_user_id") == str(current_user.id)
+
+
+def _get_material_ownership_quota(current_user) -> dict:
+
+    owned_count = count_owned_private_materials(str(current_user.id))
+
+    if current_user.role == "admin":
+        return {
+            "owned_count": owned_count,
+            "limit": None,
+            "is_unlimited": True,
+            "can_create": True,
+        }
+
+    with EntitlementService() as service:
+        limit_resolution = service.get_limit(current_user, "materials.max_owned")
+
+    limit_value = limit_resolution.limit_value
+    normalized_limit = int(limit_value) if limit_value is not None else None
+    is_unlimited = limit_resolution.status == "unlimited"
+    can_create = bool(
+        is_unlimited
+        or (
+            normalized_limit is not None
+            and owned_count < normalized_limit
+        )
+    )
+
+    return {
+        "owned_count": owned_count,
+        "limit": normalized_limit,
+        "is_unlimited": is_unlimited,
+        "can_create": can_create,
+    }
+
+
+def _ensure_material_ownership_capacity(current_user) -> dict:
+
+    quota = _get_material_ownership_quota(current_user)
+
+    if not quota["can_create"]:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": "Material ownership limit reached",
+            },
+        )
+
+    return quota
 
 
 def _resolve_material_with_city_context(
@@ -707,6 +762,7 @@ async def list_materials_route(
         "categories": list_material_categories(),
         "city_options": list_inventory_cities(),
         "selected_city": selected_city,
+        "material_quota": _get_material_ownership_quota(current_user),
         "items": items,
     }
 
@@ -841,6 +897,9 @@ async def create_material_route(
                 "success": False,
                 "error": "Article is required when adding material from a link",
             }
+
+        if not existing_item and not is_default:
+            _ensure_material_ownership_capacity(current_user)
 
         source_site = detect_material_source_site(effective_source_url)
 
@@ -1081,6 +1140,9 @@ async def create_material_route(
             "error": "Material with this article already exists",
         }
 
+    if not existing_manual_item:
+        _ensure_material_ownership_capacity(current_user)
+
     item = upsert_material(
         article=manual_article,
         name=effective_name,
@@ -1183,6 +1245,9 @@ async def import_material_from_viyar_route(
             "selected_city": selected_city,
             "error": None,
         }
+
+    if not existing_item and current_user.role != "admin":
+        _ensure_material_ownership_capacity(current_user)
 
     cookie_override = await _resolve_viyar_cookie_for_user(current_user)
     try:

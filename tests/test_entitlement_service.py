@@ -163,6 +163,28 @@ class EntitlementServiceTests(unittest.TestCase):
                 self.assertEqual(service.get_limit(free_user, "empty_text_feature").status, "wrong_value_type")
                 self.assertEqual(service.get_limit(free_user, "inactive_feature").status, "access_denied")
 
+                materials_limit = service.get_limit(free_user, "materials.max_owned")
+                self.assertEqual(materials_limit.status, "limited")
+                self.assertEqual(materials_limit.limit_value, 3)
+                self.assertTrue(service.check_limit(free_user, "materials.max_owned", 2))
+                self.assertFalse(service.check_limit(free_user, "materials.max_owned", 3))
+
+                trial_materials_limit = service.get_limit(trial_window_user, "materials.max_owned")
+                self.assertEqual(trial_materials_limit.status, "unlimited")
+                self.assertTrue(service.check_limit(trial_window_user, "materials.max_owned", 10_000))
+
+                pro_materials_limit = service.get_limit(pro_user, "materials.max_owned")
+                self.assertEqual(pro_materials_limit.status, "unlimited")
+                self.assertTrue(service.check_limit(pro_user, "materials.max_owned", 10_000))
+
+                premium_materials_limit = service.get_limit(premium_user, "materials.max_owned")
+                self.assertEqual(premium_materials_limit.status, "unlimited")
+                self.assertTrue(service.check_limit(premium_user, "materials.max_owned", 10_000))
+
+                admin_materials_limit = service.get_limit(admin_user, "materials.max_owned")
+                self.assertEqual(admin_materials_limit.status, "unlimited")
+                self.assertTrue(service.check_limit(admin_user, "materials.max_owned", 10_000))
+
                 with self.assertRaises(ValueError):
                     service.check_limit(free_user, "ai_scan_limit", -1)
                 with self.assertRaises(ValueError):
@@ -344,6 +366,13 @@ class EntitlementServiceTests(unittest.TestCase):
                     value_type="boolean",
                     is_active=False,
                 ),
+                EntitlementFeatureModel(
+                    feature_key="materials.max_owned",
+                    name_uk="Максимальна кількість власних матеріалів",
+                    category="materials",
+                    sort_order=50,
+                    value_type="integer",
+                ),
             ]
         )
         session.commit()
@@ -410,6 +439,26 @@ class EntitlementServiceTests(unittest.TestCase):
                     feature_id=feature_ids["empty_text_feature"],
                     plan_code="business",
                     text_value="",
+                ),
+                PlanEntitlementModel(
+                    feature_id=feature_ids["materials.max_owned"],
+                    plan_code="trial",
+                    is_unlimited=True,
+                ),
+                PlanEntitlementModel(
+                    feature_id=feature_ids["materials.max_owned"],
+                    plan_code="free",
+                    integer_value=3,
+                ),
+                PlanEntitlementModel(
+                    feature_id=feature_ids["materials.max_owned"],
+                    plan_code="pro",
+                    is_unlimited=True,
+                ),
+                PlanEntitlementModel(
+                    feature_id=feature_ids["materials.max_owned"],
+                    plan_code="business",
+                    is_unlimited=True,
                 ),
                 PlanEntitlementModel(
                     feature_id=feature_ids["theme_mode"],

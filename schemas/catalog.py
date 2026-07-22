@@ -275,11 +275,19 @@ class MaterialCategorySchema(BaseModel):
     name: str
 
 
+class MaterialOwnershipQuotaSchema(BaseModel):
+    owned_count: int = 0
+    limit: int | None = None
+    is_unlimited: bool = False
+    can_create: bool = False
+
+
 class MaterialCatalogListResponseSchema(BaseModel):
     success: bool
     categories: List[MaterialCategorySchema] = Field(default_factory=list)
     city_options: List[str] = Field(default_factory=list)
     selected_city: str | None = None
+    material_quota: MaterialOwnershipQuotaSchema | None = None
     items: List[MaterialCatalogItemSchema] = Field(default_factory=list)
     error: str | None = None
 

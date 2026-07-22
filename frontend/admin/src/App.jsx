@@ -5476,7 +5476,7 @@ function hasProCatalogAccess(user) {
 }
 
 function canManageMaterialCatalog(user) {
-  return hasProCatalogAccess(user);
+  return user?.role === "admin" || user?.role === "premium" || user?.role === "pro" || user?.role === "trial" || user?.role === "free";
 }
 
 function canManageSystemMaterials(user) {
@@ -5492,12 +5492,12 @@ function canEditMaterialItem(user, item) {
     return true;
   }
 
-  if (!hasProCatalogAccess(user)) {
+  if (!canManageMaterialCatalog(user)) {
     return false;
   }
 
   if (item.is_default) {
-    return true;
+    return hasProCatalogAccess(user);
   }
 
   return item.owner_user_id === String(user.id);
@@ -6608,6 +6608,7 @@ export default function App() {
   const [materialItems, setMaterialItems] = useState([]);
   const [materialCategories, setMaterialCategories] = useState([]);
   const [materialCityOptions, setMaterialCityOptions] = useState(DEFAULT_CITY_OPTIONS);
+  const [materialOwnershipQuota, setMaterialOwnershipQuota] = useState(null);
   const [materialCreateMode, setMaterialCreateMode] = useState("source");
   const [materialSearch, setMaterialSearch] = useState("");
   const [materialsCatalogLoading, setMaterialsCatalogLoading] = useState(false);
@@ -8267,6 +8268,23 @@ export default function App() {
   const canEditMaterialCatalog = canManageMaterialCatalog(user);
   const canEditSystemFittings = canManageSystemFittings(user);
   const canEditOwnFittings = canManageOwnFittings(user);
+  const normalizedNewMaterialArticle = String(newMaterialArticle || "").trim();
+  const existingMaterialForArticle = normalizedNewMaterialArticle
+    ? materialItems.find(
+        (item) => String(item.article || "").trim() === normalizedNewMaterialArticle,
+      )
+    : null;
+  const isNewMaterialSubmission = materialCreateMode === "manual" || !existingMaterialForArticle;
+  const isMaterialCreationBlockedByQuota = Boolean(
+    materialOwnershipQuota &&
+      materialOwnershipQuota.can_create === false &&
+      isNewMaterialSubmission,
+  );
+  const materialOwnershipQuotaLabel = materialOwnershipQuota
+    ? (materialOwnershipQuota.is_unlimited
+        ? "Власні матеріали: без обмежень"
+        : `Власні матеріали: ${materialOwnershipQuota.owned_count || 0} з ${materialOwnershipQuota.limit || 0}`)
+    : "";
   const isHomeView = activeView === "home";
   const isCatalogMaterialsView = activeView === "catalogMaterials";
   const isCatalogFittingsView = activeView === "catalogFittings";
@@ -9442,6 +9460,7 @@ export default function App() {
       setMaterialItems(result.items || []);
       setMaterialCategories(result.categories || []);
       setMaterialCityOptions(result.city_options?.length ? result.city_options : DEFAULT_CITY_OPTIONS);
+      setMaterialOwnershipQuota(result.material_quota || null);
       setStatus((current) =>
         String(current || "").includes("Request timed out after") ? "" : current,
       );
@@ -14354,6 +14373,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
     if (selectedMaterialDetail?.article === article) {
       closeMaterialDetails();
     }
+    await loadMaterialsCatalog(token);
     setStatus({ message: t.materialDeleted, tone: "success" });
     closeConfirm();
   }
@@ -17597,6 +17617,11 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
 
               {canEditMaterialCatalog ? (
                 <>
+                  <div className="materials-quota-hint">
+                    <span className="service-tree-badge subtle">
+                      {materialOwnershipQuotaLabel || "Власні матеріали: дані недоступні"}
+                    </span>
+                  </div>
                   <form className="materials-import-form" onSubmit={handleImportMaterial}>
                     <div className="materials-mode-switch" role="tablist" aria-label={t.catalogMaterials}>
                       <button
@@ -17689,8 +17714,8 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                       disabled={
                         loading || (
                           materialCreateMode === "source"
-                            ? (!newMaterialArticle.trim() || !newMaterialSourceUrl.trim())
-                            : (!newMaterialName.trim() || newMaterialPrice === "")
+                            ? (!newMaterialArticle.trim() || !newMaterialSourceUrl.trim() || isMaterialCreationBlockedByQuota)
+                            : (!newMaterialName.trim() || newMaterialPrice === "" || isMaterialCreationBlockedByQuota)
                         )
                       }
                       type="submit"
