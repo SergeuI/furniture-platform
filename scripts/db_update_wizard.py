@@ -32,6 +32,10 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 from scripts.maintenance_preview import create_preview_file as create_maintenance_preview_file
+from scripts.maintenance_server_audit import (
+    audit_server as audit_maintenance_server,
+    audit_server_privileged as audit_privileged_maintenance_server,
+)
 
 try:
     import paramiko
@@ -1099,6 +1103,13 @@ class WizardApp(tk.Tk):
         )
         self.maintenance_eta = tk.StringVar(value="Найближчим часом")
         self.maintenance_preview_status = tk.StringVar(value="Серверний режим ще не налаштовано.")
+        self.maintenance_server_audit_status = tk.StringVar(value="Перевірку ще не виконано.")
+        self.maintenance_server_audit_summary = tk.StringVar(
+            value="Натисни «Перевірити сервер», щоб запустити read-only аудит production nginx."
+        )
+        self._maintenance_server_audit_report = ""
+        self._maintenance_server_audit_window: tk.Toplevel | None = None
+        self._maintenance_server_audit_running = False
         self.map_search = tk.StringVar(value="")
         self.history_search = tk.StringVar(value="")
         self.history_filter = tk.StringVar(value="Усі")
@@ -2181,11 +2192,33 @@ class WizardApp(tk.Tk):
         ttk.Button(maintenance_actions, text="Вимкнути техроботи", state="disabled").grid(row=0, column=2, sticky="ew")
         ttk.Label(
             maintenance_box,
-            text="Буде доступно після налаштування сервера.",
+            textvariable=self.maintenance_server_audit_status,
             style="Hint.TLabel",
             justify="left",
             wraplength=420,
         ).grid(row=4, column=0, sticky="w", pady=(8, 0))
+        ttk.Label(
+            maintenance_box,
+            textvariable=self.maintenance_server_audit_summary,
+            style="Hint.TLabel",
+            justify="left",
+            wraplength=420,
+        ).grid(row=5, column=0, sticky="w", pady=(4, 0))
+        maintenance_audit_actions = ttk.Frame(maintenance_box)
+        maintenance_audit_actions.grid(row=6, column=0, sticky="ew", pady=(10, 0))
+        maintenance_audit_actions.columnconfigure(0, weight=1)
+        maintenance_audit_actions.columnconfigure(1, weight=1)
+        maintenance_audit_actions.columnconfigure(2, weight=1)
+        ttk.Button(maintenance_audit_actions, text="Перевірити сервер", command=self.run_maintenance_server_audit).grid(row=0, column=0, sticky="ew")
+        ttk.Button(maintenance_audit_actions, text="Перевірити з sudo", command=self.run_maintenance_server_audit_privileged).grid(row=0, column=1, sticky="ew", padx=8)
+        ttk.Button(maintenance_audit_actions, text="Показати звіт", command=self.open_maintenance_server_audit_report).grid(row=0, column=2, sticky="ew")
+        ttk.Label(
+            maintenance_box,
+            text="Буде доступно після налаштування сервера.",
+            style="Hint.TLabel",
+            justify="left",
+            wraplength=420,
+        ).grid(row=7, column=0, sticky="w", pady=(8, 0))
 
         params = ttk.LabelFrame(right, text="Параметри", style="Card.TLabelframe")
         params.pack(fill="x", pady=(12, 0))
@@ -3827,6 +3860,268 @@ class WizardApp(tk.Tk):
 
         self.maintenance_preview_status.set(f"Готово: {preview_path}")
         self._open_path(preview_path)
+
+    def _prompt_sudo_password(self) -> str | None:
+        dialog = tk.Toplevel(self)
+        dialog.title("sudo-пароль")
+        dialog.resizable(False, False)
+        dialog.transient(self)
+        dialog.grab_set()
+        dialog.columnconfigure(0, weight=1)
+
+        result: dict[str, str | None] = {"value": None}
+        password_var = tk.StringVar(value="")
+
+        body = ttk.Frame(dialog, padding=16, style="Root.TFrame")
+        body.grid(row=0, column=0, sticky="nsew")
+        body.columnconfigure(0, weight=1)
+
+        ttk.Label(
+            body,
+            text="Введи sudo-пароль для одноразової privileged read-only перевірки.",
+            style="Hint.TLabel",
+            justify="left",
+            wraplength=420,
+        ).grid(row=0, column=0, sticky="w")
+        entry = ttk.Entry(body, textvariable=password_var, show="*")
+        entry.grid(row=1, column=0, sticky="ew", pady=(10, 0))
+        entry.focus_set()
+
+        buttons = ttk.Frame(body, style="Root.TFrame")
+        buttons.grid(row=2, column=0, sticky="e", pady=(16, 0))
+
+        def accept() -> None:
+            value = password_var.get()
+            if not value:
+                messagebox.showwarning("Порожній пароль", "Введи sudo-пароль або натисни Скасувати.")
+                return
+            result["value"] = value
+            dialog.destroy()
+
+        def cancel() -> None:
+            result["value"] = None
+            password_var.set("")
+            dialog.destroy()
+
+        ttk.Button(buttons, text="Скасувати", command=cancel).pack(side="right")
+        ttk.Button(buttons, text="Продовжити", style="Primary.TButton", command=accept).pack(side="right", padx=(0, 8))
+        dialog.protocol("WM_DELETE_WINDOW", cancel)
+
+        self.wait_window(dialog)
+        value = result["value"]
+        password_var.set("")
+        return value
+
+    def run_maintenance_server_audit(self) -> None:
+        if self._maintenance_server_audit_running:
+            return
+
+        server_host = self.server_host.get().strip()
+        server_port = self.server_port.get().strip() or "22"
+        server_user = self.server_user.get().strip()
+        ssh_key_path = self.ssh_key_path.get().strip()
+        server_password = self.server_password.get().strip()
+
+        if not server_host or not server_user:
+            messagebox.showwarning(
+                "Дані сервера",
+                "Для read-only аудиту потрібні введені адреса сервера і SSH-користувач.",
+            )
+            return
+
+        self._maintenance_server_audit_running = True
+        self.maintenance_server_audit_status.set("Перевіряю сервер...")
+        self.maintenance_server_audit_summary.set("Виконую read-only аудит production nginx.")
+        self._maintenance_server_audit_report = ""
+        self._begin_activity()
+
+        def finish(result: object | None = None, error_text: str | None = None) -> None:
+            self._maintenance_server_audit_running = False
+            self._end_activity()
+
+            if error_text is not None:
+                self.maintenance_server_audit_status.set("Перевірку завершено з помилкою.")
+                self.maintenance_server_audit_summary.set(error_text)
+                self._maintenance_server_audit_report = f"Server audit\n\n{error_text}\n"
+                self._append_product_log(f"[Аудит сервера] {error_text}")
+                messagebox.showerror("Не вдалося перевірити сервер", error_text)
+                return
+
+            if result is None:
+                return
+
+            audit_result = result
+            status_text = "Готово" if getattr(audit_result, "success", False) else "Завершено з попередженнями"
+            self.maintenance_server_audit_status.set(f"{status_text}: {getattr(audit_result, 'status', 'unknown')}")
+            self.maintenance_server_audit_summary.set(
+                str(getattr(audit_result, "summary", "")).strip() or "Аудит завершено."
+            )
+            self._maintenance_server_audit_report = str(getattr(audit_result, "report", "")).strip()
+            self._append_product_log(f"[Аудит сервера] {self.maintenance_server_audit_summary.get()}")
+            if not getattr(audit_result, "success", False):
+                messagebox.showwarning(
+                    "Аудит завершено з попередженнями",
+                    self.maintenance_server_audit_summary.get(),
+                )
+
+        def worker() -> None:
+            try:
+                result = audit_maintenance_server(
+                    server_host,
+                    server_port,
+                    server_user,
+                    ssh_key_path,
+                    server_password,
+                )
+            except Exception as exc:  # pragma: no cover - remote dependent
+                self.after(0, lambda: finish(error_text=str(exc)))
+                return
+                self.after(0, lambda: finish(result=result))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def run_maintenance_server_audit_privileged(self) -> None:
+        if self._maintenance_server_audit_running:
+            return
+
+        server_host = self.server_host.get().strip()
+        server_port = self.server_port.get().strip() or "22"
+        server_user = self.server_user.get().strip()
+        ssh_key_path = self.ssh_key_path.get().strip()
+        server_password = self.server_password.get().strip()
+
+        if not server_host or not server_user:
+            messagebox.showwarning(
+                "Дані сервера",
+                "Для privileged read-only аудиту потрібні введені адреса сервера і SSH-користувач.",
+            )
+            return
+
+        sudo_password = self._prompt_sudo_password()
+        if sudo_password is None:
+            self.maintenance_server_audit_status.set("Привілейовану перевірку скасовано.")
+            self.maintenance_server_audit_summary.set("sudo-пароль не введено.")
+            return
+
+        self._maintenance_server_audit_running = True
+        self.maintenance_server_audit_status.set("Привілейована перевірка...")
+        self.maintenance_server_audit_summary.set("Виконую privileged read-only аудит production nginx.")
+        self._maintenance_server_audit_report = ""
+        self._begin_activity()
+        sudo_secret_box = {"value": sudo_password}
+
+        def finish(result: object | None = None, error_text: str | None = None) -> None:
+            self._maintenance_server_audit_running = False
+            self._end_activity()
+
+            if error_text is not None:
+                self.maintenance_server_audit_status.set("Привілейовану перевірку завершено з помилкою.")
+                self.maintenance_server_audit_summary.set(error_text)
+                self._maintenance_server_audit_report = f"privileged read-only server audit for production nginx\n\n{error_text}\n"
+                self._append_product_log("[Аудит сервера] Privileged read-only audit failed.")
+                self.record_history("maintenance.server_audit_privileged", status="error")
+                messagebox.showerror("Не вдалося перевірити сервер", error_text)
+                sudo_secret_box["value"] = ""
+                return
+
+            if result is None:
+                sudo_secret_box["value"] = ""
+                return
+
+            audit_result = result
+            status_text = "Готово" if getattr(audit_result, "success", False) else "Завершено з попередженнями"
+            self.maintenance_server_audit_status.set(f"{status_text}: {getattr(audit_result, 'status', 'unknown')}")
+            self.maintenance_server_audit_summary.set(
+                str(getattr(audit_result, "summary", "")).strip() or "Привілейовану перевірку завершено."
+            )
+            self._maintenance_server_audit_report = str(getattr(audit_result, "report", "")).strip()
+            self._append_product_log(f"[Аудит сервера] {self.maintenance_server_audit_summary.get()}")
+            self.record_history(
+                "maintenance.server_audit_privileged",
+                status="ok" if getattr(audit_result, "success", False) else "error",
+            )
+            if not getattr(audit_result, "success", False):
+                messagebox.showwarning(
+                    "Аудит завершено з попередженнями",
+                    self.maintenance_server_audit_summary.get(),
+                )
+            sudo_secret_box["value"] = ""
+
+        def worker() -> None:
+            try:
+                result = audit_privileged_maintenance_server(
+                    server_host,
+                    server_port,
+                    server_user,
+                    ssh_key_path,
+                    server_password,
+                    sudo_secret_box["value"],
+                )
+            except Exception as exc:  # pragma: no cover - remote dependent
+                self.after(0, lambda: finish(error_text=str(exc)))
+                return
+            self.after(0, lambda: finish(result=result))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def open_maintenance_server_audit_report(self) -> None:
+        if not self._maintenance_server_audit_report.strip():
+            messagebox.showinfo(
+                "Звіт ще не готовий",
+                "Спочатку натисни «Перевірити сервер».",
+            )
+            return
+
+        if self._maintenance_server_audit_window is not None and self._maintenance_server_audit_window.winfo_exists():
+            window = self._maintenance_server_audit_window
+            window.deiconify()
+            window.lift()
+            window.focus_force()
+            return
+
+        window = tk.Toplevel(self)
+        window.title("Звіт read-only аудиту сервера")
+        window.geometry("980x760")
+        window.minsize(760, 520)
+        window.transient(self)
+        window.columnconfigure(0, weight=1)
+        window.rowconfigure(1, weight=1)
+        self._maintenance_server_audit_window = window
+
+        header = ttk.Frame(window, style="Root.TFrame", padding=16)
+        header.grid(row=0, column=0, sticky="ew")
+        header.columnconfigure(0, weight=1)
+        ttk.Label(header, text="Звіт read-only аудиту production nginx", style="Section.TLabel").grid(
+            row=0, column=0, sticky="w"
+        )
+        ttk.Label(
+            header,
+            text="Детальний звіт показує лише зчитаний стан, без змін на сервері.",
+            style="Hint.TLabel",
+            justify="left",
+        ).grid(row=1, column=0, sticky="w", pady=(6, 0))
+
+        body = ttk.Frame(window, style="Root.TFrame", padding=(16, 0, 16, 16))
+        body.grid(row=1, column=0, sticky="nsew")
+        body.columnconfigure(0, weight=1)
+        body.rowconfigure(0, weight=1)
+
+        text = tk.Text(
+            body,
+            wrap="word",
+            bg="#fbfaf7",
+            fg="#1f2a29",
+            relief="flat",
+            borderwidth=0,
+            padx=12,
+            pady=12,
+        )
+        text.grid(row=0, column=0, sticky="nsew")
+        scroll = ttk.Scrollbar(body, orient="vertical", command=text.yview)
+        scroll.grid(row=0, column=1, sticky="ns")
+        text.configure(yscrollcommand=scroll.set)
+        text.insert("1.0", self._maintenance_server_audit_report)
+        text.configure(state="disabled")
 
     def open_launch_log(self) -> None:
         self._open_path(PROJECT_ROOT / "product_center_launch.log")
