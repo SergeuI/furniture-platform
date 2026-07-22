@@ -16,6 +16,7 @@ class EntitlementRegistryTests(unittest.TestCase):
             "materials.create",
             "materials.edit",
             "materials.delete",
+            "materials.max_owned",
             "fittings.view",
             "fittings.create",
             "fittings.edit",
@@ -31,7 +32,10 @@ class EntitlementRegistryTests(unittest.TestCase):
 
         self.assertEqual(len(SYSTEM_ENTITLEMENT_REGISTRY), len(expected_keys))
         self.assertEqual(set(get_system_entitlement_registry_keys()), expected_keys)
-        self.assertTrue(all(feature.value_type == "boolean" for feature in SYSTEM_ENTITLEMENT_REGISTRY))
+        self.assertEqual(
+            sorted(feature.value_type for feature in SYSTEM_ENTITLEMENT_REGISTRY),
+            ["boolean"] * 15 + ["integer"],
+        )
 
         registry_by_key = {feature.feature_key: feature for feature in SYSTEM_ENTITLEMENT_REGISTRY}
         expected_names = {
@@ -39,6 +43,7 @@ class EntitlementRegistryTests(unittest.TestCase):
             "materials.create": "Додавання власних матеріалів",
             "materials.edit": "Редагування власних матеріалів",
             "materials.delete": "Видалення власних матеріалів",
+            "materials.max_owned": "Максимальна кількість власних матеріалів",
             "fittings.view": "Доступ до каталогу фурнітури",
             "fittings.create": "Додавання власної фурнітури",
             "fittings.edit": "Редагування власної фурнітури",

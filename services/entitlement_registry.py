@@ -100,6 +100,14 @@ SYSTEM_ENTITLEMENT_REGISTRY: tuple[EntitlementRegistryFeature, ...] = (
         sort_order=40,
     ),
     EntitlementRegistryFeature(
+        feature_key="materials.max_owned",
+        name_uk="Максимальна кількість власних матеріалів",
+        description_uk="Визначає, скільки власних приватних матеріалів користувач може одночасно зберігати у своїй бібліотеці. Системні матеріали адміністратора та приватні матеріали інших користувачів до ліміту не входять.",
+        category="materials",
+        value_type="integer",
+        sort_order=50,
+    ),
+    EntitlementRegistryFeature(
         feature_key="fittings.view",
         name_uk="Доступ до каталогу фурнітури",
         description_uk="Дозволяє переглядати каталог фурнітури.",

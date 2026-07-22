@@ -261,7 +261,7 @@ class AdminEntitlementsApiTests(unittest.TestCase):
                 body = response.json()
                 self.assertTrue(body["success"])
                 self.assertTrue(body["can_apply"])
-                self.assertEqual(len(body["new_features"]), 15)
+                self.assertEqual(len(body["new_features"]), 16)
                 self.assertEqual(len(body["conflicts"]), 0)
                 self.assertEqual(len(body["missing_plan_rows"]), 0)
                 self.assertEqual(len(body["db_system_features_missing_from_registry"]), 0)
@@ -275,6 +275,7 @@ class AdminEntitlementsApiTests(unittest.TestCase):
                     "materials.create": "Додавання власних матеріалів",
                     "materials.edit": "Редагування власних матеріалів",
                     "materials.delete": "Видалення власних матеріалів",
+                    "materials.max_owned": "Максимальна кількість власних матеріалів",
                     "fittings.view": "Доступ до каталогу фурнітури",
                     "fittings.create": "Додавання власної фурнітури",
                     "fittings.edit": "Редагування власної фурнітури",
@@ -298,8 +299,8 @@ class AdminEntitlementsApiTests(unittest.TestCase):
                 first_body = first_response.json()
                 self.assertTrue(first_body["success"])
                 self.assertTrue(first_body["applied"])
-                self.assertEqual(len(first_body["created_features"]), 15)
-                self.assertEqual(len(first_body["created_plan_rows"]), 60)
+                self.assertEqual(len(first_body["created_features"]), 16)
+                self.assertEqual(len(first_body["created_plan_rows"]), 64)
 
                 with self._admin_auth():
                     second_response = client.post(
@@ -312,8 +313,8 @@ class AdminEntitlementsApiTests(unittest.TestCase):
                 self.assertFalse(second_body["applied"])
                 self.assertEqual(len(second_body["created_features"]), 0)
                 self.assertEqual(len(second_body["created_plan_rows"]), 0)
-                self.assertEqual(self._count_rows(db_path, "entitlement_features"), 15)
-                self.assertEqual(self._count_rows(db_path, "plan_entitlements"), 60)
+                self.assertEqual(self._count_rows(db_path, "entitlement_features"), 16)
+                self.assertEqual(self._count_rows(db_path, "plan_entitlements"), 64)
                 self.assertEqual(self._count_rows(db_path, "audit_logs"), 1)
 
     def test_admin_registry_sync_apply_rejects_custom_feature_conflict(self) -> None:
