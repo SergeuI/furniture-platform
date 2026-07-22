@@ -31,6 +31,8 @@ from urllib.request import urlopen
 from pathlib import Path
 from tkinter import messagebox, ttk
 
+from scripts.maintenance_preview import create_preview_file as create_maintenance_preview_file
+
 try:
     import paramiko
 except Exception:  # pragma: no cover - optional dependency
@@ -1092,6 +1094,11 @@ class WizardApp(tk.Tk):
         self.auto_refresh = tk.BooleanVar(value=True)
         self.allow_local_registration = tk.BooleanVar(value=False)
         self.allow_local_registration_test_mode = tk.BooleanVar(value=False)
+        self.maintenance_message = tk.StringVar(
+            value="Ми оновлюємо платформу. Ваші проєкти та дані збережені."
+        )
+        self.maintenance_eta = tk.StringVar(value="Найближчим часом")
+        self.maintenance_preview_status = tk.StringVar(value="Серверний режим ще не налаштовано.")
         self.map_search = tk.StringVar(value="")
         self.history_search = tk.StringVar(value="")
         self.history_filter = tk.StringVar(value="Усі")
@@ -2152,6 +2159,33 @@ class WizardApp(tk.Tk):
         frontend_box.pack(fill="x", pady=(12, 0))
         self._register_action_button("frontend-app", ttk.Button(frontend_box, text="Запустити app", command=self.start_app_frontend)).pack(fill="x")
         self._register_action_button("frontend-admin", ttk.Button(frontend_box, text="Запустити admin", command=self.start_admin_frontend)).pack(fill="x", pady=(8, 0))
+
+        maintenance_box = ttk.LabelFrame(right, text="Технічні роботи", style="Card.TLabelframe")
+        maintenance_box.pack(fill="x", pady=(12, 0))
+        self._add_entry(maintenance_box, "Повідомлення", self.maintenance_message, 0)
+        self._add_entry(maintenance_box, "Орієнт. час", self.maintenance_eta, 1)
+        ttk.Label(
+            maintenance_box,
+            textvariable=self.maintenance_preview_status,
+            style="Hint.TLabel",
+            justify="left",
+            wraplength=420,
+        ).grid(row=2, column=0, sticky="w", pady=(6, 0))
+        maintenance_actions = ttk.Frame(maintenance_box)
+        maintenance_actions.grid(row=3, column=0, sticky="ew", pady=(10, 0))
+        maintenance_actions.columnconfigure(0, weight=1)
+        maintenance_actions.columnconfigure(1, weight=1)
+        maintenance_actions.columnconfigure(2, weight=1)
+        ttk.Button(maintenance_actions, text="Переглянути заглушку", command=self.preview_maintenance_page).grid(row=0, column=0, sticky="ew")
+        ttk.Button(maintenance_actions, text="Увімкнути техроботи", state="disabled").grid(row=0, column=1, sticky="ew", padx=8)
+        ttk.Button(maintenance_actions, text="Вимкнути техроботи", state="disabled").grid(row=0, column=2, sticky="ew")
+        ttk.Label(
+            maintenance_box,
+            text="Буде доступно після налаштування сервера.",
+            style="Hint.TLabel",
+            justify="left",
+            wraplength=420,
+        ).grid(row=4, column=0, sticky="w", pady=(8, 0))
 
         params = ttk.LabelFrame(right, text="Параметри", style="Card.TLabelframe")
         params.pack(fill="x", pady=(12, 0))
@@ -3778,6 +3812,21 @@ class WizardApp(tk.Tk):
         webbrowser.open(LOCAL_API_DOCS_URL)
         webbrowser.open(LOCAL_ADMIN_URL)
         webbrowser.open(LOCAL_APP_URL)
+
+    def preview_maintenance_page(self) -> None:
+        message = self.maintenance_message.get().strip()
+        eta = self.maintenance_eta.get().strip()
+        try:
+            preview_path = create_maintenance_preview_file(message=message, eta=eta)
+        except OSError as exc:
+            messagebox.showerror("Не вдалося створити preview", str(exc))
+            return
+        except Exception as exc:
+            messagebox.showerror("Не вдалося створити preview", str(exc))
+            return
+
+        self.maintenance_preview_status.set(f"Готово: {preview_path}")
+        self._open_path(preview_path)
 
     def open_launch_log(self) -> None:
         self._open_path(PROJECT_ROOT / "product_center_launch.log")

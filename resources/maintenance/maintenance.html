@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{title}}</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f5f8f6;
+      --bg-soft: #edf4f1;
+      --panel: rgba(255, 255, 255, 0.78);
+      --panel-strong: rgba(255, 255, 255, 0.92);
+      --line: rgba(20, 44, 38, 0.10);
+      --text: #1a302c;
+      --muted: #5f726d;
+      --accent: #1e7b6f;
+      --accent-dark: #14564f;
+      --accent-soft: #d9eeea;
+      --shadow: 0 28px 72px rgba(12, 53, 48, 0.14);
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      min-height: 100%;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 20px;
+      background:
+        radial-gradient(circle at 15% 16%, rgba(30, 123, 111, 0.12), transparent 24%),
+        radial-gradient(circle at 84% 18%, rgba(98, 168, 155, 0.12), transparent 22%),
+        radial-gradient(circle at 76% 84%, rgba(30, 123, 111, 0.10), transparent 24%),
+        linear-gradient(180deg, var(--bg), var(--bg-soft));
+      color: var(--text);
+      font-family: "Segoe UI", "Noto Sans", Arial, sans-serif;
+    }
+
+    .page {
+      width: min(1380px, 100%);
+      display: grid;
+      gap: 22px;
+    }
+
+    .hero-shell {
+      position: relative;
+      border-radius: 34px;
+      overflow: hidden;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.76), rgba(255, 255, 255, 0.58));
+      border: 1px solid rgba(20, 44, 38, 0.06);
+      box-shadow: var(--shadow);
+      min-height: 78vh;
+      display: grid;
+      place-items: center;
+      padding: clamp(16px, 2vw, 28px);
+    }
+
+    .hero-shell::before,
+    .hero-shell::after {
+      content: "";
+      position: absolute;
+      inset: auto;
+      width: 340px;
+      height: 340px;
+      border-radius: 50%;
+      filter: blur(10px);
+      pointer-events: none;
+      opacity: 0.34;
+    }
+
+    .hero-shell::before {
+      top: -120px;
+      left: -120px;
+      background: radial-gradient(circle, rgba(30, 123, 111, 0.24), transparent 70%);
+    }
+
+    .hero-shell::after {
+      bottom: -140px;
+      right: -120px;
+      background: radial-gradient(circle, rgba(86, 159, 145, 0.20), transparent 70%);
+    }
+
+    .hero-image {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      object-position: center center;
+      padding: clamp(8px, 1.4vw, 20px);
+      filter: drop-shadow(0 24px 42px rgba(14, 35, 31, 0.08));
+    }
+
+    .top-brand {
+      position: absolute;
+      top: 22px;
+      left: 22px;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.74);
+      border: 1px solid rgba(20, 44, 38, 0.08);
+      color: var(--accent-dark);
+      font-size: 0.92rem;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      box-shadow: 0 10px 22px rgba(14, 35, 31, 0.07);
+      backdrop-filter: blur(10px);
+      z-index: 2;
+    }
+
+    .top-brand__dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: #37c888;
+      box-shadow: 0 0 0 5px rgba(55, 200, 136, 0.18);
+      flex: 0 0 auto;
+    }
+
+    .info-bar {
+      position: relative;
+      margin: 0 auto;
+      width: min(980px, calc(100% - 28px));
+      border-radius: 24px;
+      background: var(--panel);
+      border: 1px solid rgba(20, 44, 38, 0.08);
+      box-shadow: 0 18px 40px rgba(12, 53, 48, 0.10);
+      backdrop-filter: blur(14px);
+      padding: clamp(16px, 2vw, 24px);
+      z-index: 2;
+    }
+
+    .info-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.4fr) minmax(0, 0.9fr) auto;
+      gap: 16px;
+      align-items: center;
+    }
+
+    .message-block,
+    .eta-block {
+      padding: 16px 18px;
+      border-radius: 18px;
+      background: var(--panel-strong);
+      border: 1px solid rgba(30, 123, 111, 0.10);
+    }
+
+    .label {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--accent);
+      font-size: 0.76rem;
+      font-weight: 800;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+    }
+
+    .message {
+      margin: 0;
+      font-size: 1rem;
+      line-height: 1.6;
+      color: var(--text);
+    }
+
+    .eta-value {
+      margin: 0;
+      font-size: 1.06rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 190px;
+      min-height: 54px;
+      padding: 0 24px;
+      border-radius: 999px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+      color: #fff;
+      text-decoration: none;
+      font-size: 1rem;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      box-shadow: 0 16px 30px rgba(20, 86, 79, 0.22);
+      white-space: nowrap;
+    }
+
+    @media (max-width: 1100px) {
+      .hero-shell {
+        min-height: 72vh;
+      }
+
+      .info-bar {
+        width: min(920px, calc(100% - 22px));
+      }
+
+      .info-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .button {
+        min-width: 0;
+        width: 100%;
+      }
+    }
+
+    @media (max-width: 720px) {
+      body {
+        padding: 12px;
+      }
+
+      .hero-shell {
+        min-height: 64vh;
+        border-radius: 26px;
+      }
+
+      .hero-image {
+        padding: 10px;
+      }
+
+      .top-brand {
+        top: 14px;
+        left: 14px;
+        right: 14px;
+        justify-content: center;
+      }
+
+      .info-bar {
+        width: 100%;
+        border-radius: 20px;
+      }
+
+      .message-block,
+      .eta-block {
+        padding: 14px 15px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero-shell" aria-label="Maintenance illustration">
+      <div class="top-brand">
+        <span class="top-brand__dot"></span>
+        <span>MP Furniture Calculator</span>
+      </div>
+      <img class="hero-image" src="{{hero_src}}" alt="Ведуться технічні роботи">
+    </section>
+
+    <section class="info-bar" aria-label="Maintenance details">
+      <div class="info-grid">
+        <div class="message-block">
+          <span class="label">Повідомлення</span>
+          <p class="message">{{maintenance_message}}</p>
+        </div>
+        <div class="eta-block">
+          <span class="label">Орієнт. час</span>
+          <p class="eta-value">{{eta}}</p>
+        </div>
+        <a class="button" href="" onclick="window.location.reload(); return false;">{{button}}</a>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
