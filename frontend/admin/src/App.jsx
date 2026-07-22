@@ -2917,19 +2917,6 @@ Object.assign(TRANSLATIONS.uk, {
   assemblyGroupOther: "Інші панелі",
 });
 
-Object.assign(TRANSLATIONS.uk, {
-  preview3dInteractiveHint: "Перетягуйте для обертання. Колесо миші або жест масштабування змінює зум. У 3D моделі показані крайка, отвори, пази та чверті.",
-  productionAssembly3d: "3D збірка",
-  productionAssemblyHint: "Ця 3D збірка побудована на основі карти розкрою. Натисніть на панель, щоб відкрити її робоче місце деталі.",
-  assemblyAssembled: "Зібрано",
-  assemblyExploded: "Рознесено",
-  assemblyShowAll: "Показати все",
-  assemblyGroupCarcass: "Корпус",
-  assemblyGroupFacades: "Фасади",
-  assemblyGroupDrawers: "Шухляди",
-  assemblyGroupBack: "Задня стінка",
-  assemblyGroupOther: "Інші панелі",
-});
 
 Object.assign(TRANSLATIONS.uk, {
   holeServicePreviewCalculable: "Буде додано до кошторису",
@@ -3582,14 +3569,6 @@ Object.assign(TRANSLATIONS.uk, {
   homeDescription: "Швидкий огляд каталогів, цін і стану системи.",
   homeOpenProjects: "Відкрити проєкти",
   homeOpenSettings: "Налаштування профілю",
-  home: "\u0413\u043e\u043b\u043e\u0432\u043d\u0430",
-  homeDescription:
-    "\u0428\u0432\u0438\u0434\u043a\u0438\u0439 \u043e\u0433\u043b\u044f\u0434 \u043a\u0430\u0442\u0430\u043b\u043e\u0433\u0456\u0432, \u0446\u0456\u043d \u0456 \u0441\u0442\u0430\u043d\u0443 \u0441\u0438\u0441\u0442\u0435\u043c\u0438.",
-  homeHeroTitle: "\u0413\u043e\u043b\u043e\u0432\u043d\u0430 \u043f\u0430\u043d\u0435\u043b\u044c",
-  homeHeroDescription:
-    "\u041e\u0441\u043d\u043e\u0432\u043d\u0456 \u043a\u0430\u0442\u0430\u043b\u043e\u0433\u0438, \u0446\u0456\u043d\u0438 \u0437\u0430 \u043c\u0456\u0441\u0442\u043e\u043c \u0456 \u0441\u0442\u0430\u0442\u0443\u0441 \u0430\u0432\u0442\u043e\u043e\u043d\u043e\u0432\u043b\u0435\u043d\u043d\u044f \u0432 \u043e\u0434\u043d\u043e\u043c\u0443 \u043c\u0456\u0441\u0446\u0456.",
-  homeOpenProjects: "\u0412\u0456\u0434\u043a\u0440\u0438\u0442\u0438 \u043f\u0440\u043e\u0454\u043a\u0442\u0438",
-  homeOpenSettings: "\u041d\u0430\u043b\u0430\u0448\u0442\u0443\u0432\u0430\u043d\u043d\u044f \u043f\u0440\u043e\u0444\u0456\u043b\u044e",
   homeAutoRefreshTitle: "\u0410\u0432\u0442\u043e\u043e\u043d\u043e\u0432\u043b\u0435\u043d\u043d\u044f",
   homeAutoRefreshDescription:
     "\u0424\u043e\u043d\u043e\u0432\u0435 \u043e\u043d\u043e\u0432\u043b\u0435\u043d\u043d\u044f \u043f\u043e\u0441\u043b\u0443\u0433 Viyar \u0442\u0430 \u0446\u0456\u043d \u043d\u0430 \u0440\u043e\u0437\u043f\u0430\u0440\u0441\u0435\u043d\u0456 \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b\u0438.",
@@ -4068,16 +4047,6 @@ Object.assign(TRANSLATIONS.uk, {
   delete: "Видалити",
   deleteFailed: "Не вдалося видалити",
   details: "Деталі",
-  home: "Головна",
-  homeDescription: "Швидкий огляд каталогів, цін і стану системи.",
-  homeCatalogMenuTitle: "Каталоги",
-  homeCatalogMenuDescription: "Перехід до головних довідників без пошуку їх в боковому меню.",
-  homeHeroTitle: "Головна панель",
-  homeHeroDescription: "Основні каталоги, ціни за містом і статус автооновлення в одному місці.",
-  homeMetricsTitle: "Стан робочої зони",
-  homeMetricsDescription: "Компактний зріз по проєктах, користувачах і довідниках.",
-  homeOpenProjects: "Відкрити проєкти",
-  homeOpenSettings: "Налаштування профілю",
   holes: "Присадка фурнітури",
   manualServices: "Ручні послуги",
   materials: "Матеріали",
@@ -4115,10 +4084,6 @@ Object.assign(TRANSLATIONS.uk, {
   holePointCreateDescription: "Створення нової точки присадки для вибраної фурнітури та варіанта кріплення.",
   holePointEditTitle: "Редагувати точку присадки",
   holePreviewTitle: "2D перегляд",
-  holePointAdd: "Додати точку",
-  holePointCreateTitle: "Створення точки присадки",
-  holePointCreateDescription: "Створення нової точки присадки для вибраної фурнітури та варіанта кріплення.",
-  holePointEditTitle: "Редагувати точку присадки",
   holePointTemplate: "Шаблон",
   holePointTemplateRequired: "Оберіть шаблон перед створенням точки",
   holeTemplateSelectTemplate: "Для цієї фурнітури немає отворів",
@@ -4176,21 +4141,6 @@ Object.assign(TRANSLATIONS.uk, {
   productionAssembly3d: "3D збірка",
   productionAssemblyHint:
     "Ця 3D збірка побудована на основі карти розкрою. Натисніть на панель, щоб відкрити її робоче місце деталі.",
-  holeTemplateMountingSchemeRightEdge: "Правий торець",
-  holeTemplateMountingSchemeFrontFace: "Фасад",
-  holeTemplateMountingSchemeBackFace: "Задня площина",
-  holeTemplateMountingSchemeTop: "Верх",
-  holeTemplateMountingSchemeBottom: "Низ",
-  holeTemplateMountingSchemeSelected: "Обрано",
-  holeWorkspaceVariantEdgeToFace: "Торець → площина",
-  holeWorkspaceVariantFaceToEdge: "Площина → торець",
-  holeWorkspaceVariantHorizontalToVertical: "Горизонталь → вертикаль",
-  holeWorkspaceVariantVerticalToHorizontal: "Вертикаль → горизонталь",
-  preview3dInteractiveHint:
-    "Перетягуйте для обертання. Колесо миші або жест масштабування змінює зум. У 3D моделі показані крайки, отвори, пази та чверті.",
-  productionAssembly3d: "3D збірка",
-  productionAssemblyHint:
-    "Ця 3D збірка побудована на основі карти розкрою. Натисніть на панель, щоб відкрити її робоче місце деталі.",
 });
 
 Object.assign(TRANSLATIONS.uk, {
@@ -4199,8 +4149,6 @@ Object.assign(TRANSLATIONS.uk, {
   catalogFittings: "Каталог фурнітури",
   catalogHubTitle: "Огляд довідників",
   homeCatalogMenuTitle: "Каталоги",
-  homeOpenProjects: "Відкрити проєкти",
-  homeOpenSettings: "Налаштування профілю",
   furniturePlatform: "MProject.furniture",
   brandTagline: "Професійне рішення для меблевого виробництва",
   holes: "Присадка фурнітури",
@@ -4214,9 +4162,6 @@ Object.assign(TRANSLATIONS.uk, {
   holeTemplateSelectFitting: "Оберіть фурнітуру",
   holeTemplateSelectTemplate: "Для цієї фурнітури немає отворів",
   holePointTemplateRequired: "Оберіть шаблон перед створенням точки",
-  holePointCreateTitle: "Додати точку присадки",
-  holePointCreateDescription: "Створення нової точки присадки для вибраної фурнітури та варіанта кріплення.",
-  holePointEditTitle: "Редагувати точку присадки",
   holePreviewTitle: "2D перегляд",
   holePreviewHelper: "Прев'ю показує розташування точок на вибраній деталі.",
   holePreviewEmpty: "Точки присадки ще не додані",
@@ -4225,7 +4170,6 @@ Object.assign(TRANSLATIONS.uk, {
   holePreviewDepth: "Глибина",
   holePreviewSide: "Сторона",
   holePreviewOperation: "Операція",
-  holePointAdd: "Додати точку",
   holePointLabel: "Мітка",
   holePointSide: "Сторона",
   holePointOperation: "Операція",
@@ -4243,11 +4187,6 @@ Object.assign(TRANSLATIONS.uk, {
   holeTemplateColumnActive: "Активний",
   holeTemplateColumnNotes: "Нотатки",
   holeTemplateMountingSchemePlaceholder: "Оберіть схему кріплення, якщо для позиції прив'язаний шаблон отворів.",
-  holeTemplateMountingSchemeSelected: "Обрано",
-  holeWorkspaceVariantEdgeToFace: "Торець → площина",
-  holeWorkspaceVariantFaceToEdge: "Площина → торець",
-  holeWorkspaceVariantHorizontalToVertical: "Горизонталь → вертикаль",
-  holeWorkspaceVariantVerticalToHorizontal: "Вертикаль → горизонталь",
 });
 
 Object.assign(TRANSLATIONS.uk, {
