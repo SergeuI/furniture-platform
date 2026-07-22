@@ -261,13 +261,28 @@ class AdminEntitlementsApiTests(unittest.TestCase):
                 body = response.json()
                 self.assertTrue(body["success"])
                 self.assertTrue(body["can_apply"])
-                self.assertEqual(len(body["new_features"]), 14)
+                self.assertEqual(len(body["new_features"]), 15)
                 self.assertEqual(len(body["conflicts"]), 0)
                 self.assertEqual(len(body["missing_plan_rows"]), 0)
                 self.assertEqual(len(body["db_system_features_missing_from_registry"]), 0)
                 self.assertEqual(self._count_rows(db_path, "entitlement_features"), 0)
                 self.assertEqual(self._count_rows(db_path, "plan_entitlements"), 0)
                 self.assertEqual(self._count_rows(db_path, "audit_logs"), 0)
+
+                new_features_by_key = {feature["feature_key"]: feature for feature in body["new_features"]}
+                expected_names = {
+                    "materials.view": "Доступ до каталогу матеріалів",
+                    "materials.create": "Додавання власних матеріалів",
+                    "materials.edit": "Редагування власних матеріалів",
+                    "materials.delete": "Видалення власних матеріалів",
+                    "fittings.view": "Доступ до каталогу фурнітури",
+                    "fittings.create": "Додавання власної фурнітури",
+                    "fittings.edit": "Редагування власної фурнітури",
+                    "fittings.delete": "Видалення власної фурнітури",
+                    "fitting_holes.use": "Доступ до присадки фурнітури",
+                }
+                for feature_key, expected_name in expected_names.items():
+                    self.assertEqual(new_features_by_key[feature_key]["name_uk"], expected_name)
 
     def test_admin_registry_sync_apply_creates_registry_and_is_idempotent(self) -> None:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
@@ -283,8 +298,8 @@ class AdminEntitlementsApiTests(unittest.TestCase):
                 first_body = first_response.json()
                 self.assertTrue(first_body["success"])
                 self.assertTrue(first_body["applied"])
-                self.assertEqual(len(first_body["created_features"]), 14)
-                self.assertEqual(len(first_body["created_plan_rows"]), 56)
+                self.assertEqual(len(first_body["created_features"]), 15)
+                self.assertEqual(len(first_body["created_plan_rows"]), 60)
 
                 with self._admin_auth():
                     second_response = client.post(
@@ -297,8 +312,8 @@ class AdminEntitlementsApiTests(unittest.TestCase):
                 self.assertFalse(second_body["applied"])
                 self.assertEqual(len(second_body["created_features"]), 0)
                 self.assertEqual(len(second_body["created_plan_rows"]), 0)
-                self.assertEqual(self._count_rows(db_path, "entitlement_features"), 14)
-                self.assertEqual(self._count_rows(db_path, "plan_entitlements"), 56)
+                self.assertEqual(self._count_rows(db_path, "entitlement_features"), 15)
+                self.assertEqual(self._count_rows(db_path, "plan_entitlements"), 60)
                 self.assertEqual(self._count_rows(db_path, "audit_logs"), 1)
 
     def test_admin_registry_sync_apply_rejects_custom_feature_conflict(self) -> None:

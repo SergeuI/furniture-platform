@@ -20,6 +20,7 @@ class EntitlementRegistryTests(unittest.TestCase):
             "fittings.create",
             "fittings.edit",
             "fittings.delete",
+            "fitting_holes.use",
             "projects.view",
             "projects.create",
             "projects.edit",
@@ -31,6 +32,21 @@ class EntitlementRegistryTests(unittest.TestCase):
         self.assertEqual(len(SYSTEM_ENTITLEMENT_REGISTRY), len(expected_keys))
         self.assertEqual(set(get_system_entitlement_registry_keys()), expected_keys)
         self.assertTrue(all(feature.value_type == "boolean" for feature in SYSTEM_ENTITLEMENT_REGISTRY))
+
+        registry_by_key = {feature.feature_key: feature for feature in SYSTEM_ENTITLEMENT_REGISTRY}
+        expected_names = {
+            "materials.view": "Доступ до каталогу матеріалів",
+            "materials.create": "Додавання власних матеріалів",
+            "materials.edit": "Редагування власних матеріалів",
+            "materials.delete": "Видалення власних матеріалів",
+            "fittings.view": "Доступ до каталогу фурнітури",
+            "fittings.create": "Додавання власної фурнітури",
+            "fittings.edit": "Редагування власної фурнітури",
+            "fittings.delete": "Видалення власної фурнітури",
+            "fitting_holes.use": "Доступ до присадки фурнітури",
+        }
+        for feature_key, expected_name in expected_names.items():
+            self.assertEqual(registry_by_key[feature_key].name_uk, expected_name)
 
     def test_registry_validation_rejects_invalid_definitions(self) -> None:
         with self.assertRaises(ValueError):
