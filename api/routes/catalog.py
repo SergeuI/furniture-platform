@@ -44,6 +44,7 @@ from schemas.catalog import (
     MaterialCatalogOperationResponseSchema,
     MaterialCatalogListResponseSchema,
     MaterialImportFromViyarSchema,
+    MaterialOwnersResponseSchema,
     ServiceCatalogItemUpdateSchema,
     ServiceCatalogOperationResponseSchema,
     ServiceCatalogPriceSyncResponseSchema,
@@ -84,6 +85,7 @@ from database.repositories.inventory_repository import (
     get_material_by_import_identity,
     get_material_edge_image,
     get_material_by_article,
+    get_material_owners,
     list_fitting_images,
     list_fittings,
     list_fitting_categories,
@@ -766,6 +768,31 @@ async def list_materials_route(
         "selected_city": selected_city,
         "material_quota": _get_material_ownership_quota(current_user),
         "items": items,
+    }
+
+
+@router.get(
+    "/materials/{article}/owners",
+    response_model=MaterialOwnersResponseSchema,
+)
+async def get_material_owners_route(
+    article: str,
+    current_user = Depends(require_roles(["admin"])),
+):
+
+    owners_payload = get_material_owners(article.strip())
+
+    if owners_payload is None:
+        return {
+            "success": False,
+            "error": "Material not found",
+            "owners_count": 0,
+            "owners": [],
+        }
+
+    return {
+        "success": True,
+        **owners_payload,
     }
 
 

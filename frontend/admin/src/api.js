@@ -680,6 +680,23 @@ export async function getMaterialDetails(token, article, city = "") {
   });
 }
 
+export async function getMaterialOwners(token, article) {
+  const normalizedArticle = String(article || "").trim();
+
+  if (!normalizedArticle) {
+    return {
+      success: false,
+      error: "Material article is required",
+      status: 0,
+    };
+  }
+
+  return request(`/catalog/materials/${encodeURIComponent(normalizedArticle)}/owners`, {
+    headers: authHeaders(token),
+    timeoutMs: 30000,
+  });
+}
+
 export async function attachMaterialEdge(token, article, payload) {
   return request(`/catalog/materials/${encodeURIComponent(article)}/edges`, {
     method: "POST",

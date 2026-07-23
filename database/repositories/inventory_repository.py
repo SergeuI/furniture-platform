@@ -1040,6 +1040,16 @@ def _load_material_user_links(
     return {row[0] for row in rows if row and row[0]}
 
 
+def _serialize_material_owner(user: UserModel) -> dict:
+    login = (user.username or user.email.split("@")[0]).strip()
+    return {
+        "id": str(user.id),
+        "display_name": user.username or login or None,
+        "login": login or None,
+        "email": user.email,
+    }
+
+
 def get_material_by_import_identity(
     *,
     source: str | None,
@@ -1163,6 +1173,75 @@ def count_owned_private_materials(owner_user_id: str | None) -> int:
             .scalar()
             or 0
         )
+    finally:
+        db.close()
+
+
+def get_material_owners(material_article: str) -> dict | None:
+
+    normalized_article = _normalize_import_article(material_article)
+    if not normalized_article:
+        return None
+
+    db = SessionLocal()
+
+    try:
+        material = (
+            db.query(MaterialModel.id, MaterialModel.article, MaterialModel.owner_user_id)
+            .filter(MaterialModel.article == normalized_article)
+            .first()
+        )
+
+        if not material:
+            return None
+
+        owner_ids: list[str] = []
+        if material.owner_user_id:
+            owner_ids.append(str(material.owner_user_id))
+
+        link_owner_ids = [
+            row[0]
+            for row in (
+                db.query(MaterialUserLinkModel.user_id)
+                .filter(MaterialUserLinkModel.material_article == normalized_article)
+                .distinct()
+                .order_by(MaterialUserLinkModel.user_id.asc())
+                .all()
+            )
+            if row and row[0]
+        ]
+
+        for owner_id in link_owner_ids:
+            if owner_id not in owner_ids:
+                owner_ids.append(owner_id)
+
+        if not owner_ids:
+            return {
+                "material_article": normalized_article,
+                "owners_count": 0,
+                "owners": [],
+            }
+
+        users_by_id = {
+            str(user.id): user
+            for user in (
+                db.query(UserModel)
+                .filter(UserModel.id.in_(owner_ids))
+                .all()
+            )
+        }
+
+        owners = [
+            _serialize_material_owner(users_by_id[owner_id])
+            for owner_id in owner_ids
+            if owner_id in users_by_id
+        ]
+
+        return {
+            "material_article": normalized_article,
+            "owners_count": len(owners),
+            "owners": owners,
+        }
     finally:
         db.close()
 

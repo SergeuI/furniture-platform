@@ -32,6 +32,7 @@ from database.models import material_edge_price  # noqa: F401
 from database.models import material_import_job  # noqa: F401
 from database.models import material_price  # noqa: F401
 from database.models import material_user_link  # noqa: F401
+from database.models.material_user_link import MaterialUserLinkModel
 from database.models import plan_entitlement  # noqa: F401
 from database.models.plan_entitlement import PlanEntitlementModel
 from database.models import project  # noqa: F401
@@ -41,6 +42,7 @@ from database.models import registration_identity  # noqa: F401
 from database.models import service_catalog_item  # noqa: F401
 from database.models import service_drilling_rule  # noqa: F401
 from database.models import user  # noqa: F401
+from database.models.user import UserModel
 from database.models import user_change_request  # noqa: F401
 from database.models import user_service_catalog_price  # noqa: F401
 from database.repositories import inventory_repository
@@ -187,6 +189,91 @@ class CatalogVisibilityTests(unittest.TestCase):
                 self.assertEqual(all_response.status_code, 200)
                 all_articles = {item["article"] for item in all_response.json()["items"]}
                 self.assertEqual(all_articles, {"ADMIN-SYS", "ADMIN-MINE", "USER-PRIVATE", "ORPHAN"})
+
+    def test_admin_material_owners_endpoint_deduplicates_and_hides_private_data_from_non_admins(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
+                with session_factory() as session:
+                    session.add_all(
+                        [
+                            UserModel(
+                                id="owner-1",
+                                email="owner.one@example.com",
+                                username="owner.one",
+                                password_hash="hash",
+                                role="trial",
+                            ),
+                            UserModel(
+                                id="collaborator-1",
+                                email="collab@example.com",
+                                username=None,
+                                password_hash="hash",
+                                role="free",
+                            ),
+                            MaterialModel(
+                                article="OWNED-MAT",
+                                name="Owned Material",
+                                category="dsp",
+                                owner_user_id="owner-1",
+                                is_default=False,
+                            ),
+                            MaterialUserLinkModel(
+                                material_article="OWNED-MAT",
+                                user_id="owner-1",
+                            ),
+                            MaterialUserLinkModel(
+                                material_article="OWNED-MAT",
+                                user_id="collaborator-1",
+                            ),
+                        ]
+                    )
+                    session.commit()
+
+                admin_response = client.get(
+                    "/catalog/materials/OWNED-MAT/owners",
+                    headers=self._auth_headers("admin-token"),
+                )
+                self.assertEqual(admin_response.status_code, 200)
+                self.assertTrue(admin_response.json()["success"])
+                self.assertEqual(admin_response.json()["owners_count"], 2)
+                self.assertEqual(
+                    [owner["id"] for owner in admin_response.json()["owners"]],
+                    ["owner-1", "collaborator-1"],
+                )
+                self.assertEqual(admin_response.json()["owners"][0]["display_name"], "owner.one")
+                self.assertEqual(admin_response.json()["owners"][0]["email"], "owner.one@example.com")
+                self.assertEqual(admin_response.json()["owners"][1]["login"], "collab")
+
+                trial_response = client.get(
+                    "/catalog/materials/OWNED-MAT/owners",
+                    headers=self._auth_headers("trial-token"),
+                )
+                self.assertEqual(trial_response.status_code, 403)
+
+    def test_admin_material_owners_endpoint_returns_empty_list_for_material_without_owners(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
+                with session_factory() as session:
+                    session.add(
+                        MaterialModel(
+                            article="ORPHAN-OWNERS",
+                            name="Orphan Owners Material",
+                            category="dsp",
+                            owner_user_id=None,
+                            is_default=False,
+                        )
+                    )
+                    session.commit()
+
+                response = client.get(
+                    "/catalog/materials/ORPHAN-OWNERS/owners",
+                    headers=self._auth_headers("admin-token"),
+                )
+                self.assertEqual(response.status_code, 200)
+                payload = response.json()
+                self.assertTrue(payload["success"])
+                self.assertEqual(payload["owners_count"], 0)
+                self.assertEqual(payload["owners"], [])
 
     def test_trial_user_can_open_system_material_and_fitting_details(self) -> None:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:

@@ -81,6 +81,7 @@ import {
   getMaterialImportJob,
   getMaterialImageBlob,
   getMaterialsCatalog,
+  getMaterialOwners,
   getMyViyarAuthStatus,
   getManualServicesTree,
   getProject,
@@ -5550,10 +5551,24 @@ function getMaterialOwnerLabel(item, currentUser, language) {
     return language === "en" ? "Owner: me" : "Власник: я";
   }
 
-  const ownerId = String(item.owner_user_id).trim();
-  return language === "en"
-    ? `Owner: user #${ownerId}`
-    : `Власник: користувач #${ownerId}`;
+  return language === "en" ? "Owner: user" : "Власник: користувач";
+}
+
+function getMaterialOwnersLabel(count, language) {
+  if (count <= 0) {
+    return language === "en" ? "No owners" : "Власників немає";
+  }
+
+  return language === "en" ? `Owners (${count})` : `Власники (${count})`;
+}
+
+function getMaterialOwnerDisplayName(owner, language) {
+  const primary = String(owner?.display_name || owner?.login || owner?.email || "").trim();
+  if (primary) {
+    return primary;
+  }
+
+  return language === "en" ? "Unknown owner" : "Невідомий власник";
 }
 
 function getMaterialSourceMeta(item, t) {
@@ -6674,6 +6689,10 @@ export default function App() {
   const [openMaterialMenuId, setOpenMaterialMenuId] = useState("");
   const [selectedMaterialDetail, setSelectedMaterialDetail] = useState(null);
   const [materialDetailLoading, setMaterialDetailLoading] = useState(false);
+  const [materialOwners, setMaterialOwners] = useState([]);
+  const [materialOwnersLoading, setMaterialOwnersLoading] = useState(false);
+  const [materialOwnersError, setMaterialOwnersError] = useState("");
+  const [materialOwnersModalOpen, setMaterialOwnersModalOpen] = useState(false);
   const [materialEdgeForms, setMaterialEdgeForms] = useState({});
   const [materialEdgeCreateForm, setMaterialEdgeCreateForm] = useState({
     open: false,
@@ -6862,6 +6881,7 @@ export default function App() {
   const fittingsCatalogRequestRef = useRef({ id: 0, pending: false });
   const fittingBundlesRequestRef = useRef({ id: 0, pending: false });
   const materialDetailsRequestRef = useRef({ id: 0, article: "", open: false });
+  const materialOwnersRequestRef = useRef({ id: 0, article: "", open: false });
   const fittingDetailsRequestRef = useRef({ id: 0, itemId: "", open: false });
   const fittingDetailsReturnFocusRef = useRef(null);
   const fittingDetailsCloseButtonRef = useRef(null);
@@ -9537,6 +9557,9 @@ export default function App() {
     materialDetailsRequestRef.current = { id: requestId, article, open: true };
 
     setMaterialDetailLoading(true);
+    setMaterialOwnersModalOpen(false);
+    setMaterialOwners([]);
+    setMaterialOwnersError("");
     setSelectedMaterialDetail((current) => current || item);
 
     try {
@@ -9562,6 +9585,9 @@ export default function App() {
       }
 
       setSelectedMaterialDetail(result.item || item);
+      if (user?.role === "admin" && (result.item || item)?.article) {
+        await loadMaterialOwners(String((result.item || item).article || "").trim(), false);
+      }
       if (result.job?.id) {
         setActiveMaterialImportJobId(result.job.id);
         setActiveMaterialImportJob(result.job);
@@ -9577,11 +9603,106 @@ export default function App() {
 
   function closeMaterialDetails() {
     materialDetailsRequestRef.current.open = false;
+    materialOwnersRequestRef.current = { id: 0, article: "", open: false };
     setSelectedMaterialDetail(null);
     setMaterialDetailLoading(false);
+    setMaterialOwners([]);
+    setMaterialOwnersError("");
+    setMaterialOwnersLoading(false);
+    setMaterialOwnersModalOpen(false);
     setMaterialEdgeForms({});
     setMaterialEdgeCreateForm({ open: false, edge_key: "edge_08", source_url: "" });
   }
+
+  async function loadMaterialOwners(article, openModal = false) {
+    const normalizedArticle = String(article || "").trim();
+
+    if (!token || user?.role !== "admin" || !normalizedArticle) {
+      return;
+    }
+
+    const requestId = materialOwnersRequestRef.current.id + 1;
+    materialOwnersRequestRef.current = {
+      id: requestId,
+      article: normalizedArticle,
+      open: openModal || materialOwnersModalOpen,
+    };
+
+    setMaterialOwnersLoading(true);
+    setMaterialOwnersError("");
+
+    try {
+      const result = await getMaterialOwners(token, normalizedArticle);
+
+      if (
+        materialOwnersRequestRef.current.id !== requestId ||
+        materialOwnersRequestRef.current.article !== normalizedArticle ||
+        activeViewRef.current !== "catalogMaterials"
+      ) {
+        return;
+      }
+
+      if (!result.success) {
+        setMaterialOwners([]);
+        setMaterialOwnersError(result.error || t.unableToLoadCatalog);
+        return;
+      }
+
+      setMaterialOwners(Array.isArray(result.owners) ? result.owners : []);
+      setMaterialOwnersError("");
+    } finally {
+      if (materialOwnersRequestRef.current.id === requestId) {
+        setMaterialOwnersLoading(false);
+      }
+    }
+  }
+
+  async function openMaterialOwners() {
+    const article = String(selectedMaterialDetail?.article || "").trim();
+
+    if (!article) {
+      return;
+    }
+
+    setMaterialOwnersModalOpen(true);
+    await loadMaterialOwners(article, true);
+  }
+
+  function closeMaterialOwners() {
+    materialOwnersRequestRef.current.open = false;
+    setMaterialOwnersModalOpen(false);
+  }
+
+  useEffect(() => {
+    if (!selectedMaterialDetail) {
+      return undefined;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const handleKeyDown = (event) => {
+      if (event.key !== "Escape") {
+        return;
+      }
+
+      event.preventDefault();
+
+      if (materialOwnersModalOpen) {
+        closeMaterialOwners();
+        return;
+      }
+
+      closeMaterialDetails();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [materialOwnersModalOpen, selectedMaterialDetail]);
 
   async function openFittingDetails(item, returnFocusTarget = null) {
     if (!token || !item?.id) {
@@ -22382,10 +22503,30 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                 </div>
                 {user?.role === "admin" ? (
                   <div className="material-details-owner">
-                    <span>{language === "en" ? "Owner" : "Власник"}</span>
-                    <strong>
-                      {getMaterialOwnerLabel(selectedMaterialDetail, user, language) || (language === "en" ? "Not set" : "Не вказано")}
-                    </strong>
+                    <span>{language === "en" ? "Owners" : "Власники"}</span>
+                    {materialOwnersLoading &&
+                    materialOwnersRequestRef.current.article === String(selectedMaterialDetail.article || "").trim() ? (
+                      <strong>{t.loading}</strong>
+                    ) : materialOwnersError &&
+                      materialOwnersRequestRef.current.article === String(selectedMaterialDetail.article || "").trim() ? (
+                      <button
+                        className="text-button material-owners-trigger"
+                        onClick={openMaterialOwners}
+                        type="button"
+                      >
+                        {language === "en" ? "Owners" : "Власники"}
+                      </button>
+                    ) : materialOwners.length > 0 ? (
+                      <button
+                        className="text-button material-owners-trigger"
+                        onClick={openMaterialOwners}
+                        type="button"
+                      >
+                        {getMaterialOwnersLabel(materialOwners.length, language)}
+                      </button>
+                    ) : (
+                      <strong>{getMaterialOwnersLabel(0, language)}</strong>
+                    )}
                   </div>
                 ) : null}
 
@@ -22597,6 +22738,60 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                 <p className="empty-inline-note material-edge-empty-note">{t.materialEdgeSlotEmpty}</p>
               )}
             </section>
+          </section>
+        </div>
+      ) : null}
+
+      {activeView === "catalogMaterials" && selectedMaterialDetail && materialOwnersModalOpen ? (
+        <div
+          aria-modal="true"
+          className="modal-backdrop modal-backdrop-nested"
+          onClick={closeMaterialOwners}
+          role="dialog"
+        >
+          <section
+            className="confirm-modal material-details-modal material-owners-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="confirm-header">
+              <div>
+                <strong>{language === "en" ? "Material owners" : "Власники матеріалу"}</strong>
+                <p>{getMaterialShortName(selectedMaterialDetail)}</p>
+              </div>
+              <button
+                aria-label={t.cancel}
+                className="ghost-button compact-button detail-info-button"
+                onClick={closeMaterialOwners}
+                type="button"
+              >
+                <X size={16} />
+              </button>
+            </header>
+
+            <div className="material-owners-panel">
+              {materialOwnersLoading ? (
+                <div className="material-owners-state">
+                  <span className="service-tree-badge subtle">{t.loading}</span>
+                </div>
+              ) : materialOwnersError ? (
+                <div className="material-owners-state">
+                  <span>{materialOwnersError}</span>
+                </div>
+              ) : materialOwners.length ? (
+                <div className="material-owners-list" role="list">
+                  {materialOwners.map((owner) => (
+                    <article className="material-owners-item" key={owner.id} role="listitem">
+                      <strong>{getMaterialOwnerDisplayName(owner, language)}</strong>
+                      <span>{owner.email}</span>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <div className="empty-state compact-empty-state">
+                  <span>{language === "en" ? "No owners" : "Власників немає"}</span>
+                </div>
+              )}
+            </div>
           </section>
         </div>
       ) : null}

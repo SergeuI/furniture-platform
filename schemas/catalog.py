@@ -282,6 +282,21 @@ class MaterialOwnershipQuotaSchema(BaseModel):
     can_create: bool = False
 
 
+class MaterialOwnerSchema(BaseModel):
+    id: str
+    display_name: str | None = None
+    login: str | None = None
+    email: str
+
+
+class MaterialOwnersResponseSchema(BaseModel):
+    success: bool
+    material_article: str | None = None
+    owners_count: int = 0
+    owners: List[MaterialOwnerSchema] = Field(default_factory=list)
+    error: str | None = None
+
+
 class MaterialCatalogListResponseSchema(BaseModel):
     success: bool
     categories: List[MaterialCategorySchema] = Field(default_factory=list)
