@@ -365,6 +365,222 @@ class MaintenanceServerAuditTests(unittest.TestCase):
         self.assertTrue(all("restart" not in command for command, *_ in fake_client.calls))
         self.assertTrue(all("write" not in command.lower() for command, *_ in fake_client.calls))
 
+    def test_privileged_audit_reports_owner_aware_structure(self) -> None:
+        class FakeStdin:
+            def __init__(self) -> None:
+                self.written = ""
+                self.closed = False
+
+            def write(self, text: str) -> None:
+                self.written += text
+
+            def flush(self) -> None:
+                pass
+
+            def close(self) -> None:
+                self.closed = True
+
+        class FakeStream:
+            def __init__(self, channel: SimpleNamespace, stderr_text: str = "") -> None:
+                self.channel = channel
+                self._stderr_text = stderr_text
+
+            def read(self) -> bytes:
+                return self._stderr_text.encode("utf-8")
+
+        class FakeClient:
+            def __init__(self, outputs: dict[str, tuple[int, str, str]]) -> None:
+                self.outputs = outputs
+                self.calls: list[tuple[str, bool, float | None]] = []
+
+            def exec_command(self, command: str, get_pty: bool = False, timeout: float | None = None):
+                self.calls.append((command, get_pty, timeout))
+                exit_code, stdout_text, stderr_text = self.outputs[command]
+                channel = SimpleNamespace(stdout_text=stdout_text, stderr_text=stderr_text, exit_status=exit_code)
+                stdin = FakeStdin()
+                return stdin, FakeStream(channel), FakeStream(channel, stderr_text)
+
+            def close(self) -> None:
+                pass
+
+        config_text = """
+        # configuration file /etc/nginx/sites-enabled/furniture-owner.conf:
+        map $http_cookie $mpfc_maintenance_gate_file {
+            default /opt/furniture-maintenance/maintenance.flag;
+            "~(?:^|;\\s*)mpfc_maintenance_owner=CaseSensitiveToken(?:;|$)" "";
+        }
+
+        map $remote_user $mpfc_maintenance_owner_set_cookie {
+            default "";
+            "mpfc-owner" "mpfc_maintenance_owner=CaseSensitiveToken; Path=/; Max-Age=7200; Secure; HttpOnly; SameSite=Strict";
+        }
+
+        server {
+            listen 443 ssl http2;
+            server_name mpfc.com.ua www.mpfc.com.ua 45.94.157.42;
+            root /var/www/mpfc/public;
+            include /etc/nginx/secure/mpfc-maintenance-owner-map.conf;
+            location / {
+                if (-f $mpfc_maintenance_gate_file) { return 503; }
+            }
+            location /admin/ {
+                if (-f $mpfc_maintenance_gate_file) { return 503; }
+            }
+            location /api/ {
+                if (-f $mpfc_maintenance_gate_file) { return 503; }
+            }
+            location = /openapi.json {
+                if (-f $mpfc_maintenance_gate_file) { return 503; }
+            }
+            include /etc/nginx/secure/mpfc-maintenance-owner-locations.conf;
+        }
+        location = /__maintenance_owner/login {
+            auth_basic "MP Furniture Owner Access";
+            add_header Set-Cookie $mpfc_maintenance_owner_set_cookie always;
+        }
+        location = /__maintenance_owner/logout {
+            add_header Set-Cookie "mpfc_maintenance_owner=; Path=/; Max-Age=0; Secure; HttpOnly; SameSite=Strict" always;
+        }
+        """.strip()
+
+        outputs: dict[str, tuple[int, str, str]] = {
+            "id": (0, "uid=1000(mpc) gid=1000(mpc)", ""),
+            "groups": (0, "mpc sudo", ""),
+            "systemctl is-active nginx": (0, "active", ""),
+            "systemctl status nginx --no-pager -l": (0, "nginx service status", ""),
+            "ss -ltn": (0, "LISTEN 0 128 0.0.0.0:80 0.0.0.0:* LISTEN 0 128 0.0.0.0:443 0.0.0.0:*", ""),
+            PRIVILEGED_NGINX_COMMAND: (0, config_text, ""),
+        }
+        for path in DEFAULT_CHECK_PATHS:
+            outputs[f"test -e {path} && echo EXISTS || echo MISSING"] = (0, "EXISTS", "")
+            outputs[f"test -w {path} && echo WRITABLE || echo NOT_WRITABLE"] = (0, "WRITABLE", "")
+
+        fake_client = FakeClient(outputs)
+
+        with patch.object(maintenance_audit, "_open_paramiko_client", return_value=(fake_client, None)), patch.object(
+            maintenance_audit,
+            "_collect_channel_output",
+            side_effect=lambda channel, timeout_seconds=120.0: (channel.stdout_text, channel.stderr_text, channel.exit_status),
+        ):
+            result = audit_server_privileged(
+                "example.com",
+                "22",
+                "deploy",
+                "~/.ssh/id_ed25519",
+                "",
+                "sudo-secret",
+            )
+
+        self.assertTrue(result.success)
+        self.assertIn("owner-aware gate checks: 4", result.report)
+        self.assertIn("owner cookie map blocks: 1", result.report)
+        self.assertIn("owner-aware include lines: 1", result.report)
+        self.assertIn("owner login locations: 1", result.report)
+        self.assertIn("owner logout locations: 1", result.report)
+        self.assertIn("owner login auth_basic: 1", result.report)
+        self.assertIn("owner login set-cookie variable: 1", result.report)
+        self.assertIn("owner login direct set-cookie: 0", result.report)
+        self.assertIn("owner logout clear cookie: 1", result.report)
+        self.assertIn("owner login wiring: secure", result.report)
+        self.assertIn("legacy maintenance.flag checks: 0", result.report)
+        self.assertIn("owner-aware lines:", result.report)
+        self.assertIn("if (-f $mpfc_maintenance_gate_file)", result.report)
+        self.assertIn("include /etc/nginx/secure/mpfc-maintenance-owner-locations.conf;", result.report)
+        self.assertIn("map $remote_user $mpfc_maintenance_owner_set_cookie", result.report)
+        self.assertIn("add_header Set-Cookie $mpfc_maintenance_owner_set_cookie always;", result.report)
+        self.assertNotIn("CaseSensitiveToken", result.report)
+
+    def test_privileged_audit_flags_legacy_owner_cookie_wiring(self) -> None:
+        class FakeStdin:
+            def __init__(self) -> None:
+                self.written = ""
+                self.closed = False
+
+            def write(self, text: str) -> None:
+                self.written += text
+
+            def flush(self) -> None:
+                pass
+
+            def close(self) -> None:
+                self.closed = True
+
+        class FakeStream:
+            def __init__(self, channel: SimpleNamespace, stderr_text: str = "") -> None:
+                self.channel = channel
+                self._stderr_text = stderr_text
+
+            def read(self) -> bytes:
+                return self._stderr_text.encode("utf-8")
+
+        class FakeClient:
+            def __init__(self, outputs: dict[str, tuple[int, str, str]]) -> None:
+                self.outputs = outputs
+                self.calls: list[tuple[str, bool, float | None]] = []
+
+            def exec_command(self, command: str, get_pty: bool = False, timeout: float | None = None):
+                self.calls.append((command, get_pty, timeout))
+                exit_code, stdout_text, stderr_text = self.outputs[command]
+                channel = SimpleNamespace(stdout_text=stdout_text, stderr_text=stderr_text, exit_status=exit_code)
+                stdin = FakeStdin()
+                return stdin, FakeStream(channel), FakeStream(channel, stderr_text)
+
+            def close(self) -> None:
+                pass
+
+        config_text = """
+        # configuration file /etc/nginx/sites-enabled/furniture-owner.conf:
+        server {
+            listen 443 ssl http2;
+            server_name mpfc.com.ua www.mpfc.com.ua 45.94.157.42;
+            root /var/www/mpfc/public;
+            location / {
+                if (-f $mpfc_maintenance_gate_file) { return 503; }
+            }
+            location = /__maintenance_owner/login {
+                auth_basic "MP Furniture Owner Access";
+                add_header Set-Cookie "mpfc_maintenance_owner=legacy-token; Path=/; Max-Age=7200; Secure; HttpOnly; SameSite=Strict" always;
+            }
+            location = /__maintenance_owner/logout {
+                add_header Set-Cookie "mpfc_maintenance_owner=; Path=/; Max-Age=0; Secure; HttpOnly; SameSite=Strict" always;
+            }
+        }
+        """.strip()
+
+        outputs: dict[str, tuple[int, str, str]] = {
+            "id": (0, "uid=1000(mpc) gid=1000(mpc)", ""),
+            "groups": (0, "mpc sudo", ""),
+            "systemctl is-active nginx": (0, "active", ""),
+            "systemctl status nginx --no-pager -l": (0, "nginx service status", ""),
+            "ss -ltn": (0, "LISTEN 0 128 0.0.0.0:80 0.0.0.0:* LISTEN 0 128 0.0.0.0:443 0.0.0.0:*", ""),
+            PRIVILEGED_NGINX_COMMAND: (0, config_text, ""),
+        }
+        for path in DEFAULT_CHECK_PATHS:
+            outputs[f"test -e {path} && echo EXISTS || echo MISSING"] = (0, "EXISTS", "")
+            outputs[f"test -w {path} && echo WRITABLE || echo NOT_WRITABLE"] = (0, "WRITABLE", "")
+
+        fake_client = FakeClient(outputs)
+
+        with patch.object(maintenance_audit, "_open_paramiko_client", return_value=(fake_client, None)), patch.object(
+            maintenance_audit,
+            "_collect_channel_output",
+            side_effect=lambda channel, timeout_seconds=120.0: (channel.stdout_text, channel.stderr_text, channel.exit_status),
+        ):
+            result = audit_server_privileged(
+                "example.com",
+                "22",
+                "deploy",
+                "~/.ssh/id_ed25519",
+                "",
+                "sudo-secret",
+            )
+
+        self.assertTrue(result.success)
+        self.assertIn("owner login wiring: legacy insecure", result.report)
+        self.assertIn("owner login direct set-cookie: 1", result.report)
+        self.assertIn("owner login set-cookie variable: 0", result.report)
+        self.assertIn('add_header Set-Cookie "mpfc_maintenance_owner=<redacted>; Path=/; Max-Age=7200; Secure; HttpOnly; SameSite=Strict" always;', result.report)
+
     def test_privileged_audit_uses_sixty_second_privileged_timeout(self) -> None:
         class FakeStdin:
             def __init__(self) -> None:

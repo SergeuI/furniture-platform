@@ -32,6 +32,7 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 from scripts.maintenance_preview import create_preview_file as create_maintenance_preview_file
+from scripts.maintenance_owner_bypass import OWNER_LOGIN_URL, OWNER_LOGOUT_URL
 from scripts.maintenance_server_control import (
     run_disable as run_maintenance_server_disable,
     run_enable as run_maintenance_server_enable,
@@ -2210,22 +2211,35 @@ class WizardApp(tk.Tk):
         ttk.Button(maintenance_actions, text="Увімкнути техроботи", command=self.run_maintenance_server_enable).grid(row=0, column=2, sticky="ew", padx=8)
         ttk.Button(maintenance_actions, text="Вимкнути техроботи", command=self.run_maintenance_server_disable).grid(row=0, column=3, sticky="ew")
         ttk.Button(maintenance_actions, text="Деталі", command=self.open_maintenance_server_control_details).grid(row=0, column=4, sticky="ew", padx=(8, 0))
+        owner_access_actions = ttk.Frame(maintenance_box)
+        owner_access_actions.grid(row=5, column=0, sticky="ew", pady=(10, 0))
+        owner_access_actions.columnconfigure(0, weight=1)
+        owner_access_actions.columnconfigure(1, weight=1)
+        ttk.Button(owner_access_actions, text="Відкрити сайт як власник", command=self.open_maintenance_owner_login).grid(row=0, column=0, sticky="ew")
+        ttk.Button(owner_access_actions, text="Завершити власницький доступ", command=self.open_maintenance_owner_logout).grid(row=0, column=1, sticky="ew", padx=8)
+        ttk.Label(
+            maintenance_box,
+            text="Власницький доступ діє лише у браузері, в якому виконано вхід.",
+            style="Hint.TLabel",
+            justify="left",
+            wraplength=420,
+        ).grid(row=6, column=0, sticky="w", pady=(8, 0))
         ttk.Label(
             maintenance_box,
             textvariable=self.maintenance_server_audit_status,
             style="Hint.TLabel",
             justify="left",
             wraplength=420,
-        ).grid(row=5, column=0, sticky="w", pady=(8, 0))
+        ).grid(row=7, column=0, sticky="w", pady=(8, 0))
         ttk.Label(
             maintenance_box,
             textvariable=self.maintenance_server_audit_summary,
             style="Hint.TLabel",
             justify="left",
             wraplength=420,
-        ).grid(row=6, column=0, sticky="w", pady=(4, 0))
+        ).grid(row=8, column=0, sticky="w", pady=(4, 0))
         maintenance_audit_actions = ttk.Frame(maintenance_box)
-        maintenance_audit_actions.grid(row=7, column=0, sticky="ew", pady=(10, 0))
+        maintenance_audit_actions.grid(row=9, column=0, sticky="ew", pady=(10, 0))
         maintenance_audit_actions.columnconfigure(0, weight=1)
         maintenance_audit_actions.columnconfigure(1, weight=1)
         maintenance_audit_actions.columnconfigure(2, weight=1)
@@ -2238,7 +2252,7 @@ class WizardApp(tk.Tk):
             style="Hint.TLabel",
             justify="left",
             wraplength=420,
-        ).grid(row=8, column=0, sticky="w", pady=(8, 0))
+        ).grid(row=10, column=0, sticky="w", pady=(8, 0))
 
         params = ttk.LabelFrame(right, text="Параметри", style="Card.TLabelframe")
         params.pack(fill="x", pady=(12, 0))
@@ -3860,6 +3874,12 @@ class WizardApp(tk.Tk):
 
     def open_frontend_admin(self) -> None:
         webbrowser.open(LOCAL_ADMIN_URL)
+
+    def open_maintenance_owner_login(self) -> None:
+        webbrowser.open(OWNER_LOGIN_URL)
+
+    def open_maintenance_owner_logout(self) -> None:
+        webbrowser.open(OWNER_LOGOUT_URL)
 
     def open_all_local_pages(self) -> None:
         webbrowser.open(LOCAL_API_DOCS_URL)

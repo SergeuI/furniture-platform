@@ -19,6 +19,15 @@ DEFAULT_CHECK_PATHS = (
     "/var/www/furniture-maintenance",
 )
 
+OWNER_MAINTENANCE_FLAG_PATH = "/opt/furniture-maintenance/maintenance.flag"
+OWNER_GATE_VARIABLE = "$mpfc_maintenance_gate_file"
+OWNER_COOKIE_SET_VARIABLE = "$mpfc_maintenance_owner_set_cookie"
+OWNER_LOGIN_LOCATION_LINE = "location = /__maintenance_owner/login {"
+OWNER_LOGOUT_LOCATION_LINE = "location = /__maintenance_owner/logout {"
+OWNER_LOGIN_SET_COOKIE_LINE = "add_header Set-Cookie $mpfc_maintenance_owner_set_cookie always;"
+OWNER_SITE_INCLUDE_LINE = "include /etc/nginx/secure/mpfc-maintenance-owner-locations.conf;"
+OWNER_REMOTE_USER_MAP_LINE = "map $remote_user $mpfc_maintenance_owner_set_cookie"
+
 PRIVILEGED_NGINX_COMMAND = "sudo -S -p '' /usr/sbin/nginx -T 2>&1"
 NGINX_SERVER_NAME_TARGETS = ("mpfc.com.ua", "www.mpfc.com.ua", "45.94.157.42")
 NGINX_ROUTE_TARGETS = (
@@ -182,6 +191,12 @@ def _unique_lines(lines: list[str]) -> list[str]:
     return ordered
 
 
+def _redact_owner_cookie_token(line: str) -> str:
+    redacted = re.sub(r"(mpfc_maintenance_owner=)(.*?)(\(\?:;\|\$\))", r"\1<redacted>\3", line)
+    redacted = re.sub(r'(mpfc_maintenance_owner=)(.*?)(; Path=/)', r"\1<redacted>\3", redacted)
+    return redacted
+
+
 def _extract_server_names(config_text: str) -> list[str]:
     names: list[str] = []
     for line in config_text.splitlines():
@@ -221,8 +236,68 @@ def _extract_maintenance_lines(config_text: str) -> list[str]:
         if not stripped:
             continue
         if any(keyword in stripped.lower() for keyword in ("maintenance", "maintenance_flag", "flag")) or stripped.startswith("map "):
-            lines.append(stripped)
+            lines.append(_redact_owner_cookie_token(stripped))
     return _unique_lines(lines)
+
+
+def _extract_owner_aware_lines(config_text: str) -> list[str]:
+    lines: list[str] = []
+    for line in config_text.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if (
+            OWNER_GATE_VARIABLE in stripped
+            or OWNER_COOKIE_SET_VARIABLE in stripped
+            or OWNER_SITE_INCLUDE_LINE in stripped
+            or OWNER_MAINTENANCE_FLAG_PATH in stripped
+            or OWNER_LOGIN_LOCATION_LINE in stripped
+            or OWNER_LOGOUT_LOCATION_LINE in stripped
+            or OWNER_LOGIN_SET_COOKIE_LINE in stripped
+        ):
+            lines.append(_redact_owner_cookie_token(stripped))
+    return _unique_lines(lines)
+
+
+def _owner_aware_structure_summary(config_text: str) -> list[str]:
+    gate_checks = config_text.count(f"if (-f {OWNER_GATE_VARIABLE})")
+    legacy_checks = config_text.count(f"if (-f {OWNER_MAINTENANCE_FLAG_PATH})")
+    include_count = config_text.count(OWNER_SITE_INCLUDE_LINE)
+    login_location_count = config_text.count(OWNER_LOGIN_LOCATION_LINE)
+    logout_location_count = config_text.count(OWNER_LOGOUT_LOCATION_LINE)
+    login_auth_count = config_text.count("auth_basic \"MP Furniture Owner Access\";")
+    login_set_cookie_count = config_text.count(OWNER_LOGIN_SET_COOKIE_LINE)
+    direct_login_cookie_count = len(
+        re.findall(
+            r'add_header Set-Cookie "mpfc_maintenance_owner=[^"]*Max-Age=7200; Secure; HttpOnly; SameSite=Strict" always;',
+            config_text,
+        )
+    )
+    logout_clear_cookie_count = config_text.count('Set-Cookie "mpfc_maintenance_owner=; Path=/; Max-Age=0; Secure; HttpOnly; SameSite=Strict" always;')
+    remote_user_map_count = config_text.count(OWNER_REMOTE_USER_MAP_LINE)
+    if gate_checks == 0 and legacy_checks == 0 and include_count == 0 and remote_user_map_count == 0:
+        return []
+    if remote_user_map_count > 0 and login_set_cookie_count > 0 and direct_login_cookie_count == 0:
+        owner_login_wiring = "secure"
+    elif direct_login_cookie_count > 0:
+        owner_login_wiring = "legacy insecure"
+    elif remote_user_map_count > 0:
+        owner_login_wiring = "partial"
+    else:
+        owner_login_wiring = "not found"
+    return [
+        f"owner-aware gate checks: {gate_checks}",
+        f"owner cookie map blocks: {remote_user_map_count}",
+        f"owner-aware include lines: {include_count}",
+        f"owner login locations: {login_location_count}",
+        f"owner logout locations: {logout_location_count}",
+        f"owner login auth_basic: {login_auth_count}",
+        f"owner login set-cookie variable: {login_set_cookie_count}",
+        f"owner login direct set-cookie: {direct_login_cookie_count}",
+        f"owner logout clear cookie: {logout_clear_cookie_count}",
+        f"owner login wiring: {owner_login_wiring}",
+        f"legacy maintenance.flag checks: {legacy_checks}",
+    ]
 
 
 def _extract_listening_ports(ss_text: str) -> list[str]:
@@ -629,6 +704,10 @@ def _format_report(
     else:
         summary_lines.append("maintenance-related: not found")
 
+    owner_aware_summary = _owner_aware_structure_summary(config_text) if config_ok else []
+    if owner_aware_summary:
+        summary_lines.extend(owner_aware_summary)
+
     if path_results:
         summary_lines.extend(_summarize_path(item) for item in path_results)
 
@@ -676,6 +755,9 @@ def _format_report(
         "",
         "maintenance-related lines:",
         *(maintenance_lines if maintenance_lines else ["not found"]),
+        "",
+        "owner-aware lines:",
+        *(_extract_owner_aware_lines(config_text) if config_ok else ["not found"]),
         "",
         "path checks:",
         *(_summarize_path(item) for item in path_results),

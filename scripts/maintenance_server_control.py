@@ -7,6 +7,8 @@ import shutil
 import shlex
 import tempfile
 from pathlib import Path
+from urllib.error import HTTPError, URLError
+from urllib.request import urlopen
 
 from scripts.maintenance_preview import HERO_IMAGE_PATH, load_template
 from scripts.maintenance_server_audit import (
@@ -20,6 +22,11 @@ from scripts.maintenance_server_audit import (
 REMOTE_STAGING_DIR = "/opt/furniture-maintenance"
 REMOTE_WEBROOT = "/var/www/furniture-maintenance"
 REMOTE_HERO_SRC = "/maintenance/maintenance-hero.png"
+PRODUCTION_SITE_URL = "https://mpfc.com.ua"
+PRODUCTION_PUBLIC_URL = f"{PRODUCTION_SITE_URL}/"
+PRODUCTION_ADMIN_URL = f"{PRODUCTION_SITE_URL}/admin/"
+PRODUCTION_OPENAPI_URL = f"{PRODUCTION_SITE_URL}/openapi.json"
+PRODUCTION_IMAGE_URL = f"{PRODUCTION_SITE_URL}/maintenance/maintenance-hero.png"
 STATUS_COMMAND = "sudo -S -p '' /usr/local/sbin/mpfc-maintenance status"
 ENABLE_COMMAND = "sudo -S -p '' /usr/local/sbin/mpfc-maintenance enable"
 DISABLE_COMMAND = "sudo -S -p '' /usr/local/sbin/mpfc-maintenance disable"
@@ -228,6 +235,46 @@ def _sanitize_output(stdout: str, stderr: str) -> tuple[str, str]:
     safe_stdout = "\n".join(line.strip() for line in stdout.splitlines() if line.strip())
     safe_stderr = "\n".join(line.strip() for line in stderr.splitlines() if line.strip())
     return safe_stdout, safe_stderr
+
+
+def _probe_http_status(url: str, timeout_seconds: float = 5.0) -> int | None:
+    try:
+        with urlopen(url, timeout=timeout_seconds) as response:
+            status = getattr(response, "status", None)
+            if status is None:
+                status = response.getcode()
+            return int(status) if status is not None else None
+    except HTTPError as exc:
+        return int(exc.code)
+    except (URLError, TimeoutError, ValueError, OSError):
+        return None
+
+
+def _probe_public_http_statuses() -> tuple[int | None, int | None, int | None, int | None]:
+    return (
+        _probe_http_status(PRODUCTION_PUBLIC_URL),
+        _probe_http_status(PRODUCTION_ADMIN_URL),
+        _probe_http_status(PRODUCTION_OPENAPI_URL),
+        _probe_http_status(PRODUCTION_IMAGE_URL),
+    )
+
+
+def _status_from_http_statuses(
+    public_http: int | None,
+    admin_http: int | None,
+    openapi_http: int | None,
+    image_http: int | None,
+) -> tuple[bool | None, str]:
+    if public_http == 200 and admin_http == 200 and openapi_http == 200 and image_http == 200:
+        return False, "Технічні роботи вимкнені."
+    if public_http == 503 and admin_http == 503 and openapi_http == 503 and image_http == 200:
+        return True, "Технічні роботи увімкнені."
+    return None, "Неможливо визначити стан технічних робіт."
+
+
+def _looks_like_checksum_mismatch(result: CommandResult) -> bool:
+    combined = "\n".join(part for part in [result.stdout, result.stderr] if part).lower()
+    return "checksum differs" in combined
 
 
 def _publish_failure(
@@ -540,7 +587,52 @@ def run_status(
                 raw_output="",
             )
         result = _run_status_command(client, sudo_password)
-        return _command_to_result("status", result)
+        parsed_status = _command_to_result("status", result)
+        if parsed_status.success or not _looks_like_checksum_mismatch(result):
+            return parsed_status
+
+        nginx_result = _run_ssh_command(client, "systemctl is-active nginx", timeout_seconds=STATUS_TIMEOUT_SECONDS)
+        public_http, admin_http, openapi_http, image_http = _probe_public_http_statuses()
+        enabled_state, fallback_message = _status_from_http_statuses(public_http, admin_http, openapi_http, image_http)
+        if enabled_state is None:
+            parsed_status.stage = "checksum_validation"
+            parsed_status.message = fallback_message
+            parsed_status.safe_stdout = parsed_status.safe_stdout or result.stdout.strip()
+            parsed_status.safe_stderr = parsed_status.safe_stderr or result.stderr.strip()
+            parsed_status.nginx_status = nginx_result.stdout.strip() or parsed_status.nginx_status
+            return parsed_status
+
+        fallback_stdout = "\n".join(
+            part
+            for part in [
+                result.stdout.strip(),
+                nginx_result.stdout.strip(),
+                f"PUBLIC_HTTP={public_http}" if public_http is not None else "",
+                f"ADMIN_HTTP={admin_http}" if admin_http is not None else "",
+                f"OPENAPI_HTTP={openapi_http}" if openapi_http is not None else "",
+                f"IMAGE_HTTP={image_http}" if image_http is not None else "",
+            ]
+            if part
+        ).strip()
+        fallback_stderr = "\n".join(part for part in [result.stderr.strip(), nginx_result.stderr.strip()] if part).strip()
+        safe_stdout, safe_stderr = _sanitize_output(fallback_stdout, fallback_stderr)
+        return MaintenanceControlResult(
+            action="status",
+            success=True,
+            enabled=enabled_state,
+            status_label="enabled" if enabled_state else "disabled",
+            stage="checksum_validation",
+            exit_code=0,
+            safe_stdout=safe_stdout,
+            safe_stderr=safe_stderr,
+            nginx_status=nginx_result.stdout.strip() or "unknown",
+            public_http=public_http,
+            admin_http=admin_http,
+            openapi_http=openapi_http,
+            image_http=image_http,
+            message=fallback_message,
+            raw_output=fallback_stdout,
+        )
     finally:
         if client is not None:
             try:

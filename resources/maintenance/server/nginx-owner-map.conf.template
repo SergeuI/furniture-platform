@@ -1,0 +1,9 @@
+map $http_cookie $mpfc_maintenance_gate_file {
+    default /opt/furniture-maintenance/maintenance.flag;
+    "~(?:^|;\\s*){{owner_cookie_name}}={{owner_cookie_token}}(?:;|$)" "";
+}
+
+map $remote_user $mpfc_maintenance_owner_set_cookie {
+    default "";
+    "{{owner_login_username}}" "{{owner_cookie_name}}={{owner_cookie_token}}; Path=/; Max-Age={{owner_cookie_max_age}}; Secure; HttpOnly; SameSite=Strict";
+}

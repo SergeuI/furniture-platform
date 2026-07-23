@@ -136,6 +136,41 @@ class MaintenanceServerControlTests(unittest.TestCase):
         self.assertIsNone(partial_result.enabled)
         self.assertIn("Відсутні дані", partial_result.message)
 
+    def test_run_status_falls_back_on_checksum_mismatch(self) -> None:
+        checksum_error = CommandResult(
+            command=control.STATUS_COMMAND,
+            exit_code=1,
+            stdout="",
+            stderr="ERROR: nginx config checksum differs",
+        )
+
+        with patch.object(control, "_open_paramiko_client", return_value=(FakeClient(), None)), patch.object(
+            control,
+            "_run_ssh_command_with_input",
+            return_value=checksum_error,
+        ), patch.object(
+            control,
+            "_run_ssh_command",
+            return_value=CommandResult(command="systemctl is-active nginx", exit_code=0, stdout="active", stderr=""),
+        ), patch.object(
+            control,
+            "_probe_public_http_statuses",
+            return_value=(200, 200, 200, 200),
+        ):
+            result = control.run_status("host", "22", "user", "key", "server-pass", "sudo-pass")
+
+        self.assertTrue(result.success)
+        self.assertEqual(result.stage, "checksum_validation")
+        self.assertFalse(result.enabled)
+        self.assertEqual(result.status_label, "disabled")
+        self.assertEqual(result.nginx_status, "active")
+        self.assertEqual(result.public_http, 200)
+        self.assertEqual(result.admin_http, 200)
+        self.assertEqual(result.openapi_http, 200)
+        self.assertEqual(result.image_http, 200)
+        self.assertEqual(result.message, "Технічні роботи вимкнені.")
+        self.assertNotIn("unknown", result.raw_output.lower())
+
     def test_maintenance_helpers_use_explicit_timeouts(self) -> None:
         fake_client = object()
         with patch.object(control, "_run_ssh_command_with_input", return_value=CommandResult(command="cmd", exit_code=0, stdout="", stderr="")) as input_mock, patch.object(
