@@ -31,8 +31,9 @@ class MaintenancePreviewTests(unittest.TestCase):
 
     def test_render_escapes_user_input_and_keeps_template_unchanged(self) -> None:
         before = TEMPLATE_PATH.read_text(encoding="utf-8")
+        full_message = "Ми оновлюємо платформу. Ваші проєкти та дані збережені."
         rendered = render_maintenance_preview_html(
-            message="<script>alert(1)</script>",
+            message=full_message + ' <script>alert(1)</script>',
             eta="5 < 6",
         )
         after = TEMPLATE_PATH.read_text(encoding="utf-8")
@@ -40,6 +41,8 @@ class MaintenancePreviewTests(unittest.TestCase):
         self.assertEqual(before, after)
         self.assertIn("Ведуться технічні роботи", rendered)
         self.assertIn("MP Furniture Calculator", rendered)
+        self.assertIn(full_message, rendered)
+        self.assertEqual(rendered.count(full_message), 1)
         self.assertIn("&lt;script&gt;alert(1)&lt;/script&gt;", rendered)
         self.assertIn("5 &lt; 6", rendered)
         self.assertIn("data:image/png;base64,", rendered)

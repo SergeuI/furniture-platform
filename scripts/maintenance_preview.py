@@ -12,7 +12,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE_PATH = PROJECT_ROOT / "resources" / "maintenance" / "maintenance.html"
 HERO_IMAGE_PATH = PROJECT_ROOT / "resources" / "maintenance" / "maintenance-hero.png"
 
-DEFAULT_MESSAGE = "Ваші проєкти та дані збережені."
+DEFAULT_MESSAGE = "Ми оновлюємо платформу. Ваші проєкти та дані збережені."
 DEFAULT_ETA = "Найближчим часом"
 
 
