@@ -22503,7 +22503,6 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                 </div>
                 {user?.role === "admin" ? (
                   <div className="material-details-owner">
-                    <span>{language === "en" ? "Owners" : "Власники"}</span>
                     {materialOwnersLoading &&
                     materialOwnersRequestRef.current.article === String(selectedMaterialDetail.article || "").trim() ? (
                       <strong>{t.loading}</strong>

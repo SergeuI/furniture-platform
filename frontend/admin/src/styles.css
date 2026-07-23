@@ -1591,7 +1591,10 @@ tbody tr.selected {
 .material-card-media img {
   display: block;
   height: 100%;
-  object-fit: cover;
+  max-height: 100%;
+  max-width: 100%;
+  object-fit: contain;
+  object-position: center;
   width: 100%;
 }
 
