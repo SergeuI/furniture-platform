@@ -2065,6 +2065,81 @@ def get_material_by_article(
         db.close()
 
 
+def update_material(
+    article: str,
+    *,
+    name: str | None | object = _UNSET,
+    description: str | None | object = _UNSET,
+    color: str | None | object = _UNSET,
+    dimensions: str | None | object = _UNSET,
+    thickness: str | None | object = _UNSET,
+    price: float | None | object = _UNSET,
+    price_city: str | None = None,
+) -> dict | None:
+
+    db = SessionLocal()
+
+    try:
+        item = (
+            db.query(MaterialModel)
+            .filter(MaterialModel.article == article)
+            .first()
+        )
+
+        if not item:
+            return None
+
+        if name is not _UNSET:
+            item.name = _normalize_source(name)
+        if description is not _UNSET:
+            item.description = _normalize_source(description)
+        if color is not _UNSET:
+            item.color = _normalize_source(color)
+        if dimensions is not _UNSET:
+            item.dimensions = _normalize_source(dimensions)
+        if thickness is not _UNSET:
+            item.thickness = _normalize_source(thickness)
+
+        if price is not _UNSET:
+            normalized_city = _normalize_source(price_city)
+            if not normalized_city:
+                raise ValueError("price_city is required when price is provided")
+
+            price_row = (
+                db.query(MaterialPriceModel)
+                .filter(
+                    MaterialPriceModel.article == item.article,
+                    MaterialPriceModel.city == normalized_city,
+                )
+                .first()
+            )
+
+            if not price_row:
+                price_row = MaterialPriceModel(
+                    article=item.article,
+                    city=normalized_city,
+                )
+                db.add(price_row)
+
+            price_row.price = _normalize_price_value(price)
+            price_row.updated_at = datetime.utcnow()
+
+        db.commit()
+        db.refresh(item)
+
+        return {
+            "article": item.article,
+        }
+
+    except Exception:
+        db.rollback()
+        raise
+
+    finally:
+
+        db.close()
+
+
 def upsert_material(
     article: str,
     name: str,

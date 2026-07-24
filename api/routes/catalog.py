@@ -39,6 +39,7 @@ from schemas.catalog import (
     ManualServiceCatalogItemCreateSchema,
     ManualServiceCatalogItemUpdateSchema,
     MaterialCatalogCreateSchema,
+    MaterialCatalogUpdateSchema,
     MaterialEdgeAttachSchema,
     MaterialEdgeOperationResponseSchema,
     MaterialCatalogOperationResponseSchema,
@@ -100,6 +101,7 @@ from database.repositories.inventory_repository import (
     material_needs_full_sync,
     update_fitting,
     update_fitting_image_cache,
+    update_material,
     update_material_edge_image_cache,
     update_material_image_cache,
 )
@@ -1495,6 +1497,136 @@ async def get_material_route(
         "success": True,
         "item": item,
         "selected_city": selected_city,
+    }
+
+
+@router.patch(
+    "/materials/{article}",
+    response_model=MaterialCatalogOperationResponseSchema,
+)
+async def update_material_route(
+    article: str,
+    payload: MaterialCatalogUpdateSchema,
+    current_user = Depends(require_material_editor),
+):
+
+    _ensure_material_feature_access(current_user, "materials.edit")
+
+    normalized_article = article.strip()
+    selected_city = (current_user.city or "").strip() or None
+    existing_item = _resolve_material_with_city_context(
+        normalized_article,
+        selected_city,
+        current_user,
+    )
+
+    if not existing_item:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "success": False,
+                "error": "Material not found",
+            },
+        )
+
+    if not _can_manage_material_item(current_user, existing_item):
+        if existing_item.get("is_default"):
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "success": False,
+                    "error": "You do not have permission to edit this material",
+                },
+            )
+
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "success": False,
+                "error": "Material not found",
+            },
+        )
+
+    update_fields: dict[str, object] = {}
+    provided_fields = set(payload.model_fields_set)
+
+    if "name" in provided_fields:
+        normalized_name = (payload.name or "").strip()
+        if not normalized_name:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "success": False,
+                    "error": "Material name is required",
+                },
+            )
+        update_fields["name"] = normalized_name
+
+    if "description" in provided_fields:
+        update_fields["description"] = (payload.description or "").strip() or None
+
+    if "color" in provided_fields:
+        update_fields["color"] = (payload.color or "").strip() or None
+
+    if "dimensions" in provided_fields:
+        update_fields["dimensions"] = (payload.dimensions or "").strip() or None
+
+    if "thickness" in provided_fields:
+        update_fields["thickness"] = (payload.thickness or "").strip() or None
+
+    if "price" in provided_fields:
+        if payload.price is None:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "success": False,
+                    "error": "Price is required",
+                },
+            )
+
+        if not selected_city:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "success": False,
+                    "error": "Select your city in profile settings first",
+                },
+            )
+
+        update_fields["price"] = payload.price
+        update_fields["price_city"] = selected_city
+
+    if not update_fields:
+        return {
+            "success": True,
+            "item": existing_item,
+            "selected_city": selected_city,
+            "error": None,
+        }
+
+    if not update_material(
+        normalized_article,
+        **update_fields,
+    ):
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "success": False,
+                "error": "Material not found",
+            },
+        )
+
+    updated_item = _resolve_material_with_city_context(
+        normalized_article,
+        selected_city,
+        current_user,
+    ) or existing_item
+
+    return {
+        "success": True,
+        "item": updated_item,
+        "selected_city": selected_city,
+        "error": None,
     }
 
 

@@ -93,6 +93,27 @@ class CatalogVisibilityTests(unittest.TestCase):
         entitlement.is_not_applicable = False
 
     @staticmethod
+    def _remove_material_entitlement(
+        session,
+        feature_key: str,
+        plan_code: str,
+    ) -> None:
+        feature = (
+            session.query(EntitlementFeatureModel)
+            .filter(EntitlementFeatureModel.feature_key == feature_key)
+            .one()
+        )
+        entitlement = (
+            session.query(PlanEntitlementModel)
+            .filter(
+                PlanEntitlementModel.feature_id == feature.id,
+                PlanEntitlementModel.plan_code == plan_code,
+            )
+            .one()
+        )
+        session.delete(entitlement)
+
+    @staticmethod
     def _create_material_import_job(
         session,
         *,
@@ -557,6 +578,315 @@ class CatalogVisibilityTests(unittest.TestCase):
                     headers=self._auth_headers("trial-token"),
                 )
                 self.assertEqual(response.status_code, 403)
+
+                with session_factory() as session:
+                    material = session.query(MaterialModel).filter(MaterialModel.article == "OWNED-EDIT-MAT").one()
+                    self.assertEqual(material.name, "Owned Edit Material")
+
+    def test_material_update_endpoint_updates_own_private_material_without_changing_quota_or_row_count(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
+                with session_factory() as session:
+                    session.add(
+                        MaterialModel(
+                            article="OWNED-UPD-MAT",
+                            name="Owned Update Material",
+                            description="Original description",
+                            color="Oak",
+                            dimensions="2800 x 2070",
+                            thickness="18",
+                            category="dsp",
+                            owner_user_id="trial-user",
+                            is_default=False,
+                        )
+                    )
+                    session.add(
+                        material_price.MaterialPriceModel(
+                            article="OWNED-UPD-MAT",
+                            city="kyiv",
+                            price=12.5,
+                        )
+                    )
+                    session.add(
+                        MaterialUserLinkModel(
+                            material_article="OWNED-UPD-MAT",
+                            user_id="trial-user",
+                            source="manual",
+                            product_type="dsp",
+                        )
+                    )
+                    session.commit()
+
+                with session_factory() as session:
+                    material_before = session.query(MaterialModel).filter(MaterialModel.article == "OWNED-UPD-MAT").one()
+                    material_count_before = session.query(MaterialModel).count()
+                    link_count_before = session.query(MaterialUserLinkModel).filter(
+                        MaterialUserLinkModel.material_article == "OWNED-UPD-MAT",
+                        MaterialUserLinkModel.user_id == "trial-user",
+                    ).count()
+                    owned_count_before = inventory_repository.count_owned_private_materials("trial-user")
+                    price_before = (
+                        session.query(material_price.MaterialPriceModel)
+                        .filter(
+                            material_price.MaterialPriceModel.article == "OWNED-UPD-MAT",
+                            material_price.MaterialPriceModel.city == "kyiv",
+                        )
+                        .one()
+                    )
+
+                response = client.patch(
+                    "/catalog/materials/OWNED-UPD-MAT",
+                    json={
+                        "name": "Owned Update Material Renamed",
+                        "price": 15.75,
+                    },
+                    headers=self._auth_headers("trial-token"),
+                )
+                self.assertEqual(response.status_code, 200)
+                payload = response.json()
+                self.assertTrue(payload["success"])
+                self.assertEqual(payload["item"]["article"], "OWNED-UPD-MAT")
+                self.assertEqual(payload["item"]["name"], "Owned Update Material Renamed")
+
+                with session_factory() as session:
+                    material_after = session.query(MaterialModel).filter(MaterialModel.article == "OWNED-UPD-MAT").one()
+                    material_count_after = session.query(MaterialModel).count()
+                    link_count_after = session.query(MaterialUserLinkModel).filter(
+                        MaterialUserLinkModel.material_article == "OWNED-UPD-MAT",
+                        MaterialUserLinkModel.user_id == "trial-user",
+                    ).count()
+                    owned_count_after = inventory_repository.count_owned_private_materials("trial-user")
+                    price_after = (
+                        session.query(material_price.MaterialPriceModel)
+                        .filter(
+                            material_price.MaterialPriceModel.article == "OWNED-UPD-MAT",
+                            material_price.MaterialPriceModel.city == "kyiv",
+                        )
+                        .one()
+                    )
+
+                self.assertEqual(material_before.id, material_after.id)
+                self.assertEqual(material_count_before, material_count_after)
+                self.assertEqual(link_count_before, link_count_after)
+                self.assertEqual(owned_count_before, owned_count_after)
+                self.assertEqual(material_after.description, "Original description")
+                self.assertEqual(material_after.color, "Oak")
+                self.assertEqual(material_after.dimensions, "2800 x 2070")
+                self.assertEqual(material_after.thickness, "18")
+                self.assertEqual(price_before.price, 12.5)
+                self.assertEqual(price_after.price, 15.75)
+
+    def test_material_update_endpoint_requires_materials_edit_entitlement(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
+                with session_factory() as session:
+                    self._set_material_bool_entitlement(session, "materials.edit", "trial", False)
+                    session.add(
+                        MaterialModel(
+                            article="EDIT-BLOCKED-MAT",
+                            name="Edit Blocked Material",
+                            category="dsp",
+                            owner_user_id="trial-user",
+                            is_default=False,
+                        )
+                    )
+                    session.commit()
+
+                response = client.patch(
+                    "/catalog/materials/EDIT-BLOCKED-MAT",
+                    json={"name": "Should Not Update"},
+                    headers=self._auth_headers("trial-token"),
+                )
+                self.assertEqual(response.status_code, 403)
+                self.assertEqual(response.json()["detail"]["error"], "Insufficient permissions")
+
+                with session_factory() as session:
+                    material = session.query(MaterialModel).filter(MaterialModel.article == "EDIT-BLOCKED-MAT").one()
+                    self.assertEqual(material.name, "Edit Blocked Material")
+
+    def test_material_update_endpoint_handles_missing_materials_edit_entitlement(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
+                with session_factory() as session:
+                    self._remove_material_entitlement(session, "materials.edit", "trial")
+                    session.add(
+                        MaterialModel(
+                            article="EDIT-MISSING-MAT",
+                            name="Missing Edit Material",
+                            category="dsp",
+                            owner_user_id="trial-user",
+                            is_default=False,
+                        )
+                    )
+                    session.commit()
+
+                response = client.patch(
+                    "/catalog/materials/EDIT-MISSING-MAT",
+                    json={"name": "Should Not Update"},
+                    headers=self._auth_headers("trial-token"),
+                )
+                self.assertEqual(response.status_code, 403)
+                self.assertEqual(response.json()["detail"]["error"], "Insufficient permissions")
+
+                with session_factory() as session:
+                    material = session.query(MaterialModel).filter(MaterialModel.article == "EDIT-MISSING-MAT").one()
+                    self.assertEqual(material.name, "Missing Edit Material")
+
+    def test_material_update_endpoint_blocks_foreign_private_material(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
+                with session_factory() as session:
+                    session.add(
+                        MaterialModel(
+                            article="FOREIGN-EDIT-MAT",
+                            name="Foreign Edit Material",
+                            description="Foreign description",
+                            category="dsp",
+                            owner_user_id="stranger-user",
+                            is_default=False,
+                        )
+                    )
+                    session.commit()
+
+                response = client.patch(
+                    "/catalog/materials/FOREIGN-EDIT-MAT",
+                    json={"name": "Should Not Update"},
+                    headers=self._auth_headers("trial-token"),
+                )
+                self.assertEqual(response.status_code, 404)
+                self.assertEqual(response.json()["detail"]["error"], "Material not found")
+
+                with session_factory() as session:
+                    material = session.query(MaterialModel).filter(MaterialModel.article == "FOREIGN-EDIT-MAT").one()
+                    self.assertEqual(material.name, "Foreign Edit Material")
+                    self.assertEqual(material.description, "Foreign description")
+
+    def test_material_update_endpoint_blocks_system_material_for_non_admin_users(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
+                with session_factory() as session:
+                    session.add(
+                        MaterialModel(
+                            article="SYSTEM-EDIT-MAT",
+                            name="System Edit Material",
+                            category="dsp",
+                            owner_user_id=None,
+                            is_default=True,
+                        )
+                    )
+                    session.commit()
+
+                response = client.patch(
+                    "/catalog/materials/SYSTEM-EDIT-MAT",
+                    json={"name": "Should Not Update"},
+                    headers=self._auth_headers("trial-token"),
+                )
+                self.assertEqual(response.status_code, 403)
+                self.assertEqual(response.json()["detail"]["error"], "You do not have permission to edit this material")
+
+                with session_factory() as session:
+                    material = session.query(MaterialModel).filter(MaterialModel.article == "SYSTEM-EDIT-MAT").one()
+                    self.assertEqual(material.name, "System Edit Material")
+
+    def test_material_update_endpoint_allows_admin_bypass(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
+                with session_factory() as session:
+                    session.add(
+                        MaterialModel(
+                            article="ADMIN-EDIT-MAT",
+                            name="Admin Edit Material",
+                            description="Admin description",
+                            category="dsp",
+                            owner_user_id="stranger-user",
+                            is_default=False,
+                        )
+                    )
+                    session.commit()
+
+                response = client.patch(
+                    "/catalog/materials/ADMIN-EDIT-MAT",
+                    json={
+                        "name": "Admin Edit Material Updated",
+                        "description": "Admin updated description",
+                    },
+                    headers=self._auth_headers("admin-token"),
+                )
+                self.assertEqual(response.status_code, 200)
+                self.assertTrue(response.json()["success"])
+                self.assertEqual(response.json()["item"]["article"], "ADMIN-EDIT-MAT")
+                self.assertEqual(response.json()["item"]["name"], "Admin Edit Material Updated")
+
+                with session_factory() as session:
+                    material = session.query(MaterialModel).filter(MaterialModel.article == "ADMIN-EDIT-MAT").one()
+                    self.assertEqual(material.name, "Admin Edit Material Updated")
+                    self.assertEqual(material.description, "Admin updated description")
+
+    def test_material_update_endpoint_rejects_invalid_and_forbidden_fields(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
+                with session_factory() as session:
+                    session.add(
+                        MaterialModel(
+                            article="VALIDATION-MAT",
+                            name="Validation Material",
+                            description="Validation description",
+                            color="White",
+                            dimensions="2800 x 2070",
+                            thickness="18",
+                            category="dsp",
+                            owner_user_id="trial-user",
+                            is_default=False,
+                        )
+                    )
+                    session.commit()
+
+                forbidden_payloads = [
+                    {"article": "NEW-ARTICLE"},
+                    {"owner_user_id": "other-user"},
+                    {"is_default": True},
+                    {"source_url": "https://example.com/new"},
+                    {"city": "lviv"},
+                    {"unknown_field": "value"},
+                ]
+
+                for payload in forbidden_payloads:
+                    response = client.patch(
+                        "/catalog/materials/VALIDATION-MAT",
+                        json=payload,
+                        headers=self._auth_headers("trial-token"),
+                    )
+                    self.assertEqual(response.status_code, 422)
+
+                invalid_name = client.patch(
+                    "/catalog/materials/VALIDATION-MAT",
+                    json={"name": ""},
+                    headers=self._auth_headers("trial-token"),
+                )
+                self.assertEqual(invalid_name.status_code, 422)
+
+                invalid_price = client.patch(
+                    "/catalog/materials/VALIDATION-MAT",
+                    json={"price": -1},
+                    headers=self._auth_headers("trial-token"),
+                )
+                self.assertEqual(invalid_price.status_code, 422)
+
+                partial_update = client.patch(
+                    "/catalog/materials/VALIDATION-MAT",
+                    json={"name": "Validation Material Updated"},
+                    headers=self._auth_headers("trial-token"),
+                )
+                self.assertEqual(partial_update.status_code, 200)
+                self.assertTrue(partial_update.json()["success"])
+
+                with session_factory() as session:
+                    material = session.query(MaterialModel).filter(MaterialModel.article == "VALIDATION-MAT").one()
+                    self.assertEqual(material.name, "Validation Material Updated")
+                    self.assertEqual(material.description, "Validation description")
+                    self.assertEqual(material.color, "White")
+                    self.assertEqual(material.dimensions, "2800 x 2070")
+                    self.assertEqual(material.thickness, "18")
 
     def test_material_delete_entitlement_blocks_owned_material_deletion(self) -> None:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
