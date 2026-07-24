@@ -84,6 +84,9 @@ from services.auth_service import (
     reset_user_password,
     username_is_available,
 )
+from services.entitlement_service import (
+    EntitlementService,
+)
 from services.registration_onboarding_service import (
     confirm_pending_phone_registration,
     get_telegram_registration_status,
@@ -121,6 +124,8 @@ def _serialize_user(
 
     user
 ) -> dict:
+    with EntitlementService() as entitlement_service:
+        entitlements = entitlement_service.build_resolved_entitlement_snapshot(user)
 
     fallback_username = user.username or user.email.split("@")[0]
 
@@ -143,6 +148,8 @@ def _serialize_user(
         "last_username_change_at": user.last_username_change_at,
 
         **build_subscription_status(user),
+
+        "entitlements": entitlements,
 
         "viyar_email": user.viyar_email,
 

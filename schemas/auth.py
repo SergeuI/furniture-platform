@@ -161,6 +161,14 @@ class UpdateOwnProfileSchema(BaseModel):
     )
 
 
+class ResolvedEntitlementSchema(BaseModel):
+    allowed: bool
+    value_type: str | None = None
+    value: bool | int | float | str | None = None
+    is_unlimited: bool = False
+    is_not_applicable: bool = False
+
+
 class CreateEmailChangeRequestSchema(BaseModel):
 
     new_email: str = Field(
@@ -325,6 +333,8 @@ class UserResponseSchema(BaseModel):
     trial_ends_at: datetime | None = None
 
     trial_seconds_remaining: int = 0
+
+    entitlements: dict[str, ResolvedEntitlementSchema] = Field(default_factory=dict)
 
     is_active: bool
 

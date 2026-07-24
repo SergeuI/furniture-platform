@@ -252,6 +252,103 @@ class EntitlementServiceTests(unittest.TestCase):
                     self.assertEqual(result.effective_plan, "business")
                     mocked.assert_called_once_with(user)
 
+    def test_build_resolved_entitlement_snapshot_uses_bulk_queries_and_current_plan_rules(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._service_context(Path(tmpdir) / "entitlements.db") as service:
+                free_user = UserStub(role="free")
+                trial_user = UserStub(
+                    role="free",
+                    trial_started_at=datetime.utcnow() - timedelta(hours=1),
+                    trial_ends_at=datetime.utcnow() + timedelta(days=6),
+                )
+                admin_user = UserStub(role="admin")
+
+                with patch.object(service.repository, "list_features", wraps=service.repository.list_features) as list_features_mock, patch.object(
+                    service.repository,
+                    "list_plan_entitlements",
+                    wraps=service.repository.list_plan_entitlements,
+                ) as list_plan_entitlements_mock:
+                    free_snapshot = service.build_resolved_entitlement_snapshot(free_user)
+
+                self.assertEqual(list_features_mock.call_count, 2)
+                list_plan_entitlements_mock.assert_called_once_with("free", active_only=True)
+                self.assertEqual(
+                    set(free_snapshot),
+                    {
+                        "ai_scan_limit",
+                        "beta_toggle",
+                        "empty_text_feature",
+                        "materials.max_owned",
+                        "missing_entitlement_feature",
+                        "not_applicable_feature",
+                        "nullable_bool_feature",
+                        "storage_limit",
+                        "support_level",
+                        "theme_mode",
+                    },
+                )
+                self.assertEqual(free_snapshot["beta_toggle"], {
+                    "allowed": False,
+                    "value_type": "boolean",
+                    "value": False,
+                    "is_unlimited": False,
+                    "is_not_applicable": False,
+                })
+                self.assertEqual(free_snapshot["missing_entitlement_feature"], {
+                    "allowed": False,
+                    "value_type": "boolean",
+                    "value": None,
+                    "is_unlimited": False,
+                    "is_not_applicable": False,
+                })
+                self.assertEqual(free_snapshot["not_applicable_feature"], {
+                    "allowed": False,
+                    "value_type": "integer",
+                    "value": None,
+                    "is_unlimited": False,
+                    "is_not_applicable": True,
+                })
+                self.assertEqual(free_snapshot["materials.max_owned"], {
+                    "allowed": True,
+                    "value_type": "integer",
+                    "value": 3,
+                    "is_unlimited": False,
+                    "is_not_applicable": False,
+                })
+
+                trial_snapshot = service.build_resolved_entitlement_snapshot(trial_user)
+                self.assertEqual(trial_snapshot["materials.max_owned"], {
+                    "allowed": True,
+                    "value_type": "integer",
+                    "value": None,
+                    "is_unlimited": True,
+                    "is_not_applicable": False,
+                })
+
+                with patch.object(service.repository, "list_features", wraps=service.repository.list_features) as admin_list_features_mock, patch.object(
+                    service.repository,
+                    "list_plan_entitlements",
+                    wraps=service.repository.list_plan_entitlements,
+                ) as admin_list_plan_entitlements_mock:
+                    admin_snapshot = service.build_resolved_entitlement_snapshot(admin_user)
+
+                self.assertEqual(admin_list_features_mock.call_count, 1)
+                admin_list_plan_entitlements_mock.assert_not_called()
+                self.assertEqual(admin_snapshot["materials.max_owned"], {
+                    "allowed": True,
+                    "value_type": "integer",
+                    "value": None,
+                    "is_unlimited": True,
+                    "is_not_applicable": False,
+                })
+                self.assertEqual(admin_snapshot["beta_toggle"], {
+                    "allowed": True,
+                    "value_type": "boolean",
+                    "value": True,
+                    "is_unlimited": False,
+                    "is_not_applicable": False,
+                })
+
     def test_invalid_feature_key_is_rejected_safely(self) -> None:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             with self._service_context(Path(tmpdir) / "entitlements.db") as service:

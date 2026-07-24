@@ -123,6 +123,112 @@ class EntitlementService:
             return value
         return Decimal(str(value))
 
+    @staticmethod
+    def _serialize_resolved_entitlement(
+        feature,
+        entitlement,
+        *,
+        admin_bypass: bool,
+    ) -> dict[str, object]:
+        value_type = feature.value_type
+
+        if admin_bypass:
+            if value_type == "boolean":
+                return {
+                    "allowed": True,
+                    "value_type": value_type,
+                    "value": True,
+                    "is_unlimited": False,
+                    "is_not_applicable": False,
+                }
+
+            if value_type in {"integer", "decimal"}:
+                return {
+                    "allowed": True,
+                    "value_type": value_type,
+                    "value": None,
+                    "is_unlimited": True,
+                    "is_not_applicable": False,
+                }
+
+            return {
+                "allowed": True,
+                "value_type": value_type,
+                "value": None,
+                "is_unlimited": False,
+                "is_not_applicable": False,
+            }
+
+        if entitlement is None:
+            return {
+                "allowed": False,
+                "value_type": value_type,
+                "value": None,
+                "is_unlimited": False,
+                "is_not_applicable": False,
+            }
+
+        is_unlimited = bool(getattr(entitlement, "is_unlimited", False))
+        is_not_applicable = bool(getattr(entitlement, "is_not_applicable", False))
+
+        if value_type == "boolean":
+            value = entitlement.bool_value if entitlement.bool_value is not None else None
+            allowed = bool(entitlement.bool_value) and not is_not_applicable
+        elif value_type == "integer":
+            value = None if entitlement.integer_value is None else int(entitlement.integer_value)
+            allowed = (is_unlimited or entitlement.integer_value is not None) and not is_not_applicable
+        elif value_type == "decimal":
+            decimal_value = EntitlementService._normalize_decimal_value(entitlement.decimal_value)
+            value = None if decimal_value is None else float(decimal_value)
+            allowed = (is_unlimited or decimal_value is not None) and not is_not_applicable
+        elif value_type in {"text", "enum"}:
+            value = entitlement.text_value
+            allowed = bool(str(value or "").strip()) and not is_not_applicable
+        else:
+            value = None
+            allowed = False
+
+        return {
+            "allowed": allowed,
+            "value_type": value_type,
+            "value": value,
+            "is_unlimited": is_unlimited,
+            "is_not_applicable": is_not_applicable,
+        }
+
+    def build_resolved_entitlement_snapshot(self, user) -> dict[str, dict[str, object]]:
+        effective_plan = self.get_effective_plan(user)
+        features = self.repository.list_features(active_only=True)
+        admin_bypass = effective_plan == ADMIN_EFFECTIVE_PLAN
+
+        if admin_bypass:
+            return {
+                feature.feature_key: self._serialize_resolved_entitlement(
+                    feature,
+                    entitlement=None,
+                    admin_bypass=True,
+                )
+                for feature in features
+            }
+
+        records = self.repository.list_plan_entitlements(
+            effective_plan,
+            active_only=True,
+        )
+        entitlements_by_feature_id = {
+            record.feature.id: record.entitlement
+            for record in records
+        }
+
+        return {
+            feature.feature_key: self._serialize_resolved_entitlement(
+                feature,
+                entitlements_by_feature_id.get(feature.id),
+                admin_bypass=False,
+            )
+            for feature in features
+        }
+
     def get_effective_plan(
         self,
         user,
