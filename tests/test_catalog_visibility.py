@@ -46,6 +46,7 @@ from database.models.user import UserModel
 from database.models import user_change_request  # noqa: F401
 from database.models import user_service_catalog_price  # noqa: F401
 from database.repositories import inventory_repository
+from database.repositories import material_import_job_repository
 import services.entitlement_service as entitlement_service
 
 
@@ -64,6 +65,65 @@ class UserStub:
 
 
 class CatalogVisibilityTests(unittest.TestCase):
+    @staticmethod
+    def _set_material_bool_entitlement(
+        session,
+        feature_key: str,
+        plan_code: str,
+        enabled: bool,
+    ) -> None:
+        feature = (
+            session.query(EntitlementFeatureModel)
+            .filter(EntitlementFeatureModel.feature_key == feature_key)
+            .one()
+        )
+        entitlement = (
+            session.query(PlanEntitlementModel)
+            .filter(
+                PlanEntitlementModel.feature_id == feature.id,
+                PlanEntitlementModel.plan_code == plan_code,
+            )
+            .one()
+        )
+        entitlement.bool_value = enabled
+        entitlement.is_unlimited = False
+        entitlement.integer_value = None
+        entitlement.decimal_value = None
+        entitlement.text_value = None
+        entitlement.is_not_applicable = False
+
+    @staticmethod
+    def _create_material_import_job(
+        session,
+        *,
+        job_id: int,
+        article: str,
+        city: str,
+        owner_user_id: str | None,
+        status: str = "success",
+    ) -> None:
+        session.add(
+            material_import_job.MaterialImportJobModel(
+                id=job_id,
+                article=article,
+                category="dsp",
+                city=city,
+                owner_user_id=owner_user_id,
+                status=status,
+                attempt_count=1,
+                max_attempts=5,
+                next_retry_at=None,
+                last_error=None,
+                last_strategy=None,
+                last_source_url=None,
+                preferred_url=None,
+                debug_trace=None,
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow(),
+                completed_at=datetime.utcnow() if status == "success" else None,
+            )
+        )
+
     def test_system_materials_and_fittings_are_visible_to_trial_and_free_users(self) -> None:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, _client):
@@ -420,6 +480,271 @@ class CatalogVisibilityTests(unittest.TestCase):
 
                 with session_factory() as session:
                     self.assertIsNone(session.query(MaterialModel).filter(MaterialModel.article == article).one_or_none())
+
+    def test_material_view_entitlement_blocks_list_and_detail_access(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
+                with session_factory() as session:
+                    self._set_material_bool_entitlement(session, "materials.view", "trial", False)
+                    session.add(
+                        MaterialModel(
+                            article="VISIBLE-MAT",
+                            name="Visible Material",
+                            category="dsp",
+                            owner_user_id=None,
+                            is_default=True,
+                        )
+                    )
+                    session.commit()
+
+                list_response = client.get(
+                    "/catalog/materials",
+                    headers=self._auth_headers("trial-token"),
+                )
+                self.assertEqual(list_response.status_code, 403)
+
+                detail_response = client.get(
+                    "/catalog/materials/VISIBLE-MAT",
+                    headers=self._auth_headers("trial-token"),
+                )
+                self.assertEqual(detail_response.status_code, 403)
+
+    def test_material_create_entitlement_blocks_new_material_creation(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
+                with session_factory() as session:
+                    self._set_material_bool_entitlement(session, "materials.create", "trial", False)
+                    session.commit()
+
+                response = client.post(
+                    "/catalog/materials",
+                    json={
+                        "article": "NO-CREATE-MAT",
+                        "name": "No Create Material",
+                        "category": "dsp",
+                        "city": "kyiv",
+                        "price": 12.5,
+                    },
+                    headers=self._auth_headers("trial-token"),
+                )
+                self.assertEqual(response.status_code, 403)
+
+    def test_material_edit_entitlement_blocks_owned_material_update(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
+                with session_factory() as session:
+                    self._set_material_bool_entitlement(session, "materials.edit", "trial", False)
+                    session.add(
+                        MaterialModel(
+                            article="OWNED-EDIT-MAT",
+                            name="Owned Edit Material",
+                            category="dsp",
+                            owner_user_id="trial-user",
+                            is_default=False,
+                        )
+                    )
+                    session.commit()
+
+                response = client.post(
+                    "/catalog/materials",
+                    json={
+                        "article": "OWNED-EDIT-MAT",
+                        "name": "Owned Edit Material Updated",
+                        "category": "dsp",
+                        "city": "kyiv",
+                        "price": 13.5,
+                    },
+                    headers=self._auth_headers("trial-token"),
+                )
+                self.assertEqual(response.status_code, 403)
+
+    def test_material_delete_entitlement_blocks_owned_material_deletion(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
+                with session_factory() as session:
+                    self._set_material_bool_entitlement(session, "materials.delete", "trial", False)
+                    session.add(
+                        MaterialModel(
+                            article="OWNED-DELETE-MAT",
+                            name="Owned Delete Material",
+                            category="dsp",
+                            owner_user_id="trial-user",
+                            is_default=False,
+                        )
+                    )
+                    session.commit()
+
+                response = client.delete(
+                    "/catalog/materials/OWNED-DELETE-MAT",
+                    headers=self._auth_headers("trial-token"),
+                )
+                self.assertEqual(response.status_code, 403)
+
+    def test_material_import_job_result_is_visible_for_own_material(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
+                with session_factory() as session:
+                    session.add(
+                        MaterialModel(
+                            article="OWN-JOB-MAT",
+                            name="Own Job Material",
+                            category="dsp",
+                            owner_user_id="owner-1",
+                            is_default=False,
+                        )
+                    )
+                    self._create_material_import_job(
+                        session,
+                        job_id=101,
+                        article="OWN-JOB-MAT",
+                        city="kyiv",
+                        owner_user_id="owner-1",
+                    )
+                    session.commit()
+
+                response = client.get(
+                    "/catalog/materials/import-jobs/101",
+                    headers=self._auth_headers("owner-token"),
+                )
+                self.assertEqual(response.status_code, 200)
+                payload = response.json()
+                self.assertTrue(payload["success"])
+                self.assertIsNotNone(payload["item"])
+                self.assertEqual(payload["item"]["article"], "OWN-JOB-MAT")
+
+    def test_material_import_job_result_hides_foreign_private_material(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
+                with session_factory() as session:
+                    session.add(
+                        MaterialModel(
+                            article="FOREIGN-JOB-MAT",
+                            name="Foreign Job Material",
+                            category="dsp",
+                            owner_user_id="stranger-user",
+                            is_default=False,
+                        )
+                    )
+                    self._create_material_import_job(
+                        session,
+                        job_id=102,
+                        article="FOREIGN-JOB-MAT",
+                        city="kyiv",
+                        owner_user_id="stranger-user",
+                    )
+                    session.commit()
+
+                response = client.get(
+                    "/catalog/materials/import-jobs/102",
+                    headers=self._auth_headers("owner-token"),
+                )
+                self.assertEqual(response.status_code, 404)
+                payload = response.json()
+                self.assertEqual(payload["detail"]["error"], "Material import job not found")
+
+    def test_material_import_job_result_allows_admin_bypass(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
+                with session_factory() as session:
+                    session.add(
+                        MaterialModel(
+                            article="ADMIN-JOB-MAT",
+                            name="Admin Job Material",
+                            category="dsp",
+                            owner_user_id="stranger-user",
+                            is_default=False,
+                        )
+                    )
+                    self._create_material_import_job(
+                        session,
+                        job_id=103,
+                        article="ADMIN-JOB-MAT",
+                        city="kyiv",
+                        owner_user_id="stranger-user",
+                    )
+                    session.commit()
+
+                response = client.get(
+                    "/catalog/materials/import-jobs/103",
+                    headers=self._auth_headers("admin-token"),
+                )
+                self.assertEqual(response.status_code, 200)
+                payload = response.json()
+                self.assertTrue(payload["success"])
+                self.assertIsNotNone(payload["item"])
+                self.assertEqual(payload["item"]["article"], "ADMIN-JOB-MAT")
+
+    def test_material_import_job_result_requires_view_permission_and_keeps_db_unchanged(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
+                with session_factory() as session:
+                    self._set_material_bool_entitlement(session, "materials.view", "trial", False)
+                    session.add(
+                        MaterialModel(
+                            article="BLOCKED-JOB-MAT",
+                            name="Blocked Job Material",
+                            category="dsp",
+                            owner_user_id=None,
+                            is_default=True,
+                        )
+                    )
+                    self._create_material_import_job(
+                        session,
+                        job_id=104,
+                        article="BLOCKED-JOB-MAT",
+                        city="kyiv",
+                        owner_user_id=None,
+                    )
+                    session.commit()
+
+                with session_factory() as session:
+                    materials_before = session.query(MaterialModel).count()
+                    jobs_before = session.query(material_import_job.MaterialImportJobModel).count()
+
+                response = client.get(
+                    "/catalog/materials/import-jobs/104",
+                    headers=self._auth_headers("trial-token"),
+                )
+                self.assertEqual(response.status_code, 403)
+
+                with session_factory() as session:
+                    materials_after = session.query(MaterialModel).count()
+                    jobs_after = session.query(material_import_job.MaterialImportJobModel).count()
+
+                self.assertEqual(materials_before, materials_after)
+                self.assertEqual(jobs_before, jobs_after)
+
+    def test_material_import_job_result_keeps_system_material_visible(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
+                with session_factory() as session:
+                    session.add(
+                        MaterialModel(
+                            article="SYSTEM-JOB-MAT",
+                            name="System Job Material",
+                            category="dsp",
+                            owner_user_id=None,
+                            is_default=True,
+                        )
+                    )
+                    self._create_material_import_job(
+                        session,
+                        job_id=105,
+                        article="SYSTEM-JOB-MAT",
+                        city="kyiv",
+                        owner_user_id=None,
+                    )
+                    session.commit()
+
+                response = client.get(
+                    "/catalog/materials/import-jobs/105",
+                    headers=self._auth_headers("trial-token"),
+                )
+                self.assertEqual(response.status_code, 200)
+                payload = response.json()
+                self.assertTrue(payload["success"])
+                self.assertIsNotNone(payload["item"])
+                self.assertEqual(payload["item"]["article"], "SYSTEM-JOB-MAT")
 
     def test_free_user_can_create_three_materials_but_not_a_fourth(self) -> None:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
@@ -991,12 +1316,53 @@ class CatalogVisibilityTests(unittest.TestCase):
 
         with (
             patch.object(inventory_repository, "SessionLocal", side_effect=session_factory),
+            patch.object(material_import_job_repository, "SessionLocal", side_effect=session_factory),
             patch.object(catalog, "SessionLocal", side_effect=session_factory),
             patch.object(entitlement_service, "SessionLocal", side_effect=session_factory),
             patch.object(auth_dependencies, "get_user_from_token", side_effect=_resolve_user),
             patch.object(catalog, "get_user_from_token", side_effect=_resolve_user),
         ):
             with session_factory() as session:
+                for feature_key, name_uk, sort_order in [
+                    ("materials.view", "Доступ до каталогу матеріалів", 10),
+                    ("materials.create", "Додавання власних матеріалів", 20),
+                    ("materials.edit", "Редагування власних матеріалів", 30),
+                    ("materials.delete", "Видалення власних матеріалів", 40),
+                ]:
+                    feature = EntitlementFeatureModel(
+                        feature_key=feature_key,
+                        name_uk=name_uk,
+                        category="materials",
+                        sort_order=sort_order,
+                        value_type="boolean",
+                    )
+                    session.add(feature)
+                    session.flush()
+                    session.add_all(
+                        [
+                            PlanEntitlementModel(
+                                feature_id=feature.id,
+                                plan_code="trial",
+                                bool_value=True,
+                            ),
+                            PlanEntitlementModel(
+                                feature_id=feature.id,
+                                plan_code="free",
+                                bool_value=True,
+                            ),
+                            PlanEntitlementModel(
+                                feature_id=feature.id,
+                                plan_code="pro",
+                                bool_value=True,
+                            ),
+                            PlanEntitlementModel(
+                                feature_id=feature.id,
+                                plan_code="business",
+                                bool_value=True,
+                            ),
+                        ]
+                    )
+
                 feature = EntitlementFeatureModel(
                     feature_key="materials.max_owned",
                     name_uk="Максимальна кількість власних матеріалів",

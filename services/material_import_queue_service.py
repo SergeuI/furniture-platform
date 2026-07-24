@@ -286,9 +286,19 @@ def stop_material_import_queue_loop():
     _queue_loop_task = None
 
 
-def get_material_import_job_result(article: str, city: str) -> dict | None:
+def get_material_import_job_result(
+    article: str,
+    city: str,
+    viewer_user_id: str | None = None,
+    viewer_role: str | None = None,
+) -> dict | None:
 
-    items = list_materials(search=article, city=city)
+    items = list_materials(
+        search=article,
+        city=city,
+        viewer_user_id=viewer_user_id,
+        viewer_role=viewer_role,
+    )
 
     for item in items:
         if str(item.get("article", "")).strip() == str(article).strip():

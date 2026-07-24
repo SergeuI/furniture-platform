@@ -532,6 +532,21 @@ def _ensure_material_ownership_capacity(current_user) -> dict:
     return quota
 
 
+def _ensure_material_feature_access(current_user, feature_key: str) -> None:
+
+    with EntitlementService() as service:
+        if service.has_feature(current_user, feature_key):
+            return
+
+    raise HTTPException(
+        status_code=403,
+        detail={
+            "success": False,
+            "error": "Insufficient permissions",
+        },
+    )
+
+
 def _resolve_material_with_city_context(
     article: str,
     city: str | None,
@@ -749,6 +764,8 @@ async def list_materials_route(
     current_user = Depends(require_catalog_reader)
 ):
 
+    _ensure_material_feature_access(current_user, "materials.view")
+
     selected_city = city or current_user.city
     items = list_materials(
         search=search,
@@ -903,6 +920,7 @@ async def create_material_route(
 
     if existing_item and not _can_manage_material_item(current_user, existing_item):
         if existing_item.get("is_default"):
+            _ensure_material_feature_access(current_user, "materials.view")
             resolved_existing_item = _resolve_material_with_city_context(
                 effective_article,
                 selected_city,
@@ -919,6 +937,11 @@ async def create_material_route(
             "success": False,
             "error": "Material with this article already exists",
         }
+
+    if existing_item:
+        _ensure_material_feature_access(current_user, "materials.edit")
+    else:
+        _ensure_material_feature_access(current_user, "materials.create")
 
     if effective_source_url:
         if not effective_article:
@@ -1251,6 +1274,13 @@ async def import_material_from_viyar_route(
     )
 
     if not payload.force_refresh and existing_item and not material_needs_full_sync(existing_item):
+        if not _can_manage_material_item(current_user, existing_item):
+            return {
+                "success": False,
+                "error": "Material with this article already exists",
+            }
+
+        _ensure_material_feature_access(current_user, "materials.edit")
         item = _link_material_for_user(
             material=existing_item,
             current_user=current_user,
@@ -1274,6 +1304,17 @@ async def import_material_from_viyar_route(
             "selected_city": selected_city,
             "error": None,
         }
+
+    if existing_item:
+        if not _can_manage_material_item(current_user, existing_item):
+            return {
+                "success": False,
+                "error": "Material with this article already exists",
+            }
+
+        _ensure_material_feature_access(current_user, "materials.edit")
+    else:
+        _ensure_material_feature_access(current_user, "materials.create")
 
     if not existing_item and current_user.role != "admin":
         _ensure_material_ownership_capacity(current_user)
@@ -1387,6 +1428,8 @@ async def get_material_import_job_route(
     current_user = Depends(require_catalog_reader)
 ):
 
+    _ensure_material_feature_access(current_user, "materials.view")
+
     job = get_material_import_job(job_id)
 
     if not job:
@@ -1395,10 +1438,25 @@ async def get_material_import_job_route(
             "error": "Material import job not found",
         }
 
+    job_owner_user_id = str(job.get("owner_user_id") or "").strip()
+    if job_owner_user_id and current_user.role != "admin" and job_owner_user_id != str(current_user.id):
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "success": False,
+                "error": "Material import job not found",
+            },
+        )
+
     item = None
 
     if job["status"] == "success":
-        item = get_material_import_job_result(job["article"], job["city"])
+        item = get_material_import_job_result(
+            job["article"],
+            job["city"],
+            viewer_user_id=str(current_user.id),
+            viewer_role=current_user.role,
+        )
 
     return {
         "success": True,
@@ -1417,6 +1475,8 @@ async def get_material_route(
     city: str | None = Query(default=None),
     current_user = Depends(require_catalog_reader),
 ):
+
+    _ensure_material_feature_access(current_user, "materials.view")
 
     selected_city = (city or current_user.city or "").strip() or None
     item = _resolve_material_with_city_context(
@@ -1468,6 +1528,8 @@ async def attach_material_edge_route(
             "success": False,
             "error": "You do not have permission to edit this material",
         }
+
+    _ensure_material_feature_access(current_user, "materials.edit")
 
     edge_key = (payload.edge_key or "").strip()
 
@@ -1631,6 +1693,8 @@ async def delete_material_route(
             "success": False,
             "error": "You do not have permission to delete this material",
         }
+
+    _ensure_material_feature_access(current_user, "materials.delete")
 
     result = delete_material(article.strip())
 
