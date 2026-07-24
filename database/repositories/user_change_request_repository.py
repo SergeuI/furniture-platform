@@ -64,6 +64,8 @@ def get_pending_change_request(
 
 
 def list_user_change_requests(
+    limit: int | None = None,
+    offset: int = 0,
     status: str | None = None,
 ):
 
@@ -79,6 +81,12 @@ def list_user_change_requests(
             query = query.filter(
                 UserChangeRequestModel.status == status
             )
+
+        if offset > 0:
+            query = query.offset(offset)
+
+        if limit is not None:
+            query = query.limit(limit)
 
         return query.all()
 
