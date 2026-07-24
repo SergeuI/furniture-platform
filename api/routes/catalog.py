@@ -549,6 +549,21 @@ def _ensure_material_feature_access(current_user, feature_key: str) -> None:
     )
 
 
+def _ensure_fitting_feature_access(current_user, feature_key: str) -> None:
+
+    with EntitlementService() as service:
+        if service.has_feature(current_user, feature_key):
+            return
+
+    raise HTTPException(
+        status_code=403,
+        detail={
+            "success": False,
+            "error": "Insufficient permissions",
+        },
+    )
+
+
 def _resolve_material_with_city_context(
     article: str,
     city: str | None,
@@ -1866,6 +1881,8 @@ async def list_fittings_route(
     fitting_type: str | None = Query(default=None),
     current_user = Depends(require_catalog_reader)
 ):
+    _ensure_fitting_feature_access(current_user, "fittings.view")
+
     selected_city = city or current_user.city
 
     items = list_fittings(
@@ -1898,6 +1915,8 @@ async def get_fitting_image_route(
 
     if not authorized_user and access_token:
         authorized_user = get_user_from_token(access_token)
+
+    _ensure_fitting_feature_access(authorized_user, "fittings.view")
 
     fitting = get_fitting_by_id(
         item_id,
@@ -1932,6 +1951,8 @@ async def get_fitting_gallery_image_route(
     if not authorized_user and access_token:
         authorized_user = get_user_from_token(access_token)
 
+    _ensure_fitting_feature_access(authorized_user, "fittings.view")
+
     fitting = get_fitting_by_id(
         item_id,
         viewer_user_id=getattr(authorized_user, "id", None),
@@ -1961,6 +1982,8 @@ async def get_fitting_detail_route(
     item_id: str,
     current_user = Depends(require_catalog_reader),
 ):
+    _ensure_fitting_feature_access(current_user, "fittings.view")
+
     fitting = get_fitting_by_id(
         item_id,
         viewer_user_id=current_user.id,
@@ -2012,8 +2035,9 @@ def _can_manage_fitting_item(current_user, item: dict | None) -> bool:
 async def create_fitting_route(
     payload: FittingCatalogCreateSchema,
     background_tasks: BackgroundTasks,
-    current_user = Depends(require_fitting_editor),
+    current_user = Depends(require_catalog_reader),
 ):
+    _ensure_fitting_feature_access(current_user, "fittings.create")
 
     if payload.is_system and current_user.role != "admin":
         return {
@@ -2220,8 +2244,9 @@ async def update_fitting_route(
     item_id: str,
     payload: FittingCatalogUpdateSchema,
     background_tasks: BackgroundTasks,
-    current_user = Depends(require_fitting_editor),
+    current_user = Depends(require_catalog_reader),
 ):
+    _ensure_fitting_feature_access(current_user, "fittings.edit")
 
     existing_item = get_fitting_by_id(
         item_id,
@@ -2369,8 +2394,9 @@ async def update_fitting_route(
 )
 async def delete_fitting_route(
     item_id: str,
-    current_user = Depends(require_fitting_editor),
+    current_user = Depends(require_catalog_reader),
 ):
+    _ensure_fitting_feature_access(current_user, "fittings.delete")
 
     existing_item = get_fitting_by_id(
         item_id,

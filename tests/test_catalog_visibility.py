@@ -93,6 +93,33 @@ class CatalogVisibilityTests(unittest.TestCase):
         entitlement.is_not_applicable = False
 
     @staticmethod
+    def _set_fitting_bool_entitlement(
+        session,
+        feature_key: str,
+        plan_code: str,
+        enabled: bool,
+    ) -> None:
+        feature = (
+            session.query(EntitlementFeatureModel)
+            .filter(EntitlementFeatureModel.feature_key == feature_key)
+            .one()
+        )
+        entitlement = (
+            session.query(PlanEntitlementModel)
+            .filter(
+                PlanEntitlementModel.feature_id == feature.id,
+                PlanEntitlementModel.plan_code == plan_code,
+            )
+            .one()
+        )
+        entitlement.bool_value = enabled
+        entitlement.is_unlimited = False
+        entitlement.integer_value = None
+        entitlement.decimal_value = None
+        entitlement.text_value = None
+        entitlement.is_not_applicable = False
+
+    @staticmethod
     def _remove_material_entitlement(
         session,
         feature_key: str,
@@ -1384,6 +1411,9 @@ class CatalogVisibilityTests(unittest.TestCase):
     def test_free_user_cannot_create_fitting(self) -> None:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             with self._catalog_context(Path(tmpdir) / "catalog.db") as (_session_factory, client):
+                with _session_factory() as session:
+                    before_count = session.query(FittingModel).count()
+
                 response = client.post(
                     "/catalog/fittings",
                     json={
@@ -1394,6 +1424,51 @@ class CatalogVisibilityTests(unittest.TestCase):
                     headers=self._auth_headers("free-token"),
                 )
                 self.assertEqual(response.status_code, 403)
+
+                with _session_factory() as session:
+                    after_count = session.query(FittingModel).count()
+
+                self.assertEqual(before_count, after_count)
+
+    def test_free_user_cannot_update_or_delete_fitting_without_entitlements(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
+                with session_factory() as session:
+                    fitting = FittingModel(
+                        name="Free Owned Fitting",
+                        fitting_type="drawer_slides",
+                        fitting_group="fittings",
+                        owner_user_id="free-user",
+                        is_system=False,
+                        is_active=True,
+                    )
+                    session.add(fitting)
+                    session.commit()
+                    fitting_id = str(fitting.id)
+
+                update_response = client.put(
+                    f"/catalog/fittings/{fitting_id}",
+                    json={
+                        "name": "Free Owned Fitting Updated",
+                        "fitting_type": "drawer_slides",
+                        "fitting_group": "fittings",
+                    },
+                    headers=self._auth_headers("free-token"),
+                )
+                self.assertEqual(update_response.status_code, 403)
+                self.assertEqual(update_response.json()["detail"]["error"], "Insufficient permissions")
+
+                delete_response = client.delete(
+                    f"/catalog/fittings/{fitting_id}",
+                    headers=self._auth_headers("free-token"),
+                )
+                self.assertEqual(delete_response.status_code, 403)
+                self.assertEqual(delete_response.json()["detail"]["error"], "Insufficient permissions")
+
+                with session_factory() as session:
+                    fitting = session.get(FittingModel, int(fitting_id))
+                    self.assertIsNotNone(fitting)
+                    self.assertEqual(fitting.name, "Free Owned Fitting")
 
     def test_admin_created_fitting_is_system_and_visible_to_trial(self) -> None:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
@@ -1473,6 +1548,168 @@ class CatalogVisibilityTests(unittest.TestCase):
                     headers=self._auth_headers("trial-token"),
                 )
                 self.assertEqual(image.status_code, 404)
+
+    def test_free_user_with_view_entitlement_sees_only_system_fittings(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
+                with session_factory() as session:
+                    session.add_all(
+                        [
+                            FittingModel(
+                                name="System Fitting",
+                                fitting_type="drawer_slides",
+                                fitting_group="fittings",
+                                owner_user_id=None,
+                                is_system=True,
+                                is_active=True,
+                            ),
+                            FittingModel(
+                                name="Private Fitting",
+                                fitting_type="drawer_slides",
+                                fitting_group="fittings",
+                                owner_user_id="owner-1",
+                                is_system=False,
+                                is_active=True,
+                            ),
+                        ]
+                    )
+                    session.commit()
+
+                response = client.get(
+                    "/catalog/fittings",
+                    headers=self._auth_headers("free-token"),
+                )
+                self.assertEqual(response.status_code, 200)
+                payload = response.json()
+                self.assertTrue(payload["success"])
+                names = {item["name"] for item in payload["items"]}
+                self.assertIn("System Fitting", names)
+                self.assertNotIn("Private Fitting", names)
+
+    def test_fitting_view_entitlement_false_blocks_list_detail_and_images(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
+                with session_factory() as session:
+                    self._set_fitting_bool_entitlement(session, "fittings.view", "trial", False)
+                    system_fitting = FittingModel(
+                        name="System Fitting",
+                        fitting_type="drawer_slides",
+                        fitting_group="fittings",
+                        owner_user_id=None,
+                        is_system=True,
+                        is_active=True,
+                        image_cached_bytes=b"system-bytes",
+                        image_cached_content_type="image/png",
+                    )
+                    private_fitting = FittingModel(
+                        name="Private Fitting",
+                        fitting_type="drawer_slides",
+                        fitting_group="fittings",
+                        owner_user_id="owner-1",
+                        is_system=False,
+                        is_active=True,
+                    )
+                    session.add_all([system_fitting, private_fitting])
+                    session.flush()
+                    private_fitting_id = str(private_fitting.id)
+                    system_fitting_id = str(system_fitting.id)
+                    session.commit()
+
+                with session_factory() as session:
+                    before_count = session.query(FittingModel).count()
+
+                list_response = client.get(
+                    "/catalog/fittings",
+                    headers=self._auth_headers("trial-token"),
+                )
+                self.assertEqual(list_response.status_code, 403)
+
+                detail_response = client.get(
+                    f"/catalog/fittings/{system_fitting_id}",
+                    headers=self._auth_headers("trial-token"),
+                )
+                self.assertEqual(detail_response.status_code, 403)
+
+                image_response = client.get(
+                    f"/catalog/fittings/{system_fitting_id}/image",
+                    headers=self._auth_headers("trial-token"),
+                )
+                self.assertEqual(image_response.status_code, 403)
+
+                gallery_response = client.get(
+                    f"/catalog/fittings/{private_fitting_id}/images/1",
+                    headers=self._auth_headers("trial-token"),
+                )
+                self.assertEqual(gallery_response.status_code, 403)
+
+                admin_list = client.get(
+                    "/catalog/fittings",
+                    headers=self._auth_headers("admin-token"),
+                )
+                self.assertEqual(admin_list.status_code, 200)
+                self.assertTrue(admin_list.json()["success"])
+
+                admin_detail = client.get(
+                    f"/catalog/fittings/{private_fitting_id}",
+                    headers=self._auth_headers("admin-token"),
+                )
+                self.assertEqual(admin_detail.status_code, 200)
+                self.assertTrue(admin_detail.json()["success"])
+
+                with session_factory() as session:
+                    after_count = session.query(FittingModel).count()
+
+                self.assertEqual(before_count, after_count)
+
+    def test_pro_and_business_users_can_create_update_and_delete_own_fittings(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
+                for token, expected_owner_id in (
+                    ("pro-token", "pro-user"),
+                    ("business-token", "business-user"),
+                ):
+                    created = client.post(
+                        "/catalog/fittings",
+                        json={
+                            "name": f"{expected_owner_id} Fitting",
+                            "fitting_type": "drawer_slides",
+                            "fitting_group": "fittings",
+                        },
+                        headers=self._auth_headers(token),
+                    )
+                    self.assertEqual(created.status_code, 200)
+                    self.assertTrue(created.json()["success"])
+                    fitting_id = str(created.json()["item"]["id"])
+
+                    with session_factory() as session:
+                        fitting = session.get(FittingModel, int(fitting_id))
+                        self.assertIsNotNone(fitting)
+                        self.assertEqual(fitting.owner_user_id, expected_owner_id)
+                        self.assertFalse(fitting.is_system)
+
+                    updated = client.put(
+                        f"/catalog/fittings/{fitting_id}",
+                        json={
+                            "name": f"{expected_owner_id} Fitting Updated",
+                            "fitting_type": "drawer_slides",
+                            "fitting_group": "fittings",
+                            "is_system": True,
+                        },
+                        headers=self._auth_headers(token),
+                    )
+                    self.assertEqual(updated.status_code, 200)
+                    self.assertTrue(updated.json()["success"])
+                    self.assertFalse(updated.json()["item"]["is_system"])
+
+                    deleted = client.delete(
+                        f"/catalog/fittings/{fitting_id}",
+                        headers=self._auth_headers(token),
+                    )
+                    self.assertEqual(deleted.status_code, 200)
+                    self.assertTrue(deleted.json()["success"])
+
+                    with session_factory() as session:
+                        self.assertIsNone(session.get(FittingModel, int(fitting_id)))
 
     def test_fitting_detail_returns_characteristics_and_images(self) -> None:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
@@ -1616,6 +1853,16 @@ class CatalogVisibilityTests(unittest.TestCase):
             email="admin@example.com",
             role="admin",
         )
+        pro_user = UserStub(
+            id="pro-user",
+            email="pro@example.com",
+            role="pro",
+        )
+        business_user = UserStub(
+            id="business-user",
+            email="business@example.com",
+            role="premium",
+        )
         owner_user = UserStub(
             id="owner-1",
             email="owner@example.com",
@@ -1634,6 +1881,8 @@ class CatalogVisibilityTests(unittest.TestCase):
         token_map = {
             "trial-token": trial_user,
             "admin-token": admin_user,
+            "pro-token": pro_user,
+            "business-token": business_user,
             "owner-token": owner_user,
             "stranger-token": stranger_user,
             "free-token": free_user,
@@ -1726,6 +1975,70 @@ class CatalogVisibilityTests(unittest.TestCase):
                         ),
                     ]
                 )
+
+                for feature_key, name_uk, sort_order, values in [
+                    (
+                        "fittings.view",
+                        "Доступ до каталогу фурнітури",
+                        60,
+                        {
+                            "free": True,
+                            "trial": True,
+                            "pro": True,
+                            "business": True,
+                        },
+                    ),
+                    (
+                        "fittings.create",
+                        "Додавання власної фурнітури",
+                        70,
+                        {
+                            "free": False,
+                            "trial": True,
+                            "pro": True,
+                            "business": True,
+                        },
+                    ),
+                    (
+                        "fittings.edit",
+                        "Редагування власної фурнітури",
+                        80,
+                        {
+                            "free": False,
+                            "trial": True,
+                            "pro": True,
+                            "business": True,
+                        },
+                    ),
+                    (
+                        "fittings.delete",
+                        "Видалення власної фурнітури",
+                        90,
+                        {
+                            "free": False,
+                            "trial": True,
+                            "pro": True,
+                            "business": True,
+                        },
+                    ),
+                ]:
+                    feature = EntitlementFeatureModel(
+                        feature_key=feature_key,
+                        name_uk=name_uk,
+                        category="fittings",
+                        sort_order=sort_order,
+                        value_type="boolean",
+                    )
+                    session.add(feature)
+                    session.flush()
+                    for plan_code, enabled in values.items():
+                        session.add(
+                            PlanEntitlementModel(
+                                feature_id=feature.id,
+                                plan_code=plan_code,
+                                bool_value=enabled,
+                            )
+                        )
                 session.commit()
             with TestClient(app) as client:
                 yield session_factory, client
