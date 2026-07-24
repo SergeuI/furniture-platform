@@ -1,4 +1,4 @@
-import {
+﻿import {
   Blocks,
   CheckCircle2,
   ChevronLeft,
@@ -39,6 +39,12 @@ import {
   getSubscriptionLabel,
 } from "../../shared/trialStatus.js";
 import EntitlementsAdminPage from "./components/EntitlementsAdminPage.jsx";
+import {
+  buildFittingSubmissionPayload,
+  canEditFittingItem as canEditFittingItemHelper,
+  canManageSystemFittings as canManageSystemFittingsHelper,
+  createFittingFormDraft,
+} from "./fittingEntitlements.js";
 import {
   getMaterialEntitlementFlags,
   hasUserEntitlement,
@@ -133,6 +139,7 @@ import {
   updateServiceDrillingRule,
   updateCatalogItemActive,
   updateFittingHolePoint,
+  updateFitting,
   updateMyViyarAuth,
   updateManualService,
   updateProject,
@@ -172,7 +179,6 @@ const SIDEBAR_COLLAPSE_BREAKPOINT = 1180;
 function buildAdminAssetUrl(path) {
   return `${ADMIN_ASSET_BASE_URL}${String(path || "").replace(/^\/+/, "")}`;
 }
-
 function consumeAdminTokenHandoff() {
   const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
   const searchParams = new URLSearchParams(window.location.search);
@@ -3450,6 +3456,9 @@ Object.assign(TRANSLATIONS.en, {
   fittingSource: "Source",
   fittingSourceUrl: "Source link",
   fittingSourceUrlHint: "Paste the product page link and the catalog will try to read the name, article, image, and price.",
+  fittingEdit: "Edit fitting",
+  fittingEditHint: "Update the current fitting values and save the changes.",
+  fittingUpdated: "Fitting updated",
   fittingDetails: "Fitting details",
   fittingDetailsLoading: "Loading fitting details...",
   fittingDetailsFailed: "Unable to load fitting details.",
@@ -3485,6 +3494,8 @@ Object.assign(TRANSLATIONS.en, {
   fittingAddSystem: "Add default fitting",
   fittingAddCustom: "Add fitting for calculation",
   fittingCreateSuccess: "Fitting added",
+  fittingSaveChanges: "Save changes",
+  fittingSortOrder: "Sort order",
     fittingDelete: "Delete fitting",
     fittingDeleted: "Fitting deleted",
     fittingDeletedCount: "{count} city rows deleted",
@@ -3622,6 +3633,9 @@ Object.assign(TRANSLATIONS.uk, {
   fittingSource: "\u0414\u0436\u0435\u0440\u0435\u043b\u043e",
   fittingSourceUrl: "\u041f\u043e\u0441\u0438\u043b\u0430\u043d\u043d\u044f \u043d\u0430 \u0434\u0436\u0435\u0440\u0435\u043b\u043e",
   fittingSourceUrlHint: "\u0412\u0441\u0442\u0430\u0432\u0442\u0435 \u043f\u043e\u0441\u0438\u043b\u0430\u043d\u043d\u044f \u043d\u0430 \u0441\u0442\u043e\u0440\u0456\u043d\u043a\u0443 \u0442\u043e\u0432\u0430\u0440\u0443, \u0456 \u043a\u0430\u0442\u0430\u043b\u043e\u0433 \u0441\u043f\u0440\u043e\u0431\u0443\u0454 \u043f\u0456\u0434\u0442\u044f\u0433\u043d\u0443\u0442\u0438 \u043d\u0430\u0437\u0432\u0443, \u0430\u0440\u0442\u0438\u043a\u0443\u043b, \u043a\u0430\u0440\u0442\u0438\u043d\u043a\u0443 \u0456 \u0446\u0456\u043d\u0443.",
+  fittingEdit: "\u0420\u0435\u0434\u0430\u0433\u0443\u0432\u0430\u0442\u0438 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0443",
+  fittingEditHint: "\u041e\u043d\u043e\u0432\u0456\u0442\u044c \u043f\u043e\u0447\u0430\u0442\u043a\u043e\u0432\u0456 \u0437\u043d\u0430\u0447\u0435\u043d\u043d\u044f \u043f\u043e\u0437\u0438\u0446\u0456\u0456 \u0456 \u0437\u0431\u0435\u0440\u0456\u0442\u044c \u0437\u043c\u0456\u043d\u0438.",
+  fittingUpdated: "\u0424\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0443 \u043e\u043d\u043e\u0432\u043b\u0435\u043d\u043e",
   fittingDetails: "\u0414\u0435\u0442\u0430\u043b\u0456 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0438",
   fittingDetailsLoading: "\u0417\u0430\u0432\u0430\u043d\u0442\u0430\u0436\u0435\u043d\u043d\u044f \u0434\u0435\u0442\u0430\u043b\u0435\u0439 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0438...",
   fittingDetailsFailed: "\u041d\u0435 \u0432\u0434\u0430\u043b\u043e\u0441\u044f \u0437\u0430\u0432\u0430\u043d\u0442\u0430\u0436\u0438\u0442\u0438 \u0434\u0435\u0442\u0430\u043b\u0456 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0438.",
@@ -3657,6 +3671,8 @@ Object.assign(TRANSLATIONS.uk, {
   fittingAddSystem: "\u0414\u043e\u0434\u0430\u0442\u0438 \u0431\u0430\u0437\u043e\u0432\u0443 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0443",
   fittingAddCustom: "\u0414\u043e\u0434\u0430\u0442\u0438 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0443 \u0434\u043b\u044f \u043f\u0440\u043e\u0440\u0430\u0445\u0443\u043d\u043a\u0443",
   fittingCreateSuccess: "\u0424\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0443 \u0434\u043e\u0434\u0430\u043d\u043e",
+  fittingSaveChanges: "\u0417\u0431\u0435\u0440\u0435\u0433\u0442\u0438 \u0437\u043c\u0456\u043d\u0438",
+  fittingSortOrder: "\u0421\u043f\u043e\u0440\u044f\u0434\u043e\u043a",
     fittingDelete: "\u0412\u0438\u0434\u0430\u043b\u0438\u0442\u0438 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0443",
     fittingDeleted: "\u0424\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0443 \u0432\u0438\u0434\u0430\u043b\u0435\u043d\u043e",
     fittingDeletedCount: "\u0412\u0438\u0434\u0430\u043b\u0435\u043d\u043e {count} city-\u0440\u044f\u0434\u043a\u0456\u0432",
@@ -6832,6 +6848,8 @@ export default function App() {
   );
   const [fittingSourceModalOpen, setFittingSourceModalOpen] = useState(false);
   const [fittingCreateMode, setFittingCreateMode] = useState("manual");
+  const [fittingModalMode, setFittingModalMode] = useState("create");
+  const [editingFittingItem, setEditingFittingItem] = useState(null);
   const [fittingColumnVisibility, setFittingColumnVisibility] = useState({
     price: true,
     stock: true,
@@ -8379,7 +8397,7 @@ export default function App() {
   const canViewFittingCatalog = canViewFittings(user);
   const canCreateFittingCatalog = canCreateFittings(user);
   const canDeleteFittingCatalog = canDeleteFittings(user);
-  const canManageSystemFittingCatalog = canManageSystemFittings(user);
+  const canManageSystemFittingCatalog = canManageSystemFittingsHelper(user);
   const normalizedNewMaterialArticle = String(newMaterialArticle || "").trim();
   const existingMaterialForArticle = normalizedNewMaterialArticle
     ? materialItems.find(
@@ -9137,7 +9155,7 @@ export default function App() {
     setFittingDetailLoading(false);
     setFittingDetailError("");
     setOpenFittingMenuId("");
-    setFittingSourceModalOpen(false);
+    closeFittingFormModal();
 
     const fallbackView = canViewMaterialCatalog ? "catalogMaterials" : "home";
     setActiveView(fallbackView);
@@ -13919,7 +13937,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
 
     if (nextView !== "catalogFittings") {
       setOpenFittingMenuId("");
-      setFittingSourceModalOpen(false);
+      closeFittingFormModal();
     }
 
     if (nextView === "home") {
@@ -15019,10 +15037,66 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
     }
   }
 
+  function closeFittingFormModal() {
+    setFittingSourceModalOpen(false);
+    setFittingModalMode("create");
+    setEditingFittingItem(null);
+    setFittingCreateMode("manual");
+    setNewFittingForm(DEFAULT_FITTING_FORM);
+  }
+
+  function openCreateFittingModal(mode = "manual") {
+    const category = visibleFittingCategories.find((item) => item.code === selectedFittingCategory) || null;
+
+    setFittingModalMode("create");
+    setEditingFittingItem(null);
+    setFittingCreateMode(mode);
+    setNewFittingForm(
+      createFittingFormDraft(null, {
+        city: activeCity || "",
+        fitting_group: category?.group,
+        fitting_type: category?.code,
+      }),
+    );
+    setFittingSourceModalOpen(true);
+  }
+
+  function openEditFittingModal(item) {
+    if (!canEditFittingItemHelper(user, item)) {
+      return;
+    }
+
+    setOpenFittingMenuId("");
+    setFittingModalMode("edit");
+    setEditingFittingItem(item);
+    setFittingCreateMode(item?.source_url ? "source" : "manual");
+    setNewFittingForm(createFittingFormDraft(item, { city: activeCity || "" }));
+    setFittingSourceModalOpen(true);
+  }
+
   async function handleCreateFitting(event) {
     event.preventDefault();
 
-    if (!token || !canCreateFittingCatalog) {
+    const fallbackSystemName = currentFittingCategoryMeta?.name || t.fittingSystemScope;
+    const isEditMode = fittingModalMode === "edit";
+    const editingItem = fittingModalMode === "edit" ? editingFittingItem : null;
+    const canSubmitEdit = canEditFittingItemHelper(user, editingItem);
+
+    if (!token) {
+      return;
+    }
+
+    if (isEditMode && (!editingItem || !canSubmitEdit)) {
+      setStatus({
+        message: language === "uk"
+          ? "Ви не маєте права редагувати цю фурнітуру."
+          : "You do not have permission to edit this fitting.",
+        tone: "error",
+      });
+      return;
+    }
+
+    if (!isEditMode && !canCreateFittingCatalog) {
       setStatus({
         message: language === "uk"
           ? "Додавання фурнітури недоступне у вашому тарифі."
@@ -15032,32 +15106,23 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
       return;
     }
 
-    const isSystemFitting = canManageSystemFittingCatalog ? Boolean(newFittingForm.is_system) : false;
-    const normalizedArticle = newFittingForm.article.trim();
-    const normalizedSourceUrl = newFittingForm.source_url.trim();
-    const normalizedName = newFittingForm.name.trim();
-    const inferredSourceUrl = normalizedSourceUrl || (looksLikeUrl(normalizedName) ? normalizedName : "");
-    const inferredName = looksLikeUrl(normalizedName) && inferredSourceUrl === normalizedName ? "" : normalizedName;
-    const fallbackSystemName = currentFittingCategoryMeta?.name || t.fittingSystemScope;
-
-    const payload = {
-      article: normalizedArticle || null,
-      city: activeCity || null,
-      code: null,
-      fitting_group: newFittingForm.fitting_group,
-      fitting_type: newFittingForm.fitting_type,
-      image_url: isSystemFitting ? null : newFittingForm.image_url.trim() || null,
-      source_url: inferredSourceUrl || null,
-      is_active: Boolean(newFittingForm.is_active),
-      is_system: isSystemFitting,
-      name: inferredName || normalizedArticle || inferredSourceUrl || (isSystemFitting ? fallbackSystemName : ""),
-      price:
-        isSystemFitting || newFittingForm.price === "" || newFittingForm.price === null
-          ? null
-          : Number(String(newFittingForm.price).replace(",", ".")),
-      sort_order: Number(newFittingForm.sort_order || 0),
-      stock: null,
-    };
+    const submission =
+      isEditMode
+        ? buildFittingSubmissionPayload(newFittingForm, {
+            allowSystemToggle: false,
+            canEditSystemFittings: canManageSystemFittingCatalog,
+            currentItem: editingItem,
+            fallbackSystemName,
+            mode: "edit",
+          })
+        : buildFittingSubmissionPayload(newFittingForm, {
+            allowSystemToggle: canManageSystemFittingCatalog,
+            canEditSystemFittings: canManageSystemFittingCatalog,
+            fallbackSystemName,
+            mode: "create",
+          });
+    const payload = submission.payload;
+    const isSystemFitting = submission.is_system;
 
     if (!payload.fitting_type) {
       setStatus({ message: t.fittingTypePrompt, tone: "error" });
@@ -15075,7 +15140,10 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
     }
 
     setLoading(true);
-    const result = await createFitting(token, payload);
+    const result =
+      isEditMode && editingItem
+        ? await updateFitting(token, editingItem.id, payload)
+        : await createFitting(token, payload);
     setLoading(false);
 
     if (!result.success) {
@@ -15083,14 +15151,18 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
       return;
     }
 
-    setStatus({ message: t.fittingCreateSuccess, tone: "success" });
-    setFittingSourceModalOpen(false);
-    setNewFittingForm((current) => ({
-      ...DEFAULT_FITTING_FORM,
-      fitting_group: current.fitting_group,
-      fitting_type: current.fitting_type,
-      is_system: canManageSystemFittingCatalog ? current.is_system : false,
-    }));
+    setStatus({
+      message: isEditMode ? t.fittingUpdated : t.fittingCreateSuccess,
+      tone: "success",
+    });
+    closeFittingFormModal();
+    if (isEditMode && selectedFittingDetail && result.item) {
+      setSelectedFittingDetail((current) =>
+        current && String(current.id) === String(result.item.id)
+          ? { ...current, ...result.item }
+          : current,
+      );
+    }
     await loadFittingsCatalog(token, {
       city: activeCity || "",
     });
@@ -18516,10 +18588,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                   {activeFittingCategory && canCreateFittingCatalog ? (
                     <button
                       className="primary-button"
-                      onClick={() => {
-                        setFittingCreateMode("manual");
-                        setFittingSourceModalOpen(true);
-                      }}
+                      onClick={() => openCreateFittingModal("manual")}
                       type="button"
                     >
                       <Plus size={16} />
@@ -18685,6 +18754,19 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                                   </button>
                                   {openFittingMenuId === item.id ? (
                                     <div className="material-card-menu-dropdown">
+                                      {canEditFittingItemHelper(user, item) ? (
+                                        <button
+                                          className="material-card-menu-action"
+                                          onClick={(event) => {
+                                            event.stopPropagation();
+                                            openEditFittingModal(item);
+                                          }}
+                                          type="button"
+                                        >
+                                          <Pencil size={14} />
+                                          {t.fittingEdit}
+                                        </button>
+                                      ) : null}
                                       <button
                                         className="material-card-menu-action danger"
                                         onClick={(event) => {
@@ -18788,6 +18870,19 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                                     </button>
                                     {openFittingMenuId === item.id ? (
                                       <div className="material-card-menu-dropdown">
+                                        {canEditFittingItemHelper(user, item) ? (
+                                          <button
+                                            className="material-card-menu-action"
+                                            onClick={(event) => {
+                                              event.stopPropagation();
+                                              openEditFittingModal(item);
+                                            }}
+                                            type="button"
+                                          >
+                                            <Pencil size={14} />
+                                            {t.fittingEdit}
+                                          </button>
+                                        ) : null}
                                         <button
                                           className="material-card-menu-action danger"
                                           onClick={(event) => {
@@ -22042,7 +22137,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
         <div
           aria-modal="true"
           className="modal-backdrop"
-          onClick={() => setFittingSourceModalOpen(false)}
+          onClick={closeFittingFormModal}
           role="dialog"
         >
           <section
@@ -22052,38 +22147,48 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
             <header className="confirm-header">
               <div>
                 <strong>
-                  {fittingCreateMode === "source" ? t.fittingSourceUrl : t.fittingAddCustom}
+                  {fittingModalMode === "edit"
+                    ? t.fittingEdit
+                    : fittingCreateMode === "source"
+                      ? t.fittingSourceUrl
+                      : t.fittingAddCustom}
                 </strong>
                 <p>
-                  {fittingCreateMode === "source" ? t.fittingSourceUrlHint : t.fittingCustomHint}
+                  {fittingModalMode === "edit"
+                    ? t.fittingEditHint
+                    : fittingCreateMode === "source"
+                      ? t.fittingSourceUrlHint
+                      : t.fittingCustomHint}
                 </p>
               </div>
               <button
                 aria-label={t.cancel}
                 className="ghost-button compact-button detail-info-button"
-                onClick={() => setFittingSourceModalOpen(false)}
+                onClick={closeFittingFormModal}
                 type="button"
               >
                 <X size={16} />
               </button>
             </header>
             <form className="fitting-source-modal-form" onSubmit={handleCreateFitting}>
-              <div className="fitting-source-mode-switch">
-                <button
-                  className={`ghost-button compact-button${fittingCreateMode === "manual" ? " active" : ""}`}
-                  onClick={() => setFittingCreateMode("manual")}
-                  type="button"
-                >
-                  Вручну
-                </button>
-                <button
-                  className={`ghost-button compact-button${fittingCreateMode === "source" ? " active" : ""}`}
-                  onClick={() => setFittingCreateMode("source")}
-                  type="button"
-                >
-                  Через посилання
-                </button>
-              </div>
+              {fittingModalMode === "create" ? (
+                <div className="fitting-source-mode-switch">
+                  <button
+                    className={`ghost-button compact-button${fittingCreateMode === "manual" ? " active" : ""}`}
+                    onClick={() => setFittingCreateMode("manual")}
+                    type="button"
+                  >
+                    Вручну
+                  </button>
+                  <button
+                    className={`ghost-button compact-button${fittingCreateMode === "source" ? " active" : ""}`}
+                    onClick={() => setFittingCreateMode("source")}
+                    type="button"
+                  >
+                    Через посилання
+                  </button>
+                </div>
+              ) : null}
 
               <label>
                 <span>{t.fittingType}</span>
@@ -22111,7 +22216,52 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                 </select>
               </label>
 
-              {canManageSystemFittingCatalog ? (
+              <label>
+                <span>{t.brand}</span>
+                <input
+                  onChange={(event) =>
+                    setNewFittingForm((current) => ({ ...current, brand: event.target.value }))
+                  }
+                  type="text"
+                  value={newFittingForm.brand}
+                />
+              </label>
+
+              <label>
+                <span>{t.fittingStock}</span>
+                <input
+                  onChange={(event) =>
+                    setNewFittingForm((current) => ({ ...current, stock: event.target.value }))
+                  }
+                  type="text"
+                  value={newFittingForm.stock}
+                />
+              </label>
+
+              <label>
+                <span>{t.fittingSortOrder}</span>
+                <input
+                  min="0"
+                  onChange={(event) =>
+                    setNewFittingForm((current) => ({ ...current, sort_order: event.target.value }))
+                  }
+                  type="number"
+                  value={newFittingForm.sort_order}
+                />
+              </label>
+
+              <label className="toggle-label">
+                <input
+                  checked={Boolean(newFittingForm.is_active)}
+                  onChange={(event) =>
+                    setNewFittingForm((current) => ({ ...current, is_active: event.target.checked }))
+                  }
+                  type="checkbox"
+                />
+                {t.active}
+              </label>
+
+              {fittingModalMode === "create" && canManageSystemFittingCatalog ? (
                 <label className="toggle-label">
                   <input
                     checked={Boolean(newFittingForm.is_system)}
@@ -22125,6 +22275,13 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                   />
                   {newFittingForm.is_system ? t.fittingSystemScope : t.fittingCustomScope}
                 </label>
+              ) : fittingModalMode === "edit" ? (
+                <div className="fitting-form-note">
+                  {editingFittingItem?.is_system ? t.fittingSystemScope : t.fittingCustomScope}
+                  {language === "uk"
+                    ? ". Тип запису не можна змінити під час редагування."
+                    : ". The record type cannot be changed while editing."}
+                </div>
               ) : null}
 
               {newFittingForm.is_system ? (
@@ -22202,14 +22359,18 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                 <button
                   className="ghost-button"
                   disabled={loading}
-                  onClick={() => setFittingSourceModalOpen(false)}
+                  onClick={closeFittingFormModal}
                   type="button"
                 >
                   {t.cancel}
                 </button>
                 <button className="primary-button" disabled={loading} type="submit">
                   <Plus size={16} />
-                  {fittingCreateMode === "source" ? "Додати з посилання" : "Додати фурнітуру"}
+                  {fittingModalMode === "edit"
+                    ? t.fittingSaveChanges
+                    : fittingCreateMode === "source"
+                      ? "Додати з посилання"
+                      : "Додати фурнітуру"}
                 </button>
               </div>
             </form>
