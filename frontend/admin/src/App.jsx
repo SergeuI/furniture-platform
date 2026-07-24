@@ -39,6 +39,11 @@ import {
   getSubscriptionLabel,
 } from "../../shared/trialStatus.js";
 import EntitlementsAdminPage from "./components/EntitlementsAdminPage.jsx";
+import {
+  getMaterialEntitlementFlags,
+  hasUserEntitlement,
+  isMaterialCreationBlockedByQuota as isMaterialCreationBlockedByQuotaHelper,
+} from "./materialEntitlements.js";
 
 import surfaceMountIcon from "./assets/hole-mounting/surface_mount.png";
 import angledTwoPlanesIcon from "./assets/hole-mounting/angled_two_planes.png";
@@ -5477,11 +5482,11 @@ function hasProCatalogAccess(user) {
 }
 
 function canManageMaterialCatalog(user) {
-  return user?.role === "admin" || user?.role === "premium" || user?.role === "pro" || user?.role === "trial" || user?.role === "free";
+  return hasUserEntitlement(user, "materials.view");
 }
 
 function canManageSystemMaterials(user) {
-  return hasProCatalogAccess(user);
+  return user?.role === "admin";
 }
 
 function canEditMaterialItem(user, item) {
@@ -5493,19 +5498,27 @@ function canEditMaterialItem(user, item) {
     return true;
   }
 
-  if (!canManageMaterialCatalog(user)) {
+  if (!hasUserEntitlement(user, "materials.edit")) {
     return false;
-  }
-
-  if (item.is_default) {
-    return hasProCatalogAccess(user);
   }
 
   return item.owner_user_id === String(user.id);
 }
 
 function canDeleteMaterialItem(user, item) {
-  return canEditMaterialItem(user, item);
+  if (!user || !item) {
+    return false;
+  }
+
+  if (user.role === "admin") {
+    return true;
+  }
+
+  if (!hasUserEntitlement(user, "materials.delete")) {
+    return false;
+  }
+
+  return item.owner_user_id === String(user.id);
 }
 
 function getMaterialOwnershipScopeLabel(scope, language) {
@@ -8230,7 +8243,9 @@ export default function App() {
       if (result.job.status === "success") {
         setActiveMaterialImportJobId("");
         setStatus({ message: t.materialImportSuccess, tone: "success" });
-        await loadMaterialsCatalog(token);
+        if (canViewMaterialCatalog) {
+          await loadMaterialsCatalog(token);
+        }
         const detailResult = await getMaterialDetails(
           token,
           result.job.article,
@@ -8335,7 +8350,10 @@ export default function App() {
     });
   }
   const canCreateNewProject = canCreateProject(user);
-  const canEditMaterialCatalog = canManageMaterialCatalog(user);
+  const materialEntitlementFlags = getMaterialEntitlementFlags(user);
+  const canViewMaterialCatalog = materialEntitlementFlags.view;
+  const canCreateMaterialCatalog = materialEntitlementFlags.create;
+  const canEditMaterialCatalog = canCreateMaterialCatalog;
   const canEditSystemFittings = canManageSystemFittings(user);
   const canEditOwnFittings = canManageOwnFittings(user);
   const normalizedNewMaterialArticle = String(newMaterialArticle || "").trim();
@@ -8345,10 +8363,9 @@ export default function App() {
       )
     : null;
   const isNewMaterialSubmission = materialCreateMode === "manual" || !existingMaterialForArticle;
-  const isMaterialCreationBlockedByQuota = Boolean(
-    materialOwnershipQuota &&
-      materialOwnershipQuota.can_create === false &&
-      isNewMaterialSubmission,
+  const isMaterialCreationBlockedByQuota = isMaterialCreationBlockedByQuotaHelper(
+    materialOwnershipQuota,
+    isNewMaterialSubmission,
   );
   const materialOwnershipQuotaLabel = materialOwnershipQuota
     ? (materialOwnershipQuota.is_unlimited
@@ -14484,7 +14501,9 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
       } else {
         setStatus({ message: result.error || t.materialImportSuccess, tone: "success" });
       }
-      await loadMaterialsCatalog(token);
+      if (canViewMaterialCatalog) {
+        await loadMaterialsCatalog(token);
+      }
       return;
     }
 
@@ -14548,7 +14567,9 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
     if (selectedMaterialDetail?.article === article) {
       closeMaterialDetails();
     }
-    await loadMaterialsCatalog(token);
+    if (canViewMaterialCatalog) {
+      await loadMaterialsCatalog(token);
+    }
     setStatus({ message: t.materialDeleted, tone: "success" });
     closeConfirm();
   }
@@ -14584,7 +14605,9 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
 
     if (result.item) {
       setStatus({ message: t.materialImportSuccess, tone: "success" });
-      await loadMaterialsCatalog(token);
+      if (canViewMaterialCatalog) {
+        await loadMaterialsCatalog(token);
+      }
     }
   }
 
@@ -15378,12 +15401,12 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
   }, [token, user, isCatalogValuesView]);
 
   useEffect(() => {
-    if (!token || !isCatalogMaterialsView) {
+    if (!token || !isCatalogMaterialsView || !canViewMaterialCatalog) {
       return;
     }
 
     loadMaterialsCatalog(token);
-  }, [token, user?.role, isCatalogMaterialsView, materialCategoryFilter, materialSearch, materialOwnershipScope]);
+  }, [token, canViewMaterialCatalog, isCatalogMaterialsView, materialCategoryFilter, materialSearch, materialOwnershipScope]);
 
   useEffect(() => {
     if (!token || (!isCatalogFittingsView && !isCatalogFastenersView)) {
@@ -16078,7 +16101,9 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                   }
 
                   if (isCatalogMaterialsView) {
-                    loadMaterialsCatalog(token);
+                    if (canViewMaterialCatalog) {
+                      loadMaterialsCatalog(token);
+                    }
                     return;
                   }
 
@@ -17756,6 +17781,8 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                 </div>
               </div>
 
+              {canViewMaterialCatalog ? (
+                <>
               <div className="materials-toolbar">
                 <label className="service-catalog-search">
                   <Search size={16} />
@@ -18120,9 +18147,17 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                     </article>
                   )})}
                 </div>
-                ) : (
+                  ) : (
                 <div className="empty-state compact-empty-state">
                   <span>{t.catalogMaterialsDescription}</span>
+                </div>
+              )}
+                </>
+              ) : (
+                <div className="materials-quota-hint">
+                  <span className="service-tree-badge subtle">
+                    Додавання матеріалів недоступне у вашому тарифі.
+                  </span>
                 </div>
               )}
             </article>
