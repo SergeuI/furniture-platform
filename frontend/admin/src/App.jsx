@@ -44,6 +44,13 @@ import {
   hasUserEntitlement,
   isMaterialCreationBlockedByQuota as isMaterialCreationBlockedByQuotaHelper,
 } from "./materialEntitlements.js";
+import {
+  canCreateFittings,
+  canDeleteFittings,
+  canManageSystemFittings,
+  canViewFittings,
+  canDeleteFittingItem as canDeleteFittingItemHelper,
+} from "./fittingEntitlements.js";
 
 import surfaceMountIcon from "./assets/hole-mounting/surface_mount.png";
 import angledTwoPlanesIcon from "./assets/hole-mounting/angled_two_planes.png";
@@ -5494,10 +5501,6 @@ function handleMaterialEdgeImageError(event, materialItem, edgeItem, token = "")
   event.currentTarget.src = candidates[nextIndex];
 }
 
-function hasProCatalogAccess(user) {
-  return user?.role === "admin" || user?.role === "premium" || user?.role === "pro";
-}
-
 function canManageMaterialCatalog(user) {
   return hasUserEntitlement(user, "materials.view");
 }
@@ -5728,26 +5731,6 @@ function getSortedMaterialEdgeItems(item) {
 function getDefaultMaterialEdgeKey(item) {
   const existingKeys = new Set((item?.edge_options || []).map((edge) => edge.edge_key));
   return MATERIAL_EDGE_SLOTS.find((slot) => !existingKeys.has(slot.key))?.key || MATERIAL_EDGE_SLOTS[0].key;
-}
-
-function canManageSystemFittings(user) {
-  return user?.role === "admin";
-}
-
-function canManageOwnFittings(user) {
-  return hasProCatalogAccess(user);
-}
-
-function canDeleteFittingItem(user, item) {
-  if (!user || !item) {
-    return false;
-  }
-
-  if (user.role === "admin") {
-    return true;
-  }
-
-  return !item.is_system && item.owner_user_id === user.id;
 }
 
 function canEditProject(project, user) {
@@ -8393,8 +8376,10 @@ export default function App() {
   const canViewMaterialCatalog = materialEntitlementFlags.view;
   const canCreateMaterialCatalog = materialEntitlementFlags.create;
   const canEditMaterialCatalog = canCreateMaterialCatalog;
-  const canEditSystemFittings = canManageSystemFittings(user);
-  const canEditOwnFittings = canManageOwnFittings(user);
+  const canViewFittingCatalog = canViewFittings(user);
+  const canCreateFittingCatalog = canCreateFittings(user);
+  const canDeleteFittingCatalog = canDeleteFittings(user);
+  const canManageSystemFittingCatalog = canManageSystemFittings(user);
   const normalizedNewMaterialArticle = String(newMaterialArticle || "").trim();
   const existingMaterialForArticle = normalizedNewMaterialArticle
     ? materialItems.find(
@@ -9142,6 +9127,38 @@ export default function App() {
   }, [isCatalogView]);
 
   useEffect(() => {
+    if (!token || (!isCatalogFittingsView && !isCatalogFastenersView) || canViewFittingCatalog) {
+      return;
+    }
+
+    fittingDetailsRequestRef.current.open = false;
+    fittingDetailsReturnFocusRef.current = null;
+    setSelectedFittingDetail(null);
+    setFittingDetailLoading(false);
+    setFittingDetailError("");
+    setOpenFittingMenuId("");
+    setFittingSourceModalOpen(false);
+
+    const fallbackView = canViewMaterialCatalog ? "catalogMaterials" : "home";
+    setActiveView(fallbackView);
+    activeViewRef.current = fallbackView;
+    localStorage.setItem(ACTIVE_VIEW_STORAGE_KEY, fallbackView);
+    setStatus({
+      message: language === "uk"
+        ? "Каталог фурнітури недоступний у вашому тарифі."
+        : "The fittings catalog is unavailable for your plan.",
+      tone: "error",
+    });
+  }, [
+    token,
+    isCatalogFittingsView,
+    isCatalogFastenersView,
+    canViewFittingCatalog,
+    canViewMaterialCatalog,
+    language,
+  ]);
+
+  useEffect(() => {
     setOpenFittingMenuId("");
     const defaultCategory =
       visibleFittingCategories.find((item) => item.code === selectedFittingCategory) ||
@@ -9152,10 +9169,10 @@ export default function App() {
       city: activeCity || "",
       fitting_group: defaultCategory?.group || current.fitting_group,
       fitting_type: defaultCategory?.code || current.fitting_type,
-      is_system: canEditSystemFittings ? current.is_system : false,
+      is_system: canManageSystemFittingCatalog ? current.is_system : false,
     }));
   }, [
-    canEditSystemFittings,
+    canManageSystemFittingCatalog,
     activeCity,
     selectedFittingCategory,
     visibleFittingCategories,
@@ -9795,7 +9812,7 @@ export default function App() {
   }, [materialEditModalOpen]);
 
   async function openFittingDetails(item, returnFocusTarget = null) {
-    if (!token || !item?.id) {
+    if (!token || !item?.id || !canViewFittingCatalog) {
       return;
     }
 
@@ -9898,7 +9915,9 @@ export default function App() {
     activeToken = token,
     options = {},
   ) {
-    if (!activeToken) {
+    if (!activeToken || !canViewFittingCatalog) {
+      setFittingItems([]);
+      setFittingCategories([]);
       return;
     }
 
@@ -13856,6 +13875,10 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
   async function switchView(view, viewer = user) {
     const nextView = normalizeCatalogView(view === "catalog" ? "catalogViyar" : view);
 
+    if ((nextView === "catalogFittings" || nextView === "catalogFasteners") && !canViewFittingCatalog) {
+      return;
+    }
+
     if (
       activeView === "entitlements" &&
       entitlementsHasUnsavedChanges &&
@@ -14917,7 +14940,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
   }
 
   function openDeleteFittingConfirm(item) {
-    if (!canDeleteFittingItem(user, item)) {
+    if (!canDeleteFittingItemHelper(user, item)) {
       return;
     }
 
@@ -14932,7 +14955,13 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
   }
 
   async function handleDeleteFitting(itemId) {
-    if (!itemId) {
+    if (!itemId || !canDeleteFittingCatalog) {
+      setStatus({
+        message: language === "uk"
+          ? "Видалення фурнітури недоступне у вашому тарифі."
+          : "Deleting fittings is unavailable for your plan.",
+        tone: "error",
+      });
       return;
     }
 
@@ -14993,11 +15022,17 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
   async function handleCreateFitting(event) {
     event.preventDefault();
 
-    if (!token || !canEditOwnFittings) {
+    if (!token || !canCreateFittingCatalog) {
+      setStatus({
+        message: language === "uk"
+          ? "Додавання фурнітури недоступне у вашому тарифі."
+          : "Creating fittings is unavailable for your plan.",
+        tone: "error",
+      });
       return;
     }
 
-    const isSystemFitting = canEditSystemFittings ? Boolean(newFittingForm.is_system) : false;
+    const isSystemFitting = canManageSystemFittingCatalog ? Boolean(newFittingForm.is_system) : false;
     const normalizedArticle = newFittingForm.article.trim();
     const normalizedSourceUrl = newFittingForm.source_url.trim();
     const normalizedName = newFittingForm.name.trim();
@@ -15054,7 +15089,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
       ...DEFAULT_FITTING_FORM,
       fitting_group: current.fitting_group,
       fitting_type: current.fitting_type,
-      is_system: canEditSystemFittings ? current.is_system : false,
+      is_system: canManageSystemFittingCatalog ? current.is_system : false,
     }));
     await loadFittingsCatalog(token, {
       city: activeCity || "",
@@ -15993,16 +16028,18 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                   >
                     {t.catalogMaterials}
                   </button>
-                  <button
-                    className={isCatalogFittingsView ? "active" : ""}
-                    onClick={() => {
-                      switchView("catalogFittings");
-                      closeSidebarOnMobile();
-                    }}
-                    type="button"
-                  >
-                    {t.catalogFittings}
-                  </button>
+                  {canViewFittingCatalog ? (
+                    <button
+                      className={isCatalogFittingsView ? "active" : ""}
+                      onClick={() => {
+                        switchView("catalogFittings");
+                        closeSidebarOnMobile();
+                      }}
+                      type="button"
+                    >
+                      {t.catalogFittings}
+                    </button>
+                  ) : null}
                   {canViewFittingHoles ? (
                     <button
                       className={isCatalogHolesView ? "active" : ""}
@@ -18476,7 +18513,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                   </button>
                 </div>
                 <div className="fittings-toolbar-actions">
-                  {activeFittingCategory && canEditOwnFittings ? (
+                  {activeFittingCategory && canCreateFittingCatalog ? (
                     <button
                       className="primary-button"
                       onClick={() => {
@@ -18634,7 +18671,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                                   <Package size={24} />
                                 )}
                               </div>
-                              {canDeleteFittingItem(user, item) ? (
+                              {canDeleteFittingItemHelper(user, item) ? (
                                 <div className="material-card-menu fitting-row-menu">
                                   <button
                                     className="icon-button material-card-menu-trigger"
@@ -18737,7 +18774,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                                     </div>
                                   </div>
                                 </div>
-                                {canDeleteFittingItem(user, item) ? (
+                                {canDeleteFittingItemHelper(user, item) ? (
                                   <div className="material-card-menu fitting-row-menu">
                                     <button
                                       className="icon-button material-card-menu-trigger"
@@ -22074,7 +22111,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                 </select>
               </label>
 
-              {canEditSystemFittings ? (
+              {canManageSystemFittingCatalog ? (
                 <label className="toggle-label">
                   <input
                     checked={Boolean(newFittingForm.is_system)}
