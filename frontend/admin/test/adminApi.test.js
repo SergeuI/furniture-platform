@@ -5,6 +5,7 @@ import {
   API_BASE_URL,
   applyEntitlementRegistrySync,
   previewEntitlementRegistrySync,
+  updateMaterial,
 } from "../src/api.js";
 
 test("admin entitlement sync wrappers use the shared API base URL", async () => {
@@ -51,6 +52,59 @@ test("admin entitlement sync wrappers surface HTML responses as readable errors"
     const result = await previewEntitlementRegistrySync("token-1");
     assert.equal(result.success, false);
     assert.match(result.error, /Server returned an HTML error page \(HTTP 200\)/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("material update wrapper sends a PATCH request with the edited fields only", async () => {
+  const calls = [];
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url, options });
+    return new Response(JSON.stringify({ success: true, item: { article: "A-100" } }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+
+  try {
+    const result = await updateMaterial("token-2", "A-100", {
+      name: "New panel",
+      description: "Updated description",
+      price: 125.5,
+    });
+
+    assert.equal(result.success, true);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].url, "/api/catalog/materials/A-100");
+    assert.equal(calls[0].options.method, "PATCH");
+    assert.equal(calls[0].options.headers.Authorization, "Bearer token-2");
+    assert.deepEqual(JSON.parse(calls[0].options.body), {
+      name: "New panel",
+      description: "Updated description",
+      price: 125.5,
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("material update wrapper surfaces not-found responses from the backend", async () => {
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({ success: false, error: "Material not found or unavailable." }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
+
+  try {
+    const result = await updateMaterial("token-2", "A-404", { name: "New panel" });
+    assert.equal(result.success, false);
+    assert.equal(result.status, 404);
+    assert.equal(result.error, "Material not found or unavailable.");
   } finally {
     globalThis.fetch = originalFetch;
   }

@@ -132,6 +132,7 @@ import {
   updateProjectPartEdges,
   updateProjectPartMachining,
   updateViyarService,
+  updateMaterial,
   syncViyarServicePrices,
   updateMyProfile,
   updateUserActive,
@@ -3776,6 +3777,14 @@ Object.assign(TRANSLATIONS.en, {
   deleteMaterial: "Delete material",
   editMaterial: "Edit",
   deleteMaterialConfirm: "Delete custom material",
+  materialUpdated: "Material updated",
+  materialEditNameRequired: "Material name is required.",
+  materialEditPriceRequired: "Price is required.",
+  materialEditInvalidPrice: "Enter a valid non-negative price.",
+  materialEditCityRequired: "Select your city in profile settings.",
+  materialEditForbidden: "Editing material is not available in your plan.",
+  materialEditNotFound: "Material not found or unavailable.",
+  materialEditFailed: "Unable to update material.",
   materialDeleted: "Material deleted",
   refreshFromViyar: "Refresh from Viyar",
   materialRefreshQueued: "Material refresh queued.",
@@ -3866,6 +3875,14 @@ Object.assign(TRANSLATIONS.uk, {
   deleteMaterial: "\u0412\u0438\u0434\u0430\u043b\u0438\u0442\u0438 \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b",
   editMaterial: "\u0420\u0435\u0434\u0430\u0433\u0443\u0432\u0430\u0442\u0438",
   deleteMaterialConfirm: "\u0412\u0438\u0434\u0430\u043b\u0438\u0442\u0438 \u043a\u043e\u0440\u0438\u0441\u0442\u0443\u0432\u0430\u0446\u044c\u043a\u0438\u0439 \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b",
+  materialUpdated: "\u041c\u0430\u0442\u0435\u0440\u0456\u0430\u043b \u043e\u043d\u043e\u0432\u043b\u0435\u043d\u043e",
+  materialEditNameRequired: "\u041d\u0430\u0437\u0432\u0430 \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b\u0443 \u043f\u043e\u0442\u0440\u0456\u0431\u043d\u0430.",
+  materialEditPriceRequired: "\u0426\u0456\u043d\u0430 \u043f\u043e\u0442\u0440\u0456\u0431\u043d\u0430.",
+  materialEditInvalidPrice: "\u0412\u0432\u0435\u0434\u0456\u0442\u044c \u0434\u0456\u0439\u0441\u043d\u0443 \u043d\u0435\u0432\u0456\u0434'\u0454\u043c\u043d\u0443 \u0446\u0456\u043d\u0443.",
+  materialEditCityRequired: "\u041e\u0431\u0435\u0440\u0456\u0442\u044c \u043c\u0456\u0441\u0442\u043e \u0443 \u043d\u0430\u043b\u0430\u0448\u0442\u0443\u0432\u0430\u043d\u043d\u044f\u0445 \u043f\u0440\u043e\u0444\u0456\u043b\u044e.",
+  materialEditForbidden: "\u0420\u0435\u0434\u0430\u0433\u0443\u0432\u0430\u043d\u043d\u044f \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b\u0443 \u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u043d\u0435 \u0443 \u0432\u0430\u0448\u043e\u043c\u0443 \u0442\u0430\u0440\u0438\u0444\u0456.",
+  materialEditNotFound: "\u041c\u0430\u0442\u0435\u0440\u0456\u0430\u043b \u043d\u0435 \u0437\u043d\u0430\u0439\u0434\u0435\u043d\u043e \u0430\u0431\u043e \u0432\u0456\u043d \u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u043d\u0438\u0439.",
+  materialEditFailed: "\u041d\u0435 \u0432\u0434\u0430\u043b\u043e\u0441\u044f \u043e\u043d\u043e\u0432\u0438\u0442\u0438 \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b.",
   materialDeleted: "\u041c\u0430\u0442\u0435\u0440\u0456\u0430\u043b \u0432\u0438\u0434\u0430\u043b\u0435\u043d\u043e",
   refreshFromViyar: "\u041e\u043d\u043e\u0432\u0438\u0442\u0438 \u0437 Viyar",
   materialRefreshQueued: "\u041e\u043d\u043e\u0432\u043b\u0435\u043d\u043d\u044f \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b\u0443 \u043f\u043e\u0441\u0442\u0430\u0432\u043b\u0435\u043d\u043e \u0432 \u0447\u0435\u0440\u0433\u0443.",
@@ -5521,6 +5538,22 @@ function canDeleteMaterialItem(user, item) {
   return item.owner_user_id === String(user.id);
 }
 
+function getMaterialEditPriceValue(item) {
+  const value = item?.current_price ?? item?.price;
+  return value === null || value === undefined ? "" : String(value);
+}
+
+function buildMaterialEditForm(item) {
+  return {
+    name: String(item?.name || ""),
+    price: getMaterialEditPriceValue(item),
+    color: String(item?.color || ""),
+    dimensions: String(item?.dimensions || ""),
+    thickness: String(item?.thickness || ""),
+    description: String(item?.description || ""),
+  };
+}
+
 function getMaterialOwnershipScopeLabel(scope, language) {
   const labels = language === "en"
     ? {
@@ -6700,6 +6733,11 @@ export default function App() {
   const [activeMaterialImportJobId, setActiveMaterialImportJobId] = useState("");
   const [activeMaterialImportJob, setActiveMaterialImportJob] = useState(null);
   const [openMaterialMenuId, setOpenMaterialMenuId] = useState("");
+  const [materialEditModalOpen, setMaterialEditModalOpen] = useState(false);
+  const [materialEditSaving, setMaterialEditSaving] = useState(false);
+  const [materialEditError, setMaterialEditError] = useState("");
+  const [materialEditItem, setMaterialEditItem] = useState(null);
+  const [materialEditForm, setMaterialEditForm] = useState(() => buildMaterialEditForm(null));
   const [selectedMaterialDetail, setSelectedMaterialDetail] = useState(null);
   const [materialDetailLoading, setMaterialDetailLoading] = useState(false);
   const [materialOwners, setMaterialOwners] = useState([]);
@@ -6712,6 +6750,7 @@ export default function App() {
     edge_key: "edge_08",
     source_url: "",
   });
+  const materialEditCloseButtonRef = useRef(null);
   const [openFittingMenuId, setOpenFittingMenuId] = useState("");
   const [projectOptionPicker, setProjectOptionPicker] = useState({
     open: false,
@@ -9705,6 +9744,10 @@ export default function App() {
 
       event.preventDefault();
 
+      if (materialEditModalOpen) {
+        return;
+      }
+
       if (materialOwnersModalOpen) {
         closeMaterialOwners();
         return;
@@ -9719,7 +9762,37 @@ export default function App() {
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [materialOwnersModalOpen, selectedMaterialDetail]);
+  }, [materialEditModalOpen, materialOwnersModalOpen, selectedMaterialDetail]);
+
+  useEffect(() => {
+    if (!materialEditModalOpen) {
+      return undefined;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const handleKeyDown = (event) => {
+      if (event.key !== "Escape") {
+        return;
+      }
+
+      event.preventDefault();
+      closeMaterialEditModal();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    const focusTimer = window.setTimeout(() => {
+      materialEditCloseButtonRef.current?.focus?.();
+    }, 0);
+
+    return () => {
+      window.clearTimeout(focusTimer);
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [materialEditModalOpen]);
 
   async function openFittingDetails(item, returnFocusTarget = null) {
     if (!token || !item?.id) {
@@ -14549,6 +14622,150 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
     });
   }
 
+  function openMaterialEditModal(item) {
+    if (!item || !materialEntitlementFlags.edit || !canEditMaterialItem(user, item)) {
+      return;
+    }
+
+    setOpenMaterialMenuId("");
+    setMaterialEditItem(item);
+    setMaterialEditForm(buildMaterialEditForm(item));
+    setMaterialEditError("");
+    setMaterialEditModalOpen(true);
+  }
+
+  function closeMaterialEditModal() {
+    setMaterialEditModalOpen(false);
+    setMaterialEditSaving(false);
+    setMaterialEditError("");
+    setMaterialEditItem(null);
+  }
+
+  function updateMaterialEditForm(field, value) {
+    setMaterialEditForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  }
+
+  async function handleMaterialEditSubmit(event) {
+    event.preventDefault();
+
+    if (!token || !materialEditItem?.article) {
+      return;
+    }
+
+    const originalItem = materialEditItem;
+    const normalizedName = String(materialEditForm.name || "").trim();
+    const normalizedDescription = String(materialEditForm.description || "").trim();
+    const normalizedColor = String(materialEditForm.color || "").trim();
+    const normalizedDimensions = String(materialEditForm.dimensions || "").trim();
+    const normalizedThickness = String(materialEditForm.thickness || "").trim();
+    const normalizedPriceText = String(materialEditForm.price || "").trim();
+    const originalPriceText = getMaterialEditPriceValue(originalItem);
+    const originalPriceNumber = originalPriceText === "" ? null : Number(originalPriceText);
+    const nextPriceNumber = normalizedPriceText === "" ? null : Number(normalizedPriceText);
+    const payload = {};
+
+    if (!normalizedName) {
+      setMaterialEditError(t.materialEditNameRequired);
+      return;
+    }
+
+    if (normalizedName !== String(originalItem.name || "").trim()) {
+      payload.name = normalizedName;
+    }
+
+    if (normalizedDescription !== String(originalItem.description || "").trim()) {
+      payload.description = normalizedDescription;
+    }
+
+    if (normalizedColor !== String(originalItem.color || "").trim()) {
+      payload.color = normalizedColor;
+    }
+
+    if (normalizedDimensions !== String(originalItem.dimensions || "").trim()) {
+      payload.dimensions = normalizedDimensions;
+    }
+
+    if (normalizedThickness !== String(originalItem.thickness || "").trim()) {
+      payload.thickness = normalizedThickness;
+    }
+
+    if (normalizedPriceText !== "") {
+      if (!Number.isFinite(nextPriceNumber) || nextPriceNumber < 0) {
+        setMaterialEditError(t.materialEditInvalidPrice);
+        return;
+      }
+
+      if (originalPriceNumber !== nextPriceNumber) {
+        if (!activeCity) {
+          setMaterialEditError(t.materialEditCityRequired);
+          return;
+        }
+
+        payload.price = nextPriceNumber;
+      }
+    } else if (originalPriceText !== "") {
+      setMaterialEditError(t.materialEditPriceRequired);
+      return;
+    }
+
+    setMaterialEditSaving(true);
+    setMaterialEditError("");
+
+    const result = await updateMaterial(token, originalItem.article, payload);
+    setMaterialEditSaving(false);
+
+    if (!result.success) {
+      if (result.status === 403) {
+        setMaterialEditError(t.materialEditForbidden);
+        return;
+      }
+
+      if (result.status === 404) {
+        setMaterialEditError(t.materialEditNotFound);
+        return;
+      }
+
+      if (result.status === 400) {
+        setMaterialEditError(t.materialEditCityRequired);
+        return;
+      }
+
+      setMaterialEditError(result.error || t.materialEditFailed);
+      return;
+    }
+
+    const updatedItem = result.item || {
+      ...originalItem,
+      ...payload,
+      ...(Object.prototype.hasOwnProperty.call(payload, "price")
+        ? {
+            current_price: payload.price,
+            current_price_city: activeCity || originalItem.current_price_city || "",
+          }
+        : {}),
+    };
+
+    setMaterialItems((current) =>
+      current.map((item) =>
+        String(item.article || "").trim() === String(originalItem.article || "").trim()
+          ? { ...item, ...updatedItem }
+          : item,
+      ),
+    );
+
+    setSelectedMaterialDetail((current) =>
+      current && String(current.article || "").trim() === String(originalItem.article || "").trim()
+        ? { ...current, ...updatedItem }
+        : current,
+    );
+
+    setStatus({ message: t.materialUpdated, tone: "success" });
+    closeMaterialEditModal();
+  }
+
   async function handleDeleteMaterial(article) {
     if (!article) {
       return;
@@ -18049,6 +18266,19 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                           </button>
                           {openMaterialMenuId === item.id ? (
                             <div className="material-card-menu-dropdown">
+                              {materialEntitlementFlags.edit ? (
+                                <button
+                                  className="material-card-menu-action"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    openMaterialEditModal(item);
+                                  }}
+                                  type="button"
+                                >
+                                  <Pencil size={14} />
+                                  {t.editMaterial}
+                                </button>
+                              ) : null}
                               {item.source_url ? (
                               <button
                                 className="material-card-menu-action"
@@ -22772,6 +23002,122 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                 <p className="empty-inline-note material-edge-empty-note">{t.materialEdgeSlotEmpty}</p>
               )}
             </section>
+          </section>
+        </div>
+      ) : null}
+
+      {activeView === "catalogMaterials" && materialEditModalOpen && materialEditItem ? (
+        <div
+          aria-modal="true"
+          className="modal-backdrop"
+          onClick={closeMaterialEditModal}
+          role="dialog"
+        >
+          <section
+            className="confirm-modal material-details-modal material-edit-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="confirm-header">
+              <div>
+                <strong>{t.editMaterial}</strong>
+                <p>{getMaterialShortName(materialEditItem)}</p>
+              </div>
+              <button
+                ref={materialEditCloseButtonRef}
+                aria-label={t.cancel}
+                className="ghost-button compact-button detail-info-button"
+                onClick={closeMaterialEditModal}
+                type="button"
+              >
+                <X size={16} />
+              </button>
+            </header>
+
+            <form className="hole-template-form" onSubmit={handleMaterialEditSubmit}>
+              <div className="hole-template-form-grid">
+                <label>
+                  {t.materialImportArticle}
+                  <input readOnly type="text" value={materialEditItem.article || ""} />
+                </label>
+                <label>
+                  {t.city}
+                  <input readOnly type="text" value={formatCatalogLabel(activeCity, t)} />
+                </label>
+                <label>
+                  {t.materialManualName}
+                  <input
+                    autoComplete="off"
+                    onChange={(event) => updateMaterialEditForm("name", event.target.value)}
+                    type="text"
+                    value={materialEditForm.name}
+                  />
+                </label>
+                <label>
+                  {t.materialManualPrice}
+                  <input
+                    min="0"
+                    onChange={(event) => updateMaterialEditForm("price", event.target.value)}
+                    step="0.01"
+                    type="number"
+                    value={materialEditForm.price}
+                  />
+                </label>
+                <label>
+                  {t.materialColor}
+                  <input
+                    autoComplete="off"
+                    onChange={(event) => updateMaterialEditForm("color", event.target.value)}
+                    type="text"
+                    value={materialEditForm.color}
+                  />
+                </label>
+                <label>
+                  {t.materialDimensions}
+                  <input
+                    autoComplete="off"
+                    onChange={(event) => updateMaterialEditForm("dimensions", event.target.value)}
+                    type="text"
+                    value={materialEditForm.dimensions}
+                  />
+                </label>
+                <label>
+                  {t.materialThickness}
+                  <input
+                    autoComplete="off"
+                    onChange={(event) => updateMaterialEditForm("thickness", event.target.value)}
+                    type="text"
+                    value={materialEditForm.thickness}
+                  />
+                </label>
+                <label style={{ gridColumn: "1 / -1" }}>
+                  {t.materialDescription}
+                  <textarea
+                    onChange={(event) => updateMaterialEditForm("description", event.target.value)}
+                    rows={4}
+                    value={materialEditForm.description}
+                  />
+                </label>
+              </div>
+
+              {!activeCity ? <small className="settings-hint">{t.materialEditCityRequired}</small> : null}
+
+              {materialEditError ? <p className="hole-template-error">{materialEditError}</p> : null}
+
+              <div className="confirm-actions hole-template-actions">
+                <button
+                  className="ghost-button"
+                  disabled={materialEditSaving}
+                  onClick={closeMaterialEditModal}
+                  type="button"
+                >
+                  {t.cancel}
+                </button>
+                <button className="primary-button" disabled={materialEditSaving} type="submit">
+                  <Save size={16} />
+                  {t.save}
+                </button>
+              </div>
+            </form>
           </section>
         </div>
       ) : null}

@@ -659,6 +659,15 @@ export async function createMaterial(token, payload) {
   });
 }
 
+export async function updateMaterial(token, article, payload) {
+  return request(`/catalog/materials/${encodeURIComponent(article)}`, {
+    method: "PATCH",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+    timeoutMs: 120000,
+  });
+}
+
 export async function getMaterialImportJob(token, jobId) {
   return request(`/catalog/materials/import-jobs/${jobId}`, {
     headers: authHeaders(token),
