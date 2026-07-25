@@ -455,6 +455,9 @@ class FittingCatalogItemSchema(BaseModel):
     source_url: str | None = None
     source_site: str | None = None
     owner_user_id: str | None = None
+    owner_display_name: str | None = None
+    owner_login: str | None = None
+    owner_email: str | None = None
     is_system: bool = True
     is_active: bool = True
     sort_order: int = 0

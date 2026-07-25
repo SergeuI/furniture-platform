@@ -481,7 +481,7 @@ def _resolve_fitting_category(
     return FITTING_CATEGORY_MAP[fallback_code]
 
 
-def _serialize_fitting(item: FittingModel) -> dict:
+def _serialize_fitting(item: FittingModel, *, owner_profile: dict | None = None) -> dict:
 
     category = _resolve_fitting_category(
         item.fitting_type,
@@ -513,6 +513,9 @@ def _serialize_fitting(item: FittingModel) -> dict:
         "source_url": item.source_url,
         "source_site": source_site,
         "owner_user_id": item.owner_user_id,
+        "owner_display_name": (owner_profile or {}).get("display_name"),
+        "owner_login": (owner_profile or {}).get("login"),
+        "owner_email": (owner_profile or {}).get("email"),
         "is_system": bool(item.is_system),
         "is_active": bool(item.is_active),
         "sort_order": item.sort_order or 0,
@@ -1050,6 +1053,42 @@ def _serialize_material_owner(user: UserModel) -> dict:
     }
 
 
+def _serialize_fitting_owner(user: UserModel) -> dict:
+    login = (user.username or user.email.split("@")[0]).strip()
+    return {
+        "id": str(user.id),
+        "display_name": user.username or login or None,
+        "login": login or None,
+        "email": user.email,
+    }
+
+
+def _load_fitting_owner_profiles(
+    db,
+    owner_user_ids: Sequence[str | None],
+) -> dict[str, dict]:
+
+    normalized_owner_user_ids = [
+        str(owner_user_id).strip()
+        for owner_user_id in owner_user_ids
+        if str(owner_user_id or "").strip()
+    ]
+
+    if not normalized_owner_user_ids:
+        return {}
+
+    users = (
+        db.query(UserModel)
+        .filter(UserModel.id.in_(normalized_owner_user_ids))
+        .all()
+    )
+
+    return {
+        str(user.id): _serialize_fitting_owner(user)
+        for user in users
+    }
+
+
 def get_material_by_import_identity(
     *,
     source: str | None,
@@ -1437,6 +1476,7 @@ def list_fittings(
     viewer_role: str | None = None,
     fitting_group: str | None = None,
     fitting_type: str | None = None,
+    ownership_scope: str | None = None,
     include_inactive: bool = False,
 ) -> list[dict]:
 
@@ -1457,7 +1497,26 @@ def list_fittings(
         if not include_inactive:
             query = query.filter(FittingModel.is_active.is_(True))
 
-        if viewer_role != "admin":
+        normalized_ownership_scope = _normalize_material_ownership_scope(ownership_scope)
+
+        if viewer_role == "admin":
+            if normalized_ownership_scope == "system":
+                query = query.filter(
+                    FittingModel.is_system.is_(True),
+                    FittingModel.owner_user_id.is_(None),
+                )
+            elif normalized_ownership_scope == "mine":
+                query = query.filter(
+                    FittingModel.is_system.is_(False),
+                    FittingModel.owner_user_id == _normalize_fitting_value(viewer_user_id),
+                )
+            elif normalized_ownership_scope == "users":
+                query = query.filter(
+                    FittingModel.is_system.is_(False),
+                    FittingModel.owner_user_id.isnot(None),
+                    FittingModel.owner_user_id != _normalize_fitting_value(viewer_user_id),
+                )
+        elif viewer_role != "admin":
             visible_filter = FittingModel.is_system.is_(True)
 
             if viewer_user_id:
@@ -1475,6 +1534,10 @@ def list_fittings(
                 FittingModel.code.asc(),
             )
             .all()
+        )
+        owner_profiles = _load_fitting_owner_profiles(
+            db,
+            [item.owner_user_id for item in fittings],
         )
 
         requested_city_key = _normalize_fitting_city_key(city)
@@ -1512,7 +1575,10 @@ def list_fittings(
                     fitting_rows[0],
                 )
 
-            serialized_item = _serialize_fitting(selected_row)
+            serialized_item = _serialize_fitting(
+                selected_row,
+                owner_profile=owner_profiles.get(str(selected_row.owner_user_id or "")),
+            )
 
             if requested_city_key:
                 if exact_city_row:
@@ -1623,7 +1689,11 @@ def create_fitting(
         db.commit()
         db.refresh(item)
 
-        return _serialize_fitting(item)
+        owner_profile = None
+        if item.owner_user_id:
+            owner_profile = _load_fitting_owner_profiles(db, [item.owner_user_id]).get(str(item.owner_user_id))
+
+        return _serialize_fitting(item, owner_profile=owner_profile)
 
     except Exception:
         db.rollback()
@@ -1660,7 +1730,11 @@ def get_fitting_by_id(
         ):
             return None
 
-        return _serialize_fitting(item)
+        owner_profile = None
+        if item.owner_user_id:
+            owner_profile = _load_fitting_owner_profiles(db, [item.owner_user_id]).get(str(item.owner_user_id))
+
+        return _serialize_fitting(item, owner_profile=owner_profile)
 
     finally:
 
@@ -1805,7 +1879,11 @@ def update_fitting(
         db.commit()
         db.refresh(item)
 
-        return _serialize_fitting(item)
+        owner_profile = None
+        if item.owner_user_id:
+            owner_profile = _load_fitting_owner_profiles(db, [item.owner_user_id]).get(str(item.owner_user_id))
+
+        return _serialize_fitting(item, owner_profile=owner_profile)
 
     finally:
 

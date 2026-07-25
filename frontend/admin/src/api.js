@@ -316,6 +316,10 @@ export async function getFittingsCatalog(token, params = {}) {
     searchParams.set("fitting_type", params.fitting_type);
   }
 
+  if (params.ownership_scope) {
+    searchParams.set("ownership_scope", params.ownership_scope);
+  }
+
   const query = searchParams.toString();
 
   return request(`/catalog/fittings${query ? `?${query}` : ""}`, {

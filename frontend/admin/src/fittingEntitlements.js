@@ -88,6 +88,73 @@ export function canDeleteFittings(user) {
   return getFittingEntitlementFlags(user).delete;
 }
 
+export function getFittingOwnershipScopeLabel(scope, language) {
+  const labels = language === "en"
+    ? {
+        system: "System",
+        mine: "My private",
+        users: "Users' private",
+        all: "All",
+      }
+    : {
+        system: "Системні",
+        mine: "Мої приватні",
+        users: "Користувацькі",
+        all: "Всі",
+      };
+
+  return labels[String(scope || "all")] || labels.all;
+}
+
+export function getFittingOwnershipTypeLabel(item, currentUser, language) {
+  if (item?.is_system && !item?.owner_user_id) {
+    return language === "en" ? "System" : "Системна";
+  }
+
+  if (item?.owner_user_id && String(item.owner_user_id) === String(currentUser?.id || "")) {
+    return language === "en" ? "My private" : "Моя приватна";
+  }
+
+  if (item?.owner_user_id) {
+    return language === "en" ? "Users' private" : "Користувацька";
+  }
+
+  return language === "en" ? "Invalid" : "Некоректна";
+}
+
+export function getFittingOwnerDisplayName(item, language) {
+  const primary = String(item?.owner_display_name || item?.owner_login || item?.owner_email || "").trim();
+  if (primary) {
+    return primary;
+  }
+
+  return language === "en" ? "Unknown owner" : "Невідомий власник";
+}
+
+export function getFittingOwnerDisplay(item, currentUser, language) {
+  if (!item || currentUser?.role !== "admin") {
+    return null;
+  }
+
+  if (!item.owner_user_id || item.is_system) {
+    return null;
+  }
+
+  const ownerText = String(
+    item.owner_display_name ||
+      item.owner_login ||
+      item.owner_email ||
+      item.owner_user_id ||
+      "",
+  ).trim();
+
+  if (!ownerText) {
+    return null;
+  }
+
+  return language === "en" ? `Owner: ${ownerText}` : `Власник: ${ownerText}`;
+}
+
 export function createFittingFormDraft(item = null, options = {}) {
   const base = {
     ...DEFAULT_FITTING_FORM,

@@ -298,6 +298,125 @@ class CatalogVisibilityTests(unittest.TestCase):
                 all_articles = {item["article"] for item in all_response.json()["items"]}
                 self.assertEqual(all_articles, {"ADMIN-SYS", "ADMIN-MINE", "USER-PRIVATE", "ORPHAN"})
 
+    def test_admin_can_filter_fittings_by_ownership_scope_and_see_owner_metadata(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
+                with session_factory() as session:
+                    session.add_all(
+                        [
+                            UserModel(
+                                id="admin-user",
+                                email="admin@example.com",
+                                username="admin.operator",
+                                password_hash="hash",
+                                role="admin",
+                            ),
+                            UserModel(
+                                id="owner-1",
+                                email="owner.one@example.com",
+                                username="owner.one",
+                                password_hash="hash",
+                                role="trial",
+                            ),
+                            UserModel(
+                                id="other-user",
+                                email="other@example.com",
+                                username="other.user",
+                                password_hash="hash",
+                                role="trial",
+                            ),
+                        ]
+                    )
+                    session.add_all(
+                        [
+                            FittingModel(
+                                name="System Fitting",
+                                fitting_type="drawer_slides",
+                                fitting_group="fittings",
+                                owner_user_id=None,
+                                is_system=True,
+                                is_active=True,
+                            ),
+                            FittingModel(
+                                name="Admin Private Fitting",
+                                fitting_type="drawer_slides",
+                                fitting_group="fittings",
+                                owner_user_id="admin-user",
+                                is_system=False,
+                                is_active=True,
+                            ),
+                            FittingModel(
+                                name="Foreign Private Fitting",
+                                fitting_type="drawer_slides",
+                                fitting_group="fittings",
+                                owner_user_id="owner-1",
+                                is_system=False,
+                                is_active=True,
+                            ),
+                            FittingModel(
+                                name="Orphan Fitting",
+                                fitting_type="drawer_slides",
+                                fitting_group="fittings",
+                                owner_user_id=None,
+                                is_system=False,
+                                is_active=True,
+                            ),
+                        ]
+                    )
+                    session.commit()
+
+                system_response = client.get(
+                    "/catalog/fittings?ownership_scope=system",
+                    headers=self._auth_headers("admin-token"),
+                )
+                self.assertEqual(system_response.status_code, 200)
+                system_names = {item["name"] for item in system_response.json()["items"]}
+                self.assertEqual(system_names, {"System Fitting"})
+
+                mine_response = client.get(
+                    "/catalog/fittings?ownership_scope=mine",
+                    headers=self._auth_headers("admin-token"),
+                )
+                self.assertEqual(mine_response.status_code, 200)
+                mine_names = {item["name"] for item in mine_response.json()["items"]}
+                self.assertEqual(mine_names, {"Admin Private Fitting"})
+
+                users_response = client.get(
+                    "/catalog/fittings?ownership_scope=users",
+                    headers=self._auth_headers("admin-token"),
+                )
+                self.assertEqual(users_response.status_code, 200)
+                users_names = {item["name"] for item in users_response.json()["items"]}
+                self.assertEqual(users_names, {"Foreign Private Fitting"})
+
+                all_response = client.get(
+                    "/catalog/fittings?ownership_scope=all",
+                    headers=self._auth_headers("admin-token"),
+                )
+                self.assertEqual(all_response.status_code, 200)
+                all_items = all_response.json()["items"]
+                all_names = {item["name"] for item in all_items}
+                self.assertEqual(
+                    all_names,
+                    {"System Fitting", "Admin Private Fitting", "Foreign Private Fitting", "Orphan Fitting"},
+                )
+                private_item = next(item for item in all_items if item["name"] == "Foreign Private Fitting")
+                self.assertEqual(private_item["owner_user_id"], "owner-1")
+                self.assertEqual(private_item["owner_display_name"], "owner.one")
+                self.assertEqual(private_item["owner_login"], "owner.one")
+                self.assertEqual(private_item["owner_email"], "owner.one@example.com")
+
+                detail_response = client.get(
+                    f"/catalog/fittings/{private_item['id']}",
+                    headers=self._auth_headers("admin-token"),
+                )
+                self.assertEqual(detail_response.status_code, 200)
+                detail_item = detail_response.json()["item"]
+                self.assertEqual(detail_item["owner_user_id"], "owner-1")
+                self.assertEqual(detail_item["owner_display_name"], "owner.one")
+                self.assertEqual(detail_item["owner_login"], "owner.one")
+                self.assertEqual(detail_item["owner_email"], "owner.one@example.com")
+
     def test_admin_material_owners_endpoint_deduplicates_and_hides_private_data_from_non_admins(self) -> None:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):

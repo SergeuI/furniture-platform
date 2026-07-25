@@ -9,6 +9,10 @@ import {
   canManageSystemFittings,
   canViewFittings,
   createFittingFormDraft,
+  getFittingOwnerDisplay,
+  getFittingOwnershipScopeLabel,
+  getFittingOwnershipTypeLabel,
+  getFittingOwnerDisplayName,
   getFittingEntitlementFlags,
   DEFAULT_FITTING_FORM,
   hasUserEntitlement,
@@ -114,6 +118,90 @@ test("admin can manage system and foreign private fittings even when entitlement
   assert.equal(canDeleteFittingItem(admin, { owner_user_id: 10, is_system: false }), true);
   assert.equal(canEditFittingItem(admin, { owner_user_id: 10, is_system: true }), true);
   assert.equal(canDeleteFittingItem(admin, { owner_user_id: 10, is_system: true }), true);
+});
+
+test("fitting ownership helpers map scope, type, and owner labels", () => {
+  const user = { id: 10, role: "pro" };
+
+  assert.equal(getFittingOwnershipScopeLabel("system", "en"), "System");
+  assert.equal(getFittingOwnershipScopeLabel("mine", "uk"), "Мої приватні");
+  assert.equal(getFittingOwnershipTypeLabel({ is_system: true, owner_user_id: null }, user, "en"), "System");
+  assert.equal(getFittingOwnershipTypeLabel({ is_system: false, owner_user_id: 10 }, user, "uk"), "Моя приватна");
+  assert.equal(getFittingOwnershipTypeLabel({ is_system: false, owner_user_id: 11 }, user, "en"), "Users' private");
+  assert.equal(
+    getFittingOwnerDisplayName(
+      { owner_display_name: "owner.one", owner_login: "owner.one", owner_email: "owner@example.com" },
+      "uk",
+    ),
+    "owner.one",
+  );
+});
+
+test("admin fitting owner display keeps fallback order and hides private data for non-admins", () => {
+  assert.equal(
+    getFittingOwnerDisplay(
+      {
+        owner_display_name: "owner.one",
+        owner_login: "owner.login",
+        owner_email: "owner@example.com",
+        owner_user_id: "owner-uuid",
+        is_system: false,
+      },
+      { role: "admin" },
+      "uk",
+    ),
+    "Власник: owner.one",
+  );
+  assert.equal(
+    getFittingOwnerDisplay(
+      {
+        owner_login: "owner.login",
+        owner_email: "owner@example.com",
+        owner_user_id: "owner-uuid",
+        is_system: false,
+      },
+      { role: "admin" },
+      "en",
+    ),
+    "Owner: owner.login",
+  );
+  assert.equal(
+    getFittingOwnerDisplay(
+      {
+        owner_email: "owner@example.com",
+        owner_user_id: "owner-uuid",
+        is_system: false,
+      },
+      { role: "admin" },
+      "en",
+    ),
+    "Owner: owner@example.com",
+  );
+  assert.equal(
+    getFittingOwnerDisplay(
+      {
+        owner_user_id: "owner-uuid",
+        is_system: false,
+      },
+      { role: "admin" },
+      "en",
+    ),
+    "Owner: owner-uuid",
+  );
+  assert.equal(
+    getFittingOwnerDisplay(
+      {
+        owner_display_name: "owner.one",
+        owner_login: "owner.login",
+        owner_email: "owner@example.com",
+        owner_user_id: "owner-uuid",
+        is_system: false,
+      },
+      { role: "pro" },
+      "uk",
+    ),
+    null,
+  );
 });
 
 test("fitting form drafts preserve editable fields and keep protected scope out of edit payload", () => {

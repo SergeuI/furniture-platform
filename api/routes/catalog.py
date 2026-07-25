@@ -1879,6 +1879,7 @@ async def list_fittings_route(
     city: str | None = Query(default=None),
     fitting_group: str | None = Query(default=None),
     fitting_type: str | None = Query(default=None),
+    ownership_scope: str | None = Query(default=None),
     current_user = Depends(require_catalog_reader)
 ):
     _ensure_fitting_feature_access(current_user, "fittings.view")
@@ -1892,6 +1893,7 @@ async def list_fittings_route(
         viewer_role=current_user.role,
         fitting_group=fitting_group,
         fitting_type=fitting_type,
+        ownership_scope=ownership_scope if current_user.role == "admin" else None,
     )
     # Прогрів картинок фурнітури тимчасово вимкнено для перевірки глобального блокування API.
 
@@ -2005,6 +2007,10 @@ async def get_fitting_detail_route(
 
         item = _serialize_fitting_detail(fitting_model)
         item["images"] = list_fitting_images(item_id)
+        item["owner_user_id"] = fitting.get("owner_user_id")
+        item["owner_display_name"] = fitting.get("owner_display_name")
+        item["owner_login"] = fitting.get("owner_login")
+        item["owner_email"] = fitting.get("owner_email")
     finally:
         db.close()
 

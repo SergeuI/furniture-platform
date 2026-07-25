@@ -43,6 +43,9 @@ import {
   buildFittingSubmissionPayload,
   canEditFittingItem as canEditFittingItemHelper,
   canManageSystemFittings as canManageSystemFittingsHelper,
+  getFittingOwnershipScopeLabel,
+  getFittingOwnershipTypeLabel,
+  getFittingOwnerDisplay,
   createFittingFormDraft,
 } from "./fittingEntitlements.js";
 import {
@@ -6839,6 +6842,7 @@ export default function App() {
   const [fittingItems, setFittingItems] = useState([]);
   const [fittingCategories, setFittingCategories] = useState([]);
   const [fittingSearch, setFittingSearch] = useState("");
+  const [fittingOwnershipScope, setFittingOwnershipScope] = useState("all");
   const [fittingsCatalogLoading, setFittingsCatalogLoading] = useState(false);
   const [selectedFittingCategory, setSelectedFittingCategory] = useState(
     () => localStorage.getItem(FITTING_CATEGORY_STORAGE_KEY) || "",
@@ -8779,6 +8783,12 @@ export default function App() {
         t,
       )
     : "";
+  const selectedFittingOwnershipTypeLabel = selectedFittingDetail
+    ? getFittingOwnershipTypeLabel(selectedFittingDetail, user, language)
+    : "";
+  const selectedFittingOwnerDisplay = selectedFittingDetail
+    ? getFittingOwnerDisplay(selectedFittingDetail, user, language)
+    : "";
 
   const closeProjectOptionPicker = useCallback(() => {
     setProjectOptionPicker({
@@ -9952,6 +9962,10 @@ export default function App() {
       const result = await getFittingsCatalog(activeToken, {
         city: options.city ?? activeCity ?? "",
         search: options.search ?? fittingSearch,
+        ownership_scope:
+          user?.role === "admin"
+            ? (options.ownershipScope ?? fittingOwnershipScope ?? "all")
+            : undefined,
       });
 
       if (fittingsCatalogRequestRef.current.id !== requestId || activeViewRef.current !== viewAtStart) {
@@ -15738,7 +15752,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
     }
 
     loadFittingsCatalog(token);
-  }, [token, isCatalogFittingsView, isCatalogFastenersView, fittingSearch]);
+  }, [token, isCatalogFittingsView, isCatalogFastenersView, fittingSearch, fittingOwnershipScope]);
 
   useEffect(() => {
     if (!token || !isCatalogHolesView || fittingItems.length) {
@@ -18574,6 +18588,20 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                       value={fittingSearch}
                     />
                   </label>
+                  {user?.role === "admin" ? (
+                    <label className="materials-filter">
+                      <span>{language === "en" ? "Ownership" : "Власність"}</span>
+                      <select
+                        onChange={(event) => setFittingOwnershipScope(event.target.value)}
+                        value={fittingOwnershipScope}
+                      >
+                        <option value="system">{getFittingOwnershipScopeLabel("system", language)}</option>
+                        <option value="mine">{getFittingOwnershipScopeLabel("mine", language)}</option>
+                        <option value="users">{getFittingOwnershipScopeLabel("users", language)}</option>
+                        <option value="all">{getFittingOwnershipScopeLabel("all", language)}</option>
+                      </select>
+                    </label>
+                  ) : null}
                   <button
                     className="ghost-button"
                     disabled={loading}
@@ -18787,7 +18815,15 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                               <strong>{item.name || item.code || item.article}</strong>
                               <div className="fittings-table-badges">
                                 {fittingColumnVisibility.source ? renderSourceBadge(sourceMeta) : null}
+                                <span className="service-tree-badge subtle">
+                                  {getFittingOwnershipTypeLabel(item, user, language)}
+                                </span>
                               </div>
+                              {getFittingOwnerDisplay(item, user, language) ? (
+                                <div className="fitting-item-owner-line">
+                                  {getFittingOwnerDisplay(item, user, language)}
+                                </div>
+                              ) : null}
                             </div>
                             <div className="fitting-item-card-meta">
                               <span>{t.fittingArticle}: {item.article || t.notSet}</span>
@@ -18849,13 +18885,18 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                                   </div>
                                   <div className="fittings-table-name-copy">
                                     <strong>{item.name || item.code || item.article}</strong>
-                                    <div className="fittings-table-badges">
-                                      {item.owner_user_id && !item.is_system ? (
-                                        <span className="service-tree-badge subtle">{t.forCalculation}</span>
-                                      ) : null}
-                                    </div>
+                                  <div className="fittings-table-badges">
+                                    <span className="service-tree-badge subtle">
+                                      {getFittingOwnershipTypeLabel(item, user, language)}
+                                    </span>
                                   </div>
+                                  {getFittingOwnerDisplay(item, user, language) ? (
+                                    <div className="fitting-item-owner-line">
+                                      {getFittingOwnerDisplay(item, user, language)}
+                                    </div>
+                                  ) : null}
                                 </div>
+                              </div>
                                 {canDeleteFittingItemHelper(user, item) ? (
                                   <div className="material-card-menu fitting-row-menu">
                                     <button
@@ -23433,6 +23474,9 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                   <span className="service-tree-badge subtle">
                     {getFittingSourceMeta(selectedFittingDetail).label}
                   </span>
+                  <span className="service-tree-badge subtle">
+                    {selectedFittingOwnershipTypeLabel}
+                  </span>
                   {selectedFittingDetail.article ? (
                     <span className="service-tree-badge subtle">
                       {selectedFittingDetail.article}
@@ -23490,6 +23534,12 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                     <div>
                       <span>{t.brand}</span>
                       <strong>{selectedFittingDetail.brand}</strong>
+                    </div>
+                  ) : null}
+                  {selectedFittingOwnerDisplay ? (
+                    <div>
+                      <span>{language === "en" ? "Owner" : "Власник"}</span>
+                      <strong>{selectedFittingOwnerDisplay.replace(/^Owner:\s*/i, "").replace(/^Власник:\s*/i, "")}</strong>
                     </div>
                   ) : null}
                 </div>
