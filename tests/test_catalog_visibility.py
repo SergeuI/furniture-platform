@@ -17,6 +17,7 @@ from sqlalchemy.orm import sessionmaker
 
 from api.dependencies import auth as auth_dependencies
 from api.routes import catalog
+from api.routes import fitting_holes as fitting_holes_route
 from database.base import Base
 from database.models import audit_log  # noqa: F401
 from database.models import catalog_item  # noqa: F401
@@ -47,7 +48,9 @@ from database.models import user_change_request  # noqa: F401
 from database.models import user_service_catalog_price  # noqa: F401
 from database.repositories import inventory_repository
 from database.repositories import material_import_job_repository
+from database.repositories import fitting_hole_service_rule_repository
 import services.entitlement_service as entitlement_service
+import services.fitting_holes_service as fitting_holes_service
 
 
 def _enable_foreign_keys(dbapi_connection, connection_record) -> None:
@@ -1947,6 +1950,131 @@ class CatalogVisibilityTests(unittest.TestCase):
                 self.assertTrue(admin_private_response.json()["success"])
                 self.assertEqual(admin_private_response.json()["item"]["id"], int(private_fitting_id))
 
+    def test_fitting_holes_use_false_blocks_non_admin_write_endpoints_and_keeps_admin_bypass(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
+                with session_factory() as session:
+                    self._set_fitting_bool_entitlement(session, "fitting_holes.use", "pro", False)
+                    self._set_fitting_bool_entitlement(session, "fitting_holes.use", "business", False)
+                    fitting = FittingModel(
+                        name="Holes Enabled Fitting",
+                        fitting_type="drawer_slides",
+                        fitting_group="fittings",
+                        owner_user_id="trial-user",
+                        is_system=False,
+                        is_active=True,
+                    )
+                    session.add(fitting)
+                    session.flush()
+                    fitting_id = int(fitting.id)
+                    session.commit()
+
+                trial_response = client.post(
+                    "/fitting-holes/templates",
+                    json={
+                        "fitting_id": fitting_id,
+                        "name": "Trial Template",
+                    },
+                    headers=self._auth_headers("trial-token"),
+                )
+                self.assertEqual(trial_response.status_code, 200)
+                self.assertTrue(trial_response.json()["success"])
+
+                pro_response = client.post(
+                    "/fitting-holes/templates",
+                    json={
+                        "fitting_id": fitting_id,
+                        "name": "Pro Template",
+                    },
+                    headers=self._auth_headers("pro-token"),
+                )
+                self.assertEqual(pro_response.status_code, 403)
+
+                premium_response = client.post(
+                    "/fitting-holes/templates",
+                    json={
+                        "fitting_id": fitting_id,
+                        "name": "Premium Template",
+                    },
+                    headers=self._auth_headers("business-token"),
+                )
+                self.assertEqual(premium_response.status_code, 403)
+
+                admin_response = client.post(
+                    "/fitting-holes/templates",
+                    json={
+                        "fitting_id": fitting_id,
+                        "name": "Admin Template",
+                    },
+                    headers=self._auth_headers("admin-token"),
+                )
+                self.assertEqual(admin_response.status_code, 200)
+                self.assertTrue(admin_response.json()["success"])
+
+    def test_fitting_holes_use_false_blocks_get_before_resource_lookup_for_premium_role(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
+                with session_factory() as session:
+                    self._set_fitting_bool_entitlement(session, "fitting_holes.use", "business", False)
+                    session.commit()
+
+                response = client.get(
+                    "/fitting-holes/fittings/999999/templates",
+                    headers=self._auth_headers("business-token"),
+                )
+                self.assertEqual(response.status_code, 403)
+
+    def test_fitting_holes_use_false_blocks_patch_before_resource_lookup(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
+                with session_factory() as session:
+                    self._set_fitting_bool_entitlement(session, "fitting_holes.use", "pro", False)
+                    session.commit()
+
+                response = client.patch(
+                    "/fitting-holes/templates/999999",
+                    json={
+                        "name": "Blocked Patch Template",
+                    },
+                    headers=self._auth_headers("pro-token"),
+                )
+                self.assertEqual(response.status_code, 403)
+
+    def test_fitting_holes_use_false_blocks_delete_before_resource_lookup(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
+                with session_factory() as session:
+                    self._set_fitting_bool_entitlement(session, "fitting_holes.use", "pro", False)
+                    session.commit()
+
+                response = client.delete(
+                    "/fitting-holes/points/999999",
+                    headers=self._auth_headers("pro-token"),
+                )
+                self.assertEqual(response.status_code, 403)
+
+    def test_fitting_holes_service_rules_remain_admin_only_even_for_allowed_non_admins(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (_session_factory, client):
+                denied_response = client.get(
+                    "/fitting-holes/service-rules",
+                    headers=self._auth_headers("trial-token"),
+                )
+                self.assertEqual(denied_response.status_code, 403)
+
+                non_admin_allowed_response = client.get(
+                    "/fitting-holes/service-rules",
+                    headers=self._auth_headers("pro-token"),
+                )
+                self.assertEqual(non_admin_allowed_response.status_code, 403)
+
+                admin_response = client.get(
+                    "/fitting-holes/service-rules",
+                    headers=self._auth_headers("admin-token"),
+                )
+                self.assertEqual(admin_response.status_code, 200)
+                self.assertTrue(admin_response.json()["success"])
+
     @contextmanager
     def _catalog_context(self, database_path: Path, users_by_token: dict[str, UserStub] | None = None):
         engine = create_engine(
@@ -1959,6 +2087,7 @@ class CatalogVisibilityTests(unittest.TestCase):
 
         app = FastAPI()
         app.include_router(catalog.router, prefix="/catalog")
+        app.include_router(fitting_holes_route.router, prefix="/fitting-holes")
 
         trial_user = UserStub(
             id="trial-user",
@@ -2017,6 +2146,8 @@ class CatalogVisibilityTests(unittest.TestCase):
             patch.object(material_import_job_repository, "SessionLocal", side_effect=session_factory),
             patch.object(catalog, "SessionLocal", side_effect=session_factory),
             patch.object(entitlement_service, "SessionLocal", side_effect=session_factory),
+            patch.object(fitting_holes_service, "SessionLocal", side_effect=session_factory),
+            patch.object(fitting_hole_service_rule_repository, "SessionLocal", side_effect=session_factory),
             patch.object(auth_dependencies, "get_user_from_token", side_effect=_resolve_user),
             patch.object(catalog, "get_user_from_token", side_effect=_resolve_user),
         ):
@@ -2060,6 +2191,40 @@ class CatalogVisibilityTests(unittest.TestCase):
                             ),
                         ]
                     )
+
+                feature = EntitlementFeatureModel(
+                    feature_key="fitting_holes.use",
+                    name_uk="Р”РѕСЃС‚СѓРї РґРѕ РїСЂРёСЃР°РґРєРё С„СѓСЂРЅС–С‚СѓСЂРё",
+                    category="fitting_holes",
+                    sort_order=60,
+                    value_type="boolean",
+                )
+                session.add(feature)
+                session.flush()
+                session.add_all(
+                    [
+                        PlanEntitlementModel(
+                            feature_id=feature.id,
+                            plan_code="trial",
+                            bool_value=True,
+                        ),
+                        PlanEntitlementModel(
+                            feature_id=feature.id,
+                            plan_code="free",
+                            bool_value=False,
+                        ),
+                        PlanEntitlementModel(
+                            feature_id=feature.id,
+                            plan_code="pro",
+                            bool_value=True,
+                        ),
+                        PlanEntitlementModel(
+                            feature_id=feature.id,
+                            plan_code="business",
+                            bool_value=True,
+                        ),
+                    ]
+                )
 
                 feature = EntitlementFeatureModel(
                     feature_key="materials.max_owned",

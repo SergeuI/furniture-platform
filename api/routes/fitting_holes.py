@@ -7,7 +7,10 @@ from fastapi import (
     status,
 )
 
-from api.dependencies.auth import require_roles
+from api.dependencies.auth import (
+    require_current_user,
+    require_roles,
+)
 from schemas.fitting_holes import (
     FittingHoleBundleCreateSchema,
     FittingHoleBundleMountingVariantUpdateSchema,
@@ -34,19 +37,32 @@ from database.repositories.fitting_hole_service_rule_repository import (
     list_fitting_hole_service_rules,
     update_fitting_hole_service_rule,
 )
+from services.entitlement_service import EntitlementService
 from services.fitting_holes_service import FittingHolesService
 from services.fitting_hole_service_preview import build_fitting_hole_service_preview
 
 
 router = APIRouter()
 
-require_fitting_holes_editor = require_roles(
+require_fitting_holes_admin = require_roles(
     [
         "admin",
-        "premium",
-        "pro",
     ]
 )
+
+
+def require_fitting_holes_use(current_user = Depends(require_current_user)):
+    with EntitlementService() as service:
+        if service.has_feature(current_user, "fitting_holes.use"):
+            return current_user
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail={
+            "success": False,
+            "error": "Insufficient permissions",
+        },
+    )
 
 
 def _serialize_template(template) -> dict:
@@ -137,7 +153,7 @@ def _raise_service_error(error: ValueError) -> None:
 )
 async def create_fitting_hole_template_route(
     payload: FittingHoleTemplateCreate,
-    current_user = Depends(require_fitting_holes_editor),
+    current_user = Depends(require_fitting_holes_use),
 ):
     try:
         with FittingHolesService() as service:
@@ -160,7 +176,7 @@ async def create_fitting_hole_template_route(
 )
 async def list_fitting_hole_templates_route(
     fitting_id: int,
-    current_user = Depends(require_fitting_holes_editor),
+    current_user = Depends(require_fitting_holes_use),
 ):
     with FittingHolesService() as service:
         fitting = service.get_fitting(fitting_id)
@@ -188,7 +204,7 @@ async def list_fitting_hole_templates_route(
     response_model=FittingHoleBundleListResponseSchema,
 )
 async def list_fitting_hole_bundles_route(
-    current_user = Depends(require_fitting_holes_editor),
+    current_user = Depends(require_fitting_holes_use),
 ):
     with FittingHolesService() as service:
         bundles = service.list_bundles()
@@ -215,7 +231,7 @@ async def list_fitting_hole_bundles_route(
 )
 async def list_fitting_hole_bundle_route(
     bundle_key: str,
-    current_user = Depends(require_fitting_holes_editor),
+    current_user = Depends(require_fitting_holes_use),
 ):
     with FittingHolesService() as service:
         templates = service.list_templates_for_bundle(bundle_key)
@@ -252,7 +268,7 @@ async def list_fitting_hole_bundle_route(
 )
 async def create_fitting_hole_bundle_route(
     payload: FittingHoleBundleCreateSchema,
-    current_user = Depends(require_fitting_holes_editor),
+    current_user = Depends(require_fitting_holes_use),
 ):
     try:
         with FittingHolesService() as service:
@@ -283,7 +299,7 @@ async def create_fitting_hole_bundle_route(
 async def update_fitting_hole_bundle_route(
     bundle_key: str,
     payload: FittingHoleBundleUpdateSchema,
-    current_user = Depends(require_fitting_holes_editor),
+    current_user = Depends(require_fitting_holes_use),
 ):
     try:
         with FittingHolesService() as service:
@@ -314,7 +330,7 @@ async def update_fitting_hole_bundle_route(
 )
 async def delete_fitting_hole_bundle_route(
     bundle_key: str,
-    current_user = Depends(require_fitting_holes_editor),
+    current_user = Depends(require_fitting_holes_use),
 ):
     try:
         with FittingHolesService() as service:
@@ -339,7 +355,7 @@ async def delete_fitting_hole_bundle_route(
 async def update_fitting_hole_bundle_mounting_variant_route(
     bundle_key: str,
     payload: FittingHoleBundleMountingVariantUpdateSchema,
-    current_user = Depends(require_fitting_holes_editor),
+    current_user = Depends(require_fitting_holes_use),
 ):
     try:
         with FittingHolesService() as service:
@@ -370,7 +386,7 @@ async def update_fitting_hole_bundle_mounting_variant_route(
 )
 async def get_fitting_hole_template_route(
     template_id: int,
-    current_user = Depends(require_fitting_holes_editor),
+    current_user = Depends(require_fitting_holes_use),
 ):
     with FittingHolesService() as service:
         template = service.get_template(template_id)
@@ -394,7 +410,7 @@ async def get_fitting_hole_template_route(
 async def update_fitting_hole_template_route(
     template_id: int,
     payload: FittingHoleTemplateUpdate,
-    current_user = Depends(require_fitting_holes_editor),
+    current_user = Depends(require_fitting_holes_use),
 ):
     try:
         with FittingHolesService() as service:
@@ -423,7 +439,7 @@ async def update_fitting_hole_template_route(
 )
 async def delete_fitting_hole_template_route(
     template_id: int,
-    current_user = Depends(require_fitting_holes_editor),
+    current_user = Depends(require_fitting_holes_use),
 ):
     try:
         with FittingHolesService() as service:
@@ -450,7 +466,7 @@ async def delete_fitting_hole_template_route(
 async def create_fitting_hole_point_route(
     template_id: int,
     payload: FittingHolePointCreate,
-    current_user = Depends(require_fitting_holes_editor),
+    current_user = Depends(require_fitting_holes_use),
 ):
     body = payload.model_dump(exclude_unset=True)
     body["template_id"] = template_id
@@ -473,7 +489,7 @@ async def create_fitting_hole_point_route(
 )
 async def list_fitting_hole_points_route(
     template_id: int,
-    current_user = Depends(require_fitting_holes_editor),
+    current_user = Depends(require_fitting_holes_use),
 ):
     with FittingHolesService() as service:
         template = service.get_template(template_id)
@@ -501,7 +517,7 @@ async def list_fitting_hole_points_route(
 )
 async def get_fitting_hole_service_preview_route(
     template_id: int,
-    current_user = Depends(require_fitting_holes_editor),
+    current_user = Depends(require_fitting_holes_use),
 ):
     with FittingHolesService() as service:
         template = service.get_template(template_id)
@@ -530,7 +546,7 @@ async def get_fitting_hole_service_preview_route(
     response_model=FittingHoleServiceRuleListResponseSchema,
 )
 async def list_fitting_hole_service_rules_route(
-    current_user = Depends(require_fitting_holes_editor),
+    current_user = Depends(require_fitting_holes_admin),
 ):
     rules = list_fitting_hole_service_rules(user_id=getattr(current_user, "id", None))
     return {
@@ -548,7 +564,7 @@ async def list_fitting_hole_service_rules_route(
 )
 async def create_fitting_hole_service_rule_route(
     payload: FittingHoleServiceRuleCreateSchema,
-    current_user = Depends(require_fitting_holes_editor),
+    current_user = Depends(require_fitting_holes_admin),
 ):
     try:
         rule = create_fitting_hole_service_rule(
@@ -570,7 +586,7 @@ async def create_fitting_hole_service_rule_route(
 async def update_fitting_hole_service_rule_route(
     rule_id: int,
     payload: FittingHoleServiceRuleUpdateSchema,
-    current_user = Depends(require_fitting_holes_editor),
+    current_user = Depends(require_fitting_holes_admin),
 ):
     try:
         rule = update_fitting_hole_service_rule(
@@ -598,7 +614,7 @@ async def update_fitting_hole_service_rule_route(
 )
 async def delete_fitting_hole_service_rule_route(
     rule_id: int,
-    current_user = Depends(require_fitting_holes_editor),
+    current_user = Depends(require_fitting_holes_admin),
 ):
     try:
         rule = deactivate_fitting_hole_service_rule(rule_id)
@@ -624,7 +640,7 @@ async def delete_fitting_hole_service_rule_route(
 async def update_fitting_hole_point_route(
     point_id: int,
     payload: FittingHolePointUpdate,
-    current_user = Depends(require_fitting_holes_editor),
+    current_user = Depends(require_fitting_holes_use),
 ):
     try:
         with FittingHolesService() as service:
@@ -653,7 +669,7 @@ async def update_fitting_hole_point_route(
 )
 async def delete_fitting_hole_point_route(
     point_id: int,
-    current_user = Depends(require_fitting_holes_editor),
+    current_user = Depends(require_fitting_holes_use),
 ):
     try:
         with FittingHolesService() as service:

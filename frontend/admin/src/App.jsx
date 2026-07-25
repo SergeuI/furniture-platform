@@ -59,6 +59,7 @@ import {
   canManageSystemFittings,
   canViewFittings,
   canDeleteFittingItem as canDeleteFittingItemHelper,
+  canUseFittingHoles as canUseFittingHolesHelper,
 } from "./fittingEntitlements.js";
 
 import surfaceMountIcon from "./assets/hole-mounting/surface_mount.png";
@@ -6954,7 +6955,11 @@ export default function App() {
   const userTierLabel = getSubscriptionLabel(user, language);
   const canUseAiScan = user?.role === "admin" || user?.role === "premium" || user?.role === "pro";
   const canUsePremiumStart = user?.role === "admin" || user?.role === "premium";
-  const canViewFittingHoles = user?.role === "admin" || user?.role === "premium" || user?.role === "pro";
+  const canViewFittingHoles = canUseFittingHolesHelper(user);
+  const isCatalogHolesRequestedView = activeView === "catalogHoles";
+  const isCatalogBundlesRequestedView = activeView === "catalogBundles";
+  const isCatalogHolesView = isCatalogHolesRequestedView && canViewFittingHoles;
+  const isCatalogBundlesView = isCatalogBundlesRequestedView && canViewFittingHoles;
   const trialCountdown = useMemo(
     () => buildTrialCountdown(user, trialClockNow),
     [trialClockNow, user],
@@ -7200,7 +7205,7 @@ export default function App() {
       : "Готово до створення"
     : "";
   useEffect(() => {
-    if (activeView !== "catalogHoles" || activeHoleFittingId || !holeBundleSelectedItems.length) {
+    if (!isCatalogHolesView || activeHoleFittingId || !holeBundleSelectedItems.length) {
       return;
     }
 
@@ -7211,7 +7216,7 @@ export default function App() {
     }
 
     setHoleSelectedFittingId(String(firstBundleItem.id));
-  }, [activeView, activeHoleFittingId, holeBundleSelectedItems]);
+  }, [isCatalogHolesView, activeHoleFittingId, holeBundleSelectedItems]);
   const holesMaterialPlanesModel = useMemo(() => {
     switch (normalizedSelectedHoleMountingVariantKey) {
       case "angled_two_planes":
@@ -8422,8 +8427,6 @@ export default function App() {
   const isCatalogMaterialsView = activeView === "catalogMaterials";
   const isCatalogFittingsView = activeView === "catalogFittings";
   const isCatalogFastenersView = activeView === "catalogFasteners";
-  const isCatalogHolesView = activeView === "catalogHoles";
-  const isCatalogBundlesView = activeView === "catalogBundles";
   const isCatalogServiceRulesView = activeView === "catalogServiceRules";
   const isCatalogDrillingRulesView = activeView === "catalogDrillingRules";
   const isCatalogValuesView = activeView === "catalogValues";
@@ -9155,7 +9158,11 @@ export default function App() {
   }, [isCatalogView]);
 
   useEffect(() => {
-    if (!token || (!isCatalogFittingsView && !isCatalogFastenersView) || canViewFittingCatalog) {
+    if (
+      !token ||
+      (!isCatalogHolesRequestedView && !isCatalogBundlesRequestedView) ||
+      canViewFittingHoles
+    ) {
       return;
     }
 
@@ -9166,6 +9173,26 @@ export default function App() {
     setFittingDetailError("");
     setOpenFittingMenuId("");
     closeFittingFormModal();
+    setHoleWorkspaceMode("new");
+    setHoleActiveBundleKey("");
+    setHoleActiveBundleName("");
+    setHoleActiveBundleMountingVariantKey("");
+    setHoleBundleMountingVariantSaving(false);
+    setHoleBundleName("");
+    setHoleBundleCategoryCode("");
+    setHoleBundleSelectedItemIds([]);
+    setHoleBundleDraftItemIds([]);
+    setSelectedHoleMountingVariantKey("surface_mount");
+    setHoleSelectedFittingCategory("");
+    setHoleSelectedFittingId("");
+    setHoleSelectedTemplateId("");
+    setHoleSelectedTemplate(null);
+    setHoleTemplateItems([]);
+    setHolePoints([]);
+    setSelectedHolePointId("");
+    closeHoleTemplateCreateForm();
+    closeHolePointCreateForm();
+    closeHolePointEditForm();
 
     const fallbackView = canViewMaterialCatalog ? "catalogMaterials" : "home";
     setActiveView(fallbackView);
@@ -9173,15 +9200,15 @@ export default function App() {
     localStorage.setItem(ACTIVE_VIEW_STORAGE_KEY, fallbackView);
     setStatus({
       message: language === "uk"
-        ? "Каталог фурнітури недоступний у вашому тарифі."
-        : "The fittings catalog is unavailable for your plan.",
+        ? "Розділ присадки фурнітури недоступний у вашому тарифі."
+        : "The fitting holes section is unavailable for your plan.",
       tone: "error",
     });
   }, [
     token,
-    isCatalogFittingsView,
-    isCatalogFastenersView,
-    canViewFittingCatalog,
+    isCatalogHolesRequestedView,
+    isCatalogBundlesRequestedView,
+    canViewFittingHoles,
     canViewMaterialCatalog,
     language,
   ]);
@@ -13908,6 +13935,20 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
     const nextView = normalizeCatalogView(view === "catalog" ? "catalogViyar" : view);
 
     if ((nextView === "catalogFittings" || nextView === "catalogFasteners") && !canViewFittingCatalog) {
+      return;
+    }
+
+    if ((nextView === "catalogHoles" || nextView === "catalogBundles") && !canViewFittingHoles) {
+      const fallbackView = canViewMaterialCatalog ? "catalogMaterials" : "home";
+      setActiveView(fallbackView);
+      activeViewRef.current = fallbackView;
+      localStorage.setItem(ACTIVE_VIEW_STORAGE_KEY, fallbackView);
+      setStatus({
+        message: language === "uk"
+          ? "Розділ присадки фурнітури недоступний у вашому тарифі."
+          : "The fitting holes section is unavailable for your plan.",
+        tone: "error",
+      });
       return;
     }
 
@@ -21186,7 +21227,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
         )}
       </section>
 
-      {activeView === "catalogBundles" && holeBundleDetailsOpen ? (
+      {isCatalogBundlesView && holeBundleDetailsOpen ? (
         <div
           aria-modal="true"
           className="modal-backdrop"

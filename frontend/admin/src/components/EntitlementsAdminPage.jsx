@@ -396,7 +396,7 @@ function RegistrySyncModal({
                       <strong>{feature.name_uk}</strong>
                       <span>{feature.feature_key}</span>
                       <small>
-                        {getEntitlementCategoryLabel(feature.category)} · {getEntitlementValueTypeLabel(feature.value_type)}
+                        {getEntitlementCategoryLabel(feature.category, language)} · {getEntitlementValueTypeLabel(feature.value_type)}
                       </small>
                     </li>
                   ))}
@@ -699,7 +699,10 @@ export default function EntitlementsAdminPage({
   const [registrySyncApplying, setRegistrySyncApplying] = useState(false);
   const [registrySyncError, setRegistrySyncError] = useState("");
 
-  const categoryOptions = useMemo(() => getEntitlementCategoryFilterOptions(features), [features]);
+  const categoryOptions = useMemo(
+    () => getEntitlementCategoryFilterOptions(features, language),
+    [features, language],
+  );
   const filteredFeatures = useMemo(
     () =>
       filterEntitlementFeatures(features, {
@@ -1087,7 +1090,7 @@ export default function EntitlementsAdminPage({
                       <td>
                         <code className="entitlements-feature-key">{feature.feature_key}</code>
                       </td>
-                      <td>{getEntitlementCategoryLabel(feature.category)}</td>
+                      <td>{getEntitlementCategoryLabel(feature.category, language)}</td>
                       <td>{getEntitlementValueTypeLabel(feature.value_type)}</td>
                       {["trial", "free", "pro", "business"].map((planCode) => (
                         <td key={planCode}>

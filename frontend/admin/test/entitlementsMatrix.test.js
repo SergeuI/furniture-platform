@@ -77,11 +77,22 @@ test("plan codes stay in the expected order", () => {
 
 test("system entitlement labels stay localized", () => {
   assert.deepEqual(ENTITLEMENT_CATEGORY_LABELS, {
-    fittings: "Фурнітура",
-    materials: "Матеріали",
-    projects: "Проєкти",
-    production: "Виробництво",
-    ai: "Штучний інтелект",
+    uk: {
+      fittings: "Фурнітура",
+      materials: "Матеріали",
+      projects: "Проєкти",
+      production: "Виробництво",
+      ai: "Штучний інтелект",
+      fitting_holes: "Присадка фурнітури",
+    },
+    en: {
+      fittings: "Fittings",
+      materials: "Materials",
+      projects: "Projects",
+      production: "Production",
+      ai: "Artificial intelligence",
+      fitting_holes: "Fitting holes",
+    },
   });
   assert.deepEqual(ENTITLEMENT_VALUE_TYPE_LABELS, {
     boolean: "Так / Ні",
@@ -91,6 +102,8 @@ test("system entitlement labels stay localized", () => {
     enum: "Варіант зі списку",
   });
   assert.equal(getEntitlementCategoryLabel("materials"), "Матеріали");
+  assert.equal(getEntitlementCategoryLabel("fitting_holes"), "Присадка фурнітури");
+  assert.equal(getEntitlementCategoryLabel("fitting_holes", "en"), "Fitting holes");
   assert.equal(getEntitlementCategoryLabel("custom"), "custom");
   assert.equal(getEntitlementValueTypeLabel("enum"), "Варіант зі списку");
   assert.equal(getEntitlementFeatureScopeLabel({ is_system: true }), "Системне");
@@ -108,6 +121,12 @@ test("category filter options expose localized labels", () => {
     { value: "ai", label: "Штучний інтелект" },
     { value: "fittings", label: "Фурнітура" },
   ]);
+});
+
+test("category filter options support the English fitting holes label", () => {
+  const options = getEntitlementCategoryFilterOptions([{ category: "fitting_holes" }], "en");
+
+  assert.deepEqual(options, [{ value: "fitting_holes", label: "Fitting holes" }]);
 });
 
 test("boolean table hint stays global and singular", () => {

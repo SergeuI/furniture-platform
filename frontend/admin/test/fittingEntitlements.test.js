@@ -8,6 +8,7 @@ import {
   canEditFittingItem,
   canManageSystemFittings,
   canViewFittings,
+  canUseFittingHoles,
   createFittingFormDraft,
   getFittingOwnerDisplay,
   getFittingOwnershipScopeLabel,
@@ -70,6 +71,44 @@ test("admin bypass keeps view and create available even when entitlements are fa
     }),
     true,
   );
+});
+
+test("fitting holes access follows entitlement and keeps admin bypass only", () => {
+  assert.equal(
+    canUseFittingHoles({
+      role: "admin",
+      entitlements: { "fitting_holes.use": { allowed: false } },
+    }),
+    true,
+  );
+  assert.equal(
+    canUseFittingHoles({
+      role: "trial",
+      entitlements: { "fitting_holes.use": { allowed: true } },
+    }),
+    true,
+  );
+  assert.equal(
+    canUseFittingHoles({
+      role: "premium",
+      entitlements: { "fitting_holes.use": { allowed: false } },
+    }),
+    false,
+  );
+  assert.equal(
+    canUseFittingHoles({
+      role: "pro",
+      entitlements: {},
+    }),
+    false,
+  );
+  assert.equal(
+    canUseFittingHoles({
+      role: "business",
+    }),
+    false,
+  );
+  assert.equal(canUseFittingHoles(null), false);
 });
 
 test("admin system control still requires create entitlement", () => {

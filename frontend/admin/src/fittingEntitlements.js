@@ -88,6 +88,14 @@ export function canDeleteFittings(user) {
   return getFittingEntitlementFlags(user).delete;
 }
 
+export function canUseFittingHoles(user) {
+  if (user?.role === "admin") {
+    return true;
+  }
+
+  return hasUserEntitlement(user, "fitting_holes.use");
+}
+
 export function getFittingOwnershipScopeLabel(scope, language) {
   const labels = language === "en"
     ? {

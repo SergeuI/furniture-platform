@@ -12,11 +12,22 @@ export const ENTITLEMENT_PLAN_LABELS = {
 export const ENTITLEMENT_VALUE_TYPES = ["boolean", "integer", "decimal", "text", "enum"];
 
 export const ENTITLEMENT_CATEGORY_LABELS = {
-  fittings: "Фурнітура",
-  materials: "Матеріали",
-  projects: "Проєкти",
-  production: "Виробництво",
-  ai: "Штучний інтелект",
+  uk: {
+    fittings: "Фурнітура",
+    materials: "Матеріали",
+    projects: "Проєкти",
+    production: "Виробництво",
+    ai: "Штучний інтелект",
+    fitting_holes: "Присадка фурнітури",
+  },
+  en: {
+    fittings: "Fittings",
+    materials: "Materials",
+    projects: "Projects",
+    production: "Production",
+    ai: "Artificial intelligence",
+    fitting_holes: "Fitting holes",
+  },
 };
 
 export const ENTITLEMENT_VALUE_TYPE_LABELS = {
@@ -47,15 +58,16 @@ export function normalizeEntitlementText(value) {
   return String(value ?? "").trim();
 }
 
-export function getEntitlementCategoryLabel(category) {
+export function getEntitlementCategoryLabel(category, language = "uk") {
   const normalized = normalizeEntitlementText(category).toLowerCase();
-  return ENTITLEMENT_CATEGORY_LABELS[normalized] || normalizeEntitlementText(category);
+  const localizedLabels = ENTITLEMENT_CATEGORY_LABELS[language] || ENTITLEMENT_CATEGORY_LABELS.uk;
+  return localizedLabels[normalized] || normalizeEntitlementText(category);
 }
 
-export function getEntitlementCategoryFilterOptions(features) {
+export function getEntitlementCategoryFilterOptions(features, language = "uk") {
   return getEntitlementCategoryOptions(features).map((value) => ({
     value,
-    label: getEntitlementCategoryLabel(value),
+    label: getEntitlementCategoryLabel(value, language),
   }));
 }
 
