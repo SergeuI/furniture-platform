@@ -171,7 +171,9 @@ def _apply_project_filters(
 
     only_mine: bool = False,
 
-    user_id: str | None = None
+    user_id: str | None = None,
+
+    ownership_scope: str | None = None
 ):
 
     if search:
@@ -242,6 +244,25 @@ def _apply_project_filters(
 
         query = query.filter(
             ProjectModel.created_by_user_id == user_id
+        )
+
+    if ownership_scope == "mine" and user_id:
+
+        query = query.filter(
+            ProjectModel.created_by_user_id == user_id
+        )
+
+    elif ownership_scope == "unowned":
+
+        query = query.filter(
+            ProjectModel.created_by_user_id.is_(None)
+        )
+
+    elif ownership_scope == "users" and user_id:
+
+        query = query.filter(
+            ProjectModel.created_by_user_id.is_not(None),
+            ProjectModel.created_by_user_id != user_id
         )
 
     return query
@@ -475,7 +496,9 @@ def list_accessible_projects(
 
     height_max: int | None = None,
 
-    only_mine: bool = False
+    only_mine: bool = False,
+
+    ownership_scope: str | None = None
 ):
 
     db = SessionLocal()
@@ -513,7 +536,9 @@ def list_accessible_projects(
 
             only_mine=only_mine,
 
-            user_id=user_id
+            user_id=user_id,
+
+            ownership_scope=ownership_scope
         )
 
         return (
@@ -561,6 +586,32 @@ def count_projects() -> int:
         db.close()
 
 
+def count_owned_projects(
+
+    user_id: str
+) -> int:
+
+    db = SessionLocal()
+
+    try:
+
+        return (
+
+            db.query(ProjectModel)
+
+            .filter(
+
+                ProjectModel.created_by_user_id == user_id
+            )
+
+            .count()
+        )
+
+    finally:
+
+        db.close()
+
+
 def count_accessible_projects(
 
     user_id: str,
@@ -583,7 +634,9 @@ def count_accessible_projects(
 
     height_max: int | None = None,
 
-    only_mine: bool = False
+    only_mine: bool = False,
+
+    ownership_scope: str | None = None
 ) -> int:
 
     db = SessionLocal()
@@ -621,7 +674,9 @@ def count_accessible_projects(
 
             only_mine=only_mine,
 
-            user_id=user_id
+            user_id=user_id,
+
+            ownership_scope=ownership_scope
         )
 
         return query.count()

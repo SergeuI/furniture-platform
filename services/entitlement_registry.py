@@ -180,6 +180,14 @@ SYSTEM_ENTITLEMENT_REGISTRY: tuple[EntitlementRegistryFeature, ...] = (
         sort_order=40,
     ),
     EntitlementRegistryFeature(
+        feature_key="projects.max_owned",
+        name_uk="Максимальна кількість власних проєктів",
+        description_uk="Визначає, скільки власних проєктів користувач може одночасно мати в системі.",
+        category="projects",
+        value_type="integer",
+        sort_order=50,
+    ),
+    EntitlementRegistryFeature(
         feature_key="cutting.use",
         name_uk="Використання розкрою",
         description_uk="Дозволяє відкривати та використовувати модуль розкрою.",

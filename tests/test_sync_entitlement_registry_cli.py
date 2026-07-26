@@ -36,7 +36,7 @@ class SyncEntitlementRegistryCliTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertIn("Mode: DRY-RUN", result.stdout)
-            self.assertIn("New features: 16", result.stdout)
+            self.assertIn("New features: 17", result.stdout)
             self.assertEqual(before_stat.st_size, after_stat.st_size)
             self.assertEqual(before_stat.st_mtime_ns, after_stat.st_mtime_ns)
             self.assertEqual(before_backups, after_backups)
@@ -66,9 +66,9 @@ class SyncEntitlementRegistryCliTests(unittest.TestCase):
                 features = session.query(EntitlementFeatureModel).order_by(EntitlementFeatureModel.feature_key).all()
                 entitlements = session.query(PlanEntitlementModel).all()
 
-                self.assertEqual(len(features), 16)
+                self.assertEqual(len(features), 17)
                 self.assertTrue(all(feature.is_system for feature in features))
-                self.assertEqual(len(entitlements), 64)
+                self.assertEqual(len(entitlements), 68)
                 self.assertEqual(session.query(AuditLogModel).count(), 1)
 
                 for entitlement in entitlements:

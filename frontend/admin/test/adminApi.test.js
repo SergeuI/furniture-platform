@@ -5,6 +5,8 @@ import {
   API_BASE_URL,
   applyEntitlementRegistrySync,
   previewEntitlementRegistrySync,
+  listProjects,
+  getProjectQuota,
   updateMaterial,
 } from "../src/api.js";
 
@@ -34,6 +36,57 @@ test("admin entitlement sync wrappers use the shared API base URL", async () => 
     ]);
     assert.equal(calls[0].options.headers.Authorization, "Bearer token-1");
     assert.equal(calls[1].options.method, "POST");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("project quota wrapper uses the shared API base URL", async () => {
+  const calls = [];
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url, options });
+    return new Response(JSON.stringify({ success: true, usage: 2, limit: 5, can_create: true }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+
+  try {
+    const result = await getProjectQuota("token-3");
+
+    assert.equal(result.success, true);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].url, "/api/project/quota");
+    assert.equal(calls[0].options.headers.Authorization, "Bearer token-3");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("project list wrapper forwards ownership scope as a query parameter", async () => {
+  const calls = [];
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url, options });
+    return new Response(JSON.stringify({ success: true, projects: [], total: 0, offset: 0 }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+
+  try {
+    const result = await listProjects("token-4", 20, 40, {
+      search: "desk",
+      ownership_scope: "mine",
+    });
+
+    assert.equal(result.success, true);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].url, "/api/project?limit=20&offset=40&search=desk&ownership_scope=mine");
+    assert.equal(calls[0].options.headers.Authorization, "Bearer token-4");
   } finally {
     globalThis.fetch = originalFetch;
   }

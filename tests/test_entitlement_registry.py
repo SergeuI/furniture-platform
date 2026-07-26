@@ -26,6 +26,7 @@ class EntitlementRegistryTests(unittest.TestCase):
             "projects.create",
             "projects.edit",
             "projects.delete",
+            "projects.max_owned",
             "cutting.use",
             "ai.image_analysis",
         }
@@ -34,7 +35,7 @@ class EntitlementRegistryTests(unittest.TestCase):
         self.assertEqual(set(get_system_entitlement_registry_keys()), expected_keys)
         self.assertEqual(
             sorted(feature.value_type for feature in SYSTEM_ENTITLEMENT_REGISTRY),
-            ["boolean"] * 15 + ["integer"],
+            ["boolean"] * 15 + ["integer", "integer"],
         )
 
         registry_by_key = {feature.feature_key: feature for feature in SYSTEM_ENTITLEMENT_REGISTRY}

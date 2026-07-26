@@ -9,7 +9,7 @@ import base64
 import binascii
 
 from api.dependencies.auth import (
-    optional_current_user,
+    require_current_user,
     require_roles
 )
 
@@ -30,6 +30,7 @@ from schemas.project_response import (
     ProjectDetailResponseSchema,
     ProjectHistoryResponseSchema,
     ProjectListResponseSchema,
+    ProjectQuotaResponseSchema,
     ProjectPartDetailResponseSchema
 )
 
@@ -61,6 +62,7 @@ from services.project_assembly_service import (
 from database.repositories.project_repository import (
 
     count_accessible_projects,
+    count_owned_projects,
 
     delete_project,
 
@@ -110,7 +112,16 @@ from services.furniture_detector import (
 from services.project_parser import (
     build_project_from_scan,
 )
+from services.entitlement_service import (
+    EntitlementService,
+)
 router = APIRouter()
+_PROJECT_OWNERSHIP_SCOPES = {
+    "all",
+    "mine",
+    "unowned",
+    "users",
+}
 
 
 def _build_project_pricing_catalog(current_user) -> dict:
@@ -141,29 +152,105 @@ def _build_project_pricing_catalog(current_user) -> dict:
         "priced_services": priced_services,
     }
 
-require_project_reader = require_roles(
-    [
-        "admin",
-        "premium",
-        "pro",
-        "free",
-    ]
-)
-
 require_project_admin = require_roles(
     [
         "admin"
     ]
 )
 
-require_project_writer = require_roles(
-    [
-        "admin",
-        "premium",
-        "pro",
-        "free",
-    ]
-)
+def _ensure_project_feature_access(current_user, feature_key: str) -> None:
+
+    with EntitlementService() as service:
+        if service.has_feature(current_user, feature_key):
+            return
+
+    raise HTTPException(
+        status_code=403,
+        detail={
+            "success": False,
+            "error": "Insufficient permissions",
+        },
+    )
+
+
+def require_project_view_access(
+    current_user = Depends(require_current_user)
+):
+
+    _ensure_project_feature_access(current_user, "projects.view")
+    return current_user
+
+
+def _resolve_project_ownership_scope(
+    current_user,
+    ownership_scope: str | None,
+    only_mine: bool
+) -> str | None:
+
+    normalized_scope = (
+        ownership_scope.strip().lower()
+        if ownership_scope is not None
+        else None
+    )
+
+    if normalized_scope is not None:
+        if normalize_user_role(current_user.role) != "admin":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "success": False,
+                    "error": "Ownership scope is admin-only",
+                },
+            )
+
+        if normalized_scope not in _PROJECT_OWNERSHIP_SCOPES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "success": False,
+                    "error": "Invalid ownership scope",
+                },
+            )
+
+        if only_mine and normalized_scope != "mine":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "success": False,
+                    "error": "Conflicting project ownership filters",
+                },
+            )
+
+        return normalized_scope
+
+    if only_mine:
+        return "mine"
+
+    return None
+
+
+def require_project_create_access(
+    current_user = Depends(require_current_user)
+):
+
+    _ensure_project_feature_access(current_user, "projects.create")
+    return current_user
+
+
+def require_project_edit_access(
+    current_user = Depends(require_current_user)
+):
+
+    _ensure_project_feature_access(current_user, "projects.edit")
+    return current_user
+
+
+def require_project_delete_access(
+    current_user = Depends(require_current_user)
+):
+
+    _ensure_project_feature_access(current_user, "projects.delete")
+    return current_user
 
 
 def _can_read_project(
@@ -215,6 +302,56 @@ def _can_update_project(
         return project.created_by_user_id == current_user.id
 
     return False
+
+
+def _get_project_ownership_quota(current_user) -> dict:
+
+    owned_count = count_owned_projects(str(current_user.id))
+
+    if normalize_user_role(current_user.role) == "admin":
+        return {
+            "usage": owned_count,
+            "limit": None,
+            "is_unlimited": True,
+            "can_create": True,
+        }
+
+    with EntitlementService() as service:
+        limit_resolution = service.get_limit(current_user, "projects.max_owned")
+
+    limit_value = limit_resolution.limit_value
+    normalized_limit = int(limit_value) if limit_value is not None else None
+    is_unlimited = limit_resolution.status == "unlimited"
+    can_create = bool(
+        is_unlimited
+        or (
+            normalized_limit is not None
+            and owned_count < normalized_limit
+        )
+    )
+
+    return {
+        "usage": owned_count,
+        "limit": normalized_limit,
+        "is_unlimited": is_unlimited,
+        "can_create": can_create,
+    }
+
+
+def _ensure_project_ownership_capacity(current_user) -> dict:
+
+    quota = _get_project_ownership_quota(current_user)
+
+    if not quota["can_create"]:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "success": False,
+                "error": "Project ownership limit reached",
+            },
+        )
+
+    return quota
 
 
 def _serialize_project(
@@ -416,8 +553,18 @@ async def list_projects_route(
         default=False
     ),
 
-    current_user = Depends(require_project_reader)
+    ownership_scope: str | None = Query(
+        default=None
+    ),
+
+    current_user = Depends(require_project_view_access)
 ):
+
+    resolved_ownership_scope = _resolve_project_ownership_scope(
+        current_user,
+        ownership_scope,
+        only_mine,
+    )
 
     projects = list_accessible_projects(
 
@@ -445,7 +592,8 @@ async def list_projects_route(
 
         height_max=height_max,
 
-        only_mine=only_mine
+        only_mine=only_mine,
+        ownership_scope=resolved_ownership_scope
     )
 
     total = count_accessible_projects(
@@ -470,7 +618,8 @@ async def list_projects_route(
 
         height_max=height_max,
 
-        only_mine=only_mine
+        only_mine=only_mine,
+        ownership_scope=resolved_ownership_scope
     )
 
     return {
@@ -491,6 +640,30 @@ async def list_projects_route(
 
             for project in projects
         ]
+    }
+
+
+# =====================================================
+# PROJECT QUOTA
+# =====================================================
+
+@router.get(
+    "/quota",
+
+    response_model=ProjectQuotaResponseSchema
+)
+async def get_project_quota_route(
+
+    current_user = Depends(require_current_user)
+):
+
+    return {
+
+        "success": True,
+
+        "project_quota": _get_project_ownership_quota(
+            current_user
+        )
     }
 
 
@@ -659,17 +832,14 @@ async def generate_project_route(
 
     project: ProjectInputSchema,
 
-    current_user = Depends(optional_current_user)
+    current_user = Depends(require_project_create_access)
 ):
+
+    _ensure_project_ownership_capacity(current_user)
 
     result = await generate_project(
         project,
-
-        created_by_user_id=(
-            current_user.id
-            if current_user
-            else None
-        )
+        created_by_user_id=current_user.id
     )
 
     return {
@@ -694,7 +864,7 @@ async def get_project_bom_route(
 
     project_id: str,
 
-    current_user = Depends(require_project_reader)
+    current_user = Depends(require_project_view_access)
 ):
 
     project = get_project(
@@ -719,7 +889,7 @@ async def get_project_bom_route(
 
             "success": False,
 
-            "error": "Insufficient project permissions"
+            "error": "Project not found"
         }
 
     return {
@@ -755,7 +925,7 @@ async def get_project_cutting_route(
 
     project_id: str,
 
-    current_user = Depends(require_project_reader)
+    current_user = Depends(require_project_view_access)
 ):
 
     project = get_project(
@@ -780,7 +950,7 @@ async def get_project_cutting_route(
 
             "success": False,
 
-            "error": "Insufficient project permissions"
+            "error": "Project not found"
         }
 
     cutting = build_project_cutting(
@@ -814,7 +984,7 @@ async def list_project_cutting_exports_route(
 
     project_id: str,
 
-    current_user = Depends(require_project_reader)
+    current_user = Depends(require_project_view_access)
 ):
 
     project = get_project(
@@ -839,7 +1009,7 @@ async def list_project_cutting_exports_route(
 
             "success": False,
 
-            "error": "Insufficient project permissions"
+            "error": "Project not found"
         }
 
     return {
@@ -861,7 +1031,7 @@ async def get_project_cutting_json_export_route(
 
     project_id: str,
 
-    current_user = Depends(require_project_reader)
+    current_user = Depends(require_project_view_access)
 ):
 
     project = get_project(
@@ -886,7 +1056,7 @@ async def get_project_cutting_json_export_route(
 
             "success": False,
 
-            "error": "Insufficient project permissions"
+            "error": "Project not found"
         }
 
     return {
@@ -916,7 +1086,7 @@ async def get_project_part_detail_route(
 
     part_code: str,
 
-    current_user = Depends(require_project_reader)
+    current_user = Depends(require_project_view_access)
 ):
 
     project = get_project(
@@ -941,7 +1111,7 @@ async def get_project_part_detail_route(
 
             "success": False,
 
-            "error": "Insufficient project permissions"
+            "error": "Project not found"
         }
 
     part_detail = build_project_part_detail(
@@ -983,7 +1153,7 @@ async def update_project_part_edges_route(
 
     edges: ProjectPartEdgesUpdateSchema,
 
-    current_user = Depends(require_project_writer)
+    current_user = Depends(require_project_edit_access)
 ):
 
     project = get_project(
@@ -1008,7 +1178,7 @@ async def update_project_part_edges_route(
 
             "success": False,
 
-            "error": "Insufficient project permissions"
+            "error": "Project not found"
         }
 
     part_detail = build_project_part_detail(
@@ -1085,7 +1255,7 @@ async def update_project_part_machining_route(
 
     machining: ProjectPartMachiningUpdateSchema,
 
-    current_user = Depends(require_project_writer)
+    current_user = Depends(require_project_edit_access)
 ):
 
     project = get_project(
@@ -1110,7 +1280,7 @@ async def update_project_part_machining_route(
 
             "success": False,
 
-            "error": "Insufficient project permissions"
+            "error": "Project not found"
         }
 
     part_detail = build_project_part_detail(
@@ -1191,7 +1361,7 @@ async def get_project_route(
 
     project_id: str,
 
-    current_user = Depends(require_project_reader)
+    current_user = Depends(require_project_view_access)
 ):
 
     project = get_project(
@@ -1216,7 +1386,7 @@ async def get_project_route(
 
             "success": False,
 
-            "error": "Insufficient project permissions"
+            "error": "Project not found"
         }
 
     return {
@@ -1243,7 +1413,7 @@ async def update_project_route(
 
     project: ProjectInputSchema,
 
-    current_user = Depends(require_project_writer)
+    current_user = Depends(require_project_edit_access)
 ):
 
     existing_project = get_project(
@@ -1268,7 +1438,7 @@ async def update_project_route(
 
             "success": False,
 
-            "error": "Insufficient project permissions"
+            "error": "Project not found"
         }
 
     previous_state = _serialize_project(
@@ -1395,7 +1565,7 @@ async def get_project_history_route(
 
     project_id: str,
 
-    current_user = Depends(require_project_reader)
+    current_user = Depends(require_project_view_access)
 ):
 
     project = get_project(
@@ -1420,7 +1590,7 @@ async def get_project_history_route(
 
             "success": False,
 
-            "error": "Insufficient project permissions"
+            "error": "Project not found"
         }
 
     versions = get_project_versions(
@@ -1544,7 +1714,7 @@ async def delete_project_route(
 
     project_id: str,
 
-    current_user = Depends(require_project_admin)
+    current_user = Depends(require_project_delete_access)
 ):
 
     project = get_project(
@@ -1552,6 +1722,18 @@ async def delete_project_route(
     )
 
     if not project:
+
+        return {
+
+            "success": False,
+
+            "error": "Project not found"
+        }
+
+    if not _can_update_project(
+        current_user,
+        project
+    ):
 
         return {
 

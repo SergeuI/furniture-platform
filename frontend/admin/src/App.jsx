@@ -54,6 +54,16 @@ import {
   isMaterialCreationBlockedByQuota as isMaterialCreationBlockedByQuotaHelper,
 } from "./materialEntitlements.js";
 import {
+  canCreateProjects,
+  canDeleteProjects,
+  canEditProjects,
+  canViewProjects,
+  getProjectOwnerLabel,
+  getProjectOwnershipScopeLabel,
+  getProjectOwnershipQuotaLabel,
+  isProjectCreationBlockedByQuota as isProjectCreationBlockedByQuotaHelper,
+} from "./projectEntitlements.js";
+import {
   canCreateFittings,
   canDeleteFittings,
   canManageSystemFittings,
@@ -110,6 +120,7 @@ import {
   getProjectCutting,
   getProjectHistory,
   getProjectPartDetail,
+  getProjectQuota,
   getUserDetails,
   getSpecificationCatalog,
   getViyarServicesTree,
@@ -369,7 +380,7 @@ const DEFAULT_PROJECT_FILTERS = {
   width_max: "",
   height_min: "",
   height_max: "",
-  only_mine: false,
+  ownership_scope: "all",
 };
 const DEFAULT_SPECIFICATION_CATALOG = {
   project_types: [
@@ -416,6 +427,12 @@ const DEFAULT_SPECIFICATION_CATALOG = {
 };
 
 const PROJECT_TYPE_OPTIONS = DEFAULT_SPECIFICATION_CATALOG.project_types;
+const PROJECT_OWNERSHIP_SCOPE_OPTIONS = [
+  "all",
+  "mine",
+  "unowned",
+  "users",
+];
 
 function normalizeProjectTypes(projectTypes) {
   const allowed = new Set(PROJECT_TYPE_OPTIONS);
@@ -2255,9 +2272,11 @@ const TRANSLATIONS = {
     projectDeleteRestricted: "You do not have permission to delete this project",
     projectEditRestricted: "You do not have permission to edit this project",
     projectCreated: "Project created",
+    projectCreateRestricted: "You do not have permission to create projects",
     projectName: "Project name",
     projectNotFound: "Project not found",
     projectDetails: "Project details",
+    projectViewRestricted: "You do not have permission to view projects",
     projectRolledBack: "Project rolled back",
     projectRollbackRestricted: "You do not have permission to roll back this project",
     projectUpdated: "Project updated",
@@ -2810,9 +2829,11 @@ const TRANSLATIONS = {
     projectDeleteRestricted: "У вас немає прав для видалення цього проекту",
     projectEditRestricted: "У вас немає прав для редагування цього проекту",
     projectCreated: "Проект створено",
+    projectCreateRestricted: "У вас немає прав для створення проектів",
     projectName: "Назва проекту",
     projectNotFound: "Проект не знайдено",
     projectDetails: "Деталі проекту",
+    projectViewRestricted: "У вас немає прав для перегляду проектів",
     projectRolledBack: "Проект відновлено",
     projectRollbackRestricted: "У вас немає прав для відновлення цього проекту",
     projectUpdated: "Проект оновлено",
@@ -5753,32 +5774,8 @@ function getDefaultMaterialEdgeKey(item) {
   return MATERIAL_EDGE_SLOTS.find((slot) => !existingKeys.has(slot.key))?.key || MATERIAL_EDGE_SLOTS[0].key;
 }
 
-function canEditProject(project, user) {
-  if (!project || !user) {
-    return false;
-  }
-
-  if (user.role === "admin") {
-    return true;
-  }
-
-  if (user.role === "free" || user.role === "pro" || user.role === "premium") {
-    return project.created_by_user_id === user.id;
-  }
-
-  return false;
-}
-
-function canDeleteProject(user) {
-  return user?.role === "admin";
-}
-
 function canRollbackProject(user) {
   return user?.role === "admin";
-}
-
-function canCreateProject(user) {
-  return Boolean(user);
 }
 
 const EDGE_SIDES = ["top", "right", "bottom", "left"];
@@ -6709,6 +6706,7 @@ export default function App() {
   const [aiScanSession, setAiScanSession] = useState(null);
   const [aiScanHistory, setAiScanHistory] = useState([]);
   const [projectFilters, setProjectFilters] = useState(DEFAULT_PROJECT_FILTERS);
+  const [appliedProjectFilters, setAppliedProjectFilters] = useState(DEFAULT_PROJECT_FILTERS);
   const [resetPasswordForms, setResetPasswordForms] = useState({});
   const [projects, setProjects] = useState([]);
   const [users, setUsers] = useState([]);
@@ -6779,6 +6777,10 @@ export default function App() {
   const [usersOffset, setUsersOffset] = useState(0);
   const [auditOffset, setAuditOffset] = useState(0);
   const [selectedProject, setSelectedProject] = useState(null);
+  const [projectOwnershipQuota, setProjectOwnershipQuota] = useState(null);
+  const [projectOwnershipQuotaLoading, setProjectOwnershipQuotaLoading] = useState(false);
+  const [projectOwnershipQuotaLoaded, setProjectOwnershipQuotaLoaded] = useState(false);
+  const [projectOwnershipQuotaError, setProjectOwnershipQuotaError] = useState("");
   const [historyItems, setHistoryItems] = useState([]);
   const [cuttingItems, setCuttingItems] = useState([]);
   const [cuttingAssembly, setCuttingAssembly] = useState({});
@@ -7903,8 +7905,8 @@ export default function App() {
   ) : null;
 
   const selectedProjectId = selectedProject?.id || "";
-  const canEditSelectedProject = canEditProject(selectedProject, user);
-  const canDeleteSelectedProject = canDeleteProject(user);
+  const canEditSelectedProject = canEditProjects(user, selectedProject);
+  const canDeleteSelectedProject = canDeleteProjects(user, selectedProject);
   const canRollbackSelectedProject = canRollbackProject(user);
   const effectiveSelectedPartCode =
     selectedCuttingPartCode || selectedPartDetail?.part?.export_code || "";
@@ -8398,7 +8400,28 @@ export default function App() {
       }
     });
   }
-  const canCreateNewProject = canCreateProject(user);
+  const canCreateNewProject = canCreateProjects(user);
+  const projectOwnerMap = useMemo(() => {
+    const map = new Map();
+
+    users.forEach((owner) => {
+      const ownerId = String(owner?.id || "").trim();
+      if (ownerId && !map.has(ownerId)) {
+        map.set(ownerId, owner);
+      }
+    });
+
+    return map;
+  }, [users]);
+  const projectOwnershipQuotaLabel = projectOwnershipQuotaLoaded
+    ? getProjectOwnershipQuotaLabel(projectOwnershipQuota, language)
+    : "";
+  const canSubmitCreateProject =
+    canCreateNewProject &&
+    projectOwnershipQuotaLoaded &&
+    !projectOwnershipQuotaLoading &&
+    !projectOwnershipQuotaError &&
+    !isProjectCreationBlockedByQuotaHelper(projectOwnershipQuota);
   const materialEntitlementFlags = getMaterialEntitlementFlags(user);
   const canViewMaterialCatalog = materialEntitlementFlags.view;
   const canCreateMaterialCatalog = materialEntitlementFlags.create;
@@ -9399,18 +9422,36 @@ export default function App() {
   async function loadProjects(
     activeToken = token,
     nextOffset = offset,
-    filters = projectFilters,
+    filters = appliedProjectFilters,
+    viewer = user,
   ) {
     if (!activeToken) {
       return;
     }
 
+    if (!canViewProjects(viewer)) {
+      const fallbackView = canCreateProjects(viewer) ? "createProject" : "home";
+      setActiveView(fallbackView);
+      activeViewRef.current = fallbackView;
+      localStorage.setItem(ACTIVE_VIEW_STORAGE_KEY, fallbackView);
+      setStatus({ message: t.projectViewRestricted, tone: "info" });
+      return;
+    }
+
     setLoading(true);
+    const requestFilters = {
+      ...filters,
+    };
+
+    if (viewer?.role !== "admin") {
+      delete requestFilters.ownership_scope;
+    }
+
     const result = await listProjects(
       activeToken,
       PAGE_SIZE,
       nextOffset,
-      filters,
+      requestFilters,
     );
     setLoading(false);
 
@@ -9423,6 +9464,46 @@ export default function App() {
     setTotal(result.total);
     setOffset(result.offset);
   }
+
+  async function loadProjectQuota(activeToken = token, viewer = user) {
+    if (!activeToken || !canCreateProjects(viewer)) {
+      setProjectOwnershipQuota(null);
+      setProjectOwnershipQuotaError("");
+      setProjectOwnershipQuotaLoaded(false);
+      setProjectOwnershipQuotaLoading(false);
+      return null;
+    }
+
+    setProjectOwnershipQuotaLoading(true);
+    setProjectOwnershipQuotaError("");
+
+    const result = await getProjectQuota(activeToken);
+    setProjectOwnershipQuotaLoading(false);
+
+    if (!result.success) {
+      setProjectOwnershipQuota(null);
+      setProjectOwnershipQuotaError(result.error || t.unableToLoadProjects);
+      setProjectOwnershipQuotaLoaded(true);
+      return null;
+    }
+
+    const quota = result.project_quota || result.quota || result;
+    setProjectOwnershipQuota(quota);
+    setProjectOwnershipQuotaLoaded(true);
+    return quota;
+  }
+
+  useEffect(() => {
+    if (!token) {
+      return;
+    }
+
+    if (activeView !== "projects" && activeView !== "createProject") {
+      return;
+    }
+
+    loadProjectQuota(token, user);
+  }, [activeView, token, user?.entitlements, user?.id, user?.role]);
 
   async function loadSpecificationCatalog() {
     const result = await getSpecificationCatalog();
@@ -13518,7 +13599,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
   }
 
   async function loadHomeView(activeToken = token, viewer = user) {
-    await loadProjects(activeToken, 0);
+    await loadProjects(activeToken, 0, appliedProjectFilters, viewer);
     await loadMaterialsCatalog(activeToken, { category: "dsp", search: "" });
     await loadFittingsCatalog(activeToken, {
       search: "",
@@ -13537,6 +13618,16 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
 
   async function loadProject(projectId, options = {}) {
     const requestedTab = options.projectTab || "data";
+
+    if (!canViewProjects(user)) {
+      const fallbackView = canCreateProjects(user) ? "createProject" : "home";
+      setActiveView(fallbackView);
+      activeViewRef.current = fallbackView;
+      localStorage.setItem(ACTIVE_VIEW_STORAGE_KEY, fallbackView);
+      setStatus({ message: t.projectViewRestricted, tone: "info" });
+      return;
+    }
+
     const projectResult = await getProject(token, projectId);
 
     if (!projectResult.success) {
@@ -13652,6 +13743,10 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
     setUser(result.user);
     setActiveView("home");
     setSelectedProject(null);
+    setProjectOwnershipQuota(null);
+    setProjectOwnershipQuotaLoading(false);
+    setProjectOwnershipQuotaLoaded(false);
+    setProjectOwnershipQuotaError("");
     setStatus("");
   }
 
@@ -13717,6 +13812,10 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
     });
     setViyarAction("");
     setSelectedProject(null);
+    setProjectOwnershipQuota(null);
+    setProjectOwnershipQuotaLoading(false);
+    setProjectOwnershipQuotaLoaded(false);
+    setProjectOwnershipQuotaError("");
     setHistoryItems([]);
     setCuttingItems([]);
     setCuttingAssembly({});
@@ -14001,11 +14100,19 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
     }
 
     if (nextView === "projects") {
-      await loadProjects(token, offset);
+      await loadProjects(token, offset, appliedProjectFilters, viewer);
       return;
     }
 
     if (nextView === "createProject") {
+      if (!canCreateProjects(viewer)) {
+        const fallbackView = canViewProjects(viewer) ? "projects" : "home";
+        setActiveView(fallbackView);
+        activeViewRef.current = fallbackView;
+        localStorage.setItem(ACTIVE_VIEW_STORAGE_KEY, fallbackView);
+        setStatus({ message: t.projectCreateRestricted, tone: "info" });
+        return;
+      }
       return;
     }
 
@@ -15226,11 +15333,29 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
   async function handleApplyProjectFilters(event) {
     event.preventDefault();
 
+    setAppliedProjectFilters(projectFilters);
     await loadProjects(token, 0, projectFilters);
+  }
+
+  async function handleProjectOwnershipScopeChange(event) {
+    const nextOwnershipScope = event.target.value;
+    const nextDraftFilters = {
+      ...projectFilters,
+      ownership_scope: nextOwnershipScope,
+    };
+    const nextAppliedProjectFilters = {
+      ...appliedProjectFilters,
+      ownership_scope: nextOwnershipScope,
+    };
+
+    setProjectFilters(nextDraftFilters);
+    setAppliedProjectFilters(nextAppliedProjectFilters);
+    await loadProjects(token, 0, nextAppliedProjectFilters, user);
   }
 
   async function handleResetProjectFilters() {
     setProjectFilters(DEFAULT_PROJECT_FILTERS);
+    setAppliedProjectFilters(DEFAULT_PROJECT_FILTERS);
     await loadProjects(token, 0, DEFAULT_PROJECT_FILTERS);
   }
 
@@ -15332,6 +15457,11 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
     event.preventDefault();
 
     if (!canCreateNewProject) {
+      setStatus({ message: t.projectCreateRestricted, tone: "info" });
+      return;
+    }
+
+    if (!canSubmitCreateProject) {
       return;
     }
 
@@ -15366,9 +15496,10 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
     setAiScanResult(null);
     setAiScanSession(null);
     setProjectFilters(DEFAULT_PROJECT_FILTERS);
+    setAppliedProjectFilters(DEFAULT_PROJECT_FILTERS);
     setStatus({ message: t.projectCreated, tone: "success" });
     setActiveView("projects");
-    await loadProjects(token, 0, DEFAULT_PROJECT_FILTERS);
+    await loadProjects(token, 0, DEFAULT_PROJECT_FILTERS, user);
 
     if (projectId) {
       await loadProject(projectId);
@@ -15402,7 +15533,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
 
     setStatus({ message: t.projectUpdated, tone: "success" });
     await loadProject(selectedProjectId);
-    await loadProjects(token, offset);
+    await loadProjects(token, offset, appliedProjectFilters, user);
   }
 
   function openRollbackConfirm(version) {
@@ -15513,7 +15644,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
     await loadProject(selectedProjectId);
     setActiveProjectTab("history");
     await loadProjectHistory(selectedProjectId);
-    await loadProjects(token, offset);
+    await loadProjects(token, offset, appliedProjectFilters, user);
   }
 
   async function handleDelete() {
@@ -15547,7 +15678,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
     setProductionLoaded(false);
     setActiveProjectTab("data");
     setActiveView("projects");
-    await loadProjects(token, offset);
+    await loadProjects(token, offset, appliedProjectFilters, user);
   }
 
   useEffect(() => {
@@ -15607,7 +15738,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
           return;
         }
 
-        await loadProjects(token, 0);
+        await loadProjects(token, 0, appliedProjectFilters, loadedUser);
       } finally {
         if (tokenRef.current === token) {
           setAuthChecking(false);
@@ -16059,20 +16190,22 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
             >
               {t.home}
             </button>
-            <button
-              className={
-                activeView === "projects" || activeView === "projectDetails"
-                  ? "active"
-                  : ""
-              }
-              onClick={() => {
-                switchView("projects");
-                closeSidebarOnMobile();
-              }}
-              type="button"
-            >
-              {t.projects}
-            </button>
+            {canViewProjects(user) ? (
+              <button
+                className={
+                  activeView === "projects" || activeView === "projectDetails"
+                    ? "active"
+                    : ""
+                }
+                onClick={() => {
+                  switchView("projects");
+                  closeSidebarOnMobile();
+                }}
+                type="button"
+              >
+                {t.projects}
+              </button>
+            ) : null}
             {canCreateNewProject ? (
               <button
                 className={activeView === "createProject" ? "active" : ""}
@@ -16719,6 +16852,22 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
           </section>
         ) : activeView === "projects" ? (
           <section className="table-panel full-panel">
+            {canCreateNewProject ? (
+              <div
+                className="project-quota-banner"
+                style={{ margin: "0 0 16px" }}
+              >
+                <span>
+                  {projectOwnershipQuotaLoading
+                    ? language === "uk"
+                      ? "Завантаження ліміту..."
+                      : "Loading quota..."
+                    : projectOwnershipQuotaError
+                      ? projectOwnershipQuotaError
+                      : projectOwnershipQuotaLabel}
+                </span>
+              </div>
+            ) : null}
             <form
               className="project-filter-form"
               onSubmit={handleApplyProjectFilters}
@@ -16849,19 +16998,22 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                   value={projectFilters.height_max}
                 />
               </label>
-              <label className="toggle-label filter-toggle">
-                <input
-                  checked={projectFilters.only_mine}
-                  onChange={(event) =>
-                    setProjectFilters({
-                      ...projectFilters,
-                      only_mine: event.target.checked,
-                    })
-                  }
-                  type="checkbox"
-                />
-                {t.onlyMine}
-              </label>
+              {user?.role === "admin" ? (
+                <label>
+                  {language === "uk" ? "Власник" : "Owner"}
+                  <select
+                    disabled={loading}
+                    onChange={handleProjectOwnershipScopeChange}
+                    value={projectFilters.ownership_scope}
+                  >
+                    {PROJECT_OWNERSHIP_SCOPE_OPTIONS.map((scope) => (
+                      <option key={scope} value={scope}>
+                        {getProjectOwnershipScopeLabel(scope, language)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
               <button
                 className="primary-button filter-button"
                 disabled={loading}
@@ -16886,6 +17038,9 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                   <th>{t.size}</th>
                   <th>{t.sections}</th>
                   <th>{t.drawers}</th>
+                  {user?.role === "admin" ? (
+                    <th>{language === "uk" ? "Власник" : "Owner"}</th>
+                  ) : null}
                   <th>{t.updated}</th>
                 </tr>
               </thead>
@@ -16903,6 +17058,9 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                     </td>
                     <td>{project.sections}</td>
                     <td>{formatDrawers(project.drawers, t)}</td>
+                    {user?.role === "admin" ? (
+                      <td>{getProjectOwnerLabel(project, projectOwnerMap, user, language)}</td>
+                    ) : null}
                     <td>{formatDateTime(project.updated_at, t)}</td>
                   </tr>
                 ))}
@@ -16976,6 +17134,21 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                 <span className="project-start-current-tier">
                   {userTierLabel}
                 </span>
+              </div>
+              <div className="project-form-caption">
+                {projectOwnershipQuotaError ? (
+                  <span>
+                    {language === "uk"
+                      ? "Не вдалося перевірити доступний ліміт проєктів."
+                      : "Unable to verify the available project limit."}
+                  </span>
+                ) : isProjectCreationBlockedByQuotaHelper(projectOwnershipQuota) ? (
+                  <span>
+                    {language === "uk"
+                      ? "Досягнуто ліміт проєктів для вашого тарифу."
+                      : "You have reached the project limit for your plan."}
+                  </span>
+                ) : null}
               </div>
 
               <div className="project-start-grid">
@@ -17337,10 +17510,12 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
                   value={newProjectForm.notes}
                 />
               </label>
-              <button className="primary-button wide-button" disabled={loading} type="submit">
-                <Plus size={18} />
-                {t.createProject}
-              </button>
+              {canSubmitCreateProject ? (
+                <button className="primary-button wide-button" disabled={loading} type="submit">
+                  <Plus size={18} />
+                  {t.createProject}
+                </button>
+              ) : null}
             </form>
           </section>
         ) : activeView === "projectDetails" ? (

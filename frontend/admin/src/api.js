@@ -908,6 +908,12 @@ export async function listProjects(token, limit, offset, filters = {}) {
   });
 }
 
+export async function getProjectQuota(token) {
+  return request("/project/quota", {
+    headers: authHeaders(token),
+  });
+}
+
 export async function generateProject(token, project) {
   return request("/project/generate", {
     method: "POST",

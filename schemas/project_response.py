@@ -185,6 +185,24 @@ class ProjectListResponseSchema(BaseModel):
     projects: List[ProjectResponseItemSchema]
 
 
+class ProjectQuotaItemResponseSchema(BaseModel):
+
+    usage: int
+
+    limit: Optional[int] = None
+
+    is_unlimited: bool = False
+
+    can_create: bool = False
+
+
+class ProjectQuotaResponseSchema(BaseModel):
+
+    success: bool
+
+    project_quota: ProjectQuotaItemResponseSchema
+
+
 class ProjectHistoryResponseSchema(BaseModel):
 
     success: bool
