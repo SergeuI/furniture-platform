@@ -31,6 +31,9 @@ from schemas.fitting_holes import (
     FittingHoleTemplateOperationResponseSchema,
     FittingHoleTemplateUpdate,
 )
+from schemas.processing_operations import (
+    ProcessingOperationPreviewResponseSchema,
+)
 from database.repositories.fitting_hole_service_rule_repository import (
     create_fitting_hole_service_rule,
     deactivate_fitting_hole_service_rule,
@@ -40,6 +43,7 @@ from database.repositories.fitting_hole_service_rule_repository import (
 from services.entitlement_service import EntitlementService
 from services.fitting_holes_service import FittingHolesService
 from services.fitting_hole_service_preview import build_fitting_hole_service_preview
+from services.processing_operation_adapter import ProcessingOperationAdapter
 
 
 router = APIRouter()
@@ -538,6 +542,38 @@ async def get_fitting_hole_service_preview_route(
     return {
         "success": True,
         **preview,
+    }
+
+
+@router.get(
+    "/templates/{template_id}/operations-preview",
+    response_model=ProcessingOperationPreviewResponseSchema,
+)
+async def get_fitting_hole_operations_preview_route(
+    template_id: int,
+    current_user = Depends(require_fitting_holes_use),
+):
+    with FittingHolesService() as service:
+        template = service.get_template(template_id)
+        if not template:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Template with id={template_id} does not exist",
+            )
+
+        points = service.list_hole_points(template_id)
+
+    adapter = ProcessingOperationAdapter()
+    operations = adapter.build_operations(
+        template,
+        points,
+        current_user_id=getattr(current_user, "id", None),
+    )
+
+    return {
+        "success": True,
+        "template": _serialize_template(template),
+        "operations": operations,
     }
 
 
