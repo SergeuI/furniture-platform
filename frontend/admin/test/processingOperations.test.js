@@ -4,6 +4,10 @@ import test from "node:test";
 import { getProcessingOperationTypes } from "../src/api.js";
 import {
   buildProcessingOperationTypeViewModels,
+  getProcessingOperationTypeCategoryLabel,
+  getProcessingOperationTypeFieldLabel,
+  getProcessingOperationTypeGeometryKindLabel,
+  getProcessingOperationTypePricingUnitLabel,
   getProcessingOperationTypeStatusLabel,
 } from "../src/processingOperationTypes.js";
 
@@ -55,6 +59,11 @@ test("processing operation types api helper calls the new registry endpoint", as
 });
 
 test("processing operation type helpers translate status and keep false capabilities inactive", () => {
+  assert.equal(getProcessingOperationTypeCategoryLabel("drilling", "uk"), "Свердління");
+  assert.equal(getProcessingOperationTypeGeometryKindLabel("cylinder", "uk"), "Циліндр");
+  assert.equal(getProcessingOperationTypeFieldLabel("diameter_mm", "uk"), "Діаметр");
+  assert.equal(getProcessingOperationTypePricingUnitLabel("piece", "uk"), "За штуку");
+
   const viewModels = buildProcessingOperationTypeViewModels(
     [
       {
@@ -91,7 +100,12 @@ test("processing operation type helpers translate status and keep false capabili
 
   assert.equal(viewModels.length, 9);
   assert.equal(viewModels[0].status_label, "Працює");
+  assert.equal(viewModels[0].category_label, "Свердління");
+  assert.equal(viewModels[0].geometry_kind_label, "Циліндр");
+  assert.deepEqual(viewModels[0].required_field_labels, ["X", "Y", "Z", "Діаметр"]);
   assert.deepEqual(viewModels[0].optional_fields, []);
+  assert.deepEqual(viewModels[0].optional_field_labels, []);
+  assert.deepEqual(viewModels[0].pricing_unit_labels, ["За штуку"]);
   assert.equal(
     viewModels[0].capability_items.find((item) => item.key === "estimate_export").active,
     false,

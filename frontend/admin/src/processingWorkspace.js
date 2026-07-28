@@ -104,16 +104,16 @@ const PROCESSING_OVERVIEW_CARDS = [
   {
     key: "operations-preview",
     label: {
-      en: "operations-preview",
-      uk: "operations-preview",
+      en: "Operation preview",
+      uk: "Попередній перегляд операцій",
     },
     status: {
       en: "Working",
       uk: "Працює",
     },
     description: {
-      en: "Read-only adapter for the new processing operation format.",
-      uk: "Read-only adapter для нового універсального формату операцій.",
+      en: "Read-only preview of the current processing operation registry.",
+      uk: "Лише для читання: перегляд поточного реєстру операцій обробки.",
     },
   },
   {

@@ -134,7 +134,8 @@ test("processing overview cards use the current working and planned statuses", (
   const cards = getProcessingOverviewCards("uk");
 
   assert.ok(cards.some((card) => card.label === "Отвори" && card.status === "Працює"));
-  assert.ok(cards.some((card) => card.label === "operations-preview" && card.status === "Працює"));
+  assert.ok(cards.some((card) => card.label === "Попередній перегляд операцій" && card.status === "Працює"));
+  assert.equal(cards.some((card) => card.label === "operations-preview"), false);
   assert.ok(cards.some((card) => card.label === "Пази" && card.status === "Заплановано"));
   assert.ok(cards.some((card) => card.label === "Ціни компаній" && card.status === "Заплановано"));
 });

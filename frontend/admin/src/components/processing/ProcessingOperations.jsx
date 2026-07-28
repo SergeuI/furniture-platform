@@ -13,6 +13,18 @@ function formatList(values, language) {
   return values.join(", ");
 }
 
+function renderRow(label, value, language) {
+  return (
+    <div>
+      <span>
+        {label}
+        {language === "uk" ? ": " : ": "}
+      </span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
 function OperationTypeCard({ item, language }) {
   const statusBadgeClass = item.status === "available" ? "service-tree-badge live" : "service-tree-badge subtle";
 
@@ -27,30 +39,12 @@ function OperationTypeCard({ item, language }) {
       </div>
 
       <div className="settings-info-grid">
-        <div>
-          <span>{language === "uk" ? "Категорія" : "Category"}</span>
-          <strong>{item.category}</strong>
-        </div>
-        <div>
-          <span>{language === "uk" ? "Геометрія" : "Geometry"}</span>
-          <strong>{item.geometry_kind}</strong>
-        </div>
-        <div>
-          <span>{language === "uk" ? "Обов’язкові поля" : "Required fields"}</span>
-          <strong>{formatList(item.required_fields, language)}</strong>
-        </div>
-        <div>
-          <span>{language === "uk" ? "Додаткові поля" : "Optional fields"}</span>
-          <strong>{formatList(item.optional_fields, language)}</strong>
-        </div>
-        <div>
-          <span>{language === "uk" ? "Одиниці ціни" : "Pricing units"}</span>
-          <strong>{formatList(item.pricing_units, language)}</strong>
-        </div>
-        <div>
-          <span>{language === "uk" ? "Версія" : "Version"}</span>
-          <strong>{item.version}</strong>
-        </div>
+        {renderRow(language === "uk" ? "Категорія" : "Category", item.category_label, language)}
+        {renderRow(language === "uk" ? "Геометрія" : "Geometry", item.geometry_kind_label, language)}
+        {renderRow(language === "uk" ? "Обов’язкові поля" : "Required fields", formatList(item.required_field_labels, language), language)}
+        {renderRow(language === "uk" ? "Додаткові поля" : "Optional fields", formatList(item.optional_field_labels, language), language)}
+        {renderRow(language === "uk" ? "Одиниці розрахунку" : "Pricing units", formatList(item.pricing_unit_labels, language), language)}
+        {renderRow(language === "uk" ? "Версія" : "Version", item.version, language)}
       </div>
 
       <div className="settings-actions" style={{ flexWrap: "wrap", gap: "0.5rem", marginTop: "0.75rem" }}>

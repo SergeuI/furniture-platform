@@ -12,13 +12,13 @@ import {
 function buildProcessingWorkspaceIntro(language) {
   if (language === "uk") {
     return {
-      description: "Перший каркас нового напряму без дублювання існуючого редактора.",
+      description: "Інтерфейс поступово розвивається без записів операцій у БД і без дублювання чинної присадки фурнітури.",
       title: "Обробка деталей",
     };
   }
 
   return {
-    description: "The first skeleton of the new direction without duplicating the existing editor.",
+    description: "The interface grows without database writes and without duplicating the current fitting holes workflow.",
     title: "Processing",
   };
 }
@@ -55,8 +55,8 @@ export default function ProcessingWorkspace({
           </div>
           <p>
             {language === "uk"
-              ? "Структура поки що каркасна: без записів у БД, без нового router і без дублювання editor."
-              : "The structure is skeletal for now: no database writes, no new router, and no duplicated editor."}
+              ? "Інтерфейс поки що каркасний: без записів до БД і без дублювання чинної присадки фурнітури."
+              : "The interface is still skeletal: no database writes and no duplication of the current fitting holes workflow."}
           </p>
         </div>
       </article>

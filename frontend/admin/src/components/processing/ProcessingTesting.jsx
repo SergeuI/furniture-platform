@@ -62,13 +62,13 @@ function OperationPreviewCard({ operation, language }) {
           </strong>
         </div>
         <div>
-          <span>{language === "uk" ? "catalog item" : "Catalog item"}</span>
+          <span>{language === "uk" ? "Каталожний елемент" : "Catalog item"}</span>
           <strong>{formatValue(operation.service_mapping?.resolved_service_catalog_item_id, language)}</strong>
         </div>
       </div>
 
       <details className="settings-card" style={{ marginTop: "0.75rem" }}>
-        <summary>{language === "uk" ? "Технічні дані JSON" : "Technical JSON data"}</summary>
+        <summary>{language === "uk" ? "Технічні JSON-дані" : "Technical JSON data"}</summary>
         <pre style={{ overflowX: "auto", whiteSpace: "pre-wrap" }}>{JSON.stringify(operation, null, 2)}</pre>
       </details>
     </article>
@@ -129,13 +129,13 @@ export default function ProcessingTesting({
           </span>
           <h3>
             {language === "uk"
-              ? "Перевірка read-only operations-preview"
-              : "Read-only operations-preview check"}
+              ? "Перевірка попереднього перегляду операцій"
+              : "Read-only operation preview check"}
           </h3>
           <p>
             {language === "uk"
-              ? "Ця сторінка лише читає вже готовий endpoint і не створює, не редагує та не зберігає дані."
-              : "This page only reads the existing endpoint and does not create, edit, or save data."}
+              ? "Ця сторінка лише читає вже готовий перегляд операцій і не створює, не редагує та не зберігає дані."
+              : "This page only reads the existing operation preview and does not create, edit, or save data."}
           </p>
         </div>
       </article>
@@ -146,8 +146,8 @@ export default function ProcessingTesting({
             <h3>{language === "uk" ? "Завантажити операції" : "Load operations"}</h3>
             <p>
               {language === "uk"
-                ? "Введіть ID шаблону, щоб подивитися read-only результат адаптера."
-                : "Enter a template ID to inspect the read-only adapter result."}
+                ? "Введіть ID шаблону, щоб подивитися читабельний результат read-only перегляду."
+                : "Enter a template ID to inspect the readable read-only preview result."}
             </p>
           </div>
         </div>
@@ -179,8 +179,8 @@ export default function ProcessingTesting({
               <h3>{language === "uk" ? "Коротка інформація про шаблон" : "Template summary"}</h3>
               <p>
                 {language === "uk"
-                  ? "Дані нижче приходять з існуючого read-only endpoint operations-preview."
-                  : "The data below comes from the existing read-only operations-preview endpoint."}
+                  ? "Дані нижче приходять з існуючого read-only перегляду операцій."
+                  : "The data below comes from the existing read-only operation preview."}
               </p>
             </div>
           </div>
