@@ -289,6 +289,10 @@ export function getProcessingWorkspaceSidebarTabs({
   }));
 }
 
+export function getProcessingWorkspaceTabTargetView(tabKey) {
+  return tabKey === "fitting-holes" ? "catalogHoles" : "processing";
+}
+
 export function normalizeProcessingWorkspaceTab(
   tabKey,
   {

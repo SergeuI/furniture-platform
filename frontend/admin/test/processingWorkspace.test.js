@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   getProcessingOverviewCards,
   getProcessingWorkspaceSidebarTabs,
+  getProcessingWorkspaceTabTargetView,
   getProcessingWorkspaceTabs,
   normalizeProcessingWorkspaceTab,
 } from "../src/processingWorkspace.js";
@@ -54,6 +55,8 @@ test("processing workspace tabs keep admin pages and restrict non-admin users to
     }),
     "overview",
   );
+  assert.equal(getProcessingWorkspaceTabTargetView("fitting-holes"), "catalogHoles");
+  assert.equal(getProcessingWorkspaceTabTargetView("overview"), "processing");
 });
 
 test("processing sidebar tabs show only names without status text", () => {

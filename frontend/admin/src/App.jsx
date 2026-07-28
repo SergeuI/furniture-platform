@@ -42,6 +42,7 @@ import EntitlementsAdminPage from "./components/EntitlementsAdminPage.jsx";
 import ProcessingWorkspace from "./components/processing/ProcessingWorkspace.jsx";
 import {
   getProcessingWorkspaceSidebarTabs,
+  getProcessingWorkspaceTabTargetView,
   normalizeProcessingWorkspaceTab,
   PROCESSING_WORKSPACE_STORAGE_KEY,
 } from "./processingWorkspace.js";
@@ -6858,7 +6859,10 @@ export default function App() {
     () => localStorage.getItem(PROCESSING_WORKSPACE_STORAGE_KEY) || "overview",
   );
   const [isProcessingMenuOpen, setIsProcessingMenuOpen] = useState(
-    () => normalizeCatalogView(localStorage.getItem(ACTIVE_VIEW_STORAGE_KEY) || "home") === "processing",
+    () => {
+      const storedView = normalizeCatalogView(localStorage.getItem(ACTIVE_VIEW_STORAGE_KEY) || "home");
+      return storedView === "processing" || storedView === "catalogHoles";
+    },
   );
   const [fittingItems, setFittingItems] = useState([]);
   const [fittingCategories, setFittingCategories] = useState([]);
@@ -8512,6 +8516,7 @@ export default function App() {
   const isCatalogManualView = activeView === "catalogManual";
   const isCatalogHubView = activeView === "catalogHub";
   const isProcessingView = activeView === "processing";
+  const isProcessingSectionView = isProcessingView || isCatalogHolesRequestedView;
   const activeCity = (user?.city || "").trim();
   const canAccessProcessingWorkspace = user?.role === "admin" || canViewFittingHoles;
   const processingWorkspaceTabs = useMemo(
@@ -8531,6 +8536,7 @@ export default function App() {
       }),
     [activeProcessingTab, canViewFittingHoles, user?.role],
   );
+  const processingWorkspaceTab = normalizedProcessingTab === "fitting-holes" ? "overview" : normalizedProcessingTab;
   const isCatalogView =
     isCatalogHubView ||
     isCatalogMaterialsView ||
@@ -14417,6 +14423,10 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
       setIsProcessingMenuOpen(true);
     }
 
+    if (nextView === "catalogHoles") {
+      setIsProcessingMenuOpen(true);
+    }
+
     setActiveView(nextView);
     activeViewRef.current = nextView;
     setStatus("");
@@ -16619,10 +16629,10 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
               </>
             ) : null}
             {canAccessProcessingWorkspace ? (
-              <div className={`nav-group${isProcessingView ? " active" : ""}`}>
-                <div className={`nav-group-header${isProcessingView ? " active" : ""}`}>
+              <div className={`nav-group${isProcessingSectionView ? " active" : ""}`}>
+                <div className={`nav-group-header${isProcessingSectionView ? " active" : ""}`}>
                   <button
-                    className={`nav-group-link${isProcessingView ? " active" : ""}`}
+                    className={`nav-group-link${isProcessingSectionView ? " active" : ""}`}
                     onClick={() => {
                       switchView("processing");
                       closeSidebarOnMobile();
@@ -16635,7 +16645,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   </button>
                   <button
                     aria-expanded={isProcessingMenuOpen}
-                    className={`nav-group-toggle${isProcessingView ? " active" : ""}`}
+                    className={`nav-group-toggle${isProcessingSectionView ? " active" : ""}`}
                     onClick={() => setIsProcessingMenuOpen((current) => !current)}
                     type="button"
                   >
@@ -16653,7 +16663,8 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                         key={tab.key}
                         onClick={() => {
                           setActiveProcessingTab(tab.key);
-                          switchView("processing");
+                          setIsProcessingMenuOpen(true);
+                          switchView(getProcessingWorkspaceTabTargetView(tab.key));
                           closeSidebarOnMobile();
                         }}
                         type="button"
@@ -17255,7 +17266,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
           </section>
         ) : isProcessingView ? (
           <ProcessingWorkspace
-            activeTab={normalizedProcessingTab}
+            activeTab={processingWorkspaceTab}
             language={language}
             onOpenFittingHolesEditor={() => switchView("catalogHoles")}
             token={token}

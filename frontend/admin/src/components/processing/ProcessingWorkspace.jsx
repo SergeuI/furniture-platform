@@ -1,4 +1,3 @@
-import ProcessingFittingHoles from "./ProcessingFittingHoles.jsx";
 import ProcessingOperations from "./ProcessingOperations.jsx";
 import ProcessingOverview from "./ProcessingOverview.jsx";
 import ProcessingPricingRules from "./ProcessingPricingRules.jsx";
@@ -68,11 +67,6 @@ export default function ProcessingWorkspace({
         <ProcessingOperations language={language} />
       ) : activeTab === "templates" ? (
         <ProcessingTemplates
-          language={language}
-          onOpenFittingHolesEditor={onOpenFittingHolesEditor}
-        />
-      ) : activeTab === "fitting-holes" ? (
-        <ProcessingFittingHoles
           language={language}
           onOpenFittingHolesEditor={onOpenFittingHolesEditor}
         />
