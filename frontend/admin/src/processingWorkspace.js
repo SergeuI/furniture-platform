@@ -308,6 +308,28 @@ export function shouldAutoOpenCatalogMenu(activeView) {
   ].includes(String(activeView || ""));
 }
 
+export function resolveActiveProcessingNavigationKey({
+  activeView = "",
+  activeProcessingTab = "overview",
+  canUseFittingHoles = false,
+  isAdmin = false,
+} = {}) {
+  if (activeView === "catalogHoles") {
+    return "fitting-holes";
+  }
+
+  if (activeView !== "processing") {
+    return null;
+  }
+
+  const normalizedTab = normalizeProcessingWorkspaceTab(activeProcessingTab, {
+    canUseFittingHoles,
+    isAdmin,
+  });
+
+  return normalizedTab === "fitting-holes" ? "overview" : normalizedTab;
+}
+
 export function normalizeProcessingWorkspaceTab(
   tabKey,
   {

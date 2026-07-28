@@ -6,6 +6,7 @@ import {
   getProcessingWorkspaceSidebarTabs,
   getProcessingWorkspaceTabTargetView,
   getProcessingWorkspaceTabs,
+  resolveActiveProcessingNavigationKey,
   normalizeProcessingWorkspaceTab,
   shouldAutoOpenCatalogMenu,
 } from "../src/processingWorkspace.js";
@@ -65,6 +66,45 @@ test("catalog holes no longer auto-opens the directories group", () => {
   assert.equal(shouldAutoOpenCatalogMenu("catalogMaterials"), true);
   assert.equal(shouldAutoOpenCatalogMenu("catalogFittings"), true);
   assert.equal(shouldAutoOpenCatalogMenu("catalogValues"), true);
+});
+
+test("processing navigation key stays aligned with the real opened page", () => {
+  assert.equal(
+    resolveActiveProcessingNavigationKey({
+      activeView: "catalogHoles",
+      activeProcessingTab: "overview",
+      canUseFittingHoles: true,
+      isAdmin: false,
+    }),
+    "fitting-holes",
+  );
+  assert.equal(
+    resolveActiveProcessingNavigationKey({
+      activeView: "processing",
+      activeProcessingTab: "fitting-holes",
+      canUseFittingHoles: true,
+      isAdmin: true,
+    }),
+    "overview",
+  );
+  assert.equal(
+    resolveActiveProcessingNavigationKey({
+      activeView: "processing",
+      activeProcessingTab: "operations",
+      canUseFittingHoles: true,
+      isAdmin: true,
+    }),
+    "operations",
+  );
+  assert.equal(
+    resolveActiveProcessingNavigationKey({
+      activeView: "users",
+      activeProcessingTab: "operations",
+      canUseFittingHoles: true,
+      isAdmin: true,
+    }),
+    null,
+  );
 });
 
 test("processing sidebar tabs show only names without status text", () => {

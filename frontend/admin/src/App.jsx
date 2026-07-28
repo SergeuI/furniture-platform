@@ -43,7 +43,7 @@ import ProcessingWorkspace from "./components/processing/ProcessingWorkspace.jsx
 import {
   getProcessingWorkspaceSidebarTabs,
   getProcessingWorkspaceTabTargetView,
-  normalizeProcessingWorkspaceTab,
+  resolveActiveProcessingNavigationKey,
   PROCESSING_WORKSPACE_STORAGE_KEY,
   shouldAutoOpenCatalogMenu,
 } from "./processingWorkspace.js";
@@ -8517,7 +8517,6 @@ export default function App() {
   const isCatalogManualView = activeView === "catalogManual";
   const isCatalogHubView = activeView === "catalogHub";
   const isProcessingView = activeView === "processing";
-  const isProcessingSectionView = isProcessingView || isCatalogHolesRequestedView;
   const activeCity = (user?.city || "").trim();
   const canAccessProcessingWorkspace = user?.role === "admin" || canViewFittingHoles;
   const processingWorkspaceTabs = useMemo(
@@ -8529,15 +8528,18 @@ export default function App() {
       }),
     [canViewFittingHoles, language, user?.role],
   );
-  const normalizedProcessingTab = useMemo(
+  const activeProcessingNavigationKey = useMemo(
     () =>
-      normalizeProcessingWorkspaceTab(activeProcessingTab, {
-        isAdmin: user?.role === "admin",
+      resolveActiveProcessingNavigationKey({
+        activeView,
+        activeProcessingTab,
         canUseFittingHoles: canViewFittingHoles,
+        isAdmin: user?.role === "admin",
       }),
-    [activeProcessingTab, canViewFittingHoles, user?.role],
+    [activeProcessingTab, activeView, canViewFittingHoles, user?.role],
   );
-  const processingWorkspaceTab = normalizedProcessingTab === "fitting-holes" ? "overview" : normalizedProcessingTab;
+  const processingWorkspaceTab = activeProcessingNavigationKey || "overview";
+  const isProcessingSectionView = activeProcessingNavigationKey !== null;
   const isCatalogView = shouldAutoOpenCatalogMenu(activeView);
   const fastenerItems = useMemo(
     () => fittingItems.filter((item) => isFastenerFitting(item)),
@@ -16114,17 +16116,17 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
   }, [activeView]);
 
   useEffect(() => {
-    if (!user?.role) {
+    if (!user?.role || activeProcessingNavigationKey === null) {
       return;
     }
 
-    if (normalizedProcessingTab !== activeProcessingTab) {
-      setActiveProcessingTab(normalizedProcessingTab);
+    if (activeProcessingTab !== activeProcessingNavigationKey) {
+      setActiveProcessingTab(activeProcessingNavigationKey);
       return;
     }
 
-    localStorage.setItem(PROCESSING_WORKSPACE_STORAGE_KEY, activeProcessingTab);
-  }, [activeProcessingTab, normalizedProcessingTab]);
+    localStorage.setItem(PROCESSING_WORKSPACE_STORAGE_KEY, activeProcessingNavigationKey);
+  }, [activeProcessingNavigationKey, activeProcessingTab, user?.role]);
 
   useEffect(() => {
     if (!entitlementsHasUnsavedChanges) {
@@ -16624,6 +16626,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   <button
                     className={`nav-group-link${isProcessingSectionView ? " active" : ""}`}
                     onClick={() => {
+                      setActiveProcessingTab("overview");
                       switchView("processing");
                       closeSidebarOnMobile();
                     }}
@@ -16649,7 +16652,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   <div className="nav-subtabs">
                     {processingWorkspaceTabs.map((tab) => (
                       <button
-                        className={tab.key === activeProcessingTab ? "active" : ""}
+                        className={tab.key === activeProcessingNavigationKey ? "active" : ""}
                         key={tab.key}
                         onClick={() => {
                           setActiveProcessingTab(tab.key);
