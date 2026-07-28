@@ -33,7 +33,10 @@ class ProcessingOperationRegistryTests(unittest.TestCase):
         self.assertFalse(items[0]["capabilities"]["estimate_export"])
         self.assertFalse(items[0]["capabilities"]["cutting_effect"])
 
-        for item in items[1:]:
+        self.assertTrue(items[1]["capabilities"]["operations_preview"])
+        self.assertTrue(items[2]["capabilities"]["operations_preview"])
+
+        for item in items[3:]:
             self.assertEqual(item["status"], "planned")
             self.assertEqual(item["version"], 1)
             self.assertFalse(any(item["capabilities"].values()))

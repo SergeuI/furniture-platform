@@ -90,7 +90,9 @@ PROCESSING_OPERATION_TYPE_REGISTRY: tuple[dict[str, object], ...] = (
             "piece",
             "linear_meter",
         ],
-        "capabilities": _capabilities(),
+        "capabilities": _capabilities(
+            operations_preview=True,
+        ),
         "version": 1,
     },
     {
@@ -114,7 +116,9 @@ PROCESSING_OPERATION_TYPE_REGISTRY: tuple[dict[str, object], ...] = (
         "pricing_units": [
             "linear_meter",
         ],
-        "capabilities": _capabilities(),
+        "capabilities": _capabilities(
+            operations_preview=True,
+        ),
         "version": 1,
     },
     {
