@@ -31,6 +31,9 @@ from api.routes.admin_entitlements import (
 from api.routes.fitting_holes import (
     router as fitting_holes_router
 )
+from api.routes.processing import (
+    router as processing_router
+)
 from api.routes.service_drilling_rules import (
     router as service_drilling_rules_router
 )
@@ -157,6 +160,15 @@ app.include_router(
     prefix="/fitting-holes",
 
     tags=["Fitting Holes"]
+)
+
+app.include_router(
+
+    processing_router,
+
+    prefix="/processing",
+
+    tags=["Processing"]
 )
 
 app.include_router(

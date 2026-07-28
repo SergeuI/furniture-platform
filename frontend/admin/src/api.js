@@ -439,6 +439,12 @@ export async function getProcessingOperationsPreview(token, templateId) {
   });
 }
 
+export async function getProcessingOperationTypes(token) {
+  return request("/processing/operation-types", {
+    headers: authHeaders(token),
+  });
+}
+
 export async function listFittingHoleServiceRules(token) {
   return request("/fitting-holes/service-rules", {
     headers: authHeaders(token),

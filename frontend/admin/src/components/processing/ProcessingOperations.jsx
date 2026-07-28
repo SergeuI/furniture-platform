@@ -1,155 +1,177 @@
-const OPERATION_CARDS = [
-  {
-    key: "hole",
-    status: {
-      en: "Working",
-      uk: "Працює",
-    },
-    title: {
-      en: "Hole",
-      uk: "Отвір",
-    },
-    description: {
-      en: "Supported by the current fitting holes workflow.",
-      uk: "Підтримується через поточну присадку фурнітури.",
-    },
-  },
-  {
-    key: "slot",
-    status: {
-      en: "Planned",
-      uk: "Заплановано",
-    },
-    title: {
-      en: "Slot",
-      uk: "Паз",
-    },
-    description: {
-      en: "Slots will share the same universal operations layer later.",
-      uk: "Пази згодом використовуватимуть спільний шар операцій.",
-    },
-  },
-  {
-    key: "pocket",
-    status: {
-      en: "Planned",
-      uk: "Заплановано",
-    },
-    title: {
-      en: "Pocket",
-      uk: "Вибірка",
-    },
-    description: {
-      en: "Pocket operations are not wired yet.",
-      uk: "Операції вибірок ще не підключені.",
-    },
-  },
-  {
-    key: "rect-cutout",
-    status: {
-      en: "Planned",
-      uk: "Заплановано",
-    },
-    title: {
-      en: "Rectangular cutout",
-      uk: "Прямокутний виріз",
-    },
-    description: {
-      en: "Rectangular cutouts will be added in a later step.",
-      uk: "Прямокутні вирізи додамо на наступному етапі.",
-    },
-  },
-  {
-    key: "contour-cutout",
-    status: {
-      en: "Planned",
-      uk: "Заплановано",
-    },
-    title: {
-      en: "Contour cutout",
-      uk: "Контурний виріз",
-    },
-    description: {
-      en: "Free-form cutouts are reserved for future work.",
-      uk: "Довільні контурні вирізи залишено на майбутнє.",
-    },
-  },
-  {
-    key: "radius",
-    status: {
-      en: "Planned",
-      uk: "Заплановано",
-    },
-    title: {
-      en: "Radius",
-      uk: "Радіус",
-    },
-    description: {
-      en: "Radius operations will eventually affect contour and edge-band length.",
-      uk: "Радіуси згодом впливатимуть на контур і довжину крайки.",
-    },
-  },
-  {
-    key: "milling",
-    status: {
-      en: "Planned",
-      uk: "Заплановано",
-    },
-    title: {
-      en: "Milling",
-      uk: "Фрезерування",
-    },
-    description: {
-      en: "Milling will connect to templates and service pricing later.",
-      uk: "Фрезерування згодом підключиться до шаблонів і цін.",
-    },
-  },
-  {
-    key: "manual",
-    status: {
-      en: "Planned",
-      uk: "Заплановано",
-    },
-    title: {
-      en: "Manual operation",
-      uk: "Ручна операція",
-    },
-    description: {
-      en: "Manual operations are planned as a separate type.",
-      uk: "Ручні операції плануються як окремий тип.",
-    },
-  },
-];
+import { useEffect, useMemo, useState } from "react";
 
-function pickLocalizedText(source, language) {
-  return source?.[language] || source?.uk || source?.en || "";
+import { getProcessingOperationTypes } from "../../api.js";
+import {
+  buildProcessingOperationTypeViewModels,
+} from "../../processingOperationTypes.js";
+
+function formatList(values, language) {
+  if (!Array.isArray(values) || values.length === 0) {
+    return language === "uk" ? "Немає" : "None";
+  }
+
+  return values.join(", ");
 }
 
-export default function ProcessingOperations({ language = "uk" }) {
+function OperationTypeCard({ item, language }) {
+  const statusBadgeClass = item.status === "available" ? "service-tree-badge live" : "service-tree-badge subtle";
+
   return (
-    <section className="table-panel full-panel">
+    <article className="settings-card">
       <div className="settings-card-header">
         <div>
-          <h3>{language === "uk" ? "Операції обробки" : "Processing operations"}</h3>
-          <p>
-            {language === "uk"
-              ? "Показано лише стартовий каркас типів операцій. Тепер робочим є тільки отвір."
-              : "This is only the starter skeleton for operation types. Only holes are active now."}
-          </p>
+          <strong>{item.name}</strong>
+          <p>{item.description}</p>
+        </div>
+        <span className={statusBadgeClass}>{item.status_label}</span>
+      </div>
+
+      <div className="settings-info-grid">
+        <div>
+          <span>{language === "uk" ? "Категорія" : "Category"}</span>
+          <strong>{item.category}</strong>
+        </div>
+        <div>
+          <span>{language === "uk" ? "Геометрія" : "Geometry"}</span>
+          <strong>{item.geometry_kind}</strong>
+        </div>
+        <div>
+          <span>{language === "uk" ? "Обов’язкові поля" : "Required fields"}</span>
+          <strong>{formatList(item.required_fields, language)}</strong>
+        </div>
+        <div>
+          <span>{language === "uk" ? "Додаткові поля" : "Optional fields"}</span>
+          <strong>{formatList(item.optional_fields, language)}</strong>
+        </div>
+        <div>
+          <span>{language === "uk" ? "Одиниці ціни" : "Pricing units"}</span>
+          <strong>{formatList(item.pricing_units, language)}</strong>
+        </div>
+        <div>
+          <span>{language === "uk" ? "Версія" : "Version"}</span>
+          <strong>{item.version}</strong>
         </div>
       </div>
 
-      <div className="dashboard-tile-grid">
-        {OPERATION_CARDS.map((card) => (
-          <article className="dashboard-tile-card" key={card.key}>
-            <div className="dashboard-tile-copy">
-              <strong>{pickLocalizedText(card.title, language)}</strong>
-              <span>{pickLocalizedText(card.description, language)}</span>
-            </div>
-            <span className="service-tree-badge subtle">{pickLocalizedText(card.status, language)}</span>
-          </article>
+      <div className="settings-actions" style={{ flexWrap: "wrap", gap: "0.5rem", marginTop: "0.75rem" }}>
+        {item.capability_items.map((capability) => (
+          <span
+            className={`service-tree-badge${capability.active ? " live" : " subtle"}`}
+            key={capability.key}
+          >
+            {capability.label}: {capability.state_label}
+          </span>
         ))}
       </div>
+    </article>
+  );
+}
+
+export default function ProcessingOperations({ language = "uk", token = "" }) {
+  const [operationTypes, setOperationTypes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [reloadIndex, setReloadIndex] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadOperationTypes() {
+      setLoading(true);
+      setError("");
+
+      const result = await getProcessingOperationTypes(token);
+
+      if (cancelled) {
+        return;
+      }
+
+      if (!result.success) {
+        setOperationTypes([]);
+        setError(result.error || (language === "uk" ? "Не вдалося завантажити реєстр" : "Unable to load registry"));
+        setLoading(false);
+        return;
+      }
+
+      setOperationTypes(Array.isArray(result.items) ? result.items : []);
+      setLoading(false);
+    }
+
+    loadOperationTypes();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [language, reloadIndex, token]);
+
+  const viewModels = useMemo(
+    () => buildProcessingOperationTypeViewModels(operationTypes, language),
+    [language, operationTypes],
+  );
+
+  return (
+    <section className="dashboard-layout">
+      <article className="dashboard-hero-card">
+        <div className="dashboard-hero-copy">
+          <span className="dashboard-eyebrow">
+            {language === "uk" ? "Реєстр типів" : "Type registry"}
+          </span>
+          <h3>{language === "uk" ? "Операції обробки" : "Processing operations"}</h3>
+          <p>
+            {language === "uk"
+              ? "Показано стабільний read-only реєстр типів операцій. Дані надходять із backend без записів у БД."
+              : "This is a stable read-only registry of operation types. The data is loaded from the backend without database writes."}
+          </p>
+        </div>
+        <div className="dashboard-status-card">
+          <div className="dashboard-status-head">
+            <div className="dashboard-status-title">
+              <strong>{language === "uk" ? "Стан реєстру" : "Registry status"}</strong>
+              <p>{loading ? (language === "uk" ? "Завантаження..." : "Loading...") : `${viewModels.length}`}</p>
+            </div>
+            <span className={`dashboard-status-badge${loading ? "" : " live"}`}>
+              {loading ? (language === "uk" ? "Завантаження" : "Loading") : `${viewModels.length} / 9`}
+            </span>
+          </div>
+          <p>
+            {language === "uk"
+              ? "Ключі та описи беруться з окремого registry-ендпоїнта /processing/operation-types."
+              : "Keys and descriptions come from the dedicated /processing/operation-types endpoint."}
+          </p>
+        </div>
+      </article>
+
+      <article className="dashboard-panel">
+        <div className="dashboard-panel-head">
+          <div>
+            <h3>{language === "uk" ? "Список типів" : "Type list"}</h3>
+            <p>
+              {language === "uk"
+                ? "Тут видно 9 типів, їхній статус, геометрію, поля та поточні можливості."
+                : "This list shows the 9 types, their status, geometry, fields, and current capabilities."}
+            </p>
+          </div>
+          <button className="primary-button" disabled={loading} onClick={() => setReloadIndex((value) => value + 1)} type="button">
+            {loading ? (language === "uk" ? "Завантаження..." : "Loading...") : (language === "uk" ? "Оновити" : "Retry")}
+          </button>
+        </div>
+
+        {error ? <p className="hole-template-error">{error}</p> : null}
+      </article>
+
+      {loading ? (
+        <article className="settings-card">
+          <p>{language === "uk" ? "Завантажуємо реєстр типів операцій..." : "Loading operation type registry..."}</p>
+        </article>
+      ) : null}
+
+      {!loading && !error ? (
+        <section className="settings-grid">
+          {viewModels.map((item) => (
+            <OperationTypeCard key={item.key} language={language} item={item} />
+          ))}
+        </section>
+      ) : null}
     </section>
   );
 }

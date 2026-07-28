@@ -64,7 +64,7 @@ export default function ProcessingWorkspace({
       {activeTab === "overview" ? (
         <ProcessingOverview language={language} />
       ) : activeTab === "operations" ? (
-        <ProcessingOperations language={language} />
+        <ProcessingOperations language={language} token={token} />
       ) : activeTab === "templates" ? (
         <ProcessingTemplates
           language={language}
