@@ -13650,7 +13650,11 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
     }
   }
 
-  async function loadHoleTemplateDetails(activeToken = token, templateId = holeSelectedTemplateId) {
+  async function loadHoleTemplateDetails(
+    activeToken = token,
+    templateId = holeSelectedTemplateId,
+    preferredVariantKey = selectedHoleMountingVariantKey,
+  ) {
     if (!activeToken || !templateId) {
       setHoleSelectedTemplate(null);
       setHolePoints([]);
@@ -13684,7 +13688,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
 
     const preserveVariantKey = String(holeMountingVariantRefreshRef.current?.variantKey || "").trim();
     const preserveTemplateId = String(holeMountingVariantRefreshRef.current?.templateId || "").trim();
-    const currentVariantKey = String(selectedHoleMountingVariantKey || "").trim();
+    const currentVariantKey = String(preferredVariantKey || "").trim();
     const templateListMatchById = holeTemplateItems.find((item) => String(item?.id || "") === String(templateId || "")) || null;
     const templateListMatchByVariant =
       holeTemplateItems.find(
@@ -13767,7 +13771,12 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
     }
   }
 
-  async function handleHoleFittingChange(nextFittingId, preferredTemplateId = "", workspaceMode = holeWorkspaceMode) {
+  async function handleHoleFittingChange(
+    nextFittingId,
+    preferredTemplateId = "",
+    workspaceMode = holeWorkspaceMode,
+    preferredVariantKey = selectedHoleMountingVariantKey,
+  ) {
     const nextFitting = fittingItems.find((item) => String(item.id) === String(nextFittingId)) || null;
     setHoleSelectedFittingCategory(nextFitting?.fitting_type || holeSelectedFittingCategory);
     setHoleSelectedFittingId(nextFittingId);
@@ -13796,13 +13805,13 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
       const preferredTemplate = String(preferredTemplateId || "").trim()
         ? templates.find((template) => String(template.id) === String(preferredTemplateId)) || null
         : null;
-      await handleHoleTemplateChange(String((preferredTemplate || templates[0] || {}).id || ""));
+      await handleHoleTemplateChange(String((preferredTemplate || templates[0] || {}).id || ""), preferredVariantKey);
       return;
     }
 
     try {
       setLoading(true);
-      await ensureHoleWorkspaceTemplate(nextFittingId, normalizedSelectedHoleMountingVariantKey);
+      await ensureHoleWorkspaceTemplate(nextFittingId, preferredVariantKey);
       setStatus({ message: "Створено базовий шаблон для присадки", tone: "success" });
     } catch (error) {
       setStatus({
@@ -13852,7 +13861,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
     closeHolePointEditForm();
   }
 
-  async function handleHoleTemplateChange(nextTemplateId) {
+  async function handleHoleTemplateChange(nextTemplateId, preferredVariantKey = selectedHoleMountingVariantKey) {
     setHoleSelectedTemplateId(nextTemplateId);
     setHoleSelectedTemplate(null);
     setHolePoints([]);
@@ -13868,7 +13877,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
       return;
     }
 
-    await loadHoleTemplateDetails(token, nextTemplateId);
+    await loadHoleTemplateDetails(token, nextTemplateId, preferredVariantKey);
   }
 
   async function loadManualServices(activeToken = token, viewer = user) {
@@ -14363,7 +14372,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
     setStatus(t.machiningSaved);
   }
 
-  async function switchView(view, viewer = user) {
+  async function switchView(view, viewer = user, openContext = null) {
     const nextView = normalizeCatalogView(view === "catalog" ? "catalogViyar" : view);
 
     if ((nextView === "catalogFittings" || nextView === "catalogFasteners") && !canViewFittingCatalog) {
@@ -14517,6 +14526,22 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
       closeHoleTemplateCreateForm();
       closeHolePointCreateForm();
       closeHolePointEditForm();
+
+      const contextFittingId = String(openContext?.fittingId || "").trim();
+      const contextTemplateId = String(openContext?.templateId || "").trim();
+      const contextVariantKey = normalizeHoleWorkspaceMountingVariantKey(openContext?.mountingVariantKey || "");
+
+      if (contextFittingId && contextTemplateId) {
+        setHoleWorkspaceMode("existing");
+        setSelectedHoleMountingVariantKey(contextVariantKey || "surface_mount");
+        await handleHoleFittingChange(
+          contextFittingId,
+          contextTemplateId,
+          "existing",
+          contextVariantKey || "surface_mount",
+        );
+      }
+
       return;
     }
 
@@ -17261,7 +17286,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
           <ProcessingWorkspace
             activeTab={processingWorkspaceTab}
             language={language}
-            onOpenFittingHolesEditor={() => switchView("catalogHoles")}
+            onOpenFittingHolesEditor={(context) => switchView("catalogHoles", user, context)}
             token={token}
           />
         ) : activeView === "projects" ? (

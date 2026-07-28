@@ -178,3 +178,11 @@ test("processing workspace forwards token to the templates page", () => {
 
   assert.match(source, /<ProcessingTemplates[\s\S]*token=\{token\}[\s\S]*\/>/);
 });
+
+test("processing app opens catalog holes with the selected template context", () => {
+  const appPath = fileURLToPath(new URL("../src/App.jsx", import.meta.url));
+  const source = readFileSync(appPath, "utf8");
+
+  assert.match(source, /onOpenFittingHolesEditor=\{\(context\) => switchView\("catalogHoles", user, context\)\}/);
+  assert.match(source, /async function switchView\(view, viewer = user, openContext = null\)/);
+});

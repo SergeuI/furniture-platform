@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 import {
+  buildProcessingTemplateEditorContext,
   filterProcessingTemplates,
   getProcessingTemplateDefaultLabel,
   getProcessingFittingDisplayLabel,
@@ -31,6 +34,18 @@ test("processing templates helpers expose readable labels and future categories"
   assert.equal(getProcessingTemplateDefaultLabel({ is_default: true }, "uk"), "За замовчуванням");
   assert.equal(getProcessingTemplatePreviewCountLabel(3, "uk"), "3 операцій");
   assert.equal(getProcessingTemplateDimensionsLabel({ width: 500, height: 300, thickness: 18 }, "uk"), "500 × 300 × 18 мм");
+  assert.deepEqual(
+    buildProcessingTemplateEditorContext(
+      { id: 7428, fitting_id: 19, mounting_variant_key: "face_to_edge", bundle_key: "confirmat_7x50" },
+      { id: 19 },
+    ),
+    {
+      templateId: "7428",
+      fittingId: "19",
+      mountingVariantKey: "face_to_edge",
+      bundleKey: "confirmat_7x50",
+    },
+  );
 });
 
 test("processing templates helpers build readable titles and filters", () => {
@@ -91,4 +106,14 @@ test("processing templates helpers build readable titles and filters", () => {
     ],
   );
   assert.equal(getProcessingTemplateCardTitle({}, {}, "uk"), "Фурнітура");
+});
+
+test("processing templates render preview next to the selected card only once", () => {
+  const sourcePath = fileURLToPath(new URL("../src/components/processing/ProcessingTemplates.jsx", import.meta.url));
+  const source = readFileSync(sourcePath, "utf8");
+  const previewMatches = source.match(/<TemplatePreviewPanel/g) || [];
+
+  assert.equal(source.includes("selectedTemplatePreviewRef"), true);
+  assert.equal(source.includes("isSelected ? ("), true);
+  assert.equal(previewMatches.length, 1);
 });

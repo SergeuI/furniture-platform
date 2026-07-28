@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { getProcessingOperationsPreview, getFittingsCatalog, listFittingHoleTemplatesByFitting } from "../../api.js";
 import {
@@ -11,6 +11,7 @@ import {
 } from "../../processingTesting.js";
 import {
   filterProcessingTemplates,
+  buildProcessingTemplateEditorContext,
   getProcessingFittingDisplayLabel,
   getProcessingFittingSearchText,
   getProcessingTemplateCardSubtitle,
@@ -130,7 +131,35 @@ function TemplateOperationCard({ operation, index, language }) {
   );
 }
 
-function TemplatePreviewPanel({ language, preview, selectedFitting, selectedTemplate, onOpenEditor }) {
+function TemplatePreviewPanel({ error = "", language, loading = false, preview, selectedFitting, selectedTemplate, onOpenEditor }) {
+  if (loading) {
+    return (
+      <article className="dashboard-panel">
+        <div className="dashboard-panel-head">
+          <div>
+            <h3>{language === "uk" ? "РџРѕРїРµСЂРµРґРЅС–Р№ РїРµСЂРµРіР»СЏРґ РѕРїРµСЂР°С†С–Р№" : "Operations preview"}</h3>
+            <p>
+              {language === "uk" ? "Р—Р°РІР°РЅС‚Р°Р¶СѓС”РјРѕ preview..." : "Loading preview..."}
+            </p>
+          </div>
+        </div>
+      </article>
+    );
+  }
+
+  if (error) {
+    return (
+      <article className="dashboard-panel">
+        <div className="dashboard-panel-head">
+          <div>
+            <h3>{language === "uk" ? "РџРѕРїРµСЂРµРґРЅС–Р№ РїРµСЂРµРіР»СЏРґ РѕРїРµСЂР°С†С–Р№" : "Operations preview"}</h3>
+            <p>{error}</p>
+          </div>
+        </div>
+      </article>
+    );
+  }
+
   if (!preview) {
     return (
       <article className="dashboard-panel">
@@ -163,8 +192,12 @@ function TemplatePreviewPanel({ language, preview, selectedFitting, selectedTemp
           </p>
         </div>
         {typeof onOpenEditor === "function" ? (
-          <button className="primary-button" onClick={onOpenEditor} type="button">
-            {language === "uk" ? "Відкрити в редакторі присадки" : "Open fitting holes editor"}
+          <button
+            className="primary-button"
+            onClick={() => onOpenEditor(buildProcessingTemplateEditorContext(selectedTemplate, selectedFitting))}
+            type="button"
+          >
+            {language === "uk" ? "Відкрити цей шаблон у редакторі" : "Open this template in editor"}
           </button>
         ) : null}
       </div>
@@ -238,6 +271,7 @@ export default function ProcessingTemplates({ language = "uk", token = "", onOpe
   const [preview, setPreview] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState("");
+  const selectedTemplatePreviewRef = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -398,6 +432,18 @@ export default function ProcessingTemplates({ language = "uk", token = "", onOpe
   const selectedTemplatePreview = preview && String(preview.template?.id || selectedTemplateId || "") === String(selectedTemplateId || "")
     ? preview
     : null;
+
+  useEffect(() => {
+    if (!selectedTemplatePreview || !selectedTemplatePreviewRef.current) {
+      return undefined;
+    }
+
+    selectedTemplatePreviewRef.current.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+    return undefined;
+  }, [selectedTemplatePreview]);
 
   return (
     <section className="dashboard-layout">
@@ -630,10 +676,10 @@ export default function ProcessingTemplates({ language = "uk", token = "", onOpe
                     {typeof onOpenFittingHolesEditor === "function" ? (
                       <button
                         className="ghost-button"
-                        onClick={() => onOpenFittingHolesEditor()}
+                        onClick={() => onOpenFittingHolesEditor(buildProcessingTemplateEditorContext(template, selectedFitting))}
                         type="button"
                       >
-                        {language === "uk" ? "Відкрити в редакторі присадки" : "Open fitting holes editor"}
+                        {language === "uk" ? "Відкрити цей шаблон у редакторі" : "Open this template in editor"}
                       </button>
                     ) : null}
                   </div>
@@ -659,6 +705,19 @@ export default function ProcessingTemplates({ language = "uk", token = "", onOpe
                       />
                     </div>
                   </details>
+                  {isSelected ? (
+                    <div ref={selectedTemplatePreviewRef} style={{ marginTop: "0.75rem" }}>
+                      <TemplatePreviewPanel
+                        error={previewError}
+                        language={language}
+                        loading={previewLoading}
+                        onOpenEditor={onOpenFittingHolesEditor}
+                        preview={selectedTemplatePreview}
+                        selectedFitting={selectedFitting}
+                        selectedTemplate={selectedTemplate}
+                      />
+                    </div>
+                  ) : null}
                 </article>
               );
             })}
@@ -693,21 +752,6 @@ export default function ProcessingTemplates({ language = "uk", token = "", onOpe
         </section>
       </article>
 
-      {previewLoading ? (
-        <article className="settings-card">
-          <p>{language === "uk" ? "Завантажуємо preview..." : "Loading preview..."}</p>
-        </article>
-      ) : null}
-
-      {previewError ? <p className="hole-template-error">{previewError}</p> : null}
-
-      <TemplatePreviewPanel
-        language={language}
-        onOpenEditor={onOpenFittingHolesEditor}
-        preview={selectedTemplatePreview}
-        selectedFitting={selectedFitting}
-        selectedTemplate={selectedTemplate}
-      />
     </section>
   );
 }

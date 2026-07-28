@@ -236,6 +236,32 @@ export function getProcessingTemplateCardSubtitle(template, fitting, language = 
   return parts.join(" · ");
 }
 
+export function buildProcessingTemplateEditorContext(template, fitting) {
+  const templateId = String(template?.id || "").trim();
+  const fittingId = String(template?.fitting_id || fitting?.id || "").trim();
+  const mountingVariantKey = String(template?.mounting_variant_key || "").trim();
+  const bundleKey = String(template?.bundle_key || "").trim();
+  const context = {};
+
+  if (templateId) {
+    context.templateId = templateId;
+  }
+
+  if (fittingId) {
+    context.fittingId = fittingId;
+  }
+
+  if (mountingVariantKey) {
+    context.mountingVariantKey = mountingVariantKey;
+  }
+
+  if (bundleKey) {
+    context.bundleKey = bundleKey;
+  }
+
+  return context;
+}
+
 export function getProcessingTemplateTypeLabel(templateType, language = "uk") {
   const normalizedType = String(templateType || "").trim();
 
