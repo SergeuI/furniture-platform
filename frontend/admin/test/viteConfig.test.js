@@ -8,6 +8,7 @@ test("admin dev proxy routes entitlement requests to the API server", () => {
 
   assert.equal(config.server.proxy["/admin"], "http://127.0.0.1:8000");
   assert.equal(config.server.proxy["/auth"], "http://127.0.0.1:8000");
+  assert.equal(config.server.proxy["/processing"], "http://127.0.0.1:8000");
   assert.equal(config.base, "/");
 });
 
@@ -15,4 +16,3 @@ test("build keeps the admin base path", () => {
   const config = viteConfig({ command: "build" });
   assert.equal(config.base, "/admin/");
 });
-
