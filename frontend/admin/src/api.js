@@ -433,6 +433,12 @@ export async function getFittingHoleServicePreview(token, templateId) {
   });
 }
 
+export async function getProcessingOperationsPreview(token, templateId) {
+  return request(`/fitting-holes/templates/${templateId}/operations-preview`, {
+    headers: authHeaders(token),
+  });
+}
+
 export async function listFittingHoleServiceRules(token) {
   return request("/fitting-holes/service-rules", {
     headers: authHeaders(token),

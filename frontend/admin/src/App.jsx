@@ -39,6 +39,7 @@ import {
   getSubscriptionLabel,
 } from "../../shared/trialStatus.js";
 import EntitlementsAdminPage from "./components/EntitlementsAdminPage.jsx";
+import ProcessingWorkspace from "./components/processing/ProcessingWorkspace.jsx";
 import {
   buildFittingSubmissionPayload,
   canEditFittingItem as canEditFittingItemHelper,
@@ -8499,7 +8500,9 @@ export default function App() {
   const isCatalogViyarView = activeView === "catalogViyar";
   const isCatalogManualView = activeView === "catalogManual";
   const isCatalogHubView = activeView === "catalogHub";
+  const isProcessingView = activeView === "processing";
   const activeCity = (user?.city || "").trim();
+  const canAccessProcessingWorkspace = user?.role === "admin" || canViewFittingHoles;
   const isCatalogView =
     isCatalogHubView ||
     isCatalogMaterialsView ||
@@ -9394,6 +9397,10 @@ export default function App() {
       return "";
     }
 
+    if (isProcessingView) {
+      return language === "uk" ? "Обробка деталей" : "Processing";
+    }
+
     if (activeView === "settings") {
       return t.myData;
     }
@@ -9424,6 +9431,7 @@ export default function App() {
     isCatalogManualView,
     isCatalogValuesView,
     isCatalogViyarView,
+    isProcessingView,
     materialItems.length,
     manualServiceItems.length,
     pageLabel,
@@ -14350,6 +14358,20 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
       return;
     }
 
+    if (nextView === "processing" && !canAccessProcessingWorkspace) {
+      const fallbackView = canViewMaterialCatalog ? "catalogMaterials" : "home";
+      setActiveView(fallbackView);
+      activeViewRef.current = fallbackView;
+      localStorage.setItem(ACTIVE_VIEW_STORAGE_KEY, fallbackView);
+      setStatus({
+        message: language === "uk"
+          ? "Розділ обробки деталей недоступний у вашому тарифі."
+          : "The processing workspace is unavailable for your plan.",
+        tone: "error",
+      });
+      return;
+    }
+
     if (
       activeView === "entitlements" &&
       entitlementsHasUnsavedChanges &&
@@ -16551,6 +16573,18 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                 </button>
               </>
             ) : null}
+            {canAccessProcessingWorkspace ? (
+              <button
+                className={isProcessingView ? "active" : ""}
+                onClick={() => {
+                  switchView("processing");
+                  closeSidebarOnMobile();
+                }}
+                type="button"
+              >
+                {language === "uk" ? "Обробка деталей" : "Processing"}
+              </button>
+            ) : null}
             <div className={`nav-group${isCatalogView ? " active" : ""}`}>
               <div className={`nav-group-header${isCatalogView ? " active" : ""}`}>
                 <button
@@ -16742,6 +16776,8 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   ? t.catalogViyar
                 : isCatalogManualView
                   ? t.catalogManual
+                : isProcessingView
+                  ? (language === "uk" ? "Обробка деталей" : "Processing")
                 : activeView === "settings"
                   ? t.settings
                 : activeView === "entitlements"
@@ -17149,6 +17185,14 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
               </div>
             </article>
           </section>
+        ) : isProcessingView ? (
+          <ProcessingWorkspace
+            canUseFittingHoles={canViewFittingHoles}
+            isAdmin={user.role === "admin"}
+            language={language}
+            onOpenFittingHolesEditor={() => switchView("catalogHoles")}
+            token={token}
+          />
         ) : activeView === "projects" ? (
           <section className="table-panel full-panel">
             {canCreateNewProject ? (
