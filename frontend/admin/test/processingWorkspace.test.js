@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 import {
@@ -168,4 +170,11 @@ test("operations-preview api helper calls the new read-only endpoint", async () 
   } finally {
     global.fetch = originalFetch;
   }
+});
+
+test("processing workspace forwards token to the templates page", () => {
+  const workspacePath = fileURLToPath(new URL("../src/components/processing/ProcessingWorkspace.jsx", import.meta.url));
+  const source = readFileSync(workspacePath, "utf8");
+
+  assert.match(source, /<ProcessingTemplates[\s\S]*token=\{token\}[\s\S]*\/>/);
 });

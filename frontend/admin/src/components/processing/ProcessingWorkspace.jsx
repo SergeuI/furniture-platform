@@ -69,6 +69,7 @@ export default function ProcessingWorkspace({
         <ProcessingTemplates
           language={language}
           onOpenFittingHolesEditor={onOpenFittingHolesEditor}
+          token={token}
         />
       ) : activeTab === "services-prices" ? (
         <ProcessingServicesPrices language={language} />
