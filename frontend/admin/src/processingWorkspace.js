@@ -9,7 +9,7 @@ const PROCESSING_TAB_DEFINITIONS = [
       en: "Working",
       uk: "Працює",
     },
-    visibleTo: "processing",
+    visibleTo: "admin",
   },
   {
     key: "operations",
@@ -21,7 +21,7 @@ const PROCESSING_TAB_DEFINITIONS = [
       en: "Working",
       uk: "Працює",
     },
-    visibleTo: "processing",
+    visibleTo: "admin",
   },
   {
     key: "templates",
@@ -33,7 +33,7 @@ const PROCESSING_TAB_DEFINITIONS = [
       en: "Planned",
       uk: "Заплановано",
     },
-    visibleTo: "processing",
+    visibleTo: "admin",
   },
   {
     key: "fitting-holes",
@@ -45,7 +45,7 @@ const PROCESSING_TAB_DEFINITIONS = [
       en: "Working",
       uk: "Працює",
     },
-    visibleTo: "processing",
+    visibleTo: "fitting-holes",
   },
   {
     key: "services-prices",
@@ -81,7 +81,7 @@ const PROCESSING_TAB_DEFINITIONS = [
       en: "Working",
       uk: "Працює",
     },
-    visibleTo: "processing",
+    visibleTo: "admin",
   },
 ];
 
@@ -251,7 +251,7 @@ function canSeeTab(definition, isAdmin, canUseFittingHoles) {
     return isAdmin;
   }
 
-  if (definition.visibleTo === "processing") {
+  if (definition.visibleTo === "fitting-holes") {
     return isAdmin || canUseFittingHoles;
   }
 

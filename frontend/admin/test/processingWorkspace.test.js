@@ -8,7 +8,7 @@ import {
 } from "../src/processingWorkspace.js";
 import { getProcessingOperationsPreview } from "../src/api.js";
 
-test("processing workspace tabs keep the current fitting holes section and add the new skeleton pages", () => {
+test("processing workspace tabs keep admin pages and restrict non-admin users to fitting holes only", () => {
   const adminTabs = getProcessingWorkspaceTabs({
     canUseFittingHoles: true,
     isAdmin: true,
@@ -16,6 +16,11 @@ test("processing workspace tabs keep the current fitting holes section and add t
   });
   const fittingUserTabs = getProcessingWorkspaceTabs({
     canUseFittingHoles: true,
+    isAdmin: false,
+    language: "uk",
+  });
+  const blockedUserTabs = getProcessingWorkspaceTabs({
+    canUseFittingHoles: false,
     isAdmin: false,
     language: "uk",
   });
@@ -32,15 +37,25 @@ test("processing workspace tabs keep the current fitting holes section and add t
       "testing",
     ],
   );
-  assert.deepEqual(
-    fittingUserTabs.map((tab) => tab.key),
-    ["overview", "operations", "templates", "fitting-holes", "testing"],
+  assert.deepEqual(fittingUserTabs.map((tab) => tab.key), ["fitting-holes"]);
+  assert.deepEqual(blockedUserTabs.map((tab) => tab.key), []);
+  assert.equal(
+    normalizeProcessingWorkspaceTab("testing", {
+      canUseFittingHoles: true,
+      isAdmin: false,
+    }),
+    "fitting-holes",
   );
-  assert.equal(normalizeProcessingWorkspaceTab("unknown", { canUseFittingHoles: true, isAdmin: true }), "overview");
-  assert.equal(normalizeProcessingWorkspaceTab("testing", { canUseFittingHoles: true, isAdmin: false }), "testing");
+  assert.equal(
+    normalizeProcessingWorkspaceTab("unknown", {
+      canUseFittingHoles: true,
+      isAdmin: true,
+    }),
+    "overview",
+  );
 });
 
-test("processing overview cards use the planned and working statuses that match the current stage", () => {
+test("processing overview cards use the current working and planned statuses", () => {
   const cards = getProcessingOverviewCards("uk");
 
   assert.ok(cards.some((card) => card.label === "Отвори" && card.status === "Працює"));

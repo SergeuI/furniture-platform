@@ -41,6 +41,11 @@ import {
 import EntitlementsAdminPage from "./components/EntitlementsAdminPage.jsx";
 import ProcessingWorkspace from "./components/processing/ProcessingWorkspace.jsx";
 import {
+  getProcessingWorkspaceTabs,
+  normalizeProcessingWorkspaceTab,
+  PROCESSING_WORKSPACE_STORAGE_KEY,
+} from "./processingWorkspace.js";
+import {
   buildFittingSubmissionPayload,
   canEditFittingItem as canEditFittingItemHelper,
   canManageSystemFittings as canManageSystemFittingsHelper,
@@ -6849,6 +6854,12 @@ export default function App() {
     () => normalizeCatalogView(localStorage.getItem(ACTIVE_VIEW_STORAGE_KEY) || "home"),
   );
   const [isCatalogMenuOpen, setIsCatalogMenuOpen] = useState(false);
+  const [activeProcessingTab, setActiveProcessingTab] = useState(
+    () => localStorage.getItem(PROCESSING_WORKSPACE_STORAGE_KEY) || "overview",
+  );
+  const [isProcessingMenuOpen, setIsProcessingMenuOpen] = useState(
+    () => normalizeCatalogView(localStorage.getItem(ACTIVE_VIEW_STORAGE_KEY) || "home") === "processing",
+  );
   const [fittingItems, setFittingItems] = useState([]);
   const [fittingCategories, setFittingCategories] = useState([]);
   const [fittingSearch, setFittingSearch] = useState("");
@@ -8503,6 +8514,23 @@ export default function App() {
   const isProcessingView = activeView === "processing";
   const activeCity = (user?.city || "").trim();
   const canAccessProcessingWorkspace = user?.role === "admin" || canViewFittingHoles;
+  const processingWorkspaceTabs = useMemo(
+    () =>
+      getProcessingWorkspaceTabs({
+        language,
+        isAdmin: user?.role === "admin",
+        canUseFittingHoles: canViewFittingHoles,
+      }),
+    [canViewFittingHoles, language, user?.role],
+  );
+  const normalizedProcessingTab = useMemo(
+    () =>
+      normalizeProcessingWorkspaceTab(activeProcessingTab, {
+        isAdmin: user?.role === "admin",
+        canUseFittingHoles: canViewFittingHoles,
+      }),
+    [activeProcessingTab, canViewFittingHoles, user?.role],
+  );
   const isCatalogView =
     isCatalogHubView ||
     isCatalogMaterialsView ||
@@ -14385,6 +14413,10 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
       return;
     }
 
+    if (nextView === "processing") {
+      setIsProcessingMenuOpen(true);
+    }
+
     setActiveView(nextView);
     activeViewRef.current = nextView;
     setStatus("");
@@ -16082,6 +16114,19 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
   }, [activeView]);
 
   useEffect(() => {
+    if (!user?.role) {
+      return;
+    }
+
+    if (normalizedProcessingTab !== activeProcessingTab) {
+      setActiveProcessingTab(normalizedProcessingTab);
+      return;
+    }
+
+    localStorage.setItem(PROCESSING_WORKSPACE_STORAGE_KEY, activeProcessingTab);
+  }, [activeProcessingTab, normalizedProcessingTab]);
+
+  useEffect(() => {
     if (!entitlementsHasUnsavedChanges) {
       return undefined;
     }
@@ -16574,21 +16619,57 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
               </>
             ) : null}
             {canAccessProcessingWorkspace ? (
-              <button
-                className={isProcessingView ? "active" : ""}
-                onClick={() => {
-                  switchView("processing");
-                  closeSidebarOnMobile();
-                }}
-                type="button"
-              >
-                {language === "uk" ? "Обробка деталей" : "Processing"}
-              </button>
+              <div className={`nav-group${isProcessingView ? " active" : ""}`}>
+                <div className={`nav-group-header${isProcessingView ? " active" : ""}`}>
+                  <button
+                    className={`nav-group-link${isProcessingView ? " active" : ""}`}
+                    onClick={() => {
+                      switchView("processing");
+                      closeSidebarOnMobile();
+                    }}
+                    type="button"
+                  >
+                    <span className="nav-group-title">
+                      {language === "uk" ? "Обробка деталей" : "Processing"}
+                    </span>
+                  </button>
+                  <button
+                    aria-expanded={isProcessingMenuOpen}
+                    className={`nav-group-toggle${isProcessingView ? " active" : ""}`}
+                    onClick={() => setIsProcessingMenuOpen((current) => !current)}
+                    type="button"
+                  >
+                    <ChevronRight
+                      className={`nav-group-icon${isProcessingMenuOpen ? " expanded" : ""}`}
+                      size={16}
+                    />
+                  </button>
+                </div>
+                {isProcessingMenuOpen ? (
+                  <div className="nav-subtabs">
+                    {processingWorkspaceTabs.map((tab) => (
+                      <button
+                        className={tab.key === activeProcessingTab ? "active" : ""}
+                        key={tab.key}
+                        onClick={() => {
+                          setActiveProcessingTab(tab.key);
+                          switchView("processing");
+                          closeSidebarOnMobile();
+                        }}
+                        type="button"
+                      >
+                        <span>{tab.label}</span>
+                        <small>{tab.status}</small>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
             ) : null}
             <div className={`nav-group${isCatalogView ? " active" : ""}`}>
               <div className={`nav-group-header${isCatalogView ? " active" : ""}`}>
                 <button
-                className={`nav-group-link${isCatalogHubView || isCatalogMaterialsView || isCatalogFittingsView || isCatalogFastenersView || isCatalogHolesView || isCatalogBundlesView || isCatalogServiceRulesView || isCatalogDrillingRulesView ? " active" : ""}`}
+                  className={`nav-group-link${isCatalogHubView || isCatalogMaterialsView || isCatalogFittingsView || isCatalogFastenersView || isCatalogHolesView || isCatalogBundlesView || isCatalogServiceRulesView || isCatalogDrillingRulesView ? " active" : ""}`}
                   onClick={() => {
                     switchView(user.role === "admin" ? "catalogHub" : "catalogMaterials");
                     closeSidebarOnMobile();
@@ -16632,18 +16713,6 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                     >
                       {t.catalogFittings}
                     </button>
-                  ) : null}
-                  {canViewFittingHoles ? (
-                    <button
-                      className={isCatalogHolesView ? "active" : ""}
-                      onClick={() => {
-                        switchView("catalogHoles");
-                        closeSidebarOnMobile();
-                      }}
-                      type="button"
-                      >
-                        {t.holeTabTitle}
-                      </button>
                   ) : null}
                   {canViewFittingHoles ? (
                     <button
@@ -17187,8 +17256,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
           </section>
         ) : isProcessingView ? (
           <ProcessingWorkspace
-            canUseFittingHoles={canViewFittingHoles}
-            isAdmin={user.role === "admin"}
+            activeTab={normalizedProcessingTab}
             language={language}
             onOpenFittingHolesEditor={() => switchView("catalogHoles")}
             token={token}

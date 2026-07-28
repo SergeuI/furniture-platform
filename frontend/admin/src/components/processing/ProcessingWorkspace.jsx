@@ -1,5 +1,3 @@
-import { useEffect, useMemo, useState } from "react";
-
 import ProcessingFittingHoles from "./ProcessingFittingHoles.jsx";
 import ProcessingOperations from "./ProcessingOperations.jsx";
 import ProcessingOverview from "./ProcessingOverview.jsx";
@@ -10,15 +8,12 @@ import ProcessingTesting from "./ProcessingTesting.jsx";
 import {
   getProcessingTabLabel,
   getProcessingTabStatus,
-  getProcessingWorkspaceTabs,
-  normalizeProcessingWorkspaceTab,
-  PROCESSING_WORKSPACE_STORAGE_KEY,
 } from "../../processingWorkspace.js";
 
 function buildProcessingWorkspaceIntro(language) {
   if (language === "uk") {
     return {
-      description: "Перший каркас нового напрямку без дублювання існуючого редактора.",
+      description: "Перший каркас нового напряму без дублювання існуючого редактора.",
       title: "Обробка деталей",
     };
   }
@@ -30,45 +25,14 @@ function buildProcessingWorkspaceIntro(language) {
 }
 
 export default function ProcessingWorkspace({
-  canUseFittingHoles = false,
-  isAdmin = false,
+  activeTab = "overview",
   language = "uk",
   onOpenFittingHolesEditor = null,
   token = "",
 }) {
-  const tabs = useMemo(
-    () =>
-      getProcessingWorkspaceTabs({
-        canUseFittingHoles,
-        isAdmin,
-        language,
-      }),
-    [canUseFittingHoles, isAdmin, language],
-  );
-  const [activeTab, setActiveTab] = useState(() =>
-    normalizeProcessingWorkspaceTab(localStorage.getItem(PROCESSING_WORKSPACE_STORAGE_KEY) || "overview", {
-      canUseFittingHoles,
-      isAdmin,
-    }),
-  );
-
-  useEffect(() => {
-    const nextTab = normalizeProcessingWorkspaceTab(activeTab, {
-      canUseFittingHoles,
-      isAdmin,
-    });
-
-    if (nextTab !== activeTab) {
-      setActiveTab(nextTab);
-    }
-  }, [activeTab, canUseFittingHoles, isAdmin]);
-
-  useEffect(() => {
-    localStorage.setItem(PROCESSING_WORKSPACE_STORAGE_KEY, activeTab);
-  }, [activeTab]);
-
-  const currentTab = tabs.find((tab) => tab.key === activeTab) || tabs[0] || null;
   const intro = buildProcessingWorkspaceIntro(language);
+  const currentTabLabel = getProcessingTabLabel(activeTab, language);
+  const currentTabStatus = getProcessingTabStatus(activeTab, language);
 
   return (
     <section className="dashboard-layout">
@@ -84,10 +48,10 @@ export default function ProcessingWorkspace({
           <div className="dashboard-status-head">
             <div className="dashboard-status-title">
               <strong>{language === "uk" ? "Поточна вкладка" : "Current tab"}</strong>
-              <p>{getProcessingTabLabel(activeTab, language)}</p>
+              <p>{currentTabLabel}</p>
             </div>
             <span className="dashboard-status-badge live">
-              {getProcessingTabStatus(activeTab, language)}
+              {currentTabStatus}
             </span>
           </div>
           <p>
@@ -95,35 +59,6 @@ export default function ProcessingWorkspace({
               ? "Структура поки що каркасна: без записів у БД, без нового router і без дублювання editor."
               : "The structure is skeletal for now: no database writes, no new router, and no duplicated editor."}
           </p>
-        </div>
-      </article>
-
-      <article className="dashboard-panel">
-        <div className="dashboard-panel-head">
-          <div>
-            <h3>{language === "uk" ? "Меню розділу" : "Workspace menu"}</h3>
-            <p>
-              {language === "uk"
-                ? "Тут зібрано майбутні підрозділи нового напрямку."
-                : "This groups the future sub-sections of the new direction."}
-            </p>
-          </div>
-        </div>
-
-        <div className="nav-subtabs" role="tablist" aria-label={language === "uk" ? "Обробка деталей" : "Processing"}>
-          {tabs.map((tab) => (
-            <button
-              aria-selected={tab.key === activeTab}
-              className={tab.key === activeTab ? "active" : ""}
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              role="tab"
-              type="button"
-            >
-              <span>{tab.label}</span>
-              <small>{tab.status}</small>
-            </button>
-          ))}
         </div>
       </article>
 
