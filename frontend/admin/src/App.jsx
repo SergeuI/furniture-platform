@@ -41,7 +41,7 @@ import {
 import EntitlementsAdminPage from "./components/EntitlementsAdminPage.jsx";
 import ProcessingWorkspace from "./components/processing/ProcessingWorkspace.jsx";
 import {
-  getProcessingWorkspaceTabs,
+  getProcessingWorkspaceSidebarTabs,
   normalizeProcessingWorkspaceTab,
   PROCESSING_WORKSPACE_STORAGE_KEY,
 } from "./processingWorkspace.js";
@@ -8516,7 +8516,7 @@ export default function App() {
   const canAccessProcessingWorkspace = user?.role === "admin" || canViewFittingHoles;
   const processingWorkspaceTabs = useMemo(
     () =>
-      getProcessingWorkspaceTabs({
+      getProcessingWorkspaceSidebarTabs({
         language,
         isAdmin: user?.role === "admin",
         canUseFittingHoles: canViewFittingHoles,
@@ -16659,7 +16659,6 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                         type="button"
                       >
                         <span>{tab.label}</span>
-                        <small>{tab.status}</small>
                       </button>
                     ))}
                   </div>

@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   getProcessingOverviewCards,
+  getProcessingWorkspaceSidebarTabs,
   getProcessingWorkspaceTabs,
   normalizeProcessingWorkspaceTab,
 } from "../src/processingWorkspace.js";
@@ -53,6 +54,29 @@ test("processing workspace tabs keep admin pages and restrict non-admin users to
     }),
     "overview",
   );
+});
+
+test("processing sidebar tabs show only names without status text", () => {
+  const sidebarTabs = getProcessingWorkspaceSidebarTabs({
+    canUseFittingHoles: true,
+    isAdmin: true,
+    language: "uk",
+  });
+
+  assert.deepEqual(
+    sidebarTabs.map((tab) => tab.label),
+    [
+      "Огляд",
+      "Операції обробки",
+      "Шаблони обробки",
+      "Присадка фурнітури",
+      "Послуги та ціни",
+      "Правила розрахунку",
+      "Тестування",
+    ],
+  );
+  assert.equal(sidebarTabs.every((tab) => tab.status === undefined), true);
+  assert.equal(sidebarTabs.some((tab) => ["Працює", "Заплановано", "Потребує налаштування"].includes(tab.label)), false);
 });
 
 test("processing overview cards use the current working and planned statuses", () => {

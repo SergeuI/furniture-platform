@@ -274,6 +274,21 @@ export function getProcessingWorkspaceTabs({
     }));
 }
 
+export function getProcessingWorkspaceSidebarTabs({
+  language = "uk",
+  isAdmin = false,
+  canUseFittingHoles = false,
+} = {}) {
+  return getProcessingWorkspaceTabs({
+    language,
+    isAdmin,
+    canUseFittingHoles,
+  }).map(({ key, label }) => ({
+    key,
+    label,
+  }));
+}
+
 export function normalizeProcessingWorkspaceTab(
   tabKey,
   {
