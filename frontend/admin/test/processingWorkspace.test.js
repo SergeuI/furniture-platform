@@ -7,6 +7,7 @@ import {
   getProcessingWorkspaceTabTargetView,
   getProcessingWorkspaceTabs,
   normalizeProcessingWorkspaceTab,
+  shouldAutoOpenCatalogMenu,
 } from "../src/processingWorkspace.js";
 import { getProcessingOperationsPreview } from "../src/api.js";
 
@@ -57,6 +58,13 @@ test("processing workspace tabs keep admin pages and restrict non-admin users to
   );
   assert.equal(getProcessingWorkspaceTabTargetView("fitting-holes"), "catalogHoles");
   assert.equal(getProcessingWorkspaceTabTargetView("overview"), "processing");
+});
+
+test("catalog holes no longer auto-opens the directories group", () => {
+  assert.equal(shouldAutoOpenCatalogMenu("catalogHoles"), false);
+  assert.equal(shouldAutoOpenCatalogMenu("catalogMaterials"), true);
+  assert.equal(shouldAutoOpenCatalogMenu("catalogFittings"), true);
+  assert.equal(shouldAutoOpenCatalogMenu("catalogValues"), true);
 });
 
 test("processing sidebar tabs show only names without status text", () => {

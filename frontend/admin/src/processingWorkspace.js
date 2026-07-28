@@ -293,6 +293,21 @@ export function getProcessingWorkspaceTabTargetView(tabKey) {
   return tabKey === "fitting-holes" ? "catalogHoles" : "processing";
 }
 
+export function shouldAutoOpenCatalogMenu(activeView) {
+  return [
+    "catalogHub",
+    "catalogMaterials",
+    "catalogFittings",
+    "catalogFasteners",
+    "catalogBundles",
+    "catalogServiceRules",
+    "catalogDrillingRules",
+    "catalogValues",
+    "catalogViyar",
+    "catalogManual",
+  ].includes(String(activeView || ""));
+}
+
 export function normalizeProcessingWorkspaceTab(
   tabKey,
   {

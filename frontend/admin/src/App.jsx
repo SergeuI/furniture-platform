@@ -45,6 +45,7 @@ import {
   getProcessingWorkspaceTabTargetView,
   normalizeProcessingWorkspaceTab,
   PROCESSING_WORKSPACE_STORAGE_KEY,
+  shouldAutoOpenCatalogMenu,
 } from "./processingWorkspace.js";
 import {
   buildFittingSubmissionPayload,
@@ -8537,18 +8538,7 @@ export default function App() {
     [activeProcessingTab, canViewFittingHoles, user?.role],
   );
   const processingWorkspaceTab = normalizedProcessingTab === "fitting-holes" ? "overview" : normalizedProcessingTab;
-  const isCatalogView =
-    isCatalogHubView ||
-    isCatalogMaterialsView ||
-    isCatalogFittingsView ||
-    isCatalogFastenersView ||
-    isCatalogHolesView ||
-    isCatalogBundlesView ||
-    isCatalogServiceRulesView ||
-    isCatalogDrillingRulesView ||
-    isCatalogValuesView ||
-    isCatalogViyarView ||
-    isCatalogManualView;
+  const isCatalogView = shouldAutoOpenCatalogMenu(activeView);
   const fastenerItems = useMemo(
     () => fittingItems.filter((item) => isFastenerFitting(item)),
     [fittingItems],
@@ -9255,10 +9245,10 @@ export default function App() {
   );
 
   useEffect(() => {
-    if (isCatalogView) {
+    if (shouldAutoOpenCatalogMenu(activeView)) {
       setIsCatalogMenuOpen(true);
     }
-  }, [isCatalogView]);
+  }, [activeView]);
 
   useEffect(() => {
     if (
