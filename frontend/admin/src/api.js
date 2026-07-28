@@ -439,6 +439,15 @@ export async function getProcessingOperationsPreview(token, templateId) {
   });
 }
 
+export async function getProjectPartOperationsPreview(token, projectId, partIdentifier) {
+  const normalizedProjectId = encodeURIComponent(String(projectId || "").trim());
+  const normalizedPartIdentifier = encodeURIComponent(String(partIdentifier || "").trim());
+
+  return request(`/processing/projects/${normalizedProjectId}/parts/${normalizedPartIdentifier}/operations-preview`, {
+    headers: authHeaders(token),
+  });
+}
+
 export async function getProcessingOperationTypes(token) {
   return request("/processing/operation-types", {
     headers: authHeaders(token),
