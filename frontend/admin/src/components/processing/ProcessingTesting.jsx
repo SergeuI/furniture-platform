@@ -7,6 +7,12 @@ import {
   listProjects,
 } from "../../api.js";
 import {
+  formatOperationCoordinates,
+  formatOperationTitle,
+  formatPartDimensions,
+  getOperationEstimateStatus,
+  getOperationServiceStatus,
+  getVisibleOperationFields,
   getProcessingTestingModeOptions,
   getProcessingTestingOperationTypeLabel,
 } from "../../processingTesting.js";
@@ -37,41 +43,6 @@ function formatNumber(value, language) {
   return numericValue % 1 === 0 ? String(numericValue) : numericValue.toFixed(2).replace(/\.00$/, "");
 }
 
-function formatDimensions(item, language) {
-  const dimensions = [
-    item?.width ?? item?.width_mm,
-    item?.height ?? item?.height_mm,
-    item?.thickness ?? item?.depth ?? item?.depth_mm,
-  ];
-
-  if (dimensions.every((value) => value === null || value === undefined || value === "")) {
-    return language === "uk" ? "Не визначено" : "Not set";
-  }
-
-  return dimensions.map((value) => formatNumber(value, language)).join(" × ");
-}
-
-function getProjectOptionLabel(project, language) {
-  const title = String(project?.project_name || project?.name || "").trim() || (language === "uk" ? "Без назви" : "Untitled");
-  const details = [project?.client_name, project?.room_name].filter(Boolean).join(" · ");
-  const projectId = formatValue(project?.id, language);
-
-  return details ? `${title} · ${details} · ID ${projectId}` : `${title} · ID ${projectId}`;
-}
-
-function getProjectPartOptionLabel(item, language) {
-  const name = String(item?.part_name || "").trim() || (language === "uk" ? "Деталь" : "Part");
-  const code = String(item?.export_code || "").trim();
-  const size = [item?.width, item?.height, item?.thickness]
-    .filter((value) => value !== null && value !== undefined && value !== "")
-    .map((value) => formatNumber(value, language))
-    .join(" × ");
-
-  return [name, code ? `ID ${code}` : "", size ? `${size} мм` : ""]
-    .filter(Boolean)
-    .join(" · ");
-}
-
 function buildOperationTypeCounts(operations) {
   return operations.reduce(
     (accumulator, operation) => {
@@ -85,112 +56,94 @@ function buildOperationTypeCounts(operations) {
   );
 }
 
-function formatGeometrySummary(geometry, language) {
-  if (!geometry || typeof geometry !== "object") {
-    return language === "uk" ? "Не визначено" : "Not set";
-  }
+function getProjectOptionLabel(project, language) {
+  const title = String(project?.project_name || project?.name || "").trim() || (language === "uk" ? "Без назви" : "Untitled");
+  const details = [project?.client_name, project?.room_name].filter(Boolean).join(" · ");
+  const projectId = formatValue(project?.id, language);
 
-  const rows = [
-    ["diameter_mm", language === "uk" ? "Діаметр" : "Diameter"],
-    ["depth_mm", language === "uk" ? "Глибина" : "Depth"],
-    ["length_mm", language === "uk" ? "Довжина" : "Length"],
-    ["width_mm", language === "uk" ? "Ширина" : "Width"],
-    ["radius_mm", language === "uk" ? "Радіус" : "Radius"],
-    ["edge", language === "uk" ? "Край" : "Edge"],
-    ["operation", language === "uk" ? "Операція" : "Operation"],
-  ];
-
-  const rendered = rows
-    .map(([key, label]) => {
-      const value = geometry[key];
-      if (value === null || value === undefined || value === "") {
-        return null;
-      }
-
-      return `${label}: ${formatValue(value, language)}`;
-    })
-    .filter(Boolean);
-
-  if (geometry.is_through !== null && geometry.is_through !== undefined) {
-    rendered.push(`${language === "uk" ? "Наскрізний" : "Through"}: ${formatValue(geometry.is_through, language)}`);
-  }
-
-  return rendered.length ? rendered.join(" · ") : (language === "uk" ? "Не визначено" : "Not set");
+  return details ? `${title} · ${details} · ID ${projectId}` : `${title} · ID ${projectId}`;
 }
 
-function OperationPreviewCard({ operation, language }) {
-  const operationTypeLabel = getProcessingTestingOperationTypeLabel(operation.operation_type, language);
-  const includeInEstimateLabel = formatValue(operation.production_effects?.include_in_estimate, language);
+function getProjectPartOptionLabel(item, language) {
+  const name = String(item?.part_name || "").trim() || (language === "uk" ? "Деталь" : "Part");
+  const code = String(item?.export_code || "").trim();
+  const size = formatPartDimensions(item, language);
+
+  return [name, code ? `ID ${code}` : "", size ? size : ""]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function SummaryField({ label, value }) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  return (
+    <div>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function OperationPreviewCard({ operation, index, language }) {
+  const title = formatOperationTitle(operation, index + 1, language);
+  const typeLabel = getProcessingTestingOperationTypeLabel(operation.operation_type, language);
+  const estimateStatus = getOperationEstimateStatus(operation, language);
+  const serviceStatus = getOperationServiceStatus(operation, language);
+  const visibleFields = getVisibleOperationFields(operation, language);
+  const technicalRows = [
+    ["operation_type", language === "uk" ? "Тип операції" : "Operation type", operation.operation_type],
+    ["source_type", language === "uk" ? "Джерело" : "Source type", operation.source_type],
+    ["source_id", language === "uk" ? "ID джерела" : "Source ID", operation.source_id],
+    ["template_id", "Template ID", operation.template_id],
+    ["order_index", language === "uk" ? "Порядок" : "Order", operation.order_index],
+    ["service_mapping", language === "uk" ? "Прив’язка послуги" : "Service mapping", operation.service_mapping],
+    ["production_effects", language === "uk" ? "Виробничі ефекти" : "Production effects", operation.production_effects],
+    ["metadata", language === "uk" ? "Метадані" : "Metadata", operation.metadata],
+  ];
 
   return (
     <article className="settings-card">
       <div className="settings-card-header">
         <div>
-          <strong>{operation.label || operationTypeLabel || (language === "uk" ? "Без мітки" : "Untitled")}</strong>
+          <strong>{title}</strong>
           <p>
-            {operationTypeLabel || formatValue(null, language)} ·{" "}
-            {operation.source_type || formatValue(null, language)}
+            {typeLabel || (language === "uk" ? "Без типу" : "Untitled type")}
+            {formatOperationCoordinates(operation, language) !== (language === "uk" ? "Не визначено" : "Not set")
+              ? ` · ${formatOperationCoordinates(operation, language)}`
+              : ""}
           </p>
         </div>
-        <span className="service-tree-badge subtle">{includeInEstimateLabel}</span>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", justifyContent: "flex-end" }}>
+          {estimateStatus ? <span className="service-tree-badge subtle">{estimateStatus}</span> : null}
+          {serviceStatus ? <span className="service-tree-badge subtle">{serviceStatus}</span> : null}
+        </div>
       </div>
 
       <div className="settings-info-grid">
-        <div>
-          <span>{language === "uk" ? "Координати" : "Coordinates"}</span>
-          <strong>
-            x: {formatValue(operation.placement?.x_mm, language)}, y: {formatValue(operation.placement?.y_mm, language)}, z: {formatValue(operation.placement?.z_mm, language)}
-          </strong>
-        </div>
-        <div>
-          <span>{language === "uk" ? "Панель" : "Panel"}</span>
-          <strong>
-            {formatValue(operation.placement?.target_panel, language)} / {formatValue(operation.placement?.target_surface, language)} / {formatValue(operation.placement?.target_side, language)}
-          </strong>
-        </div>
-        <div>
-          <span>{language === "uk" ? "Геометрія" : "Geometry"}</span>
-          <strong>{formatGeometrySummary(operation.geometry, language)}</strong>
-        </div>
-        <div>
-          <span>{language === "uk" ? "Кількість" : "Quantity"}</span>
-          <strong>
-            {formatValue(operation.quantity, language)} · {operation.mirrored ? (language === "uk" ? "дзеркально" : "mirrored") : (language === "uk" ? "звичайно" : "normal")}
-          </strong>
-        </div>
-        <div>
-          <span>{language === "uk" ? "Порядок" : "Order"}</span>
-          <strong>{formatValue(operation.order_index, language)}</strong>
-        </div>
-        <div>
-          <span>{language === "uk" ? "Послуга" : "Service"}</span>
-          <strong>
-            {operation.service_mapping?.found ? (language === "uk" ? "Знайдено" : "Found") : (language === "uk" ? "Не знайдено" : "Not found")}
-          </strong>
-        </div>
-      </div>
-
-      <div className="settings-info-grid" style={{ marginTop: "0.75rem" }}>
-        <div>
-          <span>{language === "uk" ? "ID джерела" : "Source ID"}</span>
-          <strong>{formatValue(operation.source_id, language)}</strong>
-        </div>
-        <div>
-          <span>{language === "uk" ? "Template ID" : "Template ID"}</span>
-          <strong>{formatValue(operation.template_id, language)}</strong>
-        </div>
-        <div>
-          <span>{language === "uk" ? "Збереження в кошторис" : "Estimate"}</span>
-          <strong>{includeInEstimateLabel}</strong>
-        </div>
-        <div>
-          <span>{language === "uk" ? "Сервісний елемент" : "Catalog item"}</span>
-          <strong>{formatValue(operation.service_mapping?.resolved_service_catalog_item_id, language)}</strong>
-        </div>
+        {visibleFields.map((field) => (
+          <SummaryField key={field.label} label={field.label} value={field.value} />
+        ))}
       </div>
 
       <details className="settings-card" style={{ marginTop: "0.75rem" }}>
-        <summary>{language === "uk" ? "Технічні JSON-дані" : "Technical JSON data"}</summary>
+        <summary>{language === "uk" ? "Технічні дані" : "Technical data"}</summary>
+        <div className="settings-info-grid" style={{ marginTop: "0.75rem" }}>
+          {technicalRows.map(([key, label, value]) => {
+            const renderedValue = key === "service_mapping" || key === "production_effects" || key === "metadata"
+              ? JSON.stringify(value ?? null, null, 2)
+              : formatValue(value, language);
+
+            return (
+              <div key={key}>
+                <span>{label}</span>
+                <strong style={{ whiteSpace: "pre-wrap" }}>{renderedValue}</strong>
+              </div>
+            );
+          })}
+        </div>
         <pre style={{ overflowX: "auto", whiteSpace: "pre-wrap" }}>{JSON.stringify(operation, null, 2)}</pre>
       </details>
     </article>
@@ -399,8 +352,8 @@ export default function ProcessingTesting({
           </h3>
           <p>
             {language === "uk"
-              ? "Ця сторінка лише читає готові read-only перегляди й не створює, не редагує та не зберігає дані."
-              : "This page only reads the existing read-only previews and does not create, edit, or save data."}
+              ? "Ця сторінка лише читає вже наявні read-only перегляди й не створює, не редагує та не зберігає дані."
+              : "This page only reads existing read-only previews and does not create, edit, or save data."}
           </p>
         </div>
       </article>
@@ -490,47 +443,86 @@ export default function ProcessingTesting({
       </article>
 
       {mode === "project" ? (
-        <article className="dashboard-panel">
-          <div className="dashboard-panel-head">
-            <div>
-              <h3>{language === "uk" ? "Список проєкту" : "Project list"}</h3>
-              <p>
-                {language === "uk"
-                  ? "Оберіть реальний проєкт і його деталь без ручного введення part_identifier."
-                  : "Choose a real project and part without typing the part identifier by hand."}
-              </p>
-            </div>
-          </div>
-
-          {projectsLoading ? (
-            <p>{language === "uk" ? "Завантажуємо список проєктів..." : "Loading project list..."}</p>
-          ) : null}
-
-          {!projectsLoading && !projectsError && !projects.length ? (
-            <p>{language === "uk" ? "Проєктів не знайдено." : "No projects were returned."}</p>
-          ) : null}
-
-          {selectedProject ? (
-            <div className="settings-info-grid">
+        <>
+          <article className="dashboard-panel">
+            <div className="dashboard-panel-head">
               <div>
-                <span>{language === "uk" ? "Назва" : "Name"}</span>
-                <strong>{formatValue(selectedProject.project_name || selectedProject.name, language)}</strong>
-              </div>
-              <div>
-                <span>ID</span>
-                <strong>{formatValue(selectedProject.id, language)}</strong>
-              </div>
-              <div>
-                <span>{language === "uk" ? "Клієнт" : "Client"}</span>
-                <strong>{formatValue(selectedProject.client_name, language)}</strong>
-              </div>
-              <div>
-                <span>{language === "uk" ? "Кімната" : "Room"}</span>
-                <strong>{formatValue(selectedProject.room_name, language)}</strong>
+                <h3>{language === "uk" ? "Вибраний проєкт" : "Selected project"}</h3>
+                <p>
+                  {language === "uk"
+                    ? "Показано тільки основні дані вибраного проєкту."
+                    : "Only the main details of the selected project are shown here."}
+                </p>
               </div>
             </div>
+
+            {projectsLoading ? (
+              <p>{language === "uk" ? "Завантажуємо список проєктів..." : "Loading project list..."}</p>
+            ) : null}
+
+            {!projectsLoading && !projectsError && !projects.length ? (
+              <p>{language === "uk" ? "Проєктів не знайдено." : "No projects were returned."}</p>
+            ) : null}
+
+            {selectedProject ? (
+              <div className="settings-info-grid">
+                <SummaryField
+                  label={language === "uk" ? "Назва" : "Name"}
+                  value={formatValue(selectedProject.project_name || selectedProject.name, language)}
+                />
+                <SummaryField label="ID" value={formatValue(selectedProject.id, language)} />
+                <SummaryField
+                  label={language === "uk" ? "Клієнт" : "Client"}
+                  value={selectedProject.client_name ? formatValue(selectedProject.client_name, language) : ""}
+                />
+                <SummaryField
+                  label={language === "uk" ? "Кімната" : "Room"}
+                  value={selectedProject.room_name ? formatValue(selectedProject.room_name, language) : ""}
+                />
+              </div>
+            ) : null}
+          </article>
+
+          {selectedPart ? (
+            <article className="dashboard-panel">
+              <div className="dashboard-panel-head">
+                <div>
+                  <h3>{language === "uk" ? "Інформація про деталь" : "Part information"}</h3>
+                  <p>
+                    {language === "uk"
+                      ? "Коротка виробнича інформація про вибрану деталь."
+                      : "A short production summary for the selected part."}
+                  </p>
+                </div>
+              </div>
+
+              <div className="settings-info-grid">
+                <SummaryField
+                  label={language === "uk" ? "Назва" : "Name"}
+                  value={formatValue(selectedPart.part_name, language)}
+                />
+                <SummaryField
+                  label={language === "uk" ? "Код" : "Code"}
+                  value={formatValue(selectedPart.export_code, language)}
+                />
+                <SummaryField
+                  label={language === "uk" ? "Розміри" : "Dimensions"}
+                  value={formatPartDimensions(selectedPart, language)}
+                />
+                <SummaryField
+                  label={language === "uk" ? "Операцій" : "Operations"}
+                  value={formatValue(operations.length, language)}
+                />
+              </div>
+
+              <div className="settings-info-grid" style={{ marginTop: "0.75rem" }}>
+                <SummaryField label={language === "uk" ? "Отвори" : "Holes"} value={operationCounts.hole} />
+                <SummaryField label={language === "uk" ? "Пази" : "Grooves"} value={operationCounts.groove} />
+                <SummaryField label={language === "uk" ? "Чверті" : "Quarters"} value={operationCounts.quarter} />
+              </div>
+            </article>
           ) : null}
-        </article>
+        </>
       ) : null}
 
       {mode === "template" && preview ? (
@@ -540,32 +532,29 @@ export default function ProcessingTesting({
               <h3>{language === "uk" ? "Коротка інформація про шаблон" : "Template summary"}</h3>
               <p>
                 {language === "uk"
-                  ? "Дані нижче приходять з існуючого read-only перегляду операцій присадки фурнітури."
+                  ? "Дані нижче походять із існуючого read-only перегляду операцій присадки фурнітури."
                   : "The data below comes from the existing read-only fitting holes operation preview."}
               </p>
             </div>
           </div>
           <div className="settings-info-grid">
-            <div>
-              <span>ID</span>
-              <strong>{formatValue(preview.template?.id, language)}</strong>
-            </div>
-            <div>
-              <span>{language === "uk" ? "Назва" : "Name"}</span>
-              <strong>{formatValue(preview.template?.name, language)}</strong>
-            </div>
-            <div>
-              <span>{language === "uk" ? "Фурнітура" : "Fitting"}</span>
-              <strong>{formatValue(preview.template?.fitting_code, language)}</strong>
-            </div>
-            <div>
-              <span>{language === "uk" ? "Варіант кріплення" : "Mounting variant"}</span>
-              <strong>{formatValue(preview.template?.mounting_variant_key, language)}</strong>
-            </div>
-            <div>
-              <span>{language === "uk" ? "Кількість операцій" : "Operation count"}</span>
-              <strong>{operations.length}</strong>
-            </div>
+            <SummaryField label="ID" value={formatValue(preview.template?.id, language)} />
+            <SummaryField
+              label={language === "uk" ? "Назва" : "Name"}
+              value={formatValue(preview.template?.name, language)}
+            />
+            <SummaryField
+              label={language === "uk" ? "Фурнітура" : "Fitting"}
+              value={formatValue(preview.template?.fitting_code, language)}
+            />
+            <SummaryField
+              label={language === "uk" ? "Варіант кріплення" : "Mounting variant"}
+              value={formatValue(preview.template?.mounting_variant_key, language)}
+            />
+            <SummaryField
+              label={language === "uk" ? "Операцій" : "Operations"}
+              value={operations.length}
+            />
           </div>
         </article>
       ) : null}
@@ -577,55 +566,43 @@ export default function ProcessingTesting({
               <h3>{language === "uk" ? "Коротка інформація про деталь" : "Part summary"}</h3>
               <p>
                 {language === "uk"
-                  ? "Показано реальну деталь проєкту та результат нового read-only endpoint."
+                  ? "Показано вибрану реальну деталь проєкту та результат нового read-only endpoint."
                   : "The selected real project part and the new read-only endpoint result are shown here."}
               </p>
             </div>
           </div>
           <div className="settings-info-grid">
-            <div>
-              <span>{language === "uk" ? "Проєкт" : "Project"}</span>
-              <strong>{formatValue(preview.project?.id, language)}</strong>
-            </div>
-            <div>
-              <span>{language === "uk" ? "Деталь" : "Part"}</span>
-              <strong>{formatValue(preview.part?.part_name || selectedPart?.part_name, language)}</strong>
-            </div>
-            <div>
-              <span>{language === "uk" ? "Код деталі" : "Part code"}</span>
-              <strong>{formatValue(preview.part?.export_code || selectedPart?.export_code, language)}</strong>
-            </div>
-            <div>
-              <span>{language === "uk" ? "Розміри" : "Dimensions"}</span>
-              <strong>{formatDimensions(preview.part, language)}</strong>
-            </div>
-            <div>
-              <span>{language === "uk" ? "Кількість operations" : "Operation count"}</span>
-              <strong>{operations.length}</strong>
-            </div>
+            <SummaryField
+              label={language === "uk" ? "Проєкт" : "Project"}
+              value={formatValue(preview.project?.id, language)}
+            />
+            <SummaryField
+              label={language === "uk" ? "Деталь" : "Part"}
+              value={formatValue(preview.part?.part_name || selectedPart?.part_name, language)}
+            />
+            <SummaryField
+              label={language === "uk" ? "Код деталі" : "Part code"}
+              value={formatValue(preview.part?.export_code || selectedPart?.export_code, language)}
+            />
+            <SummaryField
+              label={language === "uk" ? "Розміри" : "Dimensions"}
+              value={formatPartDimensions(preview.part || selectedPart, language)}
+            />
           </div>
           <div className="settings-info-grid" style={{ marginTop: "0.75rem" }}>
-            <div>
-              <span>{language === "uk" ? "Отвори" : "Holes"}</span>
-              <strong>{operationCounts.hole}</strong>
-            </div>
-            <div>
-              <span>{language === "uk" ? "Пази" : "Grooves"}</span>
-              <strong>{operationCounts.groove}</strong>
-            </div>
-            <div>
-              <span>{language === "uk" ? "Чверті" : "Quarters"}</span>
-              <strong>{operationCounts.quarter}</strong>
-            </div>
+            <SummaryField label={language === "uk" ? "Отвори" : "Holes"} value={operationCounts.hole} />
+            <SummaryField label={language === "uk" ? "Пази" : "Grooves"} value={operationCounts.groove} />
+            <SummaryField label={language === "uk" ? "Чверті" : "Quarters"} value={operationCounts.quarter} />
           </div>
         </article>
       ) : null}
 
       {operations.length ? (
         <section className="settings-grid">
-          {operations.map((operation) => (
+          {operations.map((operation, index) => (
             <OperationPreviewCard
               key={`${operation.source_type}-${operation.source_id}-${operation.order_index}`}
+              index={index}
               language={language}
               operation={operation}
             />
@@ -636,7 +613,7 @@ export default function ProcessingTesting({
           <p>
             {mode === "template"
               ? (language === "uk" ? "Операції не знайдено." : "No operations were returned.")
-              : (language === "uk" ? "Для цієї деталі операції не сформовані." : "No operations were formed for this part.")}
+              : (language === "uk" ? "Для цієї деталі операції обробки не сформовані." : "No operations were formed for this part.")}
           </p>
         </article>
       ) : null}

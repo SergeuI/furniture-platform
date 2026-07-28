@@ -5,8 +5,14 @@ import {
   getProjectPartOperationsPreview,
 } from "../src/api.js";
 import {
+  formatOperationCoordinates,
+  formatOperationTitle,
+  formatPartDimensions,
+  getOperationEstimateStatus,
+  getOperationServiceStatus,
   getProcessingTestingModeOptions,
   getProcessingTestingOperationTypeLabel,
+  getVisibleOperationFields,
 } from "../src/processingTesting.js";
 
 test("processing testing helpers expose readable modes and operation labels", () => {
@@ -22,6 +28,42 @@ test("processing testing helpers expose readable modes and operation labels", ()
   assert.equal(getProcessingTestingOperationTypeLabel("hole", "uk"), "Отвір");
   assert.equal(getProcessingTestingOperationTypeLabel("groove", "uk"), "Паз");
   assert.equal(getProcessingTestingOperationTypeLabel("quarter", "uk"), "Чверть");
+  assert.equal(formatOperationTitle({ operation_type: "hole" }, 1, "uk"), "Отвір 1");
+  assert.equal(
+    formatOperationCoordinates({ placement: { x_mm: 50, y_mm: 21, z_mm: 0 } }, "uk"),
+    "X 50 мм, Y 21 мм, Z 0 мм",
+  );
+  assert.equal(
+    formatPartDimensions({ width: 500, height: 800, thickness: 18 }, "uk"),
+    "500 × 800 × 18 мм",
+  );
+  assert.equal(
+    getOperationEstimateStatus({ production_effects: { include_in_estimate: false } }, "uk"),
+    "Не включено до кошторису",
+  );
+  assert.equal(
+    getOperationServiceStatus({ service_mapping: { found: false } }, "uk"),
+    "Послугу ще не прив’язано",
+  );
+
+  const visibleFields = getVisibleOperationFields(
+    {
+      operation_type: "hole",
+      placement: { x_mm: 50, y_mm: 21, z_mm: 0 },
+      geometry: { diameter_mm: 5, depth_mm: 12, is_through: false },
+      quantity: 1,
+    },
+    "uk",
+  );
+
+  assert.deepEqual(
+    visibleFields.map((field) => field.label),
+    ["Координати", "Діаметр", "Глибина", "Сквозний", "Кількість"],
+  );
+  assert.equal(
+    visibleFields.some((field) => ["Панель", "Поверхня", "Сторона"].includes(field.label)),
+    false,
+  );
 });
 
 test("project part operations preview api helper encodes part identifiers", async () => {
