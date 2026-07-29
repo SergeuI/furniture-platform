@@ -6,11 +6,11 @@ export default function ProcessingFittingHoles({
     <section className="dashboard-panel">
       <div className="dashboard-panel-head">
         <div>
-          <h3>{language === "uk" ? "Присадка фурнітури" : "Fitting holes"}</h3>
+          <h3>{language === "uk" ? "Монтажні вузли" : "Mounting nodes"}</h3>
           <p>
             {language === "uk"
-              ? "Це чинний редактор присадки. Тут залишаємо поточну робочу реалізацію без дублювання."
-              : "This is the current fitting holes editor. The existing working implementation stays here without duplication."}
+              ? "Це чинний редактор монтажних вузлів. Тут залишаємо поточну робочу реалізацію без дублювання."
+              : "This is the current mounting nodes editor. The existing working implementation stays here without duplication."}
           </p>
         </div>
       </div>
@@ -23,7 +23,7 @@ export default function ProcessingFittingHoles({
         </p>
         {typeof onOpenFittingHolesEditor === "function" ? (
           <button className="primary-button" onClick={onOpenFittingHolesEditor} type="button">
-            {language === "uk" ? "Відкрити присадку фурнітури" : "Open fitting holes editor"}
+            {language === "uk" ? "Відкрити монтажні вузли" : "Open mounting nodes editor"}
           </button>
         ) : null}
       </div>

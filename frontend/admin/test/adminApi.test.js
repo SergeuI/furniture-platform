@@ -4,6 +4,8 @@ import test from "node:test";
 import {
   API_BASE_URL,
   applyEntitlementRegistrySync,
+  getMountingNode,
+  getMountingNodes,
   previewEntitlementRegistrySync,
   listProjects,
   getProjectQuota,
@@ -158,6 +160,71 @@ test("material update wrapper surfaces not-found responses from the backend", as
     assert.equal(result.success, false);
     assert.equal(result.status, 404);
     assert.equal(result.error, "Material not found or unavailable.");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("mounting node list wrapper forwards filters and keeps inactive filtering readable", async () => {
+  const calls = [];
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url, options });
+    return new Response(
+      JSON.stringify({
+        success: true,
+        nodes: [
+          { id: 1, code: "active-node", is_active: true },
+          { id: 2, code: "inactive-node", is_active: false },
+        ],
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
+  };
+
+  try {
+    const result = await getMountingNodes("token-5", {
+      search: "confirmat",
+      fitting_id: 1,
+      mounting_variant_key: "face_to_edge",
+      is_active: false,
+    });
+
+    assert.equal(result.success, true);
+    assert.deepEqual(result.nodes.map((node) => node.code), ["inactive-node"]);
+    assert.equal(
+      calls[0].url,
+      "/api/mounting-nodes?search=confirmat&fitting_id=1&mounting_variant_key=face_to_edge&is_active=false&include_inactive=true",
+    );
+    assert.equal(calls[0].options.headers.Authorization, "Bearer token-5");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("mounting node detail wrapper loads a single node by id", async () => {
+  const calls = [];
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url, options });
+    return new Response(JSON.stringify({ success: true, node: { id: 1, code: "mn_confirmat_7x50" } }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+
+  try {
+    const result = await getMountingNode("token-6", 1);
+
+    assert.equal(result.success, true);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].url, "/api/mounting-nodes/1");
+    assert.equal(calls[0].options.headers.Authorization, "Bearer token-6");
   } finally {
     globalThis.fetch = originalFetch;
   }

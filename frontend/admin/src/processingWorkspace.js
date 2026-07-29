@@ -38,8 +38,8 @@ const PROCESSING_TAB_DEFINITIONS = [
   {
     key: "fitting-holes",
     label: {
-      en: "Fitting holes",
-      uk: "Присадка фурнітури",
+      en: "Mounting nodes",
+      uk: "Монтажні вузли",
     },
     status: {
       en: "Working",

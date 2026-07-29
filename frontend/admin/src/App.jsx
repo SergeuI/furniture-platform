@@ -39,6 +39,7 @@ import {
   getSubscriptionLabel,
 } from "../../shared/trialStatus.js";
 import EntitlementsAdminPage from "./components/EntitlementsAdminPage.jsx";
+import MountingNodesPanel from "./components/processing/MountingNodesPanelRefined.jsx";
 import ProcessingWorkspace from "./components/processing/ProcessingWorkspace.jsx";
 import {
   getProcessingWorkspaceSidebarTabs,
@@ -48,7 +49,10 @@ import {
   PROCESSING_WORKSPACE_STORAGE_KEY,
   shouldAutoOpenCatalogMenu,
 } from "./processingWorkspace.js";
-import { readProcessingTemplatesReturnState } from "./processingTemplates.js";
+import {
+  getProcessingTemplateMountingVariantLabel,
+  readProcessingTemplatesReturnState,
+} from "./processingTemplates.js";
 import {
   buildFittingSubmissionPayload,
   canEditFittingItem as canEditFittingItemHelper,
@@ -1673,6 +1677,17 @@ function normalizeFittingViewMode(viewMode) {
   return viewMode === "cards" ? "cards" : "rows";
 }
 
+function formatMountingVariantLabel(value, language = "uk") {
+  return (
+    getProcessingTemplateMountingVariantLabel(value, language) ||
+    String(value || "")
+      .split("_")
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ")
+  );
+}
+
 function getHoleServiceRuleOperationLabel(operation, t) {
   const labels = {
     blind_drill: t.holeServiceRulesOperationBlindDrill,
@@ -2455,13 +2470,35 @@ const TRANSLATIONS = {
     drillingServiceRulesValidationFailed: "Choose a Viyar service and fill required rule fields.",
     drillingServiceRulesStatusLabel: "Status",
     drillingServiceRulesSelectedServiceTitle: "Selected Viyar service",
-    holeTabDescription: "View hole points for the selected fitting and mounting variant.",
+    holeTabDescription: "Mounting nodes list with a separate detail view below.",
     holeTabPreview: "2D preview",
     holeTabPoints: "Points",
     holeTabSearchPlaceholder: "Search fittings",
     holeTabSelectCategory: "Select category",
     holeTabTemplates: "Templates",
-    holeTabTitle: "Holes",
+    holeTabTitle: "Mounting nodes",
+    mountingNodesTitle: "Mounting nodes",
+    mountingNodesDescription: "Browse mounting nodes in a compact grid or list, then open details separately.",
+    mountingNodesSearchPlaceholder: "Search mounting nodes",
+    mountingNodesLoading: "Loading mounting nodes...",
+    mountingNodesEmpty: "Mounting nodes have not been created yet.",
+    mountingNodesError: "Unable to load mounting nodes",
+    mountingNodesRetry: "Retry",
+    mountingNodeBackToList: "Return to mounting nodes",
+    mountingNodeBannerDescription: "Current node context.",
+    mountingNodeBannerTitle: "Editing mounting node",
+    mountingNodeDetailsDescription: "Select a node to inspect its articles and linked templates.",
+    mountingNodeDetailsTitle: "Mounting node details",
+    mountingNodeItems: "Articles",
+    mountingNodeItemsSummary: "Composition",
+    mountingNodeLoading: "Loading mounting node...",
+    mountingNodeOpenEditor: "Open mounting node in editor",
+    mountingNodeTemplates: "Templates",
+    mountingNodeTemplatesSummary: "Templates",
+    mountingNodeTemplateAdditional: "Additional",
+    mountingNodeTemplateDefault: "Default",
+    mountingNodeTemplatePointsCount: "Points",
+    mountingNodeTemplateVariant: "Mounting variant",
     holeBundleCreateTitle: "Fitting bundle setup",
     holeBundleCreateDescription:
       "Enter a bundle name and choose a category to collect fitting positions.",
@@ -2494,9 +2531,9 @@ const TRANSLATIONS = {
     holeBundleSaveFailed: "Unable to save fitting bundle",
     fittingBundlesTitle: "Fitting bundles",
     fittingBundlesDescription:
-      "List of fitting bundles created on the \"Fitting holes\" page.",
+      "List of fitting bundles created on the \"Mounting nodes\" page.",
     fittingBundlesEmptyTitle: "No fitting bundles yet.",
-    fittingBundlesEmptyDescription: "Create a bundle on the \"Fitting holes\" page.",
+    fittingBundlesEmptyDescription: "Create a bundle on the \"Mounting nodes\" page.",
     fittingBundlesCountOne: "bundle",
     fittingBundlesCountFew: "bundles",
     fittingBundlesCountMany: "bundles",
@@ -2522,9 +2559,9 @@ const TRANSLATIONS = {
     fittingBundleDetailsTitle: "Bundle contents",
     fittingBundleDetailsDescription: "What this bundle contains",
     fittingBundleDetailsEmpty: "No bundle contents yet.",
-    fittingBundleWorkWithMachining: "Work with fitting holes",
+    fittingBundleWorkWithMachining: "Work with mounting nodes",
     unableToLoadBundles: "Unable to load fitting bundles",
-    holeReadOnlyBadge: "Read-only",
+    holeReadOnlyBadge: "Editor open",
     holePointsTitle: "Hole points",
     holeWorkspaceConnectionVariantTitle: "Connection variant",
     holeWorkspaceFittingInfoArticle: "Article",
@@ -3019,13 +3056,13 @@ Object.assign(TRANSLATIONS.uk, {
   holePreviewOperation: "\u041e\u043f\u0435\u0440\u0430\u0446\u0456\u044f",
   holePreviewSide: "\u0421\u0442\u043e\u0440\u043e\u043d\u0430",
   holePreviewTitle: "2D перегляд",
-  holeTabDescription: "\u041f\u0435\u0440\u0435\u0433\u043b\u044f\u0434 \u043e\u0442\u0432\u043e\u0440\u0456\u0432 \u0434\u043b\u044f \u0432\u0438\u0431\u0440\u0430\u043d\u043e\u0457 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0438 \u0456 \u0432\u0430\u0440\u0456\u0430\u043d\u0442\u0430 \u043a\u0440\u0456\u043f\u043b\u0435\u043d\u043d\u044f.",
+  holeTabDescription: "\u041f\u0435\u0440\u0435\u0433\u043b\u044f\u0434 \u043c\u043e\u043d\u0442\u0430\u0436\u043d\u0438\u0445 \u0432\u0443\u0437\u043b\u0456\u0432 \u0434\u043b\u044f \u0432\u0438\u0431\u0440\u0430\u043d\u043e\u0451 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0438 \u0456 \u0432\u0430\u0440\u0456\u0430\u043d\u0442\u0430 \u043a\u0440\u0456\u043f\u043b\u0435\u043d\u043d\u044f.",
   holeTabPreview: "2D \u043f\u0435\u0440\u0435\u0433\u043b\u044f\u0434",
   holeTabPoints: "\u0422\u043e\u0447\u043a\u0438",
   holeTabSearchPlaceholder: "\u041f\u043e\u0448\u0443\u043a \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0438",
   holeTabSelectCategory: "\u041e\u0431\u0435\u0440\u0456\u0442\u044c \u043a\u0430\u0442\u0435\u0433\u043e\u0440\u0456\u044e",
   holeTabTemplates: "\u0428\u0430\u0431\u043b\u043e\u043d\u0438",
-  holeTabTitle: "\u041e\u0442\u0432\u043e\u0440\u0438",
+  holeTabTitle: "\u041c\u043e\u043d\u0442\u0430\u0436\u043d\u0456 \u0432\u0443\u0437\u043b\u0438",
   holeBundleCreateTitle: "\u0421\u0442\u0432\u043e\u0440\u0435\u043d\u043d\u044f \u043a\u043e\u043c\u043f\u043b\u0435\u043a\u0442\u0443 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0438",
   holeBundleCreateDescription:
     "\u0412\u0432\u0435\u0434\u0456\u0442\u044c \u043d\u0430\u0437\u0432\u0443 \u043a\u043e\u043c\u043f\u043b\u0435\u043a\u0442\u0443 \u0442\u0430 \u043e\u0431\u0435\u0440\u0456\u0442\u044c \u043a\u0430\u0442\u0435\u0433\u043e\u0440\u0456\u044e, \u0449\u043e\u0431\u0438 \u0437\u0456\u0431\u0440\u0430\u0442\u0438 \u043f\u043e\u0437\u0438\u0446\u0456\u0457 \u0444\u0443\u0440\u043d\u0456\u0442\u0443\u0440\u0438.",
@@ -3621,7 +3658,7 @@ Object.assign(TRANSLATIONS.uk, {
   deleteRestricted: "Видаляти проєкти може тільки адміністратор",
   details: "Деталі",
   furniturePlatform: "MProject.furniture",
-  holes: "Отвори",
+  holes: "Монтажні вузли",
   manualServices: "Ручні послуги",
   materials: "Матеріали",
   materialsCount: "Матеріали",
@@ -4134,7 +4171,7 @@ Object.assign(TRANSLATIONS.uk, {
   delete: "Видалити",
   deleteFailed: "Не вдалося видалити",
   details: "Деталі",
-  holes: "Присадка фурнітури",
+  holes: "Монтажні вузли",
   manualServices: "Ручні послуги",
   materials: "Матеріали",
   myData: "Мої дані",
@@ -4156,11 +4193,33 @@ Object.assign(TRANSLATIONS.uk, {
   width: "Ширина",
   widthMax: "Ширина до",
   widthMin: "Ширина від",
-  holeTabDescription: "Перегляд присадки фурнітури для вибраної фурнітури і варіанта кріплення.",
+  holeTabDescription: "Список монтажних вузлів з окремим переглядом деталей нижче.",
   holeTabSearchPlaceholder: "Пошук фурнітури",
   holeTabSelectCategory: "Оберіть категорію",
-  holeTabTitle: "Присадка фурнітури",
-  holeReadOnlyBadge: "Режим перегляду",
+  holeTabTitle: "Монтажні вузли",
+  mountingNodesTitle: "Монтажні вузли",
+  mountingNodesDescription: "Переглядайте монтажні вузли у компактній плитці або списку та відкривайте деталі окремо.",
+  mountingNodesSearchPlaceholder: "Пошук монтажних вузлів",
+  mountingNodesLoading: "Завантаження монтажних вузлів...",
+  mountingNodesEmpty: "Монтажні вузли ще не створені.",
+  mountingNodesError: "Не вдалося завантажити монтажні вузли",
+  mountingNodesRetry: "Повторити",
+  mountingNodeBackToList: "Повернутися до монтажних вузлів",
+  mountingNodeBannerDescription: "Поточний контекст вузла.",
+  mountingNodeBannerTitle: "Редагується монтажний вузол",
+  mountingNodeDetailsDescription: "Оберіть вузол, щоб переглянути артикульний склад і пов'язані шаблони.",
+  mountingNodeDetailsTitle: "Деталі монтажного вузла",
+  mountingNodeItems: "Артикулі",
+  mountingNodeItemsSummary: "Склад",
+  mountingNodeLoading: "Завантаження монтажного вузла...",
+  mountingNodeOpenEditor: "Відкрити монтажний вузол у редакторі",
+  mountingNodeTemplates: "Шаблони",
+  mountingNodeTemplatesSummary: "Шаблони",
+  mountingNodeTemplateAdditional: "Додатковий",
+  mountingNodeTemplateDefault: "За замовчуванням",
+  mountingNodeTemplatePointsCount: "Точок",
+  mountingNodeTemplateVariant: "Варіант кріплення",
+  holeReadOnlyBadge: "Редактор відкрито",
   holePointsTitle: "Точки присадки",
   holeWorkspaceConnectionVariantTitle: "Варіант кріплення",
   holeWorkspaceFittingInfoTitle: "Інформація про фурнітуру",
@@ -4238,9 +4297,9 @@ Object.assign(TRANSLATIONS.uk, {
   homeCatalogMenuTitle: "Каталоги",
   furniturePlatform: "MProject.furniture",
   brandTagline: "Професійне рішення для меблевого виробництва",
-  holes: "Присадка фурнітури",
-  holeTabTitle: "Присадка фурнітури",
-  holeTabDescription: "Перегляд присадки фурнітури для вибраної фурнітури і варіанта кріплення.",
+  holes: "Монтажні вузли",
+  holeTabTitle: "Монтажні вузли",
+  holeTabDescription: "Перегляд монтажних вузлів для вибраної фурнітури і варіанта кріплення.",
   holeWorkspaceConnectionVariantTitle: "Варіант кріплення",
   holeWorkspaceFittingInfoTitle: "Інформація про фурнітуру",
   holeWorkspacePreview3dTitle: "3D перегляд",
@@ -6961,6 +7020,9 @@ export default function App() {
   const [selectedHolePointId, setSelectedHolePointId] = useState("");
   const [selectedHoleMountingVariantKey, setSelectedHoleMountingVariantKey] =
     useState("surface_mount");
+  const [catalogHolesMode, setCatalogHolesMode] = useState("list");
+  const [catalogHolesOpenContext, setCatalogHolesOpenContext] = useState(null);
+  const [catalogHolesReturnState, setCatalogHolesReturnState] = useState(null);
   const [holeMountingVariantDropdownOpen, setHoleMountingVariantDropdownOpen] = useState(false);
   const materialsCatalogRequestRef = useRef({ id: 0, pending: false });
   const fittingsCatalogRequestRef = useRef({ id: 0, pending: false });
@@ -9606,6 +9668,11 @@ export default function App() {
       handle_positions:
         result.handle_positions || DEFAULT_SPECIFICATION_CATALOG.handle_positions,
     });
+  }
+
+  function handleCatalogHolesBackToList() {
+    setCatalogHolesMode("list");
+    setCatalogHolesOpenContext(null);
   }
 
   async function loadUsers(activeToken = token, nextOffset = usersOffset, viewer = user) {
@@ -14440,7 +14507,37 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
       localStorage.setItem(PROCESSING_WORKSPACE_STORAGE_KEY, normalizedProcessingTab);
     }
 
+    if (nextView !== "catalogHoles") {
+      setCatalogHolesMode("list");
+      setCatalogHolesOpenContext(null);
+      setCatalogHolesReturnState(null);
+    }
+
     if (nextView === "catalogHoles") {
+      const contextMountingNodeId = String(openContext?.mountingNodeId || "").trim();
+      const contextNodeName = String(openContext?.nodeName || "").trim();
+      const contextNodeCode = String(openContext?.nodeCode || "").trim();
+      const contextFittingId = String(openContext?.fittingId || "").trim();
+      const contextTemplateId = String(openContext?.templateId || "").trim();
+      const contextVariantKey = normalizeHoleWorkspaceMountingVariantKey(openContext?.mountingVariantKey || "");
+
+      setCatalogHolesOpenContext(
+        contextMountingNodeId
+          ? {
+          mountingNodeId: contextMountingNodeId,
+          nodeCode: contextNodeCode,
+          nodeName: contextNodeName,
+          fittingId: contextFittingId,
+          templateId: contextTemplateId,
+          mountingVariantKey: contextVariantKey,
+          }
+          : null,
+      );
+      if (!contextMountingNodeId) {
+        setCatalogHolesReturnState(null);
+      }
+      setCatalogHolesMode(contextMountingNodeId ? "editor" : "list");
+
       setIsProcessingMenuOpen(true);
     }
 
@@ -19657,11 +19754,53 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                 </div>
               </div>
             ) : null}
-            <article className="catalog-card service-catalog-card service-catalog-card-full holes-view-card">
+            {catalogHolesMode === "editor" && catalogHolesOpenContext ? (
+              <div className="readonly-note" style={{ marginBottom: "16px" }}>
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
+                  <div>
+                    <strong>
+                      {t.mountingNodeBannerTitle || (language === "uk" ? "Редагування монтажного вузла" : "Editing mounting node")}
+                      : {catalogHolesOpenContext.nodeName || t.notSet}
+                    </strong>
+                    <div className="settings-info-grid mounting-node-editor-banner-grid">
+                      <div className="mounting-node-meta-field">
+                        <span>{language === "uk" ? "Код" : "Code"}</span>
+                        <strong>{catalogHolesOpenContext.nodeCode || t.notSet}</strong>
+                      </div>
+                      <div className="mounting-node-meta-field">
+                        <span>{language === "uk" ? "Артикулів" : "Articles"}</span>
+                        <strong>{catalogHolesOpenContext.fittingId || t.notSet}</strong>
+                      </div>
+                      <div className="mounting-node-meta-field">
+                        <span>{language === "uk" ? "Шаблон" : "Template"}</span>
+                        <strong>{catalogHolesOpenContext.templateId || t.notSet}</strong>
+                      </div>
+                      <div className="mounting-node-meta-field">
+                        <span>{language === "uk" ? "Варіант" : "Variant"}</span>
+                        <strong>{formatMountingVariantLabel(catalogHolesOpenContext.mountingVariantKey, language) || t.notSet}</strong>
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    className="primary-button mounting-node-detail-action-button mounting-node-return-button"
+                    onClick={handleCatalogHolesBackToList}
+                    type="button"
+                  >
+                    {language === "uk" ? "Повернутися до деталей вузла" : "Return to node details"}
+                  </button>
+                </div>
+              </div>
+            ) : null}
+            {catalogHolesMode === "editor" ? (
+              <article className="catalog-card service-catalog-card service-catalog-card-full holes-view-card">
               <div className="catalog-page-header">
                 <div className="service-catalog-title">
-                  <h3>{t.holeTabTitle}</h3>
-                  <p>{t.holeTabDescription}</p>
+                  <h3>{language === "uk" ? "Редактор монтажного вузла" : "Mounting node editor"}</h3>
+                  <p>
+                    {language === "uk"
+                      ? "Редагування фурнітури, точок і 3D-схеми монтажного вузла."
+                      : "Editing hardware, points, and the 3D scheme of the mounting node."}
+                  </p>
                 </div>
                 <div className="service-catalog-header-actions">
                   <span className="service-tree-badge subtle">
@@ -20457,7 +20596,19 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                 </section>
                 </div>
               </article>
-            </section>
+            ) : (
+              <MountingNodesPanel
+                initialState={catalogHolesReturnState}
+                language={language}
+                onOpenMountingNodeEditor={(context, returnState) => {
+                  setCatalogHolesReturnState(returnState);
+                  switchView("catalogHoles", user, context);
+                }}
+                t={t}
+                token={token}
+              />
+            )}
+          </section>
         ) : isCatalogBundlesView && activeView === "catalogBundles" ? (
           <section className="table-panel full-panel" key="catalogBundles">
             <article className="catalog-card service-catalog-card service-catalog-card-full">

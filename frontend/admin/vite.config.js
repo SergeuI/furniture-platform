@@ -27,6 +27,7 @@ export default defineConfig(({ command }) => ({
       "/fitting-holes": "http://127.0.0.1:8000",
       "/processing": "http://127.0.0.1:8000",
       "/service-drilling-rules": "http://127.0.0.1:8000",
+      "/mounting-nodes": "http://127.0.0.1:8000",
     },
   },
   preview: {

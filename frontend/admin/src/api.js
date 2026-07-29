@@ -372,6 +372,89 @@ export async function listFittingHoleTemplatesByFitting(token, fittingId) {
   });
 }
 
+function normalizeMountingNodeBoolean(value) {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  const normalized = String(value || "").trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+
+  if (["1", "true", "yes", "on"].includes(normalized)) {
+    return true;
+  }
+
+  if (["0", "false", "no", "off"].includes(normalized)) {
+    return false;
+  }
+
+  return null;
+}
+
+export async function getMountingNodes(token, filters = {}) {
+  const searchParams = new URLSearchParams();
+  const normalizedSearch = String(filters.search || "").trim();
+  const normalizedFittingId = String(filters.fitting_id || "").trim();
+  const normalizedVariantKey = String(filters.mounting_variant_key || "").trim();
+  const normalizedIsActive = normalizeMountingNodeBoolean(filters.is_active);
+
+  if (normalizedSearch) {
+    searchParams.set("search", normalizedSearch);
+  }
+
+  if (normalizedFittingId) {
+    searchParams.set("fitting_id", normalizedFittingId);
+  }
+
+  if (normalizedVariantKey) {
+    searchParams.set("mounting_variant_key", normalizedVariantKey);
+  }
+
+  if (normalizedIsActive !== null) {
+    searchParams.set("is_active", normalizedIsActive ? "true" : "false");
+
+    if (!normalizedIsActive) {
+      searchParams.set("include_inactive", "true");
+    }
+  }
+
+  const query = searchParams.toString();
+  const result = await request(`/mounting-nodes${query ? `?${query}` : ""}`, {
+    headers: authHeaders(token),
+  });
+
+  if (
+    result.success &&
+    normalizedIsActive === false &&
+    Array.isArray(result.nodes)
+  ) {
+    return {
+      ...result,
+      nodes: result.nodes.filter((node) => node?.is_active === false),
+    };
+  }
+
+  return result;
+}
+
+export async function getMountingNode(token, nodeId) {
+  const normalizedNodeId = String(nodeId || "").trim();
+
+  if (!normalizedNodeId) {
+    return {
+      success: false,
+      error: "Mounting node ID is required",
+      status: 0,
+    };
+  }
+
+  return request(`/mounting-nodes/${encodeURIComponent(normalizedNodeId)}`, {
+    headers: authHeaders(token),
+  });
+}
+
 export async function listFittingHoleBundles(token) {
   return request("/fitting-holes/bundles", {
     headers: authHeaders(token),
