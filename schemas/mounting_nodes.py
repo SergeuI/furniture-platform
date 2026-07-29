@@ -30,9 +30,87 @@ class MountingNodeItemReadSchema(BaseModel):
 
 
 class MountingNodeTemplateLinkCreateSchema(BaseModel):
-    template_id: int
+    template_id: int | None = None
     is_default: bool = False
     order_index: int = 0
+    template: MountingNodeTemplatePayloadSchema | None = None
+
+
+class MountingNodeFittingHolePointUpsertSchema(BaseModel):
+    id: int | None = None
+    template_id: int | None = None
+    label: str | None = None
+    x_mm: float | None = None
+    y_mm: float | None = None
+    z_mm: float | None = None
+    target_panel: str | None = None
+    target_surface: str | None = None
+    target_side: str | None = None
+    diameter_mm: float | None = None
+    service_drilling_rule_id: int | None = None
+    depth_mm: float | None = None
+    side: str | None = None
+    operation: str | None = None
+    order_index: int = 0
+    quantity: int = 1
+    mirrored: bool = False
+    notes: str | None = None
+
+
+class MountingNodeTemplatePayloadSchema(BaseModel):
+    template_id: int | None = None
+    fitting_id: int | None = None
+    name: str | None = Field(default=None, max_length=255)
+    bundle_key: str | None = Field(default=None, max_length=255)
+    bundle_name: str | None = Field(default=None, max_length=255)
+    bundle_order_index: int = 0
+    template_type: str | None = Field(default=None, max_length=64)
+    side: str | None = Field(default=None, max_length=64)
+    coordinate_system: str | None = Field(default=None, max_length=64)
+    mounting_variant_key: str | None = Field(default=None, max_length=64)
+    is_default: bool = False
+    notes: str | None = Field(default=None, max_length=5000)
+    is_active: bool = True
+    sync_points: bool = True
+    points: list[MountingNodeFittingHolePointUpsertSchema] = Field(default_factory=list)
+
+
+class MountingNodeFittingHolePointReadSchema(BaseModel):
+    id: int
+    template_id: int
+    label: str | None = None
+    x_mm: float | None = None
+    y_mm: float | None = None
+    z_mm: float | None = None
+    target_panel: str | None = None
+    target_surface: str | None = None
+    target_side: str | None = None
+    diameter_mm: float | None = None
+    service_drilling_rule_id: int | None = None
+    depth_mm: float | None = None
+    side: str | None = None
+    operation: str | None = None
+    order_index: int = 0
+    quantity: int = 1
+    mirrored: bool = False
+    notes: str | None = None
+
+
+class MountingNodeTemplateReadSchema(BaseModel):
+    id: int
+    fitting_id: int
+    name: str | None = None
+    bundle_key: str | None = None
+    bundle_name: str | None = None
+    bundle_order_index: int = 0
+    template_type: str | None = None
+    side: str | None = None
+    coordinate_system: str | None = None
+    mounting_variant_key: str | None = None
+    is_default: bool = False
+    notes: str | None = None
+    is_active: bool = True
+    points: list[MountingNodeFittingHolePointReadSchema] = Field(default_factory=list)
 
 
 class MountingNodeTemplateLinkReadSchema(BaseModel):
@@ -48,6 +126,7 @@ class MountingNodeTemplateLinkReadSchema(BaseModel):
     order_index: int = 0
     points_count: int = 0
     is_active: bool = True
+    template: MountingNodeTemplateReadSchema | None = None
 
 
 class MountingNodeCreateSchema(BaseModel):
@@ -104,3 +183,6 @@ class MountingNodeOperationResponseSchema(BaseModel):
     success: bool
     node: MountingNodeDetailSchema | None = None
     error: str | None = None
+
+
+MountingNodeTemplateLinkCreateSchema.model_rebuild()

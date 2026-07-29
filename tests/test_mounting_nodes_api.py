@@ -116,6 +116,257 @@ class MountingNodesApiTests(unittest.TestCase):
         self.assertTrue(body["success"])
         self.assertEqual(body["node"]["name"], "Confirmat node")
 
+    def test_create_route_returns_nested_template_and_point_ids_for_admin(self) -> None:
+        app = self._build_app()
+        app.dependency_overrides[auth_dependencies.require_current_user] = lambda: SimpleNamespace(id="user-1", role="admin")
+
+        class CreateService:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def create_mounting_node(self, payload):
+                return {
+                    "id": 1,
+                    "code": "mounting-node-confirmat-7x50",
+                    "name": payload["name"],
+                    "description": None,
+                    "owner_user_id": None,
+                    "is_active": True,
+                    "created_by_user_id": "user-1",
+                    "updated_by_user_id": "user-1",
+                    "created_at": None,
+                    "updated_at": None,
+                    "items_count": 1,
+                    "templates_count": 1,
+                    "items": [],
+                    "templates": [
+                        {
+                            "id": 11,
+                            "node_id": 1,
+                            "template_id": 7428,
+                            "template_name": "Main template",
+                            "fitting_id": 1,
+                            "fitting_code": "confirmat_7x50",
+                            "fitting_article": "190106",
+                            "mounting_variant_key": "face_to_edge",
+                            "is_default": True,
+                            "order_index": 0,
+                            "points_count": 2,
+                            "is_active": True,
+                            "template": {
+                                "id": 7428,
+                                "fitting_id": 1,
+                                "name": "Main template",
+                                "bundle_key": None,
+                                "bundle_name": None,
+                                "bundle_order_index": 0,
+                                "template_type": "manual",
+                                "side": None,
+                                "coordinate_system": "2d",
+                                "mounting_variant_key": "face_to_edge",
+                                "is_default": True,
+                                "notes": None,
+                                "is_active": True,
+                                "points": [
+                                    {
+                                        "id": 29,
+                                        "template_id": 7428,
+                                        "label": None,
+                                        "x_mm": 0.0,
+                                        "y_mm": 0.0,
+                                        "z_mm": 0.0,
+                                        "target_panel": "vertical_panel",
+                                        "target_surface": "plane",
+                                        "target_side": "inner_face",
+                                        "diameter_mm": 7.0,
+                                        "service_drilling_rule_id": None,
+                                        "depth_mm": None,
+                                        "side": "inner_face",
+                                        "operation": "drill",
+                                        "order_index": 0,
+                                        "quantity": 1,
+                                        "mirrored": False,
+                                        "notes": None,
+                                    },
+                                    {
+                                        "id": 30,
+                                        "template_id": 7428,
+                                        "label": None,
+                                        "x_mm": 0.0,
+                                        "y_mm": 0.0,
+                                        "z_mm": 0.0,
+                                        "target_panel": "horizontal_panel",
+                                        "target_surface": "edge",
+                                        "target_side": "edge_near_vertical",
+                                        "diameter_mm": 4.5,
+                                        "service_drilling_rule_id": None,
+                                        "depth_mm": 34.0,
+                                        "side": "edge_near_vertical",
+                                        "operation": "drill",
+                                        "order_index": 1,
+                                        "quantity": 1,
+                                        "mirrored": False,
+                                        "notes": None,
+                                    },
+                                ],
+                            },
+                        }
+                    ],
+                }
+
+        with patch.object(mounting_nodes_route, "MountingNodeService", return_value=CreateService()):
+            with TestClient(app) as client:
+                response = client.post(
+                    "/mounting-nodes",
+                    json={
+                        "name": "Confirmat node",
+                        "items": [{"fitting_id": 1, "quantity": 1}],
+                    },
+                    headers={"Authorization": "Bearer token"},
+                )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["node"]["templates"][0]["template"]["id"], 7428)
+        self.assertEqual(body["node"]["templates"][0]["template"]["points"][0]["id"], 29)
+        self.assertEqual(body["node"]["templates"][0]["template"]["points"][1]["id"], 30)
+
+    def test_update_route_returns_nested_template_and_point_ids_for_admin(self) -> None:
+        app = self._build_app()
+        app.dependency_overrides[auth_dependencies.require_current_user] = lambda: SimpleNamespace(id="user-1", role="admin")
+
+        class PatchService:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def update_mounting_node(self, node_id, payload):
+                return {
+                    "id": node_id,
+                    "code": "mounting-node-confirmat-7x50",
+                    "name": "Confirmat node",
+                    "description": None,
+                    "owner_user_id": None,
+                    "is_active": True,
+                    "created_by_user_id": "user-1",
+                    "updated_by_user_id": "user-1",
+                    "created_at": None,
+                    "updated_at": None,
+                    "items_count": 1,
+                    "templates_count": 1,
+                    "items": [],
+                    "templates": [
+                        {
+                            "id": 11,
+                            "node_id": node_id,
+                            "template_id": 7428,
+                            "template_name": "Main template updated",
+                            "fitting_id": 1,
+                            "fitting_code": "confirmat_7x50",
+                            "fitting_article": "190106",
+                            "mounting_variant_key": "face_to_edge",
+                            "is_default": True,
+                            "order_index": 0,
+                            "points_count": 2,
+                            "is_active": True,
+                            "template": {
+                                "id": 7428,
+                                "fitting_id": 1,
+                                "name": "Main template updated",
+                                "bundle_key": None,
+                                "bundle_name": None,
+                                "bundle_order_index": 0,
+                                "template_type": "manual",
+                                "side": None,
+                                "coordinate_system": "2d",
+                                "mounting_variant_key": "face_to_edge",
+                                "is_default": True,
+                                "notes": None,
+                                "is_active": True,
+                                "points": [
+                                    {
+                                        "id": 29,
+                                        "template_id": 7428,
+                                        "label": None,
+                                        "x_mm": 0.0,
+                                        "y_mm": 0.0,
+                                        "z_mm": 0.0,
+                                        "target_panel": "vertical_panel",
+                                        "target_surface": "plane",
+                                        "target_side": "inner_face",
+                                        "diameter_mm": 7.0,
+                                        "service_drilling_rule_id": None,
+                                        "depth_mm": None,
+                                        "side": "inner_face",
+                                        "operation": "drill",
+                                        "order_index": 0,
+                                        "quantity": 1,
+                                        "mirrored": False,
+                                        "notes": None,
+                                    },
+                                    {
+                                        "id": 31,
+                                        "template_id": 7428,
+                                        "label": None,
+                                        "x_mm": 0.0,
+                                        "y_mm": 0.0,
+                                        "z_mm": 0.0,
+                                        "target_panel": "horizontal_panel",
+                                        "target_surface": "edge",
+                                        "target_side": "edge_near_vertical",
+                                        "diameter_mm": 4.5,
+                                        "service_drilling_rule_id": None,
+                                        "depth_mm": 34.0,
+                                        "side": "edge_near_vertical",
+                                        "operation": "drill",
+                                        "order_index": 1,
+                                        "quantity": 1,
+                                        "mirrored": False,
+                                        "notes": None,
+                                    },
+                                ],
+                            },
+                        }
+                    ],
+                }
+
+        with patch.object(mounting_nodes_route, "MountingNodeService", return_value=PatchService()):
+            with TestClient(app) as client:
+                response = client.patch(
+                    "/mounting-nodes/1",
+                    json={
+                        "templates": [
+                            {
+                                "template_id": 7428,
+                                "template": {
+                                    "template_id": 7428,
+                                    "fitting_id": 1,
+                                    "name": "Main template updated",
+                                    "template_type": "manual",
+                                    "mounting_variant_key": "face_to_edge",
+                                    "is_default": True,
+                                    "points": [
+                                        {"id": 29, "diameter_mm": 7.0, "order_index": 0, "quantity": 1},
+                                        {"id": 31, "diameter_mm": 4.5, "depth_mm": 34.0, "order_index": 1, "quantity": 1},
+                                    ],
+                                },
+                            }
+                        ]
+                    },
+                    headers={"Authorization": "Bearer token"},
+                )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["node"]["templates"][0]["template"]["id"], 7428)
+        self.assertEqual(body["node"]["templates"][0]["template"]["points"][0]["id"], 29)
+        self.assertEqual(body["node"]["templates"][0]["template"]["points"][1]["id"], 31)
+
     def _build_app(self) -> FastAPI:
         app = FastAPI()
         app.include_router(mounting_nodes_route.router, prefix="/mounting-nodes")
