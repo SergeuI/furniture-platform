@@ -31,6 +31,9 @@ from api.routes.admin_entitlements import (
 from api.routes.fitting_holes import (
     router as fitting_holes_router
 )
+from api.routes.mounting_nodes import (
+    router as mounting_nodes_router
+)
 from api.routes.processing import (
     router as processing_router
 )
@@ -160,6 +163,15 @@ app.include_router(
     prefix="/fitting-holes",
 
     tags=["Fitting Holes"]
+)
+
+app.include_router(
+
+    mounting_nodes_router,
+
+    prefix="/mounting-nodes",
+
+    tags=["Mounting Nodes"]
 )
 
 app.include_router(

@@ -69,6 +69,11 @@ from database.models.fitting import (
     FittingHoleTemplateModel,
     FittingModel,
 )
+from database.models.mounting_node import (
+    MountingNodeItemModel,
+    MountingNodeModel,
+    MountingNodeTemplateModel,
+)
 from database.models.fitting_image import (
     FittingImageModel,
 )
