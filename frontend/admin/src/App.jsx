@@ -43,10 +43,12 @@ import ProcessingWorkspace from "./components/processing/ProcessingWorkspace.jsx
 import {
   getProcessingWorkspaceSidebarTabs,
   getProcessingWorkspaceTabTargetView,
+  normalizeProcessingWorkspaceTab,
   resolveActiveProcessingNavigationKey,
   PROCESSING_WORKSPACE_STORAGE_KEY,
   shouldAutoOpenCatalogMenu,
 } from "./processingWorkspace.js";
+import { readProcessingTemplatesReturnState } from "./processingTemplates.js";
 import {
   buildFittingSubmissionPayload,
   canEditFittingItem as canEditFittingItemHelper,
@@ -6985,6 +6987,10 @@ export default function App() {
   const isCatalogBundlesRequestedView = activeView === "catalogBundles";
   const isCatalogHolesView = isCatalogHolesRequestedView && canViewFittingHoles;
   const isCatalogBundlesView = isCatalogBundlesRequestedView && canViewFittingHoles;
+  const processingTemplatesReturnState = useMemo(
+    () => (isCatalogHolesView ? readProcessingTemplatesReturnState() : null),
+    [isCatalogHolesView],
+  );
   const trialCountdown = useMemo(
     () => buildTrialCountdown(user, trialClockNow),
     [trialClockNow, user],
@@ -13801,6 +13807,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
     if (workspaceMode !== "existing") {
       return;
     }
+
     if (templates.length) {
       const preferredTemplate = String(preferredTemplateId || "").trim()
         ? templates.find((template) => String(template.id) === String(preferredTemplateId)) || null
@@ -14422,6 +14429,15 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
 
     if (nextView === "processing") {
       setIsProcessingMenuOpen(true);
+    }
+
+    if (nextView === "processing" && openContext?.processingTab) {
+      const normalizedProcessingTab = normalizeProcessingWorkspaceTab(openContext.processingTab, {
+        canUseFittingHoles: canViewFittingHoles,
+        isAdmin: viewer?.role === "admin",
+      });
+      setActiveProcessingTab(normalizedProcessingTab);
+      localStorage.setItem(PROCESSING_WORKSPACE_STORAGE_KEY, normalizedProcessingTab);
     }
 
     if (nextView === "catalogHoles") {
@@ -19616,6 +19632,31 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
           </section>
         ) : isCatalogHolesView ? (
           <section className="table-panel full-panel">
+            {processingTemplatesReturnState ? (
+              <div className="readonly-note" style={{ marginBottom: "16px" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
+                  <div>
+                    <strong>{language === "uk" ? "Повернення до шаблонів обробки" : "Return to processing templates"}</strong>
+                    <span>
+                      {language === "uk"
+                        ? "Поверніться до того ж шаблону, фільтрів і позиції списку."
+                        : "Return to the same template, filters, and list position."}
+                    </span>
+                  </div>
+                  <button
+                    className="primary-button"
+                    onClick={() =>
+                      switchView("processing", user, {
+                        processingTab: processingTemplatesReturnState.processingTab || "templates",
+                      })
+                    }
+                    type="button"
+                  >
+                    {language === "uk" ? "Повернутися" : "Return"}
+                  </button>
+                </div>
+              </div>
+            ) : null}
             <article className="catalog-card service-catalog-card service-catalog-card-full holes-view-card">
               <div className="catalog-page-header">
                 <div className="service-catalog-title">

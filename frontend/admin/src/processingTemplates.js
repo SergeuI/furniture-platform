@@ -120,6 +120,8 @@ const PROCESSING_TEMPLATE_TYPE_LABELS = {
   },
 };
 
+export const PROCESSING_TEMPLATES_RETURN_STATE_STORAGE_KEY = "furniture_admin_processing_templates_return_state";
+
 function pickLocalizedText(source, language) {
   if (!source) {
     return "";
@@ -260,6 +262,109 @@ export function buildProcessingTemplateEditorContext(template, fitting) {
   }
 
   return context;
+}
+
+export function buildProcessingTemplatesReturnState({
+  selectedFittingId = "",
+  selectedTemplateId = "",
+  mountingVariantFilter = "all",
+  templateStatusFilter = "all",
+  fittingSearch = "",
+  templateSearch = "",
+  scrollPosition = null,
+  previewWasOpen = false,
+  processingTab = "",
+} = {}) {
+  const state = {};
+  const normalizedSelectedFittingId = String(selectedFittingId || "").trim();
+  const normalizedSelectedTemplateId = String(selectedTemplateId || "").trim();
+  const normalizedMountingVariantFilter = String(mountingVariantFilter || "").trim();
+  const normalizedTemplateStatusFilter = String(templateStatusFilter || "").trim();
+  const normalizedFittingSearch = String(fittingSearch || "").trim();
+  const normalizedTemplateSearch = String(templateSearch || "").trim();
+  const normalizedProcessingTab = String(processingTab || "").trim();
+  const normalizedScrollPosition = Number(scrollPosition);
+
+  if (normalizedSelectedFittingId) {
+    state.selectedFittingId = normalizedSelectedFittingId;
+  }
+
+  if (normalizedSelectedTemplateId) {
+    state.selectedTemplateId = normalizedSelectedTemplateId;
+  }
+
+  if (normalizedMountingVariantFilter) {
+    state.mountingVariantFilter = normalizedMountingVariantFilter;
+  }
+
+  if (normalizedTemplateStatusFilter) {
+    state.templateStatusFilter = normalizedTemplateStatusFilter;
+  }
+
+  if (normalizedFittingSearch) {
+    state.fittingSearch = normalizedFittingSearch;
+  }
+
+  if (normalizedTemplateSearch) {
+    state.templateSearch = normalizedTemplateSearch;
+  }
+
+  if (Number.isFinite(normalizedScrollPosition) && normalizedScrollPosition >= 0) {
+    state.scrollPosition = normalizedScrollPosition;
+  }
+
+  if (Object.keys(state).length || previewWasOpen) {
+    state.previewWasOpen = Boolean(previewWasOpen);
+  }
+
+  if (normalizedProcessingTab) {
+    state.processingTab = normalizedProcessingTab;
+  }
+
+  return state;
+}
+
+export function saveProcessingTemplatesReturnState(payload = {}) {
+  if (typeof window === "undefined" || typeof window.sessionStorage === "undefined") {
+    return null;
+  }
+
+  const state = buildProcessingTemplatesReturnState(payload);
+
+  if (!Object.keys(state).length) {
+    window.sessionStorage.removeItem(PROCESSING_TEMPLATES_RETURN_STATE_STORAGE_KEY);
+    return null;
+  }
+
+  window.sessionStorage.setItem(PROCESSING_TEMPLATES_RETURN_STATE_STORAGE_KEY, JSON.stringify(state));
+  return state;
+}
+
+export function readProcessingTemplatesReturnState() {
+  if (typeof window === "undefined" || typeof window.sessionStorage === "undefined") {
+    return null;
+  }
+
+  const rawValue = window.sessionStorage.getItem(PROCESSING_TEMPLATES_RETURN_STATE_STORAGE_KEY);
+
+  if (!rawValue) {
+    return null;
+  }
+
+  try {
+    const parsedValue = JSON.parse(rawValue);
+    return buildProcessingTemplatesReturnState(parsedValue);
+  } catch {
+    return null;
+  }
+}
+
+export function clearProcessingTemplatesReturnState() {
+  if (typeof window === "undefined" || typeof window.sessionStorage === "undefined") {
+    return;
+  }
+
+  window.sessionStorage.removeItem(PROCESSING_TEMPLATES_RETURN_STATE_STORAGE_KEY);
 }
 
 export function getProcessingTemplateTypeLabel(templateType, language = "uk") {

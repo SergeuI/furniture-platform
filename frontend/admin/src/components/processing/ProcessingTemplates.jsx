@@ -12,6 +12,7 @@ import {
 import {
   filterProcessingTemplates,
   buildProcessingTemplateEditorContext,
+  clearProcessingTemplatesReturnState,
   getProcessingFittingDisplayLabel,
   getProcessingFittingSearchText,
   getProcessingTemplateCardSubtitle,
@@ -23,6 +24,8 @@ import {
   getProcessingTemplateStatusLabel,
   getProcessingTemplateTypeLabel,
   getProcessingTemplateVariantOptions,
+  readProcessingTemplatesReturnState,
+  saveProcessingTemplatesReturnState,
 } from "../../processingTemplates.js";
 
 function formatValue(value, language) {
@@ -131,15 +134,24 @@ function TemplateOperationCard({ operation, index, language }) {
   );
 }
 
-function TemplatePreviewPanel({ error = "", language, loading = false, preview, selectedFitting, selectedTemplate, onOpenEditor }) {
+function TemplatePreviewPanel({
+  error = "",
+  language,
+  loading = false,
+  preview,
+  selectedFitting,
+  selectedTemplate,
+  onOpenEditor,
+  showOpenEditorButton = true,
+}) {
   if (loading) {
     return (
       <article className="dashboard-panel">
         <div className="dashboard-panel-head">
           <div>
-            <h3>{language === "uk" ? "РџРѕРїРµСЂРµРґРЅС–Р№ РїРµСЂРµРіР»СЏРґ РѕРїРµСЂР°С†С–Р№" : "Operations preview"}</h3>
+            <h3>{language === "uk" ? "Завантаження попереднього перегляду" : "Operations preview"}</h3>
             <p>
-              {language === "uk" ? "Р—Р°РІР°РЅС‚Р°Р¶СѓС”РјРѕ preview..." : "Loading preview..."}
+              {language === "uk" ? "Зачекайте, отримуємо операції шаблону…" : "Loading preview..."}
             </p>
           </div>
         </div>
@@ -191,10 +203,10 @@ function TemplatePreviewPanel({ error = "", language, loading = false, preview, 
               : "Only read-only data for the current template is shown here."}
           </p>
         </div>
-        {typeof onOpenEditor === "function" ? (
+        {showOpenEditorButton && typeof onOpenEditor === "function" ? (
           <button
             className="primary-button"
-            onClick={() => onOpenEditor(buildProcessingTemplateEditorContext(selectedTemplate, selectedFitting))}
+            onClick={() => onOpenEditor(selectedTemplate)}
             type="button"
           >
             {language === "uk" ? "Відкрити цей шаблон у редакторі" : "Open this template in editor"}
@@ -251,27 +263,131 @@ function TemplatePreviewPanel({ error = "", language, loading = false, preview, 
   );
 }
 
+function TemplatePreviewModal({
+  error = "",
+  isOpen = false,
+  language,
+  loading = false,
+  onClose = null,
+  onOpenEditor = null,
+  preview = null,
+  selectedFitting = null,
+  selectedTemplate = null,
+}) {
+  useEffect(() => {
+    if (!isOpen) {
+      return undefined;
+    }
+
+    function handleKeyDown(event) {
+      if (event.key === "Escape" && typeof onClose === "function") {
+        event.preventDefault();
+        onClose();
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
+
+  if (!isOpen) {
+    return null;
+  }
+
+  const handleBackdropClick = () => {
+    if (typeof onClose === "function") {
+      onClose();
+    }
+  };
+
+  const handleDialogClick = (event) => {
+    event.stopPropagation();
+  };
+
+  return (
+    <div className="modal-backdrop" onClick={handleBackdropClick} role="presentation">
+      <section
+        aria-label={language === "uk" ? "Попередній перегляд операцій" : "Operations preview"}
+        aria-modal="true"
+        className="confirm-modal hole-template-modal processing-template-preview-modal"
+        onClick={handleDialogClick}
+        role="dialog"
+      >
+        <div className="dashboard-panel-head" style={{ marginBottom: 0 }}>
+          <div>
+            <h3>{language === "uk" ? "Попередній перегляд операцій" : "Operations preview"}</h3>
+            <p>
+              {language === "uk"
+                ? "Read-only перегляд показано у спливаючому вікні без зміни шаблону."
+                : "Read-only preview is shown in a modal without changing the template."}
+            </p>
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", justifyContent: "flex-end" }}>
+            {typeof onOpenEditor === "function" ? (
+              <button
+                className="primary-button"
+                onClick={() => onOpenEditor(selectedTemplate)}
+                type="button"
+              >
+                {language === "uk" ? "Відкрити цей шаблон у редакторі" : "Open this template in editor"}
+              </button>
+            ) : null}
+            <button className="ghost-button" onClick={onClose} type="button">
+              {language === "uk" ? "Закрити" : "Close"}
+            </button>
+          </div>
+        </div>
+
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", paddingRight: "0.25rem" }}>
+          <TemplatePreviewPanel
+            error={error}
+            language={language}
+            loading={loading}
+            onOpenEditor={onOpenEditor}
+            preview={preview}
+            selectedFitting={selectedFitting}
+            selectedTemplate={selectedTemplate}
+            showOpenEditorButton={false}
+          />
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function FittingOptionLabel(item, language) {
   return getProcessingFittingDisplayLabel(item, language);
 }
 
 export default function ProcessingTemplates({ language = "uk", token = "", onOpenFittingHolesEditor = null }) {
+  const initialReturnStateRef = useRef(null);
+  if (initialReturnStateRef.current === null) {
+    initialReturnStateRef.current = readProcessingTemplatesReturnState();
+  }
+  const initialReturnState = initialReturnStateRef.current || {};
   const [fittings, setFittings] = useState([]);
   const [fittingsLoading, setFittingsLoading] = useState(false);
   const [fittingsError, setFittingsError] = useState("");
-  const [fittingSearch, setFittingSearch] = useState("");
-  const [selectedFittingId, setSelectedFittingId] = useState("");
+  const [fittingSearch, setFittingSearch] = useState(initialReturnState.fittingSearch || "");
+  const [selectedFittingId, setSelectedFittingId] = useState(initialReturnState.selectedFittingId || "");
   const [templates, setTemplates] = useState([]);
   const [templatesLoading, setTemplatesLoading] = useState(false);
   const [templatesError, setTemplatesError] = useState("");
-  const [templateSearch, setTemplateSearch] = useState("");
-  const [templateStatusFilter, setTemplateStatusFilter] = useState("all");
-  const [mountingVariantFilter, setMountingVariantFilter] = useState("all");
-  const [selectedTemplateId, setSelectedTemplateId] = useState("");
+  const [templateSearch, setTemplateSearch] = useState(initialReturnState.templateSearch || "");
+  const [templateStatusFilter, setTemplateStatusFilter] = useState(initialReturnState.templateStatusFilter || "all");
+  const [mountingVariantFilter, setMountingVariantFilter] = useState(initialReturnState.mountingVariantFilter || "all");
+  const [selectedTemplateId, setSelectedTemplateId] = useState(initialReturnState.selectedTemplateId || "");
   const [preview, setPreview] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState("");
-  const selectedTemplatePreviewRef = useRef(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(Boolean(initialReturnState.previewWasOpen));
+  const previewRestorePendingRef = useRef(Boolean(initialReturnState.previewWasOpen));
+  const scrollRestorePositionRef = useRef(initialReturnState.scrollPosition ?? null);
+  const scrollRestoreAppliedRef = useRef(false);
+
+  useEffect(() => {
+    clearProcessingTemplatesReturnState();
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -307,7 +423,6 @@ export default function ProcessingTemplates({ language = "uk", token = "", onOpe
 
   useEffect(() => {
     if (!fittings.length) {
-      setSelectedFittingId("");
       return;
     }
 
@@ -328,6 +443,7 @@ export default function ProcessingTemplates({ language = "uk", token = "", onOpe
       setSelectedTemplateId("");
       setPreview(null);
       setPreviewError("");
+      setIsPreviewOpen(false);
       return undefined;
     }
 
@@ -336,7 +452,6 @@ export default function ProcessingTemplates({ language = "uk", token = "", onOpe
     async function loadTemplates() {
       setTemplatesLoading(true);
       setTemplatesError("");
-      setSelectedTemplateId("");
       setPreview(null);
       setPreviewError("");
 
@@ -356,7 +471,15 @@ export default function ProcessingTemplates({ language = "uk", token = "", onOpe
       const items = Array.isArray(result.templates) ? result.templates : [];
       setTemplates(items);
       setTemplatesLoading(false);
-      setSelectedTemplateId(items[0]?.id ? String(items[0].id) : "");
+      setSelectedTemplateId((current) => {
+        const normalizedCurrent = String(current || "");
+
+        if (normalizedCurrent && items.some((item) => String(item.id) === normalizedCurrent)) {
+          return normalizedCurrent;
+        }
+
+        return items[0]?.id ? String(items[0].id) : "";
+      });
     }
 
     loadTemplates();
@@ -413,6 +536,7 @@ export default function ProcessingTemplates({ language = "uk", token = "", onOpe
     }
 
     setSelectedTemplateId(String(template.id));
+    setIsPreviewOpen(true);
     setPreviewLoading(true);
     setPreviewError("");
 
@@ -434,16 +558,63 @@ export default function ProcessingTemplates({ language = "uk", token = "", onOpe
     : null;
 
   useEffect(() => {
-    if (!selectedTemplatePreview || !selectedTemplatePreviewRef.current) {
-      return undefined;
+    if (
+      !previewRestorePendingRef.current ||
+      !isPreviewOpen ||
+      !selectedTemplate
+    ) {
+      return;
     }
 
-    selectedTemplatePreviewRef.current.scrollIntoView({
-      behavior: "smooth",
-      block: "start",
+    previewRestorePendingRef.current = false;
+    void handlePreviewTemplate(selectedTemplate);
+  }, [isPreviewOpen, selectedTemplate]);
+
+  useEffect(() => {
+    if (
+      scrollRestoreAppliedRef.current ||
+      scrollRestorePositionRef.current === null ||
+      fittingsLoading ||
+      templatesLoading
+    ) {
+      return;
+    }
+
+    const scrollPosition = Number(scrollRestorePositionRef.current);
+    if (!Number.isFinite(scrollPosition) || scrollPosition < 0) {
+      scrollRestoreAppliedRef.current = true;
+      return;
+    }
+
+    scrollRestoreAppliedRef.current = true;
+    window.requestAnimationFrame(() => {
+      window.scrollTo({ behavior: "auto", top: scrollPosition });
     });
-    return undefined;
-  }, [selectedTemplatePreview]);
+  }, [fittingsLoading, templatesLoading]);
+
+  function handleOpenFittingHolesEditor(template) {
+    if (typeof onOpenFittingHolesEditor !== "function") {
+      return;
+    }
+
+    saveProcessingTemplatesReturnState({
+      fittingSearch,
+      mountingVariantFilter,
+      previewWasOpen: isPreviewOpen,
+      processingTab: "templates",
+      scrollPosition: typeof window !== "undefined" ? window.scrollY : 0,
+      selectedFittingId,
+      selectedTemplateId: String(template?.id || selectedTemplateId || "").trim(),
+      templateSearch,
+      templateStatusFilter,
+    });
+
+    onOpenFittingHolesEditor(buildProcessingTemplateEditorContext(template, selectedFitting));
+  }
+
+  function handleClosePreviewModal() {
+    setIsPreviewOpen(false);
+  }
 
   return (
     <section className="dashboard-layout">
@@ -617,7 +788,6 @@ export default function ProcessingTemplates({ language = "uk", token = "", onOpe
               const cardTitle = getProcessingTemplateCardTitle(template, selectedFitting, language);
               const subtitle = getProcessingTemplateCardSubtitle(template, selectedFitting, language);
               const isSelected = String(template.id) === String(selectedTemplateId || "");
-
               return (
                 <article className={`settings-card${isSelected ? " is-active" : ""}`} key={template.id}>
                   <div className="settings-card-header">
@@ -676,7 +846,7 @@ export default function ProcessingTemplates({ language = "uk", token = "", onOpe
                     {typeof onOpenFittingHolesEditor === "function" ? (
                       <button
                         className="ghost-button"
-                        onClick={() => onOpenFittingHolesEditor(buildProcessingTemplateEditorContext(template, selectedFitting))}
+                        onClick={() => handleOpenFittingHolesEditor(template)}
                         type="button"
                       >
                         {language === "uk" ? "Відкрити цей шаблон у редакторі" : "Open this template in editor"}
@@ -705,25 +875,24 @@ export default function ProcessingTemplates({ language = "uk", token = "", onOpe
                       />
                     </div>
                   </details>
-                  {isSelected ? (
-                    <div ref={selectedTemplatePreviewRef} style={{ marginTop: "0.75rem" }}>
-                      <TemplatePreviewPanel
-                        error={previewError}
-                        language={language}
-                        loading={previewLoading}
-                        onOpenEditor={onOpenFittingHolesEditor}
-                        preview={selectedTemplatePreview}
-                        selectedFitting={selectedFitting}
-                        selectedTemplate={selectedTemplate}
-                      />
-                    </div>
-                  ) : null}
                 </article>
               );
             })}
           </section>
         ) : null}
       </article>
+
+      <TemplatePreviewModal
+        error={previewError}
+        isOpen={isPreviewOpen && Boolean(selectedTemplateId)}
+        language={language}
+        loading={previewLoading}
+        onClose={handleClosePreviewModal}
+        onOpenEditor={handleOpenFittingHolesEditor}
+        preview={selectedTemplatePreview}
+        selectedFitting={selectedFitting}
+        selectedTemplate={selectedTemplate}
+      />
 
       <article className="dashboard-panel">
         <div className="dashboard-panel-head">

@@ -5,6 +5,7 @@ import test from "node:test";
 
 import {
   buildProcessingTemplateEditorContext,
+  buildProcessingTemplatesReturnState,
   filterProcessingTemplates,
   getProcessingTemplateDefaultLabel,
   getProcessingFittingDisplayLabel,
@@ -111,9 +112,45 @@ test("processing templates helpers build readable titles and filters", () => {
 test("processing templates render preview next to the selected card only once", () => {
   const sourcePath = fileURLToPath(new URL("../src/components/processing/ProcessingTemplates.jsx", import.meta.url));
   const source = readFileSync(sourcePath, "utf8");
-  const previewMatches = source.match(/<TemplatePreviewPanel/g) || [];
+  const openEditorMatches = source.match(/onClick=\{\(\) => onOpenEditor\(selectedTemplate\)\}/g) || [];
 
-  assert.equal(source.includes("selectedTemplatePreviewRef"), true);
-  assert.equal(source.includes("isSelected ? ("), true);
-  assert.equal(previewMatches.length, 1);
+  assert.equal(source.includes("TemplatePreviewModal"), true);
+  assert.equal(source.includes('className="modal-backdrop"'), true);
+  assert.equal(source.includes('aria-modal="true"'), true);
+  assert.equal(source.includes("Завантаження попереднього перегляду"), true);
+  assert.equal(source.includes("Зачекайте, отримуємо операції шаблону…"), true);
+  assert.equal(source.includes("selectedTemplatePreviewRef"), false);
+  assert.equal(source.includes("isPreviewOpen && Boolean(selectedTemplateId)"), true);
+  assert.equal(openEditorMatches.length, 2);
+  assert.equal(
+    source.includes("onClick={() => onOpenEditor(buildProcessingTemplateEditorContext(selectedTemplate, selectedFitting))}"),
+    false,
+  );
+});
+
+test("processing templates return state keeps the selected template context and filters", () => {
+  assert.deepEqual(
+    buildProcessingTemplatesReturnState({
+      fittingSearch: "hinge",
+      mountingVariantFilter: "surface_mount",
+      previewWasOpen: true,
+      processingTab: "templates",
+      scrollPosition: 184,
+      selectedFittingId: 7,
+      selectedTemplateId: 91,
+      templateSearch: "drill",
+      templateStatusFilter: "active",
+    }),
+    {
+      fittingSearch: "hinge",
+      mountingVariantFilter: "surface_mount",
+      previewWasOpen: true,
+      processingTab: "templates",
+      scrollPosition: 184,
+      selectedFittingId: "7",
+      selectedTemplateId: "91",
+      templateSearch: "drill",
+      templateStatusFilter: "active",
+    },
+  );
 });

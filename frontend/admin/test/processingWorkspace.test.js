@@ -185,4 +185,12 @@ test("processing app opens catalog holes with the selected template context", ()
 
   assert.match(source, /onOpenFittingHolesEditor=\{\(context\) => switchView\("catalogHoles", user, context\)\}/);
   assert.match(source, /async function switchView\(view, viewer = user, openContext = null\)/);
+  assert.match(source, /if \(nextView === "catalogHoles"\) \{/);
+  assert.match(source, /await handleHoleFittingChange\(/);
+  assert.match(source, /readProcessingTemplatesReturnState\(\)/);
+  assert.match(source, /Return to processing templates/);
+  assert.equal(source.includes("pendingHoleTemplateOpenContext"), false);
+  assert.equal(source.includes("openPendingHoleTemplateInEditor"), false);
+  assert.equal(source.includes("setPendingHoleTemplateOpenContext"), false);
+  assert.equal(source.includes("Завантаження шаблону ID"), false);
 });

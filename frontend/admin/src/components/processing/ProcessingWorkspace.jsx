@@ -68,7 +68,11 @@ export default function ProcessingWorkspace({
       ) : activeTab === "templates" ? (
         <ProcessingTemplates
           language={language}
-          onOpenFittingHolesEditor={onOpenFittingHolesEditor}
+          onOpenFittingHolesEditor={
+            typeof onOpenFittingHolesEditor === "function"
+              ? (context) => onOpenFittingHolesEditor({ ...context, processingTab: activeTab })
+              : null
+          }
           token={token}
         />
       ) : activeTab === "services-prices" ? (
