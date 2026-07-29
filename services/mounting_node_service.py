@@ -166,6 +166,45 @@ class MountingNodeService:
         }
 
     @staticmethod
+    def _normalize_search_text(value: Any) -> str:
+        return " ".join(str(value or "").split()).strip().lower()
+
+    def _node_matches_search(self, node: MountingNodeModel, search: str) -> bool:
+        needle = self._normalize_search_text(search)
+        if not needle:
+            return True
+
+        serialized = self._serialize_node(node)
+        haystack: list[str] = [
+            self._normalize_search_text(serialized.get("code")),
+            self._normalize_search_text(serialized.get("name")),
+            self._normalize_search_text(serialized.get("description")),
+        ]
+
+        for item in serialized.get("items", []):
+            haystack.extend(
+                [
+                    self._normalize_search_text(item.get("fitting_code")),
+                    self._normalize_search_text(item.get("fitting_article")),
+                    self._normalize_search_text(item.get("fitting_name")),
+                    self._normalize_search_text(item.get("fitting_category_code")),
+                    self._normalize_search_text(item.get("role")),
+                ]
+            )
+
+        for template in serialized.get("templates", []):
+            haystack.extend(
+                [
+                    self._normalize_search_text(template.get("template_name")),
+                    self._normalize_search_text(template.get("fitting_code")),
+                    self._normalize_search_text(template.get("fitting_article")),
+                    self._normalize_search_text(template.get("mounting_variant_key")),
+                ]
+            )
+
+        return any(needle in value for value in haystack if value)
+
+    @staticmethod
     def _normalize_item_payload(item: Mapping[str, Any]) -> dict[str, Any]:
         raw_quantity = item.get("quantity", 1)
         quantity = int(1 if raw_quantity is None else raw_quantity)
@@ -261,13 +300,14 @@ class MountingNodeService:
         include_inactive: bool = False,
         fitting_id: int | None = None,
         mounting_variant_key: str | None = None,
+        search: str | None = None,
     ) -> list[dict[str, Any]]:
         nodes = self.repository.list_nodes(
             include_inactive=include_inactive,
             fitting_id=fitting_id,
             mounting_variant_key=mounting_variant_key,
         )
-        return [
+        summaries = [
             {
                 key: value
                 for key, value in self._serialize_node(node).items()
@@ -275,6 +315,15 @@ class MountingNodeService:
             }
             for node in nodes
         ]
+
+        if search is not None and str(search).strip():
+            matched_summaries = []
+            for node, summary in zip(nodes, summaries):
+                if self._node_matches_search(node, search):
+                    matched_summaries.append(summary)
+            return matched_summaries
+
+        return summaries
 
     def get_mounting_node(self, node_id: int) -> dict[str, Any] | None:
         node_id = self._require_int(node_id, "node_id")
