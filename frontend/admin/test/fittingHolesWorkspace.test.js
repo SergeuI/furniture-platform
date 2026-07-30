@@ -1,0 +1,24 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import test from "node:test";
+
+test("fitting holes workspace is extracted into a reusable layout shell", () => {
+  const workspacePath = fileURLToPath(
+    new URL("../src/components/processing/FittingHolesWorkspace.jsx", import.meta.url),
+  );
+  const workspaceSource = readFileSync(workspacePath, "utf8");
+  const appPath = fileURLToPath(new URL("../src/App.jsx", import.meta.url));
+  const appSource = readFileSync(appPath, "utf8");
+
+  assert.equal(workspaceSource.includes("holes-grid"), true);
+  assert.equal(workspaceSource.includes("children"), true);
+  assert.equal(workspaceSource.includes("className"), true);
+  assert.equal(appSource.includes('import FittingHolesWorkspace from "./components/processing/FittingHolesWorkspace.jsx";'), true);
+  assert.equal(appSource.includes("<FittingHolesWorkspace>"), true);
+  assert.equal(appSource.includes("</FittingHolesWorkspace>"), true);
+  assert.equal(appSource.includes("MountingNodesCreatePanel"), false);
+  assert.equal(appSource.includes("catalogHolesMode === \"create\""), false);
+  assert.equal(appSource.includes("holes-workspace-save-panel"), true);
+  assert.equal(appSource.includes("holes-preview-3d-card"), true);
+});

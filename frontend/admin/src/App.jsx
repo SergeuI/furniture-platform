@@ -39,6 +39,7 @@ import {
   getSubscriptionLabel,
 } from "../../shared/trialStatus.js";
 import EntitlementsAdminPage from "./components/EntitlementsAdminPage.jsx";
+import FittingHolesWorkspace from "./components/processing/FittingHolesWorkspace.jsx";
 import MountingNodesPanel from "./components/processing/MountingNodesPanelRefined.jsx";
 import ProcessingWorkspace from "./components/processing/ProcessingWorkspace.jsx";
 import {
@@ -20060,7 +20061,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                 </section>
               ) : null}
 
-              <div className="holes-grid">
+              <FittingHolesWorkspace>
                 <div className="holes-left-column">
                   <div className="holes-workspace-top-zone">
                     {renderHoleWorkspaceFittingInfo(selectedHoleFitting, holeBundleSelectedItems)}
@@ -20768,7 +20769,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                     </div>
                   )}
                 </section>
-                </div>
+              </FittingHolesWorkspace>
               </article>
             ) : (
               <MountingNodesPanel
