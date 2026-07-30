@@ -417,6 +417,7 @@ export default function MountingNodesPanelRefined({
       fittingId: primaryTemplate?.fitting_id || primaryItem?.fitting_id || "",
       templateId: primaryTemplate?.template_id || "",
       mountingVariantKey: primaryTemplate?.mounting_variant_key || "",
+      nodeDetail: selectedNodeDetail,
     }, pendingReturnStateRef.current);
   }
 

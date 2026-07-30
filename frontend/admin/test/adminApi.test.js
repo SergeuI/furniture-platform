@@ -9,6 +9,7 @@ import {
   previewEntitlementRegistrySync,
   listProjects,
   getProjectQuota,
+  updateMountingNode,
   updateMaterial,
 } from "../src/api.js";
 
@@ -225,6 +226,96 @@ test("mounting node detail wrapper loads a single node by id", async () => {
     assert.equal(calls.length, 1);
     assert.equal(calls[0].url, "/api/mounting-nodes/1");
     assert.equal(calls[0].options.headers.Authorization, "Bearer token-6");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("mounting node update wrapper sends a PATCH request with the nested atomic payload", async () => {
+  const calls = [];
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url, options });
+    return new Response(JSON.stringify({ success: true, node: { id: 1 } }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+
+  try {
+    const result = await updateMountingNode("token-7", 1, {
+      code: "node-1",
+      name: "Node 1",
+      items: [
+        {
+          fitting_id: 11,
+          quantity: 2,
+          role: "primary",
+          is_required: true,
+          affects_processing: true,
+          order_index: 1,
+        },
+      ],
+      templates: [
+        {
+          template_id: 7428,
+          is_default: true,
+          order_index: 0,
+          template: {
+            template_id: 7428,
+            fitting_id: 11,
+            name: "Main template",
+            template_type: "manual",
+            mounting_variant_key: "face_to_edge",
+            is_default: true,
+            points: [
+              { id: 29, template_id: 7428, diameter_mm: 7, order_index: 0, quantity: 1 },
+              { id: 30, template_id: 7428, diameter_mm: 4.5, order_index: 1, quantity: 1 },
+            ],
+          },
+        },
+      ],
+    });
+
+    assert.equal(result.success, true);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].url, "/api/mounting-nodes/1");
+    assert.equal(calls[0].options.method, "PATCH");
+    assert.equal(calls[0].options.headers.Authorization, "Bearer token-7");
+    assert.deepEqual(JSON.parse(calls[0].options.body), {
+      code: "node-1",
+      name: "Node 1",
+      items: [
+        {
+          fitting_id: 11,
+          quantity: 2,
+          role: "primary",
+          is_required: true,
+          affects_processing: true,
+          order_index: 1,
+        },
+      ],
+      templates: [
+        {
+          template_id: 7428,
+          is_default: true,
+          order_index: 0,
+          template: {
+            template_id: 7428,
+            fitting_id: 11,
+            name: "Main template",
+            template_type: "manual",
+            mounting_variant_key: "face_to_edge",
+            is_default: true,
+            points: [
+              { id: 29, template_id: 7428, diameter_mm: 7, order_index: 0, quantity: 1 },
+              { id: 30, template_id: 7428, diameter_mm: 4.5, order_index: 1, quantity: 1 },
+            ],
+          },
+        },
+      ],
+    });
   } finally {
     globalThis.fetch = originalFetch;
   }

@@ -455,6 +455,24 @@ export async function getMountingNode(token, nodeId) {
   });
 }
 
+export async function updateMountingNode(token, nodeId, payload) {
+  const normalizedNodeId = String(nodeId || "").trim();
+
+  if (!normalizedNodeId) {
+    return {
+      success: false,
+      error: "Mounting node ID is required",
+      status: 0,
+    };
+  }
+
+  return request(`/mounting-nodes/${encodeURIComponent(normalizedNodeId)}`, {
+    method: "PATCH",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function listFittingHoleBundles(token) {
   return request("/fitting-holes/bundles", {
     headers: authHeaders(token),

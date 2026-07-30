@@ -31,6 +31,7 @@ test("mounting nodes panel preserves list state and restores scroll after editor
   assert.equal(source.includes("mounting-nodes-refresh-button"), true);
   assert.equal(source.includes("mounting-node-return-button"), true);
   assert.equal(source.includes("mounting-node-editor-button"), true);
+  assert.equal(source.includes("nodeDetail: selectedNodeDetail"), true);
   assert.equal(source.includes("mounting-node-detail-screen"), true);
   assert.equal(source.includes("Return to mounting nodes"), true);
   assert.equal(source.includes("initialState = null"), true);
@@ -48,6 +49,11 @@ test("catalog holes page shows the mounting nodes editor only in editor mode", (
   assert.equal(source.includes('setCatalogHolesMode("list")'), true);
   assert.equal(source.includes("mounting-node-editor-banner-grid"), true);
   assert.equal(source.includes("Return to node details"), true);
+  assert.equal(source.includes("Зберегти монтажний вузол"), true);
+  assert.equal(source.includes("handleCatalogHolesSaveMountingNode"), true);
+  assert.equal(source.includes("catalogHolesSaving"), true);
+  assert.equal(source.includes("catalogHolesOpenContext?.mountingNodeId"), true);
+  assert.equal(source.includes("catalogHolesOpenContext?.nodeDetail"), true);
   assert.equal(source.includes("Editor open"), true);
   assert.equal(source.includes("Current node context."), true);
 });

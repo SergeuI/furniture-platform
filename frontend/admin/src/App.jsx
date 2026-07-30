@@ -115,6 +115,10 @@ import {
   createHolePointFormDefaults,
   mergeHolePointSaveResponse,
 } from "./holePointForm.js";
+import {
+  buildMountingNodeEditorSavePayload,
+  canSaveMountingNodeEditor,
+} from "./mountingNodesEditor.js";
 
 import surfaceMountIcon from "./assets/hole-mounting/surface_mount.png";
 import angledTwoPlanesIcon from "./assets/hole-mounting/angled_two_planes.png";
@@ -191,6 +195,7 @@ import {
   rollbackProject,
   resetUserPassword,
   updateCatalogItem,
+  updateMountingNode,
   updateFittingHoleBundle,
   updateFittingHoleBundleMountingVariant,
   updateFittingHoleTemplate,
@@ -6995,6 +7000,7 @@ export default function App() {
   const [holeSelectedFittingId, setHoleSelectedFittingId] = useState("");
   const [holeSelectedTemplateId, setHoleSelectedTemplateId] = useState("");
   const [holeSelectedTemplate, setHoleSelectedTemplate] = useState(null);
+  const [holeTemplateDetailsLoaded, setHoleTemplateDetailsLoaded] = useState(false);
   const [holeWorkspaceMode, setHoleWorkspaceMode] = useState("new");
   const [holePoints, setHolePoints] = useState([]);
   const [holeServicePreview, setHoleServicePreview] = useState(null);
@@ -7023,6 +7029,7 @@ export default function App() {
   const [catalogHolesMode, setCatalogHolesMode] = useState("list");
   const [catalogHolesOpenContext, setCatalogHolesOpenContext] = useState(null);
   const [catalogHolesReturnState, setCatalogHolesReturnState] = useState(null);
+  const [catalogHolesSaving, setCatalogHolesSaving] = useState(false);
   const [holeMountingVariantDropdownOpen, setHoleMountingVariantDropdownOpen] = useState(false);
   const materialsCatalogRequestRef = useRef({ id: 0, pending: false });
   const fittingsCatalogRequestRef = useRef({ id: 0, pending: false });
@@ -9675,6 +9682,131 @@ export default function App() {
     setCatalogHolesOpenContext(null);
   }
 
+  async function handleCatalogHolesSaveMountingNode() {
+    if (!token || catalogHolesSaving) {
+      return;
+    }
+
+    const mountingNodeId = String(catalogHolesOpenContext?.mountingNodeId || "").trim();
+    const selectedTemplateId = String(holeSelectedTemplateId || selectedHoleTemplate?.id || catalogHolesOpenContext?.templateId || "").trim();
+
+    if (
+      !canSaveMountingNodeEditor({
+        context: catalogHolesOpenContext,
+        pointsLoaded: holeTemplateDetailsLoaded,
+        selectedTemplate: selectedHoleTemplate,
+        saving: catalogHolesSaving,
+      })
+    ) {
+      setStatus({
+        message: language === "uk"
+          ? "Спочатку дочекайтеся завантаження точок і деталей вузла."
+          : "Wait until the node details and points are loaded.",
+        tone: "error",
+      });
+      return;
+    }
+
+    let payload;
+    try {
+      payload = buildMountingNodeEditorSavePayload({
+        context: catalogHolesOpenContext,
+        points: Array.isArray(holePoints) ? holePoints : [],
+        pointsLoaded: holeTemplateDetailsLoaded,
+        selectedTemplate: selectedHoleTemplate,
+      });
+    } catch (error) {
+      setStatus({
+        message: error?.message || (language === "uk" ? "Не вдалося зберегти монтажний вузол" : "Unable to save mounting node"),
+        tone: "error",
+      });
+      return;
+    }
+
+    if (!mountingNodeId) {
+      setStatus({
+        message: language === "uk" ? "Не вдалося зберегти монтажний вузол" : "Unable to save mounting node",
+        tone: "error",
+      });
+      return;
+    }
+
+    setCatalogHolesSaving(true);
+    try {
+      const result = await updateMountingNode(token, mountingNodeId, payload);
+
+      if (!result.success) {
+        setStatus({
+          message: result.error || (language === "uk" ? "Не вдалося зберегти монтажний вузол" : "Unable to save mounting node"),
+          tone: "error",
+        });
+        return;
+      }
+
+      const savedNode = result.node || result.item || result.data || null;
+      const savedTemplates = Array.isArray(savedNode?.templates) ? savedNode.templates : [];
+      const savedCurrentLink =
+        savedTemplates.find(
+          (link) =>
+            String(link?.template_id || link?.template?.id || "") === String(selectedTemplateId || ""),
+        ) || savedTemplates[0] || null;
+      const savedCurrentTemplate = savedCurrentLink?.template || selectedHoleTemplate || null;
+
+      if (savedNode) {
+        setCatalogHolesOpenContext((current) => ({
+          ...(current || {}),
+          mountingNodeId: String(savedNode.id || current?.mountingNodeId || mountingNodeId),
+          nodeCode: String(savedNode.code || current?.nodeCode || ""),
+          nodeName: String(savedNode.name || current?.nodeName || ""),
+          fittingId: String(savedCurrentLink?.fitting_id || current?.fittingId || selectedHoleTemplate?.fitting_id || ""),
+          templateId: String(savedCurrentLink?.template_id || savedCurrentTemplate?.id || selectedTemplateId || ""),
+          mountingVariantKey: String(savedCurrentLink?.mounting_variant_key || savedCurrentTemplate?.mounting_variant_key || current?.mountingVariantKey || ""),
+          nodeDetail: savedNode,
+        }));
+
+        setHoleTemplateItems(
+          savedTemplates.map((link) => link?.template || {
+            id: link?.template_id,
+            fitting_id: link?.fitting_id,
+            name: link?.template_name || "",
+            mounting_variant_key: link?.mounting_variant_key || "",
+            is_default: Boolean(link?.is_default),
+            is_active: Boolean(link?.is_active),
+          }),
+        );
+
+        if (savedCurrentTemplate?.id) {
+          setHoleSelectedTemplateId(String(savedCurrentTemplate.id));
+        }
+
+        if (savedCurrentTemplate) {
+          setHoleSelectedTemplate(savedCurrentTemplate);
+        }
+
+        if (Array.isArray(savedCurrentTemplate?.points)) {
+          setHolePoints(savedCurrentTemplate.points);
+          setHoleTemplateDetailsLoaded(true);
+        }
+      }
+
+      if (savedCurrentTemplate?.id) {
+        await loadHoleServicePreview(token, savedCurrentTemplate.id);
+      }
+
+      setStatus({
+        message: language === "uk" ? "Монтажний вузол збережено" : "Mounting node saved",
+        tone: "success",
+      });
+    } catch (error) {
+      setStatus({
+        message: error?.message || (language === "uk" ? "Не вдалося зберегти монтажний вузол" : "Unable to save mounting node"),
+        tone: "error",
+      });
+    } finally {
+      setCatalogHolesSaving(false);
+    }
+  }
+
   async function loadUsers(activeToken = token, nextOffset = usersOffset, viewer = user) {
     if (!activeToken || viewer?.role !== "admin") {
       return;
@@ -10348,6 +10480,7 @@ export default function App() {
       setHoleTemplateItems([]);
       setHoleSelectedTemplateId("");
       setHoleSelectedTemplate(null);
+      setHoleTemplateDetailsLoaded(false);
       setHolePoints([]);
       setSelectedHolePointId("");
       return [];
@@ -10364,6 +10497,7 @@ export default function App() {
       setHoleTemplateItems([]);
       setHoleSelectedTemplateId("");
       setHoleSelectedTemplate(null);
+      setHoleTemplateDetailsLoaded(false);
       setHolePoints([]);
       setSelectedHolePointId("");
       setStatus({ message: result.error || "Unable to load fitting hole templates", tone: "error" });
@@ -10373,6 +10507,7 @@ export default function App() {
     const templates = Array.isArray(result.templates) ? result.templates : [];
     setHoleTemplateItems(templates);
     setHoleSelectedTemplate(null);
+    setHoleTemplateDetailsLoaded(false);
     setHolePoints([]);
     setSelectedHolePointId("");
     return templates;
@@ -13728,8 +13863,11 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
     templateId = holeSelectedTemplateId,
     preferredVariantKey = selectedHoleMountingVariantKey,
   ) {
+    setHoleTemplateDetailsLoaded(false);
+
     if (!activeToken || !templateId) {
       setHoleSelectedTemplate(null);
+      setHoleTemplateDetailsLoaded(false);
       setHolePoints([]);
       setSelectedHolePointId("");
       setHoleServicePreview(null);
@@ -13751,6 +13889,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
       }
 
       setHoleSelectedTemplate(null);
+      setHoleTemplateDetailsLoaded(false);
       setHolePoints([]);
       setSelectedHolePointId("");
       setHoleServicePreview(null);
@@ -13801,6 +13940,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
         return true;
       }
 
+      setHoleTemplateDetailsLoaded(false);
       setHolePoints([]);
       setSelectedHolePointId("");
       setHoleServicePreview(null);
@@ -13810,6 +13950,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
     }
 
     setHolePoints(Array.isArray(pointsResult.points) ? pointsResult.points : []);
+    setHoleTemplateDetailsLoaded(true);
     await loadHoleServicePreview(activeToken, templateId);
     return true;
   }
@@ -13855,6 +13996,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
     setHoleSelectedFittingId(nextFittingId);
     setHoleSelectedTemplateId("");
     setHoleSelectedTemplate(null);
+    setHoleTemplateDetailsLoaded(false);
     setHoleTemplateItems([]);
     setHolePoints([]);
     setHoleServicePreview(null);
@@ -13925,6 +14067,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
 
     setHoleSelectedTemplateId("");
     setHoleSelectedTemplate(null);
+    setHoleTemplateDetailsLoaded(false);
     setHolePoints([]);
     setHoleServicePreview(null);
     setHoleServicePreviewError("");
@@ -13938,6 +14081,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
   async function handleHoleTemplateChange(nextTemplateId, preferredVariantKey = selectedHoleMountingVariantKey) {
     setHoleSelectedTemplateId(nextTemplateId);
     setHoleSelectedTemplate(null);
+    setHoleTemplateDetailsLoaded(false);
     setHolePoints([]);
     setHoleServicePreview(null);
     setHoleServicePreviewError("");
@@ -14511,6 +14655,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
       setCatalogHolesMode("list");
       setCatalogHolesOpenContext(null);
       setCatalogHolesReturnState(null);
+      setCatalogHolesSaving(false);
     }
 
     if (nextView === "catalogHoles") {
@@ -14520,16 +14665,19 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
       const contextFittingId = String(openContext?.fittingId || "").trim();
       const contextTemplateId = String(openContext?.templateId || "").trim();
       const contextVariantKey = normalizeHoleWorkspaceMountingVariantKey(openContext?.mountingVariantKey || "");
+      const contextNodeDetail =
+        openContext?.nodeDetail && typeof openContext.nodeDetail === "object" ? openContext.nodeDetail : null;
 
       setCatalogHolesOpenContext(
         contextMountingNodeId
           ? {
-          mountingNodeId: contextMountingNodeId,
-          nodeCode: contextNodeCode,
-          nodeName: contextNodeName,
-          fittingId: contextFittingId,
-          templateId: contextTemplateId,
-          mountingVariantKey: contextVariantKey,
+            mountingNodeId: contextMountingNodeId,
+            nodeCode: contextNodeCode,
+            nodeName: contextNodeName,
+            fittingId: contextFittingId,
+            templateId: contextTemplateId,
+            mountingVariantKey: contextVariantKey,
+            nodeDetail: contextNodeDetail,
           }
           : null,
       );
@@ -19806,6 +19954,22 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   <span className="service-tree-badge subtle">
                     {t.holeReadOnlyBadge}
                   </span>
+                  {catalogHolesOpenContext?.mountingNodeId && catalogHolesOpenContext?.nodeDetail ? (
+                    <button
+                      className="primary-button mounting-node-save-button"
+                      disabled={!canSaveMountingNodeEditor({
+                        context: catalogHolesOpenContext,
+                        pointsLoaded: holeTemplateDetailsLoaded,
+                        selectedTemplate: selectedHoleTemplate,
+                        saving: catalogHolesSaving,
+                      })}
+                      onClick={handleCatalogHolesSaveMountingNode}
+                      type="button"
+                    >
+                      <Save size={16} />
+                      {language === "uk" ? "Зберегти монтажний вузол" : "Save mounting node"}
+                    </button>
+                  ) : null}
                 </div>
               </div>
 
