@@ -54,6 +54,10 @@ test("catalog holes page shows the mounting nodes editor only in editor mode", (
   assert.equal(source.includes("catalogHolesSaving"), true);
   assert.equal(source.includes("catalogHolesOpenContext?.mountingNodeId"), true);
   assert.equal(source.includes("catalogHolesOpenContext?.nodeDetail"), true);
+  assert.equal(source.includes("const isMountingNodeEditorMode = Boolean("), true);
+  assert.equal(source.includes("!isMountingNodeEditorMode ? ("), true);
+  assert.equal(source.includes("holes-bundle-create-panel"), true);
+  assert.equal(source.includes("holes-workspace-save-panel"), true);
   assert.equal(source.includes("Editor open"), true);
   assert.equal(source.includes("Current node context."), true);
 });

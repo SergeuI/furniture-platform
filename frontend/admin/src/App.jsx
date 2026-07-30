@@ -7056,6 +7056,12 @@ export default function App() {
   const isCatalogBundlesRequestedView = activeView === "catalogBundles";
   const isCatalogHolesView = isCatalogHolesRequestedView && canViewFittingHoles;
   const isCatalogBundlesView = isCatalogBundlesRequestedView && canViewFittingHoles;
+  const isMountingNodeEditorMode = Boolean(
+    isCatalogHolesView &&
+      catalogHolesMode === "editor" &&
+      catalogHolesOpenContext?.mountingNodeId &&
+      catalogHolesOpenContext?.nodeDetail,
+  );
   const processingTemplatesReturnState = useMemo(
     () => (isCatalogHolesView ? readProcessingTemplatesReturnState() : null),
     [isCatalogHolesView],
@@ -19973,84 +19979,86 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                 </div>
               </div>
 
-              <section className="holes-bundle-create-panel">
-                <div className="holes-bundle-create-head">
-                  <div>
-                    <strong>{t.holeBundleCreateTitle}</strong>
-                    <p>{t.holeBundleCreateDescription}</p>
-                  </div>
-                  <span className="service-tree-badge subtle">
-                    {holeBundleSelectedItems.length} {t.holeBundleSelectedItemsCount}
-                  </span>
-                </div>
-                <div className="holes-bundle-create-grid">
-                  <label className="holes-bundle-field">
-                    <span>{t.holeBundleName}</span>
-                    <input
-                      onChange={(event) => setHoleBundleName(event.target.value)}
-                      placeholder={t.holeBundleNamePlaceholder}
-                      type="text"
-                      value={holeBundleName}
-                    />
-                  </label>
-                  <label className="holes-bundle-field">
-                    <span>{t.holeBundleCategory}</span>
-                    <select
-                      disabled={!holeCategoryOptions.length}
-                      onChange={(event) => handleHoleBundleCategoryChange(event.target.value)}
-                      value={holeBundleCategoryCode}
-                    >
-                      <option value="">{t.holeBundleCategoryPlaceholder}</option>
-                      {holeCategoryOptions.map((category) => (
-                        <option key={category.code} value={category.code}>
-                          {category.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-                <div className="holes-bundle-create-note">
-                  {holeBundleCategoryMeta ? (
-                    <span>
-                      {t.holeBundleCategorySelected}: {holeBundleCategoryMeta.name}
-                    </span>
-                  ) : (
-                    <span>{t.holeBundleCategoryHint}</span>
-                  )}
-                </div>
-                {holeActiveBundleKey ? (
-                  <div className="holes-bundle-open-status">
-                    <span>{t.holeBundleOpenStatus.replace("{name}", holeActiveBundleName || t.notSet)}</span>
-                    <div className="holes-bundle-open-status-actions">
-                      <button
-                        className="ghost-button compact-button"
-                        onClick={clearOpenedHoleBundle}
-                        type="button"
-                      >
-                        {t.holeBundleClearButton}
-                      </button>
-                      <button
-                        className="primary-button compact-button"
-                        disabled={holeBundleMountingVariantSaving || !normalizedSelectedHoleMountingVariantKey}
-                        onClick={saveHoleBundleMountingVariant}
-                        type="button"
-                      >
-                        {t.holeBundleSaveVariantButton}
-                      </button>
+              {!isMountingNodeEditorMode ? (
+                <section className="holes-bundle-create-panel">
+                  <div className="holes-bundle-create-head">
+                    <div>
+                      <strong>{t.holeBundleCreateTitle}</strong>
+                      <p>{t.holeBundleCreateDescription}</p>
                     </div>
+                    <span className="service-tree-badge subtle">
+                      {holeBundleSelectedItems.length} {t.holeBundleSelectedItemsCount}
+                    </span>
                   </div>
-                ) : null}
-                <div className="holes-bundle-create-actions">
-                  <button
-                    className="primary-button"
-                    disabled={!holeBundleCanSave}
-                    onClick={saveHoleBundle}
-                    type="button"
-                  >
-                    {t.holeBundleSaveButton}
-                  </button>
-                </div>
-              </section>
+                  <div className="holes-bundle-create-grid">
+                    <label className="holes-bundle-field">
+                      <span>{t.holeBundleName}</span>
+                      <input
+                        onChange={(event) => setHoleBundleName(event.target.value)}
+                        placeholder={t.holeBundleNamePlaceholder}
+                        type="text"
+                        value={holeBundleName}
+                      />
+                    </label>
+                    <label className="holes-bundle-field">
+                      <span>{t.holeBundleCategory}</span>
+                      <select
+                        disabled={!holeCategoryOptions.length}
+                        onChange={(event) => handleHoleBundleCategoryChange(event.target.value)}
+                        value={holeBundleCategoryCode}
+                      >
+                        <option value="">{t.holeBundleCategoryPlaceholder}</option>
+                        {holeCategoryOptions.map((category) => (
+                          <option key={category.code} value={category.code}>
+                            {category.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                  <div className="holes-bundle-create-note">
+                    {holeBundleCategoryMeta ? (
+                      <span>
+                        {t.holeBundleCategorySelected}: {holeBundleCategoryMeta.name}
+                      </span>
+                    ) : (
+                      <span>{t.holeBundleCategoryHint}</span>
+                    )}
+                  </div>
+                  {holeActiveBundleKey ? (
+                    <div className="holes-bundle-open-status">
+                      <span>{t.holeBundleOpenStatus.replace("{name}", holeActiveBundleName || t.notSet)}</span>
+                      <div className="holes-bundle-open-status-actions">
+                        <button
+                          className="ghost-button compact-button"
+                          onClick={clearOpenedHoleBundle}
+                          type="button"
+                        >
+                          {t.holeBundleClearButton}
+                        </button>
+                        <button
+                          className="primary-button compact-button"
+                          disabled={holeBundleMountingVariantSaving || !normalizedSelectedHoleMountingVariantKey}
+                          onClick={saveHoleBundleMountingVariant}
+                          type="button"
+                        >
+                          {t.holeBundleSaveVariantButton}
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                  <div className="holes-bundle-create-actions">
+                    <button
+                      className="primary-button"
+                      disabled={!holeBundleCanSave}
+                      onClick={saveHoleBundle}
+                      type="button"
+                    >
+                      {t.holeBundleSaveButton}
+                    </button>
+                  </div>
+                </section>
+              ) : null}
 
               <div className="holes-grid">
                 <div className="holes-left-column">
@@ -20522,33 +20530,35 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                       <div className="holes-selected-point-empty">Точку не вибрано</div>
                     )}
                   </section>
-                  <section className="holes-workspace-save-panel" aria-label="Збереження отворів фурнітури">
-                    <div className="holes-workspace-save-copy">
-                      <strong>Зберегти отвори фурнітури</strong>
-                      <p>
-                        Поточний варіант кріплення:{" "}
-                        {selectedHoleMountingVariant?.label || normalizedSelectedHoleMountingVariantKey}
-                      </p>
-                    </div>
-                    <div className="holes-workspace-save-actions">
-                      <span
-                        className={`holes-workspace-save-status${
-                          holeWorkspaceHasUnsavedVariantChanges ? " is-dirty" : " is-saved"
-                        }`}
-                      >
-                        {holeWorkspaceSaveStatus}
-                      </span>
-                      <button
-                        className="primary-button"
-                        disabled={loading || !activeHoleFittingId || !selectedHoleMountingVariantKey}
-                        onClick={handleHoleWorkspaceSaveTemplate}
-                        type="button"
-                      >
-                        <Save size={16} />
-                        {selectedHoleTemplate ? "Зберегти отвори фурнітури" : "Створити основний шаблон"}
-                      </button>
-                    </div>
-                  </section>
+                  {!isMountingNodeEditorMode ? (
+                    <section className="holes-workspace-save-panel" aria-label="Збереження отворів фурнітури">
+                      <div className="holes-workspace-save-copy">
+                        <strong>Зберегти отвори фурнітури</strong>
+                        <p>
+                          Поточний варіант кріплення:{" "}
+                          {selectedHoleMountingVariant?.label || normalizedSelectedHoleMountingVariantKey}
+                        </p>
+                      </div>
+                      <div className="holes-workspace-save-actions">
+                        <span
+                          className={`holes-workspace-save-status${
+                            holeWorkspaceHasUnsavedVariantChanges ? " is-dirty" : " is-saved"
+                          }`}
+                        >
+                          {holeWorkspaceSaveStatus}
+                        </span>
+                        <button
+                          className="primary-button"
+                          disabled={loading || !activeHoleFittingId || !selectedHoleMountingVariantKey}
+                          onClick={handleHoleWorkspaceSaveTemplate}
+                          type="button"
+                        >
+                          <Save size={16} />
+                          {selectedHoleTemplate ? "Зберегти отвори фурнітури" : "Створити основний шаблон"}
+                        </button>
+                      </div>
+                    </section>
+                  ) : null}
                   <details className="holes-preview-technical">
                     <summary>Технічні дані</summary>
                   <div className="holes-preview-scene" aria-label="Модель сцени">
