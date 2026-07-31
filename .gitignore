@@ -83,3 +83,7 @@ tmp_*
 pycache_files.txt
 profile_card.png
 docs/update_packages/.update_package_state.json
+
+# Local runtime artifacts and backups
+.tmp/
+backups/
