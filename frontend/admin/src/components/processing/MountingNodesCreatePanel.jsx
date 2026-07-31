@@ -12,15 +12,22 @@ import {
   MOUNTING_NODE_CREATE_ROLE_OPTIONS,
   addMountingNodeCreateDraftItem,
   addMountingNodeCreateDraftPoint,
+  commitMountingNodeCreateDraftPoint,
   createMountingNodeCreateDraft,
   createMountingNodeCreateDraftItemFromFitting,
   createMountingNodeCreateDraftPointFromFitting,
   removeMountingNodeCreateDraftItem,
   removeMountingNodeCreateDraftPoint,
+  prepareMountingNodeCreateDraftPointForm,
   updateMountingNodeCreateDraftItem,
   updateMountingNodeCreateDraftPoint,
 } from "../../mountingNodesCreateDraft.js";
 import { getProcessingTemplateMountingVariantLabel } from "../../processingTemplates.js";
+import {
+  getSurfaceMountPointFormPreset,
+  shouldShowSurfaceMountPointTargetFields,
+} from "../../surfaceMountThreePreview.js";
+import { getAngledTwoPlanesPointFormPreset } from "../../angledTwoPlanesThreePreview.js";
 import { buildHolePointFormFromPoint, createHolePointFormDefaults } from "../../holePointForm.js";
 
 const MOUNTING_VARIANT_KEYS = [
@@ -184,6 +191,326 @@ function PointField({ children, label }) {
   );
 }
 
+function getPointTargetPanelOptions(mountingVariantKey = "") {
+  if (String(mountingVariantKey || "").trim() === "surface_mount") {
+    return [{ value: "vertical_panel", label: "Панель" }];
+  }
+
+  return [
+    { value: "vertical_panel", label: "Вертикальна панель" },
+    { value: "horizontal_panel", label: "Горизонтальна панель" },
+  ];
+}
+
+function getPointTargetSurfaceOptions(targetPanel, mountingVariantKey = "") {
+  if (String(mountingVariantKey || "").trim() === "surface_mount") {
+    return [{ value: "plane", label: "Площина панелі" }];
+  }
+
+  const panel = String(targetPanel || "").trim();
+
+  if (panel === "horizontal_panel") {
+    return [
+      { value: "edge", label: "Торець" },
+      { value: "plane", label: "Площина" },
+    ];
+  }
+
+  return [
+    { value: "plane", label: "Площина" },
+    { value: "edge", label: "Торець" },
+  ];
+}
+
+function getPointTargetSideOptions(targetPanel, targetSurface, currentValue, mountingVariantKey = "") {
+  if (String(mountingVariantKey || "").trim() === "surface_mount") {
+    return [{ value: "inner_face", label: "Всередину панелі" }];
+  }
+
+  const panel = String(targetPanel || "").trim();
+  const surface = String(targetSurface || "").trim();
+  const normalizedCurrentValue = String(currentValue || "").trim();
+
+  const addCurrentValue = (options) => {
+    if (normalizedCurrentValue && !options.some((option) => option.value === normalizedCurrentValue)) {
+      return [...options, { value: normalizedCurrentValue, label: normalizedCurrentValue }];
+    }
+
+    return options;
+  };
+
+  if (panel === "vertical_panel") {
+    if (surface === "edge") {
+      return addCurrentValue([
+        { value: "top_edge", label: "Верхній торець" },
+        { value: "bottom_edge", label: "Нижній торець" },
+      ]);
+    }
+
+    return addCurrentValue([
+      { value: "inner_face", label: "Внутрішня площина" },
+      { value: "outer_face", label: "Зовнішня / фасадна площина" },
+      { value: "needs_clarification", label: "Потребує уточнення площини" },
+    ]);
+  }
+
+  if (panel === "horizontal_panel") {
+    if (surface === "edge") {
+      return addCurrentValue([
+        { value: "edge_near_vertical", label: "Торець біля вертикальної панелі" },
+        { value: "edge_far_vertical", label: "Інший торець" },
+      ]);
+    }
+
+    return addCurrentValue([
+      { value: "top_face", label: "Верхня площина" },
+      { value: "bottom_face", label: "Нижня площина" },
+      { value: "needs_clarification", label: "Потребує уточнення площини" },
+    ]);
+  }
+
+  return addCurrentValue([
+    { value: "needs_clarification", label: "Потребує уточнення площини" },
+  ]);
+}
+
+function MountingNodePointFields({
+  disabled = false,
+  form = {},
+  language = "en",
+  mountingVariantKey = "",
+  onFieldChange = () => {},
+  onNumericFieldChange = () => {},
+  onToggle = () => {},
+}) {
+  const normalizedVariantKey = String(mountingVariantKey || "").trim();
+  const isAngledTwoPlanesVariant = normalizedVariantKey === "angled_two_planes";
+  const showSurfaceMountPointTargetFields = shouldShowSurfaceMountPointTargetFields(normalizedVariantKey);
+  const showTargetFields = showSurfaceMountPointTargetFields && !isAngledTwoPlanesVariant;
+  const selectedPanelKey = form.target_panel || form.panel_key || "vertical_panel";
+  const selectedTargetSurface = form.target_surface || "plane";
+  const selectedTargetSide = form.target_side || "inner_face";
+
+  return (
+    <div className="mounting-node-create-workspace-side">
+      <PointField label={language === "uk" ? "Мітка" : "Label"}>
+        <input
+          disabled={disabled}
+          onChange={(event) => onFieldChange("label", event.target.value)}
+          type="text"
+          value={form.label || ""}
+        />
+      </PointField>
+
+      <div className="hole-template-form-grid">
+        <PointField label="X">
+          <input
+            disabled={disabled}
+            onChange={(event) => onNumericFieldChange("x_mm", event.target.value)}
+            step="any"
+            type="number"
+            value={form.x_mm}
+          />
+        </PointField>
+        <PointField label="Y">
+          <input
+            disabled={disabled}
+            onChange={(event) => onNumericFieldChange("y_mm", event.target.value)}
+            step="any"
+            type="number"
+            value={form.y_mm}
+          />
+        </PointField>
+        <PointField label="Z">
+          <input
+            disabled={disabled}
+            onChange={(event) => onNumericFieldChange("z_mm", event.target.value)}
+            step="any"
+            type="number"
+            value={form.z_mm}
+          />
+        </PointField>
+      </div>
+
+      {isAngledTwoPlanesVariant ? (
+        <div className="hole-template-form-grid">
+          <PointField label={language === "uk" ? "Панель" : "Panel"}>
+            <select
+              disabled={disabled}
+              onChange={(event) => onFieldChange("target_panel", event.target.value)}
+              value={selectedPanelKey}
+            >
+              {getPointTargetPanelOptions(normalizedVariantKey).map((option, index) => (
+                <option key={`point-target-panel-${index}-${option.value}`} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </PointField>
+        </div>
+      ) : null}
+
+      {showTargetFields ? (
+        <div className="hole-template-form-grid">
+          <PointField label={language === "uk" ? "Панель" : "Panel"}>
+            <select
+              disabled={disabled}
+              onChange={(event) => onFieldChange("target_panel", event.target.value)}
+              value={selectedPanelKey}
+            >
+              {getPointTargetPanelOptions(normalizedVariantKey).map((option, index) => (
+                <option key={`point-target-panel-${index}-${option.value}`} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </PointField>
+          <PointField label={language === "uk" ? "Поверхня" : "Surface"}>
+            <select
+              disabled={disabled}
+              onChange={(event) => onFieldChange("target_surface", event.target.value)}
+              value={selectedTargetSurface}
+            >
+              {getPointTargetSurfaceOptions(selectedPanelKey, normalizedVariantKey).map((option, index) => (
+                <option key={`point-target-surface-${index}-${option.value}`} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </PointField>
+          <PointField label={language === "uk" ? "Сторона" : "Side"}>
+            <select
+              disabled={disabled}
+              onChange={(event) => onFieldChange("target_side", event.target.value)}
+              value={selectedTargetSide}
+            >
+              {getPointTargetSideOptions(
+                selectedPanelKey,
+                selectedTargetSurface,
+                selectedTargetSide,
+                normalizedVariantKey,
+              ).map((option, index) => (
+                <option key={`point-target-side-${index}-${option.value}`} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </PointField>
+        </div>
+      ) : null}
+
+      <div className="hole-template-form-grid">
+        <PointField label={language === "uk" ? "Діаметр" : "Diameter"}>
+          <input
+            disabled={disabled}
+            min="0.01"
+            onChange={(event) => onNumericFieldChange("diameter_mm", event.target.value)}
+            step="any"
+            type="number"
+            value={form.diameter_mm}
+          />
+        </PointField>
+        <PointField label={language === "uk" ? "Глибина" : "Depth"}>
+          <input
+            disabled={disabled || Boolean(form.is_through)}
+            onChange={(event) => onNumericFieldChange("depth_mm", event.target.value)}
+            step="any"
+            type="number"
+            value={form.depth_mm}
+          />
+        </PointField>
+        <label className="material-inline-check">
+          <input
+            checked={Boolean(form.is_through)}
+            disabled={disabled}
+            onChange={(event) => onToggle("is_through", event.target.checked)}
+            type="checkbox"
+          />
+          {language === "uk" ? "Наскрізний отвір" : "Through"}
+        </label>
+      </div>
+
+      <div className="hole-template-checks">
+        <label className="material-inline-check">
+          <input
+            checked={(form.operation || "drill") === "drill"}
+            disabled={disabled}
+            onChange={() => onFieldChange("operation", "drill")}
+            type="radio"
+            name={`point-operation-${form.client_key || "default"}`}
+          />
+          {language === "uk" ? "Свердління" : "Drill"}
+        </label>
+        <label className="material-inline-check">
+          <input
+            checked={form.operation === "counterbore"}
+            disabled={disabled}
+            onChange={() => onFieldChange("operation", "counterbore")}
+            type="radio"
+            name={`point-operation-${form.client_key || "default"}`}
+          />
+          {language === "uk" ? "Потай" : "Counterbore"}
+        </label>
+      </div>
+
+      <label className="mounting-node-create-field">
+        <span>{language === "uk" ? "Примітки" : "Notes"}</span>
+        <textarea
+          disabled={disabled}
+          onChange={(event) => onFieldChange("notes", event.target.value)}
+          rows="3"
+          value={form.notes || ""}
+        />
+      </label>
+    </div>
+  );
+}
+
+function applyMountingNodePointFieldChange(current, field, value) {
+  const next = { ...(current || {}), [field]: value };
+
+  if (field === "target_panel" || field === "panel_key") {
+    const targetPanel = String(value || "").trim() || "vertical_panel";
+    const targetSurface = targetPanel === "horizontal_panel" ? "edge" : "plane";
+    const targetSide = targetPanel === "horizontal_panel" ? "edge_near_vertical" : "inner_face";
+
+    next.panel_key = targetPanel;
+    next.target_panel = targetPanel;
+    next.target_surface = targetSurface;
+    next.target_side = targetSide;
+    next.side = targetSide;
+  }
+
+  if (field === "target_surface") {
+    const targetSurface = String(value || "").trim() || "plane";
+    const targetPanel = String(next.target_panel || next.panel_key || "vertical_panel").trim() || "vertical_panel";
+    const targetSide =
+      targetPanel === "horizontal_panel"
+        ? (targetSurface === "edge" ? "edge_near_vertical" : "top_face")
+        : (targetSurface === "edge" ? "top_edge" : "inner_face");
+
+    next.target_panel = targetPanel;
+    next.panel_key = targetPanel;
+    next.target_surface = targetSurface;
+    next.target_side = targetSide;
+    next.side = targetSide;
+  }
+
+  if (field === "target_side") {
+    next.target_side = value;
+    next.side = value;
+  }
+
+  if (field === "is_through") {
+    next.is_through = Boolean(value);
+    if (next.is_through) {
+      next.depth_mm = "";
+    }
+  }
+
+  return next;
+}
+
 export default function MountingNodesCreatePanel({
   fittingItems = [],
   fittingCategories = [],
@@ -199,6 +526,11 @@ export default function MountingNodesCreatePanel({
   const [selectedFittingId, setSelectedFittingId] = useState("");
   const [selectedPointKey, setSelectedPointKey] = useState("");
   const [hoveredPointKey, setHoveredPointKey] = useState("");
+  const [pointCreateOpen, setPointCreateOpen] = useState(false);
+  const [pointCreateForm, setPointCreateForm] = useState(() => createHolePointFormDefaults());
+  const [pointCreateFittingId, setPointCreateFittingId] = useState("");
+  const [pointCreateError, setPointCreateError] = useState("");
+  const [pointCreateSubmitting, setPointCreateSubmitting] = useState(false);
   const [variantOpen, setVariantOpen] = useState(false);
   const [selectorOpen, setSelectorOpen] = useState(false);
   const [selectorSearch, setSelectorSearch] = useState("");
@@ -469,19 +801,68 @@ export default function MountingNodesCreatePanel({
       name: selectedFitting.name,
       image_url: selectedFitting.image_url,
     };
+    const nextPointForm = prepareMountingNodeCreateDraftPointForm(draft, fitting);
+
+    setPointCreateFittingId(getFittingId(selectedFitting));
+    setPointCreateForm(nextPointForm);
+    setPointCreateError("");
+    setPointCreateSubmitting(false);
+    setPointCreateOpen(true);
+  };
+
+  const closePointCreateForm = () => {
+    setPointCreateOpen(false);
+    setPointCreateError("");
+    setPointCreateForm(createHolePointFormDefaults());
+    setPointCreateFittingId("");
+    setPointCreateSubmitting(false);
+  };
+
+  const handlePointCreateFieldChange = (field, value) => {
+    setPointCreateForm((current) => {
+      if (!current) {
+        return current;
+      }
+
+      return applyMountingNodePointFieldChange(current, field, value);
+    });
+  };
+
+  const handlePointCreateNumericFieldChange = (field, value) => {
+    handlePointCreateFieldChange(field, value);
+  };
+
+  const handlePointCreateToggle = (field, value) => {
+    handlePointCreateFieldChange(field, value);
+  };
+
+  const handlePointCreateSubmit = (event) => {
+    event.preventDefault();
+
+    if (!pointCreateForm) {
+      return;
+    }
+
+    const fitting =
+      selectedItems.find((item) => getFittingId(item) === normalizeText(pointCreateFittingId)) || selectedFitting;
+
+    if (!fitting) {
+      setPointCreateError(language === "uk" ? "Спочатку виберіть фурнітуру." : "Select a fitting first.");
+      return;
+    }
+
+    setPointCreateSubmitting(true);
+
     const nextPoint = createMountingNodeCreateDraftPointFromFitting(
       fitting,
-      {},
+      pointCreateForm,
       previewPoints.length,
       Math.max(previewPoints.length + 1, 1),
     );
 
-    updateDraft({
-      ...draft,
-      points: [...previewPoints.map((point) => ({ ...point, id: point.id })), nextPoint],
-      is_dirty: true,
-    });
+    updateDraft(commitMountingNodeCreateDraftPoint(draft, nextPoint));
     setSelectedPointKey(normalizeText(nextPoint.client_key));
+    closePointCreateForm();
   };
 
   const handleRemovePoint = (clientKey) => {
@@ -497,15 +878,7 @@ export default function MountingNodesCreatePanel({
       return;
     }
 
-    const patch = { [field]: value };
-    if (field === "target_panel") {
-      patch.panel_key = value;
-    }
-    if (field === "panel_key") {
-      patch.target_panel = value;
-    }
-
-    updateDraft(updateMountingNodeCreateDraftPoint(draft, selectedPoint.id, patch));
+    updateDraft(updateMountingNodeCreateDraftPoint(draft, selectedPoint.id, applyMountingNodePointFieldChange(selectedPointForm, field, value)));
   };
 
   const handlePointNumericFieldChange = (field, value) => {
@@ -1071,6 +1444,62 @@ export default function MountingNodesCreatePanel({
             {language === "uk" ? "Створити монтажний вузол" : "Create mounting node"}
           </button>
         </div>
+
+        {pointCreateOpen ? (
+          <div className="modal-backdrop" onClick={closePointCreateForm} role="presentation">
+            <article
+              className="confirm-modal hole-template-modal mounting-node-point-modal"
+              onClick={(event) => event.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+              aria-label={language === "uk" ? "Створення точки" : "Create point"}
+            >
+              <header className="confirm-header">
+                <div>
+                  <strong>{language === "uk" ? "Створення точки" : "Create point"}</strong>
+                  <p>
+                    {selectedFitting
+                      ? `${getFittingName(selectedFitting) || pointCreateFittingId}${getFittingArticle(selectedFitting) ? ` · ${getFittingArticle(selectedFitting)}` : ""}`
+                      : language === "uk"
+                        ? "Виберіть фурнітуру."
+                        : "Select a fitting first."}
+                  </p>
+                </div>
+                <button
+                  aria-label={language === "uk" ? "Закрити" : "Close"}
+                  className="ghost-button compact-button detail-info-button"
+                  onClick={closePointCreateForm}
+                  type="button"
+                >
+                  <X size={16} />
+                </button>
+              </header>
+
+              {pointCreateError ? <div className="hole-template-error">{pointCreateError}</div> : null}
+
+              <form onSubmit={handlePointCreateSubmit}>
+                <MountingNodePointFields
+                  disabled={pointCreateSubmitting}
+                  form={pointCreateForm}
+                  language={language}
+                  mountingVariantKey={selectedVariantKey}
+                  onFieldChange={handlePointCreateFieldChange}
+                  onNumericFieldChange={handlePointCreateNumericFieldChange}
+                  onToggle={handlePointCreateToggle}
+                />
+
+                <div className="confirm-actions">
+                  <button className="ghost-button" onClick={closePointCreateForm} type="button">
+                    {language === "uk" ? "Скасувати" : "Cancel"}
+                  </button>
+                  <button className="primary-button" disabled={pointCreateSubmitting} type="submit">
+                    {language === "uk" ? "Додати точку" : "Add point"}
+                  </button>
+                </div>
+              </form>
+            </article>
+          </div>
+        ) : null}
 
         {selectorOpen ? (
           <div className="modal-backdrop" onClick={closeSelector} role="presentation">

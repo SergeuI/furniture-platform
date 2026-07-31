@@ -8,7 +8,9 @@ import {
   createMountingNodeCreateDraft,
   createMountingNodeCreateDraftItemFromFitting,
   createMountingNodeCreateDraftPointFromFitting,
+  commitMountingNodeCreateDraftPoint,
   isMountingNodeCreateDraftReady,
+  prepareMountingNodeCreateDraftPointForm,
   removeMountingNodeCreateDraftItem,
   removeMountingNodeCreateDraftPoint,
   updateMountingNodeCreateDraftItem,
@@ -140,6 +142,81 @@ test("mounting node create draft keeps item and point state local", () => {
   const removedItemDraft = removeMountingNodeCreateDraftItem(withSecondPoint, "11");
   assert.equal(removedItemDraft.items.length, 0);
   assert.equal(removedItemDraft.points.length, 0);
+});
+
+test("mounting node create draft point form stays local until confirmed", () => {
+  const draft = createMountingNodeCreateDraft({
+    name: "mn_confirmat_7x50",
+    mounting_variant_key: "face_to_edge",
+    is_dirty: true,
+    items: [
+      {
+        fitting_id: "11",
+        article: "ART-11",
+        name: "Confirmat",
+        image_url: "",
+        quantity: 1,
+        role: MOUNTING_NODE_CREATE_ROLE_OPTIONS[0],
+        is_required: true,
+        affects_processing: true,
+      },
+    ],
+    points: [],
+  });
+
+  const fitting = {
+    id: 11,
+    article: "ART-11",
+    name: "Confirmat",
+    code: "CNF-11",
+  };
+
+  const pointForm = prepareMountingNodeCreateDraftPointForm(draft, fitting, {
+    label: "P1",
+    x_mm: 24,
+    y_mm: -8,
+    z_mm: 12,
+  });
+
+  assert.equal(draft.points.length, 0);
+  assert.equal(pointForm.id, null);
+  assert.equal(pointForm.client_key.startsWith("mounting-node-create-"), true);
+  assert.equal(pointForm.fitting_id, "11");
+
+  const committedDraft = commitMountingNodeCreateDraftPoint(draft, pointForm);
+
+  assert.equal(committedDraft.points.length, 1);
+  assert.equal(committedDraft.points[0].id, null);
+  assert.equal(committedDraft.points[0].client_key, pointForm.client_key);
+  assert.equal(committedDraft.points[0].x_mm, 24);
+  assert.equal(committedDraft.points[0].y_mm, -8);
+  assert.equal(committedDraft.points[0].z_mm, 12);
+
+  const surfaceMountDraft = createMountingNodeCreateDraft({
+    mounting_variant_key: "surface_mount",
+    points: [],
+  });
+  const surfaceMountPointForm = prepareMountingNodeCreateDraftPointForm(surfaceMountDraft, fitting);
+
+  assert.equal(surfaceMountPointForm.panel_key, "vertical_panel");
+  assert.equal(surfaceMountPointForm.target_panel, "vertical_panel");
+  assert.equal(surfaceMountPointForm.target_surface, "plane");
+  assert.equal(surfaceMountPointForm.target_side, "inner_face");
+  assert.equal(surfaceMountPointForm.side, "front");
+
+  const angledDraft = createMountingNodeCreateDraft({
+    mounting_variant_key: "angled_two_planes",
+    points: [],
+  });
+  const angledPointForm = prepareMountingNodeCreateDraftPointForm(angledDraft, fitting, {
+    panel_key: "horizontal_panel",
+  });
+
+  assert.equal(angledPointForm.panel_key, "horizontal_panel");
+  assert.equal(angledPointForm.target_panel, "horizontal_panel");
+  assert.equal(angledPointForm.target_surface, "plane");
+  assert.equal(angledPointForm.target_side, "inner_face");
+  assert.equal(angledPointForm.side, "inner_face");
 });
 
 test("mounting node create draft validation blocks missing name, variant and duplicate fittings", () => {

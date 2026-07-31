@@ -7,6 +7,9 @@ export const MOUNTING_NODE_CREATE_ROLE_OPTIONS = [
   SECONDARY_MOUNTING_NODE_CREATE_ROLE,
 ];
 
+import { getAngledTwoPlanesPointFormPreset } from "./angledTwoPlanesThreePreview.js";
+import { getSurfaceMountPointFormPreset } from "./surfaceMountThreePreview.js";
+
 let mountingNodeCreateClientKeyCounter = 0;
 
 function normalizeText(value) {
@@ -268,6 +271,20 @@ function getDefaultPointGeometry(index, total) {
   };
 }
 
+function getMountingNodeCreatePointPreset(variantKey = "") {
+  const normalizedVariantKey = normalizeText(variantKey);
+
+  if (normalizedVariantKey === "surface_mount") {
+    return getSurfaceMountPointFormPreset();
+  }
+
+  if (normalizedVariantKey === "angled_two_planes") {
+    return getAngledTwoPlanesPointFormPreset("vertical_panel");
+  }
+
+  return {};
+}
+
 export function createMountingNodeCreateDraftPointFromFitting(
   fitting = {},
   overrides = {},
@@ -275,6 +292,10 @@ export function createMountingNodeCreateDraftPointFromFitting(
   total = 1,
 ) {
   const geometry = getDefaultPointGeometry(index, total);
+  const resolvedPanelKey = normalizeText(overrides.panel_key) || normalizeText(overrides.target_panel) || "vertical_panel";
+  const resolvedTargetPanel = normalizeText(overrides.target_panel) || resolvedPanelKey;
+  const resolvedTargetSurface = normalizeText(overrides.target_surface) || "plane";
+  const resolvedTargetSide = normalizeText(overrides.target_side) || "inner_face";
   return normalizeMountingNodeCreateDraftPoint({
     client_key: overrides.client_key,
     id: null,
@@ -283,11 +304,11 @@ export function createMountingNodeCreateDraftPointFromFitting(
     article: fitting.article || fitting.code || "",
     image_url: fitting.image_url || fitting.image || "",
     label: normalizeText(overrides.label) || `P${index + 1}`,
-    panel_key: normalizeText(overrides.panel_key) || "vertical_panel",
-    target_panel: normalizeText(overrides.target_panel) || "vertical_panel",
-    target_surface: normalizeText(overrides.target_surface) || "plane",
-    target_side: normalizeText(overrides.target_side) || "inner_face",
-    side: normalizeText(overrides.side) || "inner_face",
+    panel_key: resolvedPanelKey,
+    target_panel: resolvedTargetPanel,
+    target_surface: resolvedTargetSurface,
+    target_side: resolvedTargetSide,
+    side: normalizeText(overrides.side) || resolvedTargetSide,
     x_mm: overrides.x_mm ?? geometry.x_mm,
     y_mm: overrides.y_mm ?? geometry.y_mm,
     z_mm: overrides.z_mm ?? geometry.z_mm,
@@ -302,10 +323,58 @@ export function createMountingNodeCreateDraftPointFromFitting(
   });
 }
 
+export function prepareMountingNodeCreateDraftPointForm(
+  draft = createMountingNodeCreateDraft(),
+  fitting = {},
+  overrides = {},
+) {
+  const pointCount = Array.isArray(draft.points) ? draft.points.length : 0;
+  const variantPreset = getMountingNodeCreatePointPreset(draft?.mounting_variant_key);
+  const resolvedPanelKey = normalizeText(overrides.panel_key) || normalizeText(overrides.target_panel) || normalizeText(variantPreset.panel_key);
+
+  return createMountingNodeCreateDraftPointFromFitting(
+    fitting,
+    {
+      ...variantPreset,
+      ...overrides,
+      panel_key: resolvedPanelKey || normalizeText(variantPreset.panel_key),
+      target_panel:
+        normalizeText(overrides.target_panel) ||
+        resolvedPanelKey ||
+        normalizeText(variantPreset.target_panel),
+    },
+    pointCount,
+    Math.max(pointCount + 1, 1),
+  );
+}
+
+export function commitMountingNodeCreateDraftPoint(draft = createMountingNodeCreateDraft(), pointForm = {}) {
+  if (!pointForm) {
+    return draft;
+  }
+
+  return {
+    ...draft,
+    points: [...(Array.isArray(draft.points) ? draft.points : []), normalizeMountingNodeCreateDraftPoint(pointForm)],
+    is_dirty: true,
+  };
+}
+
 export function addMountingNodeCreateDraftPoint(draft = createMountingNodeCreateDraft(), fitting = {}, overrides = {}) {
+  const variantPreset = getMountingNodeCreatePointPreset(draft?.mounting_variant_key);
+  const resolvedPanelKey = normalizeText(overrides.panel_key) || normalizeText(overrides.target_panel) || normalizeText(variantPreset.panel_key);
+
   const nextPoint = createMountingNodeCreateDraftPointFromFitting(
     fitting,
-    overrides,
+    {
+      ...variantPreset,
+      ...overrides,
+      panel_key: resolvedPanelKey || normalizeText(variantPreset.panel_key),
+      target_panel:
+        normalizeText(overrides.target_panel) ||
+        resolvedPanelKey ||
+        normalizeText(variantPreset.target_panel),
+    },
     Array.isArray(draft.points) ? draft.points.length : 0,
     Math.max(Array.isArray(draft.points) ? draft.points.length + 1 : 1, 1),
   );
