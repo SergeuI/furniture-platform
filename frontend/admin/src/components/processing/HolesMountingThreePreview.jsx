@@ -1186,7 +1186,7 @@ export default function HolesMountingThreePreview({
             ) : null}
 
             {holeVolumes.length ? (
-              holeVolumes.map((marker) =>
+              holeVolumes.map((marker, index) =>
                 marker.isFaceToEdge ? (
                   (() => {
                     const isSelected = String(selectedHoleId) === String(marker.id);
@@ -1201,7 +1201,7 @@ export default function HolesMountingThreePreview({
                     const lineOpacity = isSelected ? 0.92 : isHovered ? 0.88 : 0.72;
                     return (
                   <group
-                    key={`face-to-edge-${marker.id}`}
+                    key={`face-to-edge-${index}-${String(marker.id ?? marker.point?.client_key ?? "fallback")}`}
                     onClick={(event) => {
                       event.stopPropagation();
                       onSelectHole?.(marker.id);
@@ -1279,7 +1279,7 @@ export default function HolesMountingThreePreview({
 
                     return (
                       <group
-                        key={`marker-${marker.id}`}
+                        key={`marker-${index}-${String(marker.id ?? marker.point?.client_key ?? "fallback")}`}
                         onClick={(event) => {
                           event.stopPropagation();
                           onSelectHole?.(marker.id);
@@ -1426,7 +1426,7 @@ export default function HolesMountingThreePreview({
           />
         </Canvas>
         <div className="holes-three-preview-overlay">
-          {!markerPositions.length ? (
+          {!markerPositions.length && !isCompactThreePreview ? (
             <div className="holes-three-preview-empty">Отвори ще не додані</div>
           ) : null}
         </div>

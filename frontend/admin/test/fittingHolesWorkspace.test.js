@@ -15,10 +15,12 @@ test("fitting holes workspace is extracted into a reusable layout shell", () => 
   assert.equal(workspaceSource.includes("children"), true);
   assert.equal(workspaceSource.includes("className"), true);
   assert.equal(appSource.includes('import FittingHolesWorkspace from "./components/processing/FittingHolesWorkspace.jsx";'), true);
+  assert.equal(appSource.includes('import MountingNodesCreatePanel from "./components/processing/MountingNodesCreatePanel.jsx";'), true);
   assert.equal(appSource.includes("<FittingHolesWorkspace>"), true);
   assert.equal(appSource.includes("</FittingHolesWorkspace>"), true);
-  assert.equal(appSource.includes("MountingNodesCreatePanel"), false);
-  assert.equal(appSource.includes("catalogHolesMode === \"create\""), false);
+  assert.equal(appSource.includes("MountingNodesCreatePanel"), true);
+  assert.equal(appSource.includes('catalogHolesMode === "create"'), true);
+  assert.equal(appSource.includes('catalogHolesMode === "create" ? null : catalogHolesMode === "editor" ? ('), true);
   assert.equal(appSource.includes("holes-workspace-save-panel"), true);
   assert.equal(appSource.includes("holes-preview-3d-card"), true);
 });

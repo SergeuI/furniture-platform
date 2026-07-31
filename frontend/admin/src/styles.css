@@ -3652,6 +3652,90 @@ tbody tr.selected {
   padding: 12px;
 }
 
+.mounting-node-create-screen {
+  display: grid;
+  gap: 16px;
+}
+
+.mounting-node-create-section {
+  display: grid;
+  gap: 14px;
+}
+
+.mounting-node-create-header {
+  align-items: flex-start;
+}
+
+.mounting-node-create-top-grid {
+  align-items: end;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.mounting-node-create-top-grid .mounting-node-create-field {
+  min-width: 0;
+}
+
+.mounting-node-create-name-field {
+  display: grid;
+  gap: 6px;
+}
+
+.mounting-node-create-name-row {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
+.mounting-node-create-name-row input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.mounting-node-create-name-row .primary-button {
+  white-space: nowrap;
+}
+
+.mounting-node-create-screen .holes-grid {
+  align-items: start;
+  gap: 14px;
+}
+
+.mounting-node-create-screen .holes-left-column {
+  gap: 12px;
+}
+
+.mounting-node-create-workspace-side {
+  display: grid;
+  gap: 12px;
+}
+
+.mounting-node-create-screen .holes-preview-3d-card {
+  align-self: start;
+}
+
+.mounting-node-create-screen .holes-preview-3d-card .holes-preview-stage {
+  display: block;
+  min-height: clamp(300px, 42vh, 520px);
+}
+
+.mounting-node-create-screen .holes-preview-3d-card > .holes-preview-legend {
+  display: flex;
+}
+
+.mounting-node-create-section > .holes-workspace-save-panel {
+  align-items: center;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px 14px;
+}
+
+.mounting-node-create-side-note {
+  color: #607182;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .holes-preview-svg {
   display: block;
   height: auto;
@@ -7479,6 +7563,12 @@ tbody tr.selected {
   padding: 10px;
 }
 
+.hole-bundle-selected-item-compact,
+.mounting-node-create-fitting-row {
+  grid-template-columns: 56px minmax(0, 1fr) 150px 84px 40px;
+  align-items: center;
+}
+
 .hole-bundle-selected-item.is-clickable {
   cursor: pointer;
 }
@@ -7522,6 +7612,13 @@ tbody tr.selected {
   min-width: 0;
 }
 
+.hole-bundle-selected-item-copy-head {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+}
+
 .hole-bundle-selected-item-active-badge {
   color: #1d4ed8;
   font-size: 11px;
@@ -7540,6 +7637,37 @@ tbody tr.selected {
   color: #607182;
   font-size: 12px;
   line-height: 1.3;
+}
+
+.mounting-node-create-fitting-role,
+.mounting-node-create-fitting-quantity {
+  min-width: 0;
+  width: 100%;
+}
+
+.mounting-node-create-fitting-role {
+  min-width: 150px;
+}
+
+.mounting-node-create-fitting-quantity {
+  min-width: 84px;
+}
+
+.mounting-node-create-fitting-remove {
+  min-height: 34px;
+  padding: 0;
+  width: 40px;
+}
+
+.compact-inline-check {
+  align-items: center;
+  background: #f8fbfd;
+  border: 1px solid #dbe3ea;
+  border-radius: 999px;
+  display: inline-flex;
+  gap: 6px;
+  margin: 0;
+  padding: 8px 10px;
 }
 
 .hole-bundle-modal-toolbar {
@@ -7659,7 +7787,13 @@ tbody tr.selected {
 .hole-bundle-modal-cards {
   display: grid;
   gap: 12px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+@media (max-width: 768px) {
+  .hole-bundle-modal-cards {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 .hole-bundle-modal-card {
@@ -7749,6 +7883,16 @@ tbody tr.selected {
 
   .hole-bundle-modal-row-meta {
     grid-column: 3 / -1;
+  }
+
+  .mounting-node-create-fitting-row {
+    grid-template-columns: 56px minmax(0, 1fr);
+  }
+
+  .mounting-node-create-fitting-role,
+  .mounting-node-create-fitting-quantity {
+    min-width: 0;
+    width: 100%;
   }
 
   .service-rule-picker-controls,
@@ -9283,6 +9427,11 @@ tbody tr.selected {
   }
 
   .mounting-nodes-filters {
+    grid-template-columns: 1fr;
+  }
+
+  .mounting-node-create-top-grid,
+  .mounting-node-create-section > .holes-workspace-save-panel {
     grid-template-columns: 1fr;
   }
 

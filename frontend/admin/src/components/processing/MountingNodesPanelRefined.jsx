@@ -1,4 +1,4 @@
-import { ArrowLeft, LayoutGrid, List, RefreshCw, Search } from "lucide-react";
+import { ArrowLeft, LayoutGrid, List, Plus, RefreshCw, Search } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { getMountingNode, getMountingNodes } from "../../api.js";
@@ -133,6 +133,7 @@ export default function MountingNodesPanelRefined({
   language = "uk",
   editorMode = false,
   initialState = null,
+  onOpenMountingNodeCreate = null,
   onOpenMountingNodeEditor = null,
   t,
   token = "",
@@ -400,6 +401,16 @@ export default function MountingNodesPanelRefined({
     setMountingNodesViewMode("list");
   }
 
+  function handleOpenCreate() {
+    if (typeof onOpenMountingNodeCreate !== "function") {
+      return;
+    }
+
+    const returnState = captureReturnState("list", true);
+    pendingReturnStateRef.current = returnState;
+    onOpenMountingNodeCreate(returnState);
+  }
+
   function handleOpenEditor() {
     if (!selectedNodeDetail || typeof onOpenMountingNodeEditor !== "function") {
       return;
@@ -436,6 +447,16 @@ export default function MountingNodesPanelRefined({
             </div>
             <div className="mounting-nodes-toolbar">
               <span className="service-tree-badge subtle">{language === "uk" ? `Знайдено: ${nodes.length}` : `Found: ${nodes.length}`}</span>
+              {typeof onOpenMountingNodeCreate === "function" ? (
+                <button
+                  className="primary-button mounting-node-create-button"
+                  onClick={handleOpenCreate}
+                  type="button"
+                >
+                  <Plus size={16} />
+                  {language === "uk" ? "Створити монтажний вузол" : "Create mounting node"}
+                </button>
+              ) : null}
               <div className="mounting-nodes-display-toggle materials-mode-switch" role="group" aria-label={language === "uk" ? "Вигляд каталогу" : "Catalog view mode"}>
                 <button
                   aria-pressed={displayMode === "grid"}

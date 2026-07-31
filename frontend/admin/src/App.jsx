@@ -40,6 +40,7 @@ import {
 } from "../../shared/trialStatus.js";
 import EntitlementsAdminPage from "./components/EntitlementsAdminPage.jsx";
 import FittingHolesWorkspace from "./components/processing/FittingHolesWorkspace.jsx";
+import MountingNodesCreatePanel from "./components/processing/MountingNodesCreatePanel.jsx";
 import HolesMountingThreePreview from "./components/processing/HolesMountingThreePreview.jsx";
 import MountingNodesPanel from "./components/processing/MountingNodesPanelRefined.jsx";
 import ProcessingWorkspace from "./components/processing/ProcessingWorkspace.jsx";
@@ -9690,6 +9691,12 @@ export default function App() {
     setCatalogHolesOpenContext(null);
   }
 
+  function handleOpenMountingNodeCreate(returnState = null) {
+    setCatalogHolesReturnState(returnState);
+    setCatalogHolesOpenContext(null);
+    setCatalogHolesMode("create");
+  }
+
   async function handleCatalogHolesSaveMountingNode() {
     if (!token || catalogHolesSaving) {
       return;
@@ -19099,7 +19106,15 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                 </div>
               </div>
             ) : null}
-            {catalogHolesMode === "editor" && catalogHolesOpenContext ? (
+            {catalogHolesMode === "create" ? (
+              <MountingNodesCreatePanel
+                fittingCategories={visibleFittingCategories}
+                fittingItems={fittingItems}
+                language={language}
+                onCancel={handleCatalogHolesBackToList}
+                t={t}
+              />
+            ) : catalogHolesMode === "editor" && catalogHolesOpenContext ? (
               <div className="readonly-note" style={{ marginBottom: "16px" }}>
                 <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
                   <div>
@@ -19136,7 +19151,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                 </div>
               </div>
             ) : null}
-            {catalogHolesMode === "editor" ? (
+            {catalogHolesMode === "create" ? null : catalogHolesMode === "editor" ? (
               <article className="catalog-card service-catalog-card service-catalog-card-full holes-view-card">
               <div className="catalog-page-header">
                 <div className="service-catalog-title">
@@ -19966,6 +19981,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
               <MountingNodesPanel
                 initialState={catalogHolesReturnState}
                 language={language}
+                onOpenMountingNodeCreate={handleOpenMountingNodeCreate}
                 onOpenMountingNodeEditor={(context, returnState) => {
                   setCatalogHolesReturnState(returnState);
                   switchView("catalogHoles", user, context);
