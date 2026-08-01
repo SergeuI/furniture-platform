@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   API_BASE_URL,
   applyEntitlementRegistrySync,
+  createMountingNode,
   getMountingNode,
   getMountingNodes,
   previewEntitlementRegistrySync,
@@ -226,6 +227,92 @@ test("mounting node detail wrapper loads a single node by id", async () => {
     assert.equal(calls.length, 1);
     assert.equal(calls[0].url, "/api/mounting-nodes/1");
     assert.equal(calls[0].options.headers.Authorization, "Bearer token-6");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("mounting node create wrapper sends a POST request with the create payload", async () => {
+  const calls = [];
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url, options });
+    return new Response(JSON.stringify({ success: true, node: { id: 42, code: "mn_confirmat_7x50" } }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+
+  try {
+    const result = await createMountingNode("token-7", {
+      name: "Confirmat 7x50",
+      description: "Demo node",
+      is_active: true,
+      items: [
+        {
+          fitting_id: 11,
+          quantity: 2,
+          role: "primary",
+          is_required: true,
+          affects_processing: true,
+          order_index: 0,
+        },
+      ],
+      templates: [
+        {
+          is_default: true,
+          order_index: 0,
+          template: {
+            fitting_id: 11,
+            name: "Confirmat 7x50 · Face to edge",
+            template_type: "manual",
+            mounting_variant_key: "face_to_edge",
+            is_default: true,
+            is_active: true,
+            sync_points: true,
+            points: [],
+          },
+        },
+      ],
+    });
+
+    assert.equal(result.success, true);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].url, "/api/mounting-nodes");
+    assert.equal(calls[0].options.method, "POST");
+    assert.equal(calls[0].options.headers.Authorization, "Bearer token-7");
+    assert.deepEqual(JSON.parse(calls[0].options.body), {
+      name: "Confirmat 7x50",
+      description: "Demo node",
+      is_active: true,
+      items: [
+        {
+          fitting_id: 11,
+          quantity: 2,
+          role: "primary",
+          is_required: true,
+          affects_processing: true,
+          order_index: 0,
+        },
+      ],
+      templates: [
+        {
+          is_default: true,
+          order_index: 0,
+          template: {
+            fitting_id: 11,
+            name: "Confirmat 7x50 · Face to edge",
+            template_type: "manual",
+            mounting_variant_key: "face_to_edge",
+            is_default: true,
+            is_active: true,
+            sync_points: true,
+            points: [],
+          },
+        },
+      ],
+    });
   } finally {
     globalThis.fetch = originalFetch;
   }

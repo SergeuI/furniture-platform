@@ -135,6 +135,7 @@ import { BoxGeometry, CanvasTexture, DoubleSide, EdgesGeometry, Float32BufferAtt
 import {
   attachMaterialEdge,
   changeOwnPassword,
+  createMountingNode,
   createMaterial,
   createFitting,
   createFittingHoleTemplate,
@@ -154,6 +155,7 @@ import {
   confirmProjectScan,
   getCatalogAutoRefreshStatus,
   getCurrentUser,
+  getMountingNode,
   getFittingHoleBundle,
   getFittingHoleTemplate,
   getFittingHoleServicePreview,
@@ -7032,6 +7034,8 @@ export default function App() {
   const [catalogHolesMode, setCatalogHolesMode] = useState("list");
   const [catalogHolesOpenContext, setCatalogHolesOpenContext] = useState(null);
   const [catalogHolesReturnState, setCatalogHolesReturnState] = useState(null);
+  const [catalogHolesCreateError, setCatalogHolesCreateError] = useState("");
+  const [catalogHolesCreating, setCatalogHolesCreating] = useState(false);
   const [catalogHolesSaving, setCatalogHolesSaving] = useState(false);
   const [holeMountingVariantDropdownOpen, setHoleMountingVariantDropdownOpen] = useState(false);
   const materialsCatalogRequestRef = useRef({ id: 0, pending: false });
@@ -9689,12 +9693,151 @@ export default function App() {
   function handleCatalogHolesBackToList() {
     setCatalogHolesMode("list");
     setCatalogHolesOpenContext(null);
+    setCatalogHolesCreateError("");
+    setCatalogHolesCreating(false);
   }
 
   function handleOpenMountingNodeCreate(returnState = null) {
     setCatalogHolesReturnState(returnState);
     setCatalogHolesOpenContext(null);
+    setCatalogHolesCreateError("");
+    setCatalogHolesCreating(false);
     setCatalogHolesMode("create");
+  }
+
+  function buildMountingNodeEditorContext(nodeDetail) {
+    if (!nodeDetail || typeof nodeDetail !== "object") {
+      return null;
+    }
+
+    const primaryTemplate =
+      nodeDetail.templates?.find((template) => template?.is_default) || nodeDetail.templates?.[0] || null;
+    const primaryItem = nodeDetail.items?.[0] || null;
+    const mountingNodeId = String(nodeDetail.id || "").trim();
+
+    if (!mountingNodeId) {
+      return null;
+    }
+
+    return {
+      mountingNodeId,
+      nodeCode: String(nodeDetail.code || "").trim(),
+      nodeName: String(nodeDetail.name || "").trim(),
+      fittingId: String(primaryTemplate?.fitting_id || primaryItem?.fitting_id || "").trim(),
+      templateId: String(primaryTemplate?.template_id || "").trim(),
+      mountingVariantKey: String(primaryTemplate?.mounting_variant_key || "").trim(),
+      nodeDetail,
+    };
+  }
+
+  function buildMountingNodeCreatePayload(draft = {}) {
+    const items = Array.isArray(draft.items) ? draft.items : [];
+    const selectedItems = items.filter((item) => String(item?.fitting_id || "").trim());
+    const primaryItem = selectedItems[0] || null;
+    const mountingVariantKey = String(draft.mounting_variant_key || "").trim() || "surface_mount";
+    const primaryFittingId = Number(primaryItem?.fitting_id);
+
+    if (!selectedItems.length) {
+      throw new Error(language === "uk" ? "Спочатку виберіть фурнітуру." : "Select at least one fitting.");
+    }
+
+    if (!String(draft.name || "").trim()) {
+      throw new Error(language === "uk" ? "Вкажіть назву монтажного вузла." : "Enter a mounting node name.");
+    }
+
+    if (!Number.isFinite(primaryFittingId)) {
+      throw new Error(language === "uk" ? "Невірна фурнітура для шаблону." : "Invalid fitting for the template.");
+    }
+
+    const templateName =
+      String(draft.template_name || "").trim() ||
+      `${String(primaryItem?.name || primaryItem?.article || primaryItem?.fitting_id || "Template").trim()} · ${getProcessingTemplateMountingVariantLabel(mountingVariantKey, language) || mountingVariantKey}`;
+
+    return {
+      code: String(draft.code || "").trim() || undefined,
+      name: String(draft.name || "").trim(),
+      description: String(draft.description || "").trim() || undefined,
+      is_active: draft.is_active !== false,
+      items: selectedItems.map((item, index) => ({
+        fitting_id: Number(item.fitting_id),
+        quantity: Math.max(1, Number(item.quantity) || 1),
+        role: String(item.role || "").trim() || null,
+        is_required: item.is_required !== false,
+        affects_processing: item.affects_processing !== false,
+        order_index: Number.isFinite(Number(item.order_index)) ? Number(item.order_index) : index,
+      })),
+      templates: [
+        {
+          is_default: true,
+          order_index: 0,
+          template: {
+            fitting_id: primaryFittingId,
+            name: templateName,
+            template_type: "manual",
+            side: null,
+            coordinate_system: "2d",
+            mounting_variant_key: mountingVariantKey,
+            is_default: true,
+            is_active: true,
+            sync_points: true,
+            points: [],
+          },
+        },
+      ],
+    };
+  }
+
+  async function handleCreateMountingNode(draft) {
+    if (!token || catalogHolesCreating) {
+      return;
+    }
+
+    let payload;
+    try {
+      payload = buildMountingNodeCreatePayload(draft);
+    } catch (error) {
+      setCatalogHolesCreateError(error?.message || (language === "uk" ? "Не вдалося створити монтажний вузол" : "Unable to create mounting node"));
+      return;
+    }
+
+    setCatalogHolesCreating(true);
+    setCatalogHolesCreateError("");
+
+    try {
+      const result = await createMountingNode(token, payload);
+
+      if (!result.success) {
+        setCatalogHolesCreateError(
+          result.error || (language === "uk" ? "Не вдалося створити монтажний вузол" : "Unable to create mounting node"),
+        );
+        return;
+      }
+
+      let createdNode = result.node || null;
+
+      if (createdNode?.id && (!Array.isArray(createdNode.items) || !Array.isArray(createdNode.templates))) {
+        const detailResult = await getMountingNode(token, createdNode.id);
+        if (detailResult.success && detailResult.node) {
+          createdNode = detailResult.node;
+        }
+      }
+
+      const editorContext = buildMountingNodeEditorContext(createdNode);
+      if (!editorContext) {
+        setCatalogHolesCreateError(
+          language === "uk"
+            ? "Не вдалося відкрити редактор створеного монтажного вузла."
+            : "Unable to open the created mounting node editor.",
+        );
+        return;
+      }
+
+      await switchView("catalogHoles", user, editorContext);
+    } catch (error) {
+      setCatalogHolesCreateError(error?.message || (language === "uk" ? "Не вдалося створити монтажний вузол" : "Unable to create mounting node"));
+    } finally {
+      setCatalogHolesCreating(false);
+    }
   }
 
   async function handleCatalogHolesSaveMountingNode() {
@@ -19110,80 +19253,50 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
               <MountingNodesCreatePanel
                 fittingCategories={visibleFittingCategories}
                 fittingItems={fittingItems}
+                createError={catalogHolesCreateError}
+                isCreating={catalogHolesCreating}
                 language={language}
                 onCancel={handleCatalogHolesBackToList}
+                onCreate={handleCreateMountingNode}
                 t={t}
               />
-            ) : catalogHolesMode === "editor" && catalogHolesOpenContext ? (
-              <div className="readonly-note" style={{ marginBottom: "16px" }}>
-                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
-                  <div>
-                    <strong>
-                      {t.mountingNodeBannerTitle || (language === "uk" ? "Редагування монтажного вузла" : "Editing mounting node")}
-                      : {catalogHolesOpenContext.nodeName || t.notSet}
-                    </strong>
-                    <div className="settings-info-grid mounting-node-editor-banner-grid">
-                      <div className="mounting-node-meta-field">
-                        <span>{language === "uk" ? "Код" : "Code"}</span>
-                        <strong>{catalogHolesOpenContext.nodeCode || t.notSet}</strong>
-                      </div>
-                      <div className="mounting-node-meta-field">
-                        <span>{language === "uk" ? "Артикулів" : "Articles"}</span>
-                        <strong>{catalogHolesOpenContext.fittingId || t.notSet}</strong>
-                      </div>
-                      <div className="mounting-node-meta-field">
-                        <span>{language === "uk" ? "Шаблон" : "Template"}</span>
-                        <strong>{catalogHolesOpenContext.templateId || t.notSet}</strong>
-                      </div>
-                      <div className="mounting-node-meta-field">
-                        <span>{language === "uk" ? "Варіант" : "Variant"}</span>
-                        <strong>{formatMountingVariantLabel(catalogHolesOpenContext.mountingVariantKey, language) || t.notSet}</strong>
-                      </div>
-                    </div>
-                  </div>
-                  <button
-                    className="primary-button mounting-node-detail-action-button mounting-node-return-button"
-                    onClick={handleCatalogHolesBackToList}
-                    type="button"
-                  >
-                    {language === "uk" ? "Повернутися до деталей вузла" : "Return to node details"}
-                  </button>
-                </div>
-              </div>
-            ) : null}
-            {catalogHolesMode === "create" ? null : catalogHolesMode === "editor" ? (
+            ) : catalogHolesMode === "editor" ? (
               <article className="catalog-card service-catalog-card service-catalog-card-full holes-view-card">
-              <div className="catalog-page-header">
-                <div className="service-catalog-title">
-                  <h3>{language === "uk" ? "Редактор монтажного вузла" : "Mounting node editor"}</h3>
-                  <p>
-                    {language === "uk"
-                      ? "Редагування фурнітури, точок і 3D-схеми монтажного вузла."
-                      : "Editing hardware, points, and the 3D scheme of the mounting node."}
-                  </p>
-                </div>
-                <div className="service-catalog-header-actions">
-                  <span className="service-tree-badge subtle">
-                    {t.holeReadOnlyBadge}
-                  </span>
-                  {catalogHolesOpenContext?.mountingNodeId && catalogHolesOpenContext?.nodeDetail ? (
+                <div className="catalog-page-header">
+                  <div className="service-catalog-title">
+                    <h3>{language === "uk" ? "Редактор монтажного вузла" : "Mounting node editor"}</h3>
+                    <p>
+                      {language === "uk"
+                        ? "Редагування фурнітури, точок і 3D-схеми монтажного вузла."
+                        : "Editing hardware, points, and the 3D scheme of the mounting node."}
+                    </p>
+                  </div>
+                  <div className="service-catalog-header-actions">
                     <button
-                      className="primary-button mounting-node-save-button"
-                      disabled={!canSaveMountingNodeEditor({
-                        context: catalogHolesOpenContext,
-                        pointsLoaded: holeTemplateDetailsLoaded,
-                        selectedTemplate: selectedHoleTemplate,
-                        saving: catalogHolesSaving,
-                      })}
-                      onClick={handleCatalogHolesSaveMountingNode}
+                      className="primary-button mounting-node-detail-action-button mounting-node-return-button"
+                      onClick={handleCatalogHolesBackToList}
                       type="button"
                     >
-                      <Save size={16} />
-                      {language === "uk" ? "Зберегти монтажний вузол" : "Save mounting node"}
+                      {language === "uk" ? "Повернутися до деталей вузла" : "Return to node details"}
                     </button>
-                  ) : null}
+                    {catalogHolesOpenContext?.mountingNodeId && catalogHolesOpenContext?.nodeDetail ? (
+                      <button
+                        className="primary-button mounting-node-save-button"
+                        disabled={!canSaveMountingNodeEditor({
+                          context: catalogHolesOpenContext,
+                          pointsLoaded: holeTemplateDetailsLoaded,
+                          selectedTemplate: selectedHoleTemplate,
+                          saving: catalogHolesSaving,
+                        })}
+                        onClick={handleCatalogHolesSaveMountingNode}
+                        type="button"
+                      >
+                        <Save size={16} />
+                        {language === "uk" ? "Зберегти монтажний вузол" : "Save mounting node"}
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
-              </div>
 
               {!isMountingNodeEditorMode ? (
                 <section className="holes-bundle-create-panel">
@@ -19268,12 +19381,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
 
               <FittingHolesWorkspace>
                 <div className="holes-left-column">
-                  <div className="holes-workspace-top-zone">
-                    {renderHoleWorkspaceFittingInfo(selectedHoleFitting, holeBundleSelectedItems)}
-                    {renderHoleWorkspaceMountingVariantDropdown()}
-                  </div>
-
-                <section className="holes-panel holes-workspace-points-panel">
+                  <section className="holes-panel holes-workspace-points-panel">
                   <div className="holes-panel-header">
                     <h4>{t.holeTabPoints}</h4>
                     <span className="service-tree-badge subtle">
@@ -19410,12 +19518,14 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                           </section>
                         ))}
                       </div>
-                    ) : (
+                  ) : (
                       <div className="empty-state compact-empty-state">
                         <span>{t.holePreviewEmpty}</span>
                       </div>
                     )}
                   </section>
+                  {!isMountingNodeEditorMode ? (
+                    <>
                   <section className="holes-preview-card holes-service-preview-card holes-workspace-preview-panel">
                     <div className="holes-preview-header">
                       <div>
@@ -19614,6 +19724,8 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                     )}
                     </section>
                   ) : null}
+                    </>
+                  ) : null}
                 </div>
 
                 <section className={`holes-preview-card holes-preview-3d-card${holeWorkspaceCanPreview ? "" : " is-placeholder"}`}>
@@ -19644,6 +19756,8 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                       { showHeader: false },
                     )
                   )}
+                  {!isMountingNodeEditorMode ? (
+                    <>
                   <div className="holes-preview-material-planes" aria-label={t.holeWorkspacePreview3dTitle}>
                     <div className="holes-preview-material-planes-title">Площини матеріалу</div>
                     <div className="holes-preview-material-planes-flow">
@@ -19898,6 +20012,10 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                       </div>
                     </div>
                   </details>
+                    </>
+                  ) : null}
+                  {!isMountingNodeEditorMode ? (
+                    <>
                   {holePreviewData.hasPoints ? (
                     <>
                       <div className="holes-preview-stage" data-placeholder={t.holeWorkspacePreview3dPlaceholder}>
@@ -19974,6 +20092,8 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                       <span>{t.holePreviewEmpty}</span>
                     </div>
                   )}
+                    </>
+                  ) : null}
                 </section>
               </FittingHolesWorkspace>
               </article>

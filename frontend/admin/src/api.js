@@ -455,6 +455,14 @@ export async function getMountingNode(token, nodeId) {
   });
 }
 
+export async function createMountingNode(token, payload) {
+  return request("/mounting-nodes", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function updateMountingNode(token, nodeId, payload) {
   const normalizedNodeId = String(nodeId || "").trim();
 

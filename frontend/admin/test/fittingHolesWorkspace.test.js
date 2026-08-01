@@ -20,7 +20,8 @@ test("fitting holes workspace is extracted into a reusable layout shell", () => 
   assert.equal(appSource.includes("</FittingHolesWorkspace>"), true);
   assert.equal(appSource.includes("MountingNodesCreatePanel"), true);
   assert.equal(appSource.includes('catalogHolesMode === "create"'), true);
-  assert.equal(appSource.includes('catalogHolesMode === "create" ? null : catalogHolesMode === "editor" ? ('), true);
+  assert.equal(appSource.includes('catalogHolesMode === "create" ? ('), true);
+  assert.equal(appSource.includes(') : catalogHolesMode === "editor" ? ('), true);
   assert.equal(appSource.includes("holes-workspace-save-panel"), true);
   assert.equal(appSource.includes("holes-preview-3d-card"), true);
 });
