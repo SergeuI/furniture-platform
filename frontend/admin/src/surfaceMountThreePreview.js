@@ -246,11 +246,9 @@ export function buildSurfaceMountThreePreviewHoleVolumes(holes, layout = {}) {
     const depthValue = readHoleNumber(hole, ["depth", "depth_mm"]);
     const hasDepth = Number.isFinite(depthValue) && depthValue > 0;
     const sideDirection = getSurfaceMountHoleDirection(hole?.side);
-    const holeRadius = clamp(
-      Number.isFinite(numericDiameter) ? numericDiameter / 110 : 0.052,
-      0.045,
-      0.1,
-    );
+    const holeRadius = Number.isFinite(numericDiameter)
+      ? Math.abs(numericDiameter) * SURFACE_MOUNT_MM_TO_SCENE * 0.5
+      : 0.052;
     const holeLength = hasDepth
       ? Math.abs(depthValue || 0) * SURFACE_MOUNT_MM_TO_SCENE
       : basePanelThickness;

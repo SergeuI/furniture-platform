@@ -1292,8 +1292,8 @@ export default function HolesMountingThreePreview({
                           event.stopPropagation();
                           onHoverHole?.(marker.id);
                         }}
-                        position={shouldAnchorAtSurface ? marker.surfacePoint : marker.centerPosition}
-                        quaternion={shouldAnchorAtSurface ? marker.quaternion : undefined}
+                        position={shouldAnchorAtSurface || marker.isSurfaceMount ? marker.surfacePoint : marker.centerPosition}
+                        quaternion={shouldAnchorAtSurface || marker.isSurfaceMount ? marker.quaternion : undefined}
                         userData={{
                           holeId: marker.point?.id ?? marker.id,
                           inwardDirection: marker.inwardNormal,
@@ -1303,7 +1303,7 @@ export default function HolesMountingThreePreview({
                       >
                         <mesh
                           castShadow
-                          position={shouldAnchorAtSurface ? [0, marker.holeLength / 2, 0] : [0, 0, 0]}
+                          position={shouldAnchorAtSurface || marker.isSurfaceMount ? [0, marker.holeLength / 2, 0] : [0, 0, 0]}
                           renderOrder={4}
                           userData={{
                             holeId: marker.point?.id ?? marker.id,
@@ -1320,7 +1320,7 @@ export default function HolesMountingThreePreview({
                             transparent
                             roughness={0.22}
                           />
-                          {holeIdTextures[marker.id] && shouldAnchorAtSurface ? (
+                          {holeIdTextures[marker.id] && (shouldAnchorAtSurface || marker.isSurfaceMount) ? (
                             <>
                               <line renderOrder={3}>
                                 <bufferGeometry>

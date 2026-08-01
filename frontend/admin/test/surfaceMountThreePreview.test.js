@@ -55,7 +55,7 @@ test("surface mount preview expands panel height for a point at Y = 100 mm", () 
   assert.equal(Number(dimensions.maxAbsY.toFixed(3)), 1);
   assert.equal(Number(dimensions.maxAbsZ.toFixed(3)), 0);
   assert.equal(Number(dimensions.visualMarginScene.toFixed(3)), 0.3);
-  assert.equal(Number(layout.panels[0].args[1].toFixed(3)), 2.8);
+  assert.equal(Number(layout.panels[0].args[1].toFixed(3)), 2.72);
   assert.equal(Number(layout.panels[0].args[2].toFixed(3)), 1.34);
 });
 
@@ -76,7 +76,7 @@ test("surface mount preview expands panel height symmetrically for a point at Y 
   );
   const layout = buildSurfaceMountThreePreviewLayout(18, volumes);
 
-  assert.equal(Number(layout.panels[0].args[1].toFixed(3)), 2.8);
+  assert.equal(Number(layout.panels[0].args[1].toFixed(3)), 2.72);
   assert.equal(Number(layout.panels[0].args[2].toFixed(3)), 1.34);
 });
 
@@ -98,7 +98,7 @@ test("surface mount preview expands panel width for a point at Z = 100 mm", () =
   const layout = buildSurfaceMountThreePreviewLayout(18, volumes);
 
   assert.equal(Number(layout.panels[0].args[1].toFixed(3)), 2.18);
-  assert.equal(Number(layout.panels[0].args[2].toFixed(3)), 2.8);
+  assert.equal(Number(layout.panels[0].args[2].toFixed(3)), 2.72);
 });
 
 test("surface mount preview caps the visual panel size for extreme coordinates", () => {
@@ -310,6 +310,39 @@ test("surface mount blind hole uses the raw depth value without a 0.18 floor", (
   assert.equal(Number(end.x.toFixed(3)), -0.1);
   assert.equal(center.x < 0, true);
   assert.equal(end.x < 0, true);
+});
+
+test("surface mount keeps 3 mm diameter and 3 mm depth as exact cylinder geometry", () => {
+  const layout = buildSurfaceMountThreePreviewLayout(18);
+  const volumes = buildSurfaceMountThreePreviewHoleVolumes(
+    [
+      {
+        id: 13,
+        label: "P13",
+        x_mm: 0,
+        y_mm: 0,
+        z_mm: 0,
+        diameter_mm: 3,
+        depth_mm: 3,
+        side: "inner_face",
+      },
+    ],
+    layout,
+  );
+
+  const quaternion = volumes[0].quaternion;
+  const groupPosition = new Vector3(...volumes[0].surfacePoint);
+  const start = new Vector3(0, 0, 0).applyQuaternion(quaternion).add(groupPosition);
+  const center = new Vector3(0, volumes[0].holeLength / 2, 0).applyQuaternion(quaternion).add(groupPosition);
+  const end = new Vector3(0, volumes[0].holeLength, 0).applyQuaternion(quaternion).add(groupPosition);
+  const normalizeZero = (value) => (Object.is(value, -0) ? 0 : value);
+
+  assert.equal(Number(volumes[0].holeRadius.toFixed(3)), 0.015);
+  assert.equal(Number(volumes[0].holeLength.toFixed(3)), 0.03);
+  assert.equal(Number(volumes[0].centerPosition[0].toFixed(3)), -0.015);
+  assert.deepEqual(start.toArray().map((value) => normalizeZero(Number(value.toFixed(3)))), [0, 0, 0]);
+  assert.deepEqual(center.toArray().map((value) => normalizeZero(Number(value.toFixed(3)))), [-0.015, 0, 0]);
+  assert.deepEqual(end.toArray().map((value) => normalizeZero(Number(value.toFixed(3)))), [-0.03, 0, 0]);
 });
 
 test("surface mount preview keeps the same mm to scene scale for 18 mm and 34 mm panels", () => {
