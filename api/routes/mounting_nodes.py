@@ -22,10 +22,25 @@ router = APIRouter()
 require_mounting_nodes_admin = require_roles(["admin"])
 
 
-def require_mounting_nodes_use(current_user = Depends(require_current_user)):
+def _has_mounting_nodes_access(current_user, feature_key: str) -> bool:
     with EntitlementService() as service:
-        if service.has_feature(current_user, "fitting_holes.use"):
-            return current_user
+        return service.has_feature(current_user, "fitting_holes.use") and service.has_feature(current_user, feature_key)
+
+
+def _get_mounting_nodes_access(current_user) -> dict[str, bool]:
+    with EntitlementService() as service:
+        fitting_holes_use = service.has_feature(current_user, "fitting_holes.use")
+        return {
+            "viewer_can_view": fitting_holes_use and service.has_feature(current_user, "mounting_nodes.view"),
+            "viewer_can_create": fitting_holes_use and service.has_feature(current_user, "mounting_nodes.create"),
+            "viewer_can_edit": fitting_holes_use and service.has_feature(current_user, "mounting_nodes.edit"),
+            "viewer_can_delete": fitting_holes_use and service.has_feature(current_user, "mounting_nodes.delete"),
+        }
+
+
+def _require_mounting_nodes_access(current_user, feature_key: str):
+    if _has_mounting_nodes_access(current_user, feature_key):
+        return current_user
 
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
@@ -34,6 +49,26 @@ def require_mounting_nodes_use(current_user = Depends(require_current_user)):
             "error": "Insufficient permissions",
         },
     )
+
+
+def require_mounting_nodes_view(current_user = Depends(require_current_user)):
+    return _require_mounting_nodes_access(current_user, "mounting_nodes.view")
+
+
+def require_mounting_nodes_create(current_user = Depends(require_current_user)):
+    return _require_mounting_nodes_access(current_user, "mounting_nodes.create")
+
+
+def require_mounting_nodes_edit(current_user = Depends(require_current_user)):
+    return _require_mounting_nodes_access(current_user, "mounting_nodes.edit")
+
+
+def require_mounting_nodes_delete(current_user = Depends(require_current_user)):
+    return _require_mounting_nodes_access(current_user, "mounting_nodes.delete")
+
+
+def _resolve_mounting_nodes_access(current_user) -> dict[str, bool]:
+    return _get_mounting_nodes_access(current_user)
 
 
 def _raise_service_error(error: ValueError) -> None:
@@ -71,8 +106,9 @@ async def list_mounting_nodes_route(
     fitting_id: int | None = Query(default=None),
     mounting_variant_key: str | None = Query(default=None),
     search: str | None = Query(default=None),
-    current_user = Depends(require_mounting_nodes_use),
+    current_user = Depends(require_mounting_nodes_view),
 ):
+    access = _resolve_mounting_nodes_access(current_user)
     with MountingNodeService() as service:
         nodes = service.list_mounting_nodes(
             include_inactive=include_inactive,
@@ -81,6 +117,8 @@ async def list_mounting_nodes_route(
             search=search,
             viewer_user_id=getattr(current_user, "id", None),
             viewer_role=getattr(current_user, "role", None),
+            viewer_can_edit=access["viewer_can_edit"],
+            viewer_can_delete=access["viewer_can_delete"],
         )
 
     return {
@@ -95,13 +133,16 @@ async def list_mounting_nodes_route(
 )
 async def get_mounting_node_route(
     node_id: int,
-    current_user = Depends(require_mounting_nodes_use),
+    current_user = Depends(require_mounting_nodes_view),
 ):
+    access = _resolve_mounting_nodes_access(current_user)
     with MountingNodeService() as service:
         node = service.get_mounting_node(
             node_id,
             viewer_user_id=getattr(current_user, "id", None),
             viewer_role=getattr(current_user, "role", None),
+            viewer_can_edit=access["viewer_can_edit"],
+            viewer_can_delete=access["viewer_can_delete"],
         )
 
     if node is None:
@@ -122,14 +163,17 @@ async def get_mounting_node_route(
 )
 async def create_mounting_node_route(
     payload: MountingNodeCreateSchema,
-    current_user = Depends(require_mounting_nodes_use),
+    current_user = Depends(require_mounting_nodes_create),
 ):
+    access = _resolve_mounting_nodes_access(current_user)
     try:
         with MountingNodeService() as service:
             node = service.create_mounting_node(
                 payload.model_dump(exclude_unset=True),
                 viewer_user_id=getattr(current_user, "id", None),
                 viewer_role=getattr(current_user, "role", None),
+                viewer_can_edit=access["viewer_can_edit"],
+                viewer_can_delete=access["viewer_can_delete"],
             )
     except ValueError as error:
         _raise_service_error(error)
@@ -149,8 +193,9 @@ async def create_mounting_node_route(
 async def update_mounting_node_route(
     node_id: int,
     payload: MountingNodeUpdateSchema,
-    current_user = Depends(require_mounting_nodes_use),
+    current_user = Depends(require_mounting_nodes_edit),
 ):
+    access = _resolve_mounting_nodes_access(current_user)
     try:
         with MountingNodeService() as service:
             node = service.update_mounting_node(
@@ -158,6 +203,8 @@ async def update_mounting_node_route(
                 payload.model_dump(exclude_unset=True),
                 viewer_user_id=getattr(current_user, "id", None),
                 viewer_role=getattr(current_user, "role", None),
+                viewer_can_edit=access["viewer_can_edit"],
+                viewer_can_delete=access["viewer_can_delete"],
             )
     except ValueError as error:
         _raise_service_error(error)
@@ -182,7 +229,7 @@ async def update_mounting_node_route(
 )
 async def delete_mounting_node_route(
     node_id: int,
-    current_user = Depends(require_mounting_nodes_use),
+    current_user = Depends(require_mounting_nodes_delete),
 ):
     try:
         with MountingNodeService() as service:

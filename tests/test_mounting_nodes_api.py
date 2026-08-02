@@ -20,7 +20,9 @@ from database.models.user import UserModel
 from services.mounting_node_service import MountingNodeService
 
 
-class _AllowedEntitlementService:
+class _FeatureEntitlementService:
+    allowed_features: frozenset[str] = frozenset()
+
     def __enter__(self):
         return self
 
@@ -28,7 +30,55 @@ class _AllowedEntitlementService:
         return False
 
     def has_feature(self, current_user, feature_key: str) -> bool:
-        return feature_key == "fitting_holes.use"
+        return feature_key in self.allowed_features
+
+
+class _AllowedEntitlementService(_FeatureEntitlementService):
+    allowed_features = frozenset(
+        {
+            "fitting_holes.use",
+            "mounting_nodes.view",
+            "mounting_nodes.create",
+            "mounting_nodes.edit",
+            "mounting_nodes.delete",
+        }
+    )
+
+
+class _ViewOnlyEntitlementService(_FeatureEntitlementService):
+    allowed_features = frozenset(
+        {
+            "fitting_holes.use",
+            "mounting_nodes.view",
+        }
+    )
+
+
+class _CreateOnlyEntitlementService(_FeatureEntitlementService):
+    allowed_features = frozenset(
+        {
+            "fitting_holes.use",
+            "mounting_nodes.create",
+        }
+    )
+
+
+class _EditOnlyEntitlementService(_FeatureEntitlementService):
+    allowed_features = frozenset(
+        {
+            "fitting_holes.use",
+            "mounting_nodes.edit",
+        }
+    )
+
+
+class _DeleteOnlyEntitlementService(_FeatureEntitlementService):
+    allowed_features = frozenset(
+        {
+            "fitting_holes.use",
+            "mounting_nodes.delete",
+        }
+    )
 
 
 class _DeniedEntitlementService:
@@ -79,6 +129,19 @@ class MountingNodesApiTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json()["detail"], "Mounting node with id=999 does not exist")
+
+    def test_list_route_requires_mounting_nodes_view_access(self) -> None:
+        app = self._build_app()
+
+        with patch.object(mounting_nodes_route, "EntitlementService", _CreateOnlyEntitlementService):
+            with TestClient(app) as client:
+                response = client.get(
+                    "/mounting-nodes",
+                    headers={"Authorization": "Bearer token"},
+                )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["detail"]["error"], "Insufficient permissions")
 
     def test_create_route_returns_node_for_admin(self) -> None:
         app = self._build_app()
@@ -167,6 +230,24 @@ class MountingNodesApiTests(unittest.TestCase):
         finally:
             session.close()
             engine.dispose()
+
+    def test_create_route_requires_mounting_nodes_create_access(self) -> None:
+        app = self._build_app()
+        app.dependency_overrides[auth_dependencies.require_current_user] = lambda: SimpleNamespace(id="user-1", role="free")
+
+        with patch.object(mounting_nodes_route, "EntitlementService", _ViewOnlyEntitlementService):
+            with TestClient(app) as client:
+                response = client.post(
+                    "/mounting-nodes",
+                    json={
+                        "name": "User node",
+                        "items": [{"fitting_id": 1, "quantity": 1}],
+                    },
+                    headers={"Authorization": "Bearer token"},
+                )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["detail"]["error"], "Insufficient permissions")
 
     def test_create_route_returns_nested_template_and_point_ids_for_admin(self) -> None:
         app = self._build_app()
@@ -431,6 +512,21 @@ class MountingNodesApiTests(unittest.TestCase):
         self.assertEqual(body["node"]["templates"][0]["template"]["points"][0]["id"], 29)
         self.assertEqual(body["node"]["templates"][0]["template"]["points"][1]["id"], 31)
 
+    def test_update_route_requires_mounting_nodes_edit_access(self) -> None:
+        app = self._build_app()
+        app.dependency_overrides[auth_dependencies.require_current_user] = lambda: SimpleNamespace(id="user-1", role="free")
+
+        with patch.object(mounting_nodes_route, "EntitlementService", _CreateOnlyEntitlementService):
+            with TestClient(app) as client:
+                response = client.patch(
+                    "/mounting-nodes/1",
+                    json={"name": "Updated node"},
+                    headers={"Authorization": "Bearer token"},
+                )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["detail"]["error"], "Insufficient permissions")
+
     def test_list_and_detail_route_apply_owner_visibility_and_snapshot(self) -> None:
         session, engine = self._build_session()
         try:
@@ -507,6 +603,50 @@ class MountingNodesApiTests(unittest.TestCase):
             session.close()
             engine.dispose()
 
+    def test_list_and_detail_route_respect_edit_and_delete_entitlements(self) -> None:
+        session, engine = self._build_session()
+        try:
+            app = self._build_app()
+            user_a = self._create_user(session, email="user-a@example.com", role="free")
+            fitting = self._create_fitting(session, name="Fit A", code="fit-a", article="A")
+            service = MountingNodeService(session=session)
+
+            own_node = service.create_mounting_node(
+                {
+                    "name": "Own node",
+                    "items": [{"fitting_id": fitting.id, "quantity": 1}],
+                },
+                viewer_user_id=user_a.id,
+                viewer_role=user_a.role,
+            )
+
+            app.dependency_overrides[auth_dependencies.require_current_user] = lambda: user_a
+
+            with patch.object(mounting_nodes_route, "EntitlementService", _ViewOnlyEntitlementService):
+                with patch.object(mounting_nodes_route, "MountingNodeService", return_value=service):
+                    with TestClient(app) as client:
+                        list_response = client.get(
+                            "/mounting-nodes",
+                            headers={"Authorization": "Bearer token"},
+                        )
+                        detail_response = client.get(
+                            f"/mounting-nodes/{own_node['id']}",
+                            headers={"Authorization": "Bearer token"},
+                        )
+
+            self.assertEqual(list_response.status_code, 200)
+            list_nodes = list_response.json()["nodes"]
+            self.assertEqual({node["name"]: node["can_edit"] for node in list_nodes}, {"Own node": False})
+            self.assertEqual({node["name"]: node["can_delete"] for node in list_nodes}, {"Own node": False})
+
+            self.assertEqual(detail_response.status_code, 200)
+            detail_node = detail_response.json()["node"]
+            self.assertFalse(detail_node["can_edit"])
+            self.assertFalse(detail_node["can_delete"])
+        finally:
+            session.close()
+            engine.dispose()
+
     def test_delete_route_removes_node_and_nested_template_records_for_owner(self) -> None:
         session, engine = self._build_session()
         try:
@@ -570,6 +710,38 @@ class MountingNodesApiTests(unittest.TestCase):
             self.assertIsNone(session.get(MountingNodeModel, own_node["id"]))
             self.assertIsNone(session.get(FittingHoleTemplateModel, template.id))
             self.assertEqual(session.query(FittingHolePointModel).count(), 0)
+        finally:
+            session.close()
+            engine.dispose()
+
+    def test_delete_route_requires_mounting_nodes_delete_access(self) -> None:
+        session, engine = self._build_session()
+        try:
+            app = self._build_app()
+            owner = self._create_user(session, email="owner@example.com", role="free")
+            fitting = self._create_fitting(session, name="Fit A", code="fit-a", article="A")
+            service = MountingNodeService(session=session)
+            node = service.create_mounting_node(
+                {
+                    "name": "Own node",
+                    "items": [{"fitting_id": fitting.id, "quantity": 1}],
+                },
+                viewer_user_id=owner.id,
+                viewer_role=owner.role,
+            )
+
+            app.dependency_overrides[auth_dependencies.require_current_user] = lambda: owner
+
+            with patch.object(mounting_nodes_route, "EntitlementService", _EditOnlyEntitlementService):
+                with patch.object(mounting_nodes_route, "MountingNodeService", return_value=service):
+                    with TestClient(app) as client:
+                        response = client.delete(
+                            f"/mounting-nodes/{node['id']}",
+                            headers={"Authorization": "Bearer token"},
+                        )
+
+            self.assertEqual(response.status_code, 403)
+            self.assertEqual(response.json()["detail"]["error"], "Insufficient permissions")
         finally:
             session.close()
             engine.dispose()

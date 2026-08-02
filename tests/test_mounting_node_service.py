@@ -964,6 +964,52 @@ class MountingNodeServiceTests(unittest.TestCase):
             session.close()
             engine.dispose()
 
+    def test_access_snapshot_can_be_limited_by_viewer_entitlements(self) -> None:
+        session, engine = self._build_session()
+        try:
+            admin = self._create_user(session, email="admin@example.com", role="admin")
+            user_a = self._create_user(session, email="user-a@example.com", role="free")
+            fitting = self._create_fitting(session, name="Fit A", code="fit-a", article="A")
+            service = MountingNodeService(session=session)
+
+            own_node = service.create_mounting_node(
+                {
+                    "name": "Own node",
+                    "items": [{"fitting_id": fitting.id, "quantity": 1}],
+                },
+                viewer_user_id=user_a.id,
+                viewer_role=user_a.role,
+            )
+
+            baseline = service.get_mounting_node(own_node["id"], viewer_user_id=user_a.id, viewer_role=user_a.role)
+            restricted = service.get_mounting_node(
+                own_node["id"],
+                viewer_user_id=user_a.id,
+                viewer_role=user_a.role,
+                viewer_can_edit=False,
+                viewer_can_delete=False,
+            )
+            admin_view = service.get_mounting_node(
+                own_node["id"],
+                viewer_user_id=admin.id,
+                viewer_role=admin.role,
+                viewer_can_edit=False,
+                viewer_can_delete=False,
+            )
+
+            self.assertIsNotNone(baseline)
+            self.assertTrue(baseline["can_edit"])
+            self.assertTrue(baseline["can_delete"])
+            self.assertIsNotNone(restricted)
+            self.assertFalse(restricted["can_edit"])
+            self.assertFalse(restricted["can_delete"])
+            self.assertIsNotNone(admin_view)
+            self.assertTrue(admin_view["can_edit"])
+            self.assertTrue(admin_view["can_delete"])
+        finally:
+            session.close()
+            engine.dispose()
+
     def test_create_update_and_delete_respect_ownership_permissions(self) -> None:
         session, engine = self._build_session()
         try:

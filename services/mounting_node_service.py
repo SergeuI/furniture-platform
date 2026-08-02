@@ -181,14 +181,16 @@ class MountingNodeService:
         *,
         viewer_user_id: Any = None,
         viewer_role: Any = None,
+        viewer_can_edit: bool | None = None,
+        viewer_can_delete: bool | None = None,
     ) -> dict[str, Any]:
         owner_user_id = self._optional_text(getattr(node, "owner_user_id", None))
         normalized_viewer_user_id = self._normalize_viewer_user_id(viewer_user_id)
         is_admin = self._is_admin_role(viewer_role)
         is_system = owner_user_id is None
         is_owner = bool(owner_user_id and normalized_viewer_user_id and owner_user_id == normalized_viewer_user_id)
-        can_edit = bool(is_admin or is_owner)
-        can_delete = bool(is_admin or is_owner)
+        can_edit = bool(is_admin or (is_owner and (viewer_can_edit if viewer_can_edit is not None else True)))
+        can_delete = bool(is_admin or (is_owner and (viewer_can_delete if viewer_can_delete is not None else True)))
 
         if is_system:
             ownership_type = "system"
@@ -351,6 +353,8 @@ class MountingNodeService:
         *,
         viewer_user_id: Any = None,
         viewer_role: Any = None,
+        viewer_can_edit: bool | None = None,
+        viewer_can_delete: bool | None = None,
     ) -> dict[str, Any]:
         items = list(getattr(node, "items", []) or [])
         templates = list(getattr(node, "templates", []) or [])
@@ -358,6 +362,8 @@ class MountingNodeService:
             node,
             viewer_user_id=viewer_user_id,
             viewer_role=viewer_role,
+            viewer_can_edit=viewer_can_edit,
+            viewer_can_delete=viewer_can_delete,
         )
         return {
             "id": node.id,
@@ -852,6 +858,8 @@ class MountingNodeService:
         search: str | None = None,
         viewer_user_id: Any = None,
         viewer_role: Any = None,
+        viewer_can_edit: bool | None = None,
+        viewer_can_delete: bool | None = None,
     ) -> list[dict[str, Any]]:
         nodes = self.repository.list_nodes(
             include_inactive=include_inactive,
@@ -867,6 +875,8 @@ class MountingNodeService:
                     node,
                     viewer_user_id=viewer_user_id,
                     viewer_role=viewer_role,
+                    viewer_can_edit=viewer_can_edit,
+                    viewer_can_delete=viewer_can_delete,
                 ).items()
                 if key not in {"items", "templates"}
             }
@@ -888,6 +898,8 @@ class MountingNodeService:
         *,
         viewer_user_id: Any = None,
         viewer_role: Any = None,
+        viewer_can_edit: bool | None = None,
+        viewer_can_delete: bool | None = None,
     ) -> dict[str, Any] | None:
         node_id = self._require_int(node_id, "node_id")
         node = self.repository.get_node_by_id(node_id)
@@ -898,6 +910,8 @@ class MountingNodeService:
             node,
             viewer_user_id=viewer_user_id,
             viewer_role=viewer_role,
+            viewer_can_edit=viewer_can_edit,
+            viewer_can_delete=viewer_can_delete,
         )
         if not self._is_admin_role(viewer_role) and ownership_snapshot["owner_user_id"] is not None and not ownership_snapshot["is_owner"]:
             return None
@@ -906,6 +920,8 @@ class MountingNodeService:
             node,
             viewer_user_id=viewer_user_id,
             viewer_role=viewer_role,
+            viewer_can_edit=viewer_can_edit,
+            viewer_can_delete=viewer_can_delete,
         )
 
     def create_mounting_node(
@@ -918,6 +934,8 @@ class MountingNodeService:
             payload,
             viewer_user_id=payload.get("viewer_user_id"),
             viewer_role=payload.get("viewer_role"),
+            viewer_can_edit=payload.get("viewer_can_edit"),
+            viewer_can_delete=payload.get("viewer_can_delete"),
         )
 
     def _create_mounting_node(
@@ -926,6 +944,8 @@ class MountingNodeService:
         *,
         viewer_user_id: Any = None,
         viewer_role: Any = None,
+        viewer_can_edit: bool | None = None,
+        viewer_can_delete: bool | None = None,
     ) -> dict[str, Any]:
         name = self._require_text(payload.get("name"), "name")
         code = self._optional_text(payload.get("code")) or self._generate_code(name)
@@ -976,6 +996,8 @@ class MountingNodeService:
             refreshed or node,
             viewer_user_id=viewer_user_id,
             viewer_role=viewer_role,
+            viewer_can_edit=viewer_can_edit,
+            viewer_can_delete=viewer_can_delete,
         )
 
     def update_mounting_node(
@@ -990,6 +1012,8 @@ class MountingNodeService:
             payload,
             viewer_user_id=payload.get("viewer_user_id"),
             viewer_role=payload.get("viewer_role"),
+            viewer_can_edit=payload.get("viewer_can_edit"),
+            viewer_can_delete=payload.get("viewer_can_delete"),
         )
 
     def _update_mounting_node(
@@ -999,6 +1023,8 @@ class MountingNodeService:
         *,
         viewer_user_id: Any = None,
         viewer_role: Any = None,
+        viewer_can_edit: bool | None = None,
+        viewer_can_delete: bool | None = None,
     ) -> dict[str, Any] | None:
         node_id = self._require_int(node_id, "node_id")
         node = self.repository.get_node_by_id(node_id)
@@ -1089,6 +1115,8 @@ class MountingNodeService:
             refreshed,
             viewer_user_id=viewer_user_id,
             viewer_role=viewer_role,
+            viewer_can_edit=viewer_can_edit,
+            viewer_can_delete=viewer_can_delete,
         )
 
     def delete_mounting_node(

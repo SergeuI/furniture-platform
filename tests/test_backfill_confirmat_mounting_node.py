@@ -29,7 +29,7 @@ class _AllowedEntitlementService:
         return False
 
     def has_feature(self, current_user, feature_key: str) -> bool:
-        return feature_key == "fitting_holes.use"
+        return feature_key in {"fitting_holes.use", "mounting_nodes.view"}
 
 
 class _ServiceContext:
