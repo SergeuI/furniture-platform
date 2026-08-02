@@ -419,8 +419,8 @@ export default function MountingNodesCreatePanel({
     updateDraft(updateMountingNodeCreateDraftItem(draft, fittingId, patch));
   };
 
-  const handleSubmit = async (event) => {
-    event.preventDefault();
+  const handleSubmit = async (event, afterCreate = "editor") => {
+    event?.preventDefault?.();
 
     if (!canSubmit) {
       return;
@@ -428,24 +428,32 @@ export default function MountingNodesCreatePanel({
 
     setInternalSubmitting(true);
     try {
-      await onCreate(draft);
+      await onCreate(draft, afterCreate);
     } finally {
       setInternalSubmitting(false);
     }
   };
 
-  const submitLabel = isCreating || internalSubmitting
+  const isSubmitting = isCreating || internalSubmitting;
+  const primarySubmitLabel = isSubmitting
     ? language === "uk"
-      ? "Створення..."
-      : "Creating..."
+      ? "Збереження..."
+      : "Saving..."
     : language === "uk"
-      ? "Створити монтажний вузол"
-      : "Create mounting node";
+      ? "Зберегти та налаштувати отвори"
+      : "Save and configure holes";
+  const secondarySubmitLabel = isSubmitting
+    ? language === "uk"
+      ? "Збереження..."
+      : "Saving..."
+    : language === "uk"
+      ? "Зберегти й повернутися до списку"
+      : "Save and return to list";
 
   return (
     <section aria-label={selectorTitle} className="mounting-node-create-screen">
       <article className="catalog-card service-catalog-card service-catalog-card-full mounting-node-create-section">
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={(event) => handleSubmit(event, "editor")}>
           <div className="catalog-page-header mounting-node-create-header">
             <div className="service-catalog-title">
               <h3>{language === "uk" ? "Створення монтажного вузла" : "Create mounting node"}</h3>
@@ -685,9 +693,24 @@ export default function MountingNodesCreatePanel({
             <div className="holes-workspace-save-panel-copy">
               <strong>{language === "uk" ? "Створення монтажного вузла" : "Create mounting node"}</strong>
             </div>
-            <button className="primary-button" disabled={!canSubmit} type="submit">
-              {submitLabel}
-            </button>
+            <div className="holes-workspace-save-actions mounting-node-create-actions">
+              <button
+                className="primary-button"
+                disabled={!canSubmit}
+                onClick={(event) => handleSubmit(event, "editor")}
+                type="button"
+              >
+                {primarySubmitLabel}
+              </button>
+              <button
+                className="ghost-button"
+                disabled={!canSubmit}
+                onClick={(event) => handleSubmit(event, "list")}
+                type="button"
+              >
+                {secondarySubmitLabel}
+              </button>
+            </div>
           </div>
         </form>
 

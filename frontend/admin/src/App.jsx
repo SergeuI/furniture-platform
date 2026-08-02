@@ -9787,7 +9787,7 @@ export default function App() {
     };
   }
 
-  async function handleCreateMountingNode(draft) {
+  async function handleCreateMountingNode(draft, afterCreate = "editor") {
     if (!token || catalogHolesCreating) {
       return;
     }
@@ -9821,6 +9821,33 @@ export default function App() {
           createdNode = detailResult.node;
         }
       }
+
+      if (afterCreate === "list") {
+        setCatalogHolesCreateError("");
+        setCatalogHolesOpenContext(null);
+        setCatalogHolesMode("list");
+        return;
+      }
+
+      const nextReturnState = {
+        ...(catalogHolesReturnState && typeof catalogHolesReturnState === "object" ? catalogHolesReturnState : {}),
+        nodeDetailsById: {
+          ...(catalogHolesReturnState?.nodeDetailsById || {}),
+          [String(createdNode.id || "")]: createdNode,
+        },
+        nodes: Array.isArray(catalogHolesReturnState?.nodes)
+          ? [
+              createdNode,
+              ...catalogHolesReturnState.nodes.filter((node) => String(node?.id || "") !== String(createdNode.id || "")),
+            ]
+          : [createdNode],
+        mountingNodesViewMode: "detail",
+        restoreScrollOnMount: true,
+        selectedNodeDetail: createdNode,
+        selectedNodeId: String(createdNode.id || ""),
+        selectedNodeLoading: false,
+      };
+      setCatalogHolesReturnState(nextReturnState);
 
       const editorContext = buildMountingNodeEditorContext(createdNode);
       if (!editorContext) {
@@ -19292,7 +19319,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                         type="button"
                       >
                         <Save size={16} />
-                        {language === "uk" ? "Зберегти монтажний вузол" : "Save mounting node"}
+                        {language === "uk" ? "Зберегти налаштування отворів" : "Save hole settings"}
                       </button>
                     ) : null}
                   </div>

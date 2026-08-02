@@ -2241,6 +2241,22 @@ tbody tr.selected {
   overflow-wrap: anywhere;
 }
 
+.mounting-node-card-visuals,
+.mounting-node-row-visuals {
+  align-items: flex-end;
+  display: grid;
+  gap: 8px;
+  justify-items: end;
+}
+
+.mounting-node-card-actions,
+.mounting-node-row-actions {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .mounting-node-card-type {
   color: #40525d;
   font-size: 0.96rem;
@@ -3088,6 +3104,10 @@ tbody tr.selected {
   gap: 10px;
   justify-content: space-between;
   min-width: 0;
+}
+
+.mounting-node-create-actions {
+  justify-content: flex-end;
 }
 
 .holes-workspace-save-status {
@@ -9489,6 +9509,16 @@ tbody tr.selected {
   }
 
   .mounting-node-item-gallery {
+    justify-content: flex-start;
+  }
+
+  .mounting-node-card-visuals,
+  .mounting-node-row-visuals {
+    justify-items: flex-start;
+  }
+
+  .mounting-node-card-actions,
+  .mounting-node-row-actions {
     justify-content: flex-start;
   }
 

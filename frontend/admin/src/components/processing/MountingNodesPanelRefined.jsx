@@ -1,4 +1,4 @@
-import { ArrowLeft, LayoutGrid, List, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
+import { ArrowLeft, Box, Info, LayoutGrid, List, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { deleteMountingNode, getFittingDetails, getFittingImageBlob, getMountingNode, getMountingNodes } from "../../api.js";
@@ -147,6 +147,69 @@ function getOwnershipLabel(node, language) {
   return language === "uk" ? "Невідомий доступ" : "Unknown ownership";
 }
 
+function buildNodeEditorContext(nodeDetail) {
+  if (!nodeDetail || typeof nodeDetail !== "object") {
+    return null;
+  }
+
+  const primaryTemplate =
+    nodeDetail.templates?.find((template) => template?.is_default) || nodeDetail.templates?.[0] || null;
+  const primaryItem = nodeDetail.items?.[0] || null;
+  const mountingNodeId = String(nodeDetail.id || "").trim();
+
+  if (!mountingNodeId) {
+    return null;
+  }
+
+  return {
+    mountingNodeId,
+    nodeCode: String(nodeDetail.code || "").trim(),
+    nodeName: String(nodeDetail.name || "").trim(),
+    fittingId: String(primaryTemplate?.fitting_id || primaryItem?.fitting_id || "").trim(),
+    templateId: String(primaryTemplate?.template_id || "").trim(),
+    mountingVariantKey: String(primaryTemplate?.mounting_variant_key || "").trim(),
+    nodeDetail,
+  };
+}
+
+function buildNodeReturnState({
+  activeStatusFilter,
+  activeVariantFilter,
+  appliedSearch,
+  displayMode,
+  listError,
+  listLoading,
+  nodeDetailErrorsById,
+  nodeDetailsById,
+  nodes,
+  restoreScrollOnMount,
+  scrollPosition,
+  searchInput,
+  selectedNodeDetail,
+  selectedNodeId,
+  selectedNodeLoading,
+  nextViewMode,
+}) {
+  return buildMountingNodesReturnState({
+    activeStatusFilter,
+    activeVariantFilter,
+    appliedSearch,
+    displayMode,
+    listError,
+    listLoading,
+    mountingNodesViewMode: nextViewMode,
+    nodeDetailErrorsById,
+    nodeDetailsById,
+    nodes,
+    restoreScrollOnMount,
+    scrollPosition,
+    searchInput,
+    selectedNodeDetail,
+    selectedNodeId,
+    selectedNodeLoading,
+  });
+}
+
 function getNodeItemImageUrl(item, fittingThumbnailState) {
   const thumbnailUrl = String(fittingThumbnailState?.src || "").trim();
   if (fittingThumbnailState?.status === "loaded" && thumbnailUrl) {
@@ -207,6 +270,43 @@ function renderNodeItemGallery(items, language, t, fittingThumbnailStateById) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function renderNodeCardActions(node, nodeDetail, language, t, onOpenNodeDetail, onOpenNodeEditor) {
+  const canEdit = Boolean((nodeDetail || node)?.can_edit);
+  const openNodeDetailLabel = language === "uk" ? "Інформація про вузол" : "Node info";
+  const openNodeEditorLabel = language === "uk" ? "Отвори та 3D" : "Open editor and 3D";
+
+  return (
+    <div className="mounting-node-card-actions">
+      <button
+        aria-label={openNodeDetailLabel}
+        className="ghost-button compact-button detail-info-button mounting-node-card-action"
+        onClick={(event) => {
+          event.stopPropagation();
+          onOpenNodeDetail(node.id);
+        }}
+        title={openNodeDetailLabel}
+        type="button"
+      >
+        <Info size={16} />
+      </button>
+      {canEdit ? (
+        <button
+          aria-label={openNodeEditorLabel}
+          className="ghost-button compact-button detail-info-button mounting-node-card-action"
+          onClick={(event) => {
+            event.stopPropagation();
+            onOpenNodeEditor(nodeDetail || node);
+          }}
+          title={openNodeEditorLabel}
+          type="button"
+        >
+          <Box size={16} />
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -614,7 +714,7 @@ export default function MountingNodesPanelRefined({
   );
 
   function captureReturnState(nextViewMode, restoreScrollOnMount = false) {
-    return buildMountingNodesReturnState({
+    return buildNodeReturnState({
       activeStatusFilter,
       activeVariantFilter,
       appliedSearch,
@@ -631,6 +731,7 @@ export default function MountingNodesPanelRefined({
       selectedNodeDetail,
       selectedNodeId,
       selectedNodeLoading,
+      nextViewMode,
     });
   }
 
@@ -671,25 +772,31 @@ export default function MountingNodesPanelRefined({
     onOpenMountingNodeCreate(returnState);
   }
 
-  function handleOpenEditor() {
-    if (!selectedNodeDetail || typeof onOpenMountingNodeEditor !== "function") {
+  function handleOpenEditor(nodeDetail = selectedNodeDetail) {
+    if (!nodeDetail || typeof onOpenMountingNodeEditor !== "function") {
       return;
     }
 
-    pendingReturnStateRef.current = captureReturnState("detail", true);
-
-    const primaryTemplate = selectedNodeDetail.templates?.find((template) => template?.is_default) || selectedNodeDetail.templates?.[0] || null;
-    const primaryItem = selectedNodeDetail.items?.[0] || null;
-
-    onOpenMountingNodeEditor({
-      mountingNodeId: selectedNodeDetail.id,
-      nodeCode: selectedNodeDetail.code,
-      nodeName: selectedNodeDetail.name,
-      fittingId: primaryTemplate?.fitting_id || primaryItem?.fitting_id || "",
-      templateId: primaryTemplate?.template_id || "",
-      mountingVariantKey: primaryTemplate?.mounting_variant_key || "",
-      nodeDetail: selectedNodeDetail,
-    }, pendingReturnStateRef.current);
+    const nextReturnState = buildNodeReturnState({
+      activeStatusFilter,
+      activeVariantFilter,
+      appliedSearch,
+      displayMode,
+      listError,
+      listLoading,
+      nodeDetailErrorsById,
+      nodeDetailsById,
+      nodes,
+      restoreScrollOnMount: true,
+      scrollPosition: typeof window !== "undefined" ? window.scrollY : 0,
+      searchInput,
+      selectedNodeDetail: nodeDetail,
+      selectedNodeId: String(nodeDetail.id || ""),
+      selectedNodeLoading: false,
+      nextViewMode: "detail",
+    });
+    pendingReturnStateRef.current = nextReturnState;
+    onOpenMountingNodeEditor(buildNodeEditorContext(nodeDetail), nextReturnState);
   }
 
   function handleOpenDeleteConfirm() {
@@ -863,7 +970,17 @@ export default function MountingNodesPanelRefined({
                           <strong>{node.name || t.notSet}</strong>
                           <p className="mounting-node-card-type">{ownershipLabel}</p>
                         </div>
-                        {renderNodeItemGallery(nodeDetail?.items, language, t, fittingThumbnailStateById)}
+                        <div className="mounting-node-card-visuals">
+                          {renderNodeCardActions(
+                            node,
+                            nodeDetail,
+                            language,
+                            t,
+                            handleSelectNode,
+                            handleOpenEditor,
+                          )}
+                          {renderNodeItemGallery(nodeDetail?.items, language, t, fittingThumbnailStateById)}
+                        </div>
                       </div>
                     </article>
                   );
@@ -896,7 +1013,19 @@ export default function MountingNodesPanelRefined({
                           <strong>{node.name || t.notSet}</strong>
                           <p className="mounting-node-card-type">{ownershipLabel}</p>
                         </div>
-                        {renderNodeItemGallery(nodeDetail?.items, language, t, fittingThumbnailStateById)}
+                        <div className="mounting-node-row-visuals">
+                          <div className="mounting-node-row-actions">
+                            {renderNodeCardActions(
+                              node,
+                              nodeDetail,
+                              language,
+                              t,
+                              handleSelectNode,
+                              handleOpenEditor,
+                            )}
+                          </div>
+                          {renderNodeItemGallery(nodeDetail?.items, language, t, fittingThumbnailStateById)}
+                        </div>
                       </div>
                     </article>
                   );
