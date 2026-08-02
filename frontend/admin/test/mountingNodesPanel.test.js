@@ -24,6 +24,23 @@ test("mounting nodes panel preserves list state and restores scroll after editor
   assert.equal(source.includes("mounting-node-return-button"), true);
   assert.equal(source.includes("mounting-node-editor-button"), true);
   assert.equal(source.includes("mounting-node-delete-button"), true);
+  assert.equal(source.includes("mounting-node-card-layout"), true);
+  assert.equal(source.includes("mounting-node-row-layout"), true);
+  assert.equal(source.includes("mounting-node-card-type"), true);
+  assert.equal(source.includes("mounting-node-item-gallery"), true);
+  assert.equal(source.includes("mounting-node-item-thumb"), true);
+  assert.equal(source.includes("renderNodeItemGallery"), true);
+  assert.equal(source.includes("getNodeItemImageUrl(item, fittingThumbnailState)"), true);
+  assert.equal(source.includes("getFittingDetails"), true);
+  assert.equal(source.includes("getFittingImageBlob"), true);
+  assert.equal(source.includes("fittingThumbnailStateById"), true);
+  assert.equal(source.includes('status: "loading"'), true);
+  assert.equal(source.includes('status: "loaded"'), true);
+  assert.equal(source.includes('status: "no-image"'), true);
+  assert.equal(source.includes('status: "error"'), true);
+  assert.equal(source.includes("reader.onabort"), true);
+  assert.equal(source.includes("visibleItems"), true);
+  assert.equal(source.includes("hasLoadingImages"), true);
   assert.equal(source.includes("mounting-node-ownership-badge"), true);
   assert.equal(source.includes("mounting-node-create-button"), true);
   assert.equal(source.includes("onOpenMountingNodeCreate"), true);
@@ -90,4 +107,21 @@ test("catalog holes page shows the mounting nodes create mode and editor mode br
   assert.equal(createPanelSource.includes("holes-workspace-top-zone"), false);
   assert.equal(createPanelSource.includes("holes-selected-point-panel"), false);
   assert.equal(createPanelSource.includes("createMountingNodeCreateDraftPointFromFitting("), false);
+});
+
+test("mounting nodes panel keeps the same image extraction contract for grid and list thumbnails", () => {
+  const sourcePath = fileURLToPath(
+    new URL("../src/components/processing/MountingNodesPanelRefined.jsx", import.meta.url),
+  );
+  const source = readFileSync(sourcePath, "utf8");
+
+  assert.equal(source.includes("getFittingDetails(token, fittingId)"), true);
+  assert.equal(source.includes("getFittingImageBlob(token, fittingId, primaryImage.id)"), true);
+  assert.equal(source.includes("fittingThumbnailStateById[fittingId]"), true);
+  assert.equal(source.includes("const visibleItems = renderedItems.filter((item) => item.fittingThumbnailState?.status === \"loaded\" && item.imageUrl);"), true);
+  assert.equal(source.includes("const primaryImage = galleryImages.find((image) => Boolean(image?.is_primary)) || galleryImages[0] || null;"), true);
+  assert.equal(source.includes("readAsDataURL(imageResult.blob)"), true);
+  assert.equal(source.includes("status: \"loaded\",") || source.includes('status: "loaded"'), true);
+  assert.equal(source.includes("renderNodeItemGallery(nodeDetail?.items, language, t, fittingThumbnailStateById)"), true);
+  assert.equal(source.includes("No images"), true);
 });

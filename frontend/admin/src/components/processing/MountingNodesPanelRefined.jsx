@@ -1,7 +1,7 @@
 import { ArrowLeft, LayoutGrid, List, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
-import { deleteMountingNode, getMountingNode, getMountingNodes } from "../../api.js";
+import { deleteMountingNode, getFittingDetails, getFittingImageBlob, getMountingNode, getMountingNodes } from "../../api.js";
 import { getProcessingTemplateMountingVariantLabel } from "../../processingTemplates.js";
 
 const KNOWN_MOUNTING_VARIANT_KEYS = [
@@ -137,14 +137,78 @@ function getOwnershipLabel(node, language) {
   }
 
   if (node?.is_owner) {
-    return language === "uk" ? "Мій вузол" : "My node";
+    return language === "uk" ? "Власний" : "Owned";
   }
 
   if (ownershipType === "private" || node?.owner_user_id) {
-    return language === "uk" ? "Користувацький" : "Private";
+    return language === "uk" ? "Користувацький" : "Custom";
   }
 
   return language === "uk" ? "Невідомий доступ" : "Unknown ownership";
+}
+
+function getNodeItemImageUrl(item, fittingThumbnailState) {
+  const thumbnailUrl = String(fittingThumbnailState?.src || "").trim();
+  if (fittingThumbnailState?.status === "loaded" && thumbnailUrl) {
+    return thumbnailUrl;
+  }
+
+  return String(item?.image_url || item?.image || item?.thumbnail_url || "").trim();
+}
+
+function getNodeItemLabel(item, t) {
+  return String(item?.fitting_name || item?.name || item?.fitting_article || item?.fitting_code || "").trim() || t.notSet;
+}
+
+function renderNodeItemGallery(items, language, t, fittingThumbnailStateById) {
+  const nodeItems = Array.isArray(items) ? items : [];
+  const renderedItems = nodeItems.map((item, index) => {
+    const fittingId = String(item?.fitting_id || "").trim();
+    const fittingThumbnailState = fittingId ? fittingThumbnailStateById?.[fittingId] || null : null;
+    const imageUrl = getNodeItemImageUrl(item, fittingThumbnailState);
+
+    return {
+      fittingId,
+      fittingThumbnailState,
+      imageUrl,
+      itemLabel: getNodeItemLabel(item, t),
+      itemKey: String(item?.id || item?.fitting_id || item?.fitting_article || item?.fitting_code || index),
+    };
+  });
+  const visibleItems = renderedItems.filter((item) => item.fittingThumbnailState?.status === "loaded" && item.imageUrl);
+  const hasLoadingImages = renderedItems.some((item) => item.fittingThumbnailState?.status === "loading");
+
+  if (!nodeItems.length || !visibleItems.length && !hasLoadingImages) {
+    return (
+      <div className="mounting-node-item-gallery is-empty" aria-label={language === "uk" ? "Немає зображень" : "No images"}>
+        <div className="mounting-node-item-thumb is-empty">
+          <span>{t.holeWorkspaceNoImage || (language === "uk" ? "Без зображення" : "No image")}</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!visibleItems.length) {
+    return (
+      <div className="mounting-node-item-gallery is-empty" aria-label={language === "uk" ? "Завантаження зображень" : "Loading images"}>
+        <div className="mounting-node-item-thumb is-empty">
+          <span>{t.mountingNodesLoading || (language === "uk" ? "Завантаження..." : "Loading...")}</span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mounting-node-item-gallery" aria-label={language === "uk" ? "Зображення фурнітури" : "Fitting images"}>
+      {visibleItems.map((item) => {
+        return (
+          <div className="mounting-node-item-thumb" key={item.itemKey}>
+            <img alt={item.itemLabel} loading="lazy" src={item.imageUrl} />
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 export default function MountingNodesPanelRefined({
@@ -174,6 +238,7 @@ export default function MountingNodesPanelRefined({
   const [selectedNodeId, setSelectedNodeId] = useState(initialReturnState.selectedNodeId);
   const [nodeDetailsById, setNodeDetailsById] = useState(initialReturnState.nodeDetailsById);
   const [nodeDetailErrorsById, setNodeDetailErrorsById] = useState(initialReturnState.nodeDetailErrorsById);
+  const [fittingThumbnailStateById, setFittingThumbnailStateById] = useState({});
   const [deleteConfirmNode, setDeleteConfirmNode] = useState(null);
   const [deleteConfirmError, setDeleteConfirmError] = useState("");
   const [deleteConfirmLoading, setDeleteConfirmLoading] = useState(false);
@@ -355,6 +420,180 @@ export default function MountingNodesPanelRefined({
       cancelled = true;
     };
   }, [nodes, t.mountingNodesError, token]);
+
+  useEffect(() => {
+    if (!token) {
+      setFittingThumbnailStateById({});
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    const fittingIds = [];
+    const seenFittingIds = new Set();
+
+    Object.values(nodeDetailsById || {}).forEach((nodeDetail) => {
+      const items = Array.isArray(nodeDetail?.items) ? nodeDetail.items : [];
+
+      items.forEach((item) => {
+        const fittingId = String(item?.fitting_id || "").trim();
+        if (!fittingId || seenFittingIds.has(fittingId)) {
+          return;
+        }
+
+        const existingState = fittingThumbnailStateById[fittingId] || null;
+        if (existingState?.status === "loading" || existingState?.status === "loaded" || existingState?.status === "no-image" || existingState?.status === "error") {
+          return;
+        }
+
+        seenFittingIds.add(fittingId);
+        fittingIds.push(fittingId);
+      });
+    });
+
+    if (!fittingIds.length) {
+      return undefined;
+    }
+
+    setFittingThumbnailStateById((current) => {
+      const next = { ...current };
+      fittingIds.forEach((fittingId) => {
+        next[fittingId] = {
+          status: "loading",
+          src: null,
+        };
+      });
+      return next;
+    });
+
+    fittingIds.forEach((fittingId) => {
+      (async () => {
+        try {
+          const result = await getFittingDetails(token, fittingId);
+          if (cancelled) {
+            return;
+          }
+
+          if (!result.success || !result.item) {
+            setFittingThumbnailStateById((current) => ({
+              ...current,
+              [fittingId]: {
+                status: "error",
+                src: null,
+              },
+            }));
+            return;
+          }
+
+          const galleryImages = Array.isArray(result.item.images)
+            ? [...result.item.images]
+                .filter((image) => String(image?.id || "").trim())
+                .sort((left, right) => {
+                  const leftSort = Number(left?.sort_order ?? 0);
+                  const rightSort = Number(right?.sort_order ?? 0);
+
+                  if (leftSort !== rightSort) {
+                    return leftSort - rightSort;
+                  }
+
+                  return Number(left?.id ?? 0) - Number(right?.id ?? 0);
+                })
+            : [];
+          const primaryImage = galleryImages.find((image) => Boolean(image?.is_primary)) || galleryImages[0] || null;
+
+          if (!primaryImage?.id) {
+            setFittingThumbnailStateById((current) => ({
+              ...current,
+              [fittingId]: {
+                status: "no-image",
+                src: null,
+              },
+            }));
+            return;
+          }
+
+          const imageResult = await getFittingImageBlob(token, fittingId, primaryImage.id);
+          if (cancelled) {
+            return;
+          }
+
+          if (!imageResult.success || !imageResult.blob) {
+            setFittingThumbnailStateById((current) => ({
+              ...current,
+              [fittingId]: {
+                status: "error",
+                src: null,
+              },
+            }));
+            return;
+          }
+
+          let imageUrl = "";
+          try {
+            imageUrl = await new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(String(reader.result || ""));
+              reader.onerror = () => reject(reader.error || new Error("Unable to load fitting image"));
+              reader.onabort = () => reject(new Error("Unable to load fitting image"));
+              reader.readAsDataURL(imageResult.blob);
+            });
+          } catch {
+            if (cancelled) {
+              return;
+            }
+
+            setFittingThumbnailStateById((current) => ({
+              ...current,
+              [fittingId]: {
+                status: "error",
+                src: null,
+              },
+            }));
+            return;
+          }
+
+          if (cancelled) {
+            return;
+          }
+
+          if (!imageUrl) {
+            setFittingThumbnailStateById((current) => ({
+              ...current,
+              [fittingId]: {
+                status: "error",
+                src: null,
+              },
+            }));
+            return;
+          }
+
+          setFittingThumbnailStateById((current) => ({
+            ...current,
+            [fittingId]: {
+              status: "loaded",
+              src: imageUrl,
+            },
+          }));
+        } catch {
+          if (cancelled) {
+            return;
+          }
+
+          setFittingThumbnailStateById((current) => ({
+            ...current,
+            [fittingId]: {
+              status: "error",
+              src: null,
+            },
+          }));
+        }
+      })();
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [nodeDetailsById, t.mountingNodesError, token]);
 
   const selectedNode = useMemo(() => nodes.find((node) => String(node.id) === String(selectedNodeId)) || null, [nodes, selectedNodeId]);
   const selectedNodeDetail = selectedNode ? nodeDetailsById[String(selectedNode.id)] || null : null;
@@ -601,7 +840,6 @@ export default function MountingNodesPanelRefined({
               <div className="settings-grid mounting-nodes-grid">
                 {nodes.map((node) => {
                   const nodeDetail = nodeDetailsById[String(node.id)] || null;
-                  const previewLines = nodeDetail ? getNodeCardPreviewText(nodeDetail, t, language) : [];
                   const isSelected = String(selectedNodeId) === String(node.id);
                   const ownershipLabel = getOwnershipLabel(nodeDetail || node, language);
 
@@ -620,36 +858,12 @@ export default function MountingNodesPanelRefined({
                       role="button"
                       tabIndex={0}
                     >
-                      <div className="settings-card-header">
-                        <div>
+                      <div className="mounting-node-card-layout">
+                        <div className="mounting-node-card-copy">
                           <strong>{node.name || t.notSet}</strong>
-                          <p>{node.code || t.notSet}</p>
+                          <p className="mounting-node-card-type">{ownershipLabel}</p>
                         </div>
-                        <div className="mounting-node-badges">
-                          <span className="service-tree-badge subtle mounting-node-ownership-badge">
-                            {ownershipLabel}
-                          </span>
-                          <span className="service-tree-badge subtle">
-                            {node.is_active ? (t.active || "Active") : (t.inactive || "Inactive")}
-                          </span>
-                          <span className="service-tree-badge subtle">
-                            {t.mountingNodeItems || (language === "uk" ? "Артикулів" : "Articles")}: {node.items_count ?? 0}
-                          </span>
-                          <span className="service-tree-badge subtle">
-                            {t.mountingNodeTemplates || (language === "uk" ? "Шаблонів" : "Templates")}: {node.templates_count ?? 0}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="settings-info-grid mounting-node-card-summary">
-                        <div>
-                          <span>{t.mountingNodeItemsSummary || (language === "uk" ? "Склад" : "Composition")}</span>
-                          <strong>{previewLines[0] || (nodeDetail ? t.notSet : (t.mountingNodesLoading || "Loading"))}</strong>
-                        </div>
-                        <div>
-                          <span>{t.mountingNodeTemplatesSummary || (language === "uk" ? "Шаблони" : "Templates")}</span>
-                          <strong>{previewLines[1] || (nodeDetail ? t.notSet : (t.mountingNodesLoading || "Loading"))}</strong>
-                        </div>
+                        {renderNodeItemGallery(nodeDetail?.items, language, t, fittingThumbnailStateById)}
                       </div>
                     </article>
                   );
@@ -659,7 +873,6 @@ export default function MountingNodesPanelRefined({
               <div className="mounting-nodes-list">
                 {nodes.map((node) => {
                   const nodeDetail = nodeDetailsById[String(node.id)] || null;
-                  const previewLines = nodeDetail ? getNodeCardPreviewText(nodeDetail, t, language) : [];
                   const isSelected = String(selectedNodeId) === String(node.id);
                   const ownershipLabel = getOwnershipLabel(nodeDetail || node, language);
 
@@ -678,35 +891,12 @@ export default function MountingNodesPanelRefined({
                       role="button"
                       tabIndex={0}
                     >
-                      <div className="mounting-node-row-header">
-                        <div>
+                      <div className="mounting-node-row-layout">
+                        <div className="mounting-node-row-copy">
                           <strong>{node.name || t.notSet}</strong>
-                          <p>{node.code || t.notSet}</p>
+                          <p className="mounting-node-card-type">{ownershipLabel}</p>
                         </div>
-                        <div className="mounting-node-badges">
-                          <span className="service-tree-badge subtle mounting-node-ownership-badge">
-                            {ownershipLabel}
-                          </span>
-                          <span className="service-tree-badge subtle">
-                            {node.is_active ? (t.active || "Active") : (t.inactive || "Inactive")}
-                          </span>
-                          <span className="service-tree-badge subtle">
-                            {t.mountingNodeItems || (language === "uk" ? "Артикулів" : "Articles")}: {node.items_count ?? 0}
-                          </span>
-                          <span className="service-tree-badge subtle">
-                            {t.mountingNodeTemplates || (language === "uk" ? "Шаблонів" : "Templates")}: {node.templates_count ?? 0}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="mounting-node-row-body">
-                        <div>
-                          <span>{t.mountingNodeItemsSummary || (language === "uk" ? "Склад" : "Composition")}</span>
-                          <strong>{previewLines[0] || (nodeDetail ? t.notSet : (t.mountingNodesLoading || "Loading"))}</strong>
-                        </div>
-                        <div>
-                          <span>{t.mountingNodeTemplatesSummary || (language === "uk" ? "Шаблони" : "Templates")}</span>
-                          <strong>{previewLines[1] || (nodeDetail ? t.notSet : (t.mountingNodesLoading || "Loading"))}</strong>
-                        </div>
+                        {renderNodeItemGallery(nodeDetail?.items, language, t, fittingThumbnailStateById)}
                       </div>
                     </article>
                   );
