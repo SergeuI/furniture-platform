@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 import {
@@ -80,6 +82,7 @@ test("system entitlement labels stay localized", () => {
     uk: {
       fittings: "Фурнітура",
       materials: "Матеріали",
+      mounting_nodes: "Монтажні вузли",
       projects: "Проєкти",
       production: "Виробництво",
       ai: "Штучний інтелект",
@@ -88,6 +91,7 @@ test("system entitlement labels stay localized", () => {
     en: {
       fittings: "Fittings",
       materials: "Materials",
+      mounting_nodes: "Mounting nodes",
       projects: "Projects",
       production: "Production",
       ai: "Artificial intelligence",
@@ -104,6 +108,8 @@ test("system entitlement labels stay localized", () => {
   assert.equal(getEntitlementCategoryLabel("materials"), "Матеріали");
   assert.equal(getEntitlementCategoryLabel("fitting_holes"), "Присадка фурнітури");
   assert.equal(getEntitlementCategoryLabel("fitting_holes", "en"), "Fitting holes");
+  assert.equal(getEntitlementCategoryLabel("mounting_nodes"), "Монтажні вузли");
+  assert.equal(getEntitlementCategoryLabel("mounting_nodes", "en"), "Mounting nodes");
   assert.equal(getEntitlementCategoryLabel("custom"), "custom");
   assert.equal(getEntitlementValueTypeLabel("enum"), "Варіант зі списку");
   assert.equal(getEntitlementFeatureScopeLabel({ is_system: true }), "Системне");
@@ -121,6 +127,8 @@ test("category filter options expose localized labels", () => {
     { value: "ai", label: "Штучний інтелект" },
     { value: "fittings", label: "Фурнітура" },
   ]);
+  const mountingNodesOptions = getEntitlementCategoryFilterOptions([{ category: "mounting_nodes" }], "en");
+  assert.deepEqual(mountingNodesOptions, [{ value: "mounting_nodes", label: "Mounting nodes" }]);
 });
 
 test("category filter options support the English fitting holes label", () => {
@@ -180,6 +188,16 @@ test("registry sync preview state allows apply only for safe changes", () => {
   assert.equal(state.hasChanges, true);
   assert.equal(state.canApply, true);
   assert.equal(state.showApplyButton, true);
+});
+
+test("registry sync modal receives the current language from the admin page", () => {
+  const sourcePath = fileURLToPath(new URL("../src/components/EntitlementsAdminPage.jsx", import.meta.url));
+  const source = readFileSync(sourcePath, "utf8");
+
+  assert.equal(source.includes("function RegistrySyncModal({"), true);
+  assert.equal(source.includes("language = \"uk\""), true);
+  assert.equal(source.includes("language={language}"), true);
+  assert.equal(source.includes("getEntitlementCategoryLabel(feature.category, language)"), true);
 });
 
 test("feature sorting uses category, sort_order, then feature_key", () => {

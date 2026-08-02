@@ -20,6 +20,32 @@ from services.entitlement_registry import (
 
 
 PLAN_CODES = tuple(PLAN_CODE_ORDER.keys())
+BOOLEAN_FEATURE_PLAN_DEFAULTS = {
+    "mounting_nodes.view": {
+        "trial": True,
+        "free": False,
+        "pro": True,
+        "business": True,
+    },
+    "mounting_nodes.create": {
+        "trial": True,
+        "free": False,
+        "pro": True,
+        "business": True,
+    },
+    "mounting_nodes.edit": {
+        "trial": True,
+        "free": False,
+        "pro": True,
+        "business": True,
+    },
+    "mounting_nodes.delete": {
+        "trial": True,
+        "free": False,
+        "pro": True,
+        "business": True,
+    },
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,17 +112,68 @@ class EntitlementRegistrySyncService:
         }
 
     @staticmethod
-    def _default_plan_row(feature_id: int, plan_code: str) -> PlanEntitlementModel:
+    def _blank_plan_row_values() -> dict[str, Any]:
+        return {
+            "bool_value": None,
+            "integer_value": None,
+            "decimal_value": None,
+            "text_value": None,
+            "is_unlimited": False,
+            "is_not_applicable": False,
+        }
+
+    @staticmethod
+    def _registry_default_plan_row_values(
+        registry_feature: EntitlementRegistryFeature,
+        plan_code: str,
+    ) -> dict[str, Any]:
+        values = EntitlementRegistrySyncService._blank_plan_row_values()
+        if registry_feature.value_type == "boolean":
+            feature_defaults = BOOLEAN_FEATURE_PLAN_DEFAULTS.get(registry_feature.feature_key)
+            if feature_defaults is not None:
+                values["bool_value"] = feature_defaults[plan_code]
+        return values
+
+    @staticmethod
+    def _default_plan_row(
+        feature_id: int,
+        registry_feature: EntitlementRegistryFeature,
+        plan_code: str,
+    ) -> PlanEntitlementModel:
+        defaults = EntitlementRegistrySyncService._registry_default_plan_row_values(registry_feature, plan_code)
         return PlanEntitlementModel(
             feature_id=feature_id,
             plan_code=plan_code,
-            bool_value=None,
-            integer_value=None,
-            decimal_value=None,
-            text_value=None,
-            is_unlimited=False,
-            is_not_applicable=False,
+            bool_value=defaults["bool_value"],
+            integer_value=defaults["integer_value"],
+            decimal_value=defaults["decimal_value"],
+            text_value=defaults["text_value"],
+            is_unlimited=defaults["is_unlimited"],
+            is_not_applicable=defaults["is_not_applicable"],
         )
+
+    @staticmethod
+    def _is_blank_plan_row(entitlement: PlanEntitlementModel) -> bool:
+        return (
+            entitlement.bool_value is None
+            and entitlement.integer_value is None
+            and entitlement.decimal_value is None
+            and entitlement.text_value is None
+            and not bool(entitlement.is_unlimited)
+            and not bool(entitlement.is_not_applicable)
+        )
+
+    @staticmethod
+    def _apply_plan_row_defaults(
+        entitlement: PlanEntitlementModel,
+        defaults: dict[str, Any],
+    ) -> None:
+        entitlement.bool_value = defaults["bool_value"]
+        entitlement.integer_value = defaults["integer_value"]
+        entitlement.decimal_value = defaults["decimal_value"]
+        entitlement.text_value = defaults["text_value"]
+        entitlement.is_unlimited = defaults["is_unlimited"]
+        entitlement.is_not_applicable = defaults["is_not_applicable"]
 
     def _registry(self) -> tuple[EntitlementRegistryFeature, ...]:
         return get_system_entitlement_registry()
@@ -192,7 +269,14 @@ class EntitlementRegistrySyncService:
             missing_plan_codes = [
                 plan_code
                 for plan_code in PLAN_CODES
-                if plan_code not in entitlements
+                if (
+                    plan_code not in entitlements
+                    or (
+                        self._is_blank_plan_row(entitlements[plan_code])
+                        and self._registry_default_plan_row_values(registry_feature, plan_code)
+                        != self._blank_plan_row_values()
+                    )
+                )
             ]
 
             if metadata_update:
@@ -297,7 +381,7 @@ class EntitlementRegistrySyncService:
                     created_features.append(feature.feature_key)
 
                     entitlements = [
-                        self._default_plan_row(feature.id, plan_code)
+                        self._default_plan_row(feature.id, registry_feature, plan_code)
                         for plan_code in PLAN_CODES
                     ]
                     self.repository.add_entitlements(entitlements)
@@ -327,16 +411,20 @@ class EntitlementRegistrySyncService:
                     for entitlement in self.repository.list_entitlements_for_feature(feature.id)
                 }
                 for plan_code in PLAN_CODES:
-                    if plan_code in existing_entitlements:
+                    defaults = self._registry_default_plan_row_values(registry_feature, plan_code)
+                    entitlement = existing_entitlements.get(plan_code)
+                    if entitlement is None:
+                        self.session.add(self._default_plan_row(feature.id, registry_feature, plan_code))
+                        created_plan_rows.append(
+                            {
+                                "feature_key": feature.feature_key,
+                                "plan_code": plan_code,
+                            }
+                        )
                         continue
-                    entitlement = self._default_plan_row(feature.id, plan_code)
-                    self.session.add(entitlement)
-                    created_plan_rows.append(
-                        {
-                            "feature_key": feature.feature_key,
-                            "plan_code": plan_code,
-                        }
-                    )
+
+                    if self._is_blank_plan_row(entitlement) and defaults != self._blank_plan_row_values():
+                        self._apply_plan_row_defaults(entitlement, defaults)
 
             audit_details = {
                 "source": source,

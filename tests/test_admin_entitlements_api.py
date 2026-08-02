@@ -20,6 +20,17 @@ from database.models.audit_log import AuditLogModel
 from database.models.entitlement_feature import EntitlementFeatureModel
 from database.models.plan_entitlement import PlanEntitlementModel
 from services.admin_entitlement_service import AdminEntitlementService
+from services.entitlement_registry import SYSTEM_ENTITLEMENT_REGISTRY
+
+
+EXPECTED_SYSTEM_ENTITLEMENT_COUNT = len(SYSTEM_ENTITLEMENT_REGISTRY)
+EXPECTED_PLAN_ROW_COUNT = EXPECTED_SYSTEM_ENTITLEMENT_COUNT * 4
+EXPECTED_MOUNTING_NODE_FEATURE_KEYS = {
+    "mounting_nodes.view",
+    "mounting_nodes.create",
+    "mounting_nodes.edit",
+    "mounting_nodes.delete",
+}
 
 
 def _enable_foreign_keys(dbapi_connection, connection_record) -> None:
@@ -261,7 +272,7 @@ class AdminEntitlementsApiTests(unittest.TestCase):
                 body = response.json()
                 self.assertTrue(body["success"])
                 self.assertTrue(body["can_apply"])
-                self.assertEqual(len(body["new_features"]), 17)
+                self.assertEqual(len(body["new_features"]), EXPECTED_SYSTEM_ENTITLEMENT_COUNT)
                 self.assertEqual(len(body["conflicts"]), 0)
                 self.assertEqual(len(body["missing_plan_rows"]), 0)
                 self.assertEqual(len(body["db_system_features_missing_from_registry"]), 0)
@@ -270,6 +281,7 @@ class AdminEntitlementsApiTests(unittest.TestCase):
                 self.assertEqual(self._count_rows(db_path, "audit_logs"), 0)
 
                 new_features_by_key = {feature["feature_key"]: feature for feature in body["new_features"]}
+                self.assertTrue(EXPECTED_MOUNTING_NODE_FEATURE_KEYS.issubset(new_features_by_key))
                 expected_names = {
                     "materials.view": "Доступ до каталогу матеріалів",
                     "materials.create": "Додавання власних матеріалів",
@@ -299,8 +311,8 @@ class AdminEntitlementsApiTests(unittest.TestCase):
                 first_body = first_response.json()
                 self.assertTrue(first_body["success"])
                 self.assertTrue(first_body["applied"])
-                self.assertEqual(len(first_body["created_features"]), 17)
-                self.assertEqual(len(first_body["created_plan_rows"]), 68)
+                self.assertEqual(len(first_body["created_features"]), EXPECTED_SYSTEM_ENTITLEMENT_COUNT)
+                self.assertEqual(len(first_body["created_plan_rows"]), EXPECTED_PLAN_ROW_COUNT)
 
                 with self._admin_auth():
                     second_response = client.post(
@@ -313,8 +325,8 @@ class AdminEntitlementsApiTests(unittest.TestCase):
                 self.assertFalse(second_body["applied"])
                 self.assertEqual(len(second_body["created_features"]), 0)
                 self.assertEqual(len(second_body["created_plan_rows"]), 0)
-                self.assertEqual(self._count_rows(db_path, "entitlement_features"), 17)
-                self.assertEqual(self._count_rows(db_path, "plan_entitlements"), 68)
+                self.assertEqual(self._count_rows(db_path, "entitlement_features"), EXPECTED_SYSTEM_ENTITLEMENT_COUNT)
+                self.assertEqual(self._count_rows(db_path, "plan_entitlements"), EXPECTED_PLAN_ROW_COUNT)
                 self.assertEqual(self._count_rows(db_path, "audit_logs"), 1)
 
     def test_admin_registry_sync_apply_rejects_custom_feature_conflict(self) -> None:

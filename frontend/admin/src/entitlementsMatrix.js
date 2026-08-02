@@ -15,6 +15,7 @@ export const ENTITLEMENT_CATEGORY_LABELS = {
   uk: {
     fittings: "Фурнітура",
     materials: "Матеріали",
+    mounting_nodes: "Монтажні вузли",
     projects: "Проєкти",
     production: "Виробництво",
     ai: "Штучний інтелект",
@@ -23,6 +24,7 @@ export const ENTITLEMENT_CATEGORY_LABELS = {
   en: {
     fittings: "Fittings",
     materials: "Materials",
+    mounting_nodes: "Mounting nodes",
     projects: "Projects",
     production: "Production",
     ai: "Artificial intelligence",

@@ -22,6 +22,10 @@ class EntitlementRegistryTests(unittest.TestCase):
             "fittings.edit",
             "fittings.delete",
             "fitting_holes.use",
+            "mounting_nodes.view",
+            "mounting_nodes.create",
+            "mounting_nodes.edit",
+            "mounting_nodes.delete",
             "projects.view",
             "projects.create",
             "projects.edit",
@@ -35,7 +39,7 @@ class EntitlementRegistryTests(unittest.TestCase):
         self.assertEqual(set(get_system_entitlement_registry_keys()), expected_keys)
         self.assertEqual(
             sorted(feature.value_type for feature in SYSTEM_ENTITLEMENT_REGISTRY),
-            ["boolean"] * 15 + ["integer", "integer"],
+            ["boolean"] * 19 + ["integer", "integer"],
         )
 
         registry_by_key = {feature.feature_key: feature for feature in SYSTEM_ENTITLEMENT_REGISTRY}
@@ -50,6 +54,10 @@ class EntitlementRegistryTests(unittest.TestCase):
             "fittings.edit": "Редагування власної фурнітури",
             "fittings.delete": "Видалення власної фурнітури",
             "fitting_holes.use": "Доступ до присадки фурнітури",
+            "mounting_nodes.view": "Перегляд монтажних вузлів",
+            "mounting_nodes.create": "Створення власних монтажних вузлів",
+            "mounting_nodes.edit": "Редагування власних монтажних вузлів",
+            "mounting_nodes.delete": "Видалення власних монтажних вузлів",
         }
         for feature_key, expected_name in expected_names.items():
             self.assertEqual(registry_by_key[feature_key].name_uk, expected_name)

@@ -316,6 +316,7 @@ function FeatureModal({
 
 function RegistrySyncModal({
   applying,
+  language = "uk",
   hasUnsavedChanges,
   loading,
   onApply,
@@ -1137,6 +1138,7 @@ export default function EntitlementsAdminPage({
           applying={registrySyncApplying}
           error={registrySyncError}
           hasUnsavedChanges={hasUnsavedChanges}
+          language={language}
           loading={registrySyncLoading}
           onApply={handleApplyRegistrySync}
           onClose={closeRegistrySyncModal}

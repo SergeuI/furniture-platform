@@ -14,6 +14,43 @@ from database.base import Base
 from database.models.audit_log import AuditLogModel
 from database.models.entitlement_feature import EntitlementFeatureModel
 from database.models.plan_entitlement import PlanEntitlementModel
+from services.entitlement_registry import SYSTEM_ENTITLEMENT_REGISTRY
+
+
+EXPECTED_SYSTEM_ENTITLEMENT_COUNT = len(SYSTEM_ENTITLEMENT_REGISTRY)
+EXPECTED_PLAN_ROW_COUNT = EXPECTED_SYSTEM_ENTITLEMENT_COUNT * 4
+EXPECTED_MOUNTING_NODE_FEATURE_KEYS = {
+    "mounting_nodes.view",
+    "mounting_nodes.create",
+    "mounting_nodes.edit",
+    "mounting_nodes.delete",
+}
+BOOLEAN_FEATURE_PLAN_DEFAULTS = {
+    "mounting_nodes.view": {
+        "trial": True,
+        "free": False,
+        "pro": True,
+        "business": True,
+    },
+    "mounting_nodes.create": {
+        "trial": True,
+        "free": False,
+        "pro": True,
+        "business": True,
+    },
+    "mounting_nodes.edit": {
+        "trial": True,
+        "free": False,
+        "pro": True,
+        "business": True,
+    },
+    "mounting_nodes.delete": {
+        "trial": True,
+        "free": False,
+        "pro": True,
+        "business": True,
+    },
+}
 
 
 def _enable_foreign_keys(dbapi_connection, connection_record) -> None:
@@ -36,7 +73,8 @@ class SyncEntitlementRegistryCliTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertIn("Mode: DRY-RUN", result.stdout)
-            self.assertIn("New features: 17", result.stdout)
+            self.assertIn(f"New features: {EXPECTED_SYSTEM_ENTITLEMENT_COUNT}", result.stdout)
+            self.assertTrue(EXPECTED_MOUNTING_NODE_FEATURE_KEYS.issubset(set(self._extract_feature_keys(result.stdout))))
             self.assertEqual(before_stat.st_size, after_stat.st_size)
             self.assertEqual(before_stat.st_mtime_ns, after_stat.st_mtime_ns)
             self.assertEqual(before_backups, after_backups)
@@ -65,14 +103,25 @@ class SyncEntitlementRegistryCliTests(unittest.TestCase):
             with self._session(database_path) as session:
                 features = session.query(EntitlementFeatureModel).order_by(EntitlementFeatureModel.feature_key).all()
                 entitlements = session.query(PlanEntitlementModel).all()
+                features_by_id = {feature.id: feature for feature in features}
 
-                self.assertEqual(len(features), 17)
+                self.assertEqual(len(features), EXPECTED_SYSTEM_ENTITLEMENT_COUNT)
+                self.assertTrue(EXPECTED_MOUNTING_NODE_FEATURE_KEYS.issubset({feature.feature_key for feature in features}))
                 self.assertTrue(all(feature.is_system for feature in features))
-                self.assertEqual(len(entitlements), 68)
+                self.assertEqual(len(entitlements), EXPECTED_PLAN_ROW_COUNT)
                 self.assertEqual(session.query(AuditLogModel).count(), 1)
 
                 for entitlement in entitlements:
-                    self.assertIsNone(entitlement.bool_value)
+                    feature = features_by_id[entitlement.feature_id]
+                    if feature.feature_key in BOOLEAN_FEATURE_PLAN_DEFAULTS:
+                        self.assertEqual(
+                            entitlement.bool_value,
+                            BOOLEAN_FEATURE_PLAN_DEFAULTS[feature.feature_key][entitlement.plan_code],
+                        )
+                    elif feature.value_type == "boolean":
+                        self.assertIsNone(entitlement.bool_value)
+                    else:
+                        self.assertIsNone(entitlement.bool_value)
                     self.assertIsNone(entitlement.integer_value)
                     self.assertIsNone(entitlement.decimal_value)
                     self.assertIsNone(entitlement.text_value)
@@ -160,6 +209,13 @@ class SyncEntitlementRegistryCliTests(unittest.TestCase):
     @staticmethod
     def _backup_files(database_path: Path) -> list[Path]:
         return sorted(database_path.parent.glob(f"{database_path.name}.*.bak"))
+
+    @staticmethod
+    def _extract_feature_keys(stdout: str) -> list[str]:
+        for line in stdout.splitlines():
+            if line.startswith("  - "):
+                return [item.strip() for item in line.removeprefix("  - ").split(", ")]
+        return []
 
     @staticmethod
     def _create_stage1_database(database_path: Path) -> None:

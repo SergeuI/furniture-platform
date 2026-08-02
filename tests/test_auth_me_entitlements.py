@@ -59,6 +59,7 @@ class AuthMeEntitlementsTests(unittest.TestCase):
             payload = response.json()
             self.assertTrue(payload["success"])
             self.assertEqual(set(payload["user"]["entitlements"]), set(get_system_entitlement_registry_keys()))
+            self.assertTrue({"mounting_nodes.view", "mounting_nodes.create", "mounting_nodes.edit", "mounting_nodes.delete"}.issubset(payload["user"]["entitlements"]))
             self.assertEqual(
                 payload["user"]["entitlements"]["materials.view"],
                 {
