@@ -1,8 +1,22 @@
-import { ArrowLeft, Box, Info, LayoutGrid, List, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeft, Box, ChevronRight, Info, LayoutGrid, List, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
+import { createPortal } from "react-dom";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
-import { deleteMountingNode, getFittingDetails, getFittingImageBlob, getMountingNode, getMountingNodes } from "../../api.js";
+import {
+  deleteMountingNode,
+  getFittingDetails,
+  getFittingImageBlob,
+  getMountingNode,
+  getMountingNodes,
+  updateMountingNode,
+} from "../../api.js";
 import { getProcessingTemplateMountingVariantLabel } from "../../processingTemplates.js";
+import { buildMountingNodeEditorSavePayload } from "../../mountingNodesEditor.js";
+import surfaceMountIcon from "../../assets/hole-mounting/surface_mount.png";
+import faceToEdgeIcon from "../../assets/hole-mounting/face_to_edge.png";
+import edgeToEdgeIcon from "../../assets/hole-mounting/edge_to_edge.png";
+import angledTwoPlanesIcon from "../../assets/hole-mounting/angled_two_planes.png";
+import drawerSlidesIcon from "../../assets/hole-mounting/drawer_slides.png";
 
 const KNOWN_MOUNTING_VARIANT_KEYS = [
   "surface_mount",
@@ -41,6 +55,115 @@ function humanizeVariantKey(variantKey) {
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
+}
+
+function clampNumber(value, min, max) {
+  return Math.min(Math.max(Number(value) || 0, min), max);
+}
+
+function findNearestVerticalScrollAncestor(element) {
+  if (typeof window === "undefined" || typeof document === "undefined") {
+    return null;
+  }
+
+  let current = element?.parentElement || null;
+  while (current && current !== document.body) {
+    const overflowY = window.getComputedStyle(current).overflowY || "";
+    if (/(auto|scroll|overlay)/i.test(overflowY) && current.scrollHeight > current.clientHeight + 1) {
+      return current;
+    }
+
+    current = current.parentElement;
+  }
+
+  return document.scrollingElement || document.documentElement || document.body || null;
+}
+
+function scrollNearestVerticalAncestorBy(ancestor, delta) {
+  const nextDelta = Math.max(0, Number(delta) || 0);
+  if (!ancestor || nextDelta <= 0) {
+    return;
+  }
+
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  if (ancestor === document.scrollingElement || ancestor === document.documentElement || ancestor === document.body) {
+    window.scrollBy({ behavior: "auto", top: nextDelta });
+    return;
+  }
+
+  if (typeof ancestor.scrollBy === "function") {
+    ancestor.scrollBy({ behavior: "auto", top: nextDelta });
+    return;
+  }
+
+  ancestor.scrollTop += nextDelta;
+}
+
+function calculateVariantDropdownScrollDelta(anchorRect, viewportHeight, desiredHeight) {
+  const margin = 10;
+  const gap = 6;
+  const requestedHeight = Number(desiredHeight || 0) > 0 ? Number(desiredHeight || 0) : 340;
+  const availableBelow = Math.max(0, viewportHeight - Number(anchorRect?.bottom || 0) - gap - margin);
+
+  return Math.max(0, requestedHeight - availableBelow);
+}
+
+function calculateVariantDropdownPosition(anchorRect, viewportWidth, viewportHeight, desiredHeight) {
+  const margin = 10;
+  const gap = 6;
+  const rect = anchorRect || {};
+  const requestedHeight = Number(desiredHeight || 0) > 0 ? Number(desiredHeight || 0) : 340;
+  const availableBelow = Math.max(0, viewportHeight - Number(rect.bottom || 0) - gap - margin);
+  const width = clampNumber(rect.width || 0, 0, viewportWidth - margin * 2);
+  const left = clampNumber(rect.left || 0, margin, Math.max(margin, viewportWidth - width - margin));
+  return {
+    left,
+    maxHeight: Math.min(340, availableBelow, requestedHeight),
+    top: Number(rect.bottom || 0) + gap,
+    width,
+  };
+}
+
+function getNodeVariantDescription(variantKey, language) {
+  const descriptions = {
+    angled_two_planes:
+      language === "uk"
+        ? "Кріплення між двома непаралельними площинами."
+        : "Mounting between two non-parallel planes.",
+    drawer_slides:
+      language === "uk"
+        ? "Напрямні для висувних елементів."
+        : "Slides for pull-out elements.",
+    edge_to_edge:
+      language === "uk"
+        ? "Установлення фурнітури по торцях панелей."
+        : "Hardware mounted on the edges of panels.",
+    face_to_edge:
+      language === "uk"
+        ? "Установлення на площині однієї та торці іншої панелі."
+        : "Mounting on one panel face and another panel edge.",
+    surface_mount:
+      language === "uk"
+        ? "Установлення фурнітури на площині."
+        : "Hardware mounted on a panel face.",
+  };
+
+  return descriptions[variantKey] || "";
+}
+
+function getNodeVariantIcon(variantKey) {
+  const icons = {
+    angled_two_planes: angledTwoPlanesIcon,
+    drawer_slides: drawerSlidesIcon,
+    edge_to_edge: edgeToEdgeIcon,
+    face_to_edge: faceToEdgeIcon,
+    surface_mount: surfaceMountIcon,
+  };
+
+  return icons[variantKey] || surfaceMountIcon;
 }
 
 function readPersistedDisplayMode() {
@@ -83,6 +206,24 @@ export function buildMountingNodesReturnState(payload = {}) {
 
 function formatBooleanLabel(value, t) {
   return value ? (t.holePointSelectionYes || "Yes") : (t.holePointSelectionNo || "No");
+}
+
+function formatMountingNodeRoleLabel(value, language, t) {
+  const normalizedRole = String(value || "").trim().toLowerCase();
+
+  if (["primary", "main", "основний"].includes(normalizedRole)) {
+    return language === "uk" ? "Основний" : "Primary";
+  }
+
+  if (["additional", "додатковий"].includes(normalizedRole)) {
+    return language === "uk" ? "Додатковий" : "Additional";
+  }
+
+  if (["replacement", "substitute", "заміна"].includes(normalizedRole)) {
+    return language === "uk" ? "Заміна" : "Replacement";
+  }
+
+  return String(value || "").trim() || t.notSet;
 }
 
 function formatItemSummary(item, t) {
@@ -147,7 +288,7 @@ function getOwnershipLabel(node, language) {
   return language === "uk" ? "Невідомий доступ" : "Unknown ownership";
 }
 
-function buildNodeEditorContext(nodeDetail) {
+function buildNodeEditorContext(nodeDetail, fallbackNodeId = "") {
   if (!nodeDetail || typeof nodeDetail !== "object") {
     return null;
   }
@@ -155,7 +296,7 @@ function buildNodeEditorContext(nodeDetail) {
   const primaryTemplate =
     nodeDetail.templates?.find((template) => template?.is_default) || nodeDetail.templates?.[0] || null;
   const primaryItem = nodeDetail.items?.[0] || null;
-  const mountingNodeId = String(nodeDetail.id || "").trim();
+  const mountingNodeId = String(nodeDetail.id || nodeDetail.node_id || fallbackNodeId || "").trim();
 
   if (!mountingNodeId) {
     return null;
@@ -311,11 +452,124 @@ function renderNodeCardActions(node, nodeDetail, language, t, onOpenNodeDetail, 
   );
 }
 
+function getNodePrimaryTemplate(nodeDetail) {
+  if (!nodeDetail || typeof nodeDetail !== "object") {
+    return null;
+  }
+
+  return nodeDetail.templates?.find((template) => template?.is_default) || nodeDetail.templates?.[0] || null;
+}
+
+function getNodeVariantOptions(language) {
+  return KNOWN_MOUNTING_VARIANT_KEYS.map((variantKey) => ({
+    description: getNodeVariantDescription(variantKey, language),
+    icon: getNodeVariantIcon(variantKey),
+    key: variantKey,
+    label: getProcessingTemplateMountingVariantLabel(variantKey, language) || humanizeVariantKey(variantKey),
+    value: variantKey,
+  }));
+}
+
+function getNodeVariantChangeWarning(language) {
+  if (language === "uk") {
+    return "У вузлі вже є налаштовані точки. Зміна варіанта кріплення може змінити їх відображення. Після збереження перевірте точки у розділі «Отвори та 3D». Продовжити?";
+  }
+
+  return 'This node already has configured points. Changing the mounting variant may affect how they are shown. After saving, check the points in the "Openings and 3D" section. Continue?';
+}
+
+function getNodeVariantChangeTitle(language) {
+  return language === "uk" ? "Змінити варіант кріплення" : "Change mounting variant";
+}
+
+
+function renderNodeDetailItemCard(
+  item,
+  index,
+  language,
+  t,
+  fittingThumbnailStateById,
+  onOpenFittingDetail,
+  token,
+  openFittingDetailLoadingId,
+  setOpenFittingDetailLoadingId,
+  setOpenFittingDetailError,
+) {
+  const fittingId = String(item?.fitting_id || "").trim();
+  const fittingThumbnailState = fittingId ? fittingThumbnailStateById?.[fittingId] || null : null;
+  const imageUrl = getNodeItemImageUrl(item, fittingThumbnailState);
+  const itemLabel = getNodeItemLabel(item, t);
+  const detailLabel = language === "uk" ? "Відкрити картку фурнітури" : "Open fitting details";
+  const quantityLabel = language === "uk" ? "Кількість" : "Quantity";
+  const roleLabel = language === "uk" ? "Роль" : "Role";
+  const isLoaded = fittingThumbnailState?.status === "loaded" && imageUrl;
+  const roleValue = formatMountingNodeRoleLabel(item?.role, language, t);
+  const isDetailLoading = Boolean(fittingId && openFittingDetailLoadingId === fittingId);
+
+  return (
+    <button
+      aria-label={`${itemLabel}. ${detailLabel}`}
+      className="mounting-node-detail-item-card"
+      disabled={isDetailLoading}
+      key={String(item?.id || item?.fitting_id || item?.fitting_article || item?.fitting_code || index)}
+      onClick={async (event) => {
+        if (!fittingId || typeof onOpenFittingDetail !== "function") {
+          return;
+        }
+
+        if (typeof setOpenFittingDetailError === "function") {
+          setOpenFittingDetailError("");
+        }
+
+        if (typeof setOpenFittingDetailLoadingId === "function") {
+          setOpenFittingDetailLoadingId(fittingId);
+        }
+
+        try {
+          const result = await getFittingDetails(token, fittingId);
+          if (!result.success || !result.item) {
+            if (typeof setOpenFittingDetailError === "function") {
+              setOpenFittingDetailError(result.error || t.fittingDetailsFailed || "Failed to open fitting details");
+            }
+            return;
+          }
+
+          onOpenFittingDetail(result.item, event.currentTarget);
+        } finally {
+          if (typeof setOpenFittingDetailLoadingId === "function") {
+            setOpenFittingDetailLoadingId("");
+          }
+        }
+      }}
+      type="button"
+    >
+      <div className={`mounting-node-detail-item-thumb${isLoaded ? "" : " is-empty"}`}>
+        {isLoaded ? <img alt={itemLabel} loading="lazy" src={imageUrl} /> : <span>{t.holeWorkspaceNoImage || (language === "uk" ? "Без зображення" : "No image")}</span>}
+      </div>
+      <div className="mounting-node-detail-item-copy">
+        <strong>{itemLabel}</strong>
+        <div className="mounting-node-detail-item-meta">
+          <span>
+            {language === "uk" ? "Артикул" : "Article"}: {item.fitting_article || item.fitting_code || item.fitting_name || t.notSet}
+          </span>
+          <span>
+            {roleLabel}: {roleValue}
+          </span>
+          <span>
+            {quantityLabel}: × {item.quantity ?? 0}
+          </span>
+        </div>
+      </div>
+    </button>
+  );
+}
+
 export default function MountingNodesPanelRefined({
   language = "uk",
   editorMode = false,
   initialState = null,
   onOpenMountingNodeCreate = null,
+  onOpenFittingDetail = null,
   onOpenMountingNodeEditor = null,
   t,
   token = "",
@@ -342,9 +596,22 @@ export default function MountingNodesPanelRefined({
   const [deleteConfirmNode, setDeleteConfirmNode] = useState(null);
   const [deleteConfirmError, setDeleteConfirmError] = useState("");
   const [deleteConfirmLoading, setDeleteConfirmLoading] = useState(false);
+  const [selectedNodeVariantKey, setSelectedNodeVariantKey] = useState("");
+  const [variantDropdownOpen, setVariantDropdownOpen] = useState(false);
+  const [variantDropdownPosition, setVariantDropdownPosition] = useState(null);
+  const [variantSaveError, setVariantSaveError] = useState("");
+  const [variantSaveLoading, setVariantSaveLoading] = useState(false);
+  const [variantConfirmOpen, setVariantConfirmOpen] = useState(false);
+  const [variantDropdownPreparing, setVariantDropdownPreparing] = useState(false);
+  const [openFittingDetailLoadingId, setOpenFittingDetailLoadingId] = useState("");
+  const [openFittingDetailError, setOpenFittingDetailError] = useState("");
+  const [openEditorError, setOpenEditorError] = useState("");
   const listRequestIdRef = useRef(0);
   const detailRequestIdRef = useRef(0);
   const selectedNodeIdRef = useRef(String(initialReturnState.selectedNodeId || ""));
+  const variantDropdownRef = useRef(null);
+  const variantDropdownMenuRef = useRef(null);
+  const variantDropdownOpenFrameRef = useRef(0);
   const pendingReturnStateRef = useRef(
     initialReturnState.scrollPosition === null ? null : initialReturnState,
   );
@@ -453,6 +720,19 @@ export default function MountingNodesPanelRefined({
 
     return undefined;
   }, [activeStatusFilter, activeVariantFilter, appliedSearch, reloadToken, t.mountingNodesError, token]);
+
+  useEffect(() => {
+    setOpenEditorError("");
+  }, [selectedNodeId]);
+
+  useEffect(() => {
+    return () => {
+      if (typeof window !== "undefined" && variantDropdownOpenFrameRef.current) {
+        window.cancelAnimationFrame(variantDropdownOpenFrameRef.current);
+        variantDropdownOpenFrameRef.current = 0;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!token || !nodes.length) {
@@ -699,6 +979,8 @@ export default function MountingNodesPanelRefined({
   const selectedNodeDetail = selectedNode ? nodeDetailsById[String(selectedNode.id)] || null : null;
   const selectedNodeError = selectedNode ? nodeDetailErrorsById[String(selectedNode.id)] || "" : "";
   const selectedNodeLoading = Boolean(selectedNode && !selectedNodeDetail && !selectedNodeError && !listLoading);
+  const selectedNodePrimaryTemplate = useMemo(() => getNodePrimaryTemplate(selectedNodeDetail), [selectedNodeDetail]);
+  const selectedNodeCurrentVariantKey = String(selectedNodePrimaryTemplate?.mounting_variant_key || "").trim();
   const variantOptions = useMemo(
     () => [
       {
@@ -712,6 +994,180 @@ export default function MountingNodesPanelRefined({
     ],
     [language],
   );
+  const detailVariantOptions = useMemo(() => getNodeVariantOptions(language), [language]);
+  const selectedNodeVariantModel = useMemo(
+    () => detailVariantOptions.find((option) => option.value === selectedNodeVariantKey) || detailVariantOptions[0] || null,
+    [detailVariantOptions, selectedNodeVariantKey],
+  );
+  const selectedNodeTemplatePoints = Array.isArray(selectedNodePrimaryTemplate?.points) ? selectedNodePrimaryTemplate.points : [];
+  const selectedNodeCurrentVariantLabel =
+    getProcessingTemplateMountingVariantLabel(selectedNodeCurrentVariantKey, language) ||
+    humanizeVariantKey(selectedNodeCurrentVariantKey) ||
+    t.notSet;
+  const variantChangeRequiresConfirm =
+    Number(selectedNodePrimaryTemplate?.points_count || 0) > 0 || selectedNodeTemplatePoints.length > 0;
+  const canEditVariant = Boolean(selectedNodeDetail?.can_edit);
+  const canSaveVariant =
+    canEditVariant &&
+    !variantSaveLoading &&
+    Boolean(selectedNodeDetail) &&
+    Boolean(selectedNodePrimaryTemplate) &&
+    Boolean(selectedNodeVariantKey) &&
+    selectedNodeVariantKey !== selectedNodeCurrentVariantKey;
+
+  useEffect(() => {
+    setSelectedNodeVariantKey(selectedNodeCurrentVariantKey);
+    setVariantSaveError("");
+    setVariantConfirmOpen(false);
+    setVariantDropdownOpen(false);
+    setVariantDropdownPreparing(false);
+    setVariantDropdownPosition(null);
+  }, [selectedNodeCurrentVariantKey, selectedNodeId]);
+
+  const updateVariantDropdownPosition = useCallback(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const anchor = variantDropdownRef.current;
+    if (!anchor) {
+      return;
+    }
+
+    const menuScrollHeight = variantDropdownMenuRef.current?.scrollHeight || 0;
+    const measuredHeight = menuScrollHeight || detailVariantOptions.length * 68 + 16;
+
+    setVariantDropdownPosition(
+      calculateVariantDropdownPosition(anchor.getBoundingClientRect(), window.innerWidth, window.innerHeight, measuredHeight),
+    );
+  }, [detailVariantOptions.length, variantDropdownOpen]);
+
+  const closeVariantDropdown = useCallback(
+    (restoreFocus = true) => {
+      if (typeof window !== "undefined" && variantDropdownOpenFrameRef.current) {
+        window.cancelAnimationFrame(variantDropdownOpenFrameRef.current);
+        variantDropdownOpenFrameRef.current = 0;
+      }
+
+      setVariantDropdownOpen(false);
+      setVariantDropdownPreparing(false);
+      setVariantDropdownPosition(null);
+
+      if (restoreFocus && typeof window !== "undefined") {
+        window.requestAnimationFrame(() => {
+          variantDropdownRef.current?.focus?.();
+        });
+      }
+    },
+    [],
+  );
+
+  const openVariantDropdown = useCallback(() => {
+    if (!canEditVariant) {
+      return;
+    }
+
+    if (variantDropdownOpen || variantDropdownPreparing) {
+      closeVariantDropdown();
+      return;
+    }
+
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const anchor = variantDropdownRef.current;
+    if (!anchor) {
+      return;
+    }
+
+    setVariantDropdownPreparing(true);
+
+    const anchorRect = anchor.getBoundingClientRect();
+    const menuScrollHeight = variantDropdownMenuRef.current?.scrollHeight || 0;
+    const measuredHeight = menuScrollHeight || detailVariantOptions.length * 68 + 16;
+    const requiredScroll = calculateVariantDropdownScrollDelta(anchorRect, window.innerHeight, measuredHeight);
+    const scrollAncestor = findNearestVerticalScrollAncestor(anchor);
+
+    if (requiredScroll > 0) {
+      scrollNearestVerticalAncestorBy(scrollAncestor, requiredScroll);
+    }
+
+    if (variantDropdownOpenFrameRef.current) {
+      window.cancelAnimationFrame(variantDropdownOpenFrameRef.current);
+    }
+
+    variantDropdownOpenFrameRef.current = window.requestAnimationFrame(() => {
+      variantDropdownOpenFrameRef.current = 0;
+      updateVariantDropdownPosition();
+      setVariantDropdownOpen(true);
+      setVariantDropdownPreparing(false);
+    });
+  }, [canEditVariant, closeVariantDropdown, detailVariantOptions.length, updateVariantDropdownPosition, variantDropdownOpen, variantDropdownPreparing]);
+
+  useLayoutEffect(() => {
+    if (!variantDropdownOpen) {
+      return undefined;
+    }
+
+    updateVariantDropdownPosition();
+    return undefined;
+  }, [updateVariantDropdownPosition, variantDropdownOpen, selectedNodeVariantKey, selectedNodeId]);
+
+  useLayoutEffect(() => {
+    if ((!variantDropdownOpen && !variantDropdownPreparing) || typeof window === "undefined") {
+      return undefined;
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      const menu = variantDropdownMenuRef.current;
+      const activeOption = menu?.querySelector('[aria-pressed="true"]');
+      activeOption?.scrollIntoView({ block: "nearest" });
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [selectedNodeVariantKey, variantDropdownOpen, variantDropdownPreparing]);
+
+  useEffect(() => {
+    if ((!variantDropdownOpen && !variantDropdownPreparing) || typeof document === "undefined") {
+      return undefined;
+    }
+
+    const handlePointerDown = (event) => {
+      const target = event?.target;
+      if (!(target instanceof Node)) {
+        return;
+      }
+
+      if (variantDropdownRef.current?.contains(target) || variantDropdownMenuRef.current?.contains(target)) {
+        return;
+      }
+
+      closeVariantDropdown(false);
+    };
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeVariantDropdown(true);
+      }
+    };
+
+    const handleResize = () => updateVariantDropdownPosition();
+    const handleScroll = () => updateVariantDropdownPosition();
+
+    document.addEventListener("pointerdown", handlePointerDown, true);
+    document.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("resize", handleResize);
+    window.addEventListener("scroll", handleScroll, true);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown, true);
+      document.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("resize", handleResize);
+      window.removeEventListener("scroll", handleScroll, true);
+    };
+  }, [closeVariantDropdown, updateVariantDropdownPosition, variantDropdownOpen, variantDropdownPreparing]);
 
   function captureReturnState(nextViewMode, restoreScrollOnMount = false) {
     return buildNodeReturnState({
@@ -762,6 +1218,89 @@ export default function MountingNodesPanelRefined({
     setMountingNodesViewMode("list");
   }
 
+  function handleSelectVariantKey(value) {
+    setSelectedNodeVariantKey(String(value || ""));
+    setVariantSaveError("");
+    closeVariantDropdown();
+  }
+
+  async function handleSaveVariantKey(nextVariantKey = selectedNodeVariantKey) {
+    if (!selectedNodeDetail || !selectedNodePrimaryTemplate || !canEditVariant || variantSaveLoading) {
+      return;
+    }
+
+    const normalizedVariantKey = String(nextVariantKey || "").trim();
+    if (!normalizedVariantKey || normalizedVariantKey === selectedNodeCurrentVariantKey) {
+      return;
+    }
+
+    const context = buildNodeEditorContext(selectedNodeDetail);
+    if (!context) {
+      return;
+    }
+
+    const nextTemplate = {
+      ...selectedNodePrimaryTemplate,
+      mounting_variant_key: normalizedVariantKey,
+    };
+
+    setVariantSaveLoading(true);
+    setVariantSaveError("");
+
+    try {
+      const payload = buildMountingNodeEditorSavePayload({
+        context,
+        points: selectedNodeTemplatePoints,
+        pointsLoaded: true,
+        selectedTemplate: nextTemplate,
+      });
+      const result = await updateMountingNode(token, selectedNodeDetail.id, payload);
+
+      if (!result.success || !result.node) {
+        setVariantSaveError(result.error || (language === "uk" ? "Не вдалося зберегти варіант кріплення." : "Unable to save mounting variant."));
+        return;
+      }
+
+      const nextNode = result.node || selectedNodeDetail;
+      const nextNodeId = String(nextNode.id || selectedNodeDetail.id);
+      setNodeDetailsById((current) => ({
+        ...current,
+        [nextNodeId]: nextNode,
+      }));
+      setNodes((current) =>
+        current.map((node) => (String(node.id) === nextNodeId ? { ...node, ...nextNode } : node)),
+      );
+      setSelectedNodeVariantKey(normalizedVariantKey);
+      closeVariantDropdown(false);
+      setVariantConfirmOpen(false);
+    } catch (error) {
+      setVariantSaveError(error?.message || (language === "uk" ? "Не вдалося зберегти варіант кріплення." : "Unable to save mounting variant."));
+    } finally {
+      setVariantSaveLoading(false);
+    }
+  }
+
+  function handleVariantSubmit() {
+    if (!canSaveVariant) {
+      return;
+    }
+
+    if (variantChangeRequiresConfirm && !variantConfirmOpen) {
+      setVariantConfirmOpen(true);
+      return;
+    }
+
+    void handleSaveVariantKey(selectedNodeVariantKey);
+  }
+
+  function handleCloseVariantConfirm() {
+    if (variantSaveLoading) {
+      return;
+    }
+
+    setVariantConfirmOpen(false);
+  }
+
   function handleOpenCreate() {
     if (typeof onOpenMountingNodeCreate !== "function") {
       return;
@@ -774,6 +1313,13 @@ export default function MountingNodesPanelRefined({
 
   function handleOpenEditor(nodeDetail = selectedNodeDetail) {
     if (!nodeDetail || typeof onOpenMountingNodeEditor !== "function") {
+      setOpenEditorError(language === "uk" ? "Не вдалося відкрити редактор: відсутній ідентифікатор монтажного вузла." : "Unable to open the editor: missing mounting node identifier.");
+      return;
+    }
+
+    const resolvedNodeId = String(nodeDetail.id || nodeDetail.node_id || selectedNodeId || "").trim();
+    if (!resolvedNodeId) {
+      setOpenEditorError(language === "uk" ? "Не вдалося відкрити редактор: відсутній ідентифікатор монтажного вузла." : "Unable to open the editor: missing mounting node identifier.");
       return;
     }
 
@@ -791,12 +1337,13 @@ export default function MountingNodesPanelRefined({
       scrollPosition: typeof window !== "undefined" ? window.scrollY : 0,
       searchInput,
       selectedNodeDetail: nodeDetail,
-      selectedNodeId: String(nodeDetail.id || ""),
+      selectedNodeId: resolvedNodeId,
       selectedNodeLoading: false,
       nextViewMode: "detail",
     });
     pendingReturnStateRef.current = nextReturnState;
-    onOpenMountingNodeEditor(buildNodeEditorContext(nodeDetail), nextReturnState);
+    setOpenEditorError("");
+    onOpenMountingNodeEditor(buildNodeEditorContext(nodeDetail, resolvedNodeId), nextReturnState);
   }
 
   function handleOpenDeleteConfirm() {
@@ -853,7 +1400,6 @@ export default function MountingNodesPanelRefined({
         <>
           <div className="dashboard-panel-head mounting-nodes-panel-head">
             <div>
-              <h3>{t.mountingNodesTitle || "Mounting nodes"}</h3>
               <p>{t.mountingNodesDescription || ""}</p>
             </div>
             <div className="mounting-nodes-toolbar">
@@ -1039,16 +1585,11 @@ export default function MountingNodesPanelRefined({
           )}
         </>
       ) : (
+        <>
         <article className="catalog-card service-catalog-card service-catalog-card-full holes-view-card mounting-node-detail-screen">
           <div className="catalog-page-header mounting-node-detail-header">
             <div className="service-catalog-title">
-              <h3>{selectedNode?.name || t.mountingNodeDetailsTitle || (language === "uk" ? "Деталі монтажного вузла" : "Mounting node details")}</h3>
-              <p>{t.mountingNodeDetailsDescription || (language === "uk" ? "Переглядайте склад, шаблони та відкривайте вузол у редакторі." : "Review the composition, linked templates, and open the node in the editor.")}</p>
-              <div className="mounting-node-badges">
-                <span className="service-tree-badge subtle mounting-node-ownership-badge">
-                  {getOwnershipLabel(selectedNodeDetail, language)}
-                </span>
-              </div>
+              <p>{t.mountingNodeDetailsDescription || (language === "uk" ? "Переглядайте склад вузла, варіант кріплення та переходьте до редактора за потреби." : "Inspect the node fittings, mounting variant, and open the editor when needed.")}</p>
             </div>
             <div className="service-catalog-header-actions mounting-node-detail-actions">
               <button className="ghost-button mounting-node-detail-action-button mounting-node-return-button" onClick={handleBackToList} type="button">
@@ -1057,8 +1598,12 @@ export default function MountingNodesPanelRefined({
               </button>
               {selectedNodeDetail ? (
                 <>
+                  {/*
+                    Keep the DETAIL editor button label local so we can update the visible text
+                    without changing the shared translations in App.jsx.
+                  */}
                   <button className="primary-button mounting-node-detail-action-button mounting-node-editor-button" onClick={handleOpenEditor} type="button">
-                    {t.mountingNodeOpenEditor || (language === "uk" ? "Відкрити редактор точок" : "Open point editor")}
+                    {language === "uk" ? "Отвори та 3D" : "Open editor and 3D"}
                   </button>
                   {selectedNodeDetail.can_delete ? (
                     <button className="danger-button mounting-node-detail-action-button mounting-node-delete-button" onClick={handleOpenDeleteConfirm} type="button">
@@ -1084,71 +1629,151 @@ export default function MountingNodesPanelRefined({
             </div>
           ) : selectedNodeDetail ? (
             <>
-              <div className="settings-info-grid mounting-node-detail-summary">
-                <DetailField label={language === "uk" ? "Назва" : "Name"} value={selectedNodeDetail.name || t.notSet} />
-                <DetailField label={language === "uk" ? "Код" : "Code"} value={selectedNodeDetail.code || t.notSet} />
-                <DetailField label={t.status || "Status"} value={selectedNodeDetail.is_active ? (t.active || "Active") : (t.inactive || "Inactive")} />
-                <DetailField label={language === "uk" ? "Опис" : "Description"} value={selectedNodeDetail.description || t.notSet} />
-                <DetailField label={t.mountingNodeItems || (language === "uk" ? "Артикулів" : "Articles")} value={selectedNodeDetail.items_count ?? 0} />
-                <DetailField label={t.mountingNodeTemplates || (language === "uk" ? "Шаблонів" : "Templates")} value={selectedNodeDetail.templates_count ?? 0} />
+              <div className="mounting-node-detail-hero">
+                <div className="mounting-node-detail-hero-copy">
+                  <strong>{language === "uk" ? "Опис" : "Description"}</strong>
+                  <p>{selectedNodeDetail.description ? selectedNodeDetail.description : (language === "uk" ? "Опис не вказано" : "Description not set")}</p>
+                </div>
               </div>
+              {openEditorError ? <p className="form-error mounting-node-detail-open-error">{openEditorError}</p> : null}
 
-              <div className="settings-grid mounting-node-detail-grid" style={{ marginTop: "1rem" }}>
-                <article className="settings-card">
+              <div className="settings-grid mounting-node-detail-grid">
+                {openFittingDetailError ? <p className="form-error mounting-node-detail-open-error">{openFittingDetailError}</p> : null}
+                <article className="settings-card mounting-node-detail-items-card">
                   <div className="settings-card-header">
                     <div>
-                      <strong>{language === "uk" ? "Склад артикулів" : "Item composition"}</strong>
-                      <p>{language === "uk" ? "Кожен рядок показує артикул, кількість, роль і ознаки впливу." : "Each row shows the article, quantity, role, and processing flags."}</p>
+                      <strong>{language === "uk" ? "Фурнітура вузла" : "Node fittings"}</strong>
+                      <p>{language === "uk" ? "Клікніть картку, щоб відкрити ту саму картку фурнітури в модалі." : "Click a card to open the same fitting details modal."}</p>
                     </div>
                   </div>
-                  <div className="settings-info-grid mounting-node-detail-list">
+                  <div className="mounting-node-detail-item-list">
                     {selectedNodeDetail.items?.length ? (
-                      selectedNodeDetail.items.map((item) => (
-                        <div className="mounting-node-detail-line" key={item.id}>
-                          <span>{item.fitting_name || item.fitting_code || item.fitting_article || t.notSet}</span>
-                          <strong>
-                            {item.fitting_article || item.fitting_code || item.fitting_name || t.notSet}
-                            {" "}
-                            x {item.quantity ?? 0}
-                          </strong>
-                          <div>{language === "uk" ? "Роль" : "Role"}: {item.role || t.notSet}</div>
-                          <div>{language === "uk" ? "Обов'язковий" : "Required"}: {formatBooleanLabel(item.is_required, t)}</div>
-                          <div>{language === "uk" ? "Впливає на обробку" : "Affects processing"}: {formatBooleanLabel(item.affects_processing, t)}</div>
-                        </div>
-                      ))
+                      selectedNodeDetail.items.map((item, index) =>
+                        renderNodeDetailItemCard(
+                          item,
+                          index,
+                          language,
+                          t,
+                          fittingThumbnailStateById,
+                          onOpenFittingDetail,
+                          token,
+                          openFittingDetailLoadingId,
+                          setOpenFittingDetailLoadingId,
+                          setOpenFittingDetailError,
+                        ),
+                      )
                     ) : (
-                      <div>{t.notSet}</div>
+                      <div className="empty-state compact-empty-state">
+                        <span>{t.notSet}</span>
+                      </div>
                     )}
                   </div>
                 </article>
 
-                <article className="settings-card">
+                <article className="settings-card mounting-node-detail-variant-card">
                   <div className="settings-card-header">
                     <div>
-                      <strong>{language === "uk" ? "Пов'язані шаблони" : "Linked templates"}</strong>
-                      <p>{language === "uk" ? "Тут показані шаблони, точки та призначений варіант кріплення." : "Templates, point counts, and the assigned mounting variant are shown here."}</p>
+                      <strong>{language === "uk" ? "Варіант кріплення" : "Mounting variant"}</strong>
+                      <p>{language === "uk" ? "Змініть варіант кріплення поточного вузла та збережіть зміни." : "Change the current node mounting variant and save the update."}</p>
                     </div>
                   </div>
-                  <div className="settings-info-grid mounting-node-detail-list">
-                    {selectedNodeDetail.templates?.length ? (
-                      selectedNodeDetail.templates.map((template) => {
-                        const templateSummary = formatTemplateSummary(template, t, language);
-                        return (
-                          <div className="mounting-node-detail-line" key={template.id}>
-                            <span>{templateSummary.label}</span>
-                            <strong>{template.template_id}</strong>
-                            <div>{t.mountingNodeTemplateVariant || (language === "uk" ? "Варіант кріплення" : "Mounting variant")}: {templateSummary.meta}</div>
-                            <div>{t.mountingNodeTemplatePointsCount || (language === "uk" ? "Точок" : "Points")}: {templateSummary.pointsCount}</div>
-                            <div>{template.is_default ? (t.mountingNodeTemplateDefault || (language === "uk" ? "За замовчуванням" : "Default")) : (t.mountingNodeTemplateAdditional || (language === "uk" ? "Додатковий" : "Additional"))}</div>
-                          </div>
-                        );
-                      })
-                    ) : (
-                      <div>{t.notSet}</div>
-                    )}
+                  <div className="mounting-node-detail-variant-body">
+                    <div
+                      className={`holes-mounting-variant-dropdown-shell mounting-node-detail-variant-shell${variantDropdownOpen ? " is-open" : ""}`}
+                    >
+                      <button
+                        aria-expanded={canEditVariant ? variantDropdownOpen : false}
+                        aria-haspopup={canEditVariant ? "listbox" : undefined}
+                        className="holes-mounting-variant-toggle mounting-node-detail-variant-toggle"
+                        ref={variantDropdownRef}
+                        disabled={!canEditVariant}
+                        onClick={openVariantDropdown}
+                        type="button"
+                      >
+                        <span className="holes-mounting-variant-toggle-mark" aria-hidden="true">
+                          {selectedNodeVariantModel?.icon ? <img alt="" src={selectedNodeVariantModel.icon} /> : <span>⋯</span>}
+                        </span>
+                        <span className="holes-mounting-variant-toggle-copy">
+                          <strong>{selectedNodeVariantModel?.label || selectedNodeCurrentVariantLabel}</strong>
+                          <span>
+                            {selectedNodeVariantModel?.description ||
+                              (language === "uk" ? "Без опису" : "No description")}
+                          </span>
+                        </span>
+                        {canEditVariant ? <ChevronRight className="holes-mounting-variant-toggle-arrow" size={16} /> : null}
+                      </button>
+                    </div>
+                    {canEditVariant && variantSaveError ? <p className="form-error">{variantSaveError}</p> : null}
+                    {canEditVariant ? (
+                      <div className="mounting-node-detail-variant-actions">
+                        <button
+                          className="primary-button"
+                          disabled={!canSaveVariant}
+                          onClick={handleVariantSubmit}
+                          type="button"
+                        >
+                          {variantSaveLoading
+                            ? (language === "uk" ? "Збереження..." : "Saving...")
+                            : (language === "uk" ? "Зберегти варіант кріплення" : "Save mounting variant")}
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
                 </article>
               </div>
+              {canEditVariant && variantDropdownOpen && variantDropdownPosition && typeof document !== "undefined"
+                ? createPortal(
+                    <div
+                      className="mounting-node-detail-variant-portal"
+                      style={{
+                        left: `${variantDropdownPosition.left}px`,
+                        position: "fixed",
+                        zIndex: 19,
+                        top: `${variantDropdownPosition.top}px`,
+                        width: `${variantDropdownPosition.width}px`,
+                      }}
+                    >
+                      <div
+                        className="holes-mounting-variant-menu mounting-node-detail-variant-menu"
+                        ref={variantDropdownMenuRef}
+                        role="listbox"
+                        style={{
+                          maxHeight: `${variantDropdownPosition.maxHeight}px`,
+                          minHeight: 0,
+                          overflowX: "hidden",
+                          overflowY: "auto",
+                          overscrollBehavior: "contain",
+                          position: "static",
+                          scrollbarGutter: "stable",
+                          width: "100%",
+                        }}
+                      >
+                        {detailVariantOptions.map((option, index) => {
+                          const isActive = selectedNodeVariantKey === option.value;
+
+                          return (
+                            <button
+                              aria-pressed={isActive}
+                              className={`holes-mounting-variant-option mounting-node-detail-variant-option${isActive ? " active" : ""}`}
+                              key={`mounting-node-variant-${index}-${option.value}`}
+                              onClick={() => handleSelectVariantKey(option.value)}
+                              type="button"
+                            >
+                              <span className="holes-mounting-variant-option-mark" aria-hidden="true">
+                                {option.icon ? <img alt="" src={option.icon} /> : <span>⋯</span>}
+                              </span>
+                              <span className="holes-mounting-variant-option-copy">
+                                <strong>{option.label}</strong>
+                                <span>{option.description || (language === "uk" ? "Без опису" : "No description")}</span>
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>,
+                    document.body,
+                  )
+                : null}
             </>
           ) : (
             <div className="empty-state compact-empty-state">
@@ -1181,7 +1806,41 @@ export default function MountingNodesPanelRefined({
           </section>
         </div>
       ) : null}
+      {variantConfirmOpen ? (
+        <div aria-modal="true" className="modal-backdrop" onClick={handleCloseVariantConfirm} role="dialog">
+          <section className="confirm-modal" onClick={(event) => event.stopPropagation()}>
+            <header className="confirm-header">
+              <h2>{getNodeVariantChangeTitle(language)}</h2>
+              <button
+                aria-label={language === "uk" ? "Закрити підтвердження" : "Close confirmation"}
+                className="icon-button"
+                disabled={variantSaveLoading}
+                onClick={handleCloseVariantConfirm}
+                type="button"
+              >
+                <X size={18} />
+              </button>
+            </header>
+            <p>{getNodeVariantChangeWarning(language)}</p>
+            {variantSaveError ? <p className="form-error">{variantSaveError}</p> : null}
+            <div className="confirm-actions">
+              <button className="ghost-button" disabled={variantSaveLoading} onClick={handleCloseVariantConfirm} type="button">
+                {language === "uk" ? "Скасувати" : "Cancel"}
+              </button>
+              <button
+                className="primary-button"
+                disabled={variantSaveLoading}
+                onClick={() => void handleSaveVariantKey(selectedNodeVariantKey)}
+                type="button"
+              >
+                {variantSaveLoading ? (language === "uk" ? "Збереження..." : "Saving...") : (language === "uk" ? "Продовжити" : "Continue")}
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
         </article>
+        </>
       )}
     </section>
   );

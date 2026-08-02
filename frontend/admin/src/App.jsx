@@ -2497,7 +2497,7 @@ const TRANSLATIONS = {
     mountingNodeBackToList: "Return to mounting nodes",
     mountingNodeBannerDescription: "Current node context.",
     mountingNodeBannerTitle: "Editing mounting node",
-    mountingNodeDetailsDescription: "Select a node to inspect its articles and linked templates.",
+    mountingNodeDetailsDescription: "Inspect the node fittings, mounting variant, and open the editor when needed.",
     mountingNodeDetailsTitle: "Mounting node details",
     mountingNodeItems: "Articles",
     mountingNodeItemsSummary: "Composition",
@@ -4217,7 +4217,7 @@ Object.assign(TRANSLATIONS.uk, {
   mountingNodeBackToList: "Повернутися до монтажних вузлів",
   mountingNodeBannerDescription: "Поточний контекст вузла.",
   mountingNodeBannerTitle: "Редагується монтажний вузол",
-  mountingNodeDetailsDescription: "Оберіть вузол, щоб переглянути артикульний склад і пов'язані шаблони.",
+  mountingNodeDetailsDescription: "Переглядайте склад вузла, варіант кріплення та переходьте до редактора за потреби.",
   mountingNodeDetailsTitle: "Деталі монтажного вузла",
   mountingNodeItems: "Артикулі",
   mountingNodeItemsSummary: "Склад",
@@ -9695,6 +9695,67 @@ export default function App() {
     setCatalogHolesOpenContext(null);
     setCatalogHolesCreateError("");
     setCatalogHolesCreating(false);
+  }
+
+  function renderMountingNodesBreadcrumb(items = []) {
+    const navLabel = language === "uk" ? "Навігація монтажних вузлів" : "Mounting nodes navigation";
+
+    return (
+      <nav aria-label={navLabel} className="mounting-node-breadcrumb mounting-node-breadcrumb-top">
+        <ol className="mounting-node-breadcrumb-list">
+          {items.map((item, index) => {
+            const isCurrent = Boolean(item?.current);
+            const isLast = index === items.length - 1;
+            const label = String(item?.label || "").trim();
+            const title = String(item?.title || label || "").trim();
+
+            return (
+              <li className="mounting-node-breadcrumb-item" key={`${label || "crumb"}-${index}`}>
+                {isCurrent ? (
+                  <span aria-current="page" className="mounting-node-breadcrumb-current" title={title || label}>
+                    {label}
+                  </span>
+                ) : (
+                  <button
+                    className="mounting-node-breadcrumb-link"
+                    onClick={item?.onClick}
+                    title={title || label}
+                    type="button"
+                  >
+                    {label}
+                  </button>
+                )}
+                {!isLast ? (
+                  <span aria-hidden="true" className="mounting-node-breadcrumb-separator">
+                    ›
+                  </span>
+                ) : null}
+              </li>
+            );
+          })}
+        </ol>
+      </nav>
+    );
+  }
+
+  function getCatalogHolesBreadcrumbNodeName() {
+    const openContextName = String(catalogHolesOpenContext?.nodeName || catalogHolesOpenContext?.nodeDetail?.name || "").trim();
+    if (openContextName) {
+      return openContextName;
+    }
+
+    const returnStateName = String(
+      catalogHolesReturnState?.selectedNodeDetail?.name ||
+        catalogHolesReturnState?.selectedNode?.name ||
+        catalogHolesReturnState?.nodeDetail?.name ||
+        "",
+    ).trim();
+
+    if (returnStateName) {
+      return returnStateName;
+    }
+
+    return language === "uk" ? "Монтажний вузол" : "Mounting node";
   }
 
   function handleOpenMountingNodeCreate(returnState = null) {
@@ -19277,17 +19338,20 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
               </div>
             ) : null}
             {catalogHolesMode === "create" ? (
-              <MountingNodesCreatePanel
-                fittingCategories={visibleFittingCategories}
-                fittingItems={fittingItems}
-                createError={catalogHolesCreateError}
-                isCreating={catalogHolesCreating}
-                language={language}
-                onCancel={handleCatalogHolesBackToList}
-                onCreate={handleCreateMountingNode}
-                t={t}
-              />
+              <>
+                <MountingNodesCreatePanel
+                  fittingCategories={visibleFittingCategories}
+                  fittingItems={fittingItems}
+                  createError={catalogHolesCreateError}
+                  isCreating={catalogHolesCreating}
+                  language={language}
+                  onCancel={handleCatalogHolesBackToList}
+                  onCreate={handleCreateMountingNode}
+                  t={t}
+                />
+              </>
             ) : catalogHolesMode === "editor" ? (
+              <>
               <article className="catalog-card service-catalog-card service-catalog-card-full holes-view-card">
                 <div className="catalog-page-header">
                   <div className="service-catalog-title">
@@ -20124,10 +20188,12 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                 </section>
               </FittingHolesWorkspace>
               </article>
+              </>
             ) : (
               <MountingNodesPanel
                 initialState={catalogHolesReturnState}
                 language={language}
+                onOpenFittingDetail={openFittingDetails}
                 onOpenMountingNodeCreate={handleOpenMountingNodeCreate}
                 onOpenMountingNodeEditor={(context, returnState) => {
                   setCatalogHolesReturnState(returnState);
