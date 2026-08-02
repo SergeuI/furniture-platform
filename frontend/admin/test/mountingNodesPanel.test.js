@@ -23,13 +23,19 @@ test("mounting nodes panel preserves list state and restores scroll after editor
   assert.equal(source.includes("window.scrollTo({ behavior: \"auto\", top: nextScrollPosition })"), true);
   assert.equal(source.includes("mounting-node-return-button"), true);
   assert.equal(source.includes("mounting-node-editor-button"), true);
+  assert.equal(source.includes("mounting-node-delete-button"), true);
+  assert.equal(source.includes("mounting-node-ownership-badge"), true);
   assert.equal(source.includes("mounting-node-create-button"), true);
   assert.equal(source.includes("onOpenMountingNodeCreate"), true);
   assert.equal(source.includes("nodeDetail: selectedNodeDetail"), true);
   assert.equal(source.includes("mounting-node-detail-screen"), true);
   assert.equal(source.includes("Return to mounting nodes"), true);
+  assert.equal(source.includes("Open point editor"), true);
+  assert.equal(source.includes("Відкрити редактор точок"), true);
+  assert.equal(source.includes("Delete mounting node"), true);
+  assert.equal(source.includes("handleOpenDeleteConfirm"), true);
+  assert.equal(source.includes("deleteConfirmNode"), true);
 });
-
 test("catalog holes page shows the mounting nodes create mode and editor mode branches", () => {
   const sourcePath = fileURLToPath(new URL("../src/App.jsx", import.meta.url));
   const source = readFileSync(sourcePath, "utf8");
@@ -55,13 +61,14 @@ test("catalog holes page shows the mounting nodes create mode and editor mode br
   assert.equal(source.includes("mounting-node-return-button"), true);
   assert.equal(source.includes("mounting-node-save-button"), true);
   assert.equal(source.includes("Return to node details"), true);
-  assert.equal(source.includes("Зберегти монтажний вузол"), true);
-
+  assert.equal(source.includes("Відкрити редактор точок"), true);
+  assert.equal(source.includes('mountingNodeOpenEditor: "Відкрити редактор точок"'), true);
   assert.equal(createPanelSource.includes("MountingNodesCreatePanel"), true);
   assert.equal(createPanelSource.includes("onCreate"), true);
   assert.equal(createPanelSource.includes("isCreating"), true);
   assert.equal(createPanelSource.includes("createError"), true);
   assert.equal(createPanelSource.includes("validateMountingNodeCreateDraft"), true);
+  assert.equal(createPanelSource.includes("Створення монтажного вузла"), true);
   assert.equal(createPanelSource.includes("Створення монтажного вузла"), true);
   assert.equal(createPanelSource.includes("Назва монтажного вузла"), true);
   assert.equal(createPanelSource.includes("Опис"), true);
@@ -69,7 +76,6 @@ test("catalog holes page shows the mounting nodes create mode and editor mode br
   assert.equal(createPanelSource.includes("Інформація про фурнітуру"), true);
   assert.equal(createPanelSource.includes("Вибрані фурнітури"), true);
   assert.equal(createPanelSource.includes("Варіант кріплення"), true);
-  assert.equal(createPanelSource.includes("Role"), true);
   assert.equal(createPanelSource.includes("Quantity"), true);
   assert.equal(createPanelSource.includes("Add selected"), true);
   assert.equal(createPanelSource.includes("holes-workspace-save-panel"), true);

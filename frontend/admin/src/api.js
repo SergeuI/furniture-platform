@@ -481,6 +481,23 @@ export async function updateMountingNode(token, nodeId, payload) {
   });
 }
 
+export async function deleteMountingNode(token, nodeId) {
+  const normalizedNodeId = String(nodeId || "").trim();
+
+  if (!normalizedNodeId) {
+    return {
+      success: false,
+      error: "Mounting node ID is required",
+      status: 0,
+    };
+  }
+
+  return request(`/mounting-nodes/${encodeURIComponent(normalizedNodeId)}`, {
+    method: "DELETE",
+    headers: authHeaders(token),
+  });
+}
+
 export async function listFittingHoleBundles(token) {
   return request("/fitting-holes/bundles", {
     headers: authHeaders(token),

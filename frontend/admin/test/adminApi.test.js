@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   API_BASE_URL,
   applyEntitlementRegistrySync,
+  deleteMountingNode,
   createMountingNode,
   getMountingNode,
   getMountingNodes,
@@ -403,6 +404,32 @@ test("mounting node update wrapper sends a PATCH request with the nested atomic 
         },
       ],
     });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("mounting node delete wrapper sends a DELETE request with no extra payload", async () => {
+  const calls = [];
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url, options });
+    return new Response(JSON.stringify({ success: true }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+
+  try {
+    const result = await deleteMountingNode("token-8", 17);
+
+    assert.equal(result.success, true);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].url, "/api/mounting-nodes/17");
+    assert.equal(calls[0].options.method, "DELETE");
+    assert.equal(calls[0].options.headers.Authorization, "Bearer token-8");
+    assert.equal(calls[0].options.body, undefined);
   } finally {
     globalThis.fetch = originalFetch;
   }

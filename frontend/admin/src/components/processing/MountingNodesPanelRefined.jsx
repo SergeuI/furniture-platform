@@ -1,7 +1,7 @@
-import { ArrowLeft, LayoutGrid, List, Plus, RefreshCw, Search } from "lucide-react";
+import { ArrowLeft, LayoutGrid, List, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
-import { getMountingNode, getMountingNodes } from "../../api.js";
+import { deleteMountingNode, getMountingNode, getMountingNodes } from "../../api.js";
 import { getProcessingTemplateMountingVariantLabel } from "../../processingTemplates.js";
 
 const KNOWN_MOUNTING_VARIANT_KEYS = [
@@ -129,6 +129,24 @@ function DetailField({ label, value }) {
   );
 }
 
+function getOwnershipLabel(node, language) {
+  const ownershipType = String(node?.ownership_type || "").trim().toLowerCase();
+
+  if (ownershipType === "system" || node?.is_system) {
+    return language === "uk" ? "Системний" : "System";
+  }
+
+  if (node?.is_owner) {
+    return language === "uk" ? "Мій вузол" : "My node";
+  }
+
+  if (ownershipType === "private" || node?.owner_user_id) {
+    return language === "uk" ? "Користувацький" : "Private";
+  }
+
+  return language === "uk" ? "Невідомий доступ" : "Unknown ownership";
+}
+
 export default function MountingNodesPanelRefined({
   language = "uk",
   editorMode = false,
@@ -156,6 +174,9 @@ export default function MountingNodesPanelRefined({
   const [selectedNodeId, setSelectedNodeId] = useState(initialReturnState.selectedNodeId);
   const [nodeDetailsById, setNodeDetailsById] = useState(initialReturnState.nodeDetailsById);
   const [nodeDetailErrorsById, setNodeDetailErrorsById] = useState(initialReturnState.nodeDetailErrorsById);
+  const [deleteConfirmNode, setDeleteConfirmNode] = useState(null);
+  const [deleteConfirmError, setDeleteConfirmError] = useState("");
+  const [deleteConfirmLoading, setDeleteConfirmLoading] = useState(false);
   const listRequestIdRef = useRef(0);
   const detailRequestIdRef = useRef(0);
   const selectedNodeIdRef = useRef(String(initialReturnState.selectedNodeId || ""));
@@ -432,6 +453,50 @@ export default function MountingNodesPanelRefined({
     }, pendingReturnStateRef.current);
   }
 
+  function handleOpenDeleteConfirm() {
+    if (!selectedNodeDetail?.can_delete) {
+      return;
+    }
+
+    setDeleteConfirmError("");
+    setDeleteConfirmNode(selectedNodeDetail);
+  }
+
+  function closeDeleteConfirm() {
+    if (deleteConfirmLoading) {
+      return;
+    }
+
+    setDeleteConfirmNode(null);
+    setDeleteConfirmError("");
+  }
+
+  async function handleConfirmDelete() {
+    if (!deleteConfirmNode || deleteConfirmLoading) {
+      return;
+    }
+
+    setDeleteConfirmLoading(true);
+    setDeleteConfirmError("");
+
+    try {
+      const result = await deleteMountingNode(token, deleteConfirmNode.id);
+      if (!result.success) {
+        setDeleteConfirmError(result.error || (language === "uk" ? "Не вдалося видалити монтажний вузол." : "Unable to delete mounting node."));
+        return;
+      }
+
+      setDeleteConfirmNode(null);
+      setMountingNodesViewMode("list");
+      setSelectedNodeId("");
+      handleRefresh();
+    } catch (error) {
+      setDeleteConfirmError(error?.message || (language === "uk" ? "Не вдалося видалити монтажний вузол." : "Unable to delete mounting node."));
+    } finally {
+      setDeleteConfirmLoading(false);
+    }
+  }
+
   if (!token) {
     return null;
   }
@@ -538,6 +603,7 @@ export default function MountingNodesPanelRefined({
                   const nodeDetail = nodeDetailsById[String(node.id)] || null;
                   const previewLines = nodeDetail ? getNodeCardPreviewText(nodeDetail, t, language) : [];
                   const isSelected = String(selectedNodeId) === String(node.id);
+                  const ownershipLabel = getOwnershipLabel(nodeDetail || node, language);
 
                   return (
                     <article
@@ -560,6 +626,9 @@ export default function MountingNodesPanelRefined({
                           <p>{node.code || t.notSet}</p>
                         </div>
                         <div className="mounting-node-badges">
+                          <span className="service-tree-badge subtle mounting-node-ownership-badge">
+                            {ownershipLabel}
+                          </span>
                           <span className="service-tree-badge subtle">
                             {node.is_active ? (t.active || "Active") : (t.inactive || "Inactive")}
                           </span>
@@ -592,6 +661,7 @@ export default function MountingNodesPanelRefined({
                   const nodeDetail = nodeDetailsById[String(node.id)] || null;
                   const previewLines = nodeDetail ? getNodeCardPreviewText(nodeDetail, t, language) : [];
                   const isSelected = String(selectedNodeId) === String(node.id);
+                  const ownershipLabel = getOwnershipLabel(nodeDetail || node, language);
 
                   return (
                     <article
@@ -614,6 +684,9 @@ export default function MountingNodesPanelRefined({
                           <p>{node.code || t.notSet}</p>
                         </div>
                         <div className="mounting-node-badges">
+                          <span className="service-tree-badge subtle mounting-node-ownership-badge">
+                            {ownershipLabel}
+                          </span>
                           <span className="service-tree-badge subtle">
                             {node.is_active ? (t.active || "Active") : (t.inactive || "Inactive")}
                           </span>
@@ -652,6 +725,11 @@ export default function MountingNodesPanelRefined({
             <div className="service-catalog-title">
               <h3>{selectedNode?.name || t.mountingNodeDetailsTitle || (language === "uk" ? "Деталі монтажного вузла" : "Mounting node details")}</h3>
               <p>{t.mountingNodeDetailsDescription || (language === "uk" ? "Переглядайте склад, шаблони та відкривайте вузол у редакторі." : "Review the composition, linked templates, and open the node in the editor.")}</p>
+              <div className="mounting-node-badges">
+                <span className="service-tree-badge subtle mounting-node-ownership-badge">
+                  {getOwnershipLabel(selectedNodeDetail, language)}
+                </span>
+              </div>
             </div>
             <div className="service-catalog-header-actions mounting-node-detail-actions">
               <button className="ghost-button mounting-node-detail-action-button mounting-node-return-button" onClick={handleBackToList} type="button">
@@ -659,9 +737,17 @@ export default function MountingNodesPanelRefined({
                 {t.mountingNodeBackToList || (language === "uk" ? "Повернутися до монтажних вузлів" : "Return to mounting nodes")}
               </button>
               {selectedNodeDetail ? (
-                <button className="primary-button mounting-node-detail-action-button mounting-node-editor-button" onClick={handleOpenEditor} type="button">
-                  {t.mountingNodeOpenEditor || (language === "uk" ? "Відкрити у редакторі" : "Open in editor")}
-                </button>
+                <>
+                  <button className="primary-button mounting-node-detail-action-button mounting-node-editor-button" onClick={handleOpenEditor} type="button">
+                    {t.mountingNodeOpenEditor || (language === "uk" ? "Відкрити редактор точок" : "Open point editor")}
+                  </button>
+                  {selectedNodeDetail.can_delete ? (
+                    <button className="danger-button mounting-node-detail-action-button mounting-node-delete-button" onClick={handleOpenDeleteConfirm} type="button">
+                      <Trash2 size={16} />
+                      {language === "uk" ? "Видалити" : "Delete"}
+                    </button>
+                  ) : null}
+                </>
               ) : null}
             </div>
           </div>
@@ -750,6 +836,32 @@ export default function MountingNodesPanelRefined({
               <span>{t.mountingNodesEmpty || (language === "uk" ? "Монтажні вузли ще не створені." : "Mounting nodes have not been created yet.")}</span>
             </div>
           )}
+      {deleteConfirmNode ? (
+        <div aria-modal="true" className="modal-backdrop" onClick={closeDeleteConfirm} role="dialog">
+          <section className="confirm-modal" onClick={(event) => event.stopPropagation()}>
+            <header className="confirm-header">
+              <h2>{language === "uk" ? "Видалити монтажний вузол" : "Delete mounting node"}</h2>
+              <button aria-label={language === "uk" ? "Закрити підтвердження" : "Close confirmation"} className="icon-button" disabled={deleteConfirmLoading} onClick={closeDeleteConfirm} type="button">
+                <X size={18} />
+              </button>
+            </header>
+            <p>
+              {language === "uk"
+                ? `Видалити вузол "${deleteConfirmNode.name || deleteConfirmNode.code || deleteConfirmNode.id}"?`
+                : `Delete mounting node "${deleteConfirmNode.name || deleteConfirmNode.code || deleteConfirmNode.id}"?`}
+            </p>
+            {deleteConfirmError ? <p className="form-error">{deleteConfirmError}</p> : null}
+            <div className="confirm-actions">
+              <button className="ghost-button" disabled={deleteConfirmLoading} onClick={closeDeleteConfirm} type="button">
+                {language === "uk" ? "Скасувати" : "Cancel"}
+              </button>
+              <button className="danger-button" disabled={deleteConfirmLoading} onClick={handleConfirmDelete} type="button">
+                {deleteConfirmLoading ? (language === "uk" ? "Видалення..." : "Deleting...") : (language === "uk" ? "Видалити" : "Delete")}
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
         </article>
       )}
     </section>
