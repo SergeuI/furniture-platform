@@ -153,6 +153,9 @@ class MountingNodeListItemSchema(BaseModel):
     name: str
     description: str | None = None
     owner_user_id: str | None = None
+    ownership_type: str = "system"
+    is_system: bool = True
+    is_owner: bool = False
     is_active: bool = True
     created_by_user_id: str | None = None
     updated_by_user_id: str | None = None

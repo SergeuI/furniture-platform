@@ -1,14 +1,23 @@
 from __future__ import annotations
 
+import tempfile
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
 from api.dependencies import auth as auth_dependencies
 from api.routes import mounting_nodes as mounting_nodes_route
+from database.base import Base
+from database.models.fitting import FittingHoleTemplateModel, FittingModel
+from database.models.mounting_node import MountingNodeModel
+from database.models.user import UserModel
+from services.mounting_node_service import MountingNodeService
 
 
 class _AllowedEntitlementService:
@@ -57,7 +66,7 @@ class MountingNodesApiTests(unittest.TestCase):
             def __exit__(self, exc_type, exc, tb):
                 return False
 
-            def get_mounting_node(self, node_id):
+            def get_mounting_node(self, node_id, **kwargs):
                 return None
 
         with patch.object(mounting_nodes_route, "EntitlementService", _AllowedEntitlementService):
@@ -367,11 +376,140 @@ class MountingNodesApiTests(unittest.TestCase):
         self.assertEqual(body["node"]["templates"][0]["template"]["points"][0]["id"], 29)
         self.assertEqual(body["node"]["templates"][0]["template"]["points"][1]["id"], 31)
 
+    def test_list_and_detail_route_apply_owner_visibility_and_snapshot(self) -> None:
+        session, engine = self._build_session()
+        try:
+            app = self._build_app()
+            admin = self._create_user(session, email="admin@example.com", role="admin")
+            user_a = self._create_user(session, email="user-a@example.com", role="free")
+            user_b = self._create_user(session, email="user-b@example.com", role="free")
+            fitting = self._create_fitting(session, name="Fit A", code="fit-a", article="A")
+            system_template = self._create_template(session, fitting.id, name="System Template")
+            own_template = self._create_template(session, fitting.id, name="Own Template")
+            private_template = self._create_template(session, fitting.id, name="Private Template")
+            service = MountingNodeService(session=session)
+
+            system_node = service.create_mounting_node(
+                {
+                    "name": "System node",
+                    "items": [{"fitting_id": fitting.id, "quantity": 1}],
+                    "templates": [{"template_id": system_template.id, "is_default": True}],
+                },
+            )
+            own_node = service.create_mounting_node(
+                {
+                    "name": "Own node",
+                    "owner_user_id": user_a.id,
+                    "items": [{"fitting_id": fitting.id, "quantity": 1}],
+                    "templates": [{"template_id": own_template.id, "is_default": True}],
+                },
+            )
+            private_node = service.create_mounting_node(
+                {
+                    "name": "Private node",
+                    "owner_user_id": user_b.id,
+                    "items": [{"fitting_id": fitting.id, "quantity": 1}],
+                    "templates": [{"template_id": private_template.id, "is_default": True}],
+                },
+            )
+
+            app.dependency_overrides[auth_dependencies.require_current_user] = lambda: user_a
+
+            with patch.object(mounting_nodes_route, "EntitlementService", _AllowedEntitlementService):
+                with patch.object(mounting_nodes_route, "MountingNodeService", return_value=service):
+                    with TestClient(app) as client:
+                        list_response = client.get(
+                            "/mounting-nodes",
+                            headers={"Authorization": "Bearer token"},
+                        )
+                        own_detail_response = client.get(
+                            f"/mounting-nodes/{own_node['id']}",
+                            headers={"Authorization": "Bearer token"},
+                        )
+                        foreign_detail_response = client.get(
+                            f"/mounting-nodes/{system_node['id'] + 2}",
+                            headers={"Authorization": "Bearer token"},
+                        )
+
+            self.assertEqual(list_response.status_code, 200)
+            list_nodes = list_response.json()["nodes"]
+            self.assertEqual({node["name"] for node in list_nodes}, {"System node", "Own node"})
+            self.assertEqual({node["name"]: node["ownership_type"] for node in list_nodes}, {"System node": "system", "Own node": "mine"})
+
+            own_detail = own_detail_response.json()["node"]
+            self.assertEqual(own_detail_response.status_code, 200)
+            self.assertEqual(own_detail["ownership_type"], "mine")
+            self.assertTrue(own_detail["is_owner"])
+            self.assertFalse(own_detail["is_system"])
+
+            self.assertEqual(foreign_detail_response.status_code, 404)
+            self.assertEqual(foreign_detail_response.json()["detail"], f"Mounting node with id={private_node['id']} does not exist")
+        finally:
+            session.close()
+            engine.dispose()
+
     def _build_app(self) -> FastAPI:
         app = FastAPI()
         app.include_router(mounting_nodes_route.router, prefix="/mounting-nodes")
         app.dependency_overrides[auth_dependencies.require_current_user] = lambda: SimpleNamespace(id="user-1", role="free")
         return app
+
+    def _build_session(self):
+        tempdir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(tempdir.cleanup)
+        database_path = Path(tempdir.name) / "test.db"
+        engine = create_engine(
+            f"sqlite:///{database_path.as_posix()}",
+            connect_args={"check_same_thread": False},
+        )
+        Base.metadata.create_all(bind=engine)
+        Session = sessionmaker(bind=engine, expire_on_commit=False)
+        return Session(), engine
+
+    @staticmethod
+    def _create_user(session, email: str, role: str) -> UserModel:
+        user = UserModel(
+            email=email,
+            password_hash="hashed-password",
+            role=role,
+            is_active=True,
+        )
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+        return user
+
+    @staticmethod
+    def _create_fitting(session, name: str, code: str, article: str) -> FittingModel:
+        fitting = FittingModel(
+            name=name,
+            code=code,
+            article=article,
+            is_system=True,
+            is_active=True,
+            sort_order=0,
+        )
+        session.add(fitting)
+        session.commit()
+        session.refresh(fitting)
+        return fitting
+
+    @staticmethod
+    def _create_template(session, fitting_id: int, name: str) -> FittingHoleTemplateModel:
+        template = FittingHoleTemplateModel(
+            fitting_id=fitting_id,
+            name=name,
+            template_type="manual",
+            side="left",
+            coordinate_system="2d",
+            mounting_variant_key="surface_mount",
+            is_default=True,
+            is_active=True,
+        )
+        session.add(template)
+        session.commit()
+        session.refresh(template)
+        return template
 
 
 if __name__ == "__main__":

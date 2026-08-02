@@ -164,6 +164,43 @@ class MountingNodeService:
         return node
 
     @staticmethod
+    def _is_admin_role(viewer_role: Any) -> bool:
+        return str(viewer_role or "").strip().lower() == "admin"
+
+    @staticmethod
+    def _normalize_viewer_user_id(viewer_user_id: Any) -> str:
+        return str(viewer_user_id or "").strip()
+
+    def _resolve_ownership_snapshot(
+        self,
+        node: MountingNodeModel,
+        *,
+        viewer_user_id: Any = None,
+        viewer_role: Any = None,
+    ) -> dict[str, Any]:
+        owner_user_id = self._optional_text(getattr(node, "owner_user_id", None))
+        normalized_viewer_user_id = self._normalize_viewer_user_id(viewer_user_id)
+        is_admin = self._is_admin_role(viewer_role)
+        is_system = owner_user_id is None
+        is_owner = bool(owner_user_id and normalized_viewer_user_id and owner_user_id == normalized_viewer_user_id)
+
+        if is_system:
+            ownership_type = "system"
+        elif is_owner:
+            ownership_type = "mine"
+        elif is_admin:
+            ownership_type = "user"
+        else:
+            ownership_type = "user"
+
+        return {
+            "owner_user_id": owner_user_id,
+            "ownership_type": ownership_type,
+            "is_system": is_system,
+            "is_owner": is_owner,
+        }
+
+    @staticmethod
     def _serialize_item(item) -> dict[str, Any]:
         fitting = getattr(item, "fitting", None)
         return {
@@ -249,15 +286,26 @@ class MountingNodeService:
             "template": self._serialize_template(template) if template is not None else None,
         }
 
-    def _serialize_node(self, node: MountingNodeModel) -> dict[str, Any]:
+    def _serialize_node(
+        self,
+        node: MountingNodeModel,
+        *,
+        viewer_user_id: Any = None,
+        viewer_role: Any = None,
+    ) -> dict[str, Any]:
         items = list(getattr(node, "items", []) or [])
         templates = list(getattr(node, "templates", []) or [])
+        ownership_snapshot = self._resolve_ownership_snapshot(
+            node,
+            viewer_user_id=viewer_user_id,
+            viewer_role=viewer_role,
+        )
         return {
             "id": node.id,
             "code": node.code,
             "name": node.name,
             "description": node.description,
-            "owner_user_id": getattr(node, "owner_user_id", None),
+            **ownership_snapshot,
             "is_active": bool(getattr(node, "is_active", True)),
             "created_by_user_id": getattr(node, "created_by_user_id", None),
             "updated_by_user_id": getattr(node, "updated_by_user_id", None),
@@ -743,16 +791,24 @@ class MountingNodeService:
         fitting_id: int | None = None,
         mounting_variant_key: str | None = None,
         search: str | None = None,
+        viewer_user_id: Any = None,
+        viewer_role: Any = None,
     ) -> list[dict[str, Any]]:
         nodes = self.repository.list_nodes(
             include_inactive=include_inactive,
             fitting_id=fitting_id,
             mounting_variant_key=mounting_variant_key,
+            viewer_user_id=self._normalize_viewer_user_id(viewer_user_id),
+            viewer_role=viewer_role,
         )
         summaries = [
             {
                 key: value
-                for key, value in self._serialize_node(node).items()
+                for key, value in self._serialize_node(
+                    node,
+                    viewer_user_id=viewer_user_id,
+                    viewer_role=viewer_role,
+                ).items()
                 if key not in {"items", "templates"}
             }
             for node in nodes
@@ -767,12 +823,31 @@ class MountingNodeService:
 
         return summaries
 
-    def get_mounting_node(self, node_id: int) -> dict[str, Any] | None:
+    def get_mounting_node(
+        self,
+        node_id: int,
+        *,
+        viewer_user_id: Any = None,
+        viewer_role: Any = None,
+    ) -> dict[str, Any] | None:
         node_id = self._require_int(node_id, "node_id")
         node = self.repository.get_node_by_id(node_id)
         if node is None:
             return None
-        return self._serialize_node(node)
+
+        ownership_snapshot = self._resolve_ownership_snapshot(
+            node,
+            viewer_user_id=viewer_user_id,
+            viewer_role=viewer_role,
+        )
+        if not self._is_admin_role(viewer_role) and ownership_snapshot["owner_user_id"] is not None and not ownership_snapshot["is_owner"]:
+            return None
+
+        return self._serialize_node(
+            node,
+            viewer_user_id=viewer_user_id,
+            viewer_role=viewer_role,
+        )
 
     def create_mounting_node(
         self,

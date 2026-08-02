@@ -69,6 +69,8 @@ async def list_mounting_nodes_route(
             fitting_id=fitting_id,
             mounting_variant_key=mounting_variant_key,
             search=search,
+            viewer_user_id=getattr(current_user, "id", None),
+            viewer_role=getattr(current_user, "role", None),
         )
 
     return {
@@ -86,7 +88,11 @@ async def get_mounting_node_route(
     current_user = Depends(require_mounting_nodes_use),
 ):
     with MountingNodeService() as service:
-        node = service.get_mounting_node(node_id)
+        node = service.get_mounting_node(
+            node_id,
+            viewer_user_id=getattr(current_user, "id", None),
+            viewer_role=getattr(current_user, "role", None),
+        )
 
     if node is None:
         raise HTTPException(

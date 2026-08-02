@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, selectinload
 
 from database.models.fitting import FittingHolePointModel, FittingHoleTemplateModel, FittingModel
@@ -50,11 +51,26 @@ class MountingNodeRepository:
         include_inactive: bool = False,
         fitting_id: int | None = None,
         mounting_variant_key: str | None = None,
+        viewer_user_id: str | None = None,
+        viewer_role: str | None = None,
     ) -> list[MountingNodeModel]:
         query = self._node_query()
 
         if not include_inactive:
             query = query.filter(MountingNodeModel.is_active.is_(True))
+
+        is_admin = str(viewer_role or "").strip().lower() == "admin"
+        normalized_viewer_id = str(viewer_user_id or "").strip()
+        if not is_admin:
+            if normalized_viewer_id:
+                query = query.filter(
+                    or_(
+                        MountingNodeModel.owner_user_id.is_(None),
+                        MountingNodeModel.owner_user_id == normalized_viewer_id,
+                    ),
+                )
+            else:
+                query = query.filter(MountingNodeModel.owner_user_id.is_(None))
 
         if fitting_id is not None:
             query = query.filter(

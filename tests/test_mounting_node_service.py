@@ -889,6 +889,75 @@ class MountingNodeServiceTests(unittest.TestCase):
             session.close()
             engine.dispose()
 
+    def test_list_and_detail_respect_owner_based_visibility(self) -> None:
+        session, engine = self._build_session()
+        try:
+            admin = self._create_user(session, email="admin@example.com", role="admin")
+            user_a = self._create_user(session, email="user-a@example.com", role="free")
+            user_b = self._create_user(session, email="user-b@example.com", role="free")
+            fitting = self._create_fitting(session, name="Fit A", code="fit-a", article="A")
+            system_template = self._create_template(session, fitting.id, name="System Template", mounting_variant_key="surface_mount")
+            own_template = self._create_template(session, fitting.id, name="Own Template", mounting_variant_key="surface_mount")
+            private_template = self._create_template(session, fitting.id, name="Private Template", mounting_variant_key="surface_mount")
+            service = MountingNodeService(session=session)
+
+            system_node = service.create_mounting_node(
+                {
+                    "name": "System node",
+                    "items": [{"fitting_id": fitting.id, "quantity": 1}],
+                    "templates": [{"template_id": system_template.id, "is_default": True}],
+                }
+            )
+            own_node = service.create_mounting_node(
+                {
+                    "name": "Own node",
+                    "owner_user_id": user_a.id,
+                    "items": [{"fitting_id": fitting.id, "quantity": 1}],
+                    "templates": [{"template_id": own_template.id, "is_default": True}],
+                }
+            )
+            private_node = service.create_mounting_node(
+                {
+                    "name": "Private node",
+                    "owner_user_id": user_b.id,
+                    "items": [{"fitting_id": fitting.id, "quantity": 1}],
+                    "templates": [{"template_id": private_template.id, "is_default": True}],
+                }
+            )
+
+            admin_nodes = service.list_mounting_nodes(viewer_user_id=admin.id, viewer_role=admin.role)
+            user_a_nodes = service.list_mounting_nodes(viewer_user_id=user_a.id, viewer_role=user_a.role)
+            private_search = service.list_mounting_nodes(
+                viewer_user_id=user_a.id,
+                viewer_role=user_a.role,
+                search="Private node",
+            )
+
+            self.assertEqual({node["name"] for node in admin_nodes}, {"System node", "Own node", "Private node"})
+            self.assertEqual({node["name"] for node in user_a_nodes}, {"System node", "Own node"})
+            self.assertEqual(private_search, [])
+            self.assertEqual(service.get_mounting_node(private_node["id"], viewer_user_id=user_a.id, viewer_role=user_a.role), None)
+
+            own_detail = service.get_mounting_node(own_node["id"], viewer_user_id=user_a.id, viewer_role=user_a.role)
+            system_detail = service.get_mounting_node(system_node["id"], viewer_user_id=user_a.id, viewer_role=user_a.role)
+            private_admin_detail = service.get_mounting_node(private_node["id"], viewer_user_id=admin.id, viewer_role=admin.role)
+
+            self.assertIsNotNone(own_detail)
+            self.assertIsNotNone(system_detail)
+            self.assertIsNotNone(private_admin_detail)
+            self.assertEqual(own_detail["ownership_type"], "mine")
+            self.assertTrue(own_detail["is_owner"])
+            self.assertFalse(own_detail["is_system"])
+            self.assertEqual(system_detail["ownership_type"], "system")
+            self.assertTrue(system_detail["is_system"])
+            self.assertFalse(system_detail["is_owner"])
+            self.assertEqual(private_admin_detail["ownership_type"], "user")
+            self.assertFalse(private_admin_detail["is_owner"])
+            self.assertFalse(private_admin_detail["is_system"])
+        finally:
+            session.close()
+            engine.dispose()
+
     def _build_session(self):
         tempdir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.addCleanup(tempdir.cleanup)
@@ -965,6 +1034,19 @@ class MountingNodeServiceTests(unittest.TestCase):
         session.commit()
         session.refresh(point)
         return point
+
+    @staticmethod
+    def _create_user(session, email: str, role: str) -> UserModel:
+        user = UserModel(
+            email=email,
+            password_hash="hashed-password",
+            role=role,
+            is_active=True,
+        )
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+        return user
 
 
 if __name__ == "__main__":
