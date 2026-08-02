@@ -14,7 +14,7 @@ from sqlalchemy.orm import sessionmaker
 from api.dependencies import auth as auth_dependencies
 from api.routes import mounting_nodes as mounting_nodes_route
 from database.base import Base
-from database.models.fitting import FittingHoleTemplateModel, FittingModel
+from database.models.fitting import FittingHolePointModel, FittingHoleTemplateModel, FittingModel
 from database.models.mounting_node import MountingNodeModel
 from database.models.user import UserModel
 from services.mounting_node_service import MountingNodeService
@@ -91,13 +91,18 @@ class MountingNodesApiTests(unittest.TestCase):
             def __exit__(self, exc_type, exc, tb):
                 return False
 
-            def create_mounting_node(self, payload):
+            def create_mounting_node(self, payload, **kwargs):
                 return {
                     "id": 1,
                     "code": "mounting-node-confirmat-7x50",
                     "name": payload["name"],
                     "description": None,
                     "owner_user_id": None,
+                    "ownership_type": "system",
+                    "is_system": True,
+                    "is_owner": False,
+                    "can_edit": True,
+                    "can_delete": True,
                     "is_active": True,
                     "created_by_user_id": "user-1",
                     "updated_by_user_id": "user-1",
@@ -109,21 +114,59 @@ class MountingNodesApiTests(unittest.TestCase):
                     "templates": [],
                 }
 
-        with patch.object(mounting_nodes_route, "MountingNodeService", return_value=CreateService()):
-            with TestClient(app) as client:
-                response = client.post(
-                    "/mounting-nodes",
-                    json={
-                        "name": "Confirmat node",
-                        "items": [{"fitting_id": 1, "quantity": 1}],
-                    },
-                    headers={"Authorization": "Bearer token"},
-                )
+        with patch.object(mounting_nodes_route, "EntitlementService", _AllowedEntitlementService):
+            with patch.object(mounting_nodes_route, "MountingNodeService", return_value=CreateService()):
+                with TestClient(app) as client:
+                    response = client.post(
+                        "/mounting-nodes",
+                        json={
+                            "name": "Confirmat node",
+                            "items": [{"fitting_id": 1, "quantity": 1}],
+                        },
+                        headers={"Authorization": "Bearer token"},
+                    )
 
         self.assertEqual(response.status_code, 200)
         body = response.json()
         self.assertTrue(body["success"])
         self.assertEqual(body["node"]["name"], "Confirmat node")
+        self.assertTrue(body["node"]["can_edit"])
+        self.assertTrue(body["node"]["can_delete"])
+
+    def test_create_route_assigns_owner_for_regular_user(self) -> None:
+        session, engine = self._build_session()
+        try:
+            app = self._build_app()
+            user = self._create_user(session, email="user-a@example.com", role="free")
+            fitting = self._create_fitting(session, name="Fit A", code="fit-a", article="A")
+            service = MountingNodeService(session=session)
+            app.dependency_overrides[auth_dependencies.require_current_user] = lambda: user
+
+            with patch.object(mounting_nodes_route, "EntitlementService", _AllowedEntitlementService):
+                with patch.object(mounting_nodes_route, "MountingNodeService", return_value=service):
+                    with TestClient(app) as client:
+                        response = client.post(
+                            "/mounting-nodes",
+                            json={
+                                "name": "User node",
+                                "items": [{"fitting_id": fitting.id, "quantity": 1}],
+                            },
+                            headers={"Authorization": "Bearer token"},
+                        )
+
+            self.assertEqual(response.status_code, 200)
+            body = response.json()["node"]
+            self.assertEqual(body["owner_user_id"], user.id)
+            self.assertEqual(body["created_by_user_id"], user.id)
+            self.assertEqual(body["updated_by_user_id"], user.id)
+            self.assertEqual(body["ownership_type"], "mine")
+            self.assertTrue(body["is_owner"])
+            self.assertFalse(body["is_system"])
+            self.assertTrue(body["can_edit"])
+            self.assertTrue(body["can_delete"])
+        finally:
+            session.close()
+            engine.dispose()
 
     def test_create_route_returns_nested_template_and_point_ids_for_admin(self) -> None:
         app = self._build_app()
@@ -136,13 +179,18 @@ class MountingNodesApiTests(unittest.TestCase):
             def __exit__(self, exc_type, exc, tb):
                 return False
 
-            def create_mounting_node(self, payload):
+            def create_mounting_node(self, payload, **kwargs):
                 return {
                     "id": 1,
                     "code": "mounting-node-confirmat-7x50",
                     "name": payload["name"],
                     "description": None,
                     "owner_user_id": None,
+                    "ownership_type": "system",
+                    "is_system": True,
+                    "is_owner": False,
+                    "can_edit": True,
+                    "can_delete": True,
                     "is_active": True,
                     "created_by_user_id": "user-1",
                     "updated_by_user_id": "user-1",
@@ -226,16 +274,17 @@ class MountingNodesApiTests(unittest.TestCase):
                     ],
                 }
 
-        with patch.object(mounting_nodes_route, "MountingNodeService", return_value=CreateService()):
-            with TestClient(app) as client:
-                response = client.post(
-                    "/mounting-nodes",
-                    json={
-                        "name": "Confirmat node",
-                        "items": [{"fitting_id": 1, "quantity": 1}],
-                    },
-                    headers={"Authorization": "Bearer token"},
-                )
+        with patch.object(mounting_nodes_route, "EntitlementService", _AllowedEntitlementService):
+            with patch.object(mounting_nodes_route, "MountingNodeService", return_value=CreateService()):
+                with TestClient(app) as client:
+                    response = client.post(
+                        "/mounting-nodes",
+                        json={
+                            "name": "Confirmat node",
+                            "items": [{"fitting_id": 1, "quantity": 1}],
+                        },
+                        headers={"Authorization": "Bearer token"},
+                    )
 
         self.assertEqual(response.status_code, 200)
         body = response.json()
@@ -254,13 +303,18 @@ class MountingNodesApiTests(unittest.TestCase):
             def __exit__(self, exc_type, exc, tb):
                 return False
 
-            def update_mounting_node(self, node_id, payload):
+            def update_mounting_node(self, node_id, payload, **kwargs):
                 return {
                     "id": node_id,
                     "code": "mounting-node-confirmat-7x50",
                     "name": "Confirmat node",
                     "description": None,
                     "owner_user_id": None,
+                    "ownership_type": "system",
+                    "is_system": True,
+                    "is_owner": False,
+                    "can_edit": True,
+                    "can_delete": True,
                     "is_active": True,
                     "created_by_user_id": "user-1",
                     "updated_by_user_id": "user-1",
@@ -344,31 +398,32 @@ class MountingNodesApiTests(unittest.TestCase):
                     ],
                 }
 
-        with patch.object(mounting_nodes_route, "MountingNodeService", return_value=PatchService()):
-            with TestClient(app) as client:
-                response = client.patch(
-                    "/mounting-nodes/1",
-                    json={
-                        "templates": [
-                            {
-                                "template_id": 7428,
-                                "template": {
+        with patch.object(mounting_nodes_route, "EntitlementService", _AllowedEntitlementService):
+            with patch.object(mounting_nodes_route, "MountingNodeService", return_value=PatchService()):
+                with TestClient(app) as client:
+                    response = client.patch(
+                        "/mounting-nodes/1",
+                        json={
+                            "templates": [
+                                {
                                     "template_id": 7428,
-                                    "fitting_id": 1,
-                                    "name": "Main template updated",
-                                    "template_type": "manual",
-                                    "mounting_variant_key": "face_to_edge",
-                                    "is_default": True,
-                                    "points": [
-                                        {"id": 29, "diameter_mm": 7.0, "order_index": 0, "quantity": 1},
-                                        {"id": 31, "diameter_mm": 4.5, "depth_mm": 34.0, "order_index": 1, "quantity": 1},
-                                    ],
-                                },
-                            }
-                        ]
-                    },
-                    headers={"Authorization": "Bearer token"},
-                )
+                                    "template": {
+                                        "template_id": 7428,
+                                        "fitting_id": 1,
+                                        "name": "Main template updated",
+                                        "template_type": "manual",
+                                        "mounting_variant_key": "face_to_edge",
+                                        "is_default": True,
+                                        "points": [
+                                            {"id": 29, "diameter_mm": 7.0, "order_index": 0, "quantity": 1},
+                                            {"id": 31, "diameter_mm": 4.5, "depth_mm": 34.0, "order_index": 1, "quantity": 1},
+                                        ],
+                                    },
+                                }
+                            ]
+                        },
+                        headers={"Authorization": "Bearer token"},
+                    )
 
         self.assertEqual(response.status_code, 200)
         body = response.json()
@@ -435,15 +490,86 @@ class MountingNodesApiTests(unittest.TestCase):
             list_nodes = list_response.json()["nodes"]
             self.assertEqual({node["name"] for node in list_nodes}, {"System node", "Own node"})
             self.assertEqual({node["name"]: node["ownership_type"] for node in list_nodes}, {"System node": "system", "Own node": "mine"})
+            self.assertEqual({node["name"]: node["can_edit"] for node in list_nodes}, {"System node": False, "Own node": True})
+            self.assertEqual({node["name"]: node["can_delete"] for node in list_nodes}, {"System node": False, "Own node": True})
 
             own_detail = own_detail_response.json()["node"]
             self.assertEqual(own_detail_response.status_code, 200)
             self.assertEqual(own_detail["ownership_type"], "mine")
             self.assertTrue(own_detail["is_owner"])
             self.assertFalse(own_detail["is_system"])
+            self.assertTrue(own_detail["can_edit"])
+            self.assertTrue(own_detail["can_delete"])
 
             self.assertEqual(foreign_detail_response.status_code, 404)
             self.assertEqual(foreign_detail_response.json()["detail"], f"Mounting node with id={private_node['id']} does not exist")
+        finally:
+            session.close()
+            engine.dispose()
+
+    def test_delete_route_removes_node_and_nested_template_records_for_owner(self) -> None:
+        session, engine = self._build_session()
+        try:
+            app = self._build_app()
+            admin = self._create_user(session, email="admin@example.com", role="admin")
+            owner = self._create_user(session, email="owner@example.com", role="free")
+            stranger = self._create_user(session, email="stranger@example.com", role="free")
+            fitting = self._create_fitting(session, name="Fit A", code="fit-a", article="A")
+            template = self._create_template(session, fitting.id, name="Nested Template")
+            self._create_point(session, template.id, x_mm=0, y_mm=0, z_mm=0)
+            service = MountingNodeService(session=session)
+
+            system_node = service.create_mounting_node(
+                {
+                    "name": "System node",
+                    "items": [{"fitting_id": fitting.id, "quantity": 1}],
+                },
+                viewer_user_id=admin.id,
+                viewer_role=admin.role,
+            )
+            own_node = service.create_mounting_node(
+                {
+                    "name": "Own node",
+                    "items": [{"fitting_id": fitting.id, "quantity": 1}],
+                    "templates": [{"template_id": template.id, "is_default": True}],
+                },
+                viewer_user_id=owner.id,
+                viewer_role=owner.role,
+            )
+            foreign_node = service.create_mounting_node(
+                {
+                    "name": "Foreign node",
+                    "items": [{"fitting_id": fitting.id, "quantity": 1}],
+                },
+                viewer_user_id=stranger.id,
+                viewer_role=stranger.role,
+            )
+
+            app.dependency_overrides[auth_dependencies.require_current_user] = lambda: owner
+
+            with patch.object(mounting_nodes_route, "EntitlementService", _AllowedEntitlementService):
+                with patch.object(mounting_nodes_route, "MountingNodeService", return_value=service):
+                    with TestClient(app) as client:
+                        foreign_delete = client.delete(
+                            f"/mounting-nodes/{foreign_node['id']}",
+                            headers={"Authorization": "Bearer token"},
+                        )
+                        system_delete = client.delete(
+                            f"/mounting-nodes/{system_node['id']}",
+                            headers={"Authorization": "Bearer token"},
+                        )
+                        own_delete = client.delete(
+                            f"/mounting-nodes/{own_node['id']}",
+                            headers={"Authorization": "Bearer token"},
+                        )
+
+            self.assertEqual(foreign_delete.status_code, 404)
+            self.assertEqual(system_delete.status_code, 403)
+            self.assertEqual(own_delete.status_code, 200)
+            self.assertIsNone(own_delete.json()["node"])
+            self.assertIsNone(session.get(MountingNodeModel, own_node["id"]))
+            self.assertIsNone(session.get(FittingHoleTemplateModel, template.id))
+            self.assertEqual(session.query(FittingHolePointModel).count(), 0)
         finally:
             session.close()
             engine.dispose()
@@ -510,6 +636,26 @@ class MountingNodesApiTests(unittest.TestCase):
         session.commit()
         session.refresh(template)
         return template
+
+    @staticmethod
+    def _create_point(session, template_id: int, x_mm: float, y_mm: float, z_mm: float) -> None:
+        point = FittingHolePointModel(
+            template_id=template_id,
+            label="Point",
+            x_mm=x_mm,
+            y_mm=y_mm,
+            z_mm=z_mm,
+            diameter_mm=7.0,
+            depth_mm=None,
+            side="left",
+            operation="drill",
+            order_index=0,
+            quantity=1,
+            mirrored=False,
+        )
+        session.add(point)
+        session.commit()
+        session.refresh(point)
 
 
 if __name__ == "__main__":

@@ -52,6 +52,16 @@ def _raise_service_error(error: ValueError) -> None:
     ) from error
 
 
+def _raise_service_permission_error(error: PermissionError) -> None:
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail={
+            "success": False,
+            "error": "Insufficient permissions",
+        },
+    ) from error
+
+
 @router.get(
     "",
     response_model=MountingNodeListResponseSchema,
@@ -112,15 +122,19 @@ async def get_mounting_node_route(
 )
 async def create_mounting_node_route(
     payload: MountingNodeCreateSchema,
-    current_user = Depends(require_mounting_nodes_admin),
+    current_user = Depends(require_mounting_nodes_use),
 ):
     try:
         with MountingNodeService() as service:
             node = service.create_mounting_node(
                 payload.model_dump(exclude_unset=True),
+                viewer_user_id=getattr(current_user, "id", None),
+                viewer_role=getattr(current_user, "role", None),
             )
     except ValueError as error:
         _raise_service_error(error)
+    except PermissionError as error:
+        _raise_service_permission_error(error)
 
     return {
         "success": True,
@@ -135,16 +149,20 @@ async def create_mounting_node_route(
 async def update_mounting_node_route(
     node_id: int,
     payload: MountingNodeUpdateSchema,
-    current_user = Depends(require_mounting_nodes_admin),
+    current_user = Depends(require_mounting_nodes_use),
 ):
     try:
         with MountingNodeService() as service:
             node = service.update_mounting_node(
                 node_id,
                 payload.model_dump(exclude_unset=True),
+                viewer_user_id=getattr(current_user, "id", None),
+                viewer_role=getattr(current_user, "role", None),
             )
     except ValueError as error:
         _raise_service_error(error)
+    except PermissionError as error:
+        _raise_service_permission_error(error)
 
     if node is None:
         raise HTTPException(
@@ -155,4 +173,36 @@ async def update_mounting_node_route(
     return {
         "success": True,
         "node": node,
+    }
+
+
+@router.delete(
+    "/{node_id}",
+    response_model=MountingNodeOperationResponseSchema,
+)
+async def delete_mounting_node_route(
+    node_id: int,
+    current_user = Depends(require_mounting_nodes_use),
+):
+    try:
+        with MountingNodeService() as service:
+            deleted = service.delete_mounting_node(
+                node_id,
+                viewer_user_id=getattr(current_user, "id", None),
+                viewer_role=getattr(current_user, "role", None),
+            )
+    except ValueError as error:
+        _raise_service_error(error)
+    except PermissionError as error:
+        _raise_service_permission_error(error)
+
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Mounting node with id={node_id} does not exist",
+        )
+
+    return {
+        "success": True,
+        "node": None,
     }

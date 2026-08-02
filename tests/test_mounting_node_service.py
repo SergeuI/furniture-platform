@@ -21,7 +21,7 @@ from database.models.mounting_node import (
 from database.models.service_catalog_item import ServiceCatalogItemModel
 from database.models.service_drilling_rule import ServiceDrillingRuleModel
 from database.models.user import UserModel
-from services.mounting_node_service import MountingNodeService
+from services.mounting_node_service import MountingNodePermissionError, MountingNodeService
 
 
 class MountingNodeServiceTests(unittest.TestCase):
@@ -948,12 +948,132 @@ class MountingNodeServiceTests(unittest.TestCase):
             self.assertEqual(own_detail["ownership_type"], "mine")
             self.assertTrue(own_detail["is_owner"])
             self.assertFalse(own_detail["is_system"])
+            self.assertTrue(own_detail["can_edit"])
+            self.assertTrue(own_detail["can_delete"])
             self.assertEqual(system_detail["ownership_type"], "system")
             self.assertTrue(system_detail["is_system"])
             self.assertFalse(system_detail["is_owner"])
+            self.assertFalse(system_detail["can_edit"])
+            self.assertFalse(system_detail["can_delete"])
             self.assertEqual(private_admin_detail["ownership_type"], "user")
             self.assertFalse(private_admin_detail["is_owner"])
             self.assertFalse(private_admin_detail["is_system"])
+            self.assertTrue(private_admin_detail["can_edit"])
+            self.assertTrue(private_admin_detail["can_delete"])
+        finally:
+            session.close()
+            engine.dispose()
+
+    def test_create_update_and_delete_respect_ownership_permissions(self) -> None:
+        session, engine = self._build_session()
+        try:
+            admin = self._create_user(session, email="admin@example.com", role="admin")
+            user_a = self._create_user(session, email="user-a@example.com", role="free")
+            user_b = self._create_user(session, email="user-b@example.com", role="free")
+            fitting = self._create_fitting(session, name="Fit A", code="fit-a", article="A")
+            nested_template = self._create_template(session, fitting.id, name="Nested Template")
+            self._create_point(session, nested_template.id, x_mm=0, y_mm=0, z_mm=0)
+            service = MountingNodeService(session=session)
+
+            admin_node = service.create_mounting_node(
+                {
+                    "name": "Admin system node",
+                    "items": [{"fitting_id": fitting.id, "quantity": 1}],
+                },
+                viewer_user_id=admin.id,
+                viewer_role=admin.role,
+            )
+            own_node = service.create_mounting_node(
+                {
+                    "name": "Own node",
+                    "items": [{"fitting_id": fitting.id, "quantity": 1}],
+                    "templates": [{"template_id": nested_template.id, "is_default": True}],
+                },
+                viewer_user_id=user_a.id,
+                viewer_role=user_a.role,
+            )
+            foreign_node = service.create_mounting_node(
+                {
+                    "name": "Foreign node",
+                    "items": [{"fitting_id": fitting.id, "quantity": 1}],
+                },
+                viewer_user_id=user_b.id,
+                viewer_role=user_b.role,
+            )
+
+            self.assertIsNone(admin_node["owner_user_id"])
+            self.assertEqual(admin_node["created_by_user_id"], admin.id)
+            self.assertEqual(admin_node["updated_by_user_id"], admin.id)
+            self.assertTrue(admin_node["can_edit"])
+            self.assertTrue(admin_node["can_delete"])
+
+            self.assertEqual(own_node["owner_user_id"], user_a.id)
+            self.assertEqual(own_node["created_by_user_id"], user_a.id)
+            self.assertEqual(own_node["updated_by_user_id"], user_a.id)
+            self.assertTrue(own_node["can_edit"])
+            self.assertTrue(own_node["can_delete"])
+
+            updated_own_node = service.update_mounting_node(
+                own_node["id"],
+                {"description": "Updated"},
+                viewer_user_id=user_a.id,
+                viewer_role=user_a.role,
+            )
+            self.assertIsNotNone(updated_own_node)
+            self.assertEqual(updated_own_node["updated_by_user_id"], user_a.id)
+            self.assertTrue(updated_own_node["can_edit"])
+            self.assertTrue(updated_own_node["can_delete"])
+
+            with self.assertRaises(MountingNodePermissionError):
+                service.update_mounting_node(
+                    admin_node["id"],
+                    {"description": "Blocked"},
+                    viewer_user_id=user_a.id,
+                    viewer_role=user_a.role,
+                )
+
+            self.assertIsNone(
+                service.update_mounting_node(
+                    foreign_node["id"],
+                    {"description": "Blocked"},
+                    viewer_user_id=user_a.id,
+                    viewer_role=user_a.role,
+                )
+            )
+
+            self.assertTrue(
+                service.delete_mounting_node(
+                    own_node["id"],
+                    viewer_user_id=user_a.id,
+                    viewer_role=user_a.role,
+                )
+            )
+            self.assertIsNone(
+                service.get_mounting_node(
+                    own_node["id"],
+                    viewer_user_id=user_a.id,
+                    viewer_role=user_a.role,
+                )
+            )
+
+            with self.assertRaises(MountingNodePermissionError):
+                service.delete_mounting_node(
+                    admin_node["id"],
+                    viewer_user_id=user_a.id,
+                    viewer_role=user_a.role,
+                )
+
+            self.assertIsNone(
+                service.delete_mounting_node(
+                    foreign_node["id"],
+                    viewer_user_id=user_a.id,
+                    viewer_role=user_a.role,
+                )
+            )
+
+            deleted_template = session.get(FittingHoleTemplateModel, nested_template.id)
+            self.assertIsNone(deleted_template)
+            self.assertEqual(session.query(FittingHolePointModel).count(), 0)
         finally:
             session.close()
             engine.dispose()

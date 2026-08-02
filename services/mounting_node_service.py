@@ -16,6 +16,10 @@ from database.session import SessionLocal
 from database.models.service_drilling_rule import ServiceDrillingRuleModel
 
 
+class MountingNodePermissionError(PermissionError):
+    pass
+
+
 class MountingNodeService:
     _ALLOWED_MOUNTING_VARIANT_KEYS = {
         "surface_mount",
@@ -183,6 +187,8 @@ class MountingNodeService:
         is_admin = self._is_admin_role(viewer_role)
         is_system = owner_user_id is None
         is_owner = bool(owner_user_id and normalized_viewer_user_id and owner_user_id == normalized_viewer_user_id)
+        can_edit = bool(is_admin or is_owner)
+        can_delete = bool(is_admin or is_owner)
 
         if is_system:
             ownership_type = "system"
@@ -198,7 +204,60 @@ class MountingNodeService:
             "ownership_type": ownership_type,
             "is_system": is_system,
             "is_owner": is_owner,
+            "can_edit": can_edit,
+            "can_delete": can_delete,
         }
+
+    def _assert_mutation_access(
+        self,
+        node: MountingNodeModel,
+        *,
+        viewer_user_id: Any = None,
+        viewer_role: Any = None,
+    ) -> dict[str, Any] | None:
+        access_snapshot = self._resolve_ownership_snapshot(
+            node,
+            viewer_user_id=viewer_user_id,
+            viewer_role=viewer_role,
+        )
+
+        normalized_viewer_user_id = self._normalize_viewer_user_id(viewer_user_id)
+        if not normalized_viewer_user_id and not self._is_admin_role(viewer_role):
+            return access_snapshot
+
+        if self._is_admin_role(viewer_role):
+            return access_snapshot
+
+        if access_snapshot["is_system"]:
+            raise MountingNodePermissionError("System mounting node access is restricted")
+
+        if not access_snapshot["is_owner"]:
+            return None
+
+        return access_snapshot
+
+    def _resolve_create_ownership(
+        self,
+        payload: Mapping[str, Any],
+        *,
+        viewer_user_id: Any = None,
+        viewer_role: Any = None,
+    ) -> tuple[str | None, str | None, str | None]:
+        normalized_viewer_user_id = self._normalize_viewer_user_id(viewer_user_id)
+        legacy_owner_user_id = self._optional_text(payload.get("owner_user_id"))
+        legacy_created_by_user_id = self._optional_text(payload.get("created_by_user_id"))
+        legacy_updated_by_user_id = self._optional_text(payload.get("updated_by_user_id"))
+
+        if self._is_admin_role(viewer_role):
+            owner_user_id = None
+        elif normalized_viewer_user_id:
+            owner_user_id = normalized_viewer_user_id
+        else:
+            owner_user_id = legacy_owner_user_id
+
+        created_by_user_id = normalized_viewer_user_id or legacy_created_by_user_id
+        updated_by_user_id = normalized_viewer_user_id or legacy_updated_by_user_id
+        return owner_user_id, created_by_user_id, updated_by_user_id
 
     @staticmethod
     def _serialize_item(item) -> dict[str, Any]:
@@ -855,10 +914,28 @@ class MountingNodeService:
         **kwargs: Any,
     ) -> dict[str, Any]:
         payload = self._merge_payload(data, **kwargs)
+        return self._create_mounting_node(
+            payload,
+            viewer_user_id=payload.get("viewer_user_id"),
+            viewer_role=payload.get("viewer_role"),
+        )
+
+    def _create_mounting_node(
+        self,
+        payload: Mapping[str, Any],
+        *,
+        viewer_user_id: Any = None,
+        viewer_role: Any = None,
+    ) -> dict[str, Any]:
         name = self._require_text(payload.get("name"), "name")
         code = self._optional_text(payload.get("code")) or self._generate_code(name)
         description = self._optional_text(payload.get("description"))
         is_active = self._normalize_bool(payload.get("is_active"), True)
+        owner_user_id, created_by_user_id, updated_by_user_id = self._resolve_create_ownership(
+            payload,
+            viewer_user_id=viewer_user_id,
+            viewer_role=viewer_role,
+        )
 
         items = self._resolve_items(list(payload.get("items") or []))
         allowed_fitting_ids = {item["fitting_id"] for item in items}
@@ -874,9 +951,9 @@ class MountingNodeService:
                 name=name,
                 description=description,
                 is_active=is_active,
-                owner_user_id=self._optional_text(payload.get("owner_user_id")),
-                created_by_user_id=self._optional_text(payload.get("created_by_user_id")),
-                updated_by_user_id=self._optional_text(payload.get("updated_by_user_id")),
+                owner_user_id=owner_user_id,
+                created_by_user_id=created_by_user_id,
+                updated_by_user_id=updated_by_user_id,
             )
             self.repository.replace_items(node, items)
             resolved_templates: list[dict[str, Any]] = []
@@ -895,7 +972,11 @@ class MountingNodeService:
             self.session.flush()
 
         refreshed = self.repository.get_node_by_id(node.id)
-        return self._serialize_node(refreshed or node)
+        return self._serialize_node(
+            refreshed or node,
+            viewer_user_id=viewer_user_id,
+            viewer_role=viewer_role,
+        )
 
     def update_mounting_node(
         self,
@@ -903,13 +984,37 @@ class MountingNodeService:
         data: Optional[Mapping[str, Any]] = None,
         **kwargs: Any,
     ) -> dict[str, Any] | None:
+        payload = self._merge_payload(data, **kwargs)
+        return self._update_mounting_node(
+            node_id,
+            payload,
+            viewer_user_id=payload.get("viewer_user_id"),
+            viewer_role=payload.get("viewer_role"),
+        )
+
+    def _update_mounting_node(
+        self,
+        node_id: int,
+        payload: Mapping[str, Any],
+        *,
+        viewer_user_id: Any = None,
+        viewer_role: Any = None,
+    ) -> dict[str, Any] | None:
         node_id = self._require_int(node_id, "node_id")
         node = self.repository.get_node_by_id(node_id)
         if node is None:
             return None
 
-        payload = self._merge_payload(data, **kwargs)
+        access_snapshot = self._assert_mutation_access(
+            node,
+            viewer_user_id=viewer_user_id,
+            viewer_role=viewer_role,
+        )
+        if access_snapshot is None:
+            return None
+
         update_fields: dict[str, Any] = {}
+        normalized_viewer_user_id = self._normalize_viewer_user_id(viewer_user_id)
 
         if "code" in payload:
             code = self._optional_text(payload.get("code"))
@@ -928,6 +1033,9 @@ class MountingNodeService:
 
         if "is_active" in payload:
             update_fields["is_active"] = self._normalize_bool(payload.get("is_active"), True)
+
+        if normalized_viewer_user_id:
+            update_fields["updated_by_user_id"] = normalized_viewer_user_id
 
         items_payload = payload.get("items")
         templates_payload = payload.get("templates")
@@ -977,7 +1085,50 @@ class MountingNodeService:
         refreshed = self.repository.get_node_by_id(node.id)
         if refreshed is None:
             return None
-        return self._serialize_node(refreshed)
+        return self._serialize_node(
+            refreshed,
+            viewer_user_id=viewer_user_id,
+            viewer_role=viewer_role,
+        )
+
+    def delete_mounting_node(
+        self,
+        node_id: int,
+        *,
+        viewer_user_id: Any = None,
+        viewer_role: Any = None,
+    ) -> bool | None:
+        node_id = self._require_int(node_id, "node_id")
+        node = self.repository.get_node_by_id(node_id)
+        if node is None:
+            return None
+
+        access_snapshot = self._assert_mutation_access(
+            node,
+            viewer_user_id=viewer_user_id,
+            viewer_role=viewer_role,
+        )
+        if access_snapshot is None:
+            return None
+
+        linked_templates = list(getattr(node, "templates", []) or [])
+
+        self.session.rollback()
+        with self.session.begin():
+            self.session.delete(node)
+            self.session.flush()
+
+            for link in linked_templates:
+                template = getattr(link, "template", None)
+                if template is not None:
+                    self.session.delete(template)
+
+            self.session.flush()
+
+        return True
 
 
-__all__ = ["MountingNodeService"]
+__all__ = [
+    "MountingNodePermissionError",
+    "MountingNodeService",
+]
