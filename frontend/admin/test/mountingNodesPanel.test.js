@@ -8,29 +8,26 @@ function loadBuildNodeEditorContextFromSource() {
     new URL("../src/components/processing/MountingNodesPanelRefined.jsx", import.meta.url),
   );
   const source = readFileSync(sourcePath, "utf8");
+  const helperPath = fileURLToPath(new URL("../src/mountingNodesEditor.js", import.meta.url));
+  const helperSource = readFileSync(helperPath, "utf8");
   const buildNodeEditorContextSource = source.slice(
     source.indexOf("function buildNodeEditorContext(nodeDetail, fallbackNodeId = \"\") {"),
     source.indexOf("function buildNodeReturnState({"),
   );
-  const getNodePrimaryTemplateSource = source.slice(
-    source.indexOf("function getNodePrimaryTemplate(nodeDetail) {"),
-    source.indexOf("function getNodeEditorTemplateSource(nodeDetail) {"),
-  );
-  const getNodeEditorTemplateSource = source.slice(
-    source.indexOf("function getNodeEditorTemplateSource(nodeDetail) {"),
-    source.indexOf("function getNodeVariantOptions(language) {"),
+  const helperBlockSource = helperSource.slice(
+    helperSource.indexOf("function normalizeText(value) {"),
+    helperSource.indexOf("function buildTemplatePayload({"),
   );
 
-  if (!buildNodeEditorContextSource || !getNodePrimaryTemplateSource || !getNodeEditorTemplateSource) {
+  if (!buildNodeEditorContextSource || !helperBlockSource) {
     throw new Error("Unable to isolate the mounting node editor helper block.");
   }
 
-  const helperSource = [
-    getNodePrimaryTemplateSource,
-    getNodeEditorTemplateSource,
+  const combinedSource = [
+    helperBlockSource.replace("export function resolveMountingNodeEditorContext", "function resolveMountingNodeEditorContext"),
     buildNodeEditorContextSource.replace("export function buildNodeEditorContext", "function buildNodeEditorContext"),
   ].join("\n");
-  return new Function(`${helperSource}; return buildNodeEditorContext;`)();
+  return new Function(`${combinedSource}; return buildNodeEditorContext;`)();
 }
 
 test("mounting nodes panel keeps the DETAIL white panel free of breadcrumb markup", () => {
@@ -75,10 +72,14 @@ test("mounting nodes panel keeps the DETAIL white panel free of breadcrumb marku
   assert.equal(source.includes("Open editor and 3D"), true);
   assert.equal(source.includes("Delete mounting node"), true);
   assert.equal(source.includes("mounting-node-detail-variant-portal"), true);
+  assert.equal(source.includes("resolveMountingNodeEditorContext"), true);
   assert.equal(source.includes("findNearestVerticalScrollAncestor"), true);
   assert.equal(source.includes("scrollNearestVerticalAncestorBy"), true);
   assert.equal(source.includes("calculateVariantDropdownScrollDelta"), true);
   assert.equal(source.includes("variantDropdownPreparing"), true);
+  assert.equal(source.includes("selectedNodePrimaryTemplate?.template"), true);
+  assert.equal(source.includes("selectedTemplateSource"), true);
+  assert.equal(source.includes("setSelectedNodeVariantKey(selectedNodeCurrentVariantKey);"), true);
 
   const cardVisualsStart = source.indexOf('<div className="mounting-node-card-visuals">');
   const rowVisualsStart = source.indexOf('<div className="mounting-node-row-visuals">');
@@ -155,6 +156,40 @@ test("mounting nodes panel builds editor context from the full detail template l
   });
 });
 
+test("mounting nodes panel builds editor context from legacy flat template objects", () => {
+  const buildNodeEditorContext = loadBuildNodeEditorContextFromSource();
+  const nodeDetail = {
+    id: 11,
+    code: "legacy-node",
+    name: "Legacy node",
+    templates: [
+      {
+        id: 8800,
+        fitting_id: 77,
+        mounting_variant_key: "drawer_slides",
+        points: [],
+      },
+    ],
+    items: [
+      {
+        fitting_id: 77,
+        quantity: 1,
+      },
+    ],
+  };
+
+  assert.deepEqual(buildNodeEditorContext(nodeDetail), {
+    mountingNodeId: "11",
+    nodeCode: "legacy-node",
+    nodeName: "Legacy node",
+    fittingId: "77",
+    templateId: "8800",
+    mountingVariantKey: "drawer_slides",
+    nodeDetail,
+    points: [],
+  });
+});
+
 test("mounting nodes panel keeps the same image extraction contract for grid and list thumbnails", () => {
   const sourcePath = fileURLToPath(
     new URL("../src/components/processing/MountingNodesPanelRefined.jsx", import.meta.url),
@@ -168,8 +203,8 @@ test("mounting nodes panel keeps the same image extraction contract for grid and
   assert.equal(source.includes("renderNodeItemGallery(nodeDetail?.items, language, t, fittingThumbnailStateById)"), true);
   assert.equal(source.includes("No images"), true);
   assert.equal(source.includes("getNodeEditorTemplateSource"), true);
-  assert.equal(source.includes("actualTemplate?.template_id"), true);
-  assert.equal(source.includes("templateLink?.template_id"), true);
+  assert.equal(source.includes("actualTemplate"), true);
+  assert.equal(source.includes("templateLink"), true);
   assert.equal(source.includes("points,"), true);
 });
 

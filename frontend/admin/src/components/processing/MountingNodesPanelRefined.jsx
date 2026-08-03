@@ -11,7 +11,10 @@ import {
   updateMountingNode,
 } from "../../api.js";
 import { getProcessingTemplateMountingVariantLabel } from "../../processingTemplates.js";
-import { buildMountingNodeEditorSavePayload } from "../../mountingNodesEditor.js";
+import {
+  buildMountingNodeEditorSavePayload,
+  resolveMountingNodeEditorContext,
+} from "../../mountingNodesEditor.js";
 import surfaceMountIcon from "../../assets/hole-mounting/surface_mount.png";
 import faceToEdgeIcon from "../../assets/hole-mounting/face_to_edge.png";
 import edgeToEdgeIcon from "../../assets/hole-mounting/edge_to_edge.png";
@@ -289,37 +292,18 @@ function getOwnershipLabel(node, language) {
 }
 
 export function buildNodeEditorContext(nodeDetail, fallbackNodeId = "") {
-  if (!nodeDetail || typeof nodeDetail !== "object") {
-    return null;
-  }
+  const resolvedContext = resolveMountingNodeEditorContext(
+    nodeDetail && typeof nodeDetail === "object" ? nodeDetail : null,
+    fallbackNodeId,
+  );
 
-  const { actualTemplate, points, templateLink } = getNodeEditorTemplateSource(nodeDetail);
-  const primaryItem = nodeDetail.items?.[0] || null;
-  const mountingNodeId = String(nodeDetail.id || nodeDetail.node_id || fallbackNodeId || "").trim();
-
-  if (!mountingNodeId) {
+  if (!resolvedContext) {
     return null;
   }
 
   return {
-    mountingNodeId,
-    nodeCode: String(nodeDetail.code || "").trim(),
-    nodeName: String(nodeDetail.name || "").trim(),
-    fittingId: String(actualTemplate?.fitting_id || templateLink?.fitting_id || primaryItem?.fitting_id || "").trim(),
-    templateId: String(
-      actualTemplate?.template_id ||
-        (actualTemplate && actualTemplate !== templateLink ? actualTemplate.id : "") ||
-        templateLink?.template_id ||
-        "",
-    ).trim(),
-    mountingVariantKey: String(
-      actualTemplate?.mounting_variant_key ||
-        templateLink?.mounting_variant_key ||
-        nodeDetail.mounting_variant_key ||
-        "surface_mount",
-    ).trim(),
-    nodeDetail,
-    points,
+    ...resolvedContext,
+    nodeCode: String(nodeDetail?.code || "").trim(),
   };
 }
 
@@ -1296,8 +1280,12 @@ export default function MountingNodesPanelRefined({
       return;
     }
 
+    const selectedTemplateSource =
+      selectedNodePrimaryTemplate?.template && typeof selectedNodePrimaryTemplate.template === "object"
+        ? selectedNodePrimaryTemplate.template
+        : selectedNodePrimaryTemplate;
     const nextTemplate = {
-      ...selectedNodePrimaryTemplate,
+      ...selectedTemplateSource,
       mounting_variant_key: normalizedVariantKey,
     };
 
@@ -1315,6 +1303,7 @@ export default function MountingNodesPanelRefined({
 
       if (!result.success || !result.node) {
         setVariantSaveError(result.error || (language === "uk" ? "Не вдалося зберегти варіант кріплення." : "Unable to save mounting variant."));
+        setSelectedNodeVariantKey(selectedNodeCurrentVariantKey);
         return;
       }
 
@@ -1332,6 +1321,7 @@ export default function MountingNodesPanelRefined({
       setVariantConfirmOpen(false);
     } catch (error) {
       setVariantSaveError(error?.message || (language === "uk" ? "Не вдалося зберегти варіант кріплення." : "Unable to save mounting variant."));
+      setSelectedNodeVariantKey(selectedNodeCurrentVariantKey);
     } finally {
       setVariantSaveLoading(false);
     }
@@ -1368,13 +1358,15 @@ export default function MountingNodesPanelRefined({
     onOpenMountingNodeCreate(returnState);
   }
 
-  function handleOpenEditor(nodeDetail = selectedNodeDetail) {
-    if (!nodeDetail || typeof onOpenMountingNodeEditor !== "function") {
+  function handleOpenEditor(nodeDetail = selectedNodeDetail || nodeDetailsById[String(selectedNodeId)] || null) {
+    const resolvedNodeDetail = nodeDetail || selectedNodeDetail || nodeDetailsById[String(selectedNodeId)] || null;
+
+    if (!resolvedNodeDetail || typeof onOpenMountingNodeEditor !== "function") {
       setOpenEditorError(language === "uk" ? "Не вдалося відкрити редактор: відсутній ідентифікатор монтажного вузла." : "Unable to open the editor: missing mounting node identifier.");
       return;
     }
 
-    const resolvedNodeId = String(nodeDetail.id || nodeDetail.node_id || selectedNodeId || "").trim();
+    const resolvedNodeId = String(resolvedNodeDetail.id || resolvedNodeDetail.node_id || selectedNodeId || "").trim();
     if (!resolvedNodeId) {
       setOpenEditorError(language === "uk" ? "Не вдалося відкрити редактор: відсутній ідентифікатор монтажного вузла." : "Unable to open the editor: missing mounting node identifier.");
       return;
@@ -1393,14 +1385,14 @@ export default function MountingNodesPanelRefined({
       restoreScrollOnMount: true,
       scrollPosition: typeof window !== "undefined" ? window.scrollY : 0,
       searchInput,
-      selectedNodeDetail: nodeDetail,
+      selectedNodeDetail: resolvedNodeDetail,
       selectedNodeId: resolvedNodeId,
       selectedNodeLoading: false,
       nextViewMode: "detail",
     });
     pendingReturnStateRef.current = nextReturnState;
     setOpenEditorError("");
-    onOpenMountingNodeEditor(buildNodeEditorContext(nodeDetail, resolvedNodeId), nextReturnState);
+    onOpenMountingNodeEditor(buildNodeEditorContext(resolvedNodeDetail, resolvedNodeId), nextReturnState);
   }
 
   function handleOpenDeleteConfirm() {

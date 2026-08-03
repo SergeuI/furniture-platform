@@ -85,6 +85,101 @@ function normalizePoint(point, templateId) {
   return normalizedPoint;
 }
 
+function resolveMountingNodeTemplateSource(template) {
+  if (!template || typeof template !== "object") {
+    return null;
+  }
+
+  if (template.template && typeof template.template === "object") {
+    return template.template;
+  }
+
+  return template;
+}
+
+function resolveMountingNodeTemplateLink(nodeDetail) {
+  const templates = Array.isArray(nodeDetail?.templates)
+    ? nodeDetail.templates.filter((template) => template && typeof template === "object")
+    : [];
+  const primaryTemplateLink = templates.find((template) => template?.is_default) || templates[0] || null;
+  const linkedTemplate =
+    primaryTemplateLink?.template && typeof primaryTemplateLink.template === "object"
+      ? primaryTemplateLink.template
+      : primaryTemplateLink?.fitting_hole_template && typeof primaryTemplateLink.fitting_hole_template === "object"
+        ? primaryTemplateLink.fitting_hole_template
+        : null;
+
+  return {
+    actualTemplate: linkedTemplate || primaryTemplateLink || null,
+    primaryTemplateLink,
+    templates,
+  };
+}
+
+function resolveMountingNodeTemplateId(template, fallbackTemplateId = "") {
+  if (!template || typeof template !== "object") {
+    return normalizeText(fallbackTemplateId);
+  }
+
+  if (template.template && typeof template.template === "object") {
+    return normalizeText(template.template.id || template.template.template_id || fallbackTemplateId);
+  }
+
+  return normalizeText(template.template_id || template.id || fallbackTemplateId);
+}
+
+export function resolveMountingNodeEditorContext(nodeDetail, fallbackNodeId = "") {
+  if (!nodeDetail || typeof nodeDetail !== "object") {
+    return null;
+  }
+
+  const { actualTemplate, primaryTemplateLink } = resolveMountingNodeTemplateLink(nodeDetail);
+  const primaryItem = Array.isArray(nodeDetail.items) ? nodeDetail.items[0] || null : null;
+  const mountingNodeId = normalizeText(nodeDetail.id || nodeDetail.node_id || fallbackNodeId);
+
+  if (!mountingNodeId) {
+    return null;
+  }
+
+  const hasTemplateLinkShape = Boolean(
+    primaryTemplateLink &&
+      (Object.prototype.hasOwnProperty.call(primaryTemplateLink, "template_id") ||
+        Object.prototype.hasOwnProperty.call(primaryTemplateLink, "template") ||
+        Object.prototype.hasOwnProperty.call(primaryTemplateLink, "fitting_hole_template")),
+  );
+  const templateId = normalizeText(
+    actualTemplate?.template_id ||
+      (actualTemplate && actualTemplate !== primaryTemplateLink ? actualTemplate.id : "") ||
+      primaryTemplateLink?.template_id ||
+      (!hasTemplateLinkShape ? primaryTemplateLink?.id : "") ||
+      nodeDetail.template_id,
+  );
+  const fittingId = normalizeText(
+    actualTemplate?.fitting_id || primaryTemplateLink?.fitting_id || primaryItem?.fitting_id || nodeDetail.fitting_id,
+  );
+  const mountingVariantKey = normalizeText(
+    actualTemplate?.mounting_variant_key ||
+      primaryTemplateLink?.mounting_variant_key ||
+      nodeDetail.mounting_variant_key ||
+      "surface_mount",
+  );
+  const points = Array.isArray(actualTemplate?.points)
+    ? actualTemplate.points
+    : Array.isArray(primaryTemplateLink?.points)
+      ? primaryTemplateLink.points
+      : [];
+
+  return {
+    fittingId,
+    mountingNodeId,
+    mountingVariantKey,
+    nodeDetail,
+    nodeName: normalizeText(nodeDetail.name),
+    points,
+    templateId,
+  };
+}
+
 function buildTemplatePayload({
   link = {},
   template = null,
@@ -148,7 +243,7 @@ export function canSaveMountingNodeEditor({
 } = {}) {
   const mountingNodeId = normalizeText(context?.mountingNodeId);
   const nodeDetail = context?.nodeDetail && typeof context.nodeDetail === "object" ? context.nodeDetail : null;
-  const templateId = normalizeText(selectedTemplate?.id || context?.templateId);
+  const templateId = resolveMountingNodeTemplateId(selectedTemplate, context?.templateId);
 
   return Boolean(
     mountingNodeId &&
@@ -173,7 +268,8 @@ export function buildMountingNodeEditorSavePayload({
 
   const mountingNodeId = normalizeText(context?.mountingNodeId);
   const nodeDetail = context?.nodeDetail && typeof context.nodeDetail === "object" ? context.nodeDetail : null;
-  const templateId = normalizeText(selectedTemplate?.id || context?.templateId);
+  const selectedTemplateSource = resolveMountingNodeTemplateSource(selectedTemplate);
+  const templateId = resolveMountingNodeTemplateId(selectedTemplate, context?.templateId);
 
   if (!mountingNodeId) {
     throw new Error("Mounting node ID is required");
@@ -190,7 +286,7 @@ export function buildMountingNodeEditorSavePayload({
   const items = Array.isArray(nodeDetail.items) ? nodeDetail.items.map(normalizeNodeItem) : [];
   const templates = Array.isArray(nodeDetail.templates) ? nodeDetail.templates : [];
   const currentTemplateIndex = templates.findIndex((link) => {
-    const linkTemplateId = normalizeText(link?.template_id || link?.template?.id);
+    const linkTemplateId = resolveMountingNodeTemplateId(link);
     return linkTemplateId === templateId;
   });
   const currentTemplateLink = currentTemplateIndex >= 0 ? templates[currentTemplateIndex] : null;
@@ -200,14 +296,14 @@ export function buildMountingNodeEditorSavePayload({
       is_default: normalizeBoolean(selectedTemplate?.is_default, false),
       order_index: 0,
     },
-    template: selectedTemplate,
+    template: selectedTemplateSource,
     points,
     isCurrentTemplate: true,
     currentTemplateId: templateId,
   });
 
   const nextTemplates = templates.map((link) => {
-    const linkTemplateId = normalizeText(link?.template_id || link?.template?.id);
+    const linkTemplateId = resolveMountingNodeTemplateId(link);
     if (linkTemplateId === templateId) {
       return currentTemplatePayload;
     }
