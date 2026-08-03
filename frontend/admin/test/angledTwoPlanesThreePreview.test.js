@@ -114,6 +114,14 @@ test("angled two planes preview exposes separate vertical and horizontal panel m
   assert.equal(layout.panels[0].opacity, 0.28);
   assert.equal(layout.panels[1].opacity, 0.28);
   assert.deepEqual(
+    layout.verticalPanel.position.map((value) => Number(value.toFixed(3))),
+    [-0.09, 1.025, 0],
+  );
+  assert.deepEqual(
+    layout.horizontalPanel.position.map((value) => Number(value.toFixed(3))),
+    [1.025, -0.09, 0],
+  );
+  assert.deepEqual(
     layout.verticalPanel.pointToWorld({ y_mm: 20, z_mm: 0 }).map((value) => Number(value.toFixed(3))),
     [0, 0.2, 0],
   );
@@ -121,8 +129,10 @@ test("angled two planes preview exposes separate vertical and horizontal panel m
     layout.horizontalPanel.pointToWorld({ x_mm: 80, z_mm: 0 }).map((value) => Number(value.toFixed(3))),
     [0.8, 0, 0],
   );
-  assert.equal(Number(layout.verticalPanel.autoFitBounds.height.toFixed(3)), 0.75);
-  assert.equal(Number(layout.horizontalPanel.autoFitBounds.width.toFixed(3)), 1.16);
+  assert.equal(Number(layout.verticalPanel.autoFitBounds.height.toFixed(3)), 2.05);
+  assert.equal(Number(layout.horizontalPanel.autoFitBounds.width.toFixed(3)), 2.05);
+  assert.deepEqual(layout.sceneOrigin, [0, 0, 0]);
+  assert.deepEqual(layout.markerPlane.origin, [0, 0, 0]);
 });
 
 test("angled two planes preview auto-fits the vertical panel independently from the horizontal panel", () => {
@@ -147,10 +157,12 @@ test("angled two planes preview auto-fits the vertical panel independently from 
     },
   ]);
 
-  assert.equal(Number(layout.panels[0].args[1].toFixed(3)) > 2.05, true);
+  assert.equal(Number(layout.panels[0].args[1].toFixed(3)), 3.36);
   assert.equal(Number(layout.panels[1].args[0].toFixed(3)), 2.05);
-  assert.equal(Number(dimensions.verticalHeight.toFixed(3)) > 2.05, true);
+  assert.equal(Number(dimensions.verticalHeight.toFixed(3)), 3.36);
   assert.equal(Number(dimensions.horizontalWidth.toFixed(3)), 2.05);
+  assert.deepEqual(layout.sceneOrigin, [0, 0, 0]);
+  assert.deepEqual(layout.markerPlane.origin, [0, 0, 0]);
 });
 
 test("angled two planes preview auto-fits the horizontal panel independently from the vertical panel", () => {
@@ -175,10 +187,12 @@ test("angled two planes preview auto-fits the horizontal panel independently fro
     },
   ]);
 
-  assert.equal(Number(layout.panels[1].args[0].toFixed(3)) > 2.05, true);
+  assert.equal(Number(layout.panels[1].args[0].toFixed(3)), 3.36);
   assert.equal(Number(layout.panels[0].args[1].toFixed(3)), 2.05);
-  assert.equal(Number(dimensions.horizontalWidth.toFixed(3)) > 2.05, true);
+  assert.equal(Number(dimensions.horizontalWidth.toFixed(3)), 3.36);
   assert.equal(Number(dimensions.verticalHeight.toFixed(3)), 2.05);
+  assert.deepEqual(layout.sceneOrigin, [0, 0, 0]);
+  assert.deepEqual(layout.markerPlane.origin, [0, 0, 0]);
 });
 
 test("angled two planes preview skips holes with no resolved panel key instead of falling back", () => {
@@ -216,15 +230,17 @@ test("angled two planes preview auto-fits a vertical point 58 hole without forci
   assert.equal(Number(volume.holeRadius.toFixed(3)), 0.045);
   assert.equal(Number(dimensions.maxRadiusScene.toFixed(3)), 0.025);
   assert.equal(Number(dimensions.visualMarginScene.toFixed(3)), 0.3);
-  assert.equal(Number(dimensions.verticalHeight.toFixed(3)), 0.75);
-  assert.equal(Number(layout.panels[0].args[1].toFixed(3)), 0.75);
+  assert.equal(Number(dimensions.verticalHeight.toFixed(3)), 2.05);
+  assert.equal(Number(layout.panels[0].args[1].toFixed(3)), 2.05);
   assert.equal(Number(layout.markerPlane.spanU.toFixed(3)), 2.05);
-  assert.equal(Number(layout.markerPlane.spanV.toFixed(3)), 1.8);
-  assert.deepEqual(layout.panels[0].position.map((value) => Number(value.toFixed(3))), [-0.09, 0.375, 0]);
+  assert.equal(Number(layout.markerPlane.spanV.toFixed(3)), 2.05);
+  assert.deepEqual(layout.panels[0].position.map((value) => Number(value.toFixed(3))), [-0.09, 1.025, 0]);
   assert.deepEqual(layout.panels[1].position.map((value) => Number(value.toFixed(3))), [1.025, -0.09, 0]);
-  assert.equal(Number(layout.panels[0].args[2].toFixed(3)), 1.34);
+  assert.equal(Number(layout.panels[0].args[2].toFixed(3)), 2.65);
   assert.equal(Number(layout.panels[1].args[0].toFixed(3)), 2.05);
-  assert.equal(Number(layout.panels[1].args[2].toFixed(3)), 1.34);
+  assert.equal(Number(layout.panels[1].args[2].toFixed(3)), 2.65);
+  assert.deepEqual(layout.sceneOrigin, [0, 0, 0]);
+  assert.deepEqual(layout.markerPlane.origin, [0, 0, 0]);
 });
 
 test("angled two planes preview auto-fits the horizontal point 91 hole to the actual span", () => {
@@ -240,11 +256,13 @@ test("angled two planes preview auto-fits the horizontal point 91 hole to the ac
   const dimensions = buildAngledTwoPlanesPreviewPanelDimensions([hole]);
   const layout = buildAngledTwoPlanesThreePreviewLayout(18, 18, [hole]);
 
-  assert.equal(Number(dimensions.horizontalWidth.toFixed(3)), 1.225);
-  assert.equal(Number(dimensions.panelDepth.toFixed(3)), 2.325);
-  assert.equal(Number(layout.horizontalPanel.args[0].toFixed(3)), 1.225);
-  assert.equal(Number(layout.horizontalPanel.args[2].toFixed(3)), 2.325);
-  assert.deepEqual(layout.horizontalPanel.position.map((value) => Number(value.toFixed(3))), [0.613, -0.09, 0]);
+  assert.equal(Number(dimensions.horizontalWidth.toFixed(3)), 2.05);
+  assert.equal(Number(dimensions.panelDepth.toFixed(3)), 5.05);
+  assert.equal(Number(layout.horizontalPanel.args[0].toFixed(3)), 2.05);
+  assert.equal(Number(layout.horizontalPanel.args[2].toFixed(3)), 5.05);
+  assert.deepEqual(layout.horizontalPanel.position.map((value) => Number(value.toFixed(3))), [1.025, -0.09, 0]);
+  assert.deepEqual(layout.sceneOrigin, [0, 0, 0]);
+  assert.deepEqual(layout.markerPlane.origin, [0, 0, 0]);
 });
 
 test("angled two planes preview maps the vertical panel hole to the inside corner and sends it inward", () => {

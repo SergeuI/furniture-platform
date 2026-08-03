@@ -6,6 +6,9 @@ export const ANGLED_TWO_PLANES_PREVIEW_THICKNESS_MM_MIN = 4;
 export const ANGLED_TWO_PLANES_PREVIEW_THICKNESS_MM_MAX = 60;
 export const ANGLED_TWO_PLANES_PREVIEW_VISUAL_MARGIN_MM = 30;
 export const ANGLED_TWO_PLANES_PREVIEW_MAX_PANEL_HALF_SIZE_SCENE = 6;
+export const ANGLED_TWO_PLANES_PREVIEW_PANEL_PADDING_MM = 50;
+export const ANGLED_TWO_PLANES_PREVIEW_BASE_PANEL_SPAN_SCENE = 2.05;
+export const ANGLED_TWO_PLANES_PREVIEW_BASE_PANEL_DEPTH_SCENE = 1.34;
 
 const ANGLED_TWO_PLANES_MM_TO_SCENE = 0.01;
 
@@ -62,6 +65,105 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
+function getAngledTwoPlanesPointRadiusScene(hole) {
+  const diameterMm = readNumber(hole, ["diameter_mm", "diameter"]);
+
+  if (!Number.isFinite(diameterMm)) {
+    return 0;
+  }
+
+  return Math.abs(diameterMm) * ANGLED_TWO_PLANES_MM_TO_SCENE * 0.5;
+}
+
+function buildAngledTwoPlanesAxisBounds(sourceHoles, panelKey, valueGetter, baseSpanScene, defaultCenterScene = 0) {
+  const paddingScene = ANGLED_TWO_PLANES_PREVIEW_PANEL_PADDING_MM * ANGLED_TWO_PLANES_MM_TO_SCENE;
+  const values = sourceHoles
+    .filter((hole) => panelKey === null || resolveAngledTwoPlanesPanelKey(hole) === panelKey)
+    .map((hole) => {
+      const value = valueGetter(hole);
+
+      if (!Number.isFinite(value)) {
+        return null;
+      }
+
+      const radiusScene = getAngledTwoPlanesPointRadiusScene(hole);
+      return {
+        max: value + radiusScene,
+        min: value - radiusScene,
+      };
+    })
+    .filter(Boolean);
+
+  if (!values.length) {
+    return {
+      center: defaultCenterScene,
+      max: defaultCenterScene + baseSpanScene / 2,
+      min: defaultCenterScene - baseSpanScene / 2,
+      span: baseSpanScene,
+    };
+  }
+
+  const min = Math.min(...values.map((entry) => entry.min));
+  const max = Math.max(...values.map((entry) => entry.max));
+  let paddedMin;
+  let paddedMax;
+
+  if (min >= 0) {
+    paddedMin = 0;
+    paddedMax = Math.max(baseSpanScene, max + paddingScene);
+  } else if (max <= 0) {
+    paddedMin = Math.min(-baseSpanScene, min - paddingScene);
+    paddedMax = 0;
+  } else {
+    paddedMin = min - paddingScene;
+    paddedMax = max + paddingScene;
+  }
+
+  const span = paddedMax - paddedMin;
+
+  return {
+    center: (paddedMin + paddedMax) / 2,
+    max: paddedMax,
+    min: paddedMin,
+    span,
+  };
+}
+
+function buildAngledTwoPlanesCenteredDepthBounds(sourceHoles, baseSpanScene) {
+  const paddingScene = ANGLED_TWO_PLANES_PREVIEW_PANEL_PADDING_MM * ANGLED_TWO_PLANES_MM_TO_SCENE;
+  const values = sourceHoles
+    .map((hole) => {
+      const zMm = readNumber(hole, ["z_mm", "z"]);
+
+      if (!Number.isFinite(zMm)) {
+        return null;
+      }
+
+      const radiusScene = getAngledTwoPlanesPointRadiusScene(hole);
+      return Math.abs(zMm * ANGLED_TWO_PLANES_MM_TO_SCENE) + radiusScene;
+    })
+    .filter((value) => Number.isFinite(value));
+
+  if (!values.length) {
+    return {
+      center: 0,
+      max: baseSpanScene / 2,
+      min: -baseSpanScene / 2,
+      span: baseSpanScene,
+    };
+  }
+
+  const maxExtent = Math.max(...values) + paddingScene;
+  const extent = Math.max(baseSpanScene / 2, maxExtent);
+
+  return {
+    center: 0,
+    max: extent,
+    min: -extent,
+    span: extent * 2,
+  };
+}
+
 function resolveAngledTwoPlanesPanelKey(hole) {
   const explicitKey = String(
     hole?.panelKey ||
@@ -104,21 +206,29 @@ function buildAngledTwoPlanesPanelModel(panelKey, panelDimensions, verticalPanel
   const isHorizontalPanel = panelKey === "horizontal_panel";
   const thickness = isHorizontalPanel ? horizontalPanelThickness : verticalPanelThickness;
   const inwardNormal = isHorizontalPanel ? [0, -1, 0] : [-1, 0, 0];
+  const position = isHorizontalPanel
+    ? [panelDimensions.horizontalCenter, -thickness / 2, panelDimensions.panelCenter]
+    : [-thickness / 2, panelDimensions.verticalCenter, panelDimensions.panelCenter];
+  const autoFitBounds = isHorizontalPanel
+    ? {
+        center: panelDimensions.horizontalCenter,
+        max: panelDimensions.horizontalMax,
+        min: panelDimensions.horizontalMin,
+        width: panelDimensions.horizontalWidth,
+      }
+    : {
+        center: panelDimensions.verticalCenter,
+        height: panelDimensions.verticalHeight,
+        max: panelDimensions.verticalMax,
+        min: panelDimensions.verticalMin,
+      };
 
   return {
     key: panelKey,
     args: isHorizontalPanel
       ? [panelDimensions.horizontalWidth, thickness, panelDimensions.panelDepth]
       : [thickness, panelDimensions.verticalHeight, panelDimensions.panelDepth],
-    autoFitBounds: isHorizontalPanel
-      ? {
-          depth: panelDimensions.panelDepth,
-          width: panelDimensions.horizontalWidth,
-        }
-      : {
-          depth: panelDimensions.panelDepth,
-          height: panelDimensions.verticalHeight,
-        },
+    autoFitBounds,
     inwardNormal,
     label: isHorizontalPanel ? "Горизонтальна панель" : "Вертикальна панель",
     pointToWorld(point = {}) {
@@ -138,9 +248,7 @@ function buildAngledTwoPlanesPanelModel(panelKey, panelDimensions, verticalPanel
             Number.isFinite(numericZ) ? numericZ * ANGLED_TWO_PLANES_MM_TO_SCENE : 0,
           ];
     },
-    position: isHorizontalPanel
-      ? [panelDimensions.horizontalWidth / 2, -thickness / 2, 0]
-      : [-thickness / 2, panelDimensions.verticalHeight / 2, 0],
+    position,
     rotation: [0, 0, 0],
     workingPlane: isHorizontalPanel
       ? {
@@ -180,76 +288,50 @@ function buildAngledTwoPlanesPanelModels(panelDimensions, verticalPanelThickness
 export function buildAngledTwoPlanesPreviewPanelDimensions(holes = []) {
   const sourceHoles = Array.isArray(holes) ? holes : [];
   const visualMarginScene = ANGLED_TWO_PLANES_PREVIEW_VISUAL_MARGIN_MM * ANGLED_TWO_PLANES_MM_TO_SCENE;
-  const maxPanelDepthScene = ANGLED_TWO_PLANES_PREVIEW_MAX_PANEL_HALF_SIZE_SCENE;
-  const hasVerticalPanelHoles = sourceHoles.some((hole) => resolveAngledTwoPlanesPanelKey(hole) === "vertical_panel");
-  const hasHorizontalPanelHoles = sourceHoles.some((hole) => resolveAngledTwoPlanesPanelKey(hole) === "horizontal_panel");
   const maxRadiusScene = sourceHoles.reduce((maxValue, hole) => {
     const diameterMm = readNumber(hole, ["diameter_mm", "diameter"]);
     const radiusScene = Number.isFinite(diameterMm) ? Math.abs(diameterMm) * 0.005 : 0;
     return Math.max(maxValue, radiusScene);
   }, 0);
-
-  const verticalPanel = sourceHoles.reduce(
-    (accumulator, hole) => {
-      if (resolveAngledTwoPlanesPanelKey(hole) !== "vertical_panel") {
-        return accumulator;
-      }
-
+  const verticalBounds = buildAngledTwoPlanesAxisBounds(
+    sourceHoles,
+    "vertical_panel",
+    (hole) => {
       const yMm = readNumber(hole, ["y_mm", "y"]);
-      const zMm = readNumber(hole, ["z_mm", "z"]);
-
-      return {
-        maxAbsY: Number.isFinite(yMm) ? Math.max(accumulator.maxAbsY, Math.abs(yMm) * ANGLED_TWO_PLANES_MM_TO_SCENE) : accumulator.maxAbsY,
-        maxAbsZ: Number.isFinite(zMm) ? Math.max(accumulator.maxAbsZ, Math.abs(zMm) * ANGLED_TWO_PLANES_MM_TO_SCENE) : accumulator.maxAbsZ,
-      };
+      return Number.isFinite(yMm) ? yMm * ANGLED_TWO_PLANES_MM_TO_SCENE : null;
     },
-    { maxAbsY: 0, maxAbsZ: 0 },
+    ANGLED_TWO_PLANES_PREVIEW_BASE_PANEL_SPAN_SCENE,
+    ANGLED_TWO_PLANES_PREVIEW_BASE_PANEL_SPAN_SCENE / 2,
   );
-
-  const horizontalPanel = sourceHoles.reduce(
-    (accumulator, hole) => {
-      if (resolveAngledTwoPlanesPanelKey(hole) !== "horizontal_panel") {
-        return accumulator;
-      }
-
+  const horizontalBounds = buildAngledTwoPlanesAxisBounds(
+    sourceHoles,
+    "horizontal_panel",
+    (hole) => {
       const xMm = readNumber(hole, ["x_mm", "x"]);
-      const zMm = readNumber(hole, ["z_mm", "z"]);
-
-      return {
-        maxAbsX: Number.isFinite(xMm) ? Math.max(accumulator.maxAbsX, Math.abs(xMm) * ANGLED_TWO_PLANES_MM_TO_SCENE) : accumulator.maxAbsX,
-        maxAbsZ: Number.isFinite(zMm) ? Math.max(accumulator.maxAbsZ, Math.abs(zMm) * ANGLED_TWO_PLANES_MM_TO_SCENE) : accumulator.maxAbsZ,
-      };
+      return Number.isFinite(xMm) ? xMm * ANGLED_TWO_PLANES_MM_TO_SCENE : null;
     },
-    { maxAbsX: 0, maxAbsZ: 0 },
+    ANGLED_TWO_PLANES_PREVIEW_BASE_PANEL_SPAN_SCENE,
+    ANGLED_TWO_PLANES_PREVIEW_BASE_PANEL_SPAN_SCENE / 2,
   );
-
-  const buildAutoFitSize = (contentSizeScene, hasPanelHoles) => {
-    const cappedSize = Math.min(maxPanelDepthScene, contentSizeScene);
-
-    if (!hasPanelHoles) {
-      return Math.max(2.05, cappedSize);
-    }
-
-    return Math.max(0.75, cappedSize);
-  };
+  const depthBounds = buildAngledTwoPlanesCenteredDepthBounds(
+    sourceHoles,
+    ANGLED_TWO_PLANES_PREVIEW_BASE_PANEL_DEPTH_SCENE,
+  );
 
   return {
-    horizontalWidth: buildAutoFitSize(
-      horizontalPanel.maxAbsX + maxRadiusScene + visualMarginScene,
-      hasHorizontalPanelHoles,
-    ),
+    horizontalCenter: horizontalBounds.center,
+    horizontalMax: horizontalBounds.max,
+    horizontalMin: horizontalBounds.min,
+    horizontalWidth: horizontalBounds.span,
     maxRadiusScene,
-    panelDepth: Math.max(
-      1.34,
-      Math.min(
-        maxPanelDepthScene,
-        Math.max(verticalPanel.maxAbsZ, horizontalPanel.maxAbsZ) + maxRadiusScene + visualMarginScene,
-      ),
-    ),
-    verticalHeight: buildAutoFitSize(
-      verticalPanel.maxAbsY + maxRadiusScene + visualMarginScene,
-      hasVerticalPanelHoles,
-    ),
+    panelCenter: depthBounds.center,
+    panelDepth: depthBounds.span,
+    panelDepthMax: depthBounds.max,
+    panelDepthMin: depthBounds.min,
+    verticalCenter: verticalBounds.center,
+    verticalHeight: verticalBounds.span,
+    verticalMax: verticalBounds.max,
+    verticalMin: verticalBounds.min,
     visualMarginScene,
   };
 }
@@ -259,6 +341,7 @@ export function buildAngledTwoPlanesThreePreviewLayout(
   horizontalPanelThicknessMm = ANGLED_TWO_PLANES_PREVIEW_THICKNESS_MM_DEFAULT,
   holes = [],
 ) {
+  const sourceHoles = Array.isArray(holes) ? holes : [];
   const verticalPanelThickness = normalizeAngledTwoPlanesPreviewThicknessMm(verticalPanelThicknessMm) * ANGLED_TWO_PLANES_MM_TO_SCENE;
   const horizontalPanelThickness = normalizeAngledTwoPlanesPreviewThicknessMm(horizontalPanelThicknessMm) * ANGLED_TWO_PLANES_MM_TO_SCENE;
   const panelDimensions = buildAngledTwoPlanesPreviewPanelDimensions(holes);
@@ -277,6 +360,7 @@ export function buildAngledTwoPlanesThreePreviewLayout(
     color: "#b9ffb9",
     opacity: 0.28,
   };
+  const sceneOrigin = [0, 0, 0];
   const styledVerticalPanel = {
     ...verticalPanel,
     ...panelStyle,
@@ -290,12 +374,12 @@ export function buildAngledTwoPlanesThreePreviewLayout(
     camera: [cameraDistance, cameraDistance * 0.66, cameraDistance * 1.16],
     horizontalPanel: styledHorizontalPanel,
     label: "Дві площини під кутом",
-    markerPlane: { axis: "z", origin: [0, 0, 0], spanU: Math.max(panelDimensions.horizontalWidth, 1.6), spanV: Math.max(panelDimensions.verticalHeight, 1.8) },
+    markerPlane: { axis: "z", origin: sceneOrigin, spanU: panelDimensions.horizontalWidth, spanV: panelDimensions.verticalHeight },
     panels: [
       styledVerticalPanel,
       styledHorizontalPanel,
     ],
-    sceneOrigin: [0, 0, 0],
+    sceneOrigin,
     subtitle: "Панель A → Панель B · angled_two_planes",
     verticalPanel: styledVerticalPanel,
   };
