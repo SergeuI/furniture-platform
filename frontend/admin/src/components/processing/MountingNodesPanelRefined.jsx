@@ -569,8 +569,11 @@ export default function MountingNodesPanelRefined({
   editorMode = false,
   initialState = null,
   onOpenMountingNodeCreate = null,
+  onOpenMountingNodeDetail = null,
+  onCloseMountingNodeDetail = null,
   onOpenFittingDetail = null,
   onOpenMountingNodeEditor = null,
+  listRequestToken = 0,
   t,
   token = "",
 }) {
@@ -608,6 +611,7 @@ export default function MountingNodesPanelRefined({
   const [openEditorError, setOpenEditorError] = useState("");
   const listRequestIdRef = useRef(0);
   const detailRequestIdRef = useRef(0);
+  const listRequestTokenRef = useRef(Number(listRequestToken || 0));
   const selectedNodeIdRef = useRef(String(initialReturnState.selectedNodeId || ""));
   const variantDropdownRef = useRef(null);
   const variantDropdownMenuRef = useRef(null);
@@ -619,6 +623,16 @@ export default function MountingNodesPanelRefined({
   useEffect(() => {
     selectedNodeIdRef.current = String(selectedNodeId || "");
   }, [selectedNodeId]);
+
+  useEffect(() => {
+    const nextToken = Number(listRequestToken || 0);
+    if (!nextToken || listRequestTokenRef.current === nextToken) {
+      return;
+    }
+
+    listRequestTokenRef.current = nextToken;
+    setMountingNodesViewMode("list");
+  }, [listRequestToken]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -1209,12 +1223,24 @@ export default function MountingNodesPanelRefined({
   }
 
   function handleSelectNode(nodeId) {
+    const resolvedNodeId = String(nodeId || "").trim();
+    const selectedNode = nodes.find((node) => String(node.id) === resolvedNodeId) || null;
+    const resolvedNodeName = String(selectedNode?.name || "").trim();
+
+    if (typeof onOpenMountingNodeDetail === "function" && resolvedNodeId && resolvedNodeName) {
+      onOpenMountingNodeDetail(resolvedNodeId, resolvedNodeName);
+    }
+
     pendingReturnStateRef.current = captureReturnState("list", false);
-    setSelectedNodeId(String(nodeId || ""));
+    setSelectedNodeId(resolvedNodeId);
     setMountingNodesViewMode("detail");
   }
 
   function handleBackToList() {
+    if (typeof onCloseMountingNodeDetail === "function") {
+      onCloseMountingNodeDetail();
+    }
+
     setMountingNodesViewMode("list");
   }
 
@@ -1379,6 +1405,10 @@ export default function MountingNodesPanelRefined({
         return;
       }
 
+      if (typeof onCloseMountingNodeDetail === "function") {
+        onCloseMountingNodeDetail();
+      }
+
       setDeleteConfirmNode(null);
       setMountingNodesViewMode("list");
       setSelectedNodeId("");
@@ -1517,6 +1547,7 @@ export default function MountingNodesPanelRefined({
                           <p className="mounting-node-card-type">{ownershipLabel}</p>
                         </div>
                         <div className="mounting-node-card-visuals">
+                          {renderNodeItemGallery(nodeDetail?.items, language, t, fittingThumbnailStateById)}
                           {renderNodeCardActions(
                             node,
                             nodeDetail,
@@ -1525,7 +1556,6 @@ export default function MountingNodesPanelRefined({
                             handleSelectNode,
                             handleOpenEditor,
                           )}
-                          {renderNodeItemGallery(nodeDetail?.items, language, t, fittingThumbnailStateById)}
                         </div>
                       </div>
                     </article>
@@ -1560,6 +1590,7 @@ export default function MountingNodesPanelRefined({
                           <p className="mounting-node-card-type">{ownershipLabel}</p>
                         </div>
                         <div className="mounting-node-row-visuals">
+                          {renderNodeItemGallery(nodeDetail?.items, language, t, fittingThumbnailStateById)}
                           <div className="mounting-node-row-actions">
                             {renderNodeCardActions(
                               node,
@@ -1570,7 +1601,6 @@ export default function MountingNodesPanelRefined({
                               handleOpenEditor,
                             )}
                           </div>
-                          {renderNodeItemGallery(nodeDetail?.items, language, t, fittingThumbnailStateById)}
                         </div>
                       </div>
                     </article>

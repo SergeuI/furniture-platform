@@ -7034,6 +7034,10 @@ export default function App() {
   const [catalogHolesMode, setCatalogHolesMode] = useState("list");
   const [catalogHolesOpenContext, setCatalogHolesOpenContext] = useState(null);
   const [catalogHolesReturnState, setCatalogHolesReturnState] = useState(null);
+  const [catalogHolesDetailOpen, setCatalogHolesDetailOpen] = useState(false);
+  const [catalogHolesBreadcrumbNodeId, setCatalogHolesBreadcrumbNodeId] = useState(null);
+  const [catalogHolesBreadcrumbNodeName, setCatalogHolesBreadcrumbNodeName] = useState("");
+  const [catalogHolesListRequestToken, setCatalogHolesListRequestToken] = useState(0);
   const [catalogHolesCreateError, setCatalogHolesCreateError] = useState("");
   const [catalogHolesCreating, setCatalogHolesCreating] = useState(false);
   const [catalogHolesSaving, setCatalogHolesSaving] = useState(false);
@@ -9691,18 +9695,70 @@ export default function App() {
   }
 
   function handleCatalogHolesBackToList() {
+    if (catalogHolesMode === "editor") {
+      setCatalogHolesDetailOpen(true);
+      setCatalogHolesMode("list");
+      setCatalogHolesOpenContext(null);
+      setCatalogHolesCreateError("");
+      setCatalogHolesCreating(false);
+      return;
+    }
+
+    setCatalogHolesDetailOpen(false);
     setCatalogHolesMode("list");
     setCatalogHolesOpenContext(null);
+    setCatalogHolesReturnState(null);
+    setCatalogHolesBreadcrumbNodeId(null);
+    setCatalogHolesBreadcrumbNodeName("");
     setCatalogHolesCreateError("");
     setCatalogHolesCreating(false);
   }
 
-  function renderMountingNodesBreadcrumb(items = []) {
+  function handleOpenCatalogHolesDetail(nodeId, nodeName) {
+    const resolvedNodeId = String(nodeId || "").trim();
+    const resolvedNodeName = String(nodeName || "").trim();
+
+    if (!resolvedNodeId || !resolvedNodeName) {
+      return;
+    }
+
+    setCatalogHolesDetailOpen(true);
+    setCatalogHolesReturnState(null);
+    setCatalogHolesBreadcrumbNodeId(resolvedNodeId);
+    setCatalogHolesBreadcrumbNodeName(resolvedNodeName);
+  }
+
+  function handleCloseCatalogHolesDetail() {
+    setCatalogHolesDetailOpen(false);
+    setCatalogHolesBreadcrumbNodeId(null);
+    setCatalogHolesBreadcrumbNodeName("");
+    setCatalogHolesReturnState(null);
+  }
+
+  function handleCatalogHolesToolbarListClick() {
+    setCatalogHolesDetailOpen(false);
+    setCatalogHolesBreadcrumbNodeId(null);
+    setCatalogHolesBreadcrumbNodeName("");
+    setCatalogHolesReturnState(null);
+    setCatalogHolesSaving(false);
+
+    if (catalogHolesMode === "editor" || catalogHolesMode === "create") {
+      setCatalogHolesMode("list");
+      setCatalogHolesOpenContext(null);
+      setCatalogHolesCreateError("");
+      setCatalogHolesCreating(false);
+      return;
+    }
+
+    setCatalogHolesListRequestToken((current) => current + 1);
+  }
+
+  function renderCatalogHolesToolbarBreadcrumb(items = []) {
     const navLabel = language === "uk" ? "Навігація монтажних вузлів" : "Mounting nodes navigation";
 
     return (
-      <nav aria-label={navLabel} className="mounting-node-breadcrumb mounting-node-breadcrumb-top">
-        <ol className="mounting-node-breadcrumb-list">
+      <nav aria-label={navLabel} className="mounting-node-toolbar-breadcrumb mounting-node-breadcrumb-top">
+        <ol className="mounting-node-toolbar-breadcrumb-list">
           {items.map((item, index) => {
             const isCurrent = Boolean(item?.current);
             const isLast = index === items.length - 1;
@@ -9710,14 +9766,14 @@ export default function App() {
             const title = String(item?.title || label || "").trim();
 
             return (
-              <li className="mounting-node-breadcrumb-item" key={`${label || "crumb"}-${index}`}>
+              <li className="mounting-node-toolbar-breadcrumb-item" key={`${label || "crumb"}-${index}`}>
                 {isCurrent ? (
-                  <span aria-current="page" className="mounting-node-breadcrumb-current" title={title || label}>
+                  <span aria-current="page" className="mounting-node-toolbar-breadcrumb-current" title={title || label}>
                     {label}
                   </span>
                 ) : (
                   <button
-                    className="mounting-node-breadcrumb-link"
+                    className="mounting-node-toolbar-breadcrumb-link"
                     onClick={item?.onClick}
                     title={title || label}
                     type="button"
@@ -9726,7 +9782,7 @@ export default function App() {
                   </button>
                 )}
                 {!isLast ? (
-                  <span aria-hidden="true" className="mounting-node-breadcrumb-separator">
+                  <span aria-hidden="true" className="mounting-node-toolbar-breadcrumb-separator">
                     ›
                   </span>
                 ) : null}
@@ -9738,16 +9794,19 @@ export default function App() {
     );
   }
 
-  function getCatalogHolesBreadcrumbNodeName() {
-    const openContextName = String(catalogHolesOpenContext?.nodeName || catalogHolesOpenContext?.nodeDetail?.name || "").trim();
+  function getCatalogHolesBreadcrumbNodeName(
+    context = catalogHolesOpenContext,
+    returnState = catalogHolesReturnState,
+  ) {
+    const openContextName = String(context?.nodeName || context?.nodeDetail?.name || "").trim();
     if (openContextName) {
       return openContextName;
     }
 
     const returnStateName = String(
-      catalogHolesReturnState?.selectedNodeDetail?.name ||
-        catalogHolesReturnState?.selectedNode?.name ||
-        catalogHolesReturnState?.nodeDetail?.name ||
+      returnState?.selectedNodeDetail?.name ||
+        returnState?.selectedNode?.name ||
+        returnState?.nodeDetail?.name ||
         "",
     ).trim();
 
@@ -9755,15 +9814,98 @@ export default function App() {
       return returnStateName;
     }
 
+    const toolbarNodeName = String(catalogHolesBreadcrumbNodeName || "").trim();
+    if (toolbarNodeName) {
+      return toolbarNodeName;
+    }
+
     return language === "uk" ? "Монтажний вузол" : "Mounting node";
+  }
+
+  function getCatalogHolesToolbarBreadcrumbItems() {
+    const listLabel = t.holeTabTitle || (language === "uk" ? "Монтажні вузли" : "Mounting nodes");
+    const nodeName = getCatalogHolesBreadcrumbNodeName();
+    const isCreateMode = catalogHolesMode === "create";
+    const isEditorMode = catalogHolesMode === "editor";
+
+    const items = [
+      {
+        label: listLabel,
+        onClick: handleCatalogHolesToolbarListClick,
+        title: listLabel,
+      },
+    ];
+
+    if (isCreateMode) {
+      items.push({
+        current: true,
+        label: language === "uk" ? "Створення вузла" : "Node creation",
+        title: language === "uk" ? "Створення вузла" : "Node creation",
+      });
+      return items;
+    }
+
+    if (isEditorMode) {
+      items.push({
+        label: nodeName,
+        onClick: handleCatalogHolesBackToList,
+        title: nodeName,
+      });
+
+      items.push({
+        current: true,
+        label: language === "uk" ? "Отвори та 3D" : "Open holes and 3D",
+        title: language === "uk" ? "Отвори та 3D" : "Open holes and 3D",
+      });
+      return items;
+    }
+
+    if (catalogHolesDetailOpen) {
+      items.push({
+        current: true,
+        label: nodeName,
+        title: nodeName,
+      });
+      return items;
+    }
+
+    items[0].current = true;
+    items[0].onClick = undefined;
+    return items;
   }
 
   function handleOpenMountingNodeCreate(returnState = null) {
     setCatalogHolesReturnState(returnState);
+    setCatalogHolesDetailOpen(false);
     setCatalogHolesOpenContext(null);
+    setCatalogHolesBreadcrumbNodeId(null);
+    setCatalogHolesBreadcrumbNodeName("");
     setCatalogHolesCreateError("");
     setCatalogHolesCreating(false);
     setCatalogHolesMode("create");
+  }
+
+  function handleOpenMountingNodeEditor(context, returnState) {
+    const resolvedContext = context && typeof context === "object" ? context : null;
+    const resolvedReturnState = returnState && typeof returnState === "object" ? returnState : null;
+    const resolvedNodeId = String(resolvedContext?.mountingNodeId || "").trim();
+    const resolvedNodeName = getCatalogHolesBreadcrumbNodeName(resolvedContext, resolvedReturnState);
+    const nextContext = resolvedContext
+      ? {
+        ...resolvedContext,
+        nodeName: resolvedNodeName,
+      }
+      : resolvedContext;
+
+    setCatalogHolesDetailOpen(false);
+    if (resolvedNodeId) {
+      setCatalogHolesBreadcrumbNodeId(resolvedNodeId);
+    }
+    if (resolvedNodeName) {
+      setCatalogHolesBreadcrumbNodeName(resolvedNodeName);
+    }
+    setCatalogHolesReturnState(resolvedReturnState);
+    switchView("catalogHoles", user, nextContext);
   }
 
   function buildMountingNodeEditorContext(nodeDetail) {
@@ -9886,6 +10028,10 @@ export default function App() {
       if (afterCreate === "list") {
         setCatalogHolesCreateError("");
         setCatalogHolesOpenContext(null);
+        setCatalogHolesDetailOpen(false);
+        setCatalogHolesBreadcrumbNodeId(null);
+        setCatalogHolesBreadcrumbNodeName("");
+        setCatalogHolesReturnState(null);
         setCatalogHolesMode("list");
         return;
       }
@@ -9909,6 +10055,9 @@ export default function App() {
         selectedNodeLoading: false,
       };
       setCatalogHolesReturnState(nextReturnState);
+      setCatalogHolesDetailOpen(false);
+      setCatalogHolesBreadcrumbNodeId(String(createdNode.id || "").trim() || null);
+      setCatalogHolesBreadcrumbNodeName(String(createdNode.name || "").trim());
 
       const editorContext = buildMountingNodeEditorContext(createdNode);
       if (!editorContext) {
@@ -9999,6 +10148,8 @@ export default function App() {
       const savedCurrentTemplate = savedCurrentLink?.template || selectedHoleTemplate || null;
 
       if (savedNode) {
+        setCatalogHolesBreadcrumbNodeId(String(savedNode.id || "").trim() || null);
+        setCatalogHolesBreadcrumbNodeName(String(savedNode.name || "").trim());
         setCatalogHolesOpenContext((current) => ({
           ...(current || {}),
           mountingNodeId: String(savedNode.id || current?.mountingNodeId || mountingNodeId),
@@ -14090,18 +14241,37 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
       setCatalogHolesMode("list");
       setCatalogHolesOpenContext(null);
       setCatalogHolesReturnState(null);
+      setCatalogHolesDetailOpen(false);
+      setCatalogHolesBreadcrumbNodeId(null);
+      setCatalogHolesBreadcrumbNodeName("");
       setCatalogHolesSaving(false);
     }
 
     if (nextView === "catalogHoles") {
       const contextMountingNodeId = String(openContext?.mountingNodeId || "").trim();
-      const contextNodeName = String(openContext?.nodeName || "").trim();
+      const baseContextNodeName = String(openContext?.nodeName || "").trim();
       const contextNodeCode = String(openContext?.nodeCode || "").trim();
       const contextFittingId = String(openContext?.fittingId || "").trim();
       const contextTemplateId = String(openContext?.templateId || "").trim();
       const contextVariantKey = normalizeHoleWorkspaceMountingVariantKey(openContext?.mountingVariantKey || "");
       const contextNodeDetail =
         openContext?.nodeDetail && typeof openContext.nodeDetail === "object" ? openContext.nodeDetail : null;
+      const contextNodeName = String(
+        baseContextNodeName ||
+          contextNodeDetail?.name ||
+          catalogHolesReturnState?.selectedNodeDetail?.name ||
+          catalogHolesReturnState?.selectedNode?.name ||
+          catalogHolesBreadcrumbNodeName ||
+          "",
+      ).trim();
+
+      if (contextMountingNodeId) {
+        setCatalogHolesBreadcrumbNodeId(contextMountingNodeId);
+        setCatalogHolesBreadcrumbNodeName(contextNodeName);
+      } else {
+        setCatalogHolesBreadcrumbNodeId(null);
+        setCatalogHolesBreadcrumbNodeName("");
+      }
 
       setCatalogHolesOpenContext(
         contextMountingNodeId
@@ -14119,6 +14289,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
       if (!contextMountingNodeId) {
         setCatalogHolesReturnState(null);
       }
+      setCatalogHolesDetailOpen(false);
       setCatalogHolesMode(contextMountingNodeId ? "editor" : "list");
 
       setIsProcessingMenuOpen(true);
@@ -16538,45 +16709,49 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
             >
               <Menu size={18} />
             </button>
-            <h2>
-              {isHomeView
-                ? t.home
-                : activeView === "projects"
-                ? t.projects
-                : activeView === "createProject"
-                  ? t.createProject
-                : activeView === "projectDetails"
-                  ? t.projectDetails
-                : activeView === "users"
-                  ? t.users
-                : isCatalogHubView
-                  ? t.catalog
-                : isCatalogMaterialsView
-                  ? t.catalogMaterials
-                : isCatalogFittingsView
-                  ? t.catalogFittings
-                : isCatalogFastenersView
-                  ? t.catalogFasteners
-                : isCatalogHolesView
-                  ? t.holeTabTitle
-                : isCatalogBundlesView
-                  ? t.fittingBundlesTitle
-                : isCatalogDrillingRulesView
-                  ? t.drillingServiceRulesTitle
-                : isCatalogValuesView
-                  ? t.catalogValues
-                : isCatalogViyarView
-                  ? t.catalogViyar
-                : isCatalogManualView
-                  ? t.catalogManual
-                : isProcessingView
-                  ? (language === "uk" ? "Обробка деталей" : "Processing")
-                : activeView === "settings"
-                  ? t.settings
-                : activeView === "entitlements"
-                  ? "Тарифи та права"
-                  : t.audit}
-            </h2>
+            {isCatalogHolesView
+              ? renderCatalogHolesToolbarBreadcrumb(getCatalogHolesToolbarBreadcrumbItems())
+              : (
+                <h2>
+                  {isHomeView
+                    ? t.home
+                    : activeView === "projects"
+                    ? t.projects
+                    : activeView === "createProject"
+                      ? t.createProject
+                    : activeView === "projectDetails"
+                      ? t.projectDetails
+                    : activeView === "users"
+                      ? t.users
+                    : isCatalogHubView
+                      ? t.catalog
+                    : isCatalogMaterialsView
+                      ? t.catalogMaterials
+                    : isCatalogFittingsView
+                      ? t.catalogFittings
+                    : isCatalogFastenersView
+                      ? t.catalogFasteners
+                    : isCatalogHolesView
+                      ? t.holeTabTitle
+                    : isCatalogBundlesView
+                      ? t.fittingBundlesTitle
+                    : isCatalogDrillingRulesView
+                      ? t.drillingServiceRulesTitle
+                    : isCatalogValuesView
+                      ? t.catalogValues
+                    : isCatalogViyarView
+                      ? t.catalogViyar
+                    : isCatalogManualView
+                      ? t.catalogManual
+                    : isProcessingView
+                      ? (language === "uk" ? "Обробка деталей" : "Processing")
+                    : activeView === "settings"
+                      ? t.settings
+                    : activeView === "entitlements"
+                      ? "Тарифи та права"
+                      : t.audit}
+                </h2>
+              )}
             {activeView === "projectDetails" && selectedProject ? (
               <div className="toolbar-project-meta">
                 <span>{selectedProject.project_name || t.newProjectDefault}</span>
@@ -20192,13 +20367,13 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
             ) : (
               <MountingNodesPanel
                 initialState={catalogHolesReturnState}
+                listRequestToken={catalogHolesListRequestToken}
                 language={language}
+                onCloseMountingNodeDetail={handleCloseCatalogHolesDetail}
                 onOpenFittingDetail={openFittingDetails}
+                onOpenMountingNodeDetail={handleOpenCatalogHolesDetail}
                 onOpenMountingNodeCreate={handleOpenMountingNodeCreate}
-                onOpenMountingNodeEditor={(context, returnState) => {
-                  setCatalogHolesReturnState(returnState);
-                  switchView("catalogHoles", user, context);
-                }}
+                onOpenMountingNodeEditor={handleOpenMountingNodeEditor}
                 t={t}
                 token={token}
               />
