@@ -288,13 +288,12 @@ function getOwnershipLabel(node, language) {
   return language === "uk" ? "Невідомий доступ" : "Unknown ownership";
 }
 
-function buildNodeEditorContext(nodeDetail, fallbackNodeId = "") {
+export function buildNodeEditorContext(nodeDetail, fallbackNodeId = "") {
   if (!nodeDetail || typeof nodeDetail !== "object") {
     return null;
   }
 
-  const primaryTemplate =
-    nodeDetail.templates?.find((template) => template?.is_default) || nodeDetail.templates?.[0] || null;
+  const { actualTemplate, points, templateLink } = getNodeEditorTemplateSource(nodeDetail);
   const primaryItem = nodeDetail.items?.[0] || null;
   const mountingNodeId = String(nodeDetail.id || nodeDetail.node_id || fallbackNodeId || "").trim();
 
@@ -306,10 +305,21 @@ function buildNodeEditorContext(nodeDetail, fallbackNodeId = "") {
     mountingNodeId,
     nodeCode: String(nodeDetail.code || "").trim(),
     nodeName: String(nodeDetail.name || "").trim(),
-    fittingId: String(primaryTemplate?.fitting_id || primaryItem?.fitting_id || "").trim(),
-    templateId: String(primaryTemplate?.template_id || "").trim(),
-    mountingVariantKey: String(primaryTemplate?.mounting_variant_key || "").trim(),
+    fittingId: String(actualTemplate?.fitting_id || templateLink?.fitting_id || primaryItem?.fitting_id || "").trim(),
+    templateId: String(
+      actualTemplate?.template_id ||
+        (actualTemplate && actualTemplate !== templateLink ? actualTemplate.id : "") ||
+        templateLink?.template_id ||
+        "",
+    ).trim(),
+    mountingVariantKey: String(
+      actualTemplate?.mounting_variant_key ||
+        templateLink?.mounting_variant_key ||
+        nodeDetail.mounting_variant_key ||
+        "surface_mount",
+    ).trim(),
     nodeDetail,
+    points,
   };
 }
 
@@ -458,6 +468,27 @@ function getNodePrimaryTemplate(nodeDetail) {
   }
 
   return nodeDetail.templates?.find((template) => template?.is_default) || nodeDetail.templates?.[0] || null;
+}
+
+function getNodeEditorTemplateSource(nodeDetail) {
+  const templateLink = getNodePrimaryTemplate(nodeDetail);
+  const actualTemplate =
+    templateLink?.template && typeof templateLink.template === "object"
+      ? templateLink.template
+      : templateLink?.fitting_hole_template && typeof templateLink.fitting_hole_template === "object"
+        ? templateLink.fitting_hole_template
+        : templateLink || null;
+  const points = Array.isArray(actualTemplate?.points)
+    ? actualTemplate.points
+    : Array.isArray(templateLink?.points)
+      ? templateLink.points
+      : [];
+
+  return {
+    actualTemplate,
+    points,
+    templateLink,
+  };
 }
 
 function getNodeVariantOptions(language) {
@@ -1632,7 +1663,7 @@ export default function MountingNodesPanelRefined({
                     Keep the DETAIL editor button label local so we can update the visible text
                     without changing the shared translations in App.jsx.
                   */}
-                  <button className="primary-button mounting-node-detail-action-button mounting-node-editor-button" onClick={handleOpenEditor} type="button">
+                  <button className="primary-button mounting-node-detail-action-button mounting-node-editor-button" onClick={() => handleOpenEditor()} type="button">
                     {language === "uk" ? "Отвори та 3D" : "Open editor and 3D"}
                   </button>
                   {selectedNodeDetail.can_delete ? (

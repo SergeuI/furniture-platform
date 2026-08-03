@@ -3,6 +3,36 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
+function loadBuildNodeEditorContextFromSource() {
+  const sourcePath = fileURLToPath(
+    new URL("../src/components/processing/MountingNodesPanelRefined.jsx", import.meta.url),
+  );
+  const source = readFileSync(sourcePath, "utf8");
+  const buildNodeEditorContextSource = source.slice(
+    source.indexOf("function buildNodeEditorContext(nodeDetail, fallbackNodeId = \"\") {"),
+    source.indexOf("function buildNodeReturnState({"),
+  );
+  const getNodePrimaryTemplateSource = source.slice(
+    source.indexOf("function getNodePrimaryTemplate(nodeDetail) {"),
+    source.indexOf("function getNodeEditorTemplateSource(nodeDetail) {"),
+  );
+  const getNodeEditorTemplateSource = source.slice(
+    source.indexOf("function getNodeEditorTemplateSource(nodeDetail) {"),
+    source.indexOf("function getNodeVariantOptions(language) {"),
+  );
+
+  if (!buildNodeEditorContextSource || !getNodePrimaryTemplateSource || !getNodeEditorTemplateSource) {
+    throw new Error("Unable to isolate the mounting node editor helper block.");
+  }
+
+  const helperSource = [
+    getNodePrimaryTemplateSource,
+    getNodeEditorTemplateSource,
+    buildNodeEditorContextSource.replace("export function buildNodeEditorContext", "function buildNodeEditorContext"),
+  ].join("\n");
+  return new Function(`${helperSource}; return buildNodeEditorContext;`)();
+}
+
 test("mounting nodes panel keeps the DETAIL white panel free of breadcrumb markup", () => {
   const sourcePath = fileURLToPath(
     new URL("../src/components/processing/MountingNodesPanelRefined.jsx", import.meta.url),
@@ -25,6 +55,8 @@ test("mounting nodes panel keeps the DETAIL white panel free of breadcrumb marku
   assert.equal(detailHeaderSource.includes("<h3>"), false);
   assert.equal(source.includes("onOpenMountingNodeDetail"), true);
   assert.equal(source.includes("onCloseMountingNodeDetail"), true);
+  assert.equal(source.includes("onClick={() => handleOpenEditor()}"), true);
+  assert.equal(source.includes("onClick={handleOpenEditor}"), false);
   assert.equal(source.includes("listRequestToken"), true);
   assert.equal(source.includes("listRequestTokenRef"), true);
   assert.equal(source.includes("handleSelectNode(nodeId)"), true);
@@ -85,6 +117,44 @@ test("toolbar breadcrumb for mounting nodes uses stable App primitives", () => {
   assert.equal(source.includes("catalogHolesNavigationState"), false);
 });
 
+test("mounting nodes panel builds editor context from the full detail template link", () => {
+  const buildNodeEditorContext = loadBuildNodeEditorContextFromSource();
+  const nodeDetail = {
+    id: 9,
+    name: "петля",
+    templates: [
+      {
+        id: 13,
+        template_id: 7480,
+        is_default: true,
+        template: {
+          id: 7480,
+          fitting_id: 42,
+          mounting_variant_key: "angled_two_planes",
+          points: [],
+        },
+      },
+    ],
+    items: [
+      {
+        fitting_id: 42,
+        quantity: 1,
+      },
+    ],
+  };
+
+  assert.deepEqual(buildNodeEditorContext(nodeDetail), {
+    mountingNodeId: "9",
+    nodeCode: "",
+    nodeName: "петля",
+    fittingId: "42",
+    templateId: "7480",
+    mountingVariantKey: "angled_two_planes",
+    nodeDetail,
+    points: [],
+  });
+});
+
 test("mounting nodes panel keeps the same image extraction contract for grid and list thumbnails", () => {
   const sourcePath = fileURLToPath(
     new URL("../src/components/processing/MountingNodesPanelRefined.jsx", import.meta.url),
@@ -97,6 +167,10 @@ test("mounting nodes panel keeps the same image extraction contract for grid and
   assert.equal(source.includes('status: "loaded"'), true);
   assert.equal(source.includes("renderNodeItemGallery(nodeDetail?.items, language, t, fittingThumbnailStateById)"), true);
   assert.equal(source.includes("No images"), true);
+  assert.equal(source.includes("getNodeEditorTemplateSource"), true);
+  assert.equal(source.includes("actualTemplate?.template_id"), true);
+  assert.equal(source.includes("templateLink?.template_id"), true);
+  assert.equal(source.includes("points,"), true);
 });
 
 test("mounting nodes tile and list layouts keep the responsive grid contract in CSS", () => {
