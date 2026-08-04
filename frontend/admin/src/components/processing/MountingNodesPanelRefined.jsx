@@ -12,6 +12,11 @@ import {
 } from "../../api.js";
 import { getProcessingTemplateMountingVariantLabel } from "../../processingTemplates.js";
 import {
+  buildMountingNodeThumbnailLoadPlan,
+  buildMountingNodeThumbnailState,
+  isCurrentMountingNodeThumbnailRequest,
+} from "../../mountingNodesThumbnailLifecycle.js";
+import {
   buildMountingNodeEditorSavePayload,
   resolveMountingNodeEditorContext,
 } from "../../mountingNodesEditor.js";
@@ -579,6 +584,75 @@ function renderNodeDetailItemCard(
   );
 }
 
+function readBlobAsDataUrl(blob, isCurrentRequest) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    let settled = false;
+
+    const cleanup = () => {
+      reader.onload = null;
+      reader.onloadend = null;
+      reader.onerror = null;
+      reader.onabort = null;
+    };
+
+    const resolveOnce = (value) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      cleanup();
+      resolve(value);
+    };
+
+    const rejectOnce = (error) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      cleanup();
+      reject(error);
+    };
+
+    reader.onload = () => {
+      if (!isCurrentRequest()) {
+        rejectOnce(new Error("Unable to load fitting image"));
+        return;
+      }
+
+      resolveOnce(String(reader.result || ""));
+    };
+
+    reader.onloadend = () => {
+      if (!settled && !isCurrentRequest()) {
+        rejectOnce(new Error("Unable to load fitting image"));
+      }
+    };
+
+    reader.onerror = () => {
+      if (!isCurrentRequest()) {
+        rejectOnce(new Error("Unable to load fitting image"));
+        return;
+      }
+
+      rejectOnce(reader.error || new Error("Unable to load fitting image"));
+    };
+
+    reader.onabort = () => {
+      if (!isCurrentRequest()) {
+        rejectOnce(new Error("Unable to load fitting image"));
+        return;
+      }
+
+      rejectOnce(new Error("Unable to load fitting image"));
+    };
+
+    reader.readAsDataURL(blob);
+  });
+}
+
 export default function MountingNodesPanelRefined({
   language = "uk",
   editorMode = false,
@@ -626,6 +700,7 @@ export default function MountingNodesPanelRefined({
   const [openEditorError, setOpenEditorError] = useState("");
   const listRequestIdRef = useRef(0);
   const detailRequestIdRef = useRef(0);
+  const thumbnailRequestGenerationRef = useRef(0);
   const listRequestTokenRef = useRef(Number(listRequestToken || 0));
   const selectedNodeIdRef = useRef(String(initialReturnState.selectedNodeId || ""));
   const variantDropdownRef = useRef(null);
@@ -832,32 +907,18 @@ export default function MountingNodesPanelRefined({
 
   useEffect(() => {
     if (!token) {
+      thumbnailRequestGenerationRef.current += 1;
       setFittingThumbnailStateById({});
       return undefined;
     }
 
+    const currentGeneration = ++thumbnailRequestGenerationRef.current;
     let cancelled = false;
 
-    const fittingIds = [];
-    const seenFittingIds = new Set();
-
-    Object.values(nodeDetailsById || {}).forEach((nodeDetail) => {
-      const items = Array.isArray(nodeDetail?.items) ? nodeDetail.items : [];
-
-      items.forEach((item) => {
-        const fittingId = String(item?.fitting_id || "").trim();
-        if (!fittingId || seenFittingIds.has(fittingId)) {
-          return;
-        }
-
-        const existingState = fittingThumbnailStateById[fittingId] || null;
-        if (existingState?.status === "loading" || existingState?.status === "loaded" || existingState?.status === "no-image" || existingState?.status === "error") {
-          return;
-        }
-
-        seenFittingIds.add(fittingId);
-        fittingIds.push(fittingId);
-      });
+    const fittingIds = buildMountingNodeThumbnailLoadPlan({
+      currentGeneration,
+      fittingThumbnailStateById,
+      nodeDetailsById,
     });
 
     if (!fittingIds.length) {
@@ -867,10 +928,7 @@ export default function MountingNodesPanelRefined({
     setFittingThumbnailStateById((current) => {
       const next = { ...current };
       fittingIds.forEach((fittingId) => {
-        next[fittingId] = {
-          status: "loading",
-          src: null,
-        };
+        next[fittingId] = buildMountingNodeThumbnailState("loading", currentGeneration);
       });
       return next;
     });
@@ -879,7 +937,7 @@ export default function MountingNodesPanelRefined({
       (async () => {
         try {
           const result = await getFittingDetails(token, fittingId);
-          if (cancelled) {
+          if (!isCurrentMountingNodeThumbnailRequest(currentGeneration, thumbnailRequestGenerationRef.current, cancelled)) {
             return;
           }
 
@@ -887,8 +945,7 @@ export default function MountingNodesPanelRefined({
             setFittingThumbnailStateById((current) => ({
               ...current,
               [fittingId]: {
-                status: "error",
-                src: null,
+                ...buildMountingNodeThumbnailState("error", currentGeneration),
               },
             }));
             return;
@@ -914,15 +971,14 @@ export default function MountingNodesPanelRefined({
             setFittingThumbnailStateById((current) => ({
               ...current,
               [fittingId]: {
-                status: "no-image",
-                src: null,
+                ...buildMountingNodeThumbnailState("no-image", currentGeneration),
               },
             }));
             return;
           }
 
           const imageResult = await getFittingImageBlob(token, fittingId, primaryImage.id);
-          if (cancelled) {
+          if (!isCurrentMountingNodeThumbnailRequest(currentGeneration, thumbnailRequestGenerationRef.current, cancelled)) {
             return;
           }
 
@@ -930,8 +986,7 @@ export default function MountingNodesPanelRefined({
             setFittingThumbnailStateById((current) => ({
               ...current,
               [fittingId]: {
-                status: "error",
-                src: null,
+                ...buildMountingNodeThumbnailState("error", currentGeneration),
               },
             }));
             return;
@@ -939,29 +994,24 @@ export default function MountingNodesPanelRefined({
 
           let imageUrl = "";
           try {
-            imageUrl = await new Promise((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onload = () => resolve(String(reader.result || ""));
-              reader.onerror = () => reject(reader.error || new Error("Unable to load fitting image"));
-              reader.onabort = () => reject(new Error("Unable to load fitting image"));
-              reader.readAsDataURL(imageResult.blob);
-            });
+            imageUrl = await readBlobAsDataUrl(imageResult.blob, () =>
+              isCurrentMountingNodeThumbnailRequest(currentGeneration, thumbnailRequestGenerationRef.current, cancelled),
+            );
           } catch {
-            if (cancelled) {
+            if (!isCurrentMountingNodeThumbnailRequest(currentGeneration, thumbnailRequestGenerationRef.current, cancelled)) {
               return;
             }
 
             setFittingThumbnailStateById((current) => ({
               ...current,
               [fittingId]: {
-                status: "error",
-                src: null,
+                ...buildMountingNodeThumbnailState("error", currentGeneration),
               },
             }));
             return;
           }
 
-          if (cancelled) {
+          if (!isCurrentMountingNodeThumbnailRequest(currentGeneration, thumbnailRequestGenerationRef.current, cancelled)) {
             return;
           }
 
@@ -969,8 +1019,7 @@ export default function MountingNodesPanelRefined({
             setFittingThumbnailStateById((current) => ({
               ...current,
               [fittingId]: {
-                status: "error",
-                src: null,
+                ...buildMountingNodeThumbnailState("error", currentGeneration),
               },
             }));
             return;
@@ -979,20 +1028,18 @@ export default function MountingNodesPanelRefined({
           setFittingThumbnailStateById((current) => ({
             ...current,
             [fittingId]: {
-              status: "loaded",
-              src: imageUrl,
+              ...buildMountingNodeThumbnailState("loaded", currentGeneration, imageUrl),
             },
           }));
         } catch {
-          if (cancelled) {
+          if (!isCurrentMountingNodeThumbnailRequest(currentGeneration, thumbnailRequestGenerationRef.current, cancelled)) {
             return;
           }
 
           setFittingThumbnailStateById((current) => ({
             ...current,
             [fittingId]: {
-              status: "error",
-              src: null,
+              ...buildMountingNodeThumbnailState("error", currentGeneration),
             },
           }));
         }

@@ -69,6 +69,10 @@ test("mounting nodes panel keeps the DETAIL white panel free of breadcrumb marku
   assert.equal(source.includes("mounting-node-item-gallery"), true);
   assert.equal(source.includes("getFittingDetails"), true);
   assert.equal(source.includes("getFittingImageBlob"), true);
+  assert.equal(source.includes("thumbnailRequestGenerationRef"), true);
+  assert.equal(source.includes("buildMountingNodeThumbnailLoadPlan"), true);
+  assert.equal(source.includes("buildMountingNodeThumbnailState"), true);
+  assert.equal(source.includes("isCurrentMountingNodeThumbnailRequest"), true);
   assert.equal(source.includes("Open editor and 3D"), true);
   assert.equal(source.includes("Delete mounting node"), true);
   assert.equal(source.includes("mounting-node-detail-variant-portal"), true);
@@ -198,8 +202,11 @@ test("mounting nodes panel keeps the same image extraction contract for grid and
 
   assert.equal(source.includes("getFittingDetails(token, fittingId)"), true);
   assert.equal(source.includes("getFittingImageBlob(token, fittingId, primaryImage.id)"), true);
-  assert.equal(source.includes("fittingThumbnailStateById[fittingId]"), true);
-  assert.equal(source.includes('status: "loaded"'), true);
+  assert.equal(source.includes("thumbnailRequestGenerationRef"), true);
+  assert.equal(source.includes("buildMountingNodeThumbnailLoadPlan"), true);
+  assert.equal(source.includes("buildMountingNodeThumbnailState"), true);
+  assert.equal(source.includes("isCurrentMountingNodeThumbnailRequest"), true);
+  assert.equal(source.includes('buildMountingNodeThumbnailState("loaded", currentGeneration, imageUrl)'), true);
   assert.equal(source.includes("renderNodeItemGallery(nodeDetail?.items, language, t, fittingThumbnailStateById)"), true);
   assert.equal(source.includes("No images"), true);
   assert.equal(source.includes("getNodeEditorTemplateSource"), true);
