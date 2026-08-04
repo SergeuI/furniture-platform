@@ -119,6 +119,12 @@ import {
   mergeHolePointSaveResponse,
 } from "./holePointForm.js";
 import {
+  buildMountingNodesRestoreState,
+  buildMountingNodesRouteUrl,
+  normalizeMountingNodesRoute,
+  parseMountingNodesRoute,
+} from "./mountingNodesNavigation.js";
+import {
   buildMountingNodeEditorSavePayload,
   canSaveMountingNodeEditor,
 } from "./mountingNodesEditor.js";
@@ -248,6 +254,25 @@ const SIDEBAR_COLLAPSE_BREAKPOINT = 1180;
 function buildAdminAssetUrl(path) {
   return `${ADMIN_ASSET_BASE_URL}${String(path || "").replace(/^\/+/, "")}`;
 }
+
+function readMountingNodesRouteFromLocation() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  return parseMountingNodesRoute(window.location.search);
+}
+
+function buildMountingNodesHistoryUrl(route, currentSearch = "", currentHash = "") {
+  if (typeof window === "undefined") {
+    return "";
+  }
+
+  const normalizedRoute = normalizeMountingNodesRoute(route);
+  const nextSearch = buildMountingNodesRouteUrl(normalizedRoute, currentSearch);
+  return `${window.location.pathname}${nextSearch}${currentHash || ""}`;
+}
+
 function consumeAdminTokenHandoff() {
   const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
   const searchParams = new URLSearchParams(window.location.search);
@@ -6730,6 +6755,7 @@ export default function App() {
     };
   }, []);
 
+  const initialMountingNodesRoute = readMountingNodesRouteFromLocation();
   const [language, setLanguage] = useState(
     () => localStorage.getItem(LANGUAGE_STORAGE_KEY) || "en",
   );
@@ -6738,8 +6764,16 @@ export default function App() {
   );
   const tokenRef = useRef(token);
   const activeViewRef = useRef(
-    normalizeCatalogView(localStorage.getItem(ACTIVE_VIEW_STORAGE_KEY) || "home"),
+    initialMountingNodesRoute ? "catalogHoles" : normalizeCatalogView(localStorage.getItem(ACTIVE_VIEW_STORAGE_KEY) || "home"),
   );
+  const [mountingNodesRouteVersion, setMountingNodesRouteVersion] = useState(0);
+  const [mountingNodesRouteReady, setMountingNodesRouteReady] = useState(
+    () => !initialMountingNodesRoute || initialMountingNodesRoute.mode !== "detail",
+  );
+  const [mountingNodesRouteState, setMountingNodesRouteState] = useState(
+    () => initialMountingNodesRoute,
+  );
+  const [mountingNodesInitialState, setMountingNodesInitialState] = useState(null);
   const [user, setUser] = useState(
     () => readPersistedAdminUser(localStorage.getItem(TOKEN_STORAGE_KEY) || ""),
   );
@@ -6919,12 +6953,13 @@ export default function App() {
     mediaQuery.addListener(syncSidebarState);
     return () => mediaQuery.removeListener(syncSidebarState);
   }, []);
+
   const [loginLoading, setLoginLoading] = useState(false);
   const [trialClockNow, setTrialClockNow] = useState(() => Date.now());
   const trialRefreshTriggeredRef = useRef(false);
   const [confirmAction, setConfirmAction] = useState(null);
   const [activeView, setActiveView] = useState(
-    () => normalizeCatalogView(localStorage.getItem(ACTIVE_VIEW_STORAGE_KEY) || "home"),
+    () => (initialMountingNodesRoute ? "catalogHoles" : normalizeCatalogView(localStorage.getItem(ACTIVE_VIEW_STORAGE_KEY) || "home")),
   );
   const [isCatalogMenuOpen, setIsCatalogMenuOpen] = useState(false);
   const [activeProcessingTab, setActiveProcessingTab] = useState(
@@ -6932,10 +6967,13 @@ export default function App() {
   );
   const [isProcessingMenuOpen, setIsProcessingMenuOpen] = useState(
     () => {
-      const storedView = normalizeCatalogView(localStorage.getItem(ACTIVE_VIEW_STORAGE_KEY) || "home");
+      const storedView = initialMountingNodesRoute
+        ? "catalogHoles"
+        : normalizeCatalogView(localStorage.getItem(ACTIVE_VIEW_STORAGE_KEY) || "home");
       return storedView === "processing" || storedView === "catalogHoles";
     },
   );
+
   const [fittingItems, setFittingItems] = useState([]);
   const [fittingCategories, setFittingCategories] = useState([]);
   const [fittingSearch, setFittingSearch] = useState("");
@@ -7056,6 +7094,129 @@ export default function App() {
   const [autoRefreshStatus, setAutoRefreshStatus] = useState(null);
   const storedProjectId = localStorage.getItem(ACTIVE_PROJECT_ID_STORAGE_KEY) || "";
   const storedProjectTab = localStorage.getItem(ACTIVE_PROJECT_TAB_STORAGE_KEY) || "data";
+  const isMountingNodesRoute = Boolean(mountingNodesRouteState);
+  const mountingNodesPanelInitialState = isMountingNodesRoute ? mountingNodesInitialState : catalogHolesReturnState;
+
+  function updateMountingNodesHistory(route, { replace = false } = {}) {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const normalizedRoute = normalizeMountingNodesRoute(route);
+    const nextUrl = buildMountingNodesHistoryUrl(
+      normalizedRoute,
+      window.location.search,
+      window.location.hash || "",
+    );
+    const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash || ""}`;
+
+    if (nextUrl === currentUrl) {
+      return;
+    }
+
+    const historyMethod = replace ? window.history.replaceState : window.history.pushState;
+    historyMethod.call(window.history, null, document.title, nextUrl);
+  }
+
+  useEffect(() => {
+    if (!isMountingNodesRoute) {
+      return undefined;
+    }
+
+    if (activeView !== "catalogHoles") {
+      setActiveView("catalogHoles");
+      activeViewRef.current = "catalogHoles";
+      localStorage.setItem(ACTIVE_VIEW_STORAGE_KEY, "catalogHoles");
+    }
+
+    return undefined;
+  }, [activeView, isMountingNodesRoute]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return undefined;
+    }
+
+    const handlePopState = () => {
+      const nextRoute = readMountingNodesRouteFromLocation();
+      const normalizedRoute = nextRoute ? normalizeMountingNodesRoute(nextRoute) : null;
+
+      setMountingNodesRouteState(normalizedRoute);
+      setMountingNodesRouteVersion((current) => current + 1);
+      setMountingNodesRouteReady(!normalizedRoute || normalizedRoute.mode !== "detail");
+      setMountingNodesInitialState(
+        normalizedRoute ? buildMountingNodesRestoreState(normalizedRoute) : null,
+      );
+
+      if (normalizedRoute) {
+        setActiveView("catalogHoles");
+        activeViewRef.current = "catalogHoles";
+        localStorage.setItem(ACTIVE_VIEW_STORAGE_KEY, "catalogHoles");
+      }
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  useEffect(() => {
+    if (!isMountingNodesRoute) {
+      setMountingNodesInitialState(null);
+      setMountingNodesRouteReady(true);
+      return undefined;
+    }
+
+    if (mountingNodesRouteState?.mode !== "detail") {
+      setMountingNodesInitialState(null);
+      setMountingNodesRouteReady(true);
+      return undefined;
+    }
+
+    if (!token) {
+      setMountingNodesRouteReady(false);
+      return undefined;
+    }
+
+    let cancelled = false;
+    setMountingNodesRouteReady(false);
+    setMountingNodesInitialState(null);
+
+    (async () => {
+      const result = await getMountingNode(token, mountingNodesRouteState.nodeId);
+
+      if (cancelled) {
+        return;
+      }
+
+      if (!result.success || !result.node) {
+        const fallbackRoute = normalizeMountingNodesRoute({ mode: "list", nodeId: null });
+        setMountingNodesRouteState(fallbackRoute);
+        setMountingNodesInitialState(null);
+        setCatalogHolesDetailOpen(false);
+        setCatalogHolesBreadcrumbNodeId(null);
+        setCatalogHolesBreadcrumbNodeName("");
+        setMountingNodesRouteReady(true);
+        updateMountingNodesHistory(fallbackRoute, { replace: true });
+        return;
+      }
+
+      const restoredNodeId = String(result.node.id || mountingNodesRouteState.nodeId || "").trim();
+      const restoredNodeName = String(result.node.name || "").trim();
+
+      setCatalogHolesMode("list");
+      setCatalogHolesDetailOpen(true);
+      setCatalogHolesBreadcrumbNodeId(restoredNodeId || null);
+      setCatalogHolesBreadcrumbNodeName(restoredNodeName);
+      setMountingNodesInitialState(
+        buildMountingNodesRestoreState(mountingNodesRouteState, result.node),
+      );
+      setMountingNodesRouteReady(true);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isMountingNodesRoute, mountingNodesRouteState?.mode, mountingNodesRouteState?.nodeId, token]);
 
   const t = TRANSLATIONS[language] || TRANSLATIONS.en;
   const userLoginName = user?.username || user?.email?.split("@")[0] || "";
@@ -9726,6 +9887,7 @@ export default function App() {
     setCatalogHolesReturnState(null);
     setCatalogHolesBreadcrumbNodeId(resolvedNodeId);
     setCatalogHolesBreadcrumbNodeName(resolvedNodeName);
+    updateMountingNodesHistory({ mode: "detail", nodeId: resolvedNodeId });
   }
 
   function handleCloseCatalogHolesDetail() {
@@ -9733,6 +9895,7 @@ export default function App() {
     setCatalogHolesBreadcrumbNodeId(null);
     setCatalogHolesBreadcrumbNodeName("");
     setCatalogHolesReturnState(null);
+    updateMountingNodesHistory({ mode: "list", nodeId: null });
   }
 
   function handleCatalogHolesToolbarListClick() {
@@ -9747,10 +9910,12 @@ export default function App() {
       setCatalogHolesOpenContext(null);
       setCatalogHolesCreateError("");
       setCatalogHolesCreating(false);
+      updateMountingNodesHistory({ mode: "list", nodeId: null });
       return;
     }
 
     setCatalogHolesListRequestToken((current) => current + 1);
+    updateMountingNodesHistory({ mode: "list", nodeId: null });
   }
 
   function renderCatalogHolesToolbarBreadcrumb(items = []) {
@@ -20365,18 +20530,27 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
               </article>
               </>
             ) : (
-              <MountingNodesPanel
-                initialState={catalogHolesReturnState}
-                listRequestToken={catalogHolesListRequestToken}
-                language={language}
-                onCloseMountingNodeDetail={handleCloseCatalogHolesDetail}
-                onOpenFittingDetail={openFittingDetails}
-                onOpenMountingNodeDetail={handleOpenCatalogHolesDetail}
-                onOpenMountingNodeCreate={handleOpenMountingNodeCreate}
-                onOpenMountingNodeEditor={handleOpenMountingNodeEditor}
-                t={t}
-                token={token}
-              />
+              isMountingNodesRoute && !mountingNodesRouteReady ? (
+                <article className="catalog-card service-catalog-card service-catalog-card-full holes-view-card">
+                  <div className="empty-state compact-empty-state">
+                    <span>{t.loading || (language === "uk" ? "Завантаження..." : "Loading...")}</span>
+                  </div>
+                </article>
+              ) : (
+                <MountingNodesPanel
+                  key={`mounting-nodes-route-${mountingNodesRouteVersion}`}
+                  initialState={mountingNodesPanelInitialState}
+                  listRequestToken={catalogHolesListRequestToken}
+                  language={language}
+                  onCloseMountingNodeDetail={handleCloseCatalogHolesDetail}
+                  onOpenFittingDetail={openFittingDetails}
+                  onOpenMountingNodeDetail={handleOpenCatalogHolesDetail}
+                  onOpenMountingNodeCreate={handleOpenMountingNodeCreate}
+                  onOpenMountingNodeEditor={handleOpenMountingNodeEditor}
+                  t={t}
+                  token={token}
+                />
+              )
             )}
           </section>
         ) : isCatalogBundlesView && activeView === "catalogBundles" ? (
