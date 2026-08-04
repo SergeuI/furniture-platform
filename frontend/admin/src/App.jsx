@@ -121,12 +121,14 @@ import {
 import {
   buildMountingNodesRestoreState,
   buildMountingNodesRouteUrl,
+  createMountingNodesDetailRestoreCoordinator,
   normalizeMountingNodesRoute,
   parseMountingNodesRoute,
 } from "./mountingNodesNavigation.js";
 import {
   buildMountingNodeEditorSavePayload,
   canSaveMountingNodeEditor,
+  resolveMountingNodeEditorContext,
 } from "./mountingNodesEditor.js";
 
 import surfaceMountIcon from "./assets/hole-mounting/surface_mount.png";
@@ -6768,12 +6770,20 @@ export default function App() {
   );
   const [mountingNodesRouteVersion, setMountingNodesRouteVersion] = useState(0);
   const [mountingNodesRouteReady, setMountingNodesRouteReady] = useState(
-    () => !initialMountingNodesRoute || initialMountingNodesRoute.mode !== "detail",
+    () => !initialMountingNodesRoute || initialMountingNodesRoute.mode === "list",
   );
   const [mountingNodesRouteState, setMountingNodesRouteState] = useState(
     () => initialMountingNodesRoute,
   );
   const [mountingNodesInitialState, setMountingNodesInitialState] = useState(null);
+  const [mountingNodesRouteLoadingMessage, setMountingNodesRouteLoadingMessage] = useState("");
+  const [mountingNodesRouteError, setMountingNodesRouteError] = useState("");
+  const mountingNodesEditorRestoreKeyRef = useRef("");
+  const mountingNodesEditorRestorePromiseRef = useRef(null);
+  const mountingNodesDetailRestoreCoordinatorRef = useRef(null);
+  if (!mountingNodesDetailRestoreCoordinatorRef.current) {
+    mountingNodesDetailRestoreCoordinatorRef.current = createMountingNodesDetailRestoreCoordinator();
+  }
   const [user, setUser] = useState(
     () => readPersistedAdminUser(localStorage.getItem(TOKEN_STORAGE_KEY) || ""),
   );
@@ -7118,6 +7128,85 @@ export default function App() {
     historyMethod.call(window.history, null, document.title, nextUrl);
   }
 
+  async function restoreMountingNodeDetail(nodeId, options = {}) {
+    const resolvedNodeId = String(nodeId || "").trim();
+    const coordinator = mountingNodesDetailRestoreCoordinatorRef.current;
+
+    if (!coordinator) {
+      return { success: false };
+    }
+
+    return coordinator.run(resolvedNodeId, async ({ isCurrent }) => {
+      const updateUrl = options.updateUrl !== false;
+      const historyMode = options.historyMode === "push" ? "push" : "replace";
+
+      if (!resolvedNodeId) {
+        const fallbackRoute = normalizeMountingNodesRoute({ mode: "list", nodeId: null });
+        setMountingNodesRouteState(fallbackRoute);
+        setMountingNodesInitialState(null);
+        setMountingNodesRouteLoadingMessage("");
+        setMountingNodesRouteError("");
+        setMountingNodesRouteReady(true);
+        updateMountingNodesHistory(fallbackRoute, { replace: historyMode !== "push" });
+        return { success: false };
+      }
+
+      if (!token) {
+        setMountingNodesRouteReady(false);
+        setMountingNodesRouteLoadingMessage("Відновлення деталей монтажного вузла…");
+        setMountingNodesRouteError("");
+        return { success: false };
+      }
+
+      setMountingNodesRouteReady(false);
+      setMountingNodesRouteLoadingMessage("");
+      setMountingNodesRouteError("");
+      setMountingNodesInitialState(null);
+
+      const result = await getMountingNode(token, resolvedNodeId);
+      if (!isCurrent()) {
+        return { success: false, stale: true };
+      }
+
+      if (!result.success || !result.node) {
+        const fallbackRoute = normalizeMountingNodesRoute({ mode: "list", nodeId: null });
+        setMountingNodesRouteState(fallbackRoute);
+        setMountingNodesInitialState(null);
+        setCatalogHolesDetailOpen(false);
+        setCatalogHolesBreadcrumbNodeId(null);
+        setCatalogHolesBreadcrumbNodeName("");
+        setMountingNodesRouteLoadingMessage("");
+        setMountingNodesRouteError("");
+        setMountingNodesRouteReady(true);
+        updateMountingNodesHistory(fallbackRoute, { replace: true });
+        return { success: false };
+      }
+
+      const restoredNodeId = String(result.node.id || resolvedNodeId || "").trim();
+      const restoredNodeName = String(result.node.name || "").trim();
+      const restoredRoute = normalizeMountingNodesRoute({ mode: "detail", nodeId: restoredNodeId });
+
+      setMountingNodesRouteState(restoredRoute);
+      setMountingNodesRouteVersion((current) => current + 1);
+      setCatalogHolesMode("list");
+      setCatalogHolesDetailOpen(true);
+      setCatalogHolesBreadcrumbNodeId(restoredNodeId || null);
+      setCatalogHolesBreadcrumbNodeName(restoredNodeName);
+      setMountingNodesInitialState(
+        buildMountingNodesRestoreState(restoredRoute, result.node),
+      );
+      setMountingNodesRouteLoadingMessage("");
+      setMountingNodesRouteError("");
+      setMountingNodesRouteReady(true);
+
+      if (updateUrl) {
+        updateMountingNodesHistory(restoredRoute, { replace: historyMode !== "push" });
+      }
+
+      return { success: true };
+    });
+  }
+
   useEffect(() => {
     if (!isMountingNodesRoute) {
       return undefined;
@@ -7143,7 +7232,9 @@ export default function App() {
 
       setMountingNodesRouteState(normalizedRoute);
       setMountingNodesRouteVersion((current) => current + 1);
-      setMountingNodesRouteReady(!normalizedRoute || normalizedRoute.mode !== "detail");
+      setMountingNodesRouteReady(!normalizedRoute || normalizedRoute.mode === "list");
+      setMountingNodesRouteLoadingMessage("");
+      setMountingNodesRouteError("");
       setMountingNodesInitialState(
         normalizedRoute ? buildMountingNodesRestoreState(normalizedRoute) : null,
       );
@@ -7162,13 +7253,20 @@ export default function App() {
   useEffect(() => {
     if (!isMountingNodesRoute) {
       setMountingNodesInitialState(null);
+      setMountingNodesRouteLoadingMessage("");
+      setMountingNodesRouteError("");
       setMountingNodesRouteReady(true);
       return undefined;
     }
 
     if (mountingNodesRouteState?.mode !== "detail") {
-      setMountingNodesInitialState(null);
-      setMountingNodesRouteReady(true);
+      if (mountingNodesRouteState?.mode === "list") {
+        setMountingNodesInitialState(null);
+        setMountingNodesRouteLoadingMessage("");
+        setMountingNodesRouteError("");
+        setMountingNodesRouteReady(true);
+      }
+
       return undefined;
     }
 
@@ -7177,45 +7275,12 @@ export default function App() {
       return undefined;
     }
 
-    let cancelled = false;
-    setMountingNodesRouteReady(false);
-    setMountingNodesInitialState(null);
+    void restoreMountingNodeDetail(mountingNodesRouteState.nodeId, {
+      historyMode: "replace",
+      updateUrl: false,
+    });
 
-    (async () => {
-      const result = await getMountingNode(token, mountingNodesRouteState.nodeId);
-
-      if (cancelled) {
-        return;
-      }
-
-      if (!result.success || !result.node) {
-        const fallbackRoute = normalizeMountingNodesRoute({ mode: "list", nodeId: null });
-        setMountingNodesRouteState(fallbackRoute);
-        setMountingNodesInitialState(null);
-        setCatalogHolesDetailOpen(false);
-        setCatalogHolesBreadcrumbNodeId(null);
-        setCatalogHolesBreadcrumbNodeName("");
-        setMountingNodesRouteReady(true);
-        updateMountingNodesHistory(fallbackRoute, { replace: true });
-        return;
-      }
-
-      const restoredNodeId = String(result.node.id || mountingNodesRouteState.nodeId || "").trim();
-      const restoredNodeName = String(result.node.name || "").trim();
-
-      setCatalogHolesMode("list");
-      setCatalogHolesDetailOpen(true);
-      setCatalogHolesBreadcrumbNodeId(restoredNodeId || null);
-      setCatalogHolesBreadcrumbNodeName(restoredNodeName);
-      setMountingNodesInitialState(
-        buildMountingNodesRestoreState(mountingNodesRouteState, result.node),
-      );
-      setMountingNodesRouteReady(true);
-    })();
-
-    return () => {
-      cancelled = true;
-    };
+    return undefined;
   }, [isMountingNodesRoute, mountingNodesRouteState?.mode, mountingNodesRouteState?.nodeId, token]);
 
   const t = TRANSLATIONS[language] || TRANSLATIONS.en;
@@ -7238,6 +7303,103 @@ export default function App() {
     () => (isCatalogHolesView ? readProcessingTemplatesReturnState() : null),
     [isCatalogHolesView],
   );
+
+  useEffect(() => {
+    if (!isMountingNodesRoute || mountingNodesRouteState?.mode !== "editor") {
+      mountingNodesEditorRestoreKeyRef.current = "";
+      mountingNodesEditorRestorePromiseRef.current = null;
+      return undefined;
+    }
+
+    const restoredNodeId = String(mountingNodesRouteState.nodeId || "").trim();
+    if (!restoredNodeId) {
+      mountingNodesEditorRestoreKeyRef.current = "";
+      mountingNodesEditorRestorePromiseRef.current = null;
+      setMountingNodesRouteLoadingMessage("");
+      setMountingNodesRouteError("Не вдалося відновити редактор монтажного вузла");
+      setMountingNodesRouteReady(true);
+      return undefined;
+    }
+
+    if (!token) {
+      setMountingNodesRouteReady(false);
+      setMountingNodesRouteLoadingMessage("Відновлення редактора монтажного вузла…");
+      setMountingNodesRouteError("");
+      return undefined;
+    }
+
+    const restoreKey = `editor:${restoredNodeId}`;
+    let restorePromise = mountingNodesEditorRestorePromiseRef.current;
+    const isNewRestore = !restorePromise || mountingNodesEditorRestoreKeyRef.current !== restoreKey;
+
+    if (isNewRestore) {
+      mountingNodesEditorRestoreKeyRef.current = restoreKey;
+      setMountingNodesRouteReady(false);
+      setMountingNodesRouteLoadingMessage("Відновлення редактора монтажного вузла…");
+      setMountingNodesRouteError("");
+      setMountingNodesInitialState(null);
+
+      restorePromise = (async () => {
+        try {
+          const result = await getMountingNode(token, restoredNodeId);
+
+          if (!result.success || !result.node) {
+            return { success: false };
+          }
+
+          const editorContext = resolveMountingNodeEditorContext(result.node, restoredNodeId);
+          if (
+            !editorContext ||
+            !editorContext.mountingNodeId ||
+            !editorContext.nodeDetail ||
+            !editorContext.fittingId ||
+            !editorContext.templateId
+          ) {
+            return { success: false };
+          }
+
+          const returnState = buildMountingNodesRestoreState({ mode: "detail", nodeId: restoredNodeId }, result.node);
+          await handleOpenMountingNodeEditor(editorContext, returnState, { updateUrl: false });
+          return { success: true };
+        } catch (error) {
+          return { success: false, error };
+        } finally {
+          if (mountingNodesEditorRestorePromiseRef.current === restorePromise) {
+            mountingNodesEditorRestorePromiseRef.current = null;
+            mountingNodesEditorRestoreKeyRef.current = "";
+          }
+        }
+      })();
+
+      mountingNodesEditorRestorePromiseRef.current = restorePromise;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      const result = await restorePromise;
+
+      if (cancelled) {
+        return;
+      }
+
+      if (!result?.success) {
+        setMountingNodesRouteLoadingMessage("");
+        setMountingNodesRouteError("Не вдалося відновити редактор монтажного вузла");
+        setMountingNodesRouteReady(true);
+        return;
+      }
+
+      setMountingNodesRouteLoadingMessage("");
+      setMountingNodesRouteError("");
+      setMountingNodesRouteReady(true);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isMountingNodesRoute, mountingNodesRouteState?.mode, mountingNodesRouteState?.nodeId, token]);
+
   const trialCountdown = useMemo(
     () => buildTrialCountdown(user, trialClockNow),
     [trialClockNow, user],
@@ -9857,11 +10019,19 @@ export default function App() {
 
   function handleCatalogHolesBackToList() {
     if (catalogHolesMode === "editor") {
-      setCatalogHolesDetailOpen(true);
+      const restoredNodeId = String(
+        catalogHolesOpenContext?.mountingNodeId ||
+          catalogHolesReturnState?.selectedNodeId ||
+          catalogHolesReturnState?.nodeDetail?.id ||
+          "",
+      ).trim();
       setCatalogHolesMode("list");
       setCatalogHolesOpenContext(null);
       setCatalogHolesCreateError("");
       setCatalogHolesCreating(false);
+      if (restoredNodeId) {
+        handleMountingNodesEditorRestoreBackToDetail();
+      }
       return;
     }
 
@@ -9873,6 +10043,37 @@ export default function App() {
     setCatalogHolesBreadcrumbNodeName("");
     setCatalogHolesCreateError("");
     setCatalogHolesCreating(false);
+  }
+
+  function handleMountingNodesEditorRestoreBackToDetail() {
+    const restoredNodeId = String(
+      mountingNodesRouteState?.nodeId ||
+        catalogHolesOpenContext?.mountingNodeId ||
+        catalogHolesReturnState?.selectedNodeId ||
+        catalogHolesReturnState?.nodeDetail?.id ||
+        "",
+    ).trim();
+
+    if (!restoredNodeId) {
+      return;
+    }
+
+    mountingNodesEditorRestoreKeyRef.current = "";
+    void restoreMountingNodeDetail(restoredNodeId, {
+      historyMode: "replace",
+      updateUrl: true,
+    });
+  }
+
+  function handleMountingNodesEditorRestoreBackToList() {
+    const nextRoute = normalizeMountingNodesRoute({ mode: "list", nodeId: null });
+    mountingNodesEditorRestoreKeyRef.current = "";
+    setMountingNodesRouteError("");
+    setMountingNodesRouteLoadingMessage("");
+    setMountingNodesRouteState(nextRoute);
+    setMountingNodesInitialState(null);
+    setMountingNodesRouteReady(true);
+    updateMountingNodesHistory(nextRoute, { replace: true });
   }
 
   function handleOpenCatalogHolesDetail(nodeId, nodeName) {
@@ -10050,11 +10251,12 @@ export default function App() {
     setCatalogHolesMode("create");
   }
 
-  function handleOpenMountingNodeEditor(context, returnState) {
+  async function handleOpenMountingNodeEditor(context, returnState, options = {}) {
     const resolvedContext = context && typeof context === "object" ? context : null;
     const resolvedReturnState = returnState && typeof returnState === "object" ? returnState : null;
     const resolvedNodeId = String(resolvedContext?.mountingNodeId || "").trim();
     const resolvedNodeName = getCatalogHolesBreadcrumbNodeName(resolvedContext, resolvedReturnState);
+    const shouldUpdateUrl = options.updateUrl !== false;
     const nextContext = resolvedContext
       ? {
         ...resolvedContext,
@@ -10070,7 +10272,14 @@ export default function App() {
       setCatalogHolesBreadcrumbNodeName(resolvedNodeName);
     }
     setCatalogHolesReturnState(resolvedReturnState);
-    switchView("catalogHoles", user, nextContext);
+    setMountingNodesRouteLoadingMessage("");
+    setMountingNodesRouteError("");
+
+    if (shouldUpdateUrl && resolvedNodeId) {
+      updateMountingNodesHistory({ mode: "editor", nodeId: resolvedNodeId });
+    }
+
+    return await switchView("catalogHoles", user, nextContext);
   }
 
   function buildMountingNodeEditorContext(nodeDetail) {
@@ -20530,10 +20739,35 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
               </article>
               </>
             ) : (
-              isMountingNodesRoute && !mountingNodesRouteReady ? (
+              isMountingNodesRoute && mountingNodesRouteError ? (
                 <article className="catalog-card service-catalog-card service-catalog-card-full holes-view-card">
                   <div className="empty-state compact-empty-state">
-                    <span>{t.loading || (language === "uk" ? "Завантаження..." : "Loading...")}</span>
+                    <strong>{language === "uk" ? "Не вдалося відновити редактор монтажного вузла" : "Unable to restore the mounting node editor"}</strong>
+                    <span>{mountingNodesRouteError}</span>
+                    <div className="service-catalog-header-actions" style={{ justifyContent: "center", marginTop: "12px" }}>
+                      <button
+                        className="primary-button"
+                        onClick={handleMountingNodesEditorRestoreBackToDetail}
+                        type="button"
+                      >
+                        {language === "uk" ? "Повернутися до деталей вузла" : "Return to node details"}
+                      </button>
+                      <button
+                        className="ghost-button"
+                        onClick={handleMountingNodesEditorRestoreBackToList}
+                        type="button"
+                      >
+                        {language === "uk" ? "Повернутися до монтажних вузлів" : "Return to mounting nodes"}
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              ) : isMountingNodesRoute && !mountingNodesRouteReady ? (
+                <article className="catalog-card service-catalog-card service-catalog-card-full holes-view-card">
+                  <div className="empty-state compact-empty-state">
+                    <span>
+                      {mountingNodesRouteLoadingMessage || t.loading || (language === "uk" ? "Завантаження..." : "Loading...")}
+                    </span>
                   </div>
                 </article>
               ) : (
