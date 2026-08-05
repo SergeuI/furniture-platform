@@ -440,118 +440,78 @@ export default function MountingNodesCreatePanel({
       ? "Збереження..."
       : "Saving..."
     : language === "uk"
-      ? "Зберегти та налаштувати отвори"
-      : "Save and configure holes";
-  const secondarySubmitLabel = isSubmitting
-    ? language === "uk"
-      ? "Збереження..."
-      : "Saving..."
-    : language === "uk"
-      ? "Зберегти й повернутися до списку"
-      : "Save and return to list";
+      ? "Створити вузол"
+      : "Create node";
+  const nameValidationError = validationErrors.find((error) => error.field === "name") || null;
+  const itemsValidationError =
+    (draft.is_dirty || Boolean(createError) || isSubmitting)
+      ? validationErrors.find((error) => error.field === "items") || null
+      : null;
+  const generalValidationError =
+    (draft.is_dirty || Boolean(createError) || isSubmitting)
+      ? validationErrors.find((error) => !["name", "items"].includes(error.field)) || null
+      : null;
 
   return (
     <section aria-label={selectorTitle} className="mounting-node-create-screen">
       <article className="catalog-card service-catalog-card service-catalog-card-full mounting-node-create-section">
         <form onSubmit={(event) => handleSubmit(event, "editor")}>
-          <div className="catalog-page-header mounting-node-create-header">
-            <div className="service-catalog-title">
-              <h3>{language === "uk" ? "Створення монтажного вузла" : "Create mounting node"}</h3>
-            </div>
-            <div className="service-catalog-header-actions">
+          <div className="mounting-node-create-header">
+            <div className="mounting-node-create-header-meta">
               <span className="service-tree-badge subtle">
-                {selectedItems.length} {language === "uk" ? "фурнітур" : "fittings"}
+                {language === "uk" ? "Фурнітура" : "Fittings"}: {selectedItems.length}
               </span>
-              <button className="ghost-button compact-button" onClick={handleCancel} type="button">
+              <button className="mounting-node-create-soft-button mounting-node-create-back-button" onClick={handleCancel} type="button">
                 <ArrowLeft size={16} />
-                {language === "uk" ? "Повернутися до монтажних вузлів" : "Back to mounting nodes"}
+                {language === "uk" ? "Повернутися" : "Back"}
               </button>
             </div>
           </div>
 
           <div className="mounting-node-create-top-grid">
-            <div className="mounting-node-create-field mounting-node-create-name-field">
-              <span>{language === "uk" ? "Назва монтажного вузла" : "Mounting node name"}</span>
-              <div className="mounting-node-create-name-row">
-                <input
-                  disabled={isCreating || internalSubmitting}
-                  onChange={(event) => handleNameChange(event.target.value)}
-                  placeholder={language === "uk" ? "Наприклад, mn_confirmat_7x50" : "For example, mn_confirmat_7x50"}
-                  type="text"
-                  value={draft.name}
-                />
-                <button
-                  className="primary-button compact-button"
-                  disabled={isCreating || internalSubmitting}
-                  onClick={openSelector}
-                  type="button"
-                >
-                  <Plus size={16} />
-                  {language === "uk" ? "Додати фурнітуру" : "Add fittings"}
-                </button>
+            <section className="mounting-node-create-card mounting-node-create-main-info-card">
+              <div className="mounting-node-create-card-head">
+                <strong>{language === "uk" ? "Основна інформація" : "Basic information"}</strong>
               </div>
-            </div>
-            <label className="mounting-node-create-field">
-              <span>{language === "uk" ? "Опис" : "Description"}</span>
-              <textarea
-                disabled={isCreating || internalSubmitting}
-                onChange={(event) => handleDescriptionChange(event.target.value)}
-                placeholder={language === "uk" ? "Необов’язково" : "Optional"}
-                rows="3"
-                value={draft.description}
-              />
-            </label>
-          </div>
-
-          <div className="mounting-node-create-main-grid">
-            <section className="hole-template-fitting-info">
-              <div className="hole-template-fitting-info-head">
-                <strong>{language === "uk" ? "Інформація про фурнітуру" : "Fitting info"}</strong>
-                {selectedItems.length ? (
-                  <span className="service-tree-badge subtle">
-                    {selectedItems.length} {language === "uk" ? "позицій" : "items"}
-                  </span>
-                ) : null}
+              <div className="mounting-node-create-form-grid">
+                <label className="mounting-node-create-field mounting-node-create-name-field">
+                  <span>{language === "uk" ? "Назва монтажного вузла" : "Mounting node name"}</span>
+                  <input
+                    aria-describedby={nameValidationError ? "mounting-node-create-name-error" : undefined}
+                    aria-invalid={Boolean(nameValidationError)}
+                    disabled={isCreating || internalSubmitting}
+                    onChange={(event) => handleNameChange(event.target.value)}
+                    placeholder={language === "uk" ? "Наприклад, Конфірмат 7×50" : "For example, Confirmat 7x50"}
+                    type="text"
+                    value={draft.name}
+                  />
+                  {nameValidationError ? (
+                    <div className="mounting-node-create-field-error" id="mounting-node-create-name-error">
+                      {nameValidationError.message}
+                    </div>
+                  ) : null}
+                </label>
+                <label className="mounting-node-create-field mounting-node-create-description-field">
+                  <span>{language === "uk" ? "Опис" : "Description"}</span>
+                  <textarea
+                    className="mounting-node-create-description-input"
+                    disabled={isCreating || internalSubmitting}
+                    onChange={(event) => handleDescriptionChange(event.target.value)}
+                    placeholder={language === "uk" ? "Необов’язково" : "Optional"}
+                    rows="2"
+                    value={draft.description}
+                  />
+                </label>
               </div>
-              {selectedFitting ? (
-                <div className={`hole-template-fitting-info-body${getFittingImageUrl(selectedFitting) ? "" : " no-image"}`}>
-                  {getFittingImageUrl(selectedFitting) ? (
-                    <img
-                      alt=""
-                      className="hole-template-fitting-info-image"
-                      loading="lazy"
-                      src={getFittingImageUrl(selectedFitting)}
-                    />
-                  ) : (
-                    <div className="hole-template-fitting-info-placeholder">
-                      {language === "uk" ? "Немає фото" : "No image"}
-                    </div>
-                  )}
-                  <div className="hole-template-fitting-info-copy">
-                    <strong className="hole-template-fitting-info-title">{getFittingName(selectedFitting)}</strong>
-                    <div className="hole-template-fitting-info-subtitle">
-                      {[getFittingArticle(selectedFitting), getFittingCategoryLabel(selectedFitting, language, t, fittingCategories)]
-                        .filter(Boolean)
-                        .join(" · ") || (language === "uk" ? "Вибрано для локального draft" : "Selected for local draft")}
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="empty-state compact-empty-state">
-                  <span>{language === "uk" ? "Спочатку виберіть фурнітуру зверху." : "Choose a fitting above."}</span>
-                </div>
-              )}
             </section>
 
-            <section className="holes-mounting-variant-dropdown">
-              <div className="holes-mounting-variant-dropdown-head">
-                <div>
-                  <strong>{language === "uk" ? "Варіант кріплення" : "Mounting variant"}</strong>
-                </div>
+            <section className="mounting-node-create-card mounting-node-create-variant-card">
+              <div className="mounting-node-create-card-head">
+                <strong>{language === "uk" ? "Варіант кріплення" : "Mounting variant"}</strong>
               </div>
               <div className={`holes-mounting-variant-dropdown-shell${variantOpen ? " is-open" : ""}`}>
                 <button
-                  className="holes-mounting-variant-toggle"
+                  className="holes-mounting-variant-toggle mounting-node-create-variant-toggle"
                   disabled={isCreating || internalSubmitting}
                   onClick={() => setVariantOpen((current) => !current)}
                   type="button"
@@ -595,13 +555,16 @@ export default function MountingNodesCreatePanel({
             </section>
           </div>
 
-          <section className="hole-template-fitting-list">
-            <div className="hole-template-fitting-list-head">
+          {generalValidationError ? <div className="mounting-node-create-banner">{generalValidationError.message}</div> : null}
+          {createError ? <div className="mounting-node-create-banner">{createError}</div> : null}
+
+          <section className="mounting-node-create-card mounting-node-create-items-card">
+            <div className="hole-template-fitting-list-head mounting-node-create-items-head">
               <div>
-                <h4>{language === "uk" ? "Вибрані фурнітури" : "Selected fittings"}</h4>
+                <h4>{language === "uk" ? "Фурнітура вузла" : "Node fittings"}</h4>
               </div>
               <button
-                className="ghost-button compact-button"
+                className="primary-button mounting-node-create-add-button"
                 disabled={isCreating || internalSubmitting}
                 onClick={openSelector}
                 type="button"
@@ -611,12 +574,26 @@ export default function MountingNodesCreatePanel({
               </button>
             </div>
 
-            <div className="holes-bundle-selected-list">
+            {itemsValidationError ? (
+              <div className="mounting-node-create-section-error">
+                {itemsValidationError.message}
+              </div>
+            ) : selectedItems.length ? (
+              null
+            ) : (
+              <div className="mounting-node-create-empty-state mounting-node-create-empty-state-compact">
+                <span>{language === "uk" ? "До монтажного вузла ще не додано фурнітуру." : "No fittings added yet."}</span>
+                <span>{language === "uk" ? "Додайте щонайменше одну позицію." : "Add at least one position."}</span>
+              </div>
+            )}
+
+            <div className="holes-bundle-selected-list mounting-node-create-items-list">
               {selectedItems.length ? (
                 selectedItems.map((item, index) => {
                   const fittingId = getFittingId(item);
                   const isActive = normalizeText(selectedFitting?.fitting_id) === normalizeText(fittingId);
                   const itemKey = `selected-item-${index}-${fittingId || getFittingArticle(item) || getFittingName(item) || "fallback"}`;
+                  const imageUrl = getFittingImageUrl(item);
 
                   return (
                     <article
@@ -627,88 +604,86 @@ export default function MountingNodesCreatePanel({
                       role="button"
                       tabIndex={0}
                     >
-                      <div className="hole-bundle-selected-item-head">
-                        <div className="hole-bundle-selected-item-copy">
-                          <strong>{getFittingName(item) || fittingId}</strong>
-                          <span>{getFittingArticle(item) || fittingId || "—"}</span>
-                        </div>
-                        <button
-                          aria-label={language === "uk" ? "Видалити" : "Remove fitting"}
-                          className="ghost-button compact-button mounting-node-create-fitting-remove"
-                          disabled={isCreating || internalSubmitting}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            handleRemoveFitting(fittingId);
-                          }}
-                          title={language === "uk" ? "Видалити" : "Remove fitting"}
-                          type="button"
-                        >
-                          <X size={14} />
-                        </button>
+                      <div className="hole-bundle-selected-item-media">
+                        {imageUrl ? (
+                          <img alt="" loading="lazy" src={imageUrl} />
+                        ) : (
+                          <span className="hole-bundle-selected-item-placeholder">
+                            {language === "uk" ? "Немає фото" : "No image"}
+                          </span>
+                        )}
                       </div>
 
-                      <div className="hole-bundle-selected-item-controls">
-                        <label className="mounting-node-create-fitting-role">
-                          <span>{language === "uk" ? "Роль" : "Role"}</span>
-                          <select
-                            disabled={isCreating || internalSubmitting}
-                            onChange={(event) => handleSelectedFittingPatch(fittingId, { role: event.target.value })}
-                            value={item.role || MOUNTING_NODE_CREATE_ROLE_OPTIONS[0]}
-                          >
-                            {MOUNTING_NODE_CREATE_ROLE_OPTIONS.map((role) => (
-                              <option key={role} value={role}>
-                                {role}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        <label className="mounting-node-create-fitting-quantity">
-                          <span>{language === "uk" ? "Кількість" : "Quantity"}</span>
-                          <input
-                            disabled={isCreating || internalSubmitting}
-                            min="1"
-                            onChange={(event) =>
-                              handleSelectedFittingPatch(fittingId, { quantity: Number(event.target.value) || 1 })
-                            }
-                            type="number"
-                            value={item.quantity || 1}
-                          />
-                        </label>
+                      <div className="hole-bundle-selected-item-copy">
+                        <strong>{getFittingName(item) || fittingId}</strong>
+                        <span>{getFittingArticle(item) || fittingId || "—"}</span>
                       </div>
+
+                      <label className="mounting-node-create-fitting-quantity">
+                        <span>{language === "uk" ? "Кількість" : "Quantity"}</span>
+                        <input
+                          disabled={isCreating || internalSubmitting}
+                          min="1"
+                          onChange={(event) =>
+                            handleSelectedFittingPatch(fittingId, { quantity: Number(event.target.value) || 1 })
+                          }
+                          type="number"
+                          value={item.quantity || 1}
+                        />
+                      </label>
+
+                      <label className="mounting-node-create-fitting-role">
+                        <span>{language === "uk" ? "Роль" : "Role"}</span>
+                        <select
+                          disabled={isCreating || internalSubmitting}
+                          onChange={(event) => handleSelectedFittingPatch(fittingId, { role: event.target.value })}
+                          value={item.role || MOUNTING_NODE_CREATE_ROLE_OPTIONS[0]}
+                        >
+                          {MOUNTING_NODE_CREATE_ROLE_OPTIONS.map((role) => (
+                            <option key={role} value={role}>
+                              {role}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+
+                      <button
+                        aria-label={language === "uk" ? "Видалити" : "Remove fitting"}
+                        className="ghost-button mounting-node-create-fitting-remove"
+                        disabled={isCreating || internalSubmitting}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleRemoveFitting(fittingId);
+                        }}
+                        title={language === "uk" ? "Видалити" : "Remove fitting"}
+                        type="button"
+                      >
+                        <X size={14} />
+                      </button>
                     </article>
                   );
                 })
-              ) : (
-                <div className="empty-state compact-empty-state">
-                  <span>{language === "uk" ? "Додайте хоча б одну фурнітуру." : "Pick at least one fitting using the button above."}</span>
-                </div>
-              )}
+              ) : null}
             </div>
           </section>
 
-          {createError ? <div className="hole-template-error">{createError}</div> : null}
-          {validationErrors.length ? <div className="hole-template-error">{validationErrors[0].message}</div> : null}
-
-          <div className="holes-workspace-save-panel">
-            <div className="holes-workspace-save-panel-copy">
-              <strong>{language === "uk" ? "Створення монтажного вузла" : "Create mounting node"}</strong>
-            </div>
+          <div className="holes-workspace-save-panel mounting-node-create-footer">
             <div className="holes-workspace-save-actions mounting-node-create-actions">
               <button
-                className="primary-button"
+                className="mounting-node-create-soft-button mounting-node-create-cancel-button"
+                disabled={isSubmitting}
+                onClick={handleCancel}
+                type="button"
+              >
+                {language === "uk" ? "Скасувати" : "Cancel"}
+              </button>
+              <button
+                className="primary-button mounting-node-create-submit-button"
                 disabled={!canSubmit}
                 onClick={(event) => handleSubmit(event, "editor")}
                 type="button"
               >
                 {primarySubmitLabel}
-              </button>
-              <button
-                className="ghost-button"
-                disabled={!canSubmit}
-                onClick={(event) => handleSubmit(event, "list")}
-                type="button"
-              >
-                {secondarySubmitLabel}
               </button>
             </div>
           </div>

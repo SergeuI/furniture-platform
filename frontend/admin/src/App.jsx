@@ -1,4 +1,4 @@
-﻿import {
+import {
   Blocks,
   CheckCircle2,
   ChevronLeft,
@@ -19887,7 +19887,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
               </div>
             ) : null}
             {catalogHolesMode === "create" ? (
-              <>
+              <section className="table-panel full-panel mounting-node-create-panel-shell">
                 <MountingNodesCreatePanel
                   fittingCategories={visibleFittingCategories}
                   fittingItems={fittingItems}
@@ -19898,7 +19898,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   onCreate={handleCreateMountingNode}
                   t={t}
                 />
-              </>
+              </section>
             ) : catalogHolesMode === "editor" ? (
               <>
               <article className="catalog-card service-catalog-card service-catalog-card-full holes-view-card">
