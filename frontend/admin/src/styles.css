@@ -2277,18 +2277,6 @@ tbody tr.selected {
   gap: 8px;
 }
 
-.settings-grid.mounting-nodes-grid {
-  align-items: stretch;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  justify-content: stretch;
-}
-
-@media (max-width: 1450px) {
-  .settings-grid.mounting-nodes-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
 .mounting-nodes-list {
   display: flex;
   flex-direction: column;
@@ -6690,6 +6678,18 @@ tbody tr.selected {
   display: grid;
   gap: 16px;
   grid-template-columns: repeat(2, minmax(280px, 1fr));
+}
+
+.settings-grid.mounting-nodes-grid {
+  align-items: stretch;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  justify-content: stretch;
+}
+
+@media (max-width: 1450px) {
+  .settings-grid.mounting-nodes-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .settings-card {
