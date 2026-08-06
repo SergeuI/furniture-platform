@@ -10,6 +10,7 @@ function readSource(relativeUrl) {
 test("mounting nodes create panel renders compact wizard structure", () => {
   const panelSource = readSource("../src/components/processing/MountingNodesCreatePanel.jsx");
   const appSource = readSource("../src/App.jsx");
+  const stylesSource = readSource("../src/styles.css");
 
   assert.equal(appSource.includes("mounting-node-create-panel-shell"), true);
   assert.equal(appSource.includes('className="table-panel full-panel mounting-node-create-panel-shell"'), true);
@@ -43,4 +44,18 @@ test("mounting nodes create panel renders compact wizard structure", () => {
   assert.equal(panelSource.includes('mounting-node-create-section-error'), true);
   assert.equal(panelSource.includes('mounting-node-create-footer'), true);
   assert.equal(panelSource.includes('handleSubmit(event, "editor")'), true);
+  assert.equal(panelSource.includes('hole-bundle-modal-row-image'), true);
+  assert.equal(panelSource.includes('hole-bundle-modal-card-image'), true);
+  assert.equal(panelSource.includes('hole-bundle-modal-body'), true);
+  assert.equal(panelSource.includes('hole-bundle-modal-list'), true);
+  assert.equal(panelSource.includes('hole-bundle-modal-cards'), true);
+  assert.equal(panelSource.includes('Немає фото'), true);
+  assert.equal(stylesSource.includes('.hole-bundle-modal-row-image,'), true);
+  assert.equal(stylesSource.includes('.hole-bundle-modal-row-image-empty'), true);
+  assert.equal(stylesSource.includes('.hole-bundle-modal-card-image,'), true);
+  assert.equal(stylesSource.includes('.hole-bundle-modal-card-image-empty'), true);
+  assert.equal(stylesSource.includes('object-fit: contain;'), true);
+  assert.equal(stylesSource.includes('overflow: hidden;'), true);
+  assert.equal(stylesSource.includes('.hole-bundle-modal-card-image {\n  background: #ffffff;'), true);
+  assert.equal(stylesSource.includes('.hole-bundle-modal-card-image-empty {\n  background: #f4f7f9;'), true);
 });

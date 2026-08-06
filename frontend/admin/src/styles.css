@@ -8128,6 +8128,32 @@ tbody tr.selected {
   width: 100%;
 }
 
+.hole-bundle-modal-row-image,
+.hole-bundle-modal-row-image-empty {
+  align-items: center;
+  background: #f4f7f9;
+  border: 1px solid #dbe3ea;
+  border-radius: 8px;
+  box-sizing: border-box;
+  display: flex;
+  flex: 0 0 auto;
+  height: 56px;
+  justify-content: center;
+  overflow: hidden;
+  width: 56px;
+}
+
+.hole-bundle-modal-row-image {
+  object-fit: contain;
+}
+
+.hole-bundle-modal-row-image-empty {
+  color: #607080;
+  font-size: 11px;
+  line-height: 1.25;
+  padding: 6px;
+}
+
 .hole-bundle-modal-row-copy {
   display: grid;
   gap: 4px;
@@ -8198,6 +8224,35 @@ tbody tr.selected {
   height: 100%;
   object-fit: cover;
   width: 100%;
+}
+
+.hole-bundle-modal-card-image,
+.hole-bundle-modal-card-image-empty {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #dbe3ea;
+  border-radius: 10px;
+  box-sizing: border-box;
+  display: flex;
+  flex: 0 0 auto;
+  height: 130px;
+  justify-content: center;
+  overflow: hidden;
+  width: 100%;
+}
+
+.hole-bundle-modal-card-image {
+  background: #ffffff;
+  object-fit: contain;
+}
+
+.hole-bundle-modal-card-image-empty {
+  background: #f4f7f9;
+  color: #607080;
+  font-size: 12px;
+  line-height: 1.35;
+  padding: 12px;
+  text-align: center;
 }
 
 .hole-bundle-modal-card-copy {
