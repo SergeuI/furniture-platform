@@ -275,6 +275,155 @@ function buildMountingNodesHistoryUrl(route, currentSearch = "", currentHash = "
   return `${window.location.pathname}${nextSearch}${currentHash || ""}`;
 }
 
+const ADMIN_SECTION_BY_VIEW = {
+  audit: "audit",
+  catalogBundles: "catalog-bundles",
+  catalogDrillingRules: "catalog-drilling-rules",
+  catalogFasteners: "catalog-fasteners",
+  catalogFittings: "catalog-fittings",
+  catalogHub: "catalog-hub",
+  catalogHoles: "mounting-nodes",
+  catalogManual: "catalog-manual",
+  catalogMaterials: "catalog-materials",
+  catalogServiceRules: "catalog-service-rules",
+  catalogValues: "catalog-values",
+  catalogViyar: "catalog-viyar",
+  createProject: "create-project",
+  entitlements: "entitlements",
+  home: "home",
+  projects: "projects",
+  processing: "processing-overview",
+  settings: "settings",
+  users: "users",
+};
+
+const ADMIN_VIEW_BY_SECTION = Object.fromEntries(
+  Object.entries(ADMIN_SECTION_BY_VIEW).map(([view, section]) => [section, view]),
+);
+
+const ADMIN_PROCESSING_SECTION_PREFIX = "processing-";
+const ADMIN_MOUNTING_NODES_SECTION = "mounting-nodes";
+
+function readAdminRouteFromLocation() {
+  if (typeof window === "undefined") {
+    return {
+      hasSection: false,
+      mountingNodesRoute: null,
+      processingTab: null,
+      view: null,
+    };
+  }
+
+  const searchParams = new URLSearchParams(window.location.search);
+  const section = String(searchParams.get("section") || "").trim();
+
+  if (!section) {
+    return {
+      hasSection: false,
+      mountingNodesRoute: null,
+      processingTab: null,
+      view: null,
+    };
+  }
+
+  if (section === ADMIN_MOUNTING_NODES_SECTION) {
+    const mountingNodesRoute = parseMountingNodesRoute(window.location.search);
+
+    return {
+      hasSection: true,
+      mountingNodesRoute: mountingNodesRoute || normalizeMountingNodesRoute({ mode: "list", nodeId: null }),
+      processingTab: null,
+      view: "catalogHoles",
+    };
+  }
+
+  if (section.startsWith(ADMIN_PROCESSING_SECTION_PREFIX)) {
+    return {
+      hasSection: true,
+      mountingNodesRoute: null,
+      processingTab: section.slice(ADMIN_PROCESSING_SECTION_PREFIX.length) || "overview",
+      view: "processing",
+    };
+  }
+
+  const mappedView = ADMIN_VIEW_BY_SECTION[section];
+
+  if (mappedView) {
+    return {
+      hasSection: true,
+      mountingNodesRoute: null,
+      processingTab: null,
+      view: mappedView,
+    };
+  }
+
+  return {
+    hasSection: true,
+    mountingNodesRoute: null,
+    processingTab: null,
+    view: "home",
+  };
+}
+
+function buildAdminHistoryUrl(
+  {
+    mountingNodesRoute = null,
+    processingTab = "overview",
+    view = "home",
+  } = {},
+  currentHash = "",
+) {
+  if (typeof window === "undefined") {
+    return "";
+  }
+
+  const params = new URLSearchParams();
+  const normalizedView = normalizeCatalogView(view);
+
+  if (normalizedView === "catalogHoles") {
+    const normalizedRoute = normalizeMountingNodesRoute(
+      mountingNodesRoute || { mode: "list", nodeId: null },
+    );
+
+    params.set("section", ADMIN_MOUNTING_NODES_SECTION);
+    params.set("mode", normalizedRoute.mode);
+
+    if (normalizedRoute.nodeId === null) {
+      params.delete("node");
+    } else {
+      params.set("node", String(normalizedRoute.nodeId));
+    }
+  } else if (normalizedView === "processing") {
+    const normalizedProcessingTab = normalizeProcessingWorkspaceTab(processingTab, {
+      canUseFittingHoles: true,
+      isAdmin: true,
+    });
+
+    params.set("section", `${ADMIN_PROCESSING_SECTION_PREFIX}${normalizedProcessingTab}`);
+  } else {
+    params.set("section", ADMIN_SECTION_BY_VIEW[normalizedView] || "home");
+  }
+
+  const queryString = params.toString();
+  return `${window.location.pathname}${queryString ? `?${queryString}` : ""}${currentHash || ""}`;
+}
+
+function updateAdminHistory(route, { replace = false } = {}) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const nextUrl = buildAdminHistoryUrl(route, window.location.hash || "");
+  const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash || ""}`;
+
+  if (nextUrl === currentUrl) {
+    return;
+  }
+
+  const historyMethod = replace ? window.history.replaceState : window.history.pushState;
+  historyMethod.call(window.history, null, document.title, nextUrl);
+}
+
 function consumeAdminTokenHandoff() {
   const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
   const searchParams = new URLSearchParams(window.location.search);
@@ -6757,7 +6906,9 @@ export default function App() {
     };
   }, []);
 
-  const initialMountingNodesRoute = readMountingNodesRouteFromLocation();
+  const initialAdminRoute = readAdminRouteFromLocation();
+  const initialMountingNodesRoute =
+    initialAdminRoute.view === "catalogHoles" ? initialAdminRoute.mountingNodesRoute : null;
   const [language, setLanguage] = useState(
     () => localStorage.getItem(LANGUAGE_STORAGE_KEY) || "en",
   );
@@ -6766,11 +6917,14 @@ export default function App() {
   );
   const tokenRef = useRef(token);
   const activeViewRef = useRef(
-    initialMountingNodesRoute ? "catalogHoles" : normalizeCatalogView(localStorage.getItem(ACTIVE_VIEW_STORAGE_KEY) || "home"),
+    initialAdminRoute.view || normalizeCatalogView(localStorage.getItem(ACTIVE_VIEW_STORAGE_KEY) || "home"),
   );
   const [mountingNodesRouteVersion, setMountingNodesRouteVersion] = useState(0);
   const [mountingNodesRouteReady, setMountingNodesRouteReady] = useState(
-    () => !initialMountingNodesRoute || initialMountingNodesRoute.mode === "list",
+    () =>
+      !initialMountingNodesRoute ||
+      initialMountingNodesRoute.mode === "list" ||
+      initialMountingNodesRoute.mode === "create",
   );
   const [mountingNodesRouteState, setMountingNodesRouteState] = useState(
     () => initialMountingNodesRoute,
@@ -6969,17 +7123,18 @@ export default function App() {
   const trialRefreshTriggeredRef = useRef(false);
   const [confirmAction, setConfirmAction] = useState(null);
   const [activeView, setActiveView] = useState(
-    () => (initialMountingNodesRoute ? "catalogHoles" : normalizeCatalogView(localStorage.getItem(ACTIVE_VIEW_STORAGE_KEY) || "home")),
+    () => initialAdminRoute.view || normalizeCatalogView(localStorage.getItem(ACTIVE_VIEW_STORAGE_KEY) || "home"),
   );
   const [isCatalogMenuOpen, setIsCatalogMenuOpen] = useState(false);
   const [activeProcessingTab, setActiveProcessingTab] = useState(
-    () => localStorage.getItem(PROCESSING_WORKSPACE_STORAGE_KEY) || "overview",
+    () =>
+      initialAdminRoute.view === "processing"
+        ? initialAdminRoute.processingTab || "overview"
+        : localStorage.getItem(PROCESSING_WORKSPACE_STORAGE_KEY) || "overview",
   );
   const [isProcessingMenuOpen, setIsProcessingMenuOpen] = useState(
     () => {
-      const storedView = initialMountingNodesRoute
-        ? "catalogHoles"
-        : normalizeCatalogView(localStorage.getItem(ACTIVE_VIEW_STORAGE_KEY) || "home");
+      const storedView = initialAdminRoute.view || normalizeCatalogView(localStorage.getItem(ACTIVE_VIEW_STORAGE_KEY) || "home");
       return storedView === "processing" || storedView === "catalogHoles";
     },
   );
@@ -7079,7 +7234,13 @@ export default function App() {
   const [selectedHolePointId, setSelectedHolePointId] = useState("");
   const [selectedHoleMountingVariantKey, setSelectedHoleMountingVariantKey] =
     useState("surface_mount");
-  const [catalogHolesMode, setCatalogHolesMode] = useState("list");
+  const [catalogHolesMode, setCatalogHolesMode] = useState(() => (
+    initialMountingNodesRoute?.mode === "create"
+      ? "create"
+      : initialMountingNodesRoute?.mode === "editor"
+        ? "editor"
+        : "list"
+  ));
   const [catalogHolesOpenContext, setCatalogHolesOpenContext] = useState(null);
   const [catalogHolesReturnState, setCatalogHolesReturnState] = useState(null);
   const [catalogHolesDetailOpen, setCatalogHolesDetailOpen] = useState(false);
@@ -7108,24 +7269,12 @@ export default function App() {
   const mountingNodesPanelInitialState = isMountingNodesRoute ? mountingNodesInitialState : catalogHolesReturnState;
 
   function updateMountingNodesHistory(route, { replace = false } = {}) {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    const normalizedRoute = normalizeMountingNodesRoute(route);
-    const nextUrl = buildMountingNodesHistoryUrl(
-      normalizedRoute,
-      window.location.search,
-      window.location.hash || "",
-    );
-    const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash || ""}`;
-
-    if (nextUrl === currentUrl) {
-      return;
-    }
-
-    const historyMethod = replace ? window.history.replaceState : window.history.pushState;
-    historyMethod.call(window.history, null, document.title, nextUrl);
+    updateAdminHistory({
+      mountingNodesRoute: normalizeMountingNodesRoute(route),
+      view: "catalogHoles",
+    }, {
+      replace,
+    });
   }
 
   async function restoreMountingNodeDetail(nodeId, options = {}) {
@@ -7208,42 +7357,43 @@ export default function App() {
   }
 
   useEffect(() => {
-    if (!isMountingNodesRoute) {
-      return undefined;
-    }
-
-    if (activeView !== "catalogHoles") {
-      setActiveView("catalogHoles");
-      activeViewRef.current = "catalogHoles";
-      localStorage.setItem(ACTIVE_VIEW_STORAGE_KEY, "catalogHoles");
-    }
-
-    return undefined;
-  }, [activeView, isMountingNodesRoute]);
-
-  useEffect(() => {
     if (typeof window === "undefined") {
       return undefined;
     }
 
     const handlePopState = () => {
-      const nextRoute = readMountingNodesRouteFromLocation();
-      const normalizedRoute = nextRoute ? normalizeMountingNodesRoute(nextRoute) : null;
+      const nextRoute = readAdminRouteFromLocation();
 
-      setMountingNodesRouteState(normalizedRoute);
+      setActiveView(nextRoute.view || normalizeCatalogView(localStorage.getItem(ACTIVE_VIEW_STORAGE_KEY) || "home"));
+      activeViewRef.current = nextRoute.view || normalizeCatalogView(localStorage.getItem(ACTIVE_VIEW_STORAGE_KEY) || "home");
+      setActiveProcessingTab(
+        nextRoute.view === "processing"
+          ? nextRoute.processingTab || "overview"
+          : localStorage.getItem(PROCESSING_WORKSPACE_STORAGE_KEY) || "overview",
+      );
+      setMountingNodesRouteState(nextRoute.view === "catalogHoles" ? nextRoute.mountingNodesRoute : null);
       setMountingNodesRouteVersion((current) => current + 1);
-      setMountingNodesRouteReady(!normalizedRoute || normalizedRoute.mode === "list");
+      setMountingNodesRouteReady(
+        !nextRoute.mountingNodesRoute ||
+          nextRoute.mountingNodesRoute.mode === "list" ||
+          nextRoute.mountingNodesRoute.mode === "create",
+      );
       setMountingNodesRouteLoadingMessage("");
       setMountingNodesRouteError("");
-      setMountingNodesInitialState(
-        normalizedRoute ? buildMountingNodesRestoreState(normalizedRoute) : null,
+      setCatalogHolesMode(
+        nextRoute.view === "catalogHoles"
+          ? nextRoute.mountingNodesRoute?.mode === "create"
+            ? "create"
+            : nextRoute.mountingNodesRoute?.mode === "editor"
+              ? "editor"
+              : "list"
+          : "list",
       );
-
-      if (normalizedRoute) {
-        setActiveView("catalogHoles");
-        activeViewRef.current = "catalogHoles";
-        localStorage.setItem(ACTIVE_VIEW_STORAGE_KEY, "catalogHoles");
-      }
+      setMountingNodesInitialState(
+        nextRoute.view === "catalogHoles" && nextRoute.mountingNodesRoute
+          ? buildMountingNodesRestoreState(nextRoute.mountingNodesRoute)
+          : null,
+      );
     };
 
     window.addEventListener("popstate", handlePopState);
@@ -10035,6 +10185,26 @@ export default function App() {
       return;
     }
 
+    if (catalogHolesMode === "create") {
+      const nextRoute = normalizeMountingNodesRoute({ mode: "list", nodeId: null });
+      setCatalogHolesMode("list");
+      setCatalogHolesDetailOpen(false);
+      setCatalogHolesOpenContext(null);
+      setCatalogHolesReturnState(null);
+      setCatalogHolesBreadcrumbNodeId(null);
+      setCatalogHolesBreadcrumbNodeName("");
+      setCatalogHolesCreateError("");
+      setCatalogHolesCreating(false);
+      setMountingNodesRouteState(nextRoute);
+      setMountingNodesRouteReady(true);
+      setMountingNodesInitialState(null);
+      updateAdminHistory({
+        mountingNodesRoute: nextRoute,
+        view: "catalogHoles",
+      }, { replace: true });
+      return;
+    }
+
     setCatalogHolesDetailOpen(false);
     setCatalogHolesMode("list");
     setCatalogHolesOpenContext(null);
@@ -10070,10 +10240,21 @@ export default function App() {
     mountingNodesEditorRestoreKeyRef.current = "";
     setMountingNodesRouteError("");
     setMountingNodesRouteLoadingMessage("");
+    setCatalogHolesMode("list");
+    setCatalogHolesDetailOpen(false);
+    setCatalogHolesOpenContext(null);
+    setCatalogHolesReturnState(null);
+    setCatalogHolesBreadcrumbNodeId(null);
+    setCatalogHolesBreadcrumbNodeName("");
+    setCatalogHolesCreateError("");
+    setCatalogHolesCreating(false);
     setMountingNodesRouteState(nextRoute);
     setMountingNodesInitialState(null);
     setMountingNodesRouteReady(true);
-    updateMountingNodesHistory(nextRoute, { replace: true });
+    updateAdminHistory({
+      mountingNodesRoute: nextRoute,
+      view: "catalogHoles",
+    }, { replace: true });
   }
 
   function handleOpenCatalogHolesDetail(nodeId, nodeName) {
@@ -10088,7 +10269,11 @@ export default function App() {
     setCatalogHolesReturnState(null);
     setCatalogHolesBreadcrumbNodeId(resolvedNodeId);
     setCatalogHolesBreadcrumbNodeName(resolvedNodeName);
-    updateMountingNodesHistory({ mode: "detail", nodeId: resolvedNodeId });
+    setMountingNodesRouteState(normalizeMountingNodesRoute({ mode: "detail", nodeId: resolvedNodeId }));
+    updateAdminHistory({
+      mountingNodesRoute: { mode: "detail", nodeId: resolvedNodeId },
+      view: "catalogHoles",
+    });
   }
 
   function handleCloseCatalogHolesDetail() {
@@ -10096,7 +10281,11 @@ export default function App() {
     setCatalogHolesBreadcrumbNodeId(null);
     setCatalogHolesBreadcrumbNodeName("");
     setCatalogHolesReturnState(null);
-    updateMountingNodesHistory({ mode: "list", nodeId: null });
+    setMountingNodesRouteState(normalizeMountingNodesRoute({ mode: "list", nodeId: null }));
+    updateAdminHistory({
+      mountingNodesRoute: { mode: "list", nodeId: null },
+      view: "catalogHoles",
+    });
   }
 
   function handleCatalogHolesToolbarListClick() {
@@ -10111,12 +10300,22 @@ export default function App() {
       setCatalogHolesOpenContext(null);
       setCatalogHolesCreateError("");
       setCatalogHolesCreating(false);
-      updateMountingNodesHistory({ mode: "list", nodeId: null });
+      const nextRoute = normalizeMountingNodesRoute({ mode: "list", nodeId: null });
+      setMountingNodesRouteState(nextRoute);
+      setMountingNodesRouteReady(true);
+      setMountingNodesInitialState(null);
+      updateAdminHistory({
+        mountingNodesRoute: nextRoute,
+        view: "catalogHoles",
+      });
       return;
     }
 
     setCatalogHolesListRequestToken((current) => current + 1);
-    updateMountingNodesHistory({ mode: "list", nodeId: null });
+    updateAdminHistory({
+      mountingNodesRoute: { mode: "list", nodeId: null },
+      view: "catalogHoles",
+    });
   }
 
   function renderCatalogHolesToolbarBreadcrumb(items = []) {
@@ -10248,7 +10447,15 @@ export default function App() {
     setCatalogHolesBreadcrumbNodeName("");
     setCatalogHolesCreateError("");
     setCatalogHolesCreating(false);
+    const nextRoute = normalizeMountingNodesRoute({ mode: "create", nodeId: null });
+    setMountingNodesRouteState(nextRoute);
+    setMountingNodesRouteReady(true);
+    setMountingNodesInitialState(null);
     setCatalogHolesMode("create");
+    updateAdminHistory({
+      mountingNodesRoute: nextRoute,
+      view: "catalogHoles",
+    });
   }
 
   async function handleOpenMountingNodeEditor(context, returnState, options = {}) {
@@ -10260,6 +10467,7 @@ export default function App() {
     const nextContext = resolvedContext
       ? {
         ...resolvedContext,
+        skipHistoryUpdate: !shouldUpdateUrl,
         nodeName: resolvedNodeName,
       }
       : resolvedContext;
@@ -10276,7 +10484,12 @@ export default function App() {
     setMountingNodesRouteError("");
 
     if (shouldUpdateUrl && resolvedNodeId) {
-      updateMountingNodesHistory({ mode: "editor", nodeId: resolvedNodeId });
+      const nextRoute = normalizeMountingNodesRoute({ mode: "editor", nodeId: resolvedNodeId });
+      setMountingNodesRouteState(nextRoute);
+      updateAdminHistory({
+        mountingNodesRoute: nextRoute,
+        view: "catalogHoles",
+      });
     }
 
     return await switchView("catalogHoles", user, nextContext);
@@ -14256,12 +14469,34 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
 
     localStorage.setItem(TOKEN_STORAGE_KEY, result.access_token);
     localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(result.user));
-    localStorage.setItem(ACTIVE_VIEW_STORAGE_KEY, "home");
     localStorage.removeItem(ACTIVE_PROJECT_ID_STORAGE_KEY);
     localStorage.removeItem(ACTIVE_PROJECT_TAB_STORAGE_KEY);
     setToken(result.access_token);
     setUser(result.user);
-    setActiveView("home");
+    setActiveView(initialAdminRoute.view || "home");
+    setActiveProcessingTab(
+      initialAdminRoute.view === "processing" ? initialAdminRoute.processingTab || "overview" : "overview",
+    );
+    setMountingNodesRouteState(initialAdminRoute.view === "catalogHoles" ? initialAdminRoute.mountingNodesRoute : null);
+    setMountingNodesRouteReady(
+      initialAdminRoute.view !== "catalogHoles" ||
+        initialAdminRoute.mountingNodesRoute?.mode === "list" ||
+        initialAdminRoute.mountingNodesRoute?.mode === "create",
+    );
+    setCatalogHolesMode(
+      initialAdminRoute.view === "catalogHoles"
+        ? initialAdminRoute.mountingNodesRoute?.mode === "create"
+          ? "create"
+          : initialAdminRoute.mountingNodesRoute?.mode === "editor"
+            ? "editor"
+            : "list"
+        : "list",
+    );
+    setMountingNodesInitialState(
+      initialAdminRoute.view === "catalogHoles" && initialAdminRoute.mountingNodesRoute
+        ? buildMountingNodesRestoreState(initialAdminRoute.mountingNodesRoute)
+        : null,
+    );
     setSelectedProject(null);
     setProjectOwnershipQuota(null);
     setProjectOwnershipQuotaLoading(false);
@@ -14552,6 +14787,9 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
 
   async function switchView(view, viewer = user, openContext = null) {
     const nextView = normalizeCatalogView(view === "catalog" ? "catalogViyar" : view);
+    const skipHistoryUpdate = Boolean(openContext?.skipHistoryUpdate);
+    let nextProcessingTab = activeProcessingTab;
+    let nextMountingNodesRoute = null;
 
     if ((nextView === "catalogFittings" || nextView === "catalogFasteners") && !canViewFittingCatalog) {
       return;
@@ -14607,6 +14845,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
         canUseFittingHoles: canViewFittingHoles,
         isAdmin: viewer?.role === "admin",
       });
+      nextProcessingTab = normalizedProcessingTab;
       setActiveProcessingTab(normalizedProcessingTab);
       localStorage.setItem(PROCESSING_WORKSPACE_STORAGE_KEY, normalizedProcessingTab);
     }
@@ -14619,6 +14858,13 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
       setCatalogHolesBreadcrumbNodeId(null);
       setCatalogHolesBreadcrumbNodeName("");
       setCatalogHolesSaving(false);
+      setMountingNodesRouteState(null);
+      setMountingNodesInitialState(null);
+      setMountingNodesRouteReady(true);
+      setMountingNodesRouteLoadingMessage("");
+      setMountingNodesRouteError("");
+      mountingNodesEditorRestoreKeyRef.current = "";
+      mountingNodesEditorRestorePromiseRef.current = null;
     }
 
     if (nextView === "catalogHoles") {
@@ -14663,8 +14909,14 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
       if (!contextMountingNodeId) {
         setCatalogHolesReturnState(null);
       }
+      const nextCatalogHolesMode = contextMountingNodeId ? "editor" : "list";
+      nextMountingNodesRoute = normalizeMountingNodesRoute(
+        contextMountingNodeId
+          ? { mode: "editor", nodeId: contextMountingNodeId }
+          : { mode: "list", nodeId: null },
+      );
       setCatalogHolesDetailOpen(false);
-      setCatalogHolesMode(contextMountingNodeId ? "editor" : "list");
+      setCatalogHolesMode(nextCatalogHolesMode);
 
       setIsProcessingMenuOpen(true);
     }
@@ -14672,6 +14924,14 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
     setActiveView(nextView);
     activeViewRef.current = nextView;
     setStatus("");
+
+    if (!skipHistoryUpdate) {
+      updateAdminHistory({
+        mountingNodesRoute: nextMountingNodesRoute,
+        processingTab: nextProcessingTab,
+        view: nextView,
+      });
+    }
 
     if (nextView !== "catalogMaterials") {
       materialDetailsRequestRef.current.open = false;
@@ -16348,6 +16608,8 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
         if (activeView && activeView !== "projects") {
           if (
             CATALOG_SERVICE_VIEWS.has(activeView) ||
+            activeView === "processing" ||
+            activeView === "catalogHoles" ||
             activeView === "users" ||
             activeView === "audit" ||
             activeView === "entitlements"
@@ -16889,15 +17151,16 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
             {canAccessProcessingWorkspace ? (
               <div className={`nav-group${isProcessingSectionView ? " active" : ""}`}>
                 <div className={`nav-group-header${isProcessingSectionView ? " active" : ""}`}>
-                  <button
-                    className={`nav-group-link${isProcessingSectionView ? " active" : ""}`}
-                    onClick={() => {
-                      setActiveProcessingTab("overview");
-                      switchView("processing");
-                      closeSidebarOnMobile();
-                    }}
-                    type="button"
-                  >
+                <button
+                  className={`nav-group-link${isProcessingSectionView ? " active" : ""}`}
+                  onClick={() => {
+                    switchView("processing", user, {
+                      processingTab: "overview",
+                    });
+                    closeSidebarOnMobile();
+                  }}
+                  type="button"
+                >
                     <span className="nav-group-title">
                       {language === "uk" ? "Обробка деталей" : "Processing"}
                     </span>
@@ -16921,9 +17184,14 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                         className={tab.key === activeProcessingNavigationKey ? "active" : ""}
                         key={tab.key}
                         onClick={() => {
-                          setActiveProcessingTab(tab.key);
                           setIsProcessingMenuOpen(true);
-                          switchView(getProcessingWorkspaceTabTargetView(tab.key));
+                          if (getProcessingWorkspaceTabTargetView(tab.key) === "catalogHoles") {
+                            switchView("catalogHoles", user);
+                          } else {
+                            switchView("processing", user, {
+                              processingTab: tab.key,
+                            });
+                          }
                           closeSidebarOnMobile();
                         }}
                         type="button"

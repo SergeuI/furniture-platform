@@ -30,6 +30,13 @@ test("mounting nodes route parser recognizes the editor URL", () => {
   });
 });
 
+test("mounting nodes route parser recognizes the create URL", () => {
+  assert.deepEqual(parseMountingNodesRoute("?section=mounting-nodes&mode=create"), {
+    mode: "create",
+    nodeId: null,
+  });
+});
+
 test("mounting nodes route builder preserves unrelated query params", () => {
   assert.equal(
     buildMountingNodesRouteUrl({ mode: "list", nodeId: null }, "?foo=bar"),
@@ -48,6 +55,13 @@ test("mounting nodes route builder keeps the editor node in the URL", () => {
   assert.equal(
     buildMountingNodesRouteUrl({ mode: "editor", nodeId: 9 }, "?foo=bar"),
     "?foo=bar&section=mounting-nodes&mode=editor&node=9",
+  );
+});
+
+test("mounting nodes route builder keeps the create mode in the URL", () => {
+  assert.equal(
+    buildMountingNodesRouteUrl({ mode: "create", nodeId: null }, "?foo=bar"),
+    "?foo=bar&section=mounting-nodes&mode=create",
   );
 });
 
@@ -150,6 +164,30 @@ test("mounting nodes restore state uses the fresh node detail for editor URLs", 
       searchInput: "",
       selectedNodeDetail: nodeDetail,
       selectedNodeId: "9",
+      selectedNodeLoading: false,
+    },
+  );
+});
+
+test("mounting nodes restore state keeps create mode isolated from node details", () => {
+  assert.deepEqual(
+    buildMountingNodesRestoreState({ mode: "create", nodeId: null }, null),
+    {
+      activeStatusFilter: "all",
+      activeVariantFilter: "all",
+      appliedSearch: "",
+      displayMode: "grid",
+      listError: "",
+      listLoading: false,
+      mountingNodesViewMode: "create",
+      nodeDetailErrorsById: {},
+      nodeDetailsById: {},
+      nodes: [],
+      restoreScrollOnMount: false,
+      scrollPosition: null,
+      searchInput: "",
+      selectedNodeDetail: null,
+      selectedNodeId: "",
       selectedNodeLoading: false,
     },
   );

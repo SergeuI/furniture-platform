@@ -37,6 +37,13 @@ export function normalizeMountingNodesRoute(route = {}) {
     };
   }
 
+  if (mode === "create") {
+    return {
+      mode,
+      nodeId: null,
+    };
+  }
+
   return {
     mode: "list",
     nodeId: null,
