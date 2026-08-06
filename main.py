@@ -21,7 +21,6 @@ from services.mt_kits_parser import (
 from services.mt_parser import (
     get_mt_product_from_db,
     init_mt_db,
-    run_mt_parser,
 )
 from services.production_auth_engine import (
     init_auth_tables,
@@ -29,7 +28,10 @@ from services.production_auth_engine import (
 from services.production_database_engine import (
     init_production_db,
 )
-from services.scheduler import start_scheduler
+from services.scheduler import (
+    run_mt_parser_job,
+    start_scheduler,
+)
 
 BOT_TOKEN = getenv("BOT_TOKEN")
 RUN_MT_PARSER_ON_START = getenv(
@@ -51,6 +53,24 @@ def configure_file_logging() -> None:
     )
     root_logger = logging.getLogger()
     root_logger.addHandler(file_handler)
+
+
+async def maybe_run_mt_parser_on_start(run_on_start: bool | None = None):
+    if run_on_start is None:
+        run_on_start = RUN_MT_PARSER_ON_START
+
+    if not run_on_start:
+        logging.info(
+            "MT DB empty - skipping parser on startup to keep bot responsive"
+        )
+        return
+
+    logging.info(
+        "MT DB empty - running parser on startup"
+    )
+    await run_mt_parser_job(
+        source="startup"
+    )
 
 
 async def main():
@@ -80,15 +100,7 @@ async def main():
     )
 
     if not test:
-        if RUN_MT_PARSER_ON_START:
-            logging.info(
-                "MT DB empty - running parser on startup"
-            )
-            await run_mt_parser()
-        else:
-            logging.info(
-                "MT DB empty - skipping parser on startup to keep bot responsive"
-            )
+        await maybe_run_mt_parser_on_start()
     else:
         logging.info(
             "MT DB already has data"
