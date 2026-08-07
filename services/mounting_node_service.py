@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import re
+from datetime import datetime
 from typing import Any, Mapping, Optional
 from uuid import uuid4
 
+from fastapi.encoders import jsonable_encoder
 from sqlalchemy.orm import Session
 
 from database.models.fitting import (
@@ -188,11 +190,20 @@ class MountingNodeService:
         normalized_viewer_user_id = self._normalize_viewer_user_id(viewer_user_id)
         is_admin = self._is_admin_role(viewer_role)
         is_system = owner_user_id is None
+        is_archived = bool(getattr(node, "is_archived", False))
         is_owner = bool(owner_user_id and normalized_viewer_user_id and owner_user_id == normalized_viewer_user_id)
-        can_edit = bool(is_admin or (is_owner and (viewer_can_edit if viewer_can_edit is not None else True)))
-        can_delete = bool(is_admin or (is_owner and (viewer_can_delete if viewer_can_delete is not None else True)))
+        can_edit = bool(
+            not is_archived
+            and (is_admin or (is_owner and (viewer_can_edit if viewer_can_edit is not None else True)))
+        )
+        can_delete = bool(
+            not is_archived
+            and (is_admin or (is_owner and (viewer_can_delete if viewer_can_delete is not None else True)))
+        )
 
-        if is_system:
+        if is_archived:
+            ownership_type = "archived"
+        elif is_system:
             ownership_type = "system"
         elif is_owner:
             ownership_type = "mine"
@@ -206,6 +217,9 @@ class MountingNodeService:
             "ownership_type": ownership_type,
             "is_system": is_system,
             "is_owner": is_owner,
+            "is_archived": is_archived,
+            "archived_at": getattr(node, "archived_at", None),
+            "archived_by_user_id": getattr(node, "archived_by_user_id", None),
             "can_edit": can_edit,
             "can_delete": can_delete,
         }
@@ -230,6 +244,9 @@ class MountingNodeService:
         if self._is_admin_role(viewer_role):
             return access_snapshot
 
+        if access_snapshot["is_archived"]:
+            raise MountingNodePermissionError("Archived mounting node access is read-only")
+
         if access_snapshot["is_system"]:
             raise MountingNodePermissionError("System mounting node access is restricted")
 
@@ -246,12 +263,18 @@ class MountingNodeService:
         viewer_role: Any = None,
     ) -> tuple[str | None, str | None, str | None]:
         normalized_viewer_user_id = self._normalize_viewer_user_id(viewer_user_id)
+        requested_ownership_type = self._optional_text(payload.get("ownership_type"))
         legacy_owner_user_id = self._optional_text(payload.get("owner_user_id"))
         legacy_created_by_user_id = self._optional_text(payload.get("created_by_user_id"))
         legacy_updated_by_user_id = self._optional_text(payload.get("updated_by_user_id"))
 
         if self._is_admin_role(viewer_role):
-            owner_user_id = None
+            if requested_ownership_type == "system":
+                owner_user_id = None
+            elif normalized_viewer_user_id:
+                owner_user_id = normalized_viewer_user_id
+            else:
+                owner_user_id = legacy_owner_user_id
         elif normalized_viewer_user_id:
             owner_user_id = normalized_viewer_user_id
         else:
@@ -347,6 +370,34 @@ class MountingNodeService:
             "template": self._serialize_template(template) if template is not None else None,
         }
 
+    def _serialize_version(self, version) -> dict[str, Any]:
+        snapshot = getattr(version, "snapshot", None)
+        normalized_snapshot = snapshot if isinstance(snapshot, dict) else {}
+        items = list(normalized_snapshot.get("items") or [])
+        templates = list(normalized_snapshot.get("templates") or [])
+
+        return {
+            "id": version.id,
+            "node_id": version.node_id,
+            "node_code": getattr(version, "node_code", None),
+            "node_name": getattr(version, "node_name", None),
+            "version_number": int(getattr(version, "version_number", 0) or 0),
+            "event_type": getattr(version, "event_type", None),
+            "created_by_user_id": getattr(version, "created_by_user_id", None),
+            "created_at": getattr(version, "created_at", None),
+            "items_count": len(items),
+            "templates_count": len(templates),
+            "snapshot": normalized_snapshot,
+            "is_current": False,
+        }
+
+    def _serialize_version_detail(self, node: MountingNodeModel, version) -> dict[str, Any]:
+        serialized_version = self._serialize_version(version)
+        current_version = next(iter(self.repository.list_versions(node.id)), None)
+        if current_version is not None and int(getattr(current_version, "id", 0) or 0) == int(getattr(version, "id", 0) or 0):
+            serialized_version["is_current"] = True
+        return serialized_version
+
     def _serialize_node(
         self,
         node: MountingNodeModel,
@@ -355,6 +406,7 @@ class MountingNodeService:
         viewer_role: Any = None,
         viewer_can_edit: bool | None = None,
         viewer_can_delete: bool | None = None,
+        include_versions: bool = True,
     ) -> dict[str, Any]:
         items = list(getattr(node, "items", []) or [])
         templates = list(getattr(node, "templates", []) or [])
@@ -380,7 +432,40 @@ class MountingNodeService:
             "templates_count": len(templates),
             "items": [self._serialize_item(item) for item in items],
             "templates": [self._serialize_template_link(link) for link in templates],
+            "versions": self._serialize_versions(node) if include_versions else [],
         }
+
+    def _serialize_versions(self, node: MountingNodeModel) -> list[dict[str, Any]]:
+        versions = self.repository.list_versions(node.id)
+        serialized_versions = [self._serialize_version(version) for version in versions]
+        if serialized_versions:
+            serialized_versions[0]["is_current"] = True
+        return serialized_versions
+
+    def _record_version_snapshot(
+        self,
+        node: MountingNodeModel,
+        *,
+        event_type: str,
+        actor_user_id: Any = None,
+    ) -> None:
+        snapshot_node = self.repository.get_node_by_id(node.id) or node
+        node_snapshot = jsonable_encoder(
+            self._serialize_node(
+                snapshot_node,
+                include_versions=False,
+            )
+        )
+        next_version_number = self.repository.next_version_number(node.id)
+        self.repository.create_version(
+            node_id=node.id,
+            node_code=str(getattr(node, "code", "") or "").strip(),
+            node_name=str(getattr(node, "name", "") or "").strip(),
+            version_number=next_version_number,
+            event_type=event_type,
+            snapshot=node_snapshot,
+            created_by_user_id=self._normalize_viewer_user_id(actor_user_id) or None,
+        )
 
     @staticmethod
     def _normalize_search_text(value: Any) -> str:
@@ -391,7 +476,7 @@ class MountingNodeService:
         if not needle:
             return True
 
-        serialized = self._serialize_node(node)
+        serialized = self._serialize_node(node, include_versions=False)
         haystack: list[str] = [
             self._normalize_search_text(serialized.get("code")),
             self._normalize_search_text(serialized.get("name")),
@@ -877,6 +962,7 @@ class MountingNodeService:
                     viewer_role=viewer_role,
                     viewer_can_edit=viewer_can_edit,
                     viewer_can_delete=viewer_can_delete,
+                    include_versions=False,
                 ).items()
                 if key not in {"items", "templates"}
             }
@@ -922,7 +1008,40 @@ class MountingNodeService:
             viewer_role=viewer_role,
             viewer_can_edit=viewer_can_edit,
             viewer_can_delete=viewer_can_delete,
+            include_versions=True,
         )
+
+    def get_mounting_node_version(
+        self,
+        node_id: int,
+        version_id: int,
+        *,
+        viewer_user_id: Any = None,
+        viewer_role: Any = None,
+        viewer_can_edit: bool | None = None,
+        viewer_can_delete: bool | None = None,
+    ) -> dict[str, Any] | None:
+        node_id = self._require_int(node_id, "node_id")
+        version_id = self._require_int(version_id, "version_id")
+        node = self.repository.get_node_by_id(node_id)
+        if node is None:
+            return None
+
+        ownership_snapshot = self._resolve_ownership_snapshot(
+            node,
+            viewer_user_id=viewer_user_id,
+            viewer_role=viewer_role,
+            viewer_can_edit=viewer_can_edit,
+            viewer_can_delete=viewer_can_delete,
+        )
+        if not self._is_admin_role(viewer_role) and ownership_snapshot["owner_user_id"] is not None and not ownership_snapshot["is_owner"]:
+            return None
+
+        version = self.repository.get_version_by_id(node.id, version_id)
+        if version is None:
+            return None
+
+        return self._serialize_version_detail(node, version)
 
     def create_mounting_node(
         self,
@@ -956,6 +1075,7 @@ class MountingNodeService:
             viewer_user_id=viewer_user_id,
             viewer_role=viewer_role,
         )
+        normalized_viewer_user_id = self._normalize_viewer_user_id(viewer_user_id)
 
         items = self._resolve_items(list(payload.get("items") or []))
         allowed_fitting_ids = {item["fitting_id"] for item in items}
@@ -990,6 +1110,11 @@ class MountingNodeService:
             resolved_templates = self._validate_template_links(node.id, resolved_templates, allowed_fitting_ids)
             self.repository.replace_templates(node, resolved_templates)
             self.session.flush()
+            self._record_version_snapshot(
+                node,
+                event_type="create",
+                actor_user_id=normalized_viewer_user_id or created_by_user_id or viewer_user_id,
+            )
 
         refreshed = self.repository.get_node_by_id(node.id)
         return self._serialize_node(
@@ -998,6 +1123,7 @@ class MountingNodeService:
             viewer_role=viewer_role,
             viewer_can_edit=viewer_can_edit,
             viewer_can_delete=viewer_can_delete,
+            include_versions=True,
         )
 
     def update_mounting_node(
@@ -1030,6 +1156,9 @@ class MountingNodeService:
         node = self.repository.get_node_by_id(node_id)
         if node is None:
             return None
+
+        if bool(getattr(node, "is_archived", False)):
+            return True
 
         access_snapshot = self._assert_mutation_access(
             node,
@@ -1107,6 +1236,11 @@ class MountingNodeService:
                 self.repository.replace_templates(node, resolved_templates)
 
             self.session.flush()
+            self._record_version_snapshot(
+                node,
+                event_type="update",
+                actor_user_id=normalized_viewer_user_id,
+            )
 
         refreshed = self.repository.get_node_by_id(node.id)
         if refreshed is None:
@@ -1117,6 +1251,7 @@ class MountingNodeService:
             viewer_role=viewer_role,
             viewer_can_edit=viewer_can_edit,
             viewer_can_delete=viewer_can_delete,
+            include_versions=True,
         )
 
     def delete_mounting_node(
@@ -1139,19 +1274,23 @@ class MountingNodeService:
         if access_snapshot is None:
             return None
 
-        linked_templates = list(getattr(node, "templates", []) or [])
+        archived_by_user_id = self._normalize_viewer_user_id(viewer_user_id) or None
 
         self.session.rollback()
         with self.session.begin():
-            self.session.delete(node)
+            node = self.repository.update_node(
+                node,
+                is_archived=True,
+                archived_at=datetime.utcnow(),
+                archived_by_user_id=archived_by_user_id,
+                updated_by_user_id=archived_by_user_id or getattr(node, "updated_by_user_id", None),
+            )
             self.session.flush()
-
-            for link in linked_templates:
-                template = getattr(link, "template", None)
-                if template is not None:
-                    self.session.delete(template)
-
-            self.session.flush()
+            self._record_version_snapshot(
+                node,
+                event_type="archive",
+                actor_user_id=archived_by_user_id,
+            )
 
         return True
 

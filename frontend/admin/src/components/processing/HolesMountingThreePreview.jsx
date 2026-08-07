@@ -842,7 +842,7 @@ export default function HolesMountingThreePreview({
           return Object.fromEntries(
             (Array.isArray(holeVolumes) ? holeVolumes : [])
               .filter((hole) => hole?.id !== undefined && hole?.id !== null)
-            .map((hole) => [hole.id, createHoleIdTexture(String(hole.id))]),
+              .map((hole, index) => [hole.id, createHoleIdTexture(getSafeHolePointLabel(hole?.label, `P${index + 1}`))]),
           );
         }, [holeVolumes]);
         const faceToEdgeHoleIdTextures = useMemo(() => {
@@ -912,11 +912,11 @@ export default function HolesMountingThreePreview({
           return Object.fromEntries(
             (Array.isArray(holeVolumes) ? holeVolumes : [])
               .filter((hole) => hole?.id !== undefined && hole?.id !== null)
-              .map((hole) => {
+              .map((hole, index) => {
                 const isSelected = String(selectedHoleId) === String(hole.id);
                 const isHovered = String(hoveredHoleId) === String(hole.id);
                 const state = isSelected ? "selected" : isHovered ? "hover" : "default";
-                return [hole.id, createHoleIdTexture(String(hole.id), state)];
+                return [hole.id, createHoleIdTexture(getSafeHolePointLabel(hole?.label, `P${index + 1}`), state)];
               }),
           );
         }, [holeVolumes, hoveredHoleId, isFaceToEdgePreview, selectedHoleId]);

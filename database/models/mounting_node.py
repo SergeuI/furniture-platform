@@ -6,6 +6,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Integer,
+    JSON,
     String,
     Text,
     UniqueConstraint,
@@ -72,6 +73,27 @@ class MountingNodeModel(Base):
     )
 
     updated_by_user_id = Column(
+        String,
+        ForeignKey("users.id"),
+        nullable=True,
+        index=True,
+    )
+
+    is_archived = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=text("0"),
+        index=True,
+    )
+
+    archived_at = Column(
+        DateTime,
+        nullable=True,
+        index=True,
+    )
+
+    archived_by_user_id = Column(
         String,
         ForeignKey("users.id"),
         nullable=True,
@@ -266,8 +288,77 @@ class MountingNodeTemplateModel(Base):
     )
 
 
+class MountingNodeVersionModel(Base):
+
+    __tablename__ = "mounting_node_versions"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "node_id",
+            "version_number",
+            name="uq_mounting_node_versions_node_version",
+        ),
+    )
+
+    id = Column(
+        Integer,
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    node_id = Column(
+        Integer,
+        nullable=False,
+        index=True,
+    )
+
+    node_code = Column(
+        String(128),
+        nullable=False,
+        index=True,
+    )
+
+    node_name = Column(
+        String(255),
+        nullable=False,
+        index=True,
+    )
+
+    version_number = Column(
+        Integer,
+        nullable=False,
+        index=True,
+    )
+
+    event_type = Column(
+        String(32),
+        nullable=False,
+        default="update",
+        server_default=text("'update'"),
+    )
+
+    snapshot = Column(
+        JSON,
+        nullable=False,
+    )
+
+    created_by_user_id = Column(
+        String,
+        ForeignKey("users.id"),
+        nullable=True,
+        index=True,
+    )
+
+    created_at = Column(
+        DateTime,
+        nullable=False,
+        server_default=func.now(),
+    )
+
+
 __all__ = [
     "MountingNodeItemModel",
     "MountingNodeModel",
+    "MountingNodeVersionModel",
     "MountingNodeTemplateModel",
 ]

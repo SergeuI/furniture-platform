@@ -7,6 +7,7 @@ import {
   getFittingDetails,
   getFittingImageBlob,
   getMountingNode,
+  getMountingNodeVersion,
   getMountingNodes,
   updateMountingNode,
 } from "../../api.js";
@@ -18,6 +19,8 @@ import {
 } from "../../mountingNodesThumbnailLifecycle.js";
 import {
   buildMountingNodeEditorSavePayload,
+  getMountingNodeSnapshotPointCount,
+  resolveActiveMountingNodeVersion,
   resolveMountingNodeEditorContext,
 } from "../../mountingNodesEditor.js";
 import surfaceMountIcon from "../../assets/hole-mounting/surface_mount.png";
@@ -254,6 +257,59 @@ function formatTemplateSummary(template, t, language) {
     label: templateLabel,
     meta: `${variantLabel} · ${templateState}`,
     pointsCount: Number(template?.points_count || 0) || 0,
+  };
+}
+
+function formatMountingNodeVersionDate(value, language) {
+  if (!value) {
+    return "";
+  }
+
+  const parsed = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return "";
+  }
+
+  return parsed.toLocaleString(language === "uk" ? "uk-UA" : "en-US");
+}
+
+function getMountingNodeVersionSummary(version, language, t) {
+  const snapshot = version?.snapshot && typeof version.snapshot === "object" ? version.snapshot : {};
+  const templates = Array.isArray(snapshot.templates) ? snapshot.templates : [];
+  const primaryTemplateLink = templates.find((template) => template?.is_default) || templates[0] || null;
+  const templateSource =
+    primaryTemplateLink?.template && typeof primaryTemplateLink.template === "object"
+      ? primaryTemplateLink.template
+      : primaryTemplateLink;
+  const variantKey = String(
+    templateSource?.mounting_variant_key ||
+      primaryTemplateLink?.mounting_variant_key ||
+      snapshot.mounting_variant_key ||
+      "",
+  ).trim();
+  const variantLabel =
+    getProcessingTemplateMountingVariantLabel(variantKey, language) ||
+    humanizeVariantKey(variantKey) ||
+    t.notSet;
+  const itemsCount = Number(version?.items_count ?? snapshot.items?.length ?? 0) || 0;
+  const templatesCount = Number(version?.templates_count ?? templates.length ?? 0) || 0;
+  const pointCount = Number(getMountingNodeSnapshotPointCount(snapshot)) || 0;
+  const dateLabel = formatMountingNodeVersionDate(version?.created_at, language) || t.notSet;
+  const normalizedEventType = String(version?.event_type || "").trim();
+  const eventLabel =
+    normalizedEventType === "create"
+      ? (language === "uk" ? "Створення" : "Created")
+      : normalizedEventType === "delete" || normalizedEventType === "archive"
+        ? (language === "uk" ? "Архів" : "Archived")
+        : (language === "uk" ? "Редагування" : "Updated");
+
+  return {
+    dateLabel,
+    eventLabel,
+    itemsCount,
+    pointCount,
+    templatesCount,
+    variantLabel,
   };
 }
 
@@ -698,6 +754,9 @@ export default function MountingNodesPanelRefined({
   const [openFittingDetailLoadingId, setOpenFittingDetailLoadingId] = useState("");
   const [openFittingDetailError, setOpenFittingDetailError] = useState("");
   const [openEditorError, setOpenEditorError] = useState("");
+  const [selectedNodeVersionDetail, setSelectedNodeVersionDetail] = useState(null);
+  const [selectedNodeVersionLoadingId, setSelectedNodeVersionLoadingId] = useState("");
+  const [selectedNodeVersionError, setSelectedNodeVersionError] = useState("");
   const listRequestIdRef = useRef(0);
   const detailRequestIdRef = useRef(0);
   const thumbnailRequestGenerationRef = useRef(0);
@@ -706,6 +765,7 @@ export default function MountingNodesPanelRefined({
   const variantDropdownRef = useRef(null);
   const variantDropdownMenuRef = useRef(null);
   const variantDropdownOpenFrameRef = useRef(0);
+  const mountingNodeHistoryCardRef = useRef(null);
   const pendingReturnStateRef = useRef(
     initialReturnState.scrollPosition === null ? null : initialReturnState,
   );
@@ -1055,8 +1115,37 @@ export default function MountingNodesPanelRefined({
   const selectedNodeDetail = selectedNode ? nodeDetailsById[String(selectedNode.id)] || null : null;
   const selectedNodeError = selectedNode ? nodeDetailErrorsById[String(selectedNode.id)] || "" : "";
   const selectedNodeLoading = Boolean(selectedNode && !selectedNodeDetail && !selectedNodeError && !listLoading);
-  const selectedNodePrimaryTemplate = useMemo(() => getNodePrimaryTemplate(selectedNodeDetail), [selectedNodeDetail]);
-  const selectedNodeCurrentVariantKey = String(selectedNodePrimaryTemplate?.mounting_variant_key || "").trim();
+  const selectedNodeActiveVersion = useMemo(
+    () => resolveActiveMountingNodeVersion(selectedNodeDetail),
+    [selectedNodeDetail],
+  );
+  const selectedNodeViewDetail =
+    selectedNodeVersionDetail?.snapshot && typeof selectedNodeVersionDetail.snapshot === "object"
+      ? selectedNodeVersionDetail.snapshot
+      : selectedNodeDetail;
+  const selectedNodeResolvedContext = useMemo(
+    () => resolveMountingNodeEditorContext(selectedNodeDetail, selectedNode?.id || selectedNodeId),
+    [selectedNodeDetail, selectedNode?.id, selectedNodeId],
+  );
+  const selectedNodeDetailForDisplay = selectedNodeVersionDetail
+    ? selectedNodeViewDetail
+    : selectedNodeResolvedContext?.nodeDetail || selectedNodeDetail;
+  const selectedNodeVersionBanner = selectedNodeVersionDetail || null;
+  const selectedNodeVersionBannerSummary = selectedNodeVersionBanner
+    ? getMountingNodeVersionSummary(selectedNodeVersionBanner, language, t)
+    : null;
+  const selectedNodePrimaryTemplate = useMemo(
+    () => getNodePrimaryTemplate(selectedNodeDetailForDisplay),
+    [selectedNodeDetailForDisplay],
+  );
+  const selectedNodeActiveVariantKey = String(selectedNodePrimaryTemplate?.mounting_variant_key || "").trim();
+  const selectedNodeActiveVariantLabel =
+    getProcessingTemplateMountingVariantLabel(selectedNodeActiveVariantKey, language) ||
+    humanizeVariantKey(selectedNodeActiveVariantKey) ||
+    t.notSet;
+  const selectedNodeCurrentVariantKey = String(
+    (selectedNodeVersionBanner ? getNodePrimaryTemplate(selectedNodeViewDetail) : selectedNodePrimaryTemplate)?.mounting_variant_key || "",
+  ).trim();
   const variantOptions = useMemo(
     () => [
       {
@@ -1080,9 +1169,11 @@ export default function MountingNodesPanelRefined({
     getProcessingTemplateMountingVariantLabel(selectedNodeCurrentVariantKey, language) ||
     humanizeVariantKey(selectedNodeCurrentVariantKey) ||
     t.notSet;
+  const selectedNodeDisplayPointCount = Number(getMountingNodeSnapshotPointCount(selectedNodeDetailForDisplay)) || 0;
+  const selectedNodeActivePointCount = selectedNodeDisplayPointCount;
   const variantChangeRequiresConfirm =
-    Number(selectedNodePrimaryTemplate?.points_count || 0) > 0 || selectedNodeTemplatePoints.length > 0;
-  const canEditVariant = Boolean(selectedNodeDetail?.can_edit);
+    Number(selectedNodePrimaryTemplate?.points_count || 0) > 0 || selectedNodeActivePointCount > 0;
+  const canEditVariant = Boolean(selectedNodeDetail?.can_edit) && !selectedNodeVersionBanner;
   const canSaveVariant =
     canEditVariant &&
     !variantSaveLoading &&
@@ -1098,7 +1189,13 @@ export default function MountingNodesPanelRefined({
     setVariantDropdownOpen(false);
     setVariantDropdownPreparing(false);
     setVariantDropdownPosition(null);
-  }, [selectedNodeCurrentVariantKey, selectedNodeId]);
+  }, [selectedNodeCurrentVariantKey, selectedNodeId, selectedNodeVersionDetail]);
+
+  useEffect(() => {
+    setSelectedNodeVersionDetail(null);
+    setSelectedNodeVersionLoadingId("");
+    setSelectedNodeVersionError("");
+  }, [selectedNodeId]);
 
   const updateVariantDropdownPosition = useCallback(() => {
     if (typeof window === "undefined") {
@@ -1306,6 +1403,52 @@ export default function MountingNodesPanelRefined({
     setMountingNodesViewMode("list");
   }
 
+  function handleScrollToVersionHistory() {
+    mountingNodeHistoryCardRef.current?.scrollIntoView?.({
+      behavior: "smooth",
+      block: "start",
+    });
+  }
+
+  async function handleOpenVersion(version) {
+    const versionId = String(version?.id || "").trim();
+    const nodeId = String(selectedNodeDetail?.id || selectedNode?.id || "").trim();
+
+    if (!nodeId || !versionId || versionId === String(selectedNodeVersionDetail?.id || "")) {
+      return;
+    }
+
+    if (version?.is_current) {
+      setSelectedNodeVersionDetail(null);
+      setSelectedNodeVersionLoadingId("");
+      setSelectedNodeVersionError("");
+      return;
+    }
+
+    setSelectedNodeVersionLoadingId(versionId);
+    setSelectedNodeVersionError("");
+
+    try {
+      const result = await getMountingNodeVersion(token, nodeId, versionId);
+      if (!result.success || !result.version) {
+        setSelectedNodeVersionError(result.error || (language === "uk" ? "Не вдалося відкрити версію." : "Unable to open version."));
+        return;
+      }
+
+      setSelectedNodeVersionDetail(result.version);
+    } catch (error) {
+      setSelectedNodeVersionError(error?.message || (language === "uk" ? "Не вдалося відкрити версію." : "Unable to open version."));
+    } finally {
+      setSelectedNodeVersionLoadingId("");
+    }
+  }
+
+  function handleReturnToActiveVersion() {
+    setSelectedNodeVersionDetail(null);
+    setSelectedNodeVersionLoadingId("");
+    setSelectedNodeVersionError("");
+  }
+
   function handleSelectVariantKey(value) {
     setSelectedNodeVariantKey(String(value || ""));
     setVariantSaveError("");
@@ -1471,7 +1614,7 @@ export default function MountingNodesPanelRefined({
     try {
       const result = await deleteMountingNode(token, deleteConfirmNode.id);
       if (!result.success) {
-        setDeleteConfirmError(result.error || (language === "uk" ? "Не вдалося видалити монтажний вузол." : "Unable to delete mounting node."));
+        setDeleteConfirmError(result.error || (language === "uk" ? "Не вдалося архівувати монтажний вузол." : "Unable to archive mounting node."));
         return;
       }
 
@@ -1484,7 +1627,7 @@ export default function MountingNodesPanelRefined({
       setSelectedNodeId("");
       handleRefresh();
     } catch (error) {
-      setDeleteConfirmError(error?.message || (language === "uk" ? "Не вдалося видалити монтажний вузол." : "Unable to delete mounting node."));
+      setDeleteConfirmError(error?.message || (language === "uk" ? "Не вдалося архівувати монтажний вузол." : "Unable to archive mounting node."));
     } finally {
       setDeleteConfirmLoading(false);
     }
@@ -1696,19 +1839,23 @@ export default function MountingNodesPanelRefined({
                 <ArrowLeft size={16} />
                 {t.mountingNodeBackToList || (language === "uk" ? "Повернутися до монтажних вузлів" : "Return to mounting nodes")}
               </button>
-              {selectedNodeDetail ? (
+              {selectedNodeVersionBanner ? (
+                <button className="ghost-button mounting-node-detail-action-button mounting-node-version-back-button" onClick={handleReturnToActiveVersion} type="button">
+                  {language === "uk" ? "Повернутися до активної версії" : "Return to active version"}
+                </button>
+              ) : selectedNodeDetail ? (
                 <>
                   {/*
                     Keep the DETAIL editor button label local so we can update the visible text
                     without changing the shared translations in App.jsx.
                   */}
                   <button className="primary-button mounting-node-detail-action-button mounting-node-editor-button" onClick={() => handleOpenEditor()} type="button">
-                    {language === "uk" ? "Отвори та 3D" : "Open editor and 3D"}
+                    {language === "uk" ? "Редагувати склад та отвори" : "Edit composition and openings"}
                   </button>
                   {selectedNodeDetail.can_delete ? (
                     <button className="danger-button mounting-node-detail-action-button mounting-node-delete-button" onClick={handleOpenDeleteConfirm} type="button">
                       <Trash2 size={16} />
-                      {language === "uk" ? "Видалити" : "Delete"}
+                      {language === "uk" ? "Архівувати" : "Archive"}
                     </button>
                   ) : null}
                 </>
@@ -1732,7 +1879,83 @@ export default function MountingNodesPanelRefined({
               <div className="mounting-node-detail-hero">
                 <div className="mounting-node-detail-hero-copy">
                   <strong>{language === "uk" ? "Опис" : "Description"}</strong>
-                  <p>{selectedNodeDetail.description ? selectedNodeDetail.description : (language === "uk" ? "Опис не вказано" : "Description not set")}</p>
+                  <p>
+                    {selectedNodeDetailForDisplay?.description
+                      ? selectedNodeDetailForDisplay.description
+                      : (language === "uk" ? "Опис не вказано" : "Description not set")}
+                  </p>
+                </div>
+
+                <div className={`mounting-node-detail-version-summary-card${selectedNodeVersionBanner ? " is-preview" : ""}`}>
+                  <div className="mounting-node-detail-version-summary-head">
+                    <div>
+                      <strong>
+                        {language === "uk"
+                          ? `Активна версія: ${selectedNodeActiveVersion?.version_number || 1}`
+                          : `Active version: ${selectedNodeActiveVersion?.version_number || 1}`}
+                      </strong>
+                      <p>
+                        {language === "uk"
+                          ? "Кожне збереження створює окрему версію монтажного вузла."
+                          : "Each save creates a separate mounting node version."}
+                      </p>
+                    </div>
+                    <div className="mounting-node-detail-version-summary-actions">
+                      <button className="ghost-button compact-button" onClick={handleScrollToVersionHistory} type="button">
+                        {language === "uk" ? "Історія версій" : "Version history"}
+                      </button>
+                      {selectedNodeVersionBanner ? (
+                        <button className="ghost-button compact-button" onClick={handleReturnToActiveVersion} type="button">
+                          {language === "uk" ? "Повернутися до активної версії" : "Return to active version"}
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                  <div className="mounting-node-detail-version-summary-grid">
+                    <DetailField
+                      label={language === "uk" ? "Дата створення" : "Created"}
+                      value={selectedNodeVersionBannerSummary?.dateLabel || formatMountingNodeVersionDate(selectedNodeActiveVersion?.created_at, language) || t.notSet}
+                    />
+                    <DetailField
+                      label={language === "uk" ? "Позиції фурнітури" : "Items"}
+                      value={selectedNodeActiveVersion?.items_count ?? selectedNodeDetail?.items?.length ?? 0}
+                    />
+                    <DetailField
+                      label={language === "uk" ? "Точки" : "Points"}
+                      value={selectedNodeActivePointCount}
+                    />
+                    <DetailField
+                      label={language === "uk" ? "Варіант кріплення" : "Mounting variant"}
+                      value={selectedNodeActiveVariantLabel}
+                    />
+                  </div>
+                  {selectedNodeVersionBanner ? (
+                    <div className="mounting-node-detail-version-preview-note">
+                      <strong>
+                        {language === "uk"
+                          ? `Перегляд версії ${selectedNodeVersionBanner.version_number}`
+                          : `Viewing version ${selectedNodeVersionBanner.version_number}`}
+                      </strong>
+                      <p>
+                        {language === "uk"
+                          ? `Ця версія відкрита лише для перегляду. Позиції: ${selectedNodeVersionBannerSummary?.itemsCount || 0}, шаблони: ${selectedNodeVersionBannerSummary?.templatesCount || 0}, точки: ${selectedNodeVersionBannerSummary?.pointCount || 0}.`
+                          : `This version is read-only. Items: ${selectedNodeVersionBannerSummary?.itemsCount || 0}, templates: ${selectedNodeVersionBannerSummary?.templatesCount || 0}, points: ${selectedNodeVersionBannerSummary?.pointCount || 0}.`}
+                      </p>
+                      <p>
+                        {language === "uk"
+                          ? "Поверніться до активної версії, щоб редагувати вузол."
+                          : "Return to the active version to edit the node."}
+                      </p>
+                    </div>
+                  ) : null}
+                  {!selectedNodeDetail?.can_edit ? (
+                    <p className="mounting-node-detail-readonly-note">
+                      {language === "uk"
+                        ? "Системний монтажний вузол доступний лише для перегляду."
+                        : "This mounting node is read-only."}
+                    </p>
+                  ) : null}
+                  {selectedNodeVersionError ? <p className="form-error mounting-node-detail-open-error">{selectedNodeVersionError}</p> : null}
                 </div>
               </div>
               {openEditorError ? <p className="form-error mounting-node-detail-open-error">{openEditorError}</p> : null}
@@ -1747,8 +1970,8 @@ export default function MountingNodesPanelRefined({
                     </div>
                   </div>
                   <div className="mounting-node-detail-item-list">
-                    {selectedNodeDetail.items?.length ? (
-                      selectedNodeDetail.items.map((item, index) =>
+                    {selectedNodeDetailForDisplay?.items?.length ? (
+                      selectedNodeDetailForDisplay.items.map((item, index) =>
                         renderNodeDetailItemCard(
                           item,
                           index,
@@ -1774,7 +1997,15 @@ export default function MountingNodesPanelRefined({
                   <div className="settings-card-header">
                     <div>
                       <strong>{language === "uk" ? "Варіант кріплення" : "Mounting variant"}</strong>
-                      <p>{language === "uk" ? "Змініть варіант кріплення поточного вузла та збережіть зміни." : "Change the current node mounting variant and save the update."}</p>
+                      <p>
+                        {selectedNodeVersionBanner
+                          ? (language === "uk"
+                            ? "Ви переглядаєте read-only snapshot версії."
+                            : "You are viewing a read-only version snapshot.")
+                          : (language === "uk"
+                            ? "Змініть варіант кріплення поточного вузла та збережіть зміни."
+                            : "Change the current node mounting variant and save the update.")}
+                      </p>
                     </div>
                   </div>
                   <div className="mounting-node-detail-variant-body">
@@ -1821,6 +2052,69 @@ export default function MountingNodesPanelRefined({
                   </div>
                 </article>
               </div>
+              {Array.isArray(selectedNodeDetail.versions) && selectedNodeDetail.versions.length ? (
+                <article className="settings-card mounting-node-detail-history-card" ref={mountingNodeHistoryCardRef}>
+                  <div className="settings-card-header">
+                    <div>
+                      <strong>{language === "uk" ? "Історія версій" : "Version history"}</strong>
+                      <p>
+                        {language === "uk"
+                          ? "Кожне збереження створює окрему версію монтажного вузла."
+                          : "Each save creates a separate mounting node version."}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mounting-node-version-list">
+                    {selectedNodeDetail.versions.map((version) => {
+                      const summary = getMountingNodeVersionSummary(version, language, t);
+                      const versionId = String(version.id || "").trim();
+                      const isLoadingVersion = selectedNodeVersionLoadingId === versionId;
+
+                      return (
+                        <div
+                          className={`mounting-node-version-item${version.is_current ? " is-current" : ""}`}
+                          key={version.id}
+                        >
+                          <div className="mounting-node-version-item-head">
+                            <strong>
+                              {language === "uk" ? "Версія" : "Version"} {version.version_number}
+                            </strong>
+                            <div className="mounting-node-version-item-actions">
+                              {version.is_current ? (
+                                <span className="service-tree-badge subtle">
+                                  {language === "uk" ? "Поточна" : "Current"}
+                                </span>
+                              ) : (
+                                <button
+                                  className="ghost-button compact-button"
+                                  disabled={isLoadingVersion}
+                                  onClick={() => void handleOpenVersion(version)}
+                                  type="button"
+                                >
+                                  {isLoadingVersion
+                                    ? (language === "uk" ? "Відкриття..." : "Opening...")
+                                    : (language === "uk" ? "Переглянути" : "View")}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                          <div className="mounting-node-version-item-meta">
+                            <span>{summary.eventLabel}</span>
+                            <span>{summary.dateLabel}</span>
+                            <span>{summary.variantLabel}</span>
+                            <span>
+                              {language === "uk" ? "Фурнітура" : "Items"}: {summary.itemsCount}
+                            </span>
+                            <span>
+                              {language === "uk" ? "Шаблони" : "Templates"}: {summary.templatesCount}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </article>
+              ) : null}
               {canEditVariant && variantDropdownOpen && variantDropdownPosition && typeof document !== "undefined"
                 ? createPortal(
                     <div
@@ -1884,15 +2178,15 @@ export default function MountingNodesPanelRefined({
         <div aria-modal="true" className="modal-backdrop" onClick={closeDeleteConfirm} role="dialog">
           <section className="confirm-modal" onClick={(event) => event.stopPropagation()}>
             <header className="confirm-header">
-              <h2>{language === "uk" ? "Видалити монтажний вузол" : "Delete mounting node"}</h2>
+              <h2>{language === "uk" ? "Архівувати монтажний вузол" : "Archive mounting node"}</h2>
               <button aria-label={language === "uk" ? "Закрити підтвердження" : "Close confirmation"} className="icon-button" disabled={deleteConfirmLoading} onClick={closeDeleteConfirm} type="button">
                 <X size={18} />
               </button>
             </header>
             <p>
               {language === "uk"
-                ? `Видалити вузол "${deleteConfirmNode.name || deleteConfirmNode.code || deleteConfirmNode.id}"?`
-                : `Delete mounting node "${deleteConfirmNode.name || deleteConfirmNode.code || deleteConfirmNode.id}"?`}
+                ? `Архівувати вузол "${deleteConfirmNode.name || deleteConfirmNode.code || deleteConfirmNode.id}"?`
+                : `Archive mounting node "${deleteConfirmNode.name || deleteConfirmNode.code || deleteConfirmNode.id}"?`}
             </p>
             {deleteConfirmError ? <p className="form-error">{deleteConfirmError}</p> : null}
             <div className="confirm-actions">
@@ -1900,7 +2194,7 @@ export default function MountingNodesPanelRefined({
                 {language === "uk" ? "Скасувати" : "Cancel"}
               </button>
               <button className="danger-button" disabled={deleteConfirmLoading} onClick={handleConfirmDelete} type="button">
-                {deleteConfirmLoading ? (language === "uk" ? "Видалення..." : "Deleting...") : (language === "uk" ? "Видалити" : "Delete")}
+                {deleteConfirmLoading ? (language === "uk" ? "Архівування..." : "Archiving...") : (language === "uk" ? "Архівувати" : "Archive")}
               </button>
             </div>
           </section>

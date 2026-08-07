@@ -16,6 +16,7 @@ from database.models.fitting import (
 from database.models.mounting_node import (
     MountingNodeItemModel,
     MountingNodeModel,
+    MountingNodeVersionModel,
     MountingNodeTemplateModel,
 )
 from database.models.service_catalog_item import ServiceCatalogItemModel
@@ -67,6 +68,59 @@ class MountingNodeServiceTests(unittest.TestCase):
             self.assertTrue(node["templates"][0]["is_default"])
             self.assertEqual(node["templates"][0]["template"]["id"], template.id)
             self.assertEqual(node["templates"][0]["template"]["points"][0]["id"], template.points[0].id)
+        finally:
+            session.close()
+            engine.dispose()
+
+    def test_create_and_update_node_record_version_history(self) -> None:
+        session, engine = self._build_session()
+        try:
+            fitting = self._create_fitting(session, name="Confirmat 7x50", code="confirmat-7x50", article="190106")
+            template = self._create_template(session, fitting.id, name="Main template")
+            service = MountingNodeService(session=session)
+
+            created = service.create_mounting_node(
+                {
+                    "name": "Versioned node",
+                    "items": [{"fitting_id": fitting.id, "quantity": 1}],
+                    "templates": [{"template_id": template.id, "is_default": True}],
+                }
+            )
+            self.assertEqual(len(created["versions"]), 1)
+            self.assertEqual(created["versions"][0]["version_number"], 1)
+            self.assertTrue(created["versions"][0]["is_current"])
+            self.assertEqual(created["versions"][0]["event_type"], "create")
+            self.assertEqual(created["versions"][0]["snapshot"]["name"], "Versioned node")
+            self.assertEqual(created["versions"][0]["snapshot"]["items"][0]["fitting_id"], fitting.id)
+
+            updated = service.update_mounting_node(
+                created["id"],
+                {
+                    "description": "Updated description",
+                },
+            )
+            self.assertEqual(len(updated["versions"]), 2)
+            self.assertEqual([version["version_number"] for version in updated["versions"]], [2, 1])
+            self.assertEqual(updated["versions"][0]["event_type"], "update")
+            self.assertEqual(updated["versions"][0]["snapshot"]["description"], "Updated description")
+            self.assertTrue(updated["versions"][0]["is_current"])
+            self.assertFalse(updated["versions"][1]["is_current"])
+
+            version_one = service.get_mounting_node_version(created["id"], created["versions"][0]["id"])
+            version_two = service.get_mounting_node_version(updated["id"], updated["versions"][0]["id"])
+            self.assertIsNotNone(version_one)
+            self.assertIsNotNone(version_two)
+            self.assertEqual(version_one["version_number"], 1)
+            self.assertEqual(version_one["snapshot"]["name"], "Versioned node")
+            self.assertFalse(version_one["is_current"])
+            self.assertEqual(version_two["version_number"], 2)
+            self.assertEqual(version_two["snapshot"]["description"], "Updated description")
+            self.assertTrue(version_two["is_current"])
+
+            stored_versions = session.query(MountingNodeVersionModel).filter(
+                MountingNodeVersionModel.node_id == created["id"],
+            ).order_by(MountingNodeVersionModel.version_number.asc()).all()
+            self.assertEqual([version.version_number for version in stored_versions], [1, 2])
         finally:
             session.close()
             engine.dispose()
@@ -1029,11 +1083,29 @@ class MountingNodeServiceTests(unittest.TestCase):
                 viewer_user_id=admin.id,
                 viewer_role=admin.role,
             )
+            system_node = service.create_mounting_node(
+                {
+                    "name": "Admin system node",
+                    "ownership_type": "system",
+                    "items": [{"fitting_id": fitting.id, "quantity": 1}],
+                },
+                viewer_user_id=admin.id,
+                viewer_role=admin.role,
+            )
             own_node = service.create_mounting_node(
                 {
                     "name": "Own node",
                     "items": [{"fitting_id": fitting.id, "quantity": 1}],
                     "templates": [{"template_id": nested_template.id, "is_default": True}],
+                },
+                viewer_user_id=user_a.id,
+                viewer_role=user_a.role,
+            )
+            forced_system_node = service.create_mounting_node(
+                {
+                    "name": "Forced system request",
+                    "ownership_type": "system",
+                    "items": [{"fitting_id": fitting.id, "quantity": 1}],
                 },
                 viewer_user_id=user_a.id,
                 viewer_role=user_a.role,
@@ -1047,17 +1119,27 @@ class MountingNodeServiceTests(unittest.TestCase):
                 viewer_role=user_b.role,
             )
 
-            self.assertIsNone(admin_node["owner_user_id"])
+            self.assertEqual(admin_node["owner_user_id"], admin.id)
             self.assertEqual(admin_node["created_by_user_id"], admin.id)
             self.assertEqual(admin_node["updated_by_user_id"], admin.id)
             self.assertTrue(admin_node["can_edit"])
             self.assertTrue(admin_node["can_delete"])
+
+            self.assertIsNone(system_node["owner_user_id"])
+            self.assertEqual(system_node["ownership_type"], "system")
+            self.assertTrue(system_node["can_edit"])
+            self.assertTrue(system_node["can_delete"])
 
             self.assertEqual(own_node["owner_user_id"], user_a.id)
             self.assertEqual(own_node["created_by_user_id"], user_a.id)
             self.assertEqual(own_node["updated_by_user_id"], user_a.id)
             self.assertTrue(own_node["can_edit"])
             self.assertTrue(own_node["can_delete"])
+
+            self.assertEqual(forced_system_node["owner_user_id"], user_a.id)
+            self.assertEqual(forced_system_node["ownership_type"], "mine")
+            self.assertTrue(forced_system_node["can_edit"])
+            self.assertTrue(forced_system_node["can_delete"])
 
             updated_own_node = service.update_mounting_node(
                 own_node["id"],
@@ -1072,7 +1154,7 @@ class MountingNodeServiceTests(unittest.TestCase):
 
             with self.assertRaises(MountingNodePermissionError):
                 service.update_mounting_node(
-                    admin_node["id"],
+                    system_node["id"],
                     {"description": "Blocked"},
                     viewer_user_id=user_a.id,
                     viewer_role=user_a.role,
@@ -1094,17 +1176,24 @@ class MountingNodeServiceTests(unittest.TestCase):
                     viewer_role=user_a.role,
                 )
             )
-            self.assertIsNone(
-                service.get_mounting_node(
-                    own_node["id"],
-                    viewer_user_id=user_a.id,
-                    viewer_role=user_a.role,
-                )
+            archived_node = service.get_mounting_node(
+                own_node["id"],
+                viewer_user_id=user_a.id,
+                viewer_role=user_a.role,
             )
+            self.assertIsNotNone(archived_node)
+            self.assertTrue(archived_node["is_archived"])
+            self.assertEqual(archived_node["archived_by_user_id"], user_a.id)
+            self.assertFalse(archived_node["can_edit"])
+            self.assertFalse(archived_node["can_delete"])
+            self.assertEqual(archived_node["versions"][0]["event_type"], "archive")
+            self.assertIsNotNone(session.get(MountingNodeModel, own_node["id"]))
+            self.assertIsNotNone(session.get(FittingHoleTemplateModel, nested_template.id))
+            self.assertEqual(session.query(FittingHolePointModel).count(), 1)
 
             with self.assertRaises(MountingNodePermissionError):
                 service.delete_mounting_node(
-                    admin_node["id"],
+                    system_node["id"],
                     viewer_user_id=user_a.id,
                     viewer_role=user_a.role,
                 )
@@ -1116,10 +1205,6 @@ class MountingNodeServiceTests(unittest.TestCase):
                     viewer_role=user_a.role,
                 )
             )
-
-            deleted_template = session.get(FittingHoleTemplateModel, nested_template.id)
-            self.assertIsNone(deleted_template)
-            self.assertEqual(session.query(FittingHolePointModel).count(), 0)
         finally:
             session.close()
             engine.dispose()

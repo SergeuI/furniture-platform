@@ -11,6 +11,7 @@ from schemas.mounting_nodes import (
     MountingNodeDetailResponseSchema,
     MountingNodeListResponseSchema,
     MountingNodeOperationResponseSchema,
+    MountingNodeVersionResponseSchema,
     MountingNodeUpdateSchema,
 )
 from services.entitlement_service import EntitlementService
@@ -154,6 +155,38 @@ async def get_mounting_node_route(
     return {
         "success": True,
         "node": node,
+    }
+
+
+@router.get(
+    "/{node_id}/versions/{version_id}",
+    response_model=MountingNodeVersionResponseSchema,
+)
+async def get_mounting_node_version_route(
+    node_id: int,
+    version_id: int,
+    current_user = Depends(require_mounting_nodes_view),
+):
+    access = _resolve_mounting_nodes_access(current_user)
+    with MountingNodeService() as service:
+        version = service.get_mounting_node_version(
+            node_id,
+            version_id,
+            viewer_user_id=getattr(current_user, "id", None),
+            viewer_role=getattr(current_user, "role", None),
+            viewer_can_edit=access["viewer_can_edit"],
+            viewer_can_delete=access["viewer_can_delete"],
+        )
+
+    if version is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Mounting node version with id={version_id} for node id={node_id} does not exist",
+        )
+
+    return {
+        "success": True,
+        "version": version,
     }
 
 

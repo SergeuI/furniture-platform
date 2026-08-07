@@ -26,6 +26,17 @@ function buildMountingNodesDetailRestoreKey(nodeId) {
   return normalizedNodeId === null ? "" : `detail:${normalizedNodeId}`;
 }
 
+export function buildMountingNodesRestoredRoute(route = {}, nodeId = null) {
+  const normalizedRoute = normalizeMountingNodesRoute(route);
+  const restoredNodeId = normalizeMountingNodeId(nodeId ?? normalizedRoute.nodeId);
+  const restoredMode = normalizedRoute.mode === "editor" ? "editor" : "detail";
+
+  return normalizeMountingNodesRoute({
+    mode: restoredMode,
+    nodeId: restoredNodeId,
+  });
+}
+
 export function normalizeMountingNodesRoute(route = {}) {
   const mode = String(route?.mode || "").trim();
   const nodeId = normalizeMountingNodeId(route?.nodeId);
@@ -104,6 +115,46 @@ export function buildMountingNodesRestoreState(route = {}, nodeDetail = null) {
     selectedNodeId: normalizedRoute.mode === "list" ? "" : String(normalizedRoute.nodeId || restoredNodeId || ""),
     selectedNodeLoading: false,
   };
+}
+
+export function shouldHydrateMountingNodeDetail(route = {}, nodeDetail = null) {
+  const normalizedRoute = normalizeMountingNodesRoute(route);
+  if (normalizedRoute.mode !== "detail" && normalizedRoute.mode !== "editor") {
+    return false;
+  }
+
+  if (normalizedRoute.nodeId === null) {
+    return false;
+  }
+
+  if (!nodeDetail || typeof nodeDetail !== "object") {
+    return true;
+  }
+
+  const restoredNodeId = String(nodeDetail.id || nodeDetail.node_id || "").trim();
+
+  if (!restoredNodeId || restoredNodeId !== String(normalizedRoute.nodeId)) {
+    return true;
+  }
+
+  if (!Array.isArray(nodeDetail.items) || !Array.isArray(nodeDetail.templates)) {
+    return true;
+  }
+
+  return false;
+}
+
+export function shouldPreserveMountingNodeEditorWorkspace(route = {}, openContext = null) {
+  const normalizedRoute = normalizeMountingNodesRoute(route);
+  if (normalizedRoute.mode !== "editor") {
+    return false;
+  }
+
+  const resolvedMountingNodeId = String(openContext?.mountingNodeId || "").trim();
+  const resolvedNodeDetail =
+    openContext?.nodeDetail && typeof openContext.nodeDetail === "object" ? openContext.nodeDetail : null;
+
+  return Boolean(resolvedMountingNodeId && resolvedNodeDetail);
 }
 
 export function createMountingNodesDetailRestoreCoordinator() {

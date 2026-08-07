@@ -9,6 +9,7 @@ from database.models.fitting import FittingHolePointModel, FittingHoleTemplateMo
 from database.models.mounting_node import (
     MountingNodeItemModel,
     MountingNodeModel,
+    MountingNodeVersionModel,
     MountingNodeTemplateModel,
 )
 
@@ -59,6 +60,8 @@ class MountingNodeRepository:
         if not include_inactive:
             query = query.filter(MountingNodeModel.is_active.is_(True))
 
+        query = query.filter(MountingNodeModel.is_archived.is_(False))
+
         is_admin = str(viewer_role or "").strip().lower() == "admin"
         normalized_viewer_id = str(viewer_user_id or "").strip()
         if not is_admin:
@@ -101,12 +104,49 @@ class MountingNodeRepository:
         self.session.refresh(node)
         return node
 
+    def create_version(self, **data: Any) -> MountingNodeVersionModel:
+        version = MountingNodeVersionModel(**data)
+        self.session.add(version)
+        self.session.flush()
+        self.session.refresh(version)
+        return version
+
     def update_node(self, node: MountingNodeModel, **data: Any) -> MountingNodeModel:
         for key, value in data.items():
             setattr(node, key, value)
         self.session.flush()
         self.session.refresh(node)
         return node
+
+    def list_versions(self, node_id: int) -> list[MountingNodeVersionModel]:
+        return (
+            self.session.query(MountingNodeVersionModel)
+            .filter(MountingNodeVersionModel.node_id == node_id)
+            .order_by(
+                MountingNodeVersionModel.version_number.desc(),
+                MountingNodeVersionModel.id.desc(),
+            )
+            .all()
+        )
+
+    def get_version_by_id(self, node_id: int, version_id: int) -> Optional[MountingNodeVersionModel]:
+        return (
+            self.session.query(MountingNodeVersionModel)
+            .filter(MountingNodeVersionModel.node_id == node_id)
+            .filter(MountingNodeVersionModel.id == version_id)
+            .one_or_none()
+        )
+
+    def next_version_number(self, node_id: int) -> int:
+        row = (
+            self.session.query(MountingNodeVersionModel.version_number)
+            .filter(MountingNodeVersionModel.node_id == node_id)
+            .order_by(MountingNodeVersionModel.version_number.desc())
+            .first()
+        )
+        if row is None:
+            return 1
+        return int(row[0] or 0) + 1
 
     def replace_items(
         self,

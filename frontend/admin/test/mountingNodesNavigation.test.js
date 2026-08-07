@@ -3,10 +3,13 @@ import test from "node:test";
 
 import {
   buildMountingNodesRestoreState,
+  buildMountingNodesRestoredRoute,
   buildMountingNodesRouteUrl,
   createMountingNodesDetailRestoreCoordinator,
   normalizeMountingNodesRoute,
   parseMountingNodesRoute,
+  shouldPreserveMountingNodeEditorWorkspace,
+  shouldHydrateMountingNodeDetail,
 } from "../src/mountingNodesNavigation.js";
 
 test("mounting nodes route parser recognizes the list URL", () => {
@@ -169,6 +172,26 @@ test("mounting nodes restore state uses the fresh node detail for editor URLs", 
   );
 });
 
+test("mounting nodes restored route keeps editor mode for editor requests", () => {
+  assert.deepEqual(
+    buildMountingNodesRestoredRoute({ mode: "editor", nodeId: 9 }, 9),
+    {
+      mode: "editor",
+      nodeId: 9,
+    },
+  );
+});
+
+test("mounting nodes restored route falls back to detail mode for detail requests", () => {
+  assert.deepEqual(
+    buildMountingNodesRestoredRoute({ mode: "detail", nodeId: 9 }, 9),
+    {
+      mode: "detail",
+      nodeId: 9,
+    },
+  );
+});
+
 test("mounting nodes restore state keeps create mode isolated from node details", () => {
   assert.deepEqual(
     buildMountingNodesRestoreState({ mode: "create", nodeId: null }, null),
@@ -190,6 +213,66 @@ test("mounting nodes restore state keeps create mode isolated from node details"
       selectedNodeId: "",
       selectedNodeLoading: false,
     },
+  );
+});
+
+test("mounting nodes hydration guard requires a fresh detail fetch for editor and detail routes without node data", () => {
+  const hydratedNodeDetail = {
+    id: 9,
+    items: [],
+    templates: [],
+  };
+
+  assert.equal(shouldHydrateMountingNodeDetail({ mode: "detail", nodeId: 9 }, null), true);
+  assert.equal(shouldHydrateMountingNodeDetail({ mode: "editor", nodeId: 9 }, null), true);
+  assert.equal(shouldHydrateMountingNodeDetail({ mode: "detail", nodeId: 9 }, hydratedNodeDetail), false);
+  assert.equal(shouldHydrateMountingNodeDetail({ mode: "editor", nodeId: 9 }, hydratedNodeDetail), false);
+  assert.equal(shouldHydrateMountingNodeDetail({ mode: "detail", nodeId: 9 }, { id: 10, items: [], templates: [] }), true);
+  assert.equal(shouldHydrateMountingNodeDetail({ mode: "create", nodeId: null }, null), false);
+  assert.equal(shouldHydrateMountingNodeDetail({ mode: "list", nodeId: null }, null), false);
+});
+
+test("mounting node editor workspace guard preserves hydrated editor context", () => {
+  assert.equal(
+    shouldPreserveMountingNodeEditorWorkspace(
+      {
+        mode: "editor",
+        nodeId: 13,
+      },
+      {
+        mountingNodeId: "13",
+        nodeDetail: { id: 13, items: [], templates: [] },
+      },
+    ),
+    true,
+  );
+
+  assert.equal(
+    shouldPreserveMountingNodeEditorWorkspace(
+      {
+        mode: "editor",
+        nodeId: 13,
+      },
+      {
+        mountingNodeId: "13",
+        nodeDetail: null,
+      },
+    ),
+    false,
+  );
+
+  assert.equal(
+    shouldPreserveMountingNodeEditorWorkspace(
+      {
+        mode: "detail",
+        nodeId: 13,
+      },
+      {
+        mountingNodeId: "13",
+        nodeDetail: { id: 13, items: [], templates: [] },
+      },
+    ),
+    false,
   );
 });
 

@@ -429,6 +429,9 @@ class BackfillConfirmatMountingNodeTests(unittest.TestCase):
                     is_active INTEGER NOT NULL DEFAULT 1,
                     created_by_user_id TEXT,
                     updated_by_user_id TEXT,
+                    is_archived INTEGER NOT NULL DEFAULT 0,
+                    archived_at TEXT,
+                    archived_by_user_id TEXT,
                     created_at TEXT,
                     updated_at TEXT
                 )
@@ -462,6 +465,21 @@ class BackfillConfirmatMountingNodeTests(unittest.TestCase):
                     created_at TEXT,
                     updated_at TEXT,
                     UNIQUE(node_id, template_id)
+                )
+                """
+            )
+            connection.execute(
+                """
+                CREATE TABLE mounting_node_versions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    node_id INTEGER NOT NULL,
+                    node_code TEXT NOT NULL,
+                    node_name TEXT NOT NULL,
+                    version_number INTEGER NOT NULL,
+                    event_type TEXT NOT NULL DEFAULT 'update',
+                    snapshot JSON NOT NULL,
+                    created_by_user_id TEXT,
+                    created_at TEXT
                 )
                 """
             )

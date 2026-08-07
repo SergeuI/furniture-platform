@@ -26,13 +26,17 @@ TABLES = {
             is_active BOOLEAN NOT NULL DEFAULT 1,
             created_by_user_id VARCHAR,
             updated_by_user_id VARCHAR,
+            is_archived BOOLEAN NOT NULL DEFAULT 0,
+            archived_at DATETIME,
+            archived_by_user_id VARCHAR,
             created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             CHECK (trim(code) <> ''),
             CHECK (trim(name) <> ''),
             FOREIGN KEY(owner_user_id) REFERENCES users (id),
             FOREIGN KEY(created_by_user_id) REFERENCES users (id),
-            FOREIGN KEY(updated_by_user_id) REFERENCES users (id)
+            FOREIGN KEY(updated_by_user_id) REFERENCES users (id),
+            FOREIGN KEY(archived_by_user_id) REFERENCES users (id)
         )
     """,
     "mounting_node_items": """
@@ -68,6 +72,21 @@ TABLES = {
             UNIQUE(template_id)
         )
     """,
+    "mounting_node_versions": """
+        CREATE TABLE IF NOT EXISTS mounting_node_versions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            node_id INTEGER NOT NULL,
+            node_code VARCHAR(128) NOT NULL,
+            node_name VARCHAR(255) NOT NULL,
+            version_number INTEGER NOT NULL,
+            event_type VARCHAR(32) NOT NULL DEFAULT 'update',
+            snapshot JSON NOT NULL,
+            created_by_user_id VARCHAR,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(node_id, version_number),
+            FOREIGN KEY(created_by_user_id) REFERENCES users (id)
+        )
+    """,
 }
 
 INDEXES = {
@@ -75,6 +94,10 @@ INDEXES = {
     "ix_mounting_nodes_owner_user_id": "CREATE INDEX IF NOT EXISTS ix_mounting_nodes_owner_user_id ON mounting_nodes (owner_user_id)",
     "ix_mounting_nodes_created_by_user_id": "CREATE INDEX IF NOT EXISTS ix_mounting_nodes_created_by_user_id ON mounting_nodes (created_by_user_id)",
     "ix_mounting_nodes_updated_by_user_id": "CREATE INDEX IF NOT EXISTS ix_mounting_nodes_updated_by_user_id ON mounting_nodes (updated_by_user_id)",
+    "ix_mounting_nodes_is_archived": "CREATE INDEX IF NOT EXISTS ix_mounting_nodes_is_archived ON mounting_nodes (is_archived)",
+    "ix_mounting_nodes_archived_by_user_id": "CREATE INDEX IF NOT EXISTS ix_mounting_nodes_archived_by_user_id ON mounting_nodes (archived_by_user_id)",
+    "ix_mounting_node_versions_node_id": "CREATE INDEX IF NOT EXISTS ix_mounting_node_versions_node_id ON mounting_node_versions (node_id)",
+    "ix_mounting_node_versions_version_number": "CREATE INDEX IF NOT EXISTS ix_mounting_node_versions_version_number ON mounting_node_versions (version_number)",
     "ix_mounting_node_items_node_id": "CREATE INDEX IF NOT EXISTS ix_mounting_node_items_node_id ON mounting_node_items (node_id)",
     "ix_mounting_node_items_fitting_id": "CREATE INDEX IF NOT EXISTS ix_mounting_node_items_fitting_id ON mounting_node_items (fitting_id)",
     "ix_mounting_node_items_order_index": "CREATE INDEX IF NOT EXISTS ix_mounting_node_items_order_index ON mounting_node_items (order_index)",

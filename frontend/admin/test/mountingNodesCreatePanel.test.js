@@ -10,9 +10,11 @@ function readSource(relativeUrl) {
 test("mounting nodes create panel renders compact wizard structure", () => {
   const panelSource = readSource("../src/components/processing/MountingNodesCreatePanel.jsx");
   const appSource = readSource("../src/App.jsx");
+  const modalSource = readSource("../src/components/processing/MountingNodesFittingSelectorModal.jsx");
   const stylesSource = readSource("../src/styles.css");
 
   assert.equal(appSource.includes("mounting-node-create-panel-shell"), true);
+  assert.equal(appSource.includes("ownership_type: ownershipType"), true);
   assert.equal(appSource.includes('className="table-panel full-panel mounting-node-create-panel-shell"'), true);
   assert.equal(panelSource.includes('catalog-page-header mounting-node-create-header'), false);
   assert.equal(panelSource.includes('className="mounting-node-create-header"'), true);
@@ -25,6 +27,11 @@ test("mounting nodes create panel renders compact wizard structure", () => {
   assert.equal(panelSource.includes('className="mounting-node-create-card mounting-node-create-main-info-card"'), true);
   assert.equal(panelSource.includes('className="mounting-node-create-card mounting-node-create-variant-card"'), true);
   assert.equal(panelSource.includes('className="mounting-node-create-card mounting-node-create-items-card"'), true);
+  assert.equal(panelSource.includes('userRole = ""'), true);
+  assert.equal(panelSource.includes('mounting-node-create-ownership-field'), true);
+  assert.equal(panelSource.includes('ownership_type'), true);
+  assert.equal(panelSource.includes('Власний'), true);
+  assert.equal(panelSource.includes('Системний'), true);
   assert.equal(panelSource.includes('mounting-node-create-items-head'), true);
   assert.equal(panelSource.includes('mounting-node-create-selected-fitting-info'), false);
   assert.equal(panelSource.includes('mounting-node-create-empty-state mounting-node-create-empty-state-compact'), true);
@@ -44,12 +51,23 @@ test("mounting nodes create panel renders compact wizard structure", () => {
   assert.equal(panelSource.includes('mounting-node-create-section-error'), true);
   assert.equal(panelSource.includes('mounting-node-create-footer'), true);
   assert.equal(panelSource.includes('handleSubmit(event, "editor")'), true);
+  assert.equal(appSource.includes('mounting-node-editor-items-card'), true);
   assert.equal(panelSource.includes('hole-bundle-modal-row-image'), true);
   assert.equal(panelSource.includes('hole-bundle-modal-card-image'), true);
   assert.equal(panelSource.includes('hole-bundle-modal-body'), true);
   assert.equal(panelSource.includes('hole-bundle-modal-list'), true);
   assert.equal(panelSource.includes('hole-bundle-modal-cards'), true);
+  assert.equal(panelSource.includes('isOpen={selectorOpen}'), true);
   assert.equal(panelSource.includes('Немає фото'), true);
+  assert.equal(appSource.includes('isOpen={mountingNodeEditorSelectorOpen}'), true);
+  assert.equal(modalSource.includes('if (!isOpen || !title) {'), true);
+  assert.equal(appSource.includes('mounting-node-editor-workspace'), true);
+  assert.equal(appSource.includes('mounting-node-editor-left-column'), true);
+  assert.equal(appSource.includes('mounting-node-editor-right-column'), true);
+  assert.equal(stylesSource.includes('.mounting-node-create-screen .mounting-node-editor-workspace {'), true);
+  assert.equal(stylesSource.includes('.mounting-node-create-screen .mounting-node-editor-left-column {'), true);
+  assert.equal(stylesSource.includes('.mounting-node-create-screen .mounting-node-editor-right-column {'), true);
+  assert.equal(stylesSource.includes('.mounting-node-create-screen .holes-preview-3d-card {\n  position: sticky;'), true);
   assert.equal(stylesSource.includes('.hole-bundle-modal-row-image,'), true);
   assert.equal(stylesSource.includes('.hole-bundle-modal-row-image-empty'), true);
   assert.equal(stylesSource.includes('.hole-bundle-modal-card-image,'), true);

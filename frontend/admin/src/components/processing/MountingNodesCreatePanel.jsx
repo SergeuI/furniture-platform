@@ -181,6 +181,7 @@ export default function MountingNodesCreatePanel({
   onCreate = () => {},
   createError = "",
   isCreating = false,
+  userRole = "",
   t = {},
 }) {
   const [draft, setDraft] = useState(() =>
@@ -198,6 +199,7 @@ export default function MountingNodesCreatePanel({
   const [internalSubmitting, setInternalSubmitting] = useState(false);
   const selectorSearchRef = useRef(null);
   const selectorStateSeededRef = useRef(false);
+  const canChooseOwnershipType = String(userRole || "").trim().toLowerCase() === "admin";
 
   const validationErrors = useMemo(() => validateMountingNodeCreateDraft(draft), [draft]);
   const canSubmit = validationErrors.length === 0 && !isCreating && !internalSubmitting && typeof onCreate === "function";
@@ -332,6 +334,14 @@ export default function MountingNodesCreatePanel({
     updateDraft((current) => ({
       ...current,
       description: value,
+      is_dirty: true,
+    }));
+  };
+
+  const handleOwnershipTypeChange = (value) => {
+    updateDraft((current) => ({
+      ...current,
+      ownership_type: String(value || "").trim() === "system" ? "system" : "mine",
       is_dirty: true,
     }));
   };
@@ -503,6 +513,19 @@ export default function MountingNodesCreatePanel({
                   />
                 </label>
               </div>
+              {canChooseOwnershipType ? (
+                <label className="mounting-node-create-field mounting-node-create-ownership-field">
+                  <span>{language === "uk" ? "Тип вузла" : "Node type"}</span>
+                  <select
+                    disabled={isCreating || internalSubmitting}
+                    onChange={(event) => handleOwnershipTypeChange(event.target.value)}
+                    value={draft.ownership_type || "mine"}
+                  >
+                    <option value="mine">{language === "uk" ? "Власний" : "Owned"}</option>
+                    <option value="system">{language === "uk" ? "Системний" : "System"}</option>
+                  </select>
+                </label>
+              ) : null}
             </section>
 
             <section className="mounting-node-create-card mounting-node-create-variant-card">
@@ -690,6 +713,28 @@ export default function MountingNodesCreatePanel({
         </form>
 
         {selectorOpen ? (
+          <MountingNodesFittingSelectorModal
+            categoryCode={selectorCategoryCode}
+            isOpen={selectorOpen}
+            fittingCategories={fittingCategories}
+            fittingItems={fittingItems}
+            language={language}
+            onCategoryCodeChange={setSelectorCategoryCode}
+            onClose={closeSelector}
+            onConfirm={handleConfirmSelectedFittings}
+            onSearchChange={setSelectorSearch}
+            onToggleItem={handleToggleSelectorFitting}
+            onViewModeChange={setSelectorViewMode}
+            search={selectorSearch}
+            selectedCount={selectorSelectedCount}
+            selectedIds={selectorDraftItemIds}
+            t={t}
+            title={selectorTitle}
+            viewMode={selectorViewMode}
+          />
+        ) : null}
+
+        {false ? (
           <div className="modal-backdrop" onClick={closeSelector} role="presentation">
             <article
               className="confirm-modal hole-template-modal hole-bundle-modal"

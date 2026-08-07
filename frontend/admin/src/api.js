@@ -455,6 +455,23 @@ export async function getMountingNode(token, nodeId) {
   });
 }
 
+export async function getMountingNodeVersion(token, nodeId, versionId) {
+  const normalizedNodeId = String(nodeId || "").trim();
+  const normalizedVersionId = String(versionId || "").trim();
+
+  if (!normalizedNodeId || !normalizedVersionId) {
+    return {
+      success: false,
+      error: "Mounting node and version IDs are required",
+      status: 0,
+    };
+  }
+
+  return request(`/mounting-nodes/${encodeURIComponent(normalizedNodeId)}/versions/${encodeURIComponent(normalizedVersionId)}`, {
+    headers: authHeaders(token),
+  });
+}
+
 export async function createMountingNode(token, payload) {
   return request("/mounting-nodes", {
     method: "POST",

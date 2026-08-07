@@ -41,6 +41,7 @@ import {
 import EntitlementsAdminPage from "./components/EntitlementsAdminPage.jsx";
 import FittingHolesWorkspace from "./components/processing/FittingHolesWorkspace.jsx";
 import MountingNodesCreatePanel from "./components/processing/MountingNodesCreatePanel.jsx";
+import MountingNodesFittingSelectorModal from "./components/processing/MountingNodesFittingSelectorModal.jsx";
 import HolesMountingThreePreview from "./components/processing/HolesMountingThreePreview.jsx";
 import MountingNodesPanel from "./components/processing/MountingNodesPanelRefined.jsx";
 import ProcessingWorkspace from "./components/processing/ProcessingWorkspace.jsx";
@@ -119,15 +120,30 @@ import {
   mergeHolePointSaveResponse,
 } from "./holePointForm.js";
 import {
+  MOUNTING_NODE_CREATE_ROLE_OPTIONS,
+  createMountingNodeCreateDraftItemFromFitting,
+  updateMountingNodeCreateDraftItem,
+} from "./mountingNodesCreateDraft.js";
+import {
   buildMountingNodesRestoreState,
+  buildMountingNodesRestoredRoute,
   buildMountingNodesRouteUrl,
   createMountingNodesDetailRestoreCoordinator,
   normalizeMountingNodesRoute,
   parseMountingNodesRoute,
+  shouldPreserveMountingNodeEditorWorkspace,
+  shouldHydrateMountingNodeDetail,
 } from "./mountingNodesNavigation.js";
 import {
   buildMountingNodeEditorSavePayload,
+  canAddMountingNodeEditorPoint,
   canSaveMountingNodeEditor,
+  getMountingNodeEditorItemFittingId as getMountingNodeEditorItemFittingIdHelper,
+  getMountingNodeEditorItemImageUrl as getMountingNodeEditorItemImageUrlHelper,
+  getMountingNodeEditorPointDisplayId,
+  getMountingNodeEditorPointDisplayLabel,
+  hydrateMountingNodeEditorState,
+  resolveActiveMountingNodeVersion,
   resolveMountingNodeEditorContext,
 } from "./mountingNodesEditor.js";
 
@@ -7247,6 +7263,14 @@ export default function App() {
   const [catalogHolesBreadcrumbNodeId, setCatalogHolesBreadcrumbNodeId] = useState(null);
   const [catalogHolesBreadcrumbNodeName, setCatalogHolesBreadcrumbNodeName] = useState("");
   const [catalogHolesListRequestToken, setCatalogHolesListRequestToken] = useState(0);
+  const [mountingNodeEditorDraft, setMountingNodeEditorDraft] = useState(null);
+  const [mountingNodeEditorDraftNodeId, setMountingNodeEditorDraftNodeId] = useState("");
+  const [mountingNodeEditorSelectorOpen, setMountingNodeEditorSelectorOpen] = useState(false);
+  const [mountingNodeEditorSelectorSearch, setMountingNodeEditorSelectorSearch] = useState("");
+  const [mountingNodeEditorSelectorCategoryCode, setMountingNodeEditorSelectorCategoryCode] = useState("");
+  const [mountingNodeEditorSelectorViewMode, setMountingNodeEditorSelectorViewMode] = useState("list");
+  const [mountingNodeEditorSelectorDraftItemIds, setMountingNodeEditorSelectorDraftItemIds] = useState([]);
+  const [mountingNodeEditorHasChanges, setMountingNodeEditorHasChanges] = useState(false);
   const [catalogHolesCreateError, setCatalogHolesCreateError] = useState("");
   const [catalogHolesCreating, setCatalogHolesCreating] = useState(false);
   const [catalogHolesSaving, setCatalogHolesSaving] = useState(false);
@@ -7261,6 +7285,7 @@ export default function App() {
   const fittingDetailsCloseButtonRef = useRef(null);
   const bundleDetailsRequestRef = useRef({ id: 0, bundleKey: "", open: false });
   const holeMountingVariantRefreshRef = useRef({ reason: "", templateId: "", variantKey: "" });
+  const mountingNodeEditorHydrationKeyRef = useRef("");
   const [newFittingForm, setNewFittingForm] = useState(DEFAULT_FITTING_FORM);
   const [autoRefreshStatus, setAutoRefreshStatus] = useState(null);
   const storedProjectId = localStorage.getItem(ACTIVE_PROJECT_ID_STORAGE_KEY) || "";
@@ -7333,12 +7358,17 @@ export default function App() {
 
       const restoredNodeId = String(result.node.id || resolvedNodeId || "").trim();
       const restoredNodeName = String(result.node.name || "").trim();
-      const restoredRoute = normalizeMountingNodesRoute({ mode: "detail", nodeId: restoredNodeId });
+      const restoredRoute = buildMountingNodesRestoredRoute(
+        options.route || { mode: "detail", nodeId: restoredNodeId },
+        restoredNodeId,
+      );
 
       setMountingNodesRouteState(restoredRoute);
       setMountingNodesRouteVersion((current) => current + 1);
-      setCatalogHolesMode("list");
+      setCatalogHolesMode(restoredRoute.mode === "editor" ? "editor" : "list");
       setCatalogHolesDetailOpen(true);
+      setMountingNodeEditorDraft(cloneMountingNodeEditorDraft(result.node));
+      setMountingNodeEditorDraftNodeId(restoredNodeId || "");
       setCatalogHolesBreadcrumbNodeId(restoredNodeId || null);
       setCatalogHolesBreadcrumbNodeName(restoredNodeName);
       setMountingNodesInitialState(
@@ -7409,7 +7439,23 @@ export default function App() {
       return undefined;
     }
 
-    if (mountingNodesRouteState?.mode !== "detail") {
+    const shouldHydrateRoute = shouldHydrateMountingNodeDetail(
+      mountingNodesRouteState || {},
+      catalogHolesOpenContext?.nodeDetail || null,
+    );
+
+    if (!shouldHydrateRoute) {
+      if (mountingNodesRouteState?.mode === "list") {
+        setMountingNodesInitialState(null);
+      }
+
+      setMountingNodesRouteLoadingMessage("");
+      setMountingNodesRouteError("");
+      setMountingNodesRouteReady(true);
+      return undefined;
+    }
+
+    if (mountingNodesRouteState?.mode !== "detail" && mountingNodesRouteState?.mode !== "editor") {
       if (mountingNodesRouteState?.mode === "list") {
         setMountingNodesInitialState(null);
         setMountingNodesRouteLoadingMessage("");
@@ -7428,10 +7474,18 @@ export default function App() {
     void restoreMountingNodeDetail(mountingNodesRouteState.nodeId, {
       historyMode: "replace",
       updateUrl: false,
+      route: mountingNodesRouteState,
     });
 
     return undefined;
-  }, [isMountingNodesRoute, mountingNodesRouteState?.mode, mountingNodesRouteState?.nodeId, token]);
+  }, [
+    catalogHolesOpenContext?.nodeDetail?.id,
+    catalogHolesOpenContext?.nodeDetail?.node_id,
+    isMountingNodesRoute,
+    mountingNodesRouteState?.mode,
+    mountingNodesRouteState?.nodeId,
+    token,
+  ]);
 
   const t = TRANSLATIONS[language] || TRANSLATIONS.en;
   const userLoginName = user?.username || user?.email?.split("@")[0] || "";
@@ -10232,6 +10286,7 @@ export default function App() {
     void restoreMountingNodeDetail(restoredNodeId, {
       historyMode: "replace",
       updateUrl: true,
+      route: { mode: "detail", nodeId: restoredNodeId },
     });
   }
 
@@ -10419,8 +10474,8 @@ export default function App() {
 
       items.push({
         current: true,
-        label: language === "uk" ? "Отвори та 3D" : "Open holes and 3D",
-        title: language === "uk" ? "Отвори та 3D" : "Open holes and 3D",
+        label: language === "uk" ? "Редагування вузла" : "Node editing",
+        title: language === "uk" ? "Редагування вузла" : "Node editing",
       });
       return items;
     }
@@ -10463,6 +10518,7 @@ export default function App() {
     const resolvedReturnState = returnState && typeof returnState === "object" ? returnState : null;
     const resolvedNodeId = String(resolvedContext?.mountingNodeId || "").trim();
     const resolvedNodeName = getCatalogHolesBreadcrumbNodeName(resolvedContext, resolvedReturnState);
+    const hydratedEditorState = hydrateMountingNodeEditorState(resolvedContext?.nodeDetail, resolvedNodeId);
     const shouldUpdateUrl = options.updateUrl !== false;
     const nextContext = resolvedContext
       ? {
@@ -10473,6 +10529,8 @@ export default function App() {
       : resolvedContext;
 
     setCatalogHolesDetailOpen(false);
+    setMountingNodeEditorDraft(cloneMountingNodeEditorDraft(hydratedEditorState?.context?.nodeDetail || resolvedContext?.nodeDetail));
+    setMountingNodeEditorDraftNodeId(resolvedNodeId);
     if (resolvedNodeId) {
       setCatalogHolesBreadcrumbNodeId(resolvedNodeId);
     }
@@ -10482,6 +10540,26 @@ export default function App() {
     setCatalogHolesReturnState(resolvedReturnState);
     setMountingNodesRouteLoadingMessage("");
     setMountingNodesRouteError("");
+    setMountingNodeEditorHasChanges(false);
+    if (hydratedEditorState) {
+      setHoleWorkspaceMode("existing");
+      setSelectedHoleMountingVariantKey(hydratedEditorState.context.mountingVariantKey || "surface_mount");
+      setHoleSelectedFittingId(hydratedEditorState.context.fittingId);
+      setHoleSelectedTemplateId(hydratedEditorState.context.templateId);
+      setHoleSelectedTemplate(
+        hydratedEditorState.selectedTemplateLink
+          ? cloneMountingNodeEditorDraft(hydratedEditorState.selectedTemplateLink)
+          : null,
+      );
+      setHoleTemplateItems(hydratedEditorState.templateItems);
+      setHolePoints(hydratedEditorState.points);
+      setSelectedHolePointId("");
+      setHoveredHolePointId("");
+      setHoleTemplateDetailsLoaded(true);
+      setHoleServicePreview(null);
+      setHoleServicePreviewError("");
+      setHoleServicePreviewLoading(false);
+    }
 
     if (shouldUpdateUrl && resolvedNodeId) {
       const nextRoute = normalizeMountingNodesRoute({ mode: "editor", nodeId: resolvedNodeId });
@@ -10520,11 +10598,292 @@ export default function App() {
     };
   }
 
+  function cloneMountingNodeEditorDraft(nodeDetail) {
+    if (!nodeDetail || typeof nodeDetail !== "object") {
+      return null;
+    }
+
+    try {
+      return JSON.parse(JSON.stringify(nodeDetail));
+    } catch {
+      return {
+        ...nodeDetail,
+        items: Array.isArray(nodeDetail.items) ? nodeDetail.items.map((item) => ({ ...item })) : [],
+        templates: Array.isArray(nodeDetail.templates)
+          ? nodeDetail.templates.map((link) => ({
+              ...link,
+              template: link?.template && typeof link.template === "object"
+                ? {
+                    ...link.template,
+                    points: Array.isArray(link.template.points) ? link.template.points.map((point) => ({ ...point })) : [],
+                  }
+                : link.template,
+            }))
+        : [],
+      };
+    }
+  }
+
+  function cloneMountingNodeEditorPoints(points) {
+    return Array.isArray(points) ? points.map((point) => ({ ...point })) : [];
+  }
+
+  function createMountingNodeEditorTempPointId() {
+    return -Date.now() - Math.floor(Math.random() * 1000);
+  }
+
+  function getMountingNodeEditorItemFittingId(item) {
+    return String(getMountingNodeEditorItemFittingIdHelper(item)).trim();
+  }
+
+  function getMountingNodeEditorItemSource(item) {
+    const fittingId = getMountingNodeEditorItemFittingId(item);
+    return (
+      (Array.isArray(fittingItems) ? fittingItems : []).find(
+        (candidate) => String(candidate?.id || candidate?.fitting_id || "") === fittingId,
+      ) || null
+    );
+  }
+
+  function getMountingNodeEditorItemName(item) {
+    const source = getMountingNodeEditorItemSource(item);
+    return String(item?.fitting_name || item?.name || source?.name || source?.article || source?.code || item?.fitting_id || "").trim();
+  }
+
+  function getMountingNodeEditorItemArticle(item) {
+    const source = getMountingNodeEditorItemSource(item);
+    return String(item?.article || item?.fitting_article || source?.article || source?.code || "").trim();
+  }
+
+  function getMountingNodeEditorItemImageUrl(item) {
+    const source = getMountingNodeEditorItemSource(item);
+    return String(getMountingNodeEditorItemImageUrlHelper(item, source)).trim();
+  }
+
+  function updateMountingNodeEditorDraftItems(nextItems) {
+    setMountingNodeEditorDraft((current) => {
+      if (!current || typeof current !== "object") {
+        return current;
+      }
+
+      return {
+        ...current,
+        items: Array.isArray(nextItems) ? nextItems.map((item) => ({ ...item })) : [],
+        is_dirty: true,
+      };
+    });
+    setMountingNodeEditorHasChanges(true);
+  }
+
+  function handleMountingNodeEditorItemPatch(fittingId, patch) {
+    setMountingNodeEditorDraft((current) => {
+      if (!current || typeof current !== "object") {
+        return current;
+      }
+
+      return updateMountingNodeCreateDraftItem(current, fittingId, patch);
+    });
+  }
+
+  function openMountingNodeEditorSelector() {
+    const currentItems = Array.isArray(mountingNodeEditorDraft?.items) ? mountingNodeEditorDraft.items : [];
+    setMountingNodeEditorSelectorDraftItemIds(
+      currentItems.map((item) => getMountingNodeEditorItemFittingId(item)).filter(Boolean),
+    );
+    setMountingNodeEditorSelectorOpen(true);
+  }
+
+  function closeMountingNodeEditorSelector() {
+    setMountingNodeEditorSelectorOpen(false);
+  }
+
+  function toggleMountingNodeEditorSelectorItem(item) {
+    const fittingId = getMountingNodeEditorItemFittingId(item);
+    if (!fittingId) {
+      return;
+    }
+
+    setMountingNodeEditorSelectorDraftItemIds((current) =>
+      current.includes(fittingId)
+        ? current.filter((existingId) => existingId !== fittingId)
+        : [...current, fittingId],
+    );
+  }
+
+  function confirmMountingNodeEditorSelector() {
+    const currentItems = Array.isArray(mountingNodeEditorDraft?.items) ? mountingNodeEditorDraft.items : [];
+    const currentItemsById = new Map(currentItems.map((item) => [getMountingNodeEditorItemFittingId(item), item]));
+    const selectedIds = mountingNodeEditorSelectorDraftItemIds.filter(Boolean);
+    const nextItems = [];
+
+    selectedIds.forEach((fittingId) => {
+      const existingItem = currentItemsById.get(fittingId);
+      if (existingItem) {
+        nextItems.push(existingItem);
+        return;
+      }
+
+      const fitting = (Array.isArray(fittingItems) ? fittingItems : []).find((item) => String(item?.id || "") === String(fittingId));
+      if (!fitting) {
+        return;
+      }
+
+      nextItems.push(createMountingNodeCreateDraftItemFromFitting(fitting));
+    });
+
+    updateMountingNodeEditorDraftItems(nextItems);
+    closeMountingNodeEditorSelector();
+  }
+
+  const mountingNodeEditorVariantKeys = [
+    "surface_mount",
+    "face_to_edge",
+    "edge_to_edge",
+    "angled_two_planes",
+    "drawer_slides",
+  ];
+
+  const mountingNodeEditorSelectedItems = Array.isArray(mountingNodeEditorDraft?.items)
+    ? mountingNodeEditorDraft.items
+    : [];
+  const mountingNodeEditorSelectedVariantKey =
+    String(mountingNodeEditorDraft?.mounting_variant_key || "").trim() || "surface_mount";
+  const mountingNodeEditorSelectedVariantLabel =
+    getProcessingTemplateMountingVariantLabel(mountingNodeEditorSelectedVariantKey, language) ||
+    mountingNodeEditorSelectedVariantKey;
+  const mountingNodeEditorSelectedTemplateForSave =
+    selectedHoleTemplate ||
+    mountingNodeEditorDraft?.templates?.find((link) => Boolean(link?.is_default))?.template ||
+    mountingNodeEditorDraft?.templates?.find((link) => Boolean(link?.is_default))?.fitting_hole_template ||
+    mountingNodeEditorDraft?.templates?.[0]?.template ||
+    mountingNodeEditorDraft?.templates?.[0]?.fitting_hole_template ||
+    mountingNodeEditorDraft?.templates?.[0] ||
+    null;
+  const mountingNodeEditorPointsLoadedForSave = isMountingNodeEditorMode ? true : holeTemplateDetailsLoaded;
+
+  useEffect(() => {
+    if (!isMountingNodeEditorMode || catalogHolesMode !== "editor") {
+      mountingNodeEditorHydrationKeyRef.current = "";
+      return undefined;
+    }
+
+    const contextNodeDetail = catalogHolesOpenContext?.nodeDetail && typeof catalogHolesOpenContext.nodeDetail === "object"
+      ? catalogHolesOpenContext.nodeDetail
+      : null;
+    const contextMountingNodeId = String(catalogHolesOpenContext?.mountingNodeId || "").trim();
+
+    if (!contextNodeDetail || !contextMountingNodeId) {
+      return undefined;
+    }
+
+    const editorState = hydrateMountingNodeEditorState(contextNodeDetail, contextMountingNodeId);
+    const editorContext = editorState?.context || null;
+    if (
+      !editorState ||
+      !editorContext ||
+      !editorContext.mountingNodeId ||
+      !editorContext.nodeDetail ||
+      !editorContext.fittingId ||
+      !editorContext.templateId
+    ) {
+      return undefined;
+    }
+
+    const activeVersion = editorState.activeVersion || resolveActiveMountingNodeVersion(editorContext.nodeDetail);
+    const hydrationKey = [
+      editorContext.mountingNodeId,
+      String(activeVersion?.version_number || ""),
+      editorContext.templateId,
+      String(Array.isArray(editorContext.nodeDetail.items) ? editorContext.nodeDetail.items.length : 0),
+      String(Array.isArray(editorState.points) ? editorState.points.length : 0),
+    ].join(":");
+
+    if (mountingNodeEditorHasChanges) {
+      if (mountingNodeEditorHydrationKeyRef.current === hydrationKey) {
+        return undefined;
+      }
+
+      return undefined;
+    }
+
+    if (
+      mountingNodeEditorHydrationKeyRef.current === hydrationKey &&
+      String(mountingNodeEditorDraftNodeId || "") === editorContext.mountingNodeId
+    ) {
+      return undefined;
+    }
+
+    mountingNodeEditorHydrationKeyRef.current = hydrationKey;
+    setMountingNodeEditorDraft(cloneMountingNodeEditorDraft(editorState.context.nodeDetail));
+    setMountingNodeEditorDraftNodeId(editorContext.mountingNodeId);
+    setHoleWorkspaceMode("existing");
+    setSelectedHoleMountingVariantKey(editorContext.mountingVariantKey || "surface_mount");
+    setHoleSelectedFittingId(editorContext.fittingId);
+    setHoleSelectedTemplateId(editorContext.templateId);
+    setHoleSelectedTemplate(
+      editorState.selectedTemplateLink ? cloneMountingNodeEditorDraft(editorState.selectedTemplateLink) : null,
+    );
+    setHoleTemplateItems(Array.isArray(editorState.templateItems) ? editorState.templateItems : []);
+    setHolePoints(cloneMountingNodeEditorPoints(editorState.points));
+    setSelectedHolePointId("");
+    setHoveredHolePointId("");
+    setHoleTemplateDetailsLoaded(true);
+    setHoleServicePreview(null);
+    setHoleServicePreviewError("");
+    setHoleServicePreviewLoading(false);
+    setMountingNodeEditorHasChanges(false);
+    return undefined;
+  }, [
+    catalogHolesMode,
+    catalogHolesOpenContext?.mountingNodeId,
+    catalogHolesOpenContext?.nodeDetail,
+    isMountingNodeEditorMode,
+    mountingNodeEditorDraftNodeId,
+    mountingNodeEditorHasChanges,
+  ]);
+
+  const mountingNodeEditorCanAddPoint = canAddMountingNodeEditorPoint({
+    activeHoleFittingId,
+    holePointSubmitting,
+    isMountingNodeEditorMode,
+    loading,
+    mountingNodeEditorDraft,
+    selectedHoleMountingVariantKey,
+  });
+
+  function handleMountingNodeEditorVariantChange(variantKey) {
+    setMountingNodeEditorDraft((current) => {
+      if (!current || typeof current !== "object") {
+        return current;
+      }
+
+      return {
+        ...current,
+        mounting_variant_key: variantKey,
+        is_dirty: true,
+      };
+    });
+  }
+
+  function handleMountingNodeEditorRemoveItem(fittingId) {
+    const normalizedFittingId = String(fittingId || "").trim();
+    if (!normalizedFittingId) {
+      return;
+    }
+
+    updateMountingNodeEditorDraftItems(
+      mountingNodeEditorSelectedItems.filter(
+        (item) => String(item?.fitting_id || item?.id || "").trim() !== normalizedFittingId,
+      ),
+    );
+  }
+
   function buildMountingNodeCreatePayload(draft = {}) {
     const items = Array.isArray(draft.items) ? draft.items : [];
     const selectedItems = items.filter((item) => String(item?.fitting_id || "").trim());
     const primaryItem = selectedItems[0] || null;
     const mountingVariantKey = String(draft.mounting_variant_key || "").trim() || "surface_mount";
+    const ownershipType = String(draft.ownership_type || "").trim() === "system" ? "system" : "mine";
     const primaryFittingId = Number(primaryItem?.fitting_id);
 
     if (!selectedItems.length) {
@@ -10548,6 +10907,7 @@ export default function App() {
       name: String(draft.name || "").trim(),
       description: String(draft.description || "").trim() || undefined,
       is_active: draft.is_active !== false,
+      ownership_type: ownershipType,
       items: selectedItems.map((item, index) => ({
         fitting_id: Number(item.fitting_id),
         quantity: Math.max(1, Number(item.quantity) || 1),
@@ -10669,14 +11029,18 @@ export default function App() {
       return;
     }
 
+    const editorContext = {
+      ...(catalogHolesOpenContext || {}),
+      nodeDetail: mountingNodeEditorDraft || catalogHolesOpenContext?.nodeDetail || null,
+    };
     const mountingNodeId = String(catalogHolesOpenContext?.mountingNodeId || "").trim();
     const selectedTemplateId = String(holeSelectedTemplateId || selectedHoleTemplate?.id || catalogHolesOpenContext?.templateId || "").trim();
 
     if (
       !canSaveMountingNodeEditor({
-        context: catalogHolesOpenContext,
-        pointsLoaded: holeTemplateDetailsLoaded,
-        selectedTemplate: selectedHoleTemplate,
+        context: editorContext,
+        pointsLoaded: mountingNodeEditorPointsLoadedForSave,
+        selectedTemplate: mountingNodeEditorSelectedTemplateForSave,
         saving: catalogHolesSaving,
       })
     ) {
@@ -10692,10 +11056,10 @@ export default function App() {
     let payload;
     try {
       payload = buildMountingNodeEditorSavePayload({
-        context: catalogHolesOpenContext,
+        context: editorContext,
         points: Array.isArray(holePoints) ? holePoints : [],
-        pointsLoaded: holeTemplateDetailsLoaded,
-        selectedTemplate: selectedHoleTemplate,
+        pointsLoaded: mountingNodeEditorPointsLoadedForSave,
+        selectedTemplate: mountingNodeEditorSelectedTemplateForSave,
       });
     } catch (error) {
       setStatus({
@@ -10735,8 +11099,15 @@ export default function App() {
       const savedCurrentTemplate = savedCurrentLink?.template || selectedHoleTemplate || null;
 
       if (savedNode) {
+        const savedRestoreState = buildMountingNodesRestoreState(
+          { mode: "detail", nodeId: savedNode.id },
+          savedNode,
+        );
         setCatalogHolesBreadcrumbNodeId(String(savedNode.id || "").trim() || null);
         setCatalogHolesBreadcrumbNodeName(String(savedNode.name || "").trim());
+        setMountingNodeEditorDraft(cloneMountingNodeEditorDraft(savedNode));
+        setMountingNodeEditorDraftNodeId(String(savedNode.id || "").trim() || "");
+        setMountingNodeEditorHasChanges(false);
         setCatalogHolesOpenContext((current) => ({
           ...(current || {}),
           mountingNodeId: String(savedNode.id || current?.mountingNodeId || mountingNodeId),
@@ -10746,6 +11117,14 @@ export default function App() {
           templateId: String(savedCurrentLink?.template_id || savedCurrentTemplate?.id || selectedTemplateId || ""),
           mountingVariantKey: String(savedCurrentLink?.mounting_variant_key || savedCurrentTemplate?.mounting_variant_key || current?.mountingVariantKey || ""),
           nodeDetail: savedNode,
+        }));
+        setCatalogHolesReturnState((current) => ({
+          ...(current || {}),
+          ...savedRestoreState,
+        }));
+        setMountingNodesInitialState((current) => ({
+          ...(current || {}),
+          ...savedRestoreState,
         }));
 
         setHoleTemplateItems(
@@ -13619,7 +13998,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
   }
 
   async function openHolePointCreateForm() {
-    if (!activeHoleFittingId || !selectedHoleMountingVariantKey) {
+    if (!isMountingNodeEditorMode && (!activeHoleFittingId || !selectedHoleMountingVariantKey)) {
       setHolePointCreateError(t.holePointTemplateRequired);
       return;
     }
@@ -13672,6 +14051,18 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
         return;
       } finally {
         setLoading(false);
+      }
+    }
+
+    if (isMountingNodeEditorMode && !holeSelectedTemplateId) {
+      const fallbackTemplateId = String(
+        selectedHoleTemplate?.id ||
+          mountingNodeEditorDraft?.templates?.[0]?.template?.id ||
+          mountingNodeEditorDraft?.templates?.[0]?.template_id ||
+          "",
+      ).trim();
+      if (fallbackTemplateId) {
+        setHoleSelectedTemplateId(fallbackTemplateId);
       }
     }
 
@@ -13810,7 +14201,14 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
     let activeTemplateId = String(holeSelectedTemplateId || "");
 
     if (!activeTemplateId) {
-      if (holeWorkspaceMode === "new" && activeHoleFittingId && selectedHoleMountingVariantKey) {
+      if (isMountingNodeEditorMode) {
+        activeTemplateId = String(
+          selectedHoleTemplate?.id ||
+            mountingNodeEditorDraft?.templates?.[0]?.template?.id ||
+            mountingNodeEditorDraft?.templates?.[0]?.template_id ||
+            "",
+        ).trim();
+      } else if (holeWorkspaceMode === "new" && activeHoleFittingId && selectedHoleMountingVariantKey) {
         try {
           activeTemplateId = String(
             (await ensureHoleWorkspaceTemplate(activeHoleFittingId, selectedHoleMountingVariantKey)) || "",
@@ -13833,12 +14231,34 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
     }
 
     try {
+      const payload = buildHolePointPayload(holePointCreateForm);
+
+      if (isMountingNodeEditorMode) {
+        const nextPoint = {
+          ...payload,
+          label:
+            String(payload.label || "").trim() ||
+            `P${Array.isArray(holePoints) ? holePoints.length + 1 : 1}`,
+          id: createMountingNodeEditorTempPointId(),
+          template_id: Number(activeTemplateId) || Number(holeSelectedTemplateId) || undefined,
+          order_index: Number.isFinite(Number(payload.order_index)) ? Number(payload.order_index) : holePoints.length,
+          quantity: Number.isFinite(Number(payload.quantity)) ? Number(payload.quantity) : 1,
+        };
+
+        setHolePoints((current) => [...current, nextPoint]);
+        setSelectedHolePointId(String(nextPoint.id));
+        closeHolePointCreateForm();
+        setMountingNodeEditorHasChanges(true);
+        setStatus({ message: t.holePointCreateSuccess, tone: "success" });
+        setHolePointSubmitting(false);
+        return;
+      }
+
       holeMountingVariantRefreshRef.current = {
         reason: "point-create",
         templateId: String(activeTemplateId || ""),
         variantKey: String(selectedHoleMountingVariantKey || ""),
       };
-      const payload = buildHolePointPayload(holePointCreateForm);
 
       const result = await createFittingHolePoint(token, activeTemplateId, payload);
 
@@ -13888,11 +14308,6 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
       const selectedPanelValue = String(
         holePointEditForm.target_panel || holePointEditForm.panel_key || existingPoint?.target_panel || existingPoint?.panel_key || "",
       ).trim();
-      holeMountingVariantRefreshRef.current = {
-        reason: "point-edit",
-        templateId: String(holeSelectedTemplateId || ""),
-        variantKey: String(selectedHoleMountingVariantKey || ""),
-      };
       const payload = buildHolePointPayload(
         selectedPanelValue
           ? {
@@ -13902,6 +14317,43 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
             }
           : holePointEditForm,
       );
+
+      if (isMountingNodeEditorMode) {
+        const mergedPoint = mergeHolePointSaveResponse({
+          payload,
+          responsePoint: {
+            ...existingPoint,
+            id: existingPoint?.id || holePointEditPointId,
+            template_id: existingPoint?.template_id || Number(holeSelectedTemplateId) || undefined,
+          },
+          existingPoint,
+        });
+
+        if (mergedPoint) {
+          setHolePoints((current) =>
+            current.map((point) =>
+              String(point?.id || "") === String(holePointEditPointId || "")
+                ? {
+                    ...point,
+                    ...mergedPoint,
+                  }
+                : point,
+            ),
+          );
+        }
+
+        closeHolePointEditForm();
+        setMountingNodeEditorHasChanges(true);
+        setStatus({ message: t.holePointUpdateSuccess, tone: "success" });
+        setHolePointSubmitting(false);
+        return;
+      }
+
+      holeMountingVariantRefreshRef.current = {
+        reason: "point-edit",
+        templateId: String(holeSelectedTemplateId || ""),
+        variantKey: String(selectedHoleMountingVariantKey || ""),
+      };
 
       const result = await updateFittingHolePoint(token, holePointEditPointId, payload);
       const responsePoint = result?.point || result?.item || result?.data || null;
@@ -14002,6 +14454,17 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
 
   async function handleDeleteHolePoint(pointId) {
     if (!pointId || !holeSelectedTemplateId) {
+      return;
+    }
+
+    if (isMountingNodeEditorMode) {
+      setHolePoints((current) => current.filter((point) => String(point?.id || "") !== String(pointId)));
+      if (String(selectedHolePointId) === String(pointId)) {
+        setSelectedHolePointId("");
+      }
+      closeConfirm();
+      setMountingNodeEditorHasChanges(true);
+      setStatus({ message: t.holePointDeleteSuccess, tone: "success" });
       return;
     }
 
@@ -14900,7 +15363,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
             nodeCode: contextNodeCode,
             nodeName: contextNodeName,
             fittingId: contextFittingId,
-            templateId: contextTemplateId,
+            templateId: contextTemplateId || editorTemplateId,
             mountingVariantKey: contextVariantKey,
             nodeDetail: contextNodeDetail,
           }
@@ -15007,6 +15470,15 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
 
     if (nextView === "catalogHoles") {
       await loadFittingsCatalog(token, { search: "" });
+      const contextMountingNodeId = String(openContext?.mountingNodeId || "").trim();
+      const contextNodeDetail =
+        openContext?.nodeDetail && typeof openContext.nodeDetail === "object" ? openContext.nodeDetail : null;
+      const shouldPreserveEditorWorkspace = shouldPreserveMountingNodeEditorWorkspace(
+        { mode: contextMountingNodeId ? "editor" : "list", nodeId: contextMountingNodeId || null },
+        openContext,
+      );
+
+      if (!shouldPreserveEditorWorkspace) {
       setHoleWorkspaceMode("new");
       setHoleActiveBundleKey("");
       setHoleActiveBundleName("");
@@ -15027,10 +15499,62 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
       closeHoleTemplateCreateForm();
       closeHolePointCreateForm();
       closeHolePointEditForm();
+      }
 
       const contextFittingId = String(openContext?.fittingId || "").trim();
       const contextTemplateId = String(openContext?.templateId || "").trim();
       const contextVariantKey = normalizeHoleWorkspaceMountingVariantKey(openContext?.mountingVariantKey || "");
+      let editorTemplateId = contextTemplateId;
+
+      if (contextMountingNodeId && contextNodeDetail) {
+        const editorContext = resolveMountingNodeEditorContext(contextNodeDetail, contextMountingNodeId);
+        const editorTemplates = Array.isArray(editorContext?.nodeDetail?.templates)
+          ? editorContext.nodeDetail.templates
+          : [];
+        editorTemplateId = String(contextTemplateId || editorContext?.templateId || "").trim();
+        const editorTemplateLink =
+          editorTemplates.find(
+            (link) =>
+              String(link?.template_id || link?.template?.id || link?.fitting_hole_template?.id || "") ===
+              editorTemplateId,
+          ) ||
+          editorTemplates.find((link) => Boolean(link?.is_default)) ||
+          editorTemplates[0] ||
+          null;
+        const editorTemplate =
+          editorTemplateLink?.template && typeof editorTemplateLink.template === "object"
+            ? editorTemplateLink.template
+            : editorTemplateLink?.fitting_hole_template && typeof editorTemplateLink.fitting_hole_template === "object"
+              ? editorTemplateLink.fitting_hole_template
+              : null;
+        const editorPoints = cloneMountingNodeEditorPoints(
+          Array.isArray(editorTemplate?.points)
+            ? editorTemplate.points
+            : Array.isArray(editorContext?.points)
+              ? editorContext.points
+              : [],
+        );
+
+        setHoleWorkspaceMode("existing");
+        setSelectedHoleMountingVariantKey(contextVariantKey || editorContext?.mountingVariantKey || "surface_mount");
+        setHoleSelectedFittingId(
+          String(editorContext?.fittingId || contextFittingId || editorTemplate?.fitting_id || "").trim(),
+        );
+        setHoleSelectedTemplateId(editorTemplateId);
+        setHoleSelectedTemplate(editorTemplateLink ? cloneMountingNodeEditorDraft(editorTemplateLink) : null);
+        setHoleTemplateItems(
+          editorTemplates.map((link) => cloneMountingNodeEditorDraft(link)).filter(Boolean),
+        );
+        setHolePoints(editorPoints);
+        setSelectedHolePointId("");
+        setHoveredHolePointId("");
+        setHoleTemplateDetailsLoaded(true);
+        setHoleServicePreview(null);
+        setHoleServicePreviewError("");
+        setHoleServicePreviewLoading(false);
+        setMountingNodeEditorHasChanges(false);
+        return;
+      }
 
       if (contextFittingId && contextTemplateId) {
         setHoleWorkspaceMode("existing");
@@ -20164,6 +20688,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   language={language}
                   onCancel={handleCatalogHolesBackToList}
                   onCreate={handleCreateMountingNode}
+                  userRole={user?.role || ""}
                   t={t}
                 />
               </section>
@@ -20190,17 +20715,23 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                     {catalogHolesOpenContext?.mountingNodeId && catalogHolesOpenContext?.nodeDetail ? (
                       <button
                         className="primary-button mounting-node-save-button"
-                        disabled={!canSaveMountingNodeEditor({
-                          context: catalogHolesOpenContext,
-                          pointsLoaded: holeTemplateDetailsLoaded,
-                          selectedTemplate: selectedHoleTemplate,
-                          saving: catalogHolesSaving,
-                        })}
+                        disabled={
+                          !mountingNodeEditorHasChanges ||
+                          !canSaveMountingNodeEditor({
+                            context: {
+                              ...(catalogHolesOpenContext || {}),
+                              nodeDetail: mountingNodeEditorDraft || catalogHolesOpenContext?.nodeDetail || null,
+                            },
+                            pointsLoaded: mountingNodeEditorPointsLoadedForSave,
+                            selectedTemplate: mountingNodeEditorSelectedTemplateForSave,
+                            saving: catalogHolesSaving,
+                          })
+                        }
                         onClick={handleCatalogHolesSaveMountingNode}
                         type="button"
                       >
                         <Save size={16} />
-                        {language === "uk" ? "Зберегти налаштування отворів" : "Save hole settings"}
+                        {language === "uk" ? "Зберегти нову версію" : "Save new version"}
                       </button>
                     ) : null}
                   </div>
@@ -20287,8 +20818,100 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                 </section>
               ) : null}
 
-              <FittingHolesWorkspace>
-                <div className="holes-left-column">
+              <FittingHolesWorkspace className="mounting-node-editor-workspace">
+                <div className="holes-left-column mounting-node-editor-left-column">
+                  <section className="mounting-node-create-card mounting-node-editor-items-card">
+                    <div className="mounting-node-create-card-head mounting-node-editor-items-head">
+                      <strong>{language === "uk" ? "Склад фурнітури" : "Fitting list"}</strong>
+                      <button
+                        className="primary-button mounting-node-create-add-button"
+                        onClick={openMountingNodeEditorSelector}
+                        type="button"
+                      >
+                        <Plus size={16} />
+                        {language === "uk" ? "Додати фурнітуру" : "Add fittings"}
+                      </button>
+                    </div>
+
+                    {mountingNodeEditorSelectedItems.length ? (
+                      <div className="holes-bundle-selected-list mounting-node-create-items-list">
+                        {mountingNodeEditorSelectedItems.map((item, index) => {
+                          const fittingId = getMountingNodeEditorItemFittingId(item);
+                          const itemKey = `editor-selected-item-${index}-${fittingId || getMountingNodeEditorItemArticle(item) || getMountingNodeEditorItemName(item) || "fallback"}`;
+                          const imageUrl = getMountingNodeEditorItemImageUrl(item);
+
+                          return (
+                            <article
+                              aria-label={getMountingNodeEditorItemName(item) || fittingId}
+                              className={`hole-bundle-selected-item hole-bundle-selected-item-compact mounting-node-create-fitting-row${fittingId ? " is-clickable" : ""}`}
+                              key={itemKey}
+                            >
+                              <div className="hole-bundle-selected-item-media">
+                                {imageUrl ? (
+                                  <img alt="" loading="lazy" src={imageUrl} />
+                                ) : (
+                                  <span className="hole-bundle-selected-item-placeholder">
+                                    {language === "uk" ? "Немає фото" : "No image"}
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="hole-bundle-selected-item-copy">
+                                <strong>{getMountingNodeEditorItemName(item) || fittingId}</strong>
+                                <span>{getMountingNodeEditorItemArticle(item) || fittingId || "—"}</span>
+                              </div>
+
+                              <label className="mounting-node-create-fitting-quantity">
+                                <span>{language === "uk" ? "Кількість" : "Quantity"}</span>
+                                <input
+                                  min="1"
+                                  onChange={(event) =>
+                                    handleMountingNodeEditorItemPatch(fittingId, {
+                                      quantity: Number(event.target.value) || 1,
+                                    })
+                                  }
+                                  type="number"
+                                  value={item.quantity || 1}
+                                />
+                              </label>
+
+                              <label className="mounting-node-create-fitting-role">
+                                <span>{language === "uk" ? "Роль" : "Role"}</span>
+                                <select
+                                  onChange={(event) =>
+                                    handleMountingNodeEditorItemPatch(fittingId, { role: event.target.value })
+                                  }
+                                  value={item.role || MOUNTING_NODE_CREATE_ROLE_OPTIONS[0]}
+                                >
+                                  {MOUNTING_NODE_CREATE_ROLE_OPTIONS.map((role) => (
+                                    <option key={role} value={role}>
+                                      {role}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+
+                              <button
+                                aria-label={language === "uk" ? "Видалити" : "Remove fitting"}
+                                className="ghost-button mounting-node-create-fitting-remove"
+                                onClick={() => handleMountingNodeEditorRemoveItem(fittingId)}
+                                title={language === "uk" ? "Видалити" : "Remove fitting"}
+                                type="button"
+                              >
+                                <X size={14} />
+                              </button>
+                            </article>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="mounting-node-create-empty-state mounting-node-create-empty-state-compact">
+                        <span>{language === "uk" ? "Фурнітуру ще не додано." : "No fittings added yet."}</span>
+                        <span>{language === "uk" ? "Додайте хоча б одну позицію." : "Add at least one position."}</span>
+                      </div>
+                    )}
+                  </section>
+
                   <section className="holes-panel holes-workspace-points-panel">
                   <div className="holes-panel-header">
                     <h4>{t.holeTabPoints}</h4>
@@ -20297,7 +20920,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                     </span>
                     <button
                       className="ghost-button compact-button"
-                      disabled={loading || !activeHoleFittingId || !selectedHoleMountingVariantKey}
+                      disabled={!mountingNodeEditorCanAddPoint}
                       onClick={openHolePointCreateForm}
                       type="button"
                     >
@@ -20331,7 +20954,11 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                                 <span>{t.holePointNotes}</span>
                               </div>
                               <div className="holes-table-list">
-                                {group.points.map((point) => (
+                                {group.points.map((point, pointIndex) => {
+                                  const pointDisplayId = getMountingNodeEditorPointDisplayId(point);
+                                  const pointDisplayLabel = getMountingNodeEditorPointDisplayLabel(point, pointIndex);
+
+                                  return (
                                   <article
                                     className={`holes-points-table-row${String(hoveredHolePointId) === String(point.id) ? " is-hovered" : ""}${String(selectedHolePointId) === String(point.id) ? " is-selected" : ""}`}
                                     key={point.id}
@@ -20348,7 +20975,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                                     tabIndex={0}
                                   >
                                     <div className="holes-point-id-cell">
-                                      <span>{point.id}</span>
+                                      <span>{pointDisplayId}</span>
                                       <button
                                         aria-label={t.holePointEdit}
                                         className="ghost-button compact-button holes-point-edit-button"
@@ -20405,7 +21032,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                                       return (
                                         <>
                                           <span className="holes-point-label-cell">
-                                            {getSafeHolePointLabel(point.label, `P${point.id}`)}
+                                            {getSafeHolePointLabel(point.label, pointDisplayLabel)}
                                           </span>
                                           <span>{detailValue}</span>
                                           <span>{surfaceValue}</span>
@@ -20420,7 +21047,8 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                                       );
                                     })()}
                                   </article>
-                                ))}
+                                  );
+                                })}
                               </div>
                             </div>
                           </section>
@@ -20566,7 +21194,10 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                               x="0"
                               y="0"
                             />
-                            {holePreviewData.points.map((point) => (
+                            {holePreviewData.points.map((point, pointIndex) => {
+                              const pointDisplayLabel = getMountingNodeEditorPointDisplayLabel(point, pointIndex);
+
+                              return (
                               <g
                                 key={point.id}
                                 className={`${String(hoveredHolePointId) === String(point.id) ? "is-hovered" : ""}${String(selectedHolePointId) === String(point.id) ? " is-selected" : ""}`}
@@ -20590,13 +21221,13 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                                 role={point.id !== null && point.id !== undefined ? "button" : undefined}
                                 tabIndex={point.id !== null && point.id !== undefined ? 0 : undefined}
                                 transform={`translate(${point.previewX}, ${point.previewY})`}
-                              >
-                                <title>
-                                  {[
-                                    point.label,
-                                    `${t.holePreviewCoordinates}: x=${formatMetricValue(point.x)} y=${formatMetricValue(point.y)} z=${formatMetricValue(point.z)}`,
-                                    `${t.holePreviewDiameter}: ${formatMetricValue(point.diameter)}`,
-                                    `${t.holePreviewDepth}: ${formatMetricValue(point.depth)}`,
+                                >
+                                  <title>
+                                    {[
+                                      pointDisplayLabel,
+                                      `${t.holePreviewCoordinates}: x=${formatMetricValue(point.x)} y=${formatMetricValue(point.y)} z=${formatMetricValue(point.z)}`,
+                                      `${t.holePreviewDiameter}: ${formatMetricValue(point.diameter)}`,
+                                      `${t.holePreviewDepth}: ${formatMetricValue(point.depth)}`,
                                     `${t.holePreviewSide}: ${formatHolePointSide(point.side, t)}`,
                                     `${t.holePreviewOperation}: ${formatHolePointOperation(point.operation, t)}`,
                                   ].join(" | ")}
@@ -20611,11 +21242,12 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                                 className={`holes-preview-label${String(hoveredHolePointId) === String(point.id) ? " is-hovered" : ""}${String(selectedHolePointId) === String(point.id) ? " is-selected" : ""}`}
                                 x={point.labelX - point.previewX}
                                 y={point.labelY - point.previewY}
-                              >
-                                  {point.label}
+                                >
+                                  {pointDisplayLabel}
                                 </text>
                               </g>
-                            ))}
+                              );
+                            })}
                           </svg>
                         </div>
                         <div className="holes-preview-legend">
@@ -20636,7 +21268,9 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   ) : null}
                 </div>
 
-                <section className={`holes-preview-card holes-preview-3d-card${holeWorkspaceCanPreview ? "" : " is-placeholder"}`}>
+                <section
+                  className={`holes-preview-card holes-preview-3d-card mounting-node-editor-right-column${holeWorkspaceCanPreview ? "" : " is-placeholder"}`}
+                >
                   <div className="holes-preview-header">
                     <div>
                       <h4>{t.holeWorkspacePreview3dTitle}</h4>
@@ -20716,20 +21350,20 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                       </div>
                     </div>
                     {selectedHolePoint ? (
-                      <div className="holes-selected-point-grid">
-                        <div className="holes-selected-point-row">
-                          <span>ID</span>
-                          <strong>{selectedHolePoint.id ?? "—"}</strong>
-                        </div>
-                        <div className="holes-selected-point-row">
-                          <span>Назва</span>
-                          <strong>
-                            {getSafeHolePointLabel(
-                              selectedHolePoint.label || selectedHolePoint.name,
-                              `P${selectedHolePoint.id || ""}`.trim() || "—",
-                            )}
-                          </strong>
-                        </div>
+                        <div className="holes-selected-point-grid">
+                          <div className="holes-selected-point-row">
+                            <span>ID</span>
+                            <strong>{getMountingNodeEditorPointDisplayId(selectedHolePoint)}</strong>
+                          </div>
+                          <div className="holes-selected-point-row">
+                            <span>Назва</span>
+                            <strong>
+                              {getSafeHolePointLabel(
+                                selectedHolePoint.label || selectedHolePoint.name,
+                                getMountingNodeEditorPointDisplayLabel(selectedHolePoint),
+                              )}
+                            </strong>
+                          </div>
                         <div className="holes-selected-point-row">
                           <span>X</span>
                           <strong>{selectedHolePoint.x_mm ?? selectedHolePoint.x ?? "—"}</strong>
@@ -20802,10 +21436,6 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                         <strong>{holesPreviewModel.scene?.stats?.hasTemplate ? "так" : "ні"}</strong>
                       </div>
                       <div className="holes-preview-scene-stat">
-                        <span>Варіант кріплення:</span>
-                        <strong>{holesPreviewModel.scene?.stats?.hasMountingVariant ? "так" : "ні"}</strong>
-                      </div>
-                      <div className="holes-preview-scene-stat">
                         <span>Площини:</span>
                         <strong>{holesPreviewModel.scene?.materialPlanes ? "так" : "ні"}</strong>
                       </div>
@@ -20830,20 +21460,24 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                       <div className="holes-preview-scene-holes-title">Присадка сцени</div>
                       {holesPreviewModel.scene?.holes?.length ? (
                         <div className="holes-preview-scene-holes-list">
-                          {holesPreviewModel.scene.holes.map((hole) => (
-                            <div
-                              className={`holes-preview-scene-hole${hole.isHovered ? " is-hovered" : ""}${hole.isSelected ? " is-selected" : ""}`}
-                              key={hole.id}
-                            >
-                              <strong>
-                                #{hole.id}
-                                {Number.isFinite(hole.diameter) ? ` ⌀${hole.diameter}` : " ⌀—"}
-                              </strong>
-                              <span>
-                                x:{Number.isFinite(hole.x) ? hole.x : "—"} y:{Number.isFinite(hole.y) ? hole.y : "—"}
-                              </span>
-                            </div>
-                          ))}
+                          {holesPreviewModel.scene.holes.map((hole, index) => {
+                            const holeDisplayLabel = getMountingNodeEditorPointDisplayLabel(hole, index);
+
+                            return (
+                              <div
+                                className={`holes-preview-scene-hole${hole.isHovered ? " is-hovered" : ""}${hole.isSelected ? " is-selected" : ""}`}
+                                key={hole.id}
+                              >
+                                <strong>
+                                  {holeDisplayLabel}
+                                  {Number.isFinite(hole.diameter) ? ` ⌀${hole.diameter}` : " ⌀—"}
+                                </strong>
+                                <span>
+                                  x:{Number.isFinite(hole.x) ? hole.x : "—"} y:{Number.isFinite(hole.y) ? hole.y : "—"}
+                                </span>
+                              </div>
+                            );
+                          })}
                         </div>
                       ) : (
                         <div className="holes-preview-scene-empty">Присадка сцени ще не додана</div>
@@ -20868,12 +21502,6 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                       <span className="holes-preview-debug-label">Шаблон</span>
                       <strong className="holes-preview-debug-value">
                         {holesPreviewModel.template?.name || `#${holesPreviewModel.template?.id ?? "—"}`}
-                      </strong>
-                    </div>
-                    <div className="holes-preview-debug-row">
-                      <span className="holes-preview-debug-label">Варіант кріплення</span>
-                      <strong className="holes-preview-debug-value">
-                        {holesPreviewModel.mountingVariant?.label || "—"}
                       </strong>
                     </div>
                     <div className="holes-preview-debug-row">
@@ -20953,20 +21581,23 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                             x="0"
                             y="0"
                           />
-                          {holePreviewData.points.map((point) => (
+                          {holePreviewData.points.map((point, pointIndex) => {
+                            const pointDisplayLabel = getMountingNodeEditorPointDisplayLabel(point, pointIndex);
+
+                            return (
                             <g
                               key={point.id}
                               className={String(hoveredHolePointId) === String(point.id) ? "is-hovered" : ""}
                               onMouseEnter={() => setHoveredHolePointId(String(point.id))}
                               onMouseLeave={() => setHoveredHolePointId("")}
                               transform={`translate(${point.previewX}, ${point.previewY})`}
-                            >
-                              <title>
-                                {[
-                                  point.label,
-                                  `${t.holePreviewCoordinates}: x=${formatMetricValue(point.x)} y=${formatMetricValue(point.y)} z=${formatMetricValue(point.z)}`,
-                                  `${t.holePreviewDiameter}: ${formatMetricValue(point.diameter)}`,
-                                  `${t.holePreviewDepth}: ${formatMetricValue(point.depth)}`,
+                              >
+                                <title>
+                                  {[
+                                    pointDisplayLabel,
+                                    `${t.holePreviewCoordinates}: x=${formatMetricValue(point.x)} y=${formatMetricValue(point.y)} z=${formatMetricValue(point.z)}`,
+                                    `${t.holePreviewDiameter}: ${formatMetricValue(point.diameter)}`,
+                                    `${t.holePreviewDepth}: ${formatMetricValue(point.depth)}`,
                                   `${t.holePreviewSide}: ${formatHolePointSide(point.side, t)}`,
                                   `${t.holePreviewOperation}: ${formatHolePointOperation(point.operation, t)}`,
                                 ].join(" | ")}
@@ -20977,15 +21608,16 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                                 r={point.radius}
                                 className={`holes-preview-point${String(hoveredHolePointId) === String(point.id) ? " is-hovered" : ""}${String(selectedHolePointId) === String(point.id) ? " is-selected" : ""}`}
                               />
-                              <text
-                                className={`holes-preview-label${String(hoveredHolePointId) === String(point.id) ? " is-hovered" : ""}${String(selectedHolePointId) === String(point.id) ? " is-selected" : ""}`}
-                                x={point.labelX - point.previewX}
-                                y={point.labelY - point.previewY}
-                              >
-                                {point.label}
-                              </text>
-                            </g>
-                          ))}
+                                <text
+                                  className={`holes-preview-label${String(hoveredHolePointId) === String(point.id) ? " is-hovered" : ""}${String(selectedHolePointId) === String(point.id) ? " is-selected" : ""}`}
+                                  x={point.labelX - point.previewX}
+                                  y={point.labelY - point.previewY}
+                                >
+                                  {pointDisplayLabel}
+                                </text>
+                              </g>
+                            );
+                          })}
                         </svg>
                       </div>
                       <div className="holes-preview-legend">
@@ -21004,6 +21636,25 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   ) : null}
                 </section>
               </FittingHolesWorkspace>
+              <MountingNodesFittingSelectorModal
+                categoryCode={mountingNodeEditorSelectorCategoryCode}
+                isOpen={mountingNodeEditorSelectorOpen}
+                fittingCategories={visibleFittingCategories}
+                fittingItems={fittingItems}
+                language={language}
+                onCategoryCodeChange={setMountingNodeEditorSelectorCategoryCode}
+                onClose={closeMountingNodeEditorSelector}
+                onConfirm={confirmMountingNodeEditorSelector}
+                onSearchChange={setMountingNodeEditorSelectorSearch}
+                onToggleItem={toggleMountingNodeEditorSelectorItem}
+                onViewModeChange={setMountingNodeEditorSelectorViewMode}
+                search={mountingNodeEditorSelectorSearch}
+                selectedCount={mountingNodeEditorSelectorDraftItemIds.length}
+                selectedIds={mountingNodeEditorSelectorDraftItemIds}
+                t={t}
+                title={language === "uk" ? "Вибір фурнітури для монтажного вузла" : "Choose fittings for the mounting node"}
+                viewMode={mountingNodeEditorSelectorViewMode}
+              />
               </article>
               </>
             ) : (

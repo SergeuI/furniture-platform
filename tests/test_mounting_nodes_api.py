@@ -16,6 +16,7 @@ from api.routes import mounting_nodes as mounting_nodes_route
 from database.base import Base
 from database.models.fitting import FittingHolePointModel, FittingHoleTemplateModel, FittingModel
 from database.models.mounting_node import MountingNodeModel
+from database.models.mounting_node import MountingNodeVersionModel
 from database.models.user import UserModel
 from services.mounting_node_service import MountingNodeService
 
@@ -146,6 +147,7 @@ class MountingNodesApiTests(unittest.TestCase):
     def test_create_route_returns_node_for_admin(self) -> None:
         app = self._build_app()
         app.dependency_overrides[auth_dependencies.require_current_user] = lambda: SimpleNamespace(id="user-1", role="admin")
+        test_case = self
 
         class CreateService:
             def __enter__(self):
@@ -155,15 +157,16 @@ class MountingNodesApiTests(unittest.TestCase):
                 return False
 
             def create_mounting_node(self, payload, **kwargs):
+                test_case.assertEqual(payload.get("ownership_type"), "mine")
                 return {
                     "id": 1,
                     "code": "mounting-node-confirmat-7x50",
                     "name": payload["name"],
                     "description": None,
-                    "owner_user_id": None,
-                    "ownership_type": "system",
-                    "is_system": True,
-                    "is_owner": False,
+                    "owner_user_id": "user-1",
+                    "ownership_type": "mine",
+                    "is_system": False,
+                    "is_owner": True,
                     "can_edit": True,
                     "can_delete": True,
                     "is_active": True,
@@ -184,6 +187,7 @@ class MountingNodesApiTests(unittest.TestCase):
                         "/mounting-nodes",
                         json={
                             "name": "Confirmat node",
+                            "ownership_type": "mine",
                             "items": [{"fitting_id": 1, "quantity": 1}],
                         },
                         headers={"Authorization": "Bearer token"},
@@ -195,6 +199,8 @@ class MountingNodesApiTests(unittest.TestCase):
         self.assertEqual(body["node"]["name"], "Confirmat node")
         self.assertTrue(body["node"]["can_edit"])
         self.assertTrue(body["node"]["can_delete"])
+        self.assertEqual(body["node"]["owner_user_id"], "user-1")
+        self.assertEqual(body["node"]["ownership_type"], "mine")
 
     def test_create_route_assigns_owner_for_regular_user(self) -> None:
         session, engine = self._build_session()
@@ -227,6 +233,45 @@ class MountingNodesApiTests(unittest.TestCase):
             self.assertFalse(body["is_system"])
             self.assertTrue(body["can_edit"])
             self.assertTrue(body["can_delete"])
+        finally:
+            session.close()
+            engine.dispose()
+
+    def test_detail_route_includes_version_history(self) -> None:
+        session, engine = self._build_session()
+        try:
+            app = self._build_app()
+            user = self._create_user(session, email="user-a@example.com", role="free")
+            fitting = self._create_fitting(session, name="Fit A", code="fit-a", article="A")
+            template = self._create_template(session, fitting.id, name="Main template")
+            service = MountingNodeService(session=session)
+            app.dependency_overrides[auth_dependencies.require_current_user] = lambda: user
+
+            with patch.object(mounting_nodes_route, "EntitlementService", _AllowedEntitlementService):
+                with patch.object(mounting_nodes_route, "MountingNodeService", return_value=service):
+                    with TestClient(app) as client:
+                        create_response = client.post(
+                            "/mounting-nodes",
+                            json={
+                                "name": "Versioned node",
+                                "items": [{"fitting_id": fitting.id, "quantity": 1}],
+                                "templates": [{"template_id": template.id, "is_default": True}],
+                            },
+                            headers={"Authorization": "Bearer token"},
+                        )
+                        node_id = create_response.json()["node"]["id"]
+                        detail_response = client.get(
+                            f"/mounting-nodes/{node_id}",
+                            headers={"Authorization": "Bearer token"},
+                        )
+
+            self.assertEqual(detail_response.status_code, 200)
+            body = detail_response.json()["node"]
+            self.assertIn("versions", body)
+            self.assertEqual(len(body["versions"]), 1)
+            self.assertEqual(body["versions"][0]["version_number"], 1)
+            self.assertTrue(body["versions"][0]["is_current"])
+            self.assertEqual(body["versions"][0]["snapshot"]["name"], "Versioned node")
         finally:
             session.close()
             engine.dispose()
@@ -647,7 +692,7 @@ class MountingNodesApiTests(unittest.TestCase):
             session.close()
             engine.dispose()
 
-    def test_delete_route_removes_node_and_nested_template_records_for_owner(self) -> None:
+    def test_delete_route_archives_node_and_keeps_nested_template_records_for_owner(self) -> None:
         session, engine = self._build_session()
         try:
             app = self._build_app()
@@ -662,6 +707,7 @@ class MountingNodesApiTests(unittest.TestCase):
             system_node = service.create_mounting_node(
                 {
                     "name": "System node",
+                    "ownership_type": "system",
                     "items": [{"fitting_id": fitting.id, "quantity": 1}],
                 },
                 viewer_user_id=admin.id,
@@ -707,9 +753,179 @@ class MountingNodesApiTests(unittest.TestCase):
             self.assertEqual(system_delete.status_code, 403)
             self.assertEqual(own_delete.status_code, 200)
             self.assertIsNone(own_delete.json()["node"])
-            self.assertIsNone(session.get(MountingNodeModel, own_node["id"]))
-            self.assertIsNone(session.get(FittingHoleTemplateModel, template.id))
-            self.assertEqual(session.query(FittingHolePointModel).count(), 0)
+            archived_node = session.get(MountingNodeModel, own_node["id"])
+            self.assertIsNotNone(archived_node)
+            self.assertTrue(archived_node.is_archived)
+            self.assertEqual(archived_node.archived_by_user_id, owner.id)
+            self.assertIsNotNone(session.get(FittingHoleTemplateModel, template.id))
+            self.assertEqual(session.query(FittingHolePointModel).count(), 1)
+
+            with patch.object(mounting_nodes_route, "EntitlementService", _AllowedEntitlementService):
+                with patch.object(mounting_nodes_route, "MountingNodeService", return_value=service):
+                    with TestClient(app) as client:
+                        list_response = client.get(
+                            "/mounting-nodes",
+                            headers={"Authorization": "Bearer token"},
+                        )
+
+            self.assertEqual(list_response.status_code, 200)
+            self.assertTrue(all(node["id"] != own_node["id"] for node in list_response.json()["nodes"]))
+        finally:
+            session.close()
+            engine.dispose()
+
+    def test_version_route_returns_specific_version_snapshot(self) -> None:
+        session, engine = self._build_session()
+        try:
+            app = self._build_app()
+            owner = self._create_user(session, email="owner@example.com", role="free")
+            fitting = self._create_fitting(session, name="Fit A", code="fit-a", article="A")
+            template = self._create_template(session, fitting.id, name="Main template")
+            service = MountingNodeService(session=session)
+
+            app.dependency_overrides[auth_dependencies.require_current_user] = lambda: owner
+
+            with patch.object(mounting_nodes_route, "EntitlementService", _AllowedEntitlementService):
+                with patch.object(mounting_nodes_route, "MountingNodeService", return_value=service):
+                    with TestClient(app) as client:
+                        create_response = client.post(
+                            "/mounting-nodes",
+                            json={
+                                "name": "Versioned node",
+                                "items": [{"fitting_id": fitting.id, "quantity": 1}],
+                                "templates": [{"template_id": template.id, "is_default": True}],
+                            },
+                            headers={"Authorization": "Bearer token"},
+                        )
+                        node_id = create_response.json()["node"]["id"]
+
+                        update_response = client.patch(
+                            f"/mounting-nodes/{node_id}",
+                            json={"description": "Updated description"},
+                            headers={"Authorization": "Bearer token"},
+                        )
+                        version_one_id = update_response.json()["node"]["versions"][1]["id"]
+                        version_two_id = update_response.json()["node"]["versions"][0]["id"]
+
+                        version_one_response = client.get(
+                            f"/mounting-nodes/{node_id}/versions/{version_one_id}",
+                            headers={"Authorization": "Bearer token"},
+                        )
+                        version_two_response = client.get(
+                            f"/mounting-nodes/{node_id}/versions/{version_two_id}",
+                            headers={"Authorization": "Bearer token"},
+                        )
+
+            self.assertEqual(version_one_response.status_code, 200)
+            self.assertEqual(version_two_response.status_code, 200)
+
+            version_one = version_one_response.json()["version"]
+            version_two = version_two_response.json()["version"]
+            self.assertEqual(version_one["version_number"], 1)
+            self.assertFalse(version_one["is_current"])
+            self.assertEqual(version_one["snapshot"]["name"], "Versioned node")
+            self.assertEqual(version_two["version_number"], 2)
+            self.assertTrue(version_two["is_current"])
+            self.assertEqual(version_two["snapshot"]["description"], "Updated description")
+        finally:
+            session.close()
+            engine.dispose()
+
+    def test_nested_template_point_save_creates_version_two_and_preserves_version_one(self) -> None:
+        session, engine = self._build_session()
+        try:
+            app = self._build_app()
+            owner = self._create_user(session, email="owner@example.com", role="free")
+            fitting = self._create_fitting(session, name="Fit A", code="fit-a", article="A")
+            template = self._create_template(session, fitting.id, name="Main template")
+            service = MountingNodeService(session=session)
+
+            app.dependency_overrides[auth_dependencies.require_current_user] = lambda: owner
+
+            with patch.object(mounting_nodes_route, "EntitlementService", _AllowedEntitlementService):
+                with patch.object(mounting_nodes_route, "MountingNodeService", return_value=service):
+                    with TestClient(app) as client:
+                        create_response = client.post(
+                            "/mounting-nodes",
+                            json={
+                                "name": "Versioned node",
+                                "items": [{"fitting_id": fitting.id, "quantity": 2}],
+                                "templates": [{"template_id": template.id, "is_default": True}],
+                            },
+                            headers={"Authorization": "Bearer token"},
+                        )
+                        self.assertEqual(create_response.status_code, 200)
+                        created_node = create_response.json()["node"]
+                        self.assertEqual(created_node["versions"][0]["version_number"], 1)
+                        self.assertEqual(created_node["versions"][0]["snapshot"]["templates"][0]["template"]["points"], [])
+
+                        update_response = client.patch(
+                            f"/mounting-nodes/{created_node['id']}",
+                            json={
+                                "templates": [
+                                    {
+                                        "template_id": created_node["templates"][0]["template_id"],
+                                        "is_default": True,
+                                        "template": {
+                                            "template_id": created_node["templates"][0]["template_id"],
+                                            "fitting_id": fitting.id,
+                                            "name": "Main template",
+                                            "template_type": "manual",
+                                            "mounting_variant_key": "surface_mount",
+                                            "is_default": True,
+                                            "points": [
+                                                {
+                                                    "label": "P1",
+                                                    "x_mm": 0,
+                                                    "y_mm": 0,
+                                                    "z_mm": 0,
+                                                    "diameter_mm": 5,
+                                                    "depth_mm": 13,
+                                                    "side": "inner_face",
+                                                    "target_panel": "vertical_panel",
+                                                    "target_surface": "plane",
+                                                    "target_side": "inner_face",
+                                                    "operation": "drill",
+                                                    "order_index": 0,
+                                                    "quantity": 1,
+                                                    "mirrored": False,
+                                                }
+                                            ],
+                                        },
+                                    }
+                                ]
+                            },
+                            headers={"Authorization": "Bearer token"},
+                        )
+
+                        self.assertEqual(update_response.status_code, 200)
+                        updated_node = update_response.json()["node"]
+                        self.assertEqual([version["version_number"] for version in updated_node["versions"]], [2, 1])
+                        self.assertEqual(updated_node["versions"][0]["snapshot"]["templates"][0]["template"]["points"][0]["label"], "P1")
+                        self.assertEqual(updated_node["templates"][0]["points_count"], 1)
+
+                        version_one_id = updated_node["versions"][1]["id"]
+                        version_two_id = updated_node["versions"][0]["id"]
+                        version_one_response = client.get(
+                            f"/mounting-nodes/{created_node['id']}/versions/{version_one_id}",
+                            headers={"Authorization": "Bearer token"},
+                        )
+                        version_two_response = client.get(
+                            f"/mounting-nodes/{created_node['id']}/versions/{version_two_id}",
+                            headers={"Authorization": "Bearer token"},
+                        )
+
+            self.assertEqual(version_one_response.status_code, 200)
+            self.assertEqual(version_two_response.status_code, 200)
+            self.assertEqual(version_one_response.json()["version"]["snapshot"]["templates"][0]["template"]["points"], [])
+            self.assertEqual(
+                len(version_two_response.json()["version"]["snapshot"]["templates"][0]["template"]["points"]),
+                1,
+            )
+            self.assertEqual(
+                session.query(MountingNodeVersionModel).filter(MountingNodeVersionModel.node_id == created_node["id"]).count(),
+                2,
+            )
         finally:
             session.close()
             engine.dispose()

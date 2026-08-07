@@ -72,6 +72,7 @@ from database.models.fitting import (
 from database.models.mounting_node import (
     MountingNodeItemModel,
     MountingNodeModel,
+    MountingNodeVersionModel,
     MountingNodeTemplateModel,
 )
 from database.models.fitting_image import (
@@ -140,6 +141,56 @@ def _add_column_if_missing(
     connection.exec_driver_sql(
         f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}"
     )
+
+
+def _backfill_mounting_node_versions():
+
+    from database.session import SessionLocal
+    from services.mounting_node_service import MountingNodeService
+
+    db = SessionLocal()
+
+    try:
+        service = MountingNodeService(session=db)
+        with db.begin():
+            nodes = (
+                db.query(MountingNodeModel)
+                .order_by(
+                    MountingNodeModel.id.asc()
+                )
+                .all()
+            )
+
+            for node in nodes:
+                existing_version = (
+                    db.query(MountingNodeVersionModel.id)
+                    .filter(
+                        MountingNodeVersionModel.node_id == node.id
+                    )
+                    .first()
+                )
+                if existing_version:
+                    continue
+
+                snapshot_node = service.repository.get_node_by_id(node.id) or node
+                snapshot = service._serialize_node(  # noqa: SLF001 - migration helper
+                    snapshot_node,
+                    include_versions=False,
+                )
+                from fastapi.encoders import jsonable_encoder
+
+                snapshot = jsonable_encoder(snapshot)
+                service.repository.create_version(
+                    node_id=node.id,
+                    node_code=str(node.code or "").strip(),
+                    node_name=str(node.name or "").strip(),
+                    version_number=1,
+                    event_type="create",
+                    snapshot=snapshot,
+                    created_by_user_id=getattr(node, "created_by_user_id", None),
+                )
+    finally:
+        db.close()
 
 
 def upgrade_sqlite_schema():
@@ -333,6 +384,57 @@ def upgrade_sqlite_schema():
             "service_drilling_rule_id",
 
             "INTEGER"
+        )
+
+        mounting_node_columns = {
+            "is_archived": "BOOLEAN NOT NULL DEFAULT 0",
+            "archived_at": "DATETIME",
+            "archived_by_user_id": "VARCHAR",
+        }
+
+        for column_name, column_type in mounting_node_columns.items():
+
+            _add_column_if_missing(
+
+                connection,
+
+                "mounting_nodes",
+
+                column_name,
+
+                column_type
+            )
+
+        connection.exec_driver_sql(
+            """
+            CREATE TABLE IF NOT EXISTS mounting_node_versions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                node_id INTEGER NOT NULL,
+                node_code VARCHAR(128) NOT NULL,
+                node_name VARCHAR(255) NOT NULL,
+                version_number INTEGER NOT NULL,
+                event_type VARCHAR(32) NOT NULL DEFAULT 'update',
+                snapshot JSON NOT NULL,
+                created_by_user_id VARCHAR,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(node_id, version_number),
+                FOREIGN KEY(created_by_user_id) REFERENCES users (id)
+            )
+            """
+        )
+
+        connection.exec_driver_sql(
+            """
+            CREATE INDEX IF NOT EXISTS ix_mounting_node_versions_node_id
+            ON mounting_node_versions (node_id)
+            """
+        )
+
+        connection.exec_driver_sql(
+            """
+            CREATE INDEX IF NOT EXISTS ix_mounting_node_versions_version_number
+            ON mounting_node_versions (version_number)
+            """
         )
 
         connection.exec_driver_sql(
@@ -804,6 +906,7 @@ def init_database():
     migrate_legacy_sqlite_to_unified_db()
 
     upgrade_sqlite_schema()
+    _backfill_mounting_node_versions()
     seed_demo_access_users()
 
     seed_default_catalog_items()

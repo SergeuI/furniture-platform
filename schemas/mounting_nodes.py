@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -113,6 +114,27 @@ class MountingNodeTemplateReadSchema(BaseModel):
     points: list[MountingNodeFittingHolePointReadSchema] = Field(default_factory=list)
 
 
+class MountingNodeVersionReadSchema(BaseModel):
+    id: int
+    node_id: int
+    node_code: str
+    node_name: str
+    version_number: int
+    event_type: str
+    created_by_user_id: str | None = None
+    created_at: datetime | None = None
+    items_count: int = 0
+    templates_count: int = 0
+    snapshot: dict[str, Any] = Field(default_factory=dict)
+    is_current: bool = False
+
+
+class MountingNodeVersionResponseSchema(BaseModel):
+    success: bool
+    version: MountingNodeVersionReadSchema | None = None
+    error: str | None = None
+
+
 class MountingNodeTemplateLinkReadSchema(BaseModel):
     id: int
     node_id: int
@@ -134,6 +156,7 @@ class MountingNodeCreateSchema(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     description: str | None = Field(default=None, max_length=5000)
     is_active: bool = True
+    ownership_type: str = Field(default="mine", max_length=16)
     items: list[MountingNodeItemCreateSchema] = Field(default_factory=list)
     templates: list[MountingNodeTemplateLinkCreateSchema] = Field(default_factory=list)
 
@@ -161,6 +184,9 @@ class MountingNodeListItemSchema(BaseModel):
     is_active: bool = True
     created_by_user_id: str | None = None
     updated_by_user_id: str | None = None
+    is_archived: bool = False
+    archived_at: datetime | None = None
+    archived_by_user_id: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
     items_count: int = 0
@@ -170,6 +196,7 @@ class MountingNodeListItemSchema(BaseModel):
 class MountingNodeDetailSchema(MountingNodeListItemSchema):
     items: list[MountingNodeItemReadSchema] = Field(default_factory=list)
     templates: list[MountingNodeTemplateLinkReadSchema] = Field(default_factory=list)
+    versions: list[MountingNodeVersionReadSchema] = Field(default_factory=list)
 
 
 class MountingNodeListResponseSchema(BaseModel):

@@ -29,6 +29,7 @@ class UpgradeMountingNodesSchemaTests(unittest.TestCase):
                 "mounting_nodes",
                 "mounting_node_items",
                 "mounting_node_templates",
+                "mounting_node_versions",
             })
             self.assertIn("ix_mounting_nodes_name", plan["missing_indexes"])
 
@@ -45,6 +46,7 @@ class UpgradeMountingNodesSchemaTests(unittest.TestCase):
                 self.assertTrue(self._table_exists(connection, "mounting_nodes"))
                 self.assertTrue(self._table_exists(connection, "mounting_node_items"))
                 self.assertTrue(self._table_exists(connection, "mounting_node_templates"))
+                self.assertTrue(self._table_exists(connection, "mounting_node_versions"))
                 self.assertEqual(
                     connection.execute("SELECT COUNT(*) FROM keep_me").fetchone()[0],
                     1,
@@ -65,6 +67,10 @@ class UpgradeMountingNodesSchemaTests(unittest.TestCase):
                     ).fetchone()[0],
                     0,
                 )
+                self.assertIn("is_archived", self._get_column_names(connection, "mounting_nodes"))
+                self.assertIn("archived_at", self._get_column_names(connection, "mounting_nodes"))
+                self.assertIn("archived_by_user_id", self._get_column_names(connection, "mounting_nodes"))
+                self.assertIn("snapshot", self._get_column_names(connection, "mounting_node_versions"))
 
     def test_missing_prerequisites_are_reported(self) -> None:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
@@ -139,6 +145,11 @@ class UpgradeMountingNodesSchemaTests(unittest.TestCase):
             (table_name,),
         ).fetchone()
         return row is not None
+
+    @staticmethod
+    def _get_column_names(connection: sqlite3.Connection, table_name: str) -> set[str]:
+        rows = connection.execute(f"PRAGMA table_info({table_name})").fetchall()
+        return {row[1] for row in rows}
 
 
 if __name__ == "__main__":

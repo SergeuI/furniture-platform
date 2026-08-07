@@ -41,6 +41,10 @@ function normalizeBoolean(value, fallback = false) {
   return Boolean(value);
 }
 
+function normalizeOwnershipType(value) {
+  return String(value ?? "").trim().toLowerCase() === "system" ? "system" : "mine";
+}
+
 function normalizeQuantity(value) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? Math.max(1, Math.floor(parsed)) : 1;
@@ -98,6 +102,7 @@ export function createMountingNodeCreateDraft(overrides = {}) {
     name: normalizeText(overrides.name),
     description: normalizeText(overrides.description),
     is_active: normalizeBoolean(overrides.is_active, true),
+    ownership_type: normalizeOwnershipType(overrides.ownership_type),
     items,
     points,
     mounting_variant_key: normalizeText(overrides.mounting_variant_key),
