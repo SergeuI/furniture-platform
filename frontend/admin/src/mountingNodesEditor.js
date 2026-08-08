@@ -332,6 +332,27 @@ export function resolveMountingNodeEditorContext(nodeDetail, fallbackNodeId = ""
   };
 }
 
+export function mergeMountingNodeEditorCategoryCode(nodeDetail, fallbackCategoryCode = null) {
+  if (!nodeDetail || typeof nodeDetail !== "object") {
+    return nodeDetail;
+  }
+
+  const existingCategoryCode = normalizeMountingNodeCategoryCode(nodeDetail.category_code);
+  if (existingCategoryCode) {
+    return nodeDetail;
+  }
+
+  const normalizedFallbackCategoryCode = normalizeMountingNodeCategoryCode(fallbackCategoryCode);
+  if (!normalizedFallbackCategoryCode) {
+    return nodeDetail;
+  }
+
+  return {
+    ...nodeDetail,
+    category_code: normalizedFallbackCategoryCode,
+  };
+}
+
 export function hydrateMountingNodeEditorState(nodeDetail, fallbackNodeId = "") {
   const context = resolveMountingNodeEditorContext(
     nodeDetail && typeof nodeDetail === "object" ? nodeDetail : null,

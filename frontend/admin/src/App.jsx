@@ -148,6 +148,7 @@ import {
   getMountingNodeEditorItemImageUrl as getMountingNodeEditorItemImageUrlHelper,
   getMountingNodeEditorPointDisplayId,
   getMountingNodeEditorPointDisplayLabel,
+  mergeMountingNodeEditorCategoryCode,
   hydrateMountingNodeEditorState,
   resolveActiveMountingNodeVersion,
   resolveMountingNodeEditorContext,
@@ -10556,7 +10557,14 @@ export default function App() {
       : resolvedContext;
 
     setCatalogHolesDetailOpen(false);
-    setMountingNodeEditorDraft(cloneMountingNodeEditorDraft(hydratedEditorState?.context?.nodeDetail || resolvedContext?.nodeDetail));
+    setMountingNodeEditorDraft(
+      cloneMountingNodeEditorDraft(
+        mergeMountingNodeEditorCategoryCode(
+          hydratedEditorState?.context?.nodeDetail || resolvedContext?.nodeDetail,
+          resolvedContext?.category_code,
+        ),
+      ),
+    );
     setMountingNodeEditorDraftNodeId(resolvedNodeId);
     if (resolvedNodeId) {
       setCatalogHolesBreadcrumbNodeId(resolvedNodeId);
@@ -11166,6 +11174,10 @@ export default function App() {
       }
 
       const savedNode = result.node || result.item || result.data || null;
+      const savedNodeWithCategory = mergeMountingNodeEditorCategoryCode(
+        savedNode,
+        editorContext.category_code,
+      );
       const savedTemplates = Array.isArray(savedNode?.templates) ? savedNode.templates : [];
       const savedCurrentLink =
         savedTemplates.find(
@@ -11174,25 +11186,26 @@ export default function App() {
         ) || savedTemplates[0] || null;
       const savedCurrentTemplate = savedCurrentLink?.template || selectedHoleTemplate || null;
 
-      if (savedNode) {
+      if (savedNodeWithCategory) {
         const savedRestoreState = buildMountingNodesRestoreState(
-          { mode: "detail", nodeId: savedNode.id },
-          savedNode,
+          { mode: "detail", nodeId: savedNodeWithCategory.id },
+          savedNodeWithCategory,
         );
-        setCatalogHolesBreadcrumbNodeId(String(savedNode.id || "").trim() || null);
-        setCatalogHolesBreadcrumbNodeName(String(savedNode.name || "").trim());
-        setMountingNodeEditorDraft(cloneMountingNodeEditorDraft(savedNode));
-        setMountingNodeEditorDraftNodeId(String(savedNode.id || "").trim() || "");
+        setCatalogHolesBreadcrumbNodeId(String(savedNodeWithCategory.id || "").trim() || null);
+        setCatalogHolesBreadcrumbNodeName(String(savedNodeWithCategory.name || "").trim());
+        setMountingNodeEditorDraft(cloneMountingNodeEditorDraft(savedNodeWithCategory));
+        setMountingNodeEditorDraftNodeId(String(savedNodeWithCategory.id || "").trim() || "");
         setMountingNodeEditorHasChanges(false);
         setCatalogHolesOpenContext((current) => ({
           ...(current || {}),
-          mountingNodeId: String(savedNode.id || current?.mountingNodeId || mountingNodeId),
-          nodeCode: String(savedNode.code || current?.nodeCode || ""),
-          nodeName: String(savedNode.name || current?.nodeName || ""),
+          mountingNodeId: String(savedNodeWithCategory.id || current?.mountingNodeId || mountingNodeId),
+          nodeCode: String(savedNodeWithCategory.code || current?.nodeCode || ""),
+          nodeName: String(savedNodeWithCategory.name || current?.nodeName || ""),
           fittingId: String(savedCurrentLink?.fitting_id || current?.fittingId || selectedHoleTemplate?.fitting_id || ""),
           templateId: String(savedCurrentLink?.template_id || savedCurrentTemplate?.id || selectedTemplateId || ""),
           mountingVariantKey: String(savedCurrentLink?.mounting_variant_key || savedCurrentTemplate?.mounting_variant_key || current?.mountingVariantKey || ""),
-          nodeDetail: savedNode,
+          category_code: savedNodeWithCategory.category_code || current?.category_code || null,
+          nodeDetail: savedNodeWithCategory,
         }));
         setCatalogHolesReturnState((current) => ({
           ...(current || {}),
