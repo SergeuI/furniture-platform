@@ -13,6 +13,11 @@ import {
   updateMountingNodeCreateDraftItem,
   validateMountingNodeCreateDraft,
 } from "../../mountingNodesCreateDraft.js";
+import {
+  getMountingNodeCategoryLabel,
+  getMountingNodeCategoryOptions,
+  normalizeMountingNodeCategoryCode,
+} from "../../mountingNodeCategories.js";
 import { getProcessingTemplateMountingVariantLabel } from "../../processingTemplates.js";
 import surfaceMountIcon from "../../assets/hole-mounting/surface_mount.png";
 import angledTwoPlanesIcon from "../../assets/hole-mounting/angled_two_planes.png";
@@ -214,6 +219,11 @@ export default function MountingNodesCreatePanel({
 
   const validationErrors = useMemo(() => validateMountingNodeCreateDraft(draft), [draft]);
   const canSubmit = validationErrors.length === 0 && !isCreating && !internalSubmitting && typeof onCreate === "function";
+  const mountingNodeCategoryOptions = useMemo(() => getMountingNodeCategoryOptions(language), [language]);
+  const selectedCategoryCode = normalizeMountingNodeCategoryCode(draft.category_code);
+  const selectedCategoryLabel =
+    getMountingNodeCategoryLabel(selectedCategoryCode, language) ||
+    (language === "uk" ? "Категорію не вказано" : "Category not set");
 
   useEffect(() => {
     if (selectorOpen) {
@@ -354,6 +364,14 @@ export default function MountingNodesCreatePanel({
     updateDraft((current) => ({
       ...current,
       description: value,
+      is_dirty: true,
+    }));
+  };
+
+  const handleCategoryChange = (value) => {
+    updateDraft((current) => ({
+      ...current,
+      category_code: normalizeMountingNodeCategoryCode(value),
       is_dirty: true,
     }));
   };
@@ -535,6 +553,22 @@ export default function MountingNodesCreatePanel({
                     rows="2"
                     value={draft.description}
                   />
+                </label>
+                <label className="mounting-node-create-field mounting-node-create-category-field">
+                  <span>{language === "uk" ? "РљР°С‚РµРіРѕСЂС–СЏ РІСѓР·Р»Р°" : "Node category"}</span>
+                  <select
+                    disabled={isCreating || internalSubmitting}
+                    onChange={(event) => handleCategoryChange(event.target.value)}
+                    value={selectedCategoryCode}
+                  >
+                    <option value="">{language === "uk" ? "Без категорії" : "No category"}</option>
+                    {mountingNodeCategoryOptions.map((category) => (
+                      <option key={category.code} value={category.code}>
+                        {category.label}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="mounting-node-create-field-hint">{selectedCategoryLabel}</span>
                 </label>
               </div>
               {canChooseOwnershipType ? (

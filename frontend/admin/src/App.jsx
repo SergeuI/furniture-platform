@@ -10906,6 +10906,7 @@ export default function App() {
     const primaryItem = selectedItems[0] || null;
     const mountingVariantKey = String(draft.mounting_variant_key || "").trim() || "surface_mount";
     const ownershipType = String(draft.ownership_type || "").trim() === "system" ? "system" : "mine";
+    const categoryCode = String(draft.category_code || "").trim();
     const primaryFittingId = Number(primaryItem?.fitting_id);
 
     if (!selectedItems.length) {
@@ -10928,6 +10929,7 @@ export default function App() {
       code: String(draft.code || "").trim() || undefined,
       name: String(draft.name || "").trim(),
       description: String(draft.description || "").trim() || undefined,
+      category_code: categoryCode || undefined,
       is_active: draft.is_active !== false,
       ownership_type: ownershipType,
       items: selectedItems.map((item, index) => ({

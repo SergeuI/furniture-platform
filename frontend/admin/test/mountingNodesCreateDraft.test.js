@@ -51,11 +51,13 @@ test("mounting node create draft keeps item and point state local", () => {
   const draft = createMountingNodeCreateDraft({
     name: "mn_confirmat_7x50",
     mounting_variant_key: "surface_mount",
+    category_code: "hinges",
     is_dirty: true,
   });
 
   assert.deepEqual(draft.items, []);
   assert.deepEqual(draft.points, []);
+  assert.equal(draft.category_code, "hinges");
   assert.equal(draft.template_name, "Основний шаблон");
   assert.equal(isMountingNodeCreateDraftReady(draft), false);
 
@@ -297,6 +299,7 @@ test("mounting node create draft persists and restores session draft fields", ()
     const draft = createMountingNodeCreateDraft({
       name: "Draft node",
       description: "Keep me",
+      category_code: "ventilation",
       is_active: false,
       ownership_type: "system",
       mounting_variant_key: "face_to_edge",
@@ -347,6 +350,7 @@ test("mounting node create draft persists and restores session draft fields", ()
     const restored = loadMountingNodeCreateDraft();
     assert.equal(restored.name, "Draft node");
     assert.equal(restored.description, "Keep me");
+    assert.equal(restored.category_code, "ventilation");
     assert.equal(restored.is_active, false);
     assert.equal(restored.ownership_type, "system");
     assert.equal(restored.mounting_variant_key, "face_to_edge");

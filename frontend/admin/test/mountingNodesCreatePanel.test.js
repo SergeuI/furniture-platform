@@ -22,6 +22,9 @@ test("mounting nodes create panel renders compact wizard structure", () => {
   assert.equal(panelSource.includes('mounting-node-create-header-copy'), false);
   assert.equal(panelSource.includes('mounting-node-create-breadcrumb'), false);
   assert.equal(panelSource.includes('mounting-node-create-description-input'), true);
+  assert.equal(panelSource.includes('mounting-node-create-category-field'), true);
+  assert.equal(panelSource.includes('Node category'), true);
+  assert.equal(panelSource.includes('No category'), true);
   assert.equal(panelSource.includes('{language === "uk" ? "Фурнітура" : "Fittings"}: {selectedItems.length}'), true);
   assert.equal(panelSource.includes('Наприклад, Конфірмат 7×50'), true);
   assert.equal(panelSource.includes('mn_confirmat_7x50'), false);
@@ -56,7 +59,11 @@ test("mounting nodes create panel renders compact wizard structure", () => {
   assert.equal(panelSource.includes('saveMountingNodeCreateDraft'), true);
   assert.equal(panelSource.includes('clearMountingNodeCreateDraft'), true);
   assert.equal(panelSource.includes('createErrorRef'), true);
+  assert.equal(panelSource.includes('getMountingNodeCategoryOptions'), true);
+  assert.equal(panelSource.includes('getMountingNodeCategoryLabel'), true);
+  assert.equal(panelSource.includes('selectedCategoryLabel'), true);
   assert.equal(panelSource.includes('mounting_variant_key: loadedDraft.mounting_variant_key || MOUNTING_VARIANT_KEYS[0]'), true);
+  assert.equal(appSource.includes('category_code: categoryCode || undefined'), true);
   assert.equal(appSource.includes('mounting-node-editor-items-card'), true);
   assert.equal(appSource.includes('clearMountingNodeCreateDraft();'), true);
   assert.equal(panelSource.includes('hole-bundle-modal-row-image'), true);

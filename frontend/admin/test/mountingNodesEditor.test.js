@@ -32,6 +32,7 @@ const fixtureNodeDetail = {
   code: "mounting-node-node-9039f657",
   name: "петля",
   description: null,
+  category_code: "hinges",
   is_active: true,
   items: [
     {
@@ -149,6 +150,7 @@ test("mounting node editor payload keeps node fields, items, template id, and st
         code: "node-1",
         name: "Node 1",
         description: "Main node",
+        category_code: "hinges",
         is_active: true,
         items: [
           {
@@ -197,6 +199,7 @@ test("mounting node editor payload keeps node fields, items, template id, and st
   assert.equal(payload.code, "node-1");
   assert.equal(payload.name, "Node 1");
   assert.equal(payload.description, "Main node");
+  assert.equal(payload.category_code, "hinges");
   assert.equal(payload.is_active, true);
   assert.equal(payload.items.length, 1);
   assert.deepEqual(payload.items[0], {

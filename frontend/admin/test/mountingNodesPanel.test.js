@@ -73,6 +73,7 @@ test("mounting nodes panel keeps the DETAIL white panel free of breadcrumb marku
   assert.equal(source.includes("handleBackToList()"), true);
   assert.equal(source.includes("setMountingNodesViewMode(\"list\")"), true);
   assert.equal(source.includes("mounting-node-card-type"), true);
+  assert.equal(source.includes("getMountingNodeCategoryLabel"), true);
   assert.equal(source.includes("mounting-node-card-layout"), true);
   assert.equal(source.includes("mounting-node-row-layout"), true);
   assert.equal(source.includes("mounting-node-card-visuals"), true);
@@ -102,6 +103,7 @@ test("mounting nodes panel keeps the DETAIL white panel free of breadcrumb marku
   assert.equal(source.includes("getMountingNodeVersionSummary"), true);
   assert.equal(source.includes("mounting-node-detail-version-summary-card"), true);
   assert.equal(source.includes("mounting-node-detail-version-summary-grid"), true);
+  assert.equal(source.includes('label={language === "uk" ? "Категорія" : "Category"}'), true);
   assert.equal(source.includes("mounting-node-detail-version-preview-note"), true);
   assert.equal(source.includes("mounting-node-version-item-actions"), true);
   assert.equal(source.includes("Active version"), true);

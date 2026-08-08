@@ -1,3 +1,5 @@
+import { normalizeMountingNodeCategoryCode } from "./mountingNodeCategories.js";
+
 function normalizeText(value) {
   return String(value || "").trim();
 }
@@ -558,6 +560,7 @@ export function buildMountingNodeEditorSavePayload({
   }
 
   return {
+    category_code: normalizeMountingNodeCategoryCode(nodeDetail.category_code) || undefined,
     code: normalizeOptionalText(nodeDetail.code) || undefined,
     name: normalizeText(nodeDetail.name),
     description: normalizeOptionalText(nodeDetail.description),

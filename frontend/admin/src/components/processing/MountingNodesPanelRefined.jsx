@@ -23,6 +23,9 @@ import {
   resolveActiveMountingNodeVersion,
   resolveMountingNodeEditorContext,
 } from "../../mountingNodesEditor.js";
+import {
+  getMountingNodeCategoryLabel,
+} from "../../mountingNodeCategories.js";
 import surfaceMountIcon from "../../assets/hole-mounting/surface_mount.png";
 import faceToEdgeIcon from "../../assets/hole-mounting/face_to_edge.png";
 import edgeToEdgeIcon from "../../assets/hole-mounting/edge_to_edge.png";
@@ -350,6 +353,13 @@ function getOwnershipLabel(node, language) {
   }
 
   return language === "uk" ? "Невідомий доступ" : "Unknown ownership";
+}
+
+function getNodeCategoryLabel(node, language) {
+  return (
+    getMountingNodeCategoryLabel(node?.category_code, language) ||
+    (language === "uk" ? "Категорію не вказано" : "Category not set")
+  );
 }
 
 export function buildNodeEditorContext(nodeDetail, fallbackNodeId = "") {
@@ -1738,6 +1748,7 @@ export default function MountingNodesPanelRefined({
                   const nodeDetail = nodeDetailsById[String(node.id)] || null;
                   const isSelected = String(selectedNodeId) === String(node.id);
                   const ownershipLabel = getOwnershipLabel(nodeDetail || node, language);
+                  const categoryLabel = getNodeCategoryLabel(nodeDetail || node, language);
 
                   return (
                     <article
@@ -1758,6 +1769,7 @@ export default function MountingNodesPanelRefined({
                         <div className="mounting-node-card-copy">
                           <strong>{node.name || t.notSet}</strong>
                           <p className="mounting-node-card-type">{ownershipLabel}</p>
+                          <p className="mounting-node-card-type">{categoryLabel}</p>
                         </div>
                         <div className="mounting-node-card-visuals">
                           {renderNodeItemGallery(nodeDetail?.items, language, t, fittingThumbnailStateById)}
@@ -1781,6 +1793,7 @@ export default function MountingNodesPanelRefined({
                   const nodeDetail = nodeDetailsById[String(node.id)] || null;
                   const isSelected = String(selectedNodeId) === String(node.id);
                   const ownershipLabel = getOwnershipLabel(nodeDetail || node, language);
+                  const categoryLabel = getNodeCategoryLabel(nodeDetail || node, language);
 
                   return (
                     <article
@@ -1801,6 +1814,7 @@ export default function MountingNodesPanelRefined({
                         <div className="mounting-node-row-copy">
                           <strong>{node.name || t.notSet}</strong>
                           <p className="mounting-node-card-type">{ownershipLabel}</p>
+                          <p className="mounting-node-card-type">{categoryLabel}</p>
                         </div>
                         <div className="mounting-node-row-visuals">
                           {renderNodeItemGallery(nodeDetail?.items, language, t, fittingThumbnailStateById)}
@@ -1927,6 +1941,10 @@ export default function MountingNodesPanelRefined({
                     <DetailField
                       label={language === "uk" ? "Варіант кріплення" : "Mounting variant"}
                       value={selectedNodeActiveVariantLabel}
+                    />
+                    <DetailField
+                      label={language === "uk" ? "Категорія" : "Category"}
+                      value={getNodeCategoryLabel(selectedNodeDetailForDisplay, language)}
                     />
                   </div>
                   {selectedNodeVersionBanner ? (
