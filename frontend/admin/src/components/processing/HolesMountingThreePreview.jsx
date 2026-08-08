@@ -1276,6 +1276,7 @@ export default function HolesMountingThreePreview({
                     const markerPanelKey = String(marker.panelKey || marker.panel_key || marker.target_panel || "").trim();
                     const isHorizontalPanelMarker = markerPanelKey === "horizontal_panel";
                     const shouldAnchorAtSurface = isHorizontalPanelMarker || marker.isAngledTwoPlanes;
+                    const shouldAnchorAtCenter = Boolean(marker.isAngledTwoPlanes);
 
                     return (
                       <group
@@ -1292,7 +1293,13 @@ export default function HolesMountingThreePreview({
                           event.stopPropagation();
                           onHoverHole?.(marker.id);
                         }}
-                        position={shouldAnchorAtSurface || marker.isSurfaceMount ? marker.surfacePoint : marker.centerPosition}
+                        position={
+                          shouldAnchorAtCenter
+                            ? marker.centerPosition
+                            : shouldAnchorAtSurface || marker.isSurfaceMount
+                              ? marker.surfacePoint
+                              : marker.centerPosition
+                        }
                         quaternion={shouldAnchorAtSurface || marker.isSurfaceMount ? marker.quaternion : undefined}
                         userData={{
                           holeId: marker.point?.id ?? marker.id,
@@ -1303,7 +1310,13 @@ export default function HolesMountingThreePreview({
                       >
                         <mesh
                           castShadow
-                          position={shouldAnchorAtSurface || marker.isSurfaceMount ? [0, marker.holeLength / 2, 0] : [0, 0, 0]}
+                          position={
+                            shouldAnchorAtCenter
+                              ? [0, 0, 0]
+                              : shouldAnchorAtSurface || marker.isSurfaceMount
+                                ? [0, marker.holeLength / 2, 0]
+                                : [0, 0, 0]
+                          }
                           renderOrder={4}
                           userData={{
                             holeId: marker.point?.id ?? marker.id,
@@ -1318,6 +1331,7 @@ export default function HolesMountingThreePreview({
                             opacity={0.92}
                             depthWrite={false}
                             transparent
+                            side={DoubleSide}
                             roughness={0.22}
                           />
                           {holeIdTextures[marker.id] && (shouldAnchorAtSurface || marker.isSurfaceMount) ? (

@@ -36,3 +36,16 @@ test("holes mounting three preview is extracted into a reusable component", () =
   assert.equal(appSource.includes("memo(function HolesMountingThreePreview"), false);
   assert.equal(appSource.includes("const HolesMountingThreePreview = useMemo"), false);
 });
+
+test("app keeps panel metadata in hole preview points so legacy angled_two_planes points stay renderable", () => {
+  const appPath = fileURLToPath(new URL("../src/App.jsx", import.meta.url));
+  const appSource = readFileSync(appPath, "utf8");
+
+  assert.equal(appSource.includes("const panelKey = String("), true);
+  assert.equal(appSource.includes("point?.target_panel || point?.targetPanel || \"\""), true);
+  assert.equal(appSource.includes("panelKey,"), true);
+  assert.equal(appSource.includes("panel_key: panelKey,"), true);
+  assert.equal(appSource.includes("target_panel: targetPanel,"), true);
+  assert.equal(appSource.includes("target_surface: targetSurface,"), true);
+  assert.equal(appSource.includes("target_side: targetSide,"), true);
+});

@@ -195,6 +195,34 @@ test("angled two planes preview auto-fits the horizontal panel independently fro
   assert.deepEqual(layout.markerPlane.origin, [0, 0, 0]);
 });
 
+test("angled two planes preview keeps the constructive joint fixed when holes cross 0", () => {
+  const layout = buildAngledTwoPlanesThreePreviewLayout(18, 18, [
+    {
+      id: 1,
+      panel_key: "vertical_panel",
+      x_mm: 0,
+      y_mm: 3,
+      z_mm: 0,
+      diameter_mm: 20,
+    },
+    {
+      id: 2,
+      panel_key: "horizontal_panel",
+      x_mm: 3,
+      y_mm: 0,
+      z_mm: 0,
+      diameter_mm: 20,
+    },
+  ]);
+
+  assert.equal(Number(layout.panels[0].args[1].toFixed(3)), 2.05);
+  assert.equal(Number(layout.panels[1].args[0].toFixed(3)), 2.05);
+  assert.deepEqual(layout.panels[0].position.map((value) => Number(value.toFixed(3))), [-0.09, 1.025, 0]);
+  assert.deepEqual(layout.panels[1].position.map((value) => Number(value.toFixed(3))), [1.025, -0.09, 0]);
+  assert.equal(Number(layout.markerPlane.spanU.toFixed(3)), 2.05);
+  assert.equal(Number(layout.markerPlane.spanV.toFixed(3)), 2.05);
+});
+
 test("angled two planes preview skips holes with no resolved panel key instead of falling back", () => {
   const volumes = buildAngledTwoPlanesThreePreviewHoleVolumes([
     {
@@ -234,11 +262,11 @@ test("angled two planes preview auto-fits a vertical point 58 hole without forci
   assert.equal(Number(layout.panels[0].args[1].toFixed(3)), 2.05);
   assert.equal(Number(layout.markerPlane.spanU.toFixed(3)), 2.05);
   assert.equal(Number(layout.markerPlane.spanV.toFixed(3)), 2.05);
-  assert.deepEqual(layout.panels[0].position.map((value) => Number(value.toFixed(3))), [-0.09, 1.025, 0]);
-  assert.deepEqual(layout.panels[1].position.map((value) => Number(value.toFixed(3))), [1.025, -0.09, 0]);
-  assert.equal(Number(layout.panels[0].args[2].toFixed(3)), 2.65);
+  assert.deepEqual(layout.panels[0].position.map((value) => Number(value.toFixed(3))), [-0.09, 1.025, 0.328]);
+  assert.deepEqual(layout.panels[1].position.map((value) => Number(value.toFixed(3))), [1.025, -0.09, 0.328]);
+  assert.equal(Number(layout.panels[0].args[2].toFixed(3)), 1.995);
   assert.equal(Number(layout.panels[1].args[0].toFixed(3)), 2.05);
-  assert.equal(Number(layout.panels[1].args[2].toFixed(3)), 2.65);
+  assert.equal(Number(layout.panels[1].args[2].toFixed(3)), 1.995);
   assert.deepEqual(layout.sceneOrigin, [0, 0, 0]);
   assert.deepEqual(layout.markerPlane.origin, [0, 0, 0]);
 });
@@ -257,12 +285,72 @@ test("angled two planes preview auto-fits the horizontal point 91 hole to the ac
   const layout = buildAngledTwoPlanesThreePreviewLayout(18, 18, [hole]);
 
   assert.equal(Number(dimensions.horizontalWidth.toFixed(3)), 2.05);
-  assert.equal(Number(dimensions.panelDepth.toFixed(3)), 5.05);
+  assert.equal(Number(dimensions.panelDepth.toFixed(3)), 3.195);
   assert.equal(Number(layout.horizontalPanel.args[0].toFixed(3)), 2.05);
-  assert.equal(Number(layout.horizontalPanel.args[2].toFixed(3)), 5.05);
-  assert.deepEqual(layout.horizontalPanel.position.map((value) => Number(value.toFixed(3))), [1.025, -0.09, 0]);
+  assert.equal(Number(layout.horizontalPanel.args[2].toFixed(3)), 3.195);
+  assert.deepEqual(layout.horizontalPanel.position.map((value) => Number(value.toFixed(3))), [1.025, -0.09, -0.927]);
   assert.deepEqual(layout.sceneOrigin, [0, 0, 0]);
   assert.deepEqual(layout.markerPlane.origin, [0, 0, 0]);
+});
+
+test("angled two planes preview expands only the positive depth edge for a +Z point", () => {
+  const dimensions = buildAngledTwoPlanesPreviewPanelDimensions([
+    {
+      id: 3,
+      panel_key: "horizontal_panel",
+      x_mm: 50,
+      y_mm: 0,
+      z_mm: 100,
+      diameter_mm: 5,
+      depth_mm: 5,
+    },
+  ]);
+
+  assert.equal(Number(dimensions.panelDepthMin.toFixed(3)), -0.67);
+  assert.equal(Number(dimensions.panelDepthMax.toFixed(3)), 1.525);
+  assert.equal(Number(dimensions.panelDepth.toFixed(3)), 2.195);
+  assert.equal(Number(dimensions.meshCenter.toFixed(3)), 0.427);
+  assert.equal(Number(dimensions.panelCenter.toFixed(3)), 0.427);
+});
+
+test("angled two planes preview expands only the negative depth edge for a -Z point", () => {
+  const dimensions = buildAngledTwoPlanesPreviewPanelDimensions([
+    {
+      id: 4,
+      panel_key: "vertical_panel",
+      x_mm: 0,
+      y_mm: 200,
+      z_mm: -150,
+      diameter_mm: 5,
+      depth_mm: 5,
+    },
+  ]);
+
+  assert.equal(Number(dimensions.panelDepthMin.toFixed(3)), -2.025);
+  assert.equal(Number(dimensions.panelDepthMax.toFixed(3)), 0.67);
+  assert.equal(Number(dimensions.panelDepth.toFixed(3)), 2.695);
+  assert.equal(Number(dimensions.meshCenter.toFixed(3)), -0.677);
+  assert.equal(Number(dimensions.panelCenter.toFixed(3)), -0.677);
+});
+
+test("angled two planes preview keeps a point inside the base depth bounds from expanding through the joint", () => {
+  const dimensions = buildAngledTwoPlanesPreviewPanelDimensions([
+    {
+      id: 5,
+      panel_key: "horizontal_panel",
+      x_mm: 0,
+      y_mm: 0,
+      z_mm: 0,
+      diameter_mm: 5,
+      depth_mm: 5,
+    },
+  ]);
+
+  assert.equal(Number(dimensions.panelDepthMin.toFixed(3)), -0.67);
+  assert.equal(Number(dimensions.panelDepthMax.toFixed(3)), 0.67);
+  assert.equal(Number(dimensions.panelDepth.toFixed(3)), 1.34);
+  assert.equal(Number(dimensions.meshCenter.toFixed(3)), 0);
+  assert.equal(Number(dimensions.panelCenter.toFixed(3)), 0);
 });
 
 test("angled two planes preview maps the vertical panel hole to the inside corner and sends it inward", () => {
@@ -344,6 +432,148 @@ test("angled two planes preview keeps a 13 mm depth readable in world space for 
   assert.deepEqual(verticalWorldEnd.toArray().map((value) => Number(value.toFixed(3))), [-0.13, 0, 0]);
   assert.deepEqual(horizontalWorldStart.toArray().map((value) => Number(value.toFixed(3))), [0, 0, 0]);
   assert.deepEqual(horizontalWorldEnd.toArray().map((value) => Number(value.toFixed(3))), [0, -0.13, 0]);
+});
+
+test("angled two planes preview keeps the exact P1 fixture visible on the vertical panel", () => {
+  const volumes = buildAngledTwoPlanesThreePreviewHoleVolumes(
+    [
+      {
+        id: 121,
+        label: "P1",
+        panel_key: "vertical_panel",
+        target_panel: "vertical_panel",
+        target_surface: "plane",
+        target_side: "inner_face",
+        x_mm: 0,
+        y_mm: 0,
+        z_mm: -50,
+        diameter_mm: 10,
+        depth_mm: 10,
+      },
+    ],
+    18,
+    18,
+  );
+
+  const volume = volumes[0];
+  const layout = buildAngledTwoPlanesThreePreviewLayout(18, 18, [
+    {
+      id: 121,
+      label: "P1",
+      panel_key: "vertical_panel",
+      target_panel: "vertical_panel",
+      target_surface: "plane",
+      target_side: "inner_face",
+      x_mm: 0,
+      y_mm: 0,
+      z_mm: -50,
+      diameter_mm: 10,
+      depth_mm: 10,
+    },
+  ]);
+
+  assert.equal(volumes.length, 1);
+  assert.equal(volume.label, "P1");
+  assert.equal(volume.panelKey, "vertical_panel");
+  assert.equal(volume.targetPanel, "vertical_panel");
+  assert.deepEqual(volume.surfacePoint.map((value) => Number(value.toFixed(3))), [0, 0, -0.5]);
+  assert.deepEqual(volume.inwardNormal.map((value) => Number(value.toFixed(3))), [-1, 0, 0]);
+  assert.deepEqual(volume.quaternion.toArray().map((value) => Number(value.toFixed(3))), [0, 0, 0.707, 0.707]);
+  assert.deepEqual(layout.sceneOrigin, [0, 0, 0]);
+  assert.deepEqual(layout.verticalPanel.position.map((value) => Number(value.toFixed(3))), [-0.09, 1.025, -0.19]);
+  assert.deepEqual(volume.endPoint.map((value) => Number(value.toFixed(3))), [-0.1, 0, -0.5]);
+});
+
+test("angled two planes preview keeps the zero-depth vertical control visible", () => {
+  const volumes = buildAngledTwoPlanesThreePreviewHoleVolumes(
+    [
+      {
+        id: 122,
+        label: "P0",
+        panel_key: "vertical_panel",
+        target_panel: "vertical_panel",
+        target_surface: "plane",
+        target_side: "inner_face",
+        x_mm: 0,
+        y_mm: 0,
+        z_mm: 0,
+        diameter_mm: 10,
+        depth_mm: 10,
+      },
+    ],
+    18,
+    18,
+  );
+
+  const volume = volumes[0];
+  const layout = buildAngledTwoPlanesThreePreviewLayout(18, 18, [
+    {
+      id: 122,
+      label: "P0",
+      panel_key: "vertical_panel",
+      target_panel: "vertical_panel",
+      target_surface: "plane",
+      target_side: "inner_face",
+      x_mm: 0,
+      y_mm: 0,
+      z_mm: 0,
+      diameter_mm: 10,
+      depth_mm: 10,
+    },
+  ]);
+
+  assert.equal(volumes.length, 1);
+  assert.equal(volume.panelKey, "vertical_panel");
+  assert.equal(volume.targetPanel, "vertical_panel");
+  assert.deepEqual(volume.surfacePoint.map((value) => Number(value.toFixed(3))), [0, 0, 0]);
+  assert.deepEqual(volume.inwardNormal.map((value) => Number(value.toFixed(3))), [-1, 0, 0]);
+  assert.deepEqual(layout.verticalPanel.position.map((value) => Number(value.toFixed(3))), [-0.09, 1.025, 0]);
+});
+
+test("angled two planes preview keeps the horizontal positive-Z control visible", () => {
+  const volumes = buildAngledTwoPlanesThreePreviewHoleVolumes(
+    [
+      {
+        id: 123,
+        label: "P2",
+        panel_key: "horizontal_panel",
+        target_panel: "horizontal_panel",
+        target_surface: "plane",
+        target_side: "inner_face",
+        x_mm: 50,
+        y_mm: 0,
+        z_mm: 100,
+        diameter_mm: 10,
+        depth_mm: 10,
+      },
+    ],
+    18,
+    18,
+  );
+
+  const volume = volumes[0];
+  const layout = buildAngledTwoPlanesThreePreviewLayout(18, 18, [
+    {
+      id: 123,
+      label: "P2",
+      panel_key: "horizontal_panel",
+      target_panel: "horizontal_panel",
+      target_surface: "plane",
+      target_side: "inner_face",
+      x_mm: 50,
+      y_mm: 0,
+      z_mm: 100,
+      diameter_mm: 10,
+      depth_mm: 10,
+    },
+  ]);
+
+  assert.equal(volumes.length, 1);
+  assert.equal(volume.panelKey, "horizontal_panel");
+  assert.equal(volume.targetPanel, "horizontal_panel");
+  assert.deepEqual(volume.surfacePoint.map((value) => Number(value.toFixed(3))), [0.5, 0, 1]);
+  assert.deepEqual(volume.inwardNormal.map((value) => Number(value.toFixed(3))), [0, -1, 0]);
+  assert.deepEqual(layout.horizontalPanel.position.map((value) => Number(value.toFixed(3))), [1.025, -0.09, 0.44]);
 });
 
 test("angled two planes preview keeps point 76 on the horizontal surface and sends it inward", () => {

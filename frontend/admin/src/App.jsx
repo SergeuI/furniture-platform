@@ -7956,6 +7956,18 @@ export default function App() {
       const label = getSafeHolePointLabel(point?.label, `P${point?.id || index + 1}`);
       const operation = String(point?.operation || "").trim() || "";
       const side = String(point?.side || "").trim() || "";
+      const panelKey = String(
+        point?.panelKey ||
+          point?.panel_key ||
+          point?.panelId ||
+          point?.panel_id ||
+          point?.target_panel ||
+          point?.targetPanel ||
+          "",
+      ).trim();
+      const targetPanel = String(point?.target_panel || point?.targetPanel || "").trim();
+      const targetSurface = String(point?.target_surface || point?.targetSurface || "").trim();
+      const targetSide = String(point?.target_side || point?.targetSide || "").trim();
 
       return {
         diameter,
@@ -10504,6 +10516,7 @@ export default function App() {
   }
 
   function handleOpenMountingNodeCreate(returnState = null) {
+    clearMountingNodeCreateDraft();
     setCatalogHolesReturnState(returnState);
     setCatalogHolesDetailOpen(false);
     setCatalogHolesOpenContext(null);

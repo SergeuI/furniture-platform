@@ -11,6 +11,10 @@ export const ANGLED_TWO_PLANES_PREVIEW_BASE_PANEL_SPAN_SCENE = 2.05;
 export const ANGLED_TWO_PLANES_PREVIEW_BASE_PANEL_DEPTH_SCENE = 1.34;
 
 const ANGLED_TWO_PLANES_MM_TO_SCENE = 0.01;
+const ANGLED_TWO_PLANES_PANEL_FREE_DIRECTIONS = {
+  horizontal_panel: "positive",
+  vertical_panel: "positive",
+};
 
 export function normalizeAngledTwoPlanesPreviewThicknessMm(value) {
   const parsed = Number(value);
@@ -75,8 +79,11 @@ function getAngledTwoPlanesPointRadiusScene(hole) {
   return Math.abs(diameterMm) * ANGLED_TWO_PLANES_MM_TO_SCENE * 0.5;
 }
 
-function buildAngledTwoPlanesAxisBounds(sourceHoles, panelKey, valueGetter, baseSpanScene, defaultCenterScene = 0) {
+function buildAngledTwoPlanesAxisBounds(sourceHoles, panelKey, valueGetter, baseSpanScene, freeDirection = "positive") {
+  const isNegativeDirection = String(freeDirection || "").trim().toLowerCase() === "negative";
   const paddingScene = ANGLED_TWO_PLANES_PREVIEW_PANEL_PADDING_MM * ANGLED_TWO_PLANES_MM_TO_SCENE;
+  const baseMin = isNegativeDirection ? -baseSpanScene : 0;
+  const baseMax = isNegativeDirection ? 0 : baseSpanScene;
   const values = sourceHoles
     .filter((hole) => panelKey === null || resolveAngledTwoPlanesPanelKey(hole) === panelKey)
     .map((hole) => {
@@ -96,41 +103,39 @@ function buildAngledTwoPlanesAxisBounds(sourceHoles, panelKey, valueGetter, base
 
   if (!values.length) {
     return {
-      center: defaultCenterScene,
-      max: defaultCenterScene + baseSpanScene / 2,
-      min: defaultCenterScene - baseSpanScene / 2,
+      center: (baseMin + baseMax) / 2,
+      max: baseMax,
+      min: baseMin,
       span: baseSpanScene,
     };
   }
 
-  const min = Math.min(...values.map((entry) => entry.min));
-  const max = Math.max(...values.map((entry) => entry.max));
-  let paddedMin;
-  let paddedMax;
+  if (isNegativeDirection) {
+    const freeMin = Math.min(0, ...values.map((entry) => entry.min - paddingScene));
+    const min = Math.min(baseMin, freeMin);
 
-  if (min >= 0) {
-    paddedMin = 0;
-    paddedMax = Math.max(baseSpanScene, max + paddingScene);
-  } else if (max <= 0) {
-    paddedMin = Math.min(-baseSpanScene, min - paddingScene);
-    paddedMax = 0;
-  } else {
-    paddedMin = min - paddingScene;
-    paddedMax = max + paddingScene;
+    return {
+      center: min / 2,
+      max: 0,
+      min,
+      span: Math.abs(min),
+    };
   }
 
-  const span = paddedMax - paddedMin;
+  const freeMax = Math.max(0, ...values.map((entry) => entry.max + paddingScene));
+  const max = Math.max(baseMax, freeMax);
 
   return {
-    center: (paddedMin + paddedMax) / 2,
-    max: paddedMax,
-    min: paddedMin,
-    span,
+    center: max / 2,
+    max,
+    min: 0,
+    span: max,
   };
 }
 
 function buildAngledTwoPlanesCenteredDepthBounds(sourceHoles, baseSpanScene) {
   const paddingScene = ANGLED_TWO_PLANES_PREVIEW_PANEL_PADDING_MM * ANGLED_TWO_PLANES_MM_TO_SCENE;
+  const baseHalfSpanScene = baseSpanScene / 2;
   const values = sourceHoles
     .map((hole) => {
       const zMm = readNumber(hole, ["z_mm", "z"]);
@@ -140,27 +145,34 @@ function buildAngledTwoPlanesCenteredDepthBounds(sourceHoles, baseSpanScene) {
       }
 
       const radiusScene = getAngledTwoPlanesPointRadiusScene(hole);
-      return Math.abs(zMm * ANGLED_TWO_PLANES_MM_TO_SCENE) + radiusScene;
+      const zScene = zMm * ANGLED_TWO_PLANES_MM_TO_SCENE;
+      return {
+        max: zScene + radiusScene + paddingScene,
+        min: zScene - radiusScene - paddingScene,
+      };
     })
-    .filter((value) => Number.isFinite(value));
+    .filter(Boolean);
 
   if (!values.length) {
     return {
       center: 0,
-      max: baseSpanScene / 2,
-      min: -baseSpanScene / 2,
+      meshCenter: 0,
+      max: baseHalfSpanScene,
+      min: -baseHalfSpanScene,
       span: baseSpanScene,
     };
   }
 
-  const maxExtent = Math.max(...values) + paddingScene;
-  const extent = Math.max(baseSpanScene / 2, maxExtent);
+  const min = Math.min(-baseHalfSpanScene, ...values.map((entry) => entry.min));
+  const max = Math.max(baseHalfSpanScene, ...values.map((entry) => entry.max));
+  const meshCenter = (min + max) / 2;
 
   return {
     center: 0,
-    max: extent,
-    min: -extent,
-    span: extent * 2,
+    meshCenter,
+    max,
+    min,
+    span: max - min,
   };
 }
 
@@ -206,9 +218,14 @@ function buildAngledTwoPlanesPanelModel(panelKey, panelDimensions, verticalPanel
   const isHorizontalPanel = panelKey === "horizontal_panel";
   const thickness = isHorizontalPanel ? horizontalPanelThickness : verticalPanelThickness;
   const inwardNormal = isHorizontalPanel ? [0, -1, 0] : [-1, 0, 0];
+  const meshCenter = Number.isFinite(panelDimensions.meshCenter)
+    ? panelDimensions.meshCenter
+    : Number.isFinite(panelDimensions.panelCenter)
+      ? panelDimensions.panelCenter
+      : 0;
   const position = isHorizontalPanel
-    ? [panelDimensions.horizontalCenter, -thickness / 2, panelDimensions.panelCenter]
-    : [-thickness / 2, panelDimensions.verticalCenter, panelDimensions.panelCenter];
+    ? [panelDimensions.horizontalCenter, -thickness / 2, meshCenter]
+    : [-thickness / 2, panelDimensions.verticalCenter, meshCenter];
   const autoFitBounds = isHorizontalPanel
     ? {
         center: panelDimensions.horizontalCenter,
@@ -301,7 +318,7 @@ export function buildAngledTwoPlanesPreviewPanelDimensions(holes = []) {
       return Number.isFinite(yMm) ? yMm * ANGLED_TWO_PLANES_MM_TO_SCENE : null;
     },
     ANGLED_TWO_PLANES_PREVIEW_BASE_PANEL_SPAN_SCENE,
-    ANGLED_TWO_PLANES_PREVIEW_BASE_PANEL_SPAN_SCENE / 2,
+    ANGLED_TWO_PLANES_PANEL_FREE_DIRECTIONS.vertical_panel,
   );
   const horizontalBounds = buildAngledTwoPlanesAxisBounds(
     sourceHoles,
@@ -311,7 +328,7 @@ export function buildAngledTwoPlanesPreviewPanelDimensions(holes = []) {
       return Number.isFinite(xMm) ? xMm * ANGLED_TWO_PLANES_MM_TO_SCENE : null;
     },
     ANGLED_TWO_PLANES_PREVIEW_BASE_PANEL_SPAN_SCENE,
-    ANGLED_TWO_PLANES_PREVIEW_BASE_PANEL_SPAN_SCENE / 2,
+    ANGLED_TWO_PLANES_PANEL_FREE_DIRECTIONS.horizontal_panel,
   );
   const depthBounds = buildAngledTwoPlanesCenteredDepthBounds(
     sourceHoles,
@@ -324,7 +341,8 @@ export function buildAngledTwoPlanesPreviewPanelDimensions(holes = []) {
     horizontalMin: horizontalBounds.min,
     horizontalWidth: horizontalBounds.span,
     maxRadiusScene,
-    panelCenter: depthBounds.center,
+    meshCenter: depthBounds.meshCenter,
+    panelCenter: depthBounds.meshCenter,
     panelDepth: depthBounds.span,
     panelDepthMax: depthBounds.max,
     panelDepthMin: depthBounds.min,
