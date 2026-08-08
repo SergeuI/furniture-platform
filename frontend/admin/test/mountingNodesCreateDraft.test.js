@@ -3,20 +3,49 @@ import test from "node:test";
 
 import {
   MOUNTING_NODE_CREATE_ROLE_OPTIONS,
+  MOUNTING_NODE_CREATE_DRAFT_STORAGE_KEY,
+  clearMountingNodeCreateDraft,
   addMountingNodeCreateDraftItem,
   addMountingNodeCreateDraftPoint,
   createMountingNodeCreateDraft,
   createMountingNodeCreateDraftItemFromFitting,
   createMountingNodeCreateDraftPointFromFitting,
+  loadMountingNodeCreateDraft,
   commitMountingNodeCreateDraftPoint,
   isMountingNodeCreateDraftReady,
   prepareMountingNodeCreateDraftPointForm,
   removeMountingNodeCreateDraftItem,
   removeMountingNodeCreateDraftPoint,
+  saveMountingNodeCreateDraft,
   updateMountingNodeCreateDraftItem,
   updateMountingNodeCreateDraftPoint,
   validateMountingNodeCreateDraft,
 } from "../src/mountingNodesCreateDraft.js";
+
+function withSessionStorageMock(run) {
+  const originalWindow = globalThis.window;
+  const storageMap = new Map();
+
+  globalThis.window = {
+    sessionStorage: {
+      getItem(key) {
+        return storageMap.has(key) ? storageMap.get(key) : null;
+      },
+      setItem(key, value) {
+        storageMap.set(key, String(value));
+      },
+      removeItem(key) {
+        storageMap.delete(key);
+      },
+    },
+  };
+
+  try {
+    return run(storageMap);
+  } finally {
+    globalThis.window = originalWindow;
+  }
+}
 
 test("mounting node create draft keeps item and point state local", () => {
   const draft = createMountingNodeCreateDraft({
@@ -259,4 +288,145 @@ test("mounting node create draft validation blocks missing name, variant and dup
   assert.equal(errors.some((error) => error.message.includes("лише один раз")), true);
   assert.equal(draft.points[0].client_key.startsWith("mounting-node-create-"), true);
   assert.equal(errors.some((error) => error.field === "points"), false);
+});
+
+test("mounting node create draft persists and restores session draft fields", () => {
+  withSessionStorageMock((storageMap) => {
+    clearMountingNodeCreateDraft();
+
+    const draft = createMountingNodeCreateDraft({
+      name: "Draft node",
+      description: "Keep me",
+      is_active: false,
+      ownership_type: "system",
+      mounting_variant_key: "face_to_edge",
+      template_name: "Face template",
+      is_dirty: true,
+      items: [
+        {
+          fitting_id: "11",
+          article: "ART-11",
+          name: "Confirmat",
+          image_url: "",
+          quantity: 2,
+          role: MOUNTING_NODE_CREATE_ROLE_OPTIONS[1],
+          is_required: false,
+          affects_processing: false,
+        },
+      ],
+      points: [
+        {
+          client_key: "mounting-node-create-custom",
+          id: 116,
+          fitting_id: "11",
+          label: "P1",
+          panel_key: "vertical_panel",
+          target_panel: "vertical_panel",
+          target_surface: "plane",
+          target_side: "inner_face",
+          side: "front",
+          x_mm: 10,
+          y_mm: -5,
+          z_mm: 2,
+          diameter_mm: 8,
+          depth_mm: 12,
+          operation: "drill",
+          order_index: 0,
+          quantity: 1,
+          mirrored: false,
+          is_through: false,
+          notes: "note",
+        },
+      ],
+    });
+
+    saveMountingNodeCreateDraft(draft);
+
+    assert.equal(storageMap.has(MOUNTING_NODE_CREATE_DRAFT_STORAGE_KEY), true);
+
+    const restored = loadMountingNodeCreateDraft();
+    assert.equal(restored.name, "Draft node");
+    assert.equal(restored.description, "Keep me");
+    assert.equal(restored.is_active, false);
+    assert.equal(restored.ownership_type, "system");
+    assert.equal(restored.mounting_variant_key, "face_to_edge");
+    assert.equal(restored.template_name, "Face template");
+    assert.equal(restored.is_dirty, true);
+    assert.equal(restored.items.length, 1);
+    assert.equal(restored.items[0].fitting_id, "11");
+    assert.equal(restored.items[0].quantity, 2);
+    assert.equal(restored.items[0].role, MOUNTING_NODE_CREATE_ROLE_OPTIONS[1]);
+    assert.equal(restored.items[0].is_required, false);
+    assert.equal(restored.items[0].affects_processing, false);
+    assert.equal(restored.points.length, 1);
+    assert.equal(restored.points[0].client_key, "mounting-node-create-custom");
+    assert.equal(restored.points[0].id, 116);
+    assert.equal(restored.points[0].notes, "note");
+
+    clearMountingNodeCreateDraft();
+    assert.equal(storageMap.has(MOUNTING_NODE_CREATE_DRAFT_STORAGE_KEY), false);
+  });
+});
+
+test("mounting node create draft ignores malformed storage payloads", () => {
+  withSessionStorageMock((storageMap) => {
+    storageMap.set(MOUNTING_NODE_CREATE_DRAFT_STORAGE_KEY, "{");
+
+    const restored = loadMountingNodeCreateDraft();
+
+    assert.equal(restored.name, "");
+    assert.equal(restored.mounting_variant_key, "");
+    assert.equal(storageMap.has(MOUNTING_NODE_CREATE_DRAFT_STORAGE_KEY), false);
+  });
+});
+
+test("mounting node create draft ignores unsupported storage versions", () => {
+  withSessionStorageMock((storageMap) => {
+    storageMap.set(
+      MOUNTING_NODE_CREATE_DRAFT_STORAGE_KEY,
+      JSON.stringify({
+        version: 99,
+        draft: {
+          name: "Legacy",
+          mounting_variant_key: "surface_mount",
+        },
+      }),
+    );
+
+    const restored = loadMountingNodeCreateDraft();
+
+    assert.equal(restored.name, "");
+    assert.equal(restored.mounting_variant_key, "");
+    assert.equal(storageMap.has(MOUNTING_NODE_CREATE_DRAFT_STORAGE_KEY), true);
+  });
+});
+
+test("mounting node create draft normalizes null entries out of stored arrays", () => {
+  withSessionStorageMock((storageMap) => {
+    const storedDraft = createMountingNodeCreateDraft({
+      name: "Safe draft",
+      items: [null, undefined],
+      points: [null],
+    });
+
+    saveMountingNodeCreateDraft(storedDraft);
+    storageMap.set(
+      MOUNTING_NODE_CREATE_DRAFT_STORAGE_KEY,
+      JSON.stringify({
+        version: 1,
+        draft: {
+          ...storedDraft,
+          items: [null, storedDraft.items[0] || null],
+          points: [null],
+        },
+      }),
+    );
+
+    const restored = loadMountingNodeCreateDraft();
+
+    assert.equal(Array.isArray(restored.items), true);
+    assert.equal(restored.items.length, 0);
+    assert.equal(Array.isArray(restored.points), true);
+    assert.equal(restored.points.length, 0);
+  });
 });

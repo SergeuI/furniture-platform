@@ -10,6 +10,7 @@ function readSource(relativeUrl) {
 test("mounting nodes create panel renders compact wizard structure", () => {
   const panelSource = readSource("../src/components/processing/MountingNodesCreatePanel.jsx");
   const appSource = readSource("../src/App.jsx");
+  const draftSource = readSource("../src/mountingNodesCreateDraft.js");
   const modalSource = readSource("../src/components/processing/MountingNodesFittingSelectorModal.jsx");
   const stylesSource = readSource("../src/styles.css");
 
@@ -51,7 +52,13 @@ test("mounting nodes create panel renders compact wizard structure", () => {
   assert.equal(panelSource.includes('mounting-node-create-section-error'), true);
   assert.equal(panelSource.includes('mounting-node-create-footer'), true);
   assert.equal(panelSource.includes('handleSubmit(event, "editor")'), true);
+  assert.equal(panelSource.includes('loadMountingNodeCreateDraft'), true);
+  assert.equal(panelSource.includes('saveMountingNodeCreateDraft'), true);
+  assert.equal(panelSource.includes('clearMountingNodeCreateDraft'), true);
+  assert.equal(panelSource.includes('createErrorRef'), true);
+  assert.equal(panelSource.includes('mounting_variant_key: loadedDraft.mounting_variant_key || MOUNTING_VARIANT_KEYS[0]'), true);
   assert.equal(appSource.includes('mounting-node-editor-items-card'), true);
+  assert.equal(appSource.includes('clearMountingNodeCreateDraft();'), true);
   assert.equal(panelSource.includes('hole-bundle-modal-row-image'), true);
   assert.equal(panelSource.includes('hole-bundle-modal-card-image'), true);
   assert.equal(panelSource.includes('hole-bundle-modal-body'), true);
@@ -76,4 +83,9 @@ test("mounting nodes create panel renders compact wizard structure", () => {
   assert.equal(stylesSource.includes('overflow: hidden;'), true);
   assert.equal(stylesSource.includes('.hole-bundle-modal-card-image {\n  background: #ffffff;'), true);
   assert.equal(stylesSource.includes('.hole-bundle-modal-card-image-empty {\n  background: #f4f7f9;'), true);
+  assert.equal(draftSource.includes('MOUNTING_NODE_CREATE_DRAFT_STORAGE_KEY'), true);
+  assert.equal(draftSource.includes('saveMountingNodeCreateDraft'), true);
+  assert.equal(draftSource.includes('clearMountingNodeCreateDraft'), true);
+  assert.equal(draftSource.includes('loadMountingNodeCreateDraft'), true);
+  assert.equal(draftSource.includes('sessionStorage'), true);
 });

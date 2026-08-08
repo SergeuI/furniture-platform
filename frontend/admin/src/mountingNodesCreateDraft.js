@@ -10,6 +10,9 @@ export const MOUNTING_NODE_CREATE_ROLE_OPTIONS = [
 import { getAngledTwoPlanesPointFormPreset } from "./angledTwoPlanesThreePreview.js";
 import { getSurfaceMountPointFormPreset } from "./surfaceMountThreePreview.js";
 
+export const MOUNTING_NODE_CREATE_DRAFT_STORAGE_KEY = "mountingNodesCreateDraft";
+export const MOUNTING_NODE_CREATE_DRAFT_STORAGE_VERSION = 1;
+
 let mountingNodeCreateClientKeyCounter = 0;
 
 function normalizeText(value) {
@@ -63,6 +66,14 @@ function normalizeItemId(value) {
   return normalizeText(value);
 }
 
+function normalizeDraftArrayItem(item, normalizer) {
+  if (!item || typeof item !== "object") {
+    return null;
+  }
+
+  return normalizer(item);
+}
+
 function generateClientKey() {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return `mounting-node-create-${crypto.randomUUID()}`;
@@ -90,12 +101,124 @@ function normalizePointTargetSide(point = {}) {
   return normalizeText(point.target_side || point.targetSide);
 }
 
+function getMountingNodeCreateDraftStorage() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    return window.sessionStorage || null;
+  } catch {
+    return null;
+  }
+}
+
+function pickMountingNodeCreateDraftStorageFields(draft = {}) {
+  return {
+    name: normalizeText(draft.name),
+    description: normalizeText(draft.description),
+    is_active: normalizeBoolean(draft.is_active, true),
+    ownership_type: normalizeOwnershipType(draft.ownership_type),
+    items: Array.isArray(draft.items)
+      ? draft.items.filter(Boolean).map((item) => normalizeMountingNodeCreateDraftItem(item))
+      : [],
+    points: Array.isArray(draft.points)
+      ? draft.points.filter(Boolean).map((point) => normalizeMountingNodeCreateDraftPoint(point))
+      : [],
+    mounting_variant_key: normalizeText(draft.mounting_variant_key),
+    template_name: normalizeText(draft.template_name),
+    is_dirty: normalizeBoolean(draft.is_dirty, false),
+  };
+}
+
+export function saveMountingNodeCreateDraft(draft = createMountingNodeCreateDraft()) {
+  const storage = getMountingNodeCreateDraftStorage();
+  if (!storage) {
+    return;
+  }
+
+  try {
+    storage.setItem(
+      MOUNTING_NODE_CREATE_DRAFT_STORAGE_KEY,
+      JSON.stringify({
+        version: MOUNTING_NODE_CREATE_DRAFT_STORAGE_VERSION,
+        draft: pickMountingNodeCreateDraftStorageFields(draft),
+      }),
+    );
+  } catch {
+    // Ignore storage failures in private browsing or sandboxed environments.
+  }
+}
+
+export function clearMountingNodeCreateDraft() {
+  const storage = getMountingNodeCreateDraftStorage();
+  if (!storage) {
+    return;
+  }
+
+  try {
+    storage.removeItem(MOUNTING_NODE_CREATE_DRAFT_STORAGE_KEY);
+  } catch {
+    // Ignore storage failures in private browsing or sandboxed environments.
+  }
+}
+
+export function loadMountingNodeCreateDraft() {
+  const storage = getMountingNodeCreateDraftStorage();
+  if (!storage) {
+    return createMountingNodeCreateDraft({
+      mounting_variant_key: "",
+    });
+  }
+
+  try {
+    const storedValue = storage.getItem(MOUNTING_NODE_CREATE_DRAFT_STORAGE_KEY);
+    if (!storedValue) {
+      return createMountingNodeCreateDraft({
+        mounting_variant_key: "",
+      });
+    }
+
+    const parsedValue = JSON.parse(storedValue);
+    const storedDraft =
+      parsedValue && typeof parsedValue === "object" && parsedValue.draft && typeof parsedValue.draft === "object"
+        ? parsedValue.draft
+        : parsedValue;
+
+    if (
+      !parsedValue ||
+      typeof parsedValue !== "object" ||
+      (Object.prototype.hasOwnProperty.call(parsedValue, "version") &&
+        Number(parsedValue.version) !== MOUNTING_NODE_CREATE_DRAFT_STORAGE_VERSION)
+    ) {
+      return createMountingNodeCreateDraft({
+        mounting_variant_key: "",
+      });
+    }
+
+    return createMountingNodeCreateDraft({
+      ...pickMountingNodeCreateDraftStorageFields(storedDraft),
+    });
+  } catch {
+    clearMountingNodeCreateDraft();
+    return createMountingNodeCreateDraft({
+      mounting_variant_key: "",
+    });
+  }
+}
+
 export function createMountingNodeCreateDraft(overrides = {}) {
   const items = Array.isArray(overrides.items)
-    ? overrides.items.map((item) => normalizeMountingNodeCreateDraftItem(item))
+    ? overrides.items
+        .filter(Boolean)
+        .map((item) => normalizeDraftArrayItem(item, normalizeMountingNodeCreateDraftItem))
+        .filter(Boolean)
     : [];
   const points = Array.isArray(overrides.points)
-    ? overrides.points.map((point) => normalizeMountingNodeCreateDraftPoint(point))
+    ? overrides.points
+        .filter(Boolean)
+        .map((point) => normalizeDraftArrayItem(point, normalizeMountingNodeCreateDraftPoint))
+        .filter(Boolean)
     : [];
 
   return {

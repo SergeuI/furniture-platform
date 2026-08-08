@@ -4,9 +4,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   MOUNTING_NODE_CREATE_ROLE_OPTIONS,
   addMountingNodeCreateDraftItem,
+  clearMountingNodeCreateDraft,
   createMountingNodeCreateDraft,
   createMountingNodeCreateDraftItemFromFitting,
+  loadMountingNodeCreateDraft,
   removeMountingNodeCreateDraftItem,
+  saveMountingNodeCreateDraft,
   updateMountingNodeCreateDraftItem,
   validateMountingNodeCreateDraft,
 } from "../../mountingNodesCreateDraft.js";
@@ -16,6 +19,7 @@ import angledTwoPlanesIcon from "../../assets/hole-mounting/angled_two_planes.pn
 import faceToEdgeIcon from "../../assets/hole-mounting/face_to_edge.png";
 import edgeToEdgeIcon from "../../assets/hole-mounting/edge_to_edge.png";
 import drawerSlidesIcon from "../../assets/hole-mounting/drawer_slides.png";
+import MountingNodesFittingSelectorModal from "./MountingNodesFittingSelectorModal.jsx";
 
 const MOUNTING_VARIANT_KEYS = [
   "surface_mount",
@@ -185,9 +189,15 @@ export default function MountingNodesCreatePanel({
   t = {},
 }) {
   const [draft, setDraft] = useState(() =>
-    createMountingNodeCreateDraft({
-      mounting_variant_key: MOUNTING_VARIANT_KEYS[0],
-    }),
+    (() => {
+      const loadedDraft = loadMountingNodeCreateDraft();
+      const normalizedDraft = createMountingNodeCreateDraft({
+        ...loadedDraft,
+        mounting_variant_key: loadedDraft.mounting_variant_key || MOUNTING_VARIANT_KEYS[0],
+      });
+
+      return normalizedDraft;
+    })(),
   );
   const [selectedFittingId, setSelectedFittingId] = useState("");
   const [variantOpen, setVariantOpen] = useState(false);
@@ -199,6 +209,7 @@ export default function MountingNodesCreatePanel({
   const [internalSubmitting, setInternalSubmitting] = useState(false);
   const selectorSearchRef = useRef(null);
   const selectorStateSeededRef = useRef(false);
+  const createErrorRef = useRef(createError);
   const canChooseOwnershipType = String(userRole || "").trim().toLowerCase() === "admin";
 
   const validationErrors = useMemo(() => validateMountingNodeCreateDraft(draft), [draft]);
@@ -209,6 +220,14 @@ export default function MountingNodesCreatePanel({
       selectorSearchRef.current?.focus();
     }
   }, [selectorOpen]);
+
+  useEffect(() => {
+    createErrorRef.current = createError;
+  }, [createError]);
+
+  useEffect(() => {
+    saveMountingNodeCreateDraft(draft);
+  }, [draft]);
 
   useEffect(() => {
     if (typeof window === "undefined" || !window.localStorage) {
@@ -319,6 +338,7 @@ export default function MountingNodesCreatePanel({
   };
 
   const handleCancel = () => {
+    clearMountingNodeCreateDraft();
     onCancel?.();
   };
 
@@ -438,7 +458,11 @@ export default function MountingNodesCreatePanel({
 
     setInternalSubmitting(true);
     try {
-      await onCreate(draft, afterCreate);
+      const created = await onCreate(draft, afterCreate);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      if (created || !createErrorRef.current) {
+        clearMountingNodeCreateDraft();
+      }
     } finally {
       setInternalSubmitting(false);
     }

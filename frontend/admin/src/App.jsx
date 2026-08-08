@@ -121,6 +121,7 @@ import {
 } from "./holePointForm.js";
 import {
   MOUNTING_NODE_CREATE_ROLE_OPTIONS,
+  clearMountingNodeCreateDraft,
   createMountingNodeCreateDraftItemFromFitting,
   updateMountingNodeCreateDraftItem,
 } from "./mountingNodesCreateDraft.js";
@@ -7968,6 +7969,14 @@ export default function App() {
         orderIndex: point?.order_index ?? 0,
         quantity: point?.quantity ?? 1,
         isSelected: String(selectedHolePointId) === String(point?.id),
+        panelKey,
+        panel_key: panelKey,
+        targetPanel,
+        targetSide,
+        targetSurface,
+        target_panel: targetPanel,
+        target_side: targetSide,
+        target_surface: targetSurface,
         side,
         x,
         y,
