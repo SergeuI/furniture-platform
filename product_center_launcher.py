@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
 import sys
 import traceback
@@ -18,17 +17,11 @@ def project_root() -> Path:
     return Path(__file__).resolve().parent
 
 
-def _candidate_pythons(root: Path) -> list[Path]:
-    system_base = Path(sys.base_prefix)
-    candidates = [
-        system_base / "pythonw.exe",
-        system_base / "python.exe",
-        root / ".venv" / "Scripts" / "pythonw.exe",
-        root / ".venv" / "Scripts" / "python.exe",
-        Path(shutil.which("pythonw.exe") or ""),
-        Path(shutil.which("python.exe") or ""),
-    ]
-    return [candidate for candidate in candidates if candidate and candidate.exists()]
+def _repo_python(root: Path) -> Path:
+    candidate = root / ".venv" / "Scripts" / "python.exe"
+    if candidate.exists():
+        return candidate
+    raise FileNotFoundError(f"Missing canonical repo Python: {candidate}")
 
 
 def _tk_env(root: Path) -> dict[str, str]:
@@ -72,9 +65,10 @@ def launch() -> int:
         _append_launch_log(f"error {message}")
         return 1
 
-    python_command = next((candidate for candidate in _candidate_pythons(root)), None)
-    if python_command is None:
-        message = "Не знайдено придатний Python/pyw для запуску програми."
+    try:
+        python_command = _repo_python(root)
+    except FileNotFoundError as exc:
+        message = str(exc)
         _write_launch_error(message)
         _append_launch_log(f"error {message}")
         return 1

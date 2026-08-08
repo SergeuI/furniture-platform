@@ -55,7 +55,16 @@ HISTORY_PATH = PROJECT_ROOT / "product_center_history.jsonl"
 APP_LOG_PATH = PROJECT_ROOT / "product_center_app.log"
 UPDATE_PACKAGES_DIR = PROJECT_ROOT / "docs" / "update_packages"
 UPDATE_PACKAGES_STATE_FILE = UPDATE_PACKAGES_DIR / ".update_package_state.json"
-PYTHON = Path(sys.executable)
+
+
+def resolve_repo_python(root: Path) -> Path:
+    candidate = root / ".venv" / "Scripts" / "python.exe"
+    if candidate.exists():
+        return candidate
+    raise FileNotFoundError(f"Missing canonical repo Python: {candidate}")
+
+
+PYTHON = resolve_repo_python(PROJECT_ROOT)
 CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 LOCAL_API_HEALTH_URL = "http://127.0.0.1:8000/health"
 LOCAL_API_DOCS_URL = "http://127.0.0.1:8000/docs"
