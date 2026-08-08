@@ -16,6 +16,7 @@ test("mounting nodes route parser recognizes the list URL", () => {
   assert.deepEqual(parseMountingNodesRoute("?section=mounting-nodes&mode=list"), {
     mode: "list",
     nodeId: null,
+    categoryCode: null,
   });
 });
 
@@ -23,6 +24,7 @@ test("mounting nodes route parser recognizes the detail URL", () => {
   assert.deepEqual(parseMountingNodesRoute("?section=mounting-nodes&mode=detail&node=9"), {
     mode: "detail",
     nodeId: 9,
+    categoryCode: null,
   });
 });
 
@@ -30,6 +32,7 @@ test("mounting nodes route parser recognizes the editor URL", () => {
   assert.deepEqual(parseMountingNodesRoute("?section=mounting-nodes&mode=editor&node=9"), {
     mode: "editor",
     nodeId: 9,
+    categoryCode: null,
   });
 });
 
@@ -37,6 +40,15 @@ test("mounting nodes route parser recognizes the create URL", () => {
   assert.deepEqual(parseMountingNodesRoute("?section=mounting-nodes&mode=create"), {
     mode: "create",
     nodeId: null,
+    categoryCode: null,
+  });
+});
+
+test("mounting nodes route parser recognizes the categories URL", () => {
+  assert.deepEqual(parseMountingNodesRoute("?section=mounting-nodes&mode=categories"), {
+    mode: "categories",
+    nodeId: null,
+    categoryCode: null,
   });
 });
 
@@ -47,24 +59,31 @@ test("mounting nodes route builder preserves unrelated query params", () => {
   );
 });
 
+test("mounting nodes route builder keeps the category filter in the URL", () => {
+  assert.equal(
+    buildMountingNodesRouteUrl({ mode: "list", nodeId: null, categoryCode: "hinges" }, "?foo=bar"),
+    "?foo=bar&section=mounting-nodes&mode=list&category=hinges",
+  );
+});
+
 test("mounting nodes route builder keeps the detail node in the URL", () => {
   assert.equal(
-    buildMountingNodesRouteUrl({ mode: "detail", nodeId: 9 }, "?foo=bar"),
-    "?foo=bar&section=mounting-nodes&mode=detail&node=9",
+    buildMountingNodesRouteUrl({ mode: "detail", nodeId: 9, categoryCode: "hinges" }, "?foo=bar"),
+    "?foo=bar&section=mounting-nodes&mode=detail&node=9&category=hinges",
   );
 });
 
 test("mounting nodes route builder keeps the editor node in the URL", () => {
   assert.equal(
-    buildMountingNodesRouteUrl({ mode: "editor", nodeId: 9 }, "?foo=bar"),
-    "?foo=bar&section=mounting-nodes&mode=editor&node=9",
+    buildMountingNodesRouteUrl({ mode: "editor", nodeId: 9, categoryCode: "hinges" }, "?foo=bar"),
+    "?foo=bar&section=mounting-nodes&mode=editor&node=9&category=hinges",
   );
 });
 
 test("mounting nodes route builder keeps the create mode in the URL", () => {
   assert.equal(
-    buildMountingNodesRouteUrl({ mode: "create", nodeId: null }, "?foo=bar"),
-    "?foo=bar&section=mounting-nodes&mode=create",
+    buildMountingNodesRouteUrl({ mode: "create", nodeId: null, categoryCode: "hinges" }, "?foo=bar"),
+    "?foo=bar&section=mounting-nodes&mode=create&category=hinges",
   );
 });
 
@@ -72,6 +91,7 @@ test("mounting nodes route parser normalizes unknown modes to list", () => {
   assert.deepEqual(parseMountingNodesRoute("?section=mounting-nodes&mode=grid"), {
     mode: "list",
     nodeId: null,
+    categoryCode: null,
   });
 });
 
@@ -79,6 +99,7 @@ test("mounting nodes route parser normalizes detail without node to list", () =>
   assert.deepEqual(parseMountingNodesRoute("?section=mounting-nodes&mode=detail"), {
     mode: "list",
     nodeId: null,
+    categoryCode: null,
   });
 });
 
@@ -86,6 +107,7 @@ test("mounting nodes route parser normalizes editor without node to list", () =>
   assert.deepEqual(parseMountingNodesRoute("?section=mounting-nodes&mode=editor"), {
     mode: "list",
     nodeId: null,
+    categoryCode: null,
   });
 });
 
@@ -93,6 +115,7 @@ test("mounting nodes route parser normalizes invalid node ids to list", () => {
   assert.deepEqual(parseMountingNodesRoute("?section=mounting-nodes&mode=detail&node=abc"), {
     mode: "list",
     nodeId: null,
+    categoryCode: null,
   });
 });
 
@@ -100,6 +123,7 @@ test("mounting nodes route parser normalizes editor with invalid node ids to lis
   assert.deepEqual(parseMountingNodesRoute("?section=mounting-nodes&mode=editor&node=0"), {
     mode: "list",
     nodeId: null,
+    categoryCode: null,
   });
 });
 
@@ -107,6 +131,7 @@ test("mounting nodes route normalizer returns the safe default shape", () => {
   assert.deepEqual(normalizeMountingNodesRoute({ mode: "detail", nodeId: 0 }), {
     mode: "list",
     nodeId: null,
+    categoryCode: null,
   });
 });
 
@@ -174,12 +199,38 @@ test("mounting nodes restore state uses the fresh node detail for editor URLs", 
   );
 });
 
+test("mounting nodes restore state keeps the category filter when restoring a filtered list", () => {
+  assert.deepEqual(
+    buildMountingNodesRestoreState({ mode: "list", nodeId: null, categoryCode: "hinges" }, null),
+    {
+      activeStatusFilter: "all",
+      activeCategoryFilter: "hinges",
+      activeVariantFilter: "all",
+      appliedSearch: "",
+      displayMode: "grid",
+      listError: "",
+      listLoading: false,
+      mountingNodesViewMode: "list",
+      nodeDetailErrorsById: {},
+      nodeDetailsById: {},
+      nodes: [],
+      restoreScrollOnMount: false,
+      scrollPosition: null,
+      searchInput: "",
+      selectedNodeDetail: null,
+      selectedNodeId: "",
+      selectedNodeLoading: false,
+    },
+  );
+});
+
 test("mounting nodes restored route keeps editor mode for editor requests", () => {
   assert.deepEqual(
     buildMountingNodesRestoredRoute({ mode: "editor", nodeId: 9 }, 9),
     {
       mode: "editor",
       nodeId: 9,
+      categoryCode: null,
     },
   );
 });
@@ -190,6 +241,7 @@ test("mounting nodes restored route falls back to detail mode for detail request
     {
       mode: "detail",
       nodeId: 9,
+      categoryCode: null,
     },
   );
 });

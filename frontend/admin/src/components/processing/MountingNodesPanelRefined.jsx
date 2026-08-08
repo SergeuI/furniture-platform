@@ -744,6 +744,7 @@ export default function MountingNodesPanelRefined({
   editorMode = false,
   initialState = null,
   onOpenMountingNodeCreate = null,
+  onOpenMountingNodeCategories = null,
   onOpenMountingNodeDetail = null,
   onCloseMountingNodeDetail = null,
   onOpenFittingDetail = null,
@@ -1213,6 +1214,16 @@ export default function MountingNodesPanelRefined({
     ],
     [language],
   );
+  const activeMountingCategoryLabel = useMemo(() => {
+    if (activeCategoryFilter === MOUNTING_NODE_CATEGORY_FILTER_NULL) {
+      return language === "uk" ? "Категорію не вказано" : "Category not set";
+    }
+
+    return (
+      getMountingNodeCategoryLabel(activeCategoryFilter, language) ||
+      (language === "uk" ? "Усі категорії" : "All categories")
+    );
+  }, [activeCategoryFilter, language]);
   const detailVariantOptions = useMemo(() => getNodeVariantOptions(language), [language]);
   const selectedNodeVariantModel = useMemo(
     () => detailVariantOptions.find((option) => option.value === selectedNodeVariantKey) || detailVariantOptions[0] || null,
@@ -1462,6 +1473,16 @@ export default function MountingNodesPanelRefined({
     setMountingNodesViewMode("list");
   }
 
+  function handleReturnToCategories() {
+    if (typeof onOpenMountingNodeCategories === "function") {
+      onOpenMountingNodeCategories();
+      return;
+    }
+
+    setActiveCategoryFilter("all");
+    setMountingNodesViewMode("list");
+  }
+
   function handleScrollToVersionHistory() {
     mountingNodeHistoryCardRef.current?.scrollIntoView?.({
       behavior: "smooth",
@@ -1707,6 +1728,21 @@ export default function MountingNodesPanelRefined({
             </div>
             <div className="mounting-nodes-toolbar">
               <span className="service-tree-badge subtle">{language === "uk" ? `Знайдено: ${nodes.length}` : `Found: ${nodes.length}`}</span>
+              {activeCategoryFilter !== "all" ? (
+                <span className="service-tree-badge subtle">
+                  {language === "uk" ? "Категорія:" : "Category:"} {activeMountingCategoryLabel}
+                </span>
+              ) : null}
+              {activeCategoryFilter !== "all" ? (
+                <button
+                  className="ghost-button compact-button"
+                  onClick={handleReturnToCategories}
+                  type="button"
+                >
+                  <ArrowLeft size={16} />
+                  {language === "uk" ? "Всі категорії" : "All categories"}
+                </button>
+              ) : null}
               {typeof onOpenMountingNodeCreate === "function" ? (
                 <button
                   className="primary-button mounting-node-create-button"

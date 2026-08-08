@@ -1,4 +1,6 @@
-﻿const MOUNTING_NODES_SECTION = "mounting-nodes";
+import { normalizeMountingNodeCategoryCode } from "./mountingNodeCategories.js";
+
+const MOUNTING_NODES_SECTION = "mounting-nodes";
 
 function normalizeSearchParams(value) {
   if (value instanceof URLSearchParams) {
@@ -20,6 +22,20 @@ function normalizeMountingNodeId(value) {
   return Number.isInteger(parsedValue) && parsedValue > 0 ? parsedValue : null;
 }
 
+function normalizeMountingNodeCategoryRouteValue(value) {
+  const rawValue = String(value || "").trim().toLowerCase();
+
+  if (!rawValue) {
+    return null;
+  }
+
+  if (rawValue === "null") {
+    return "null";
+  }
+
+  return normalizeMountingNodeCategoryCode(rawValue) || null;
+}
+
 function buildMountingNodesDetailRestoreKey(nodeId) {
   const normalizedNodeId = normalizeMountingNodeId(nodeId);
 
@@ -34,17 +50,28 @@ export function buildMountingNodesRestoredRoute(route = {}, nodeId = null) {
   return normalizeMountingNodesRoute({
     mode: restoredMode,
     nodeId: restoredNodeId,
+    categoryCode: normalizedRoute.categoryCode,
   });
 }
 
 export function normalizeMountingNodesRoute(route = {}) {
   const mode = String(route?.mode || "").trim();
   const nodeId = normalizeMountingNodeId(route?.nodeId);
+  const categoryCode = normalizeMountingNodeCategoryRouteValue(route?.categoryCode);
+
+  if (mode === "categories") {
+    return {
+      mode,
+      nodeId: null,
+      categoryCode: null,
+    };
+  }
 
   if ((mode === "detail" || mode === "editor") && nodeId !== null) {
     return {
       mode,
       nodeId,
+      categoryCode,
     };
   }
 
@@ -52,12 +79,22 @@ export function normalizeMountingNodesRoute(route = {}) {
     return {
       mode,
       nodeId: null,
+      categoryCode,
+    };
+  }
+
+  if (mode === "list") {
+    return {
+      mode,
+      nodeId: null,
+      categoryCode,
     };
   }
 
   return {
     mode: "list",
     nodeId: null,
+    categoryCode,
   };
 }
 
@@ -71,6 +108,7 @@ export function parseMountingNodesRoute(search = "") {
   return normalizeMountingNodesRoute({
     mode: params.get("mode"),
     nodeId: params.get("node"),
+    categoryCode: params.get("category"),
   });
 }
 
@@ -87,6 +125,12 @@ export function buildMountingNodesRouteUrl(route = {}, currentSearch = "") {
     params.set("node", String(normalizedRoute.nodeId));
   }
 
+  if (normalizedRoute.categoryCode) {
+    params.set("category", normalizedRoute.categoryCode);
+  } else {
+    params.delete("category");
+  }
+
   const queryString = params.toString();
   return queryString ? `?${queryString}` : "";
 }
@@ -99,13 +143,13 @@ export function buildMountingNodesRestoreState(route = {}, nodeDetail = null) {
 
   return {
     activeStatusFilter: "all",
-    activeCategoryFilter: "all",
+    activeCategoryFilter: normalizedRoute.categoryCode || "all",
     activeVariantFilter: "all",
     appliedSearch: "",
     displayMode: "grid",
     listError: "",
     listLoading: false,
-    mountingNodesViewMode: normalizedRoute.mode,
+    mountingNodesViewMode: normalizedRoute.mode === "categories" ? "list" : normalizedRoute.mode,
     nodeDetailErrorsById: {},
     nodeDetailsById: restoredNodeDetail && restoredNodeId ? { [restoredNodeId]: restoredNodeDetail } : {},
     nodes: restoredNodeDetail ? [restoredNodeDetail] : [],

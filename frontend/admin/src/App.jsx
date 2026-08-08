@@ -197,6 +197,7 @@ import {
   getMaterialImageBlob,
   getMaterialsCatalog,
   getMaterialOwners,
+  getMountingNodes,
   getMyViyarAuthStatus,
   getManualServicesTree,
   getProject,
@@ -2080,6 +2081,72 @@ const CATALOG_TILE_VISUALS = {
   viyar: {
     accent: "#1f6b34",
     icon: FolderTree,
+  },
+};
+
+const MOUNTING_NODE_CATEGORY_VISUALS = {
+  fastening: { accent: "#f59e0b", icon: FileSliders },
+  hinges: { accent: "#ec4899", icon: ChevronRight },
+  drawer_systems: { accent: "#0f766e", icon: LayoutGrid },
+  handles_profiles: { accent: "#2563eb", icon: Wrench },
+  supports_legs: { accent: "#8b5cf6", icon: House },
+  hangers: { accent: "#1f6b34", icon: FolderTree },
+  sinks_plumbing: { accent: "#0ea5e9", icon: Drill },
+  appliances: { accent: "#f97316", icon: Package },
+  ventilation: { accent: "#14b8a6", icon: MoreHorizontal },
+  electrical: { accent: "#6366f1", icon: Settings2 },
+  other: { accent: "#64748b", icon: Info },
+  uncategorized: { accent: "#64748b", icon: CircleAlert },
+};
+
+const MOUNTING_NODE_CATEGORY_DESCRIPTIONS = {
+  fastening: {
+    en: "Mounting connectors, fasteners, and joining hardware.",
+    uk: "Стяжки, конфірмати, шканти та інші вузли з'єднання деталей.",
+  },
+  hinges: {
+    en: "Hinges, mounting plates, and door attachment schemes.",
+    uk: "Петлі, монтажні планки та схеми встановлення фасадів.",
+  },
+  drawer_systems: {
+    en: "Slides, drawers, and other pull-out mechanisms.",
+    uk: "Напрямні, шухляди та інші висувні механізми.",
+  },
+  handles_profiles: {
+    en: "Handles, profiles, and opening elements for furniture.",
+    uk: "Ручки, профілі та елементи відкривання меблів.",
+  },
+  supports_legs: {
+    en: "Furniture legs, adjustable supports, and casters.",
+    uk: "Меблеві ніжки, регульовані опори та ролики.",
+  },
+  hangers: {
+    en: "Wall hangers and cabinet suspension hardware.",
+    uk: "Навіси та елементи кріплення корпусів до стін.",
+  },
+  sinks_plumbing: {
+    en: "Sinks, mixers, and related mounting elements.",
+    uk: "Мийки, змішувачі та пов'язані монтажні елементи.",
+  },
+  appliances: {
+    en: "Built-in appliances and their installation hardware.",
+    uk: "Вбудована техніка та її монтажні елементи.",
+  },
+  ventilation: {
+    en: "Ventilation grilles and related mounting items.",
+    uk: "Вентиляційні решітки та пов'язані вузли.",
+  },
+  electrical: {
+    en: "Sockets, cable entries, LED, and electrical hardware.",
+    uk: "Розетки, кабельні вводи, LED та електричні елементи.",
+  },
+  other: {
+    en: "Special mounting nodes that do not fit other categories.",
+    uk: "Спеціальні монтажні вузли, що не належать до інших категорій.",
+  },
+  uncategorized: {
+    en: "Old mounting nodes whose category is not set yet.",
+    uk: "Старі монтажні вузли, для яких категорію ще не визначено.",
   },
 };
 
@@ -6945,6 +7012,7 @@ export default function App() {
   const [mountingNodesRouteReady, setMountingNodesRouteReady] = useState(
     () =>
       !initialMountingNodesRoute ||
+      initialMountingNodesRoute.mode === "categories" ||
       initialMountingNodesRoute.mode === "list" ||
       initialMountingNodesRoute.mode === "create",
   );
@@ -6954,6 +7022,9 @@ export default function App() {
   const [mountingNodesInitialState, setMountingNodesInitialState] = useState(null);
   const [mountingNodesRouteLoadingMessage, setMountingNodesRouteLoadingMessage] = useState("");
   const [mountingNodesRouteError, setMountingNodesRouteError] = useState("");
+  const [mountingNodesCategorySummary, setMountingNodesCategorySummary] = useState(null);
+  const [mountingNodesCategorySummaryLoading, setMountingNodesCategorySummaryLoading] = useState(false);
+  const [mountingNodesCategorySummaryError, setMountingNodesCategorySummaryError] = useState("");
   const mountingNodesEditorRestoreKeyRef = useRef("");
   const mountingNodesEditorRestorePromiseRef = useRef(null);
   const mountingNodesDetailRestoreCoordinatorRef = useRef(null);
@@ -7412,6 +7483,7 @@ export default function App() {
       setMountingNodesRouteVersion((current) => current + 1);
       setMountingNodesRouteReady(
         !nextRoute.mountingNodesRoute ||
+          nextRoute.mountingNodesRoute.mode === "categories" ||
           nextRoute.mountingNodesRoute.mode === "list" ||
           nextRoute.mountingNodesRoute.mode === "create",
       );
@@ -7427,7 +7499,9 @@ export default function App() {
           : "list",
       );
       setMountingNodesInitialState(
-        nextRoute.view === "catalogHoles" && nextRoute.mountingNodesRoute
+        nextRoute.view === "catalogHoles" &&
+        nextRoute.mountingNodesRoute &&
+        nextRoute.mountingNodesRoute.mode !== "categories"
           ? buildMountingNodesRestoreState(nextRoute.mountingNodesRoute)
           : null,
       );
@@ -7439,6 +7513,17 @@ export default function App() {
 
   useEffect(() => {
     if (!isMountingNodesRoute) {
+      setMountingNodesInitialState(null);
+      setMountingNodesRouteLoadingMessage("");
+      setMountingNodesRouteError("");
+      setMountingNodesRouteReady(true);
+      setMountingNodesCategorySummary(null);
+      setMountingNodesCategorySummaryLoading(false);
+      setMountingNodesCategorySummaryError("");
+      return undefined;
+    }
+
+    if (mountingNodesRouteState?.mode === "categories") {
       setMountingNodesInitialState(null);
       setMountingNodesRouteLoadingMessage("");
       setMountingNodesRouteError("");
@@ -7493,6 +7578,73 @@ export default function App() {
     mountingNodesRouteState?.nodeId,
     token,
   ]);
+
+  useEffect(() => {
+    if (!isMountingNodesRoute || mountingNodesRouteState?.mode !== "categories" || !token) {
+      setMountingNodesCategorySummary(null);
+      setMountingNodesCategorySummaryLoading(false);
+      setMountingNodesCategorySummaryError("");
+      return undefined;
+    }
+
+    let cancelled = false;
+    setMountingNodesCategorySummaryLoading(true);
+    setMountingNodesCategorySummaryError("");
+
+    void getMountingNodes(token)
+      .then((result) => {
+        if (cancelled) {
+          return;
+        }
+
+        if (!result.success) {
+          setMountingNodesCategorySummary(null);
+          setMountingNodesCategorySummaryError(result.error || (language === "uk" ? "Не вдалося завантажити каталог категорій." : "Unable to load the category catalog."));
+          return;
+        }
+
+        const categoryCounts = Object.fromEntries(
+          getMountingNodeCategoryOptions(language).map((category) => [category.code, 0]),
+        );
+        let uncategorized = 0;
+
+        (Array.isArray(result.nodes) ? result.nodes : []).forEach((node) => {
+          const categoryCode = normalizeMountingNodeCategoryCode(node?.category_code);
+
+          if (categoryCode && Object.prototype.hasOwnProperty.call(categoryCounts, categoryCode)) {
+            categoryCounts[categoryCode] += 1;
+            return;
+          }
+
+          if (!categoryCode) {
+            uncategorized += 1;
+          }
+        });
+
+        setMountingNodesCategorySummary({
+          categories: categoryCounts,
+          total: Array.isArray(result.nodes) ? result.nodes.length : 0,
+          uncategorized,
+        });
+      })
+      .catch((error) => {
+        if (cancelled) {
+          return;
+        }
+
+        setMountingNodesCategorySummary(null);
+        setMountingNodesCategorySummaryError(error?.message || (language === "uk" ? "Не вдалося завантажити каталог категорій." : "Unable to load the category catalog."));
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setMountingNodesCategorySummaryLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isMountingNodesRoute, language, mountingNodesRouteState?.mode, token]);
 
   const t = TRANSLATIONS[language] || TRANSLATIONS.en;
   const userLoginName = user?.username || user?.email?.split("@")[0] || "";
@@ -10248,6 +10400,47 @@ export default function App() {
     });
   }
 
+  function handleOpenMountingNodesCategoryCatalog() {
+    const nextRoute = normalizeMountingNodesRoute({ mode: "categories", nodeId: null });
+    setMountingNodesRouteState(nextRoute);
+    setMountingNodesInitialState(null);
+    setMountingNodesRouteLoadingMessage("");
+    setMountingNodesRouteError("");
+    setMountingNodesRouteReady(true);
+    updateAdminHistory({
+      mountingNodesRoute: nextRoute,
+      view: "catalogHoles",
+    });
+  }
+
+  function handleOpenMountingNodesCategoryList(categoryCode) {
+    const normalizedCategoryCode = String(categoryCode || "").trim().toLowerCase();
+    const resolvedCategoryCode =
+      normalizedCategoryCode === "null"
+        ? "null"
+        : normalizeMountingNodeCategoryCode(normalizedCategoryCode) || null;
+    const nextRoute = normalizeMountingNodesRoute({
+      mode: "list",
+      nodeId: null,
+      categoryCode: resolvedCategoryCode,
+    });
+
+    setMountingNodesRouteState(nextRoute);
+    setMountingNodesInitialState(buildMountingNodesRestoreState(nextRoute));
+    setMountingNodesRouteLoadingMessage("");
+    setMountingNodesRouteError("");
+    setMountingNodesRouteReady(true);
+    setMountingNodesRouteVersion((current) => current + 1);
+    updateAdminHistory({
+      mountingNodesRoute: nextRoute,
+      view: "catalogHoles",
+    });
+  }
+
+  function handleOpenAllMountingNodesList() {
+    handleOpenMountingNodesCategoryList("");
+  }
+
   function handleCatalogHolesBackToList() {
     if (catalogHolesMode === "editor") {
       const restoredNodeId = String(
@@ -10267,7 +10460,11 @@ export default function App() {
     }
 
     if (catalogHolesMode === "create") {
-      const nextRoute = normalizeMountingNodesRoute({ mode: "list", nodeId: null });
+      const nextRoute = normalizeMountingNodesRoute({
+        mode: "list",
+        nodeId: null,
+        categoryCode: mountingNodesRouteState?.categoryCode || null,
+      });
       setCatalogHolesMode("list");
       setCatalogHolesDetailOpen(false);
       setCatalogHolesOpenContext(null);
@@ -10313,12 +10510,20 @@ export default function App() {
     void restoreMountingNodeDetail(restoredNodeId, {
       historyMode: "replace",
       updateUrl: true,
-      route: { mode: "detail", nodeId: restoredNodeId },
+      route: {
+        mode: "detail",
+        nodeId: restoredNodeId,
+        categoryCode: mountingNodesRouteState?.categoryCode || null,
+      },
     });
   }
 
   function handleMountingNodesEditorRestoreBackToList() {
-    const nextRoute = normalizeMountingNodesRoute({ mode: "list", nodeId: null });
+    const nextRoute = normalizeMountingNodesRoute({
+      mode: "list",
+      nodeId: null,
+      categoryCode: mountingNodesRouteState?.categoryCode || null,
+    });
     mountingNodesEditorRestoreKeyRef.current = "";
     setMountingNodesRouteError("");
     setMountingNodesRouteLoadingMessage("");
@@ -10347,13 +10552,14 @@ export default function App() {
       return;
     }
 
+    const categoryCode = mountingNodesRouteState?.categoryCode || null;
     setCatalogHolesDetailOpen(true);
     setCatalogHolesReturnState(null);
     setCatalogHolesBreadcrumbNodeId(resolvedNodeId);
     setCatalogHolesBreadcrumbNodeName(resolvedNodeName);
-    setMountingNodesRouteState(normalizeMountingNodesRoute({ mode: "detail", nodeId: resolvedNodeId }));
+    setMountingNodesRouteState(normalizeMountingNodesRoute({ mode: "detail", nodeId: resolvedNodeId, categoryCode }));
     updateAdminHistory({
-      mountingNodesRoute: { mode: "detail", nodeId: resolvedNodeId },
+      mountingNodesRoute: { mode: "detail", nodeId: resolvedNodeId, categoryCode },
       view: "catalogHoles",
     });
   }
@@ -10363,9 +10569,10 @@ export default function App() {
     setCatalogHolesBreadcrumbNodeId(null);
     setCatalogHolesBreadcrumbNodeName("");
     setCatalogHolesReturnState(null);
-    setMountingNodesRouteState(normalizeMountingNodesRoute({ mode: "list", nodeId: null }));
+    const categoryCode = mountingNodesRouteState?.categoryCode || null;
+    setMountingNodesRouteState(normalizeMountingNodesRoute({ mode: "list", nodeId: null, categoryCode }));
     updateAdminHistory({
-      mountingNodesRoute: { mode: "list", nodeId: null },
+      mountingNodesRoute: { mode: "list", nodeId: null, categoryCode },
       view: "catalogHoles",
     });
   }
@@ -10382,7 +10589,11 @@ export default function App() {
       setCatalogHolesOpenContext(null);
       setCatalogHolesCreateError("");
       setCatalogHolesCreating(false);
-      const nextRoute = normalizeMountingNodesRoute({ mode: "list", nodeId: null });
+      const nextRoute = normalizeMountingNodesRoute({
+        mode: "list",
+        nodeId: null,
+        categoryCode: mountingNodesRouteState?.categoryCode || null,
+      });
       setMountingNodesRouteState(nextRoute);
       setMountingNodesRouteReady(true);
       setMountingNodesInitialState(null);
@@ -10395,7 +10606,11 @@ export default function App() {
 
     setCatalogHolesListRequestToken((current) => current + 1);
     updateAdminHistory({
-      mountingNodesRoute: { mode: "list", nodeId: null },
+      mountingNodesRoute: {
+        mode: "list",
+        nodeId: null,
+        categoryCode: mountingNodesRouteState?.categoryCode || null,
+      },
       view: "catalogHoles",
     });
   }
@@ -10593,7 +10808,11 @@ export default function App() {
     }
 
     if (shouldUpdateUrl && resolvedNodeId) {
-      const nextRoute = normalizeMountingNodesRoute({ mode: "editor", nodeId: resolvedNodeId });
+      const nextRoute = normalizeMountingNodesRoute({
+        mode: "editor",
+        nodeId: resolvedNodeId,
+        categoryCode: mountingNodesRouteState?.categoryCode || null,
+      });
       setMountingNodesRouteState(nextRoute);
       updateAdminHistory({
         mountingNodesRoute: nextRoute,
@@ -15462,11 +15681,12 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
       if (!contextMountingNodeId) {
         setCatalogHolesReturnState(null);
       }
+
       const nextCatalogHolesMode = contextMountingNodeId ? "editor" : "list";
       nextMountingNodesRoute = normalizeMountingNodesRoute(
         contextMountingNodeId
           ? { mode: "editor", nodeId: contextMountingNodeId }
-          : { mode: "list", nodeId: null },
+          : { mode: "categories", nodeId: null },
       );
       setCatalogHolesDetailOpen(false);
       setCatalogHolesMode(nextCatalogHolesMode);
@@ -21771,7 +21991,108 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
               </article>
               </>
             ) : (
-              isMountingNodesRoute && mountingNodesRouteError ? (
+              isMountingNodesRoute && mountingNodesRouteState?.mode === "categories" ? (
+                <article className="catalog-card service-catalog-card service-catalog-card-full">
+                  <div className="catalog-page-header">
+                    <div className="service-catalog-title">
+                      <h3>{language === "uk" ? "Каталог категорій монтажних вузлів" : "Mounting node category catalog"}</h3>
+                      <p>
+                        {language === "uk"
+                          ? "Оберіть категорію для перегляду списку монтажних вузлів або відкрийте повний список без категорії."
+                          : "Choose a category to browse mounting nodes or open the full list without category filtering."}
+                      </p>
+                    </div>
+                    <div className="service-catalog-header-actions">
+                      <span className="service-tree-badge subtle">
+                        {mountingNodesCategorySummaryLoading && !mountingNodesCategorySummary
+                          ? t.loading
+                          : `${getMountingNodeCategoryOptions(language).length} ${language === "uk" ? "категорій" : "categories"}`}
+                      </span>
+                      <span className="service-tree-badge subtle">
+                        {mountingNodesCategorySummaryLoading && !mountingNodesCategorySummary
+                          ? t.loading
+                          : `${mountingNodesCategorySummary?.total || 0} ${language === "uk" ? "вузлів" : "nodes"}`}
+                      </span>
+                      <button
+                        className="primary-button"
+                        onClick={handleOpenAllMountingNodesList}
+                        type="button"
+                      >
+                        {language === "uk" ? "Усі монтажні вузли" : "All mounting nodes"}
+                      </button>
+                      {typeof onOpenMountingNodeCreate === "function" ? (
+                        <button
+                          className="ghost-button"
+                          onClick={handleOpenCreate}
+                          type="button"
+                        >
+                          <Plus size={16} />
+                          {language === "uk" ? "Створити монтажний вузол" : "Create mounting node"}
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  {mountingNodesCategorySummaryLoading && !mountingNodesCategorySummary ? (
+                    <div className="empty-state compact-empty-state">
+                      <span>{t.loading}</span>
+                    </div>
+                  ) : mountingNodesCategorySummaryError ? (
+                    <div className="empty-state compact-empty-state">
+                      <span>{mountingNodesCategorySummaryError}</span>
+                      <button className="primary-button" onClick={handleOpenMountingNodesCategoryCatalog} type="button">
+                        {t.mountingNodesRetry || (language === "uk" ? "Повторити" : "Retry")}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="catalog-category-grid">
+                      {getMountingNodeCategoryOptions(language).map((category) => {
+                        const visual = MOUNTING_NODE_CATEGORY_VISUALS[category.code] || MOUNTING_NODE_CATEGORY_VISUALS.other;
+                        const Icon = visual.icon;
+                        const count = Number(mountingNodesCategorySummary?.categories?.[category.code] || 0) || 0;
+                        const description = MOUNTING_NODE_CATEGORY_DESCRIPTIONS[category.code]?.[language] || "";
+
+                        return (
+                          <button
+                            className="catalog-category-card"
+                            key={category.code}
+                            onClick={() => handleOpenMountingNodesCategoryList(category.code)}
+                            type="button"
+                          >
+                            <span className="catalog-category-art" style={{ "--catalog-accent": visual.accent }}>
+                              <Icon size={44} />
+                            </span>
+                            <div className="catalog-category-copy">
+                              <strong>{category.label}</strong>
+                              <span>{description}</span>
+                            </div>
+                            <span className="service-tree-badge subtle">{count}</span>
+                          </button>
+                        );
+                      })}
+
+                      {Number(mountingNodesCategorySummary?.uncategorized || 0) > 0 ? (
+                        <button
+                          className="catalog-category-card"
+                          onClick={() => handleOpenMountingNodesCategoryList("null")}
+                          type="button"
+                        >
+                          <span className="catalog-category-art" style={{ "--catalog-accent": MOUNTING_NODE_CATEGORY_VISUALS.uncategorized.accent }}>
+                            <MOUNTING_NODE_CATEGORY_VISUALS.uncategorized.icon size={44} />
+                          </span>
+                          <div className="catalog-category-copy">
+                            <strong>{language === "uk" ? "Без категорії" : "Uncategorized"}</strong>
+                            <span>{MOUNTING_NODE_CATEGORY_DESCRIPTIONS.uncategorized[language]}</span>
+                          </div>
+                          <span className="service-tree-badge subtle">
+                            {mountingNodesCategorySummary?.uncategorized || 0}
+                          </span>
+                        </button>
+                      ) : null}
+                    </div>
+                  )}
+                </article>
+              ) : isMountingNodesRoute && mountingNodesRouteError ? (
                 <article className="catalog-card service-catalog-card service-catalog-card-full holes-view-card">
                   <div className="empty-state compact-empty-state">
                     <strong>{language === "uk" ? "Не вдалося відновити редактор монтажного вузла" : "Unable to restore the mounting node editor"}</strong>
@@ -21808,6 +22129,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   initialState={mountingNodesPanelInitialState}
                   listRequestToken={catalogHolesListRequestToken}
                   language={language}
+                  onOpenMountingNodeCategories={handleOpenMountingNodesCategoryCatalog}
                   onCloseMountingNodeDetail={handleCloseCatalogHolesDetail}
                   onOpenFittingDetail={openFittingDetails}
                   onOpenMountingNodeDetail={handleOpenCatalogHolesDetail}

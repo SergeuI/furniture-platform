@@ -65,12 +65,14 @@ test("mounting nodes panel keeps the DETAIL white panel free of breadcrumb marku
   assert.equal(detailHeaderSource.includes("<h3>"), false);
   assert.equal(source.includes("onOpenMountingNodeDetail"), true);
   assert.equal(source.includes("onCloseMountingNodeDetail"), true);
+  assert.equal(source.includes("onOpenMountingNodeCategories"), true);
   assert.equal(source.includes("onClick={() => handleOpenEditor()}"), true);
   assert.equal(source.includes("onClick={handleOpenEditor}"), false);
   assert.equal(source.includes("listRequestToken"), true);
   assert.equal(source.includes("listRequestTokenRef"), true);
   assert.equal(source.includes("handleSelectNode(nodeId)"), true);
   assert.equal(source.includes("handleBackToList()"), true);
+  assert.equal(source.includes("handleReturnToCategories"), true);
   assert.equal(source.includes("setMountingNodesViewMode(\"list\")"), true);
   assert.equal(source.includes("mounting-node-card-type"), true);
   assert.equal(source.includes("getMountingNodeCategoryLabel"), true);
@@ -785,4 +787,28 @@ test("mounting nodes tile and list layouts keep the responsive grid contract in 
   assert.equal(source.includes(".mounting-nodes-list {"), true);
   assert.equal(source.includes("display: flex;"), true);
   assert.equal(source.includes("flex-direction: column;"), true);
+});
+
+test("mounting nodes list exposes the category catalog return action", () => {
+  const sourcePath = fileURLToPath(
+    new URL("../src/components/processing/MountingNodesPanelRefined.jsx", import.meta.url),
+  );
+  const source = readFileSync(sourcePath, "utf8");
+
+  assert.equal(source.includes("onOpenMountingNodeCategories"), true);
+  assert.equal(source.includes("handleReturnToCategories"), true);
+  assert.equal(source.includes("Всі категорії"), true);
+  assert.equal(source.includes("Категорія:"), true);
+});
+
+test("app exposes the mounting node category catalog view and route wiring", () => {
+  const sourcePath = fileURLToPath(new URL("../src/App.jsx", import.meta.url));
+  const source = readFileSync(sourcePath, "utf8");
+
+  assert.equal(source.includes("Mounting node category catalog"), true);
+  assert.equal(source.includes("mode === \"categories\""), true);
+  assert.equal(source.includes("handleOpenMountingNodesCategoryCatalog"), true);
+  assert.equal(source.includes("handleOpenAllMountingNodesList"), true);
+  assert.equal(source.includes("mountingNodesCategorySummary"), true);
+  assert.equal(source.includes("mountingNodesCategorySummaryLoading"), true);
 });
