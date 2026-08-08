@@ -172,12 +172,12 @@ test("mounting node editor category select lives in the App editor flow", () => 
   assert.equal(source.includes("Category not set"), true);
   assert.equal(source.includes("getMountingNodeCategoryOptions"), true);
   assert.equal(source.includes("normalizeMountingNodeCategoryCode"), true);
-  assert.equal(source.includes("mergeMountingNodeEditorCategoryCode"), true);
-  assert.equal(source.includes("category_code: mountingNodeEditorSelectedCategoryCode || undefined"), true);
+  assert.equal(source.includes("mountingNodeEditorCategoryCodeRef"), true);
+  assert.equal(source.includes("category_code: selectedCategoryCode || undefined"), true);
   assert.equal(source.includes("category_code: normalizeMountingNodeCategoryCode(nodeDetail.category_code)"), true);
   assert.equal(source.includes("setCatalogHolesOpenContext((current) => {"), true);
-  assert.equal(source.includes("category_code: normalizedCategoryCode,"), true);
-  assert.equal(source.includes("savedNodeWithCategory"), true);
+  assert.equal(source.includes("mountingNodeEditorCategoryCodeRef.current = normalizedCategoryCode;"), true);
+  assert.equal(source.includes("mountingNodeEditorCategoryCodeRef.current = normalizeMountingNodeCategoryCode("), true);
 });
 
 test("mounting node editor renders a single workspace with one hardware block and no variant block", () => {
@@ -643,7 +643,7 @@ test("mounting node editor save refreshes cached detail state after a successful
   const source = readFileSync(sourcePath, "utf8");
 
   assert.equal(source.includes("const savedRestoreState = buildMountingNodesRestoreState("), true);
-  assert.equal(source.includes('{ mode: "detail", nodeId: savedNodeWithCategory.id }'), true);
+  assert.equal(source.includes('{ mode: "detail", nodeId: savedNode.id }'), true);
   assert.equal(source.includes("setCatalogHolesReturnState((current) => ({"), true);
   assert.equal(source.includes("setMountingNodesInitialState((current) => ({"), true);
 });

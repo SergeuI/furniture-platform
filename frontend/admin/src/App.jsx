@@ -148,7 +148,6 @@ import {
   getMountingNodeEditorItemImageUrl as getMountingNodeEditorItemImageUrlHelper,
   getMountingNodeEditorPointDisplayId,
   getMountingNodeEditorPointDisplayLabel,
-  mergeMountingNodeEditorCategoryCode,
   hydrateMountingNodeEditorState,
   resolveActiveMountingNodeVersion,
   resolveMountingNodeEditorContext,
@@ -7293,6 +7292,7 @@ export default function App() {
   const bundleDetailsRequestRef = useRef({ id: 0, bundleKey: "", open: false });
   const holeMountingVariantRefreshRef = useRef({ reason: "", templateId: "", variantKey: "" });
   const mountingNodeEditorHydrationKeyRef = useRef("");
+  const mountingNodeEditorCategoryCodeRef = useRef("");
   const [newFittingForm, setNewFittingForm] = useState(DEFAULT_FITTING_FORM);
   const [autoRefreshStatus, setAutoRefreshStatus] = useState(null);
   const storedProjectId = localStorage.getItem(ACTIVE_PROJECT_ID_STORAGE_KEY) || "";
@@ -10557,14 +10557,10 @@ export default function App() {
       : resolvedContext;
 
     setCatalogHolesDetailOpen(false);
-    setMountingNodeEditorDraft(
-      cloneMountingNodeEditorDraft(
-        mergeMountingNodeEditorCategoryCode(
-          hydratedEditorState?.context?.nodeDetail || resolvedContext?.nodeDetail,
-          resolvedContext?.category_code,
-        ),
-      ),
+    mountingNodeEditorCategoryCodeRef.current = normalizeMountingNodeCategoryCode(
+      resolvedContext?.category_code || hydratedEditorState?.context?.nodeDetail?.category_code,
     );
+    setMountingNodeEditorDraft(cloneMountingNodeEditorDraft(hydratedEditorState?.context?.nodeDetail || resolvedContext?.nodeDetail));
     setMountingNodeEditorDraftNodeId(resolvedNodeId);
     if (resolvedNodeId) {
       setCatalogHolesBreadcrumbNodeId(resolvedNodeId);
@@ -10723,6 +10719,7 @@ export default function App() {
 
   function handleMountingNodeEditorCategoryChange(nextCategoryCode) {
     const normalizedCategoryCode = normalizeMountingNodeCategoryCode(nextCategoryCode);
+    mountingNodeEditorCategoryCodeRef.current = normalizedCategoryCode;
 
     setMountingNodeEditorDraft((current) => {
       if (!current || typeof current !== "object") {
@@ -11112,9 +11109,14 @@ export default function App() {
       return;
     }
 
+    const selectedCategoryCode = normalizeMountingNodeCategoryCode(
+      mountingNodeEditorCategoryCodeRef.current ||
+        mountingNodeEditorDraft?.category_code ||
+        catalogHolesOpenContext?.category_code,
+    );
     const editorContext = {
       ...(catalogHolesOpenContext || {}),
-      category_code: mountingNodeEditorSelectedCategoryCode || undefined,
+      category_code: selectedCategoryCode || undefined,
       nodeDetail: mountingNodeEditorDraft || catalogHolesOpenContext?.nodeDetail || null,
     };
     const mountingNodeId = String(catalogHolesOpenContext?.mountingNodeId || "").trim();
@@ -11174,10 +11176,6 @@ export default function App() {
       }
 
       const savedNode = result.node || result.item || result.data || null;
-      const savedNodeWithCategory = mergeMountingNodeEditorCategoryCode(
-        savedNode,
-        editorContext.category_code,
-      );
       const savedTemplates = Array.isArray(savedNode?.templates) ? savedNode.templates : [];
       const savedCurrentLink =
         savedTemplates.find(
@@ -11186,27 +11184,30 @@ export default function App() {
         ) || savedTemplates[0] || null;
       const savedCurrentTemplate = savedCurrentLink?.template || selectedHoleTemplate || null;
 
-      if (savedNodeWithCategory) {
+      if (savedNode) {
         const savedRestoreState = buildMountingNodesRestoreState(
-          { mode: "detail", nodeId: savedNodeWithCategory.id },
-          savedNodeWithCategory,
+          { mode: "detail", nodeId: savedNode.id },
+          savedNode,
         );
-        setCatalogHolesBreadcrumbNodeId(String(savedNodeWithCategory.id || "").trim() || null);
-        setCatalogHolesBreadcrumbNodeName(String(savedNodeWithCategory.name || "").trim());
-        setMountingNodeEditorDraft(cloneMountingNodeEditorDraft(savedNodeWithCategory));
-        setMountingNodeEditorDraftNodeId(String(savedNodeWithCategory.id || "").trim() || "");
+        setCatalogHolesBreadcrumbNodeId(String(savedNode.id || "").trim() || null);
+        setCatalogHolesBreadcrumbNodeName(String(savedNode.name || "").trim());
+        setMountingNodeEditorDraft(cloneMountingNodeEditorDraft(savedNode));
+        setMountingNodeEditorDraftNodeId(String(savedNode.id || "").trim() || "");
         setMountingNodeEditorHasChanges(false);
         setCatalogHolesOpenContext((current) => ({
           ...(current || {}),
-          mountingNodeId: String(savedNodeWithCategory.id || current?.mountingNodeId || mountingNodeId),
-          nodeCode: String(savedNodeWithCategory.code || current?.nodeCode || ""),
-          nodeName: String(savedNodeWithCategory.name || current?.nodeName || ""),
+          mountingNodeId: String(savedNode.id || current?.mountingNodeId || mountingNodeId),
+          nodeCode: String(savedNode.code || current?.nodeCode || ""),
+          nodeName: String(savedNode.name || current?.nodeName || ""),
           fittingId: String(savedCurrentLink?.fitting_id || current?.fittingId || selectedHoleTemplate?.fitting_id || ""),
           templateId: String(savedCurrentLink?.template_id || savedCurrentTemplate?.id || selectedTemplateId || ""),
           mountingVariantKey: String(savedCurrentLink?.mounting_variant_key || savedCurrentTemplate?.mounting_variant_key || current?.mountingVariantKey || ""),
-          category_code: savedNodeWithCategory.category_code || current?.category_code || null,
-          nodeDetail: savedNodeWithCategory,
+          category_code: savedNode.category_code || current?.category_code || null,
+          nodeDetail: savedNode,
         }));
+        mountingNodeEditorCategoryCodeRef.current = normalizeMountingNodeCategoryCode(
+          savedNode.category_code || selectedCategoryCode,
+        );
         setCatalogHolesReturnState((current) => ({
           ...(current || {}),
           ...savedRestoreState,

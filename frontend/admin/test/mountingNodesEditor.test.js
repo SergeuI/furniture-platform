@@ -4,7 +4,6 @@ import test from "node:test";
 import {
   buildMountingNodeEditorSavePayload,
   canSaveMountingNodeEditor,
-  mergeMountingNodeEditorCategoryCode,
   resolveMountingNodeEditorContext,
 } from "../src/mountingNodesEditor.js";
 
@@ -306,31 +305,6 @@ test("mounting node editor payload prefers the explicit editor category code ove
   });
 
   assert.equal(payload.category_code, "hinges");
-});
-
-test("mounting node editor keeps the selected category when a saved node snapshot omits it", () => {
-  const savedNode = {
-    ...fixtureNodeDetail,
-    category_code: null,
-  };
-
-  const restoredNode = mergeMountingNodeEditorCategoryCode(savedNode, "hinges");
-
-  assert.notStrictEqual(restoredNode, savedNode);
-  assert.equal(restoredNode.category_code, "hinges");
-  assert.equal(savedNode.category_code, null);
-});
-
-test("mounting node editor does not overwrite an existing saved category with a fallback", () => {
-  const savedNode = {
-    ...fixtureNodeDetail,
-    category_code: "fastening",
-  };
-
-  const restoredNode = mergeMountingNodeEditorCategoryCode(savedNode, "hinges");
-
-  assert.strictEqual(restoredNode, savedNode);
-  assert.equal(restoredNode.category_code, "fastening");
 });
 
 test("mounting node editor payload keeps points empty when the user deleted every loaded point", () => {
