@@ -126,6 +126,11 @@ import {
   updateMountingNodeCreateDraftItem,
 } from "./mountingNodesCreateDraft.js";
 import {
+  getMountingNodeCategoryLabel,
+  getMountingNodeCategoryOptions,
+  normalizeMountingNodeCategoryCode,
+} from "./mountingNodeCategories.js";
+import {
   buildMountingNodesRestoreState,
   buildMountingNodesRestoredRoute,
   buildMountingNodesRouteUrl,
@@ -10707,6 +10712,23 @@ export default function App() {
     });
   }
 
+  function handleMountingNodeEditorCategoryChange(nextCategoryCode) {
+    const normalizedCategoryCode = normalizeMountingNodeCategoryCode(nextCategoryCode);
+
+    setMountingNodeEditorDraft((current) => {
+      if (!current || typeof current !== "object") {
+        return current;
+      }
+
+      return {
+        ...current,
+        category_code: normalizedCategoryCode,
+        is_dirty: true,
+      };
+    });
+    setMountingNodeEditorHasChanges(true);
+  }
+
   function openMountingNodeEditorSelector() {
     const currentItems = Array.isArray(mountingNodeEditorDraft?.items) ? mountingNodeEditorDraft.items : [];
     setMountingNodeEditorSelectorDraftItemIds(
@@ -10770,6 +10792,16 @@ export default function App() {
     : [];
   const mountingNodeEditorSelectedVariantKey =
     String(mountingNodeEditorDraft?.mounting_variant_key || "").trim() || "surface_mount";
+  const mountingNodeEditorSelectedCategoryCode = normalizeMountingNodeCategoryCode(
+    mountingNodeEditorDraft?.category_code,
+  );
+  const mountingNodeEditorSelectedCategoryLabel =
+    getMountingNodeCategoryLabel(mountingNodeEditorSelectedCategoryCode, language) ||
+    (language === "uk" ? "Категорію не вказано" : "Category not set");
+  const mountingNodeEditorCategoryOptions = useMemo(
+    () => getMountingNodeCategoryOptions(language),
+    [language],
+  );
   const mountingNodeEditorSelectedVariantLabel =
     getProcessingTemplateMountingVariantLabel(mountingNodeEditorSelectedVariantKey, language) ||
     mountingNodeEditorSelectedVariantKey;
@@ -20844,6 +20876,29 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
 
               <FittingHolesWorkspace className="mounting-node-editor-workspace">
                 <div className="holes-left-column mounting-node-editor-left-column">
+                  <section className="mounting-node-create-card mounting-node-editor-category-card">
+                    <div className="mounting-node-create-card-head">
+                      <strong>{language === "uk" ? "Категорія монтажного вузла" : "Mounting node category"}</strong>
+                    </div>
+                    <label className="mounting-node-create-field mounting-node-editor-category-field">
+                      <span>{language === "uk" ? "Категорія" : "Category"}</span>
+                      <select
+                        disabled={catalogHolesSaving}
+                        onChange={(event) => handleMountingNodeEditorCategoryChange(event.target.value)}
+                        value={mountingNodeEditorSelectedCategoryCode}
+                      >
+                        <option value="">
+                          {language === "uk" ? "Категорію не вказано" : "Category not set"}
+                        </option>
+                        {mountingNodeEditorCategoryOptions.map((category) => (
+                          <option key={category.code} value={category.code}>
+                            {category.label}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="mounting-node-create-field-hint">{mountingNodeEditorSelectedCategoryLabel}</span>
+                    </label>
+                  </section>
                   <section className="mounting-node-create-card mounting-node-editor-items-card">
                     <div className="mounting-node-create-card-head mounting-node-editor-items-head">
                       <strong>{language === "uk" ? "Склад фурнітури" : "Fitting list"}</strong>

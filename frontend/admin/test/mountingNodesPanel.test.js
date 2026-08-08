@@ -151,6 +151,23 @@ test("toolbar breadcrumb for mounting nodes uses stable App primitives", () => {
   assert.equal(source.includes("catalogHolesNavigationState"), false);
 });
 
+test("mounting node editor category select lives in the App editor flow", () => {
+  const sourcePath = fileURLToPath(new URL("../src/App.jsx", import.meta.url));
+  const source = readFileSync(sourcePath, "utf8");
+
+  assert.equal(source.includes("handleMountingNodeEditorCategoryChange"), true);
+  assert.equal(source.includes("mounting-node-editor-category-card"), true);
+  assert.equal(source.includes("mounting-node-editor-category-field"), true);
+  assert.equal(source.includes("mountingNodeEditorSelectedCategoryCode"), true);
+  assert.equal(source.includes("mountingNodeEditorSelectedCategoryLabel"), true);
+  assert.equal(source.includes("mountingNodeEditorCategoryOptions"), true);
+  assert.equal(source.includes('value={mountingNodeEditorSelectedCategoryCode}'), true);
+  assert.equal(source.includes('option value=""'), true);
+  assert.equal(source.includes("Category not set"), true);
+  assert.equal(source.includes("getMountingNodeCategoryOptions"), true);
+  assert.equal(source.includes("normalizeMountingNodeCategoryCode"), true);
+});
+
 test("mounting node editor renders a single workspace with one hardware block and no variant block", () => {
   const sourcePath = fileURLToPath(new URL("../src/App.jsx", import.meta.url));
   const source = readFileSync(sourcePath, "utf8");
