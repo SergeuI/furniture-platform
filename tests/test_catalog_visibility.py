@@ -51,6 +51,7 @@ from database.repositories import material_import_job_repository
 from database.repositories import fitting_hole_service_rule_repository
 import services.entitlement_service as entitlement_service
 import services.fitting_holes_service as fitting_holes_service
+from services.fitting_image_gallery_service import PreparedFittingGalleryImage
 
 
 def _enable_foreign_keys(dbapi_connection, connection_record) -> None:
@@ -121,6 +122,17 @@ class CatalogVisibilityTests(unittest.TestCase):
         entitlement.decimal_value = None
         entitlement.text_value = None
         entitlement.is_not_applicable = False
+
+    @staticmethod
+    def _fake_gallery_image():
+        return PreparedFittingGalleryImage(
+            sort_order=0,
+            is_primary=True,
+            source_url="https://cdn.example.com/fittings/p1.jpg",
+            image_bytes=b"fake-image-bytes",
+            content_type="image/png",
+            sha256=sha256(b"fake-image-bytes").hexdigest(),
+        )
 
     @staticmethod
     def _remove_material_entitlement(
@@ -1529,6 +1541,189 @@ class CatalogVisibilityTests(unittest.TestCase):
 
                 with session_factory() as session:
                     self.assertIsNone(session.get(FittingModel, int(fitting_id)))
+
+    def test_source_import_success_creates_fitting(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
+                with patch.object(
+                    catalog,
+                    "parse_fitting_source_metadata",
+                    return_value={
+                        "success": True,
+                        "source_site": "viyar",
+                        "final_url": "https://viyar.ua/ua/catalog/test-fitting",
+                        "name": "Parsed Fitting",
+                        "article": "PARSED-001",
+                        "price": 4.02,
+                        "availability": "in stock",
+                        "image_url": "https://cdn.example.com/fittings/main.jpg",
+                        "image_urls": [
+                            "https://cdn.example.com/fittings/main.jpg",
+                        ],
+                        "description": "Parsed description",
+                        "brand": "Hettich",
+                    },
+                    create=True,
+                ), patch.object(
+                    catalog,
+                    "prepare_fitting_gallery_images",
+                    return_value=(self._fake_gallery_image(),),
+                ) as prepare_gallery_mock:
+                    response = client.post(
+                        "/catalog/fittings",
+                        json={
+                            "name": "https://viyar.ua/ua/catalog/test-fitting",
+                            "source_url": "https://viyar.ua/ua/catalog/test-fitting",
+                            "fitting_type": "drawer_slides",
+                            "fitting_group": "fittings",
+                        },
+                        headers=self._auth_headers("trial-token"),
+                    )
+
+                self.assertEqual(response.status_code, 200)
+                self.assertTrue(response.json()["success"])
+                item = response.json()["item"]
+                self.assertEqual(item["name"], "Parsed Fitting")
+                self.assertEqual(item["article"], "PARSED-001")
+                self.assertEqual(item["price"], 4.02)
+                self.assertEqual(item["description"], "Parsed description")
+                prepare_gallery_mock.assert_called_once()
+
+                with session_factory() as session:
+                    fitting = session.query(FittingModel).filter(FittingModel.article == "PARSED-001").one()
+                    self.assertEqual(fitting.name, "Parsed Fitting")
+                    self.assertEqual(fitting.source_url, "https://viyar.ua/ua/catalog/test-fitting")
+                    self.assertEqual(fitting.image_url, "https://cdn.example.com/fittings/p1.jpg")
+
+    def test_source_import_failure_rejects_when_name_empty(self) -> None:
+        self._assert_source_import_rejected_without_create(
+            payload_name="",
+            expected_article=None,
+        )
+
+    def test_source_import_failure_rejects_when_name_contains_url(self) -> None:
+        self._assert_source_import_rejected_without_create(
+            payload_name="https://viyar.ua/ua/catalog/broken-fitting",
+            expected_article=None,
+        )
+
+    def test_source_import_failure_rejects_when_name_is_arbitrary_text(self) -> None:
+        self._assert_source_import_rejected_without_create(
+            payload_name="Broken fitting",
+            expected_article=None,
+        )
+
+    def test_manual_create_without_source_url_stays_working(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
+                with patch.object(catalog, "parse_fitting_source_metadata") as parse_mock:
+                    response = client.post(
+                        "/catalog/fittings",
+                        json={
+                            "name": "Manual Fitting",
+                            "fitting_type": "drawer_slides",
+                            "fitting_group": "fittings",
+                        },
+                        headers=self._auth_headers("trial-token"),
+                    )
+
+                self.assertEqual(response.status_code, 200)
+                self.assertTrue(response.json()["success"])
+                parse_mock.assert_not_called()
+
+                with session_factory() as session:
+                    fitting = session.query(FittingModel).filter(FittingModel.name == "Manual Fitting").one()
+                    self.assertIsNone(fitting.source_url)
+
+    def test_source_import_rejects_when_gallery_images_missing_uses_generic_message(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
+                with patch.object(
+                    catalog,
+                    "parse_fitting_source_metadata",
+                    return_value={
+                        "success": True,
+                        "source_site": "viyar",
+                        "final_url": "https://viyar.ua/ua/catalog/no-images",
+                        "name": "No Images Fitting",
+                        "article": "NO-IMG-001",
+                        "price": 4.02,
+                        "availability": "in stock",
+                        "image_url": "https://cdn.example.com/fittings/main.jpg",
+                        "image_urls": [],
+                        "description": "Parsed description",
+                    },
+                    create=True,
+                ), patch.object(catalog, "prepare_fitting_gallery_images") as prepare_gallery_mock, patch.object(
+                    catalog,
+                    "create_fitting",
+                ) as create_mock:
+                    response = client.post(
+                        "/catalog/fittings",
+                        json={
+                            "name": "https://viyar.ua/ua/catalog/no-images",
+                            "source_url": "https://viyar.ua/ua/catalog/no-images",
+                            "fitting_type": "drawer_slides",
+                            "fitting_group": "fittings",
+                        },
+                        headers=self._auth_headers("trial-token"),
+                    )
+
+                self.assertEqual(response.status_code, 200)
+                self.assertFalse(response.json()["success"])
+                self.assertEqual(
+                    response.json()["error"],
+                    "Не вдалося отримати дані за посиланням. Перевірте посилання або спробуйте пізніше.",
+                )
+                prepare_gallery_mock.assert_not_called()
+                create_mock.assert_not_called()
+
+    def _assert_source_import_rejected_without_create(
+        self,
+        *,
+        payload_name: str,
+        expected_article: str | None,
+    ) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
+                with patch.object(
+                    catalog,
+                    "parse_fitting_source_metadata",
+                    return_value={
+                        "success": False,
+                        "source_site": "viyar",
+                        "error": "Page.goto: net::ERR_NETWORK_ACCESS_DENIED",
+                    },
+                ) as parse_mock, patch.object(catalog, "create_fitting") as create_mock:
+                    with session_factory() as session:
+                        before_count = session.query(FittingModel).count()
+
+                    response = client.post(
+                        "/catalog/fittings",
+                        json={
+                            "name": payload_name,
+                            "source_url": "https://viyar.ua/ua/catalog/broken-fitting",
+                            "article": expected_article,
+                            "fitting_type": "drawer_slides",
+                            "fitting_group": "fittings",
+                        },
+                        headers=self._auth_headers("trial-token"),
+                    )
+
+                self.assertEqual(response.status_code, 200)
+                self.assertFalse(response.json()["success"])
+                self.assertEqual(
+                    response.json()["error"],
+                    "Не вдалося отримати дані за посиланням. Перевірте посилання або спробуйте пізніше.",
+                )
+                self.assertNotIn("Page.goto", response.json()["error"])
+                parse_mock.assert_called_once()
+                create_mock.assert_not_called()
+
+                with session_factory() as session:
+                    after_count = session.query(FittingModel).count()
+
+                self.assertEqual(before_count, after_count)
 
     def test_free_user_cannot_create_fitting(self) -> None:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:

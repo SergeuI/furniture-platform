@@ -275,6 +275,25 @@ def _looks_like_url(value: str | None) -> bool:
         return False
 
 
+async def _parse_fitting_source_or_error(source_url: str) -> tuple[dict | None, dict | None]:
+    metadata = await parse_fitting_source_metadata(source_url)
+    if metadata.get("success"):
+        return metadata, None
+
+    logger.warning(
+        "Fitting source import failed",
+        extra={
+            "source_url": source_url,
+            "source_site": metadata.get("source_site"),
+            "error": metadata.get("error"),
+        },
+    )
+    return None, {
+        "success": False,
+        "error": "Не вдалося отримати дані за посиланням. Перевірте посилання або спробуйте пізніше.",
+    }
+
+
 def _normalize_fitting_detail_text(value: object | None) -> str | None:
     text = " ".join(str(value or "").split()).strip()
     return text or None
@@ -2072,118 +2091,122 @@ async def create_fitting_route(
 
     if effective_source_url:
         if source_site == "viyar":
-            metadata = await parse_fitting_source_metadata(effective_source_url)
-            if metadata.get("success"):
-                effective_name = metadata.get("name") or effective_name
-                effective_image_url = metadata.get("image_url") or effective_image_url
-                effective_source_url = metadata.get("final_url") or effective_source_url
-                effective_article = effective_article or metadata.get("article")
-                effective_price = metadata.get("price") if metadata.get("price") is not None else effective_price
-                effective_source = (metadata.get("source_site") or "").strip() or None
-                effective_brand = (metadata.get("brand") or "").strip() or None
-                if not effective_stock:
-                    effective_stock = (metadata.get("availability") or "").strip() or None
-                effective_description = metadata.get("description") or effective_description
-                source_payload = {
-                    "source_site": source_site,
-                    "source_url": effective_source_url,
-                    "selected_city": selected_city,
-                    "parsed_item": metadata,
+            metadata, error_response = await _parse_fitting_source_or_error(effective_source_url)
+            if error_response:
+                return error_response
+
+            effective_name = metadata.get("name") or effective_name
+            effective_image_url = metadata.get("image_url") or effective_image_url
+            effective_source_url = metadata.get("final_url") or effective_source_url
+            effective_article = effective_article or metadata.get("article")
+            effective_price = metadata.get("price") if metadata.get("price") is not None else effective_price
+            effective_source = (metadata.get("source_site") or "").strip() or None
+            effective_brand = (metadata.get("brand") or "").strip() or None
+            if not effective_stock:
+                effective_stock = (metadata.get("availability") or "").strip() or None
+            effective_description = metadata.get("description") or effective_description
+            source_payload = {
+                "source_site": source_site,
+                "source_url": effective_source_url,
+                "selected_city": selected_city,
+                "parsed_item": metadata,
+            }
+
+            metadata_image_urls = metadata.get("image_urls") or []
+            if not metadata_image_urls:
+                logger.warning(
+                    "Fitting gallery import failed: source returned no image_urls",
+                    extra={
+                        "source_url": effective_source_url,
+                        "source_site": source_site,
+                    },
+                )
+                return {
+                    "success": False,
+                    "error": "Не вдалося отримати дані за посиланням. Перевірте посилання або спробуйте пізніше.",
                 }
 
-                metadata_image_urls = metadata.get("image_urls") or []
-                if not metadata_image_urls:
-                    logger.warning(
-                        "Fitting gallery import failed: source returned no image_urls",
-                        extra={
-                            "source_url": effective_source_url,
-                            "source_site": source_site,
-                        },
-                    )
-                    return {
-                        "success": False,
-                        "error": "Source link does not contain gallery images",
-                    }
+            try:
+                prepared_gallery_images = prepare_fitting_gallery_images(
+                    normalize_fitting_gallery_image_urls(metadata_image_urls),
+                    fetcher=lambda source_url: fetch_remote_image_payload(
+                        source_url,
+                        city=selected_city,
+                    ),
+                )
+            except FittingGalleryPreparationError as error:
+                logger.warning(
+                    "Fitting gallery import failed",
+                    extra={
+                        "source_url": effective_source_url,
+                        "source_site": source_site,
+                        "error": str(error),
+                    },
+                )
+                return {
+                    "success": False,
+                    "error": "Не вдалося отримати дані за посиланням. Перевірте посилання або спробуйте пізніше.",
+                }
 
-                try:
-                    prepared_gallery_images = prepare_fitting_gallery_images(
-                        normalize_fitting_gallery_image_urls(metadata_image_urls),
-                        fetcher=lambda source_url: fetch_remote_image_payload(
-                            source_url,
-                            city=selected_city,
-                        ),
-                    )
-                except FittingGalleryPreparationError as error:
-                    logger.warning(
-                        "Fitting gallery import failed",
-                        extra={
-                            "source_url": effective_source_url,
-                            "source_site": source_site,
-                            "error": str(error),
-                        },
-                    )
-                    return {
-                        "success": False,
-                        "error": "Unable to prepare fitting gallery",
-                    }
-
-                effective_image_url = prepared_gallery_images[0].source_url
+            effective_image_url = prepared_gallery_images[0].source_url
         else:
-            metadata = await parse_fitting_source_metadata(effective_source_url)
-            if metadata.get("success"):
-                effective_name = metadata.get("name") or effective_name
-                effective_source_url = metadata.get("final_url") or effective_source_url
-                effective_article = effective_article or metadata.get("article")
-                effective_price = metadata.get("price") if metadata.get("price") is not None else effective_price
-                effective_source = (metadata.get("source_site") or "").strip() or None
-                effective_brand = (metadata.get("brand") or "").strip() or None
-                if not effective_stock:
-                    effective_stock = (metadata.get("availability") or "").strip() or None
-                effective_description = metadata.get("description") or effective_description
-                source_payload = {
-                    "source_site": source_site,
-                    "source_url": effective_source_url,
-                    "selected_city": selected_city,
-                    "parsed_item": metadata,
+            metadata, error_response = await _parse_fitting_source_or_error(effective_source_url)
+            if error_response:
+                return error_response
+
+            effective_name = metadata.get("name") or effective_name
+            effective_source_url = metadata.get("final_url") or effective_source_url
+            effective_article = effective_article or metadata.get("article")
+            effective_price = metadata.get("price") if metadata.get("price") is not None else effective_price
+            effective_source = (metadata.get("source_site") or "").strip() or None
+            effective_brand = (metadata.get("brand") or "").strip() or None
+            if not effective_stock:
+                effective_stock = (metadata.get("availability") or "").strip() or None
+            effective_description = metadata.get("description") or effective_description
+            source_payload = {
+                "source_site": source_site,
+                "source_url": effective_source_url,
+                "selected_city": selected_city,
+                "parsed_item": metadata,
+            }
+            metadata_image_urls = metadata.get("image_urls") or []
+
+            if not metadata_image_urls:
+                logger.warning(
+                    "Fitting gallery import failed: source returned no image_urls",
+                    extra={
+                        "source_url": effective_source_url,
+                        "source_site": source_site,
+                    },
+                )
+                return {
+                    "success": False,
+                    "error": "Не вдалося отримати дані за посиланням. Перевірте посилання або спробуйте пізніше.",
                 }
-                metadata_image_urls = metadata.get("image_urls") or []
 
-                if not metadata_image_urls:
-                    logger.warning(
-                        "Fitting gallery import failed: source returned no image_urls",
-                        extra={
-                            "source_url": effective_source_url,
-                            "source_site": source_site,
-                        },
-                    )
-                    return {
-                        "success": False,
-                        "error": "Source link does not contain gallery images",
-                    }
+            try:
+                prepared_gallery_images = prepare_fitting_gallery_images(
+                    normalize_fitting_gallery_image_urls(metadata_image_urls),
+                    fetcher=lambda source_url: fetch_remote_image_payload(
+                        source_url,
+                        city=selected_city,
+                    ),
+                )
+            except FittingGalleryPreparationError as error:
+                logger.warning(
+                    "Fitting gallery import failed",
+                    extra={
+                        "source_url": effective_source_url,
+                        "source_site": source_site,
+                        "error": str(error),
+                    },
+                )
+                return {
+                    "success": False,
+                    "error": "Не вдалося отримати дані за посиланням. Перевірте посилання або спробуйте пізніше.",
+                }
 
-                try:
-                    prepared_gallery_images = prepare_fitting_gallery_images(
-                        normalize_fitting_gallery_image_urls(metadata_image_urls),
-                        fetcher=lambda source_url: fetch_remote_image_payload(
-                            source_url,
-                            city=selected_city,
-                        ),
-                    )
-                except FittingGalleryPreparationError as error:
-                    logger.warning(
-                        "Fitting gallery import failed",
-                        extra={
-                            "source_url": effective_source_url,
-                            "source_site": source_site,
-                            "error": str(error),
-                        },
-                    )
-                    return {
-                        "success": False,
-                        "error": "Unable to prepare fitting gallery",
-                    }
-
-                effective_image_url = prepared_gallery_images[0].source_url
+            effective_image_url = prepared_gallery_images[0].source_url
 
     if not effective_name and effective_article:
         effective_name = effective_article
@@ -2191,7 +2214,7 @@ async def create_fitting_route(
     if effective_source_url and not effective_name.strip():
         return {
             "success": False,
-            "error": "Unable to parse fitting from source link",
+            "error": "Не вдалося отримати дані за посиланням. Перевірте посилання або спробуйте пізніше.",
         }
 
     if not effective_name.strip():
@@ -2331,20 +2354,22 @@ async def update_fitting_route(
                     "parsed_item": first_result,
                 }
         else:
-            metadata = await parse_fitting_source_metadata(effective_source_url)
-            if metadata.get("success"):
-                effective_name = metadata.get("name") or effective_name
-                effective_image_url = metadata.get("image_url") or effective_image_url
-                effective_source_url = metadata.get("final_url") or effective_source_url
-                effective_article = effective_article or metadata.get("article")
-                effective_price = metadata.get("price") if metadata.get("price") is not None else effective_price
-                effective_description = metadata.get("description") or effective_description
-                source_payload = {
-                    "source_site": source_site,
-                    "source_url": effective_source_url,
-                    "selected_city": selected_city,
-                    "parsed_item": metadata,
-                }
+            metadata, error_response = await _parse_fitting_source_or_error(effective_source_url)
+            if error_response:
+                return error_response
+
+            effective_name = metadata.get("name") or effective_name
+            effective_image_url = metadata.get("image_url") or effective_image_url
+            effective_source_url = metadata.get("final_url") or effective_source_url
+            effective_article = effective_article or metadata.get("article")
+            effective_price = metadata.get("price") if metadata.get("price") is not None else effective_price
+            effective_description = metadata.get("description") or effective_description
+            source_payload = {
+                "source_site": source_site,
+                "source_url": effective_source_url,
+                "selected_city": selected_city,
+                "parsed_item": metadata,
+            }
 
     if not effective_name and effective_article:
         effective_name = effective_article
