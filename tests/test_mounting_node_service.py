@@ -72,6 +72,78 @@ class MountingNodeServiceTests(unittest.TestCase):
             session.close()
             engine.dispose()
 
+    def test_create_node_accepts_and_serializes_category_code(self) -> None:
+        session, engine = self._build_session()
+        try:
+            fitting = self._create_fitting(session, name="Hinge", code="hinge", article="H-1")
+            service = MountingNodeService(session=session)
+
+            node = service.create_mounting_node(
+                {
+                    "name": "Hinge node",
+                    "category_code": "hinges",
+                    "items": [{"fitting_id": fitting.id, "quantity": 1}],
+                }
+            )
+
+            self.assertEqual(node["category_code"], "hinges")
+            self.assertEqual(node["versions"][0]["snapshot"]["category_code"], "hinges")
+
+            stored = session.get(MountingNodeModel, node["id"])
+            self.assertIsNotNone(stored)
+            self.assertEqual(stored.category_code, "hinges")
+        finally:
+            session.close()
+            engine.dispose()
+
+    def test_update_node_keeps_category_code_when_omitted_and_allows_changes(self) -> None:
+        session, engine = self._build_session()
+        try:
+            fitting = self._create_fitting(session, name="Confirmat", code="confirmat", article="C-1")
+            service = MountingNodeService(session=session)
+            created = service.create_mounting_node(
+                {
+                    "name": "Fastener node",
+                    "category_code": "fastening",
+                    "items": [{"fitting_id": fitting.id, "quantity": 1}],
+                }
+            )
+
+            unchanged = service.update_mounting_node(
+                created["id"],
+                {"description": "Updated description"},
+            )
+            self.assertEqual(unchanged["category_code"], "fastening")
+
+            updated = service.update_mounting_node(
+                created["id"],
+                {"category_code": "hinges"},
+            )
+            self.assertEqual(updated["category_code"], "hinges")
+            self.assertEqual(updated["versions"][0]["snapshot"]["category_code"], "hinges")
+            self.assertEqual(updated["versions"][1]["snapshot"]["category_code"], "fastening")
+        finally:
+            session.close()
+            engine.dispose()
+
+    def test_create_node_rejects_invalid_category_code(self) -> None:
+        session, engine = self._build_session()
+        try:
+            fitting = self._create_fitting(session, name="Confirmat", code="confirmat", article="C-1")
+            service = MountingNodeService(session=session)
+
+            with self.assertRaisesRegex(ValueError, "category_code must be one of"):
+                service.create_mounting_node(
+                    {
+                        "name": "Invalid category node",
+                        "category_code": "something_invalid",
+                        "items": [{"fitting_id": fitting.id, "quantity": 1}],
+                    }
+                )
+        finally:
+            session.close()
+            engine.dispose()
+
     def test_create_and_update_node_record_version_history(self) -> None:
         session, engine = self._build_session()
         try:

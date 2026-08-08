@@ -3,7 +3,12 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from database.mounting_node_categories import (
+    ALLOWED_MOUNTING_NODE_CATEGORY_CODES,
+    normalize_mounting_node_category_code,
+)
 
 
 class MountingNodeItemCreateSchema(BaseModel):
@@ -155,19 +160,47 @@ class MountingNodeCreateSchema(BaseModel):
     code: str | None = Field(default=None, max_length=128)
     name: str = Field(min_length=1, max_length=255)
     description: str | None = Field(default=None, max_length=5000)
+    category_code: str | None = Field(default=None, max_length=64)
     is_active: bool = True
     ownership_type: str = Field(default="mine", max_length=16)
     items: list[MountingNodeItemCreateSchema] = Field(default_factory=list)
     templates: list[MountingNodeTemplateLinkCreateSchema] = Field(default_factory=list)
+
+    @field_validator("category_code", mode="before")
+    @classmethod
+    def _validate_category_code(cls, value):
+        if value is None:
+            return None
+        if str(value).strip() == "":
+            raise ValueError("category_code must be one of: " + ", ".join(ALLOWED_MOUNTING_NODE_CATEGORY_CODES))
+        normalized = normalize_mounting_node_category_code(value)
+        if normalized is None:
+            allowed = ", ".join(ALLOWED_MOUNTING_NODE_CATEGORY_CODES)
+            raise ValueError(f"category_code must be one of: {allowed}")
+        return normalized
 
 
 class MountingNodeUpdateSchema(BaseModel):
     code: str | None = Field(default=None, max_length=128)
     name: str | None = Field(default=None, min_length=1, max_length=255)
     description: str | None = Field(default=None, max_length=5000)
+    category_code: str | None = Field(default=None, max_length=64)
     is_active: bool | None = None
     items: list[MountingNodeItemCreateSchema] | None = None
     templates: list[MountingNodeTemplateLinkCreateSchema] | None = None
+
+    @field_validator("category_code", mode="before")
+    @classmethod
+    def _validate_category_code(cls, value):
+        if value is None:
+            return None
+        if str(value).strip() == "":
+            raise ValueError("category_code must be one of: " + ", ".join(ALLOWED_MOUNTING_NODE_CATEGORY_CODES))
+        normalized = normalize_mounting_node_category_code(value)
+        if normalized is None:
+            allowed = ", ".join(ALLOWED_MOUNTING_NODE_CATEGORY_CODES)
+            raise ValueError(f"category_code must be one of: {allowed}")
+        return normalized
 
 
 class MountingNodeListItemSchema(BaseModel):
@@ -175,6 +208,7 @@ class MountingNodeListItemSchema(BaseModel):
     code: str
     name: str
     description: str | None = None
+    category_code: str | None = None
     owner_user_id: str | None = None
     ownership_type: str = "system"
     is_system: bool = True

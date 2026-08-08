@@ -158,11 +158,13 @@ class MountingNodesApiTests(unittest.TestCase):
 
             def create_mounting_node(self, payload, **kwargs):
                 test_case.assertEqual(payload.get("ownership_type"), "mine")
+                test_case.assertEqual(payload.get("category_code"), "hinges")
                 return {
                     "id": 1,
                     "code": "mounting-node-confirmat-7x50",
                     "name": payload["name"],
                     "description": None,
+                    "category_code": "hinges",
                     "owner_user_id": "user-1",
                     "ownership_type": "mine",
                     "is_system": False,
@@ -187,6 +189,7 @@ class MountingNodesApiTests(unittest.TestCase):
                         "/mounting-nodes",
                         json={
                             "name": "Confirmat node",
+                            "category_code": "hinges",
                             "ownership_type": "mine",
                             "items": [{"fitting_id": 1, "quantity": 1}],
                         },
@@ -201,6 +204,25 @@ class MountingNodesApiTests(unittest.TestCase):
         self.assertTrue(body["node"]["can_delete"])
         self.assertEqual(body["node"]["owner_user_id"], "user-1")
         self.assertEqual(body["node"]["ownership_type"], "mine")
+        self.assertEqual(body["node"]["category_code"], "hinges")
+
+    def test_create_route_rejects_invalid_category_code(self) -> None:
+        app = self._build_app()
+        app.dependency_overrides[auth_dependencies.require_current_user] = lambda: SimpleNamespace(id="user-1", role="admin")
+
+        with patch.object(mounting_nodes_route, "EntitlementService", _AllowedEntitlementService):
+            with TestClient(app) as client:
+                response = client.post(
+                    "/mounting-nodes",
+                    json={
+                        "name": "Confirmat node",
+                        "category_code": "something_invalid",
+                        "items": [{"fitting_id": 1, "quantity": 1}],
+                    },
+                    headers={"Authorization": "Bearer token"},
+                )
+
+        self.assertEqual(response.status_code, 422)
 
     def test_create_route_assigns_owner_for_regular_user(self) -> None:
         session, engine = self._build_session()
@@ -421,6 +443,7 @@ class MountingNodesApiTests(unittest.TestCase):
     def test_update_route_returns_nested_template_and_point_ids_for_admin(self) -> None:
         app = self._build_app()
         app.dependency_overrides[auth_dependencies.require_current_user] = lambda: SimpleNamespace(id="user-1", role="admin")
+        test_case = self
 
         class PatchService:
             def __enter__(self):
@@ -430,11 +453,13 @@ class MountingNodesApiTests(unittest.TestCase):
                 return False
 
             def update_mounting_node(self, node_id, payload, **kwargs):
+                test_case.assertEqual(payload.get("category_code"), "fastening")
                 return {
                     "id": node_id,
                     "code": "mounting-node-confirmat-7x50",
                     "name": "Confirmat node",
                     "description": None,
+                    "category_code": "fastening",
                     "owner_user_id": None,
                     "ownership_type": "system",
                     "is_system": True,
@@ -530,6 +555,7 @@ class MountingNodesApiTests(unittest.TestCase):
                     response = client.patch(
                         "/mounting-nodes/1",
                         json={
+                            "category_code": "fastening",
                             "templates": [
                                 {
                                     "template_id": 7428,
@@ -556,6 +582,7 @@ class MountingNodesApiTests(unittest.TestCase):
         self.assertEqual(body["node"]["templates"][0]["template"]["id"], 7428)
         self.assertEqual(body["node"]["templates"][0]["template"]["points"][0]["id"], 29)
         self.assertEqual(body["node"]["templates"][0]["template"]["points"][1]["id"], 31)
+        self.assertEqual(body["node"]["category_code"], "fastening")
 
     def test_update_route_requires_mounting_nodes_edit_access(self) -> None:
         app = self._build_app()
