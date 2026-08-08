@@ -99,6 +99,7 @@ export function buildMountingNodesRestoreState(route = {}, nodeDetail = null) {
 
   return {
     activeStatusFilter: "all",
+    activeCategoryFilter: "all",
     activeVariantFilter: "all",
     appliedSearch: "",
     displayMode: "grid",

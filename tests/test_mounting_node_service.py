@@ -1015,6 +1015,44 @@ class MountingNodeServiceTests(unittest.TestCase):
             session.close()
             engine.dispose()
 
+    def test_list_filters_by_category_and_null_category(self) -> None:
+        session, engine = self._build_session()
+        try:
+            fitting = self._create_fitting(session, name="Fit A", code="fit-a", article="A")
+            service = MountingNodeService(session=session)
+
+            service.create_mounting_node(
+                {
+                    "name": "Fastening node",
+                    "category_code": "fastening",
+                    "items": [{"fitting_id": fitting.id, "quantity": 1}],
+                }
+            )
+            service.create_mounting_node(
+                {
+                    "name": "Null category node",
+                    "items": [{"fitting_id": fitting.id, "quantity": 1}],
+                }
+            )
+            service.create_mounting_node(
+                {
+                    "name": "Hinges node",
+                    "category_code": "hinges",
+                    "items": [{"fitting_id": fitting.id, "quantity": 1}],
+                }
+            )
+
+            by_category = service.list_mounting_nodes(category_code="hinges")
+            by_null_category = service.list_mounting_nodes(category_code="null")
+            by_category_and_search = service.list_mounting_nodes(category_code="hinges", search="Hinges")
+
+            self.assertEqual({node["name"] for node in by_category}, {"Hinges node"})
+            self.assertEqual({node["name"] for node in by_null_category}, {"Null category node"})
+            self.assertEqual({node["name"] for node in by_category_and_search}, {"Hinges node"})
+        finally:
+            session.close()
+            engine.dispose()
+
     def test_list_and_detail_respect_owner_based_visibility(self) -> None:
         session, engine = self._build_session()
         try:

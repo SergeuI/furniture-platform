@@ -52,6 +52,7 @@ class MountingNodeRepository:
         include_inactive: bool = False,
         fitting_id: int | None = None,
         mounting_variant_key: str | None = None,
+        category_code: str | None = None,
         viewer_user_id: str | None = None,
         viewer_role: str | None = None,
     ) -> list[MountingNodeModel]:
@@ -90,6 +91,11 @@ class MountingNodeRepository:
                     ),
                 ),
             )
+
+        if category_code == "__null__":
+            query = query.filter(MountingNodeModel.category_code.is_(None))
+        elif category_code:
+            query = query.filter(MountingNodeModel.category_code == category_code)
 
         return query.order_by(
             MountingNodeModel.name.asc(),

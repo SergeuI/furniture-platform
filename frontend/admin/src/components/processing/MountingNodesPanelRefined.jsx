@@ -25,6 +25,8 @@ import {
 } from "../../mountingNodesEditor.js";
 import {
   getMountingNodeCategoryLabel,
+  getMountingNodeCategoryOptions,
+  normalizeMountingNodeCategoryCode,
 } from "../../mountingNodeCategories.js";
 import surfaceMountIcon from "../../assets/hole-mounting/surface_mount.png";
 import faceToEdgeIcon from "../../assets/hole-mounting/face_to_edge.png";
@@ -41,9 +43,24 @@ const KNOWN_MOUNTING_VARIANT_KEYS = [
 ];
 
 const DISPLAY_MODE_STORAGE_KEY = "admin.mountingNodesDisplayMode";
+const MOUNTING_NODE_CATEGORY_FILTER_NULL = "null";
 
 function normalizeFilterValue(value) {
   return String(value || "").trim();
+}
+
+function normalizeCategoryFilterValue(value) {
+  const normalizedValue = normalizeFilterValue(value);
+
+  if (!normalizedValue) {
+    return "all";
+  }
+
+  if (normalizedValue === "all" || normalizedValue === MOUNTING_NODE_CATEGORY_FILTER_NULL) {
+    return normalizedValue;
+  }
+
+  return normalizeMountingNodeCategoryCode(normalizedValue) ? normalizedValue : "all";
 }
 
 function normalizeNumberValue(value) {
@@ -197,6 +214,7 @@ export function buildMountingNodesReturnState(payload = {}) {
 
   return {
     activeStatusFilter: normalizeFilterValue(normalizedPayload.activeStatusFilter || "all") || "all",
+    activeCategoryFilter: normalizeCategoryFilterValue(normalizedPayload.activeCategoryFilter || "all"),
     activeVariantFilter: normalizeFilterValue(normalizedPayload.activeVariantFilter || "all") || "all",
     appliedSearch: normalizeFilterValue(normalizedPayload.appliedSearch),
     displayMode: normalizeDisplayMode(normalizedPayload.displayMode),
@@ -380,6 +398,7 @@ export function buildNodeEditorContext(nodeDetail, fallbackNodeId = "") {
 
 function buildNodeReturnState({
   activeStatusFilter,
+  activeCategoryFilter,
   activeVariantFilter,
   appliedSearch,
   displayMode,
@@ -398,6 +417,7 @@ function buildNodeReturnState({
 }) {
   return buildMountingNodesReturnState({
     activeStatusFilter,
+    activeCategoryFilter,
     activeVariantFilter,
     appliedSearch,
     displayMode,
@@ -736,6 +756,7 @@ export default function MountingNodesPanelRefined({
   const [searchInput, setSearchInput] = useState(initialReturnState.searchInput);
   const [appliedSearch, setAppliedSearch] = useState(initialReturnState.appliedSearch);
   const [activeStatusFilter, setActiveStatusFilter] = useState(initialReturnState.activeStatusFilter);
+  const [activeCategoryFilter, setActiveCategoryFilter] = useState(initialReturnState.activeCategoryFilter);
   const [activeVariantFilter, setActiveVariantFilter] = useState(initialReturnState.activeVariantFilter);
   const [mountingNodesViewMode, setMountingNodesViewMode] = useState(initialReturnState.mountingNodesViewMode);
   const [displayMode, setDisplayMode] = useState(() => (
@@ -850,6 +871,12 @@ export default function MountingNodesPanelRefined({
     getMountingNodes(token, {
       search: appliedSearch,
       is_active: activeStatusFilter === "all" ? undefined : activeStatusFilter === "active",
+      category_code:
+        activeCategoryFilter === "all"
+          ? undefined
+          : activeCategoryFilter === MOUNTING_NODE_CATEGORY_FILTER_NULL
+            ? "null"
+            : activeCategoryFilter,
       mounting_variant_key: activeVariantFilter === "all" ? undefined : activeVariantFilter,
     })
       .then((result) => {
@@ -893,7 +920,7 @@ export default function MountingNodesPanelRefined({
       });
 
     return undefined;
-  }, [activeStatusFilter, activeVariantFilter, appliedSearch, reloadToken, t.mountingNodesError, token]);
+  }, [activeCategoryFilter, activeStatusFilter, activeVariantFilter, appliedSearch, reloadToken, t.mountingNodesError, token]);
 
   useEffect(() => {
     setOpenEditorError("");
@@ -1169,6 +1196,23 @@ export default function MountingNodesPanelRefined({
     ],
     [language],
   );
+  const categoryFilterOptions = useMemo(
+    () => [
+      {
+        value: "all",
+        label: language === "uk" ? "Усі категорії" : "All categories",
+      },
+      {
+        value: MOUNTING_NODE_CATEGORY_FILTER_NULL,
+        label: language === "uk" ? "Категорію не вказано" : "Category not set",
+      },
+      ...getMountingNodeCategoryOptions(language).map((category) => ({
+        value: category.code,
+        label: category.label,
+      })),
+    ],
+    [language],
+  );
   const detailVariantOptions = useMemo(() => getNodeVariantOptions(language), [language]);
   const selectedNodeVariantModel = useMemo(
     () => detailVariantOptions.find((option) => option.value === selectedNodeVariantKey) || detailVariantOptions[0] || null,
@@ -1355,6 +1399,7 @@ export default function MountingNodesPanelRefined({
   function captureReturnState(nextViewMode, restoreScrollOnMount = false) {
     return buildNodeReturnState({
       activeStatusFilter,
+      activeCategoryFilter,
       activeVariantFilter,
       appliedSearch,
       displayMode,
@@ -1385,6 +1430,10 @@ export default function MountingNodesPanelRefined({
 
   function handleStatusFilterChange(value) {
     setActiveStatusFilter(String(value || "all"));
+  }
+
+  function handleCategoryFilterChange(value) {
+    setActiveCategoryFilter(normalizeCategoryFilterValue(value));
   }
 
   function handleVariantFilterChange(value) {
@@ -1574,6 +1623,7 @@ export default function MountingNodesPanelRefined({
 
     const nextReturnState = buildNodeReturnState({
       activeStatusFilter,
+      activeCategoryFilter,
       activeVariantFilter,
       appliedSearch,
       displayMode,
@@ -1703,6 +1753,16 @@ export default function MountingNodesPanelRefined({
               />
             </label>
             <label className="mounting-nodes-filter-field">
+              {language === "uk" ? "Категорія" : "Category"}
+              <select onChange={(event) => handleCategoryFilterChange(event.target.value)} value={activeCategoryFilter}>
+                {categoryFilterOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="mounting-nodes-filter-field">
               {language === "uk" ? "Статус" : "Status"}
               <select onChange={(event) => handleStatusFilterChange(event.target.value)} value={activeStatusFilter}>
                 <option value="all">{language === "uk" ? "Усі" : "All"}</option>
@@ -1737,6 +1797,17 @@ export default function MountingNodesPanelRefined({
           ) : listError ? (
             <div className="empty-state compact-empty-state">
               <span>{listError}</span>
+              <button className="primary-button" onClick={handleRefresh} type="button">
+                {t.mountingNodesRetry || (language === "uk" ? "Повторити" : "Retry")}
+              </button>
+            </div>
+          ) : activeCategoryFilter !== "all" ? (
+            <div className="empty-state compact-empty-state">
+              <span>
+                {language === "uk"
+                  ? "У цій категорії монтажних вузлів поки немає"
+                  : "There are no mounting nodes in this category yet"}
+              </span>
               <button className="primary-button" onClick={handleRefresh} type="button">
                 {t.mountingNodesRetry || (language === "uk" ? "Повторити" : "Retry")}
               </button>

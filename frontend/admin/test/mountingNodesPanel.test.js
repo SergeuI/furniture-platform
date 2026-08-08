@@ -74,6 +74,12 @@ test("mounting nodes panel keeps the DETAIL white panel free of breadcrumb marku
   assert.equal(source.includes("setMountingNodesViewMode(\"list\")"), true);
   assert.equal(source.includes("mounting-node-card-type"), true);
   assert.equal(source.includes("getMountingNodeCategoryLabel"), true);
+  assert.equal(source.includes("getMountingNodeCategoryOptions"), true);
+  assert.equal(source.includes("normalizeMountingNodeCategoryCode"), true);
+  assert.equal(source.includes("activeCategoryFilter"), true);
+  assert.equal(source.includes("handleCategoryFilterChange"), true);
+  assert.equal(source.includes("categoryFilterOptions"), true);
+  assert.equal(source.includes("MOUNTING_NODE_CATEGORY_FILTER_NULL"), true);
   assert.equal(source.includes("mounting-node-card-layout"), true);
   assert.equal(source.includes("mounting-node-row-layout"), true);
   assert.equal(source.includes("mounting-node-card-visuals"), true);

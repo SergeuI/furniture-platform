@@ -144,6 +144,84 @@ class MountingNodesApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json()["detail"]["error"], "Insufficient permissions")
 
+    def test_list_route_forwards_category_filter_to_service(self) -> None:
+        app = self._build_app()
+        app.dependency_overrides[auth_dependencies.require_current_user] = lambda: SimpleNamespace(id="user-1", role="admin")
+        test_case = self
+
+        class ListService:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def list_mounting_nodes(self, **kwargs):
+                test_case.assertEqual(kwargs.get("category_code"), "hinges")
+                return [
+                    {
+                        "id": 1,
+                        "code": "node-1",
+                        "name": "Node 1",
+                        "description": None,
+                        "category_code": "hinges",
+                        "owner_user_id": None,
+                        "ownership_type": "system",
+                        "is_system": True,
+                        "is_owner": False,
+                        "can_edit": False,
+                        "can_delete": False,
+                        "is_active": True,
+                        "created_by_user_id": None,
+                        "updated_by_user_id": None,
+                        "is_archived": False,
+                        "archived_at": None,
+                        "archived_by_user_id": None,
+                        "created_at": None,
+                        "updated_at": None,
+                        "items_count": 0,
+                        "templates_count": 0,
+                    }
+                ]
+
+        with patch.object(mounting_nodes_route, "EntitlementService", _AllowedEntitlementService):
+            with patch.object(mounting_nodes_route, "MountingNodeService", return_value=ListService()):
+                with TestClient(app) as client:
+                    response = client.get(
+                        "/mounting-nodes?category_code=hinges",
+                        headers={"Authorization": "Bearer token"},
+                    )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["nodes"][0]["category_code"], "hinges")
+
+    def test_list_route_supports_null_category_filter(self) -> None:
+        app = self._build_app()
+        app.dependency_overrides[auth_dependencies.require_current_user] = lambda: SimpleNamespace(id="user-1", role="admin")
+        test_case = self
+
+        class ListService:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def list_mounting_nodes(self, **kwargs):
+                test_case.assertEqual(kwargs.get("category_code"), "null")
+                return []
+
+        with patch.object(mounting_nodes_route, "EntitlementService", _AllowedEntitlementService):
+            with patch.object(mounting_nodes_route, "MountingNodeService", return_value=ListService()):
+                with TestClient(app) as client:
+                    response = client.get(
+                        "/mounting-nodes?category_code=null",
+                        headers={"Authorization": "Bearer token"},
+                    )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["nodes"], [])
+
     def test_create_route_returns_node_for_admin(self) -> None:
         app = self._build_app()
         app.dependency_overrides[auth_dependencies.require_current_user] = lambda: SimpleNamespace(id="user-1", role="admin")

@@ -106,6 +106,7 @@ async def list_mounting_nodes_route(
     include_inactive: bool = Query(default=False),
     fitting_id: int | None = Query(default=None),
     mounting_variant_key: str | None = Query(default=None),
+    category_code: str | None = Query(default=None),
     search: str | None = Query(default=None),
     current_user = Depends(require_mounting_nodes_view),
 ):
@@ -115,6 +116,7 @@ async def list_mounting_nodes_route(
             include_inactive=include_inactive,
             fitting_id=fitting_id,
             mounting_variant_key=mounting_variant_key,
+            category_code=category_code,
             search=search,
             viewer_user_id=getattr(current_user, "id", None),
             viewer_role=getattr(current_user, "role", None),

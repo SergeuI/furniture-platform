@@ -398,6 +398,7 @@ export async function getMountingNodes(token, filters = {}) {
   const normalizedSearch = String(filters.search || "").trim();
   const normalizedFittingId = String(filters.fitting_id || "").trim();
   const normalizedVariantKey = String(filters.mounting_variant_key || "").trim();
+  const normalizedCategoryCode = String(filters.category_code || "").trim().toLowerCase();
   const normalizedIsActive = normalizeMountingNodeBoolean(filters.is_active);
 
   if (normalizedSearch) {
@@ -410,6 +411,10 @@ export async function getMountingNodes(token, filters = {}) {
 
   if (normalizedVariantKey) {
     searchParams.set("mounting_variant_key", normalizedVariantKey);
+  }
+
+  if (normalizedCategoryCode) {
+    searchParams.set("category_code", normalizedCategoryCode);
   }
 
   if (normalizedIsActive !== null) {

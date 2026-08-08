@@ -120,6 +120,7 @@ test("mounting nodes restore state uses the fresh node detail for detail URLs", 
     buildMountingNodesRestoreState({ mode: "detail", nodeId: 9 }, nodeDetail),
     {
       activeStatusFilter: "all",
+      activeCategoryFilter: "all",
       activeVariantFilter: "all",
       appliedSearch: "",
       displayMode: "grid",
@@ -151,6 +152,7 @@ test("mounting nodes restore state uses the fresh node detail for editor URLs", 
     buildMountingNodesRestoreState({ mode: "editor", nodeId: 9 }, nodeDetail),
     {
       activeStatusFilter: "all",
+      activeCategoryFilter: "all",
       activeVariantFilter: "all",
       appliedSearch: "",
       displayMode: "grid",
@@ -197,6 +199,7 @@ test("mounting nodes restore state keeps create mode isolated from node details"
     buildMountingNodesRestoreState({ mode: "create", nodeId: null }, null),
     {
       activeStatusFilter: "all",
+      activeCategoryFilter: "all",
       activeVariantFilter: "all",
       appliedSearch: "",
       displayMode: "grid",

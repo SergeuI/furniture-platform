@@ -194,6 +194,7 @@ test("mounting node list wrapper forwards filters and keeps inactive filtering r
       search: "confirmat",
       fitting_id: 1,
       mounting_variant_key: "face_to_edge",
+      category_code: "hinges",
       is_active: false,
     });
 
@@ -201,8 +202,33 @@ test("mounting node list wrapper forwards filters and keeps inactive filtering r
     assert.deepEqual(result.nodes.map((node) => node.code), ["inactive-node"]);
     assert.equal(
       calls[0].url,
-      "/api/mounting-nodes?search=confirmat&fitting_id=1&mounting_variant_key=face_to_edge&is_active=false&include_inactive=true",
+      "/api/mounting-nodes?search=confirmat&fitting_id=1&mounting_variant_key=face_to_edge&category_code=hinges&is_active=false&include_inactive=true",
     );
+    assert.equal(calls[0].options.headers.Authorization, "Bearer token-5");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("mounting node list wrapper forwards the null category filter", async () => {
+  const calls = [];
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url, options });
+    return new Response(JSON.stringify({ success: true, nodes: [] }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+
+  try {
+    const result = await getMountingNodes("token-5", {
+      category_code: "null",
+    });
+
+    assert.equal(result.success, true);
+    assert.equal(calls[0].url, "/api/mounting-nodes?category_code=null");
     assert.equal(calls[0].options.headers.Authorization, "Bearer token-5");
   } finally {
     globalThis.fetch = originalFetch;

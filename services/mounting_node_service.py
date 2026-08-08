@@ -34,6 +34,7 @@ class MountingNodeService:
         "edge_to_edge",
         "drawer_slides",
     }
+    _NULL_CATEGORY_FILTER = "__null__"
 
     def __init__(
         self,
@@ -137,6 +138,26 @@ class MountingNodeService:
             allowed = ", ".join(ALLOWED_MOUNTING_NODE_CATEGORY_CODES)
             raise ValueError(f"category_code must be one of: {allowed}")
         return normalized
+
+    @classmethod
+    def _normalize_category_filter(cls, value: Any) -> str | None:
+        if value is None:
+            return None
+
+        text = str(value).strip()
+        if not text:
+            return None
+
+        normalized = text.lower()
+        if normalized == "null":
+            return cls._NULL_CATEGORY_FILTER
+
+        allowed = normalize_mounting_node_category_code(normalized)
+        if allowed is None:
+            allowed_labels = ", ".join(ALLOWED_MOUNTING_NODE_CATEGORY_CODES)
+            raise ValueError(f"category_code must be one of: {allowed_labels}, null")
+
+        return allowed
 
     @staticmethod
     def _normalize_bool(value: Any, default: bool) -> bool:
@@ -958,16 +979,19 @@ class MountingNodeService:
         include_inactive: bool = False,
         fitting_id: int | None = None,
         mounting_variant_key: str | None = None,
+        category_code: str | None = None,
         search: str | None = None,
         viewer_user_id: Any = None,
         viewer_role: Any = None,
         viewer_can_edit: bool | None = None,
         viewer_can_delete: bool | None = None,
     ) -> list[dict[str, Any]]:
+        normalized_category_code = self._normalize_category_filter(category_code)
         nodes = self.repository.list_nodes(
             include_inactive=include_inactive,
             fitting_id=fitting_id,
             mounting_variant_key=mounting_variant_key,
+            category_code=normalized_category_code,
             viewer_user_id=self._normalize_viewer_user_id(viewer_user_id),
             viewer_role=viewer_role,
         )
