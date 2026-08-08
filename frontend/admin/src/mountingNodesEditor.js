@@ -525,6 +525,10 @@ export function buildMountingNodeEditorSavePayload({
 
   const items = Array.isArray(nodeDetail.items) ? nodeDetail.items.map(normalizeNodeItem) : [];
   const templates = Array.isArray(nodeDetail.templates) ? nodeDetail.templates : [];
+  const categoryCode =
+    normalizeMountingNodeCategoryCode(context?.category_code) ||
+    normalizeMountingNodeCategoryCode(nodeDetail.category_code) ||
+    undefined;
   const currentTemplateIndex = templates.findIndex((link) => {
     const linkTemplateId = resolveMountingNodeTemplateId(link);
     return linkTemplateId === templateId;
@@ -560,7 +564,7 @@ export function buildMountingNodeEditorSavePayload({
   }
 
   return {
-    category_code: normalizeMountingNodeCategoryCode(nodeDetail.category_code) || undefined,
+    category_code: categoryCode,
     code: normalizeOptionalText(nodeDetail.code) || undefined,
     name: normalizeText(nodeDetail.name),
     description: normalizeOptionalText(nodeDetail.description),

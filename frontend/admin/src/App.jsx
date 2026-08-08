@@ -10618,6 +10618,7 @@ export default function App() {
       mountingNodeId,
       nodeCode: String(nodeDetail.code || "").trim(),
       nodeName: String(nodeDetail.name || "").trim(),
+      category_code: normalizeMountingNodeCategoryCode(nodeDetail.category_code),
       fittingId: String(primaryTemplate?.fitting_id || primaryItem?.fitting_id || "").trim(),
       templateId: String(primaryTemplate?.template_id || "").trim(),
       mountingVariantKey: String(primaryTemplate?.mounting_variant_key || "").trim(),
@@ -10724,6 +10725,24 @@ export default function App() {
         ...current,
         category_code: normalizedCategoryCode,
         is_dirty: true,
+      };
+    });
+    setCatalogHolesOpenContext((current) => {
+      if (!current || typeof current !== "object") {
+        return current;
+      }
+
+      const nextNodeDetail = current.nodeDetail && typeof current.nodeDetail === "object"
+        ? {
+            ...current.nodeDetail,
+            category_code: normalizedCategoryCode,
+          }
+        : current.nodeDetail;
+
+      return {
+        ...current,
+        category_code: normalizedCategoryCode,
+        nodeDetail: nextNodeDetail,
       };
     });
     setMountingNodeEditorHasChanges(true);
@@ -11087,6 +11106,7 @@ export default function App() {
 
     const editorContext = {
       ...(catalogHolesOpenContext || {}),
+      category_code: mountingNodeEditorSelectedCategoryCode || undefined,
       nodeDetail: mountingNodeEditorDraft || catalogHolesOpenContext?.nodeDetail || null,
     };
     const mountingNodeId = String(catalogHolesOpenContext?.mountingNodeId || "").trim();

@@ -261,6 +261,52 @@ test("mounting node editor payload keeps null category_code empty instead of aut
   assert.equal(payload.category_code, undefined);
 });
 
+test("mounting node editor payload prefers the explicit editor category code over a stale node snapshot", () => {
+  const payload = buildMountingNodeEditorSavePayload({
+    context: {
+      mountingNodeId: "1",
+      templateId: "7428",
+      category_code: "hinges",
+      nodeDetail: {
+        code: "node-1",
+        name: "Node 1",
+        category_code: null,
+        is_active: true,
+        items: [],
+        templates: [
+          {
+            template_id: 7428,
+            is_default: true,
+            order_index: 0,
+            template: {
+              id: 7428,
+              fitting_id: 11,
+              name: "Main template",
+              template_type: "manual",
+              mounting_variant_key: "face_to_edge",
+              is_default: true,
+              is_active: true,
+            },
+          },
+        ],
+      },
+    },
+    pointsLoaded: true,
+    selectedTemplate: {
+      id: 7428,
+      fitting_id: 11,
+      name: "Main template",
+      template_type: "manual",
+      mounting_variant_key: "face_to_edge",
+      is_default: true,
+      is_active: true,
+    },
+    points: [],
+  });
+
+  assert.equal(payload.category_code, "hinges");
+});
+
 test("mounting node editor payload keeps points empty when the user deleted every loaded point", () => {
   const payload = buildMountingNodeEditorSavePayload({
     context: {
