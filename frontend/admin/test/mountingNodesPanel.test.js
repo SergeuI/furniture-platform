@@ -180,6 +180,19 @@ test("mounting node editor category select lives in the App editor flow", () => 
   assert.equal(source.includes("mountingNodeEditorCategoryCodeRef.current = normalizeMountingNodeCategoryCode("), true);
 });
 
+test("mounting nodes list renders nodes before the category empty state branch", () => {
+  const sourcePath = fileURLToPath(
+    new URL("../src/components/processing/MountingNodesPanelRefined.jsx", import.meta.url),
+  );
+  const source = readFileSync(sourcePath, "utf8");
+  const nodesBranchIndex = source.indexOf(") : nodes.length ? (");
+  const categoryEmptyStateIndex = source.indexOf(") : activeCategoryFilter !== \"all\" ? (");
+
+  assert.equal(nodesBranchIndex >= 0, true);
+  assert.equal(categoryEmptyStateIndex >= 0, true);
+  assert.equal(nodesBranchIndex < categoryEmptyStateIndex, true);
+});
+
 test("mounting node editor renders a single workspace with one hardware block and no variant block", () => {
   const sourcePath = fileURLToPath(new URL("../src/App.jsx", import.meta.url));
   const source = readFileSync(sourcePath, "utf8");

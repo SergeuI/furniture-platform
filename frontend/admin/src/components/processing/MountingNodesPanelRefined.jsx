@@ -1801,17 +1801,6 @@ export default function MountingNodesPanelRefined({
                 {t.mountingNodesRetry || (language === "uk" ? "Повторити" : "Retry")}
               </button>
             </div>
-          ) : activeCategoryFilter !== "all" ? (
-            <div className="empty-state compact-empty-state">
-              <span>
-                {language === "uk"
-                  ? "У цій категорії монтажних вузлів поки немає"
-                  : "There are no mounting nodes in this category yet"}
-              </span>
-              <button className="primary-button" onClick={handleRefresh} type="button">
-                {t.mountingNodesRetry || (language === "uk" ? "Повторити" : "Retry")}
-              </button>
-            </div>
           ) : nodes.length ? (
             displayMode === "grid" ? (
               <div className="settings-grid mounting-nodes-grid">
@@ -1906,6 +1895,17 @@ export default function MountingNodesPanelRefined({
                 })}
               </div>
             )
+          ) : activeCategoryFilter !== "all" ? (
+            <div className="empty-state compact-empty-state">
+              <span>
+                {language === "uk"
+                  ? "У цій категорії монтажних вузлів поки немає"
+                  : "There are no mounting nodes in this category yet"}
+              </span>
+              <button className="primary-button" onClick={handleRefresh} type="button">
+                {t.mountingNodesRetry || (language === "uk" ? "Повторити" : "Retry")}
+              </button>
+            </div>
           ) : (
             <div className="empty-state compact-empty-state">
               <span>{t.mountingNodesEmpty || (language === "uk" ? "Монтажні вузли ще не створені." : "Mounting nodes have not been created yet.")}</span>
