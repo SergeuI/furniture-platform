@@ -28,6 +28,7 @@ from handlers import profile as profile_handlers
 from handlers.registration import (
     registration_contact_handler,
     registration_start_deeplink_handler,
+    registration_text_handler,
 )
 from services import registration_onboarding_service as onboarding
 from services.registration_identity_service import CHALLENGE_PENDING
@@ -78,6 +79,20 @@ class TelegramRegistrationHandlerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(message_answer.await_count, 1)
         state = await storage.get_state(self._storage_key(bot, update.message))
         self.assertEqual(state, Form.telegram_registration.state)
+
+    async def test_text_in_telegram_registration_reprompts_for_contact_button(self) -> None:
+        message_answer = mock.AsyncMock(return_value=None)
+        message = self._build_message(
+            message_id=3,
+            text="+380632585040",
+        )
+        state = mock.AsyncMock()
+
+        with mock.patch("aiogram.types.message.Message.answer", new=message_answer):
+            await registration_text_handler(message, state)
+
+        self.assertEqual(message_answer.await_count, 1)
+        self.assertIn("натисніть кнопку", message_answer.await_args.args[0].lower())
 
     async def test_contact_handler_rejects_invalid_contacts_and_accepts_owner(self) -> None:
         message_answer = mock.AsyncMock(return_value=None)
@@ -192,6 +207,34 @@ class TelegramRegistrationHandlerTests(unittest.IsolatedAsyncioTestCase):
                     else:
                         state.clear.assert_not_awaited()
                         self.assertEqual(message_answer.await_count, 1)
+
+    async def test_contact_handler_normalizes_phone_without_plus(self) -> None:
+        message_answer = mock.AsyncMock(return_value=None)
+        confirm = mock.Mock(return_value={"success": True, "trial_granted": False, "challenge_status": CHALLENGE_PENDING})
+        message = self._build_message(
+            message_id=16,
+            text="contact",
+            contact=Contact(phone_number="380632585040", first_name="Owner", user_id=123),
+            from_user_id=123,
+        )
+        state = mock.AsyncMock()
+        state.get_data = mock.AsyncMock(
+            return_value={"telegram_registration_payload": "opaque-payload"}
+        )
+        state.clear = mock.AsyncMock()
+        state.set_state = mock.AsyncMock()
+
+        with mock.patch.object(
+            registration_handlers,
+            "confirm_pending_phone_registration_via_telegram",
+            new=confirm,
+        ), mock.patch("aiogram.types.message.Message.answer", new=message_answer):
+            await registration_contact_handler(message, state)
+
+        confirm.assert_called_once()
+        self.assertEqual(confirm.call_args.kwargs["contact_phone"], "+380632585040")
+        state.clear.assert_awaited_once()
+        self.assertGreaterEqual(message_answer.await_count, 1)
 
     def test_registration_handlers_do_not_log_sensitive_values(self) -> None:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:

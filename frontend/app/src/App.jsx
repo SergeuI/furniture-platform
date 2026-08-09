@@ -4616,7 +4616,7 @@ export default function App() {
                       ) : registrationStep === 2 ? (
                         <>
                           <UserPlus size={18} />
-                          {t.registrationRequestCode}
+                          {t.registrationContinue}
                         </>
                       ) : isTelegramConfirmationMode ? null : (
                         <>

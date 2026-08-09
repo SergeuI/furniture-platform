@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 from datetime import datetime
 
 from aiogram import F, Router
@@ -22,7 +23,6 @@ from forms.user import Form
 from services.registration_identity_service import (
     CHALLENGE_BLOCKED,
     CHALLENGE_CONSUMED,
-    CHALLENGE_EXPIRED,
     hash_registration_token,
 )
 from services.registration_onboarding_service import (
@@ -43,6 +43,21 @@ def _telegram_contact_keyboard() -> ReplyKeyboardMarkup:
         resize_keyboard=True,
         one_time_keyboard=True,
     )
+
+
+def _normalize_telegram_contact_phone(phone: str) -> str:
+    text = str(phone or "").strip()
+    if not text:
+        raise ValueError("Phone number is required")
+
+    if text.startswith("+"):
+        return text
+
+    digits = re.sub(r"\D+", "", text)
+    if not digits:
+        raise ValueError("Phone number is required")
+
+    return f"+{digits}"
 
 
 def _success_markup() -> InlineKeyboardMarkup | None:
@@ -90,7 +105,7 @@ def _load_telegram_challenge(payload: str):
 @router.message(CommandStart(deep_link=True))
 async def registration_start_deeplink_handler(message: Message, state: FSMContext):
     if message.chat.type != "private":
-        await message.answer("Р’РёРєРѕСЂРёСЃС‚РѕРІСѓР№С‚Рµ Telegram у приватному чаті.")
+        await message.answer("Використовуйте Telegram у приватному чаті.")
         return
 
     parts = (message.text or "").split(maxsplit=1)
@@ -129,6 +144,18 @@ async def registration_start_deeplink_handler(message: Message, state: FSMContex
     )
 
 
+@router.message(Form.telegram_registration, F.text)
+async def registration_text_handler(message: Message, state: FSMContext):
+    if message.chat.type != "private":
+        await message.answer("Реєстрація через Telegram працює тільки в приватному чаті.")
+        return
+
+    await message.answer(
+        "Номер вручну вводити не потрібно. Будь ласка, натисніть кнопку під повідомленням.",
+        reply_markup=_telegram_contact_keyboard(),
+    )
+
+
 @router.message(Form.telegram_registration, F.contact)
 async def registration_contact_handler(message: Message, state: FSMContext):
     if message.chat.type != "private":
@@ -151,14 +178,35 @@ async def registration_contact_handler(message: Message, state: FSMContext):
         await message.answer("Сеанс підтвердження завершився. Почніть ще раз із сайту.")
         return
 
+    try:
+        normalized_contact_phone = _normalize_telegram_contact_phone(contact.phone_number)
+    except ValueError:
+        await message.answer(
+            "Не вдалося прочитати номер з Telegram contact. Будь ласка, натисніть кнопку під повідомленням ще раз.",
+            reply_markup=_telegram_contact_keyboard(),
+        )
+        return
+
     result = confirm_pending_phone_registration_via_telegram(
         payload=payload,
         telegram_user_id=message.from_user.id,
-        contact_phone=contact.phone_number,
+        contact_phone=normalized_contact_phone,
     )
 
     if not result.get("success"):
         error = result.get("error") or "Не вдалося підтвердити номер."
+        if result.get("error") in {
+            "Phone number must start with +",
+            "Phone number may contain only digits after +",
+            "Phone number must contain 8 to 15 digits after +",
+            "Phone number is required",
+        }:
+            await message.answer(
+                "Номер з Telegram contact не вдалося підтвердити. Будь ласка, натисніть кнопку під повідомленням ще раз.",
+                reply_markup=_telegram_contact_keyboard(),
+            )
+            return
+
         if result.get("error") in {
             "Challenge not found",
             f"Challenge is {CHALLENGE_CONSUMED}",
@@ -168,6 +216,7 @@ async def registration_contact_handler(message: Message, state: FSMContext):
             "User registration is not pending",
         }:
             await state.clear()
+
         await message.answer(error, reply_markup=ReplyKeyboardRemove())
         return
 
