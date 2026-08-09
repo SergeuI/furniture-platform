@@ -148,7 +148,9 @@ test("toolbar breadcrumb for mounting nodes uses stable App primitives", () => {
   assert.equal(source.includes("handleCloseCatalogHolesDetail"), true);
   assert.equal(source.includes("handleCatalogHolesToolbarListClick"), true);
   assert.equal(source.includes("renderCatalogHolesToolbarBreadcrumb("), true);
-  assert.equal(source.includes("getMountingNodesToolbarBreadcrumbItems()"), true);
+  assert.equal(source.includes("getMountingNodesToolbarBreadcrumbItemsCanonical()"), true);
+  assert.equal(source.includes("setCatalogHolesMode(\"categories\");"), true);
+  assert.equal(source.includes("setCatalogHolesMode(\"list\");"), true);
   assert.equal(source.includes("if (catalogHolesDetailOpen)"), true);
   assert.equal(source.includes("setCatalogHolesDetailOpen(true)"), true);
   assert.equal(source.includes("setCatalogHolesDetailOpen(false)"), true);

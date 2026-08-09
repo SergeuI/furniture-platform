@@ -7505,6 +7505,8 @@ export default function App() {
             ? "create"
             : nextRoute.mountingNodesRoute?.mode === "editor"
               ? "editor"
+              : nextRoute.mountingNodesRoute?.mode === "categories"
+                ? "categories"
               : "list"
           : "list",
       );
@@ -10417,6 +10419,7 @@ export default function App() {
     setMountingNodesRouteLoadingMessage("");
     setMountingNodesRouteError("");
     setMountingNodesRouteReady(true);
+    setCatalogHolesMode("categories");
     updateAdminHistory({
       mountingNodesRoute: nextRoute,
       view: "catalogHoles",
@@ -10441,6 +10444,7 @@ export default function App() {
     setMountingNodesRouteError("");
     setMountingNodesRouteReady(true);
     setMountingNodesRouteVersion((current) => current + 1);
+    setCatalogHolesMode("list");
     updateAdminHistory({
       mountingNodesRoute: nextRoute,
       view: "catalogHoles",
@@ -10605,33 +10609,16 @@ export default function App() {
     setCatalogHolesReturnState(null);
     setCatalogHolesSaving(false);
 
-    if (catalogHolesMode === "editor" || catalogHolesMode === "create") {
-      setCatalogHolesMode("list");
-      setCatalogHolesOpenContext(null);
-      setCatalogHolesCreateError("");
-      setCatalogHolesCreating(false);
-      const nextRoute = normalizeMountingNodesRoute({
-        mode: "list",
-        nodeId: null,
-        categoryCode: mountingNodesRouteState?.categoryCode || null,
-      });
-      setMountingNodesRouteState(nextRoute);
-      setMountingNodesRouteReady(true);
-      setMountingNodesInitialState(null);
-      updateAdminHistory({
-        mountingNodesRoute: nextRoute,
-        view: "catalogHoles",
-      });
-      return;
-    }
-
-    setCatalogHolesListRequestToken((current) => current + 1);
+    const nextRoute = normalizeMountingNodesRoute({ mode: "categories", nodeId: null });
+    setCatalogHolesMode("categories");
+    setCatalogHolesOpenContext(null);
+    setCatalogHolesCreateError("");
+    setCatalogHolesCreating(false);
+    setMountingNodesRouteState(nextRoute);
+    setMountingNodesRouteReady(true);
+    setMountingNodesInitialState(null);
     updateAdminHistory({
-      mountingNodesRoute: {
-        mode: "list",
-        nodeId: null,
-        categoryCode: mountingNodesRouteState?.categoryCode || null,
-      },
+      mountingNodesRoute: nextRoute,
       view: "catalogHoles",
     });
   }
@@ -10778,6 +10765,32 @@ export default function App() {
       language,
       listLabel,
       mode: catalogHolesMode,
+      nodeName,
+      onOpenCategories: handleCatalogHolesToolbarListClick,
+      onOpenCategoryList: () => handleOpenMountingNodesCategoryList(categoryCode),
+      onOpenNodeDetail: handleCatalogHolesBackToList,
+    });
+  }
+
+  function getMountingNodesToolbarBreadcrumbItemsCanonical() {
+    const listLabel = t.holeTabTitle || (language === "uk" ? "Монтажні вузли" : "Mounting nodes");
+    const routeMode = mountingNodesRouteState?.mode || catalogHolesMode;
+    const categoryCode = resolveMountingNodesCategoryCode(
+      mountingNodesRouteState?.categoryCode,
+      catalogHolesOpenContext?.category_code ||
+        catalogHolesReturnState?.selectedNodeDetail?.category_code ||
+        catalogHolesReturnState?.nodeDetail?.category_code,
+    );
+    const nodeName = getCatalogHolesBreadcrumbNodeName();
+
+    return buildMountingNodesBreadcrumbItems({
+      allListLabel: language === "uk" ? "Усі монтажні вузли" : "All mounting nodes",
+      categoryCode,
+      createLabel: language === "uk" ? "Створення вузла" : "Node creation",
+      editingLabel: language === "uk" ? "Редагування вузла" : "Node editing",
+      language,
+      listLabel,
+      mode: routeMode,
       nodeName,
       onOpenCategories: handleCatalogHolesToolbarListClick,
       onOpenCategoryList: () => handleOpenMountingNodesCategoryList(categoryCode),
@@ -15347,6 +15360,8 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
           ? "create"
           : initialAdminRoute.mountingNodesRoute?.mode === "editor"
             ? "editor"
+            : initialAdminRoute.mountingNodesRoute?.mode === "categories"
+              ? "categories"
             : "list"
         : "list",
     );
@@ -15768,7 +15783,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
         setCatalogHolesReturnState(null);
       }
 
-      const nextCatalogHolesMode = contextMountingNodeId ? "editor" : "list";
+      const nextCatalogHolesMode = contextMountingNodeId ? "editor" : "categories";
       nextMountingNodesRoute = normalizeMountingNodesRoute(
         contextMountingNodeId
           ? { mode: "editor", nodeId: contextMountingNodeId }
@@ -18272,7 +18287,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
               <Menu size={18} />
             </button>
             {isCatalogHolesView
-              ? renderCatalogHolesToolbarBreadcrumb(getMountingNodesToolbarBreadcrumbItems())
+              ? renderCatalogHolesToolbarBreadcrumb(getMountingNodesToolbarBreadcrumbItemsCanonical())
               : (
                 <h2>
                   {isHomeView
