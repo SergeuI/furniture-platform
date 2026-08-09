@@ -15820,6 +15820,16 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
       const contextVariantKey = normalizeHoleWorkspaceMountingVariantKey(openContext?.mountingVariantKey || "");
       const contextNodeDetail =
         openContext?.nodeDetail && typeof openContext.nodeDetail === "object" ? openContext.nodeDetail : null;
+      const contextCategoryCode = resolveMountingNodesCategoryCode(
+        openContext?.category_code,
+        contextNodeDetail?.category_code ?? mountingNodesRouteState?.categoryCode,
+      );
+      const contextFunctionalCode = normalizeMountingNodeFunctionalCode(
+        openContext?.functional_code ??
+          contextNodeDetail?.functional_code ??
+          mountingNodeEditorFunctionalCodeRef.current ??
+          mountingNodeEditorDraft?.functional_code,
+      ) || null;
       const contextNodeName = String(
         baseContextNodeName ||
           contextNodeDetail?.name ||
@@ -15846,6 +15856,8 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
             fittingId: contextFittingId,
             templateId: contextTemplateId || editorTemplateId,
             mountingVariantKey: contextVariantKey,
+            category_code: contextCategoryCode,
+            functional_code: contextFunctionalCode,
             nodeDetail: contextNodeDetail,
           }
           : null,

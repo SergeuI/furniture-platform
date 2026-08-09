@@ -676,6 +676,8 @@ test("mounting node editor save refreshes cached detail state after a successful
 
   assert.equal(source.includes("const savedRestoreState = buildMountingNodesRestoreState("), true);
   assert.equal(source.includes("const savedCategoryCode = resolveMountingNodesCategoryCode("), true);
+  assert.equal(source.includes("const contextFunctionalCode = normalizeMountingNodeFunctionalCode("), true);
+  assert.equal(source.includes("functional_code: contextFunctionalCode,"), true);
   assert.equal(source.includes("normalizeMountingNodesRoute({"), true);
   assert.equal(source.includes('mode: "editor"'), true);
   assert.equal(source.includes("setCatalogHolesReturnState((current) => ({"), true);
