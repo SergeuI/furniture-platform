@@ -81,6 +81,7 @@ test("mounting nodes panel keeps the DETAIL white panel free of breadcrumb marku
   assert.equal(source.includes("normalizeMountingNodeCategoryCode"), true);
   assert.equal(source.includes("activeCategoryFilter"), true);
   assert.equal(source.includes("handleCategoryFilterChange"), true);
+  assert.equal(source.includes('activeCategoryFilter === "all" ? ('), true);
   assert.equal(source.includes("categoryFilterOptions"), true);
   assert.equal(source.includes("MOUNTING_NODE_CATEGORY_FILTER_NULL"), true);
   assert.equal(source.includes("mounting-node-card-layout"), true);
@@ -814,6 +815,7 @@ test("app exposes the mounting node category catalog view and route wiring", () 
   assert.equal(source.includes("mode === \"categories\""), true);
   assert.equal(source.includes("handleOpenMountingNodesCategoryCatalog"), true);
   assert.equal(source.includes("handleOpenAllMountingNodesList"), false);
+  assert.equal(source.includes("buildMountingNodesRouteUrl(normalizedRoute, window.location.search)"), true);
   assert.equal(source.includes("mountingNodesCategorySummary"), true);
   assert.equal(source.includes("mountingNodesCategorySummaryLoading"), true);
   assert.equal(source.includes("getMountingNodeCategoryImageUrl"), true);

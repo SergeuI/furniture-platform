@@ -1788,16 +1788,18 @@ export default function MountingNodesPanelRefined({
                 value={searchInput}
               />
             </label>
-            <label className="mounting-nodes-filter-field">
-              {language === "uk" ? "Категорія" : "Category"}
-              <select onChange={(event) => handleCategoryFilterChange(event.target.value)} value={activeCategoryFilter}>
-                {categoryFilterOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+            {activeCategoryFilter === "all" ? (
+              <label className="mounting-nodes-filter-field">
+                {language === "uk" ? "Категорія" : "Category"}
+                <select onChange={(event) => handleCategoryFilterChange(event.target.value)} value={activeCategoryFilter}>
+                  {categoryFilterOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
             <label className="mounting-nodes-filter-field">
               {language === "uk" ? "Статус" : "Status"}
               <select onChange={(event) => handleStatusFilterChange(event.target.value)} value={activeStatusFilter}>

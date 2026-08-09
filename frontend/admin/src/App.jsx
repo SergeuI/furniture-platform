@@ -411,14 +411,7 @@ function buildAdminHistoryUrl(
       mountingNodesRoute || { mode: "list", nodeId: null },
     );
 
-    params.set("section", ADMIN_MOUNTING_NODES_SECTION);
-    params.set("mode", normalizedRoute.mode);
-
-    if (normalizedRoute.nodeId === null) {
-      params.delete("node");
-    } else {
-      params.set("node", String(normalizedRoute.nodeId));
-    }
+    return `${window.location.pathname}${buildMountingNodesRouteUrl(normalizedRoute, window.location.search)}${currentHash || ""}`;
   } else if (normalizedView === "processing") {
     const normalizedProcessingTab = normalizeProcessingWorkspaceTab(processingTab, {
       canUseFittingHoles: true,
