@@ -9,6 +9,7 @@ import {
   createMountingNodesDetailRestoreCoordinator,
   normalizeMountingNodesRoute,
   parseMountingNodesRoute,
+  resolveMountingNodesCategoryCode,
   shouldPreserveMountingNodeEditorWorkspace,
   shouldHydrateMountingNodeDetail,
 } from "../src/mountingNodesNavigation.js";
@@ -25,7 +26,7 @@ test("mounting nodes route parser recognizes the detail URL", () => {
   assert.deepEqual(parseMountingNodesRoute("?section=mounting-nodes&mode=detail&node=9"), {
     mode: "detail",
     nodeId: 9,
-    categoryCode: null,
+    categoryCode: undefined,
   });
 });
 
@@ -33,7 +34,7 @@ test("mounting nodes route parser recognizes the editor URL", () => {
   assert.deepEqual(parseMountingNodesRoute("?section=mounting-nodes&mode=editor&node=9"), {
     mode: "editor",
     nodeId: 9,
-    categoryCode: null,
+    categoryCode: undefined,
   });
 });
 
@@ -41,7 +42,7 @@ test("mounting nodes route parser recognizes the create URL", () => {
   assert.deepEqual(parseMountingNodesRoute("?section=mounting-nodes&mode=create"), {
     mode: "create",
     nodeId: null,
-    categoryCode: null,
+    categoryCode: undefined,
   });
 });
 
@@ -351,7 +352,7 @@ test("mounting nodes restored route keeps editor mode for editor requests", () =
     {
       mode: "editor",
       nodeId: 9,
-      categoryCode: null,
+      categoryCode: undefined,
     },
   );
 });
@@ -362,9 +363,15 @@ test("mounting nodes restored route falls back to detail mode for detail request
     {
       mode: "detail",
       nodeId: 9,
-      categoryCode: null,
+      categoryCode: undefined,
     },
   );
+});
+
+test("mounting nodes category resolver keeps absent and null categories separate", () => {
+  assert.equal(resolveMountingNodesCategoryCode(undefined, "hinges"), "hinges");
+  assert.equal(resolveMountingNodesCategoryCode(null, "hinges"), "null");
+  assert.equal(resolveMountingNodesCategoryCode(undefined, "null"), "null");
 });
 
 test("mounting nodes restore state keeps create mode isolated from node details", () => {

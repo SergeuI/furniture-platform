@@ -313,6 +313,14 @@ function buildMountingNodesHistoryUrl(route, currentSearch = "", currentHash = "
   return `${window.location.pathname}${nextSearch}${currentHash || ""}`;
 }
 
+function resolveMountingNodesNavigationCategoryCode(routeCategoryCode, fallbackCategoryCode = undefined) {
+  if (routeCategoryCode === undefined) {
+    return fallbackCategoryCode === undefined ? undefined : resolveMountingNodesCategoryCode(fallbackCategoryCode);
+  }
+
+  return resolveMountingNodesCategoryCode(routeCategoryCode, fallbackCategoryCode);
+}
+
 const ADMIN_SECTION_BY_VIEW = {
   audit: "audit",
   catalogBundles: "catalog-bundles",
@@ -10548,7 +10556,12 @@ export default function App() {
       const nextRoute = normalizeMountingNodesRoute({
         mode: "list",
         nodeId: null,
-        categoryCode: mountingNodesRouteState?.categoryCode || null,
+        categoryCode: resolveMountingNodesNavigationCategoryCode(
+          mountingNodesRouteState?.categoryCode,
+          catalogHolesOpenContext?.category_code ||
+            catalogHolesReturnState?.selectedNodeDetail?.category_code ||
+            catalogHolesReturnState?.nodeDetail?.category_code,
+        ),
       });
       setCatalogHolesMode("list");
       setCatalogHolesDetailOpen(false);
@@ -10598,7 +10611,12 @@ export default function App() {
       route: {
         mode: "detail",
         nodeId: restoredNodeId,
-        categoryCode: mountingNodesRouteState?.categoryCode || null,
+        categoryCode: resolveMountingNodesNavigationCategoryCode(
+          mountingNodesRouteState?.categoryCode,
+          catalogHolesOpenContext?.category_code ||
+            catalogHolesReturnState?.selectedNodeDetail?.category_code ||
+            catalogHolesReturnState?.nodeDetail?.category_code,
+        ),
       },
     });
   }
@@ -10607,7 +10625,12 @@ export default function App() {
     const nextRoute = normalizeMountingNodesRoute({
       mode: "list",
       nodeId: null,
-      categoryCode: mountingNodesRouteState?.categoryCode || null,
+      categoryCode: resolveMountingNodesNavigationCategoryCode(
+        mountingNodesRouteState?.categoryCode,
+        catalogHolesOpenContext?.category_code ||
+          catalogHolesReturnState?.selectedNodeDetail?.category_code ||
+          catalogHolesReturnState?.nodeDetail?.category_code,
+      ),
     });
     mountingNodesEditorRestoreKeyRef.current = "";
     setMountingNodesRouteError("");
@@ -10637,7 +10660,7 @@ export default function App() {
       return;
     }
 
-    const resolvedCategoryCode = resolveMountingNodesCategoryCode(
+    const resolvedCategoryCode = resolveMountingNodesNavigationCategoryCode(
       categoryCode,
       mountingNodesRouteState?.categoryCode,
     );
@@ -10665,7 +10688,12 @@ export default function App() {
     setCatalogHolesBreadcrumbNodeId(null);
     setCatalogHolesBreadcrumbNodeName("");
     setCatalogHolesReturnState(null);
-    const categoryCode = mountingNodesRouteState?.categoryCode || null;
+    const categoryCode = resolveMountingNodesNavigationCategoryCode(
+      mountingNodesRouteState?.categoryCode,
+      catalogHolesOpenContext?.category_code ||
+        catalogHolesReturnState?.selectedNodeDetail?.category_code ||
+        catalogHolesReturnState?.nodeDetail?.category_code,
+    );
     setMountingNodesRouteState(normalizeMountingNodesRoute({ mode: "list", nodeId: null, categoryCode }));
     updateAdminHistory({
       mountingNodesRoute: { mode: "list", nodeId: null, categoryCode },
@@ -10820,7 +10848,7 @@ export default function App() {
     const routeCategoryCode = mountingNodesRouteState?.categoryCode;
     const categoryCode = catalogHolesMode === "list" && routeCategoryCode == null
       ? undefined
-      : resolveMountingNodesCategoryCode(
+      : resolveMountingNodesNavigationCategoryCode(
           routeCategoryCode,
       catalogHolesOpenContext?.category_code ||
         catalogHolesReturnState?.selectedNodeDetail?.category_code ||
@@ -10846,7 +10874,7 @@ export default function App() {
   function getMountingNodesToolbarBreadcrumbItemsCanonical() {
     const listLabel = t.holeTabTitle || (language === "uk" ? "Монтажні вузли" : "Mounting nodes");
     const routeMode = mountingNodesRouteState?.mode || catalogHolesMode;
-    const categoryCode = resolveMountingNodesCategoryCode(
+    const categoryCode = resolveMountingNodesNavigationCategoryCode(
       mountingNodesRouteState?.categoryCode,
       catalogHolesOpenContext?.category_code ||
         catalogHolesReturnState?.selectedNodeDetail?.category_code ||
@@ -10879,7 +10907,12 @@ export default function App() {
     setCatalogHolesCreateError("");
     setCatalogHolesCreating(false);
     const nextCategoryCode = returnState?.activeCategoryFilter === "all"
-      ? mountingNodesRouteState?.categoryCode ?? null
+      ? resolveMountingNodesNavigationCategoryCode(
+          mountingNodesRouteState?.categoryCode,
+          catalogHolesOpenContext?.category_code ||
+            returnState?.selectedNodeDetail?.category_code ||
+            returnState?.nodeDetail?.category_code,
+        )
       : resolveMountingNodesCategoryCode(
           returnState?.activeCategoryFilter,
           mountingNodesRouteState?.categoryCode,

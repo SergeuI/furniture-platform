@@ -89,7 +89,7 @@ export function normalizeMountingNodesRoute(route = {}) {
     return {
       mode,
       nodeId,
-      categoryCode,
+      categoryCode: hasCategoryCode ? categoryCode : undefined,
     };
   }
 
@@ -97,7 +97,7 @@ export function normalizeMountingNodesRoute(route = {}) {
     return {
       mode,
       nodeId: null,
-      categoryCode,
+      categoryCode: hasCategoryCode ? categoryCode : undefined,
     };
   }
 
