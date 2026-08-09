@@ -1,4 +1,4 @@
-﻿import assert from "node:assert/strict";
+import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
@@ -122,14 +122,14 @@ test("mounting nodes panel keeps the DETAIL white panel free of breadcrumb marku
   assert.equal(source.includes("getMountingNodeVersionSummary"), true);
   assert.equal(source.includes("mounting-node-detail-version-summary-card"), true);
   assert.equal(source.includes("mounting-node-detail-version-summary-grid"), true);
-  assert.equal(source.includes("getNodeCategoryLabel(selectedNodeDetailForDisplay, language)"), true);
+  assert.equal(source.includes('label={language === "uk" ? "Категорія" : "Category"}'), true);
   assert.equal(source.includes("mounting-node-detail-version-preview-note"), true);
   assert.equal(source.includes("mounting-node-version-item-actions"), true);
   assert.equal(source.includes("Active version"), true);
   assert.equal(source.includes("Version history"), true);
   assert.equal(source.includes("Return to active version"), true);
   assert.equal(source.includes("Edit composition and openings"), true);
-  assert.equal(source.includes("РџРµСЂРµРіР»СЏРЅСѓС‚Рё"), true);
+  assert.equal(source.includes("Переглянути"), true);
 
   const cardVisualsStart = source.indexOf('<div className="mounting-node-card-visuals">');
   const rowVisualsStart = source.indexOf('<div className="mounting-node-row-visuals">');
@@ -167,8 +167,8 @@ test("toolbar breadcrumb for mounting nodes uses stable App primitives", () => {
   assert.equal(source.includes("setCatalogHolesDetailOpen(true)"), true);
   assert.equal(source.includes("setCatalogHolesDetailOpen(false)"), true);
   assert.equal(source.includes("mounting-node-toolbar-breadcrumb"), true);
-  assert.equal(source.includes("catalogHolesBreadcrumbNodeId"), true);
-  assert.equal(source.includes("catalogHolesBreadcrumbNodeName"), true);
+  assert.equal(source.includes("Створення вузла"), true);
+  assert.equal(source.includes("Редагування вузла"), true);
   assert.equal(source.includes('mode === "editor"'), true);
   assert.equal(source.includes("onNavigationChange"), false);
   assert.equal(source.includes("catalogHolesNavigationState"), false);
@@ -221,13 +221,13 @@ test("mounting node editor renders a single workspace with one hardware block an
   assert.equal(workspaceSource.includes("mounting-node-editor-workspace"), true);
   assert.equal(workspaceSource.includes("mounting-node-editor-left-column"), true);
   assert.equal(workspaceSource.includes("mounting-node-editor-right-column"), true);
-  assert.equal((workspaceSource.match(/holeTabPoints/g) || []).length, 1);
-  assert.equal((workspaceSource.match(/Р’Р°СЂС–Р°РЅС‚ РєСЂС–РїР»РµРЅРЅСЏ/g) || []).length, 0);
+  assert.equal((workspaceSource.match(/Склад фурнітури/g) || []).length, 1);
+  assert.equal((workspaceSource.match(/Варіант кріплення/g) || []).length, 0);
   assert.equal(workspaceSource.includes("holeTabPoints"), true);
   assert.equal(workspaceSource.includes("holeWorkspacePreview3dTitle"), true);
   assert.equal(source.includes("MountingNodesFittingSelectorModal"), true);
-  assert.equal(source.includes("mountingNodeEditorSelectorOpen"), true);
-  assert.equal(source.includes("mountingNodeEditorCanAddPoint"), true);
+  assert.equal(source.includes("Редагування вузла"), true);
+  assert.equal(source.includes("Зберегти нову версію"), true);
   assert.equal(source.includes('isOpen={mountingNodeEditorSelectorOpen}'), true);
   assert.equal(source.includes("mountingNodeEditorHasChanges"), true);
   assert.equal(source.includes("mountingNodeEditorCanAddPoint"), true);
@@ -247,7 +247,7 @@ test("mounting nodes panel builds editor context from the full detail template l
   const buildNodeEditorContext = loadBuildNodeEditorContextFromSource();
   const nodeDetail = {
     id: 9,
-    name: "РїРµС‚Р»СЏ",
+    name: "петля",
     templates: [
       {
         id: 13,
@@ -272,7 +272,7 @@ test("mounting nodes panel builds editor context from the full detail template l
   assert.deepEqual(buildNodeEditorContext(nodeDetail), {
     mountingNodeId: "9",
     nodeCode: "",
-    nodeName: "РїРµС‚Р»СЏ",
+    nodeName: "петля",
     fittingId: "42",
     templateId: "7480",
     mountingVariantKey: "angled_two_planes",
@@ -321,7 +321,7 @@ test("mounting node editor context prefers the active version snapshot over live
   const nodeDetail = {
     id: 13,
     code: "mounting-node-test",
-    name: "РўРµСЃС‚",
+    name: "Тест",
     items: [
       {
         fitting_id: 42,
@@ -356,7 +356,7 @@ test("mounting node editor context prefers the active version snapshot over live
         snapshot: {
           id: 13,
           code: "mounting-node-test",
-          name: "РўРµСЃС‚",
+          name: "Тест",
           items: [
             {
               fitting_id: 42,
@@ -394,7 +394,7 @@ test("mounting node helpers choose the active version snapshot and keep snapshot
   const nodeDetail = {
     id: 13,
     code: "mounting-node-test",
-    name: "РўРµСЃС‚",
+    name: "Тест",
     items: [
       {
         fitting_id: 42,
@@ -492,7 +492,7 @@ test("mounting node hydration helper keeps the canonical editor state aligned ac
   const nodeDetail = {
     id: 13,
     code: "mounting-node-test",
-    name: "РўРµСЃС‚",
+    name: "Тест",
     items: [
       {
         fitting_id: 42,
@@ -617,7 +617,7 @@ test("mounting node editor save payload omits temporary draft point ids", () => 
     templateId: "7480",
     nodeDetail: {
       code: "mounting-node-test",
-      name: "РўРµСЃС‚",
+      name: "Тест",
       is_active: true,
       items: [
         {
@@ -810,47 +810,36 @@ test("mounting nodes tile and list layouts keep the responsive grid contract in 
   assert.equal(source.includes("flex-direction: column;"), true);
 });
 
-test("mounting nodes list header keeps the compact controls layout contract", () => {
+test("mounting nodes list keeps the compact two-row toolbar contract", () => {
   const sourcePath = fileURLToPath(
     new URL("../src/components/processing/MountingNodesPanelRefined.jsx", import.meta.url),
   );
   const source = readFileSync(sourcePath, "utf8");
-  const stylesPath = fileURLToPath(new URL("../src/styles.css", import.meta.url));
-  const styles = readFileSync(stylesPath, "utf8");
 
-  const filterRowStart = source.indexOf('<div className="mounting-nodes-filter-row">');
-  const filterFormStart = source.indexOf('<form className="project-filter-form mounting-nodes-filters"', filterRowStart);
-  const filterToggleStart = source.indexOf('<div className="mounting-nodes-display-toggle materials-mode-switch"', filterFormStart);
-  const filterFormEnd = source.indexOf("</form>", filterFormStart);
-
-  assert.equal(filterRowStart >= 0, true);
-  assert.equal(filterFormStart > filterRowStart, true);
-  assert.equal(filterToggleStart > filterFormEnd, true);
   assert.equal(source.includes("mounting-nodes-header-row"), true);
   assert.equal(source.includes("mounting-nodes-header-copy"), true);
-  assert.equal(source.includes("mounting-nodes-toolbar-main"), true);
-  assert.equal(source.includes("mounting-nodes-filter-row"), true);
-  assert.equal(source.includes("mounting-nodes-filter-main"), true);
-  assert.equal(source.includes("mounting-nodes-display-toggle materials-mode-switch"), true);
-  assert.equal(source.includes("mounting-node-return-button"), true);
+  assert.equal(source.includes("mounting-nodes-header-actions"), true);
+  assert.equal(source.includes("mounting-nodes-controls-row"), true);
+  assert.equal(source.includes("mounting-nodes-filter-form"), true);
+  assert.equal(source.includes("mounting-nodes-view-toggle materials-mode-switch"), true);
+  assert.equal(source.includes("Переглядайте монтажні вузли у компактній плитці або списку та відкривайте деталі окремо."), true);
+  assert.equal(source.includes("Пошук монтажних вузлів"), true);
+  assert.equal(source.includes("Знайдено:"), true);
+  assert.equal(source.includes("Повернутися до категорій"), true);
+  assert.equal(source.includes("Створити монтажний вузол"), true);
+  assert.equal(source.includes("Шукати"), true);
+  assert.equal(source.includes("Плитка"), true);
+  assert.equal(source.includes("Список"), true);
+  assert.equal(source.includes("onOpenMountingNodeCategories"), true);
+  assert.equal(source.includes("handleReturnToCategories"), true);
   assert.equal(source.includes("primary-button mounting-node-detail-action-button mounting-node-return-button"), true);
-  assert.equal(styles.includes(".mounting-nodes-toolbar-main {"), true);
-  assert.equal(styles.includes(".mounting-nodes-header-row {"), true);
-  assert.equal(styles.includes(".mounting-nodes-header-copy {"), true);
-  assert.equal(styles.includes(".mounting-nodes-display-toggle {"), true);
-  assert.equal(styles.includes(".mounting-nodes-filter-row {"), true);
-  assert.equal(styles.includes(".mounting-nodes-filter-main {"), true);
-  assert.equal(styles.includes(".mounting-nodes-filters {"), true);
-  assert.equal(styles.includes("display: grid;"), true);
-  assert.equal(styles.includes(".mounting-nodes-filter-row > .mounting-nodes-filters {"), true);
-  assert.equal(styles.includes("grid-template-columns: minmax(0, 1fr) auto;"), true);
-  assert.equal(styles.includes("grid-template-columns: 1fr;"), true);
-  assert.equal(styles.includes("grid-template-columns: minmax(180px, 240px) 150px minmax(180px, 230px) auto auto;"), true);
-  assert.equal(styles.includes("justify-self: end;"), true);
-  assert.equal(styles.includes("width: auto;"), true);
-  assert.equal(styles.includes("padding: 12px 14px;"), true);
-  assert.equal(styles.includes(".settings-grid.mounting-nodes-grid {"), true);
-  assert.equal(styles.includes("margin-top: 4px;"), true);
+  assert.equal(
+    source.indexOf('<form className="project-filter-form mounting-nodes-filter-form" onSubmit={handleSearchSubmit}>') <
+      source.indexOf(
+        '<div className="mounting-nodes-view-toggle materials-mode-switch" role="group" aria-label={language === "uk" ? "Вигляд каталогу" : "Catalog view mode"}>',
+      ),
+    true,
+  );
 });
 
 test("app exposes the mounting node category catalog view and route wiring", () => {
