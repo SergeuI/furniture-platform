@@ -527,3 +527,28 @@ test("buildMountingNodeEditorSavePayload also accepts direct template objects an
 
   assert.equal(payloadFromTemplateIdOnly.templates[0].template.mounting_variant_key, "edge_to_edge");
 });
+
+test("buildMountingNodeEditorSavePayload carries functional code without falling back to category", () => {
+  const payload = buildMountingNodeEditorSavePayload({
+    context: {
+      mountingNodeId: "9",
+      templateId: "7480",
+      functional_code: "door_hinge",
+      nodeDetail: {
+        code: "mounting-node-node-9039f657",
+        name: "петля",
+        category_code: "hinges",
+        functional_code: "door_hinge",
+        is_active: true,
+        items: fixtureNodeDetail.items,
+        templates: fixtureNodeDetail.templates,
+      },
+    },
+    pointsLoaded: true,
+    selectedTemplate: fixtureNodeDetail.templates[0].template,
+    points: fixturePoints,
+  });
+
+  assert.equal(payload.functional_code, "door_hinge");
+  assert.equal(payload.category_code, "hinges");
+});

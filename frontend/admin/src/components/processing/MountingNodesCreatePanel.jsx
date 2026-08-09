@@ -18,6 +18,11 @@ import {
   getMountingNodeCategoryOptions,
   normalizeMountingNodeCategoryCode,
 } from "../../mountingNodeCategories.js";
+import {
+  getMountingNodeFunctionalLabel,
+  getMountingNodeFunctionalOptions,
+  normalizeMountingNodeFunctionalCode,
+} from "../../mountingNodeFunctionalCodes.js";
 import { getProcessingTemplateMountingVariantLabel } from "../../processingTemplates.js";
 import surfaceMountIcon from "../../assets/hole-mounting/surface_mount.png";
 import angledTwoPlanesIcon from "../../assets/hole-mounting/angled_two_planes.png";
@@ -224,6 +229,11 @@ export default function MountingNodesCreatePanel({
   const selectedCategoryLabel =
     getMountingNodeCategoryLabel(selectedCategoryCode, language) ||
     (language === "uk" ? "Категорію не вказано" : "Category not set");
+  const mountingNodeFunctionalOptions = useMemo(() => getMountingNodeFunctionalOptions(language), [language]);
+  const selectedFunctionalCode = normalizeMountingNodeFunctionalCode(draft.functional_code);
+  const selectedFunctionalLabel =
+    getMountingNodeFunctionalLabel(selectedFunctionalCode, language) ||
+    (language === "uk" ? "Не вказано" : "Not set");
 
   useEffect(() => {
     if (selectorOpen) {
@@ -372,6 +382,14 @@ export default function MountingNodesCreatePanel({
     updateDraft((current) => ({
       ...current,
       category_code: normalizeMountingNodeCategoryCode(value),
+      is_dirty: true,
+    }));
+  };
+
+  const handleFunctionalChange = (value) => {
+    updateDraft((current) => ({
+      ...current,
+      functional_code: normalizeMountingNodeFunctionalCode(value),
       is_dirty: true,
     }));
   };
@@ -569,6 +587,22 @@ export default function MountingNodesCreatePanel({
                     ))}
                   </select>
                   <span className="mounting-node-create-field-hint">{selectedCategoryLabel}</span>
+                </label>
+                <label className="mounting-node-create-field mounting-node-create-functional-field">
+                  <span>{language === "uk" ? "Функціональне призначення" : "Functional purpose"}</span>
+                  <select
+                    disabled={isCreating || internalSubmitting}
+                    onChange={(event) => handleFunctionalChange(event.target.value)}
+                    value={selectedFunctionalCode}
+                  >
+                    <option value="">{language === "uk" ? "Не вказано" : "Not set"}</option>
+                    {mountingNodeFunctionalOptions.map((functional) => (
+                      <option key={functional.code} value={functional.code}>
+                        {functional.label}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="mounting-node-create-field-hint">{selectedFunctionalLabel}</span>
                 </label>
               </div>
               {canChooseOwnershipType ? (

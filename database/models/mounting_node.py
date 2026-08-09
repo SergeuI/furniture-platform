@@ -57,6 +57,12 @@ class MountingNodeModel(Base):
         index=True,
     )
 
+    functional_code = Column(
+        String(64),
+        nullable=True,
+        index=True,
+    )
+
     owner_user_id = Column(
         String,
         ForeignKey("users.id"),

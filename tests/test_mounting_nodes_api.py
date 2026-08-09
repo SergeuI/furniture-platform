@@ -237,12 +237,14 @@ class MountingNodesApiTests(unittest.TestCase):
             def create_mounting_node(self, payload, **kwargs):
                 test_case.assertEqual(payload.get("ownership_type"), "mine")
                 test_case.assertEqual(payload.get("category_code"), "hinges")
+                test_case.assertEqual(payload.get("functional_code"), "door_hinge")
                 return {
                     "id": 1,
                     "code": "mounting-node-confirmat-7x50",
                     "name": payload["name"],
                     "description": None,
                     "category_code": "hinges",
+                    "functional_code": "door_hinge",
                     "owner_user_id": "user-1",
                     "ownership_type": "mine",
                     "is_system": False,
@@ -268,6 +270,7 @@ class MountingNodesApiTests(unittest.TestCase):
                         json={
                             "name": "Confirmat node",
                             "category_code": "hinges",
+                            "functional_code": "door_hinge",
                             "ownership_type": "mine",
                             "items": [{"fitting_id": 1, "quantity": 1}],
                         },
@@ -283,6 +286,7 @@ class MountingNodesApiTests(unittest.TestCase):
         self.assertEqual(body["node"]["owner_user_id"], "user-1")
         self.assertEqual(body["node"]["ownership_type"], "mine")
         self.assertEqual(body["node"]["category_code"], "hinges")
+        self.assertEqual(body["node"]["functional_code"], "door_hinge")
 
     def test_create_route_rejects_invalid_category_code(self) -> None:
         app = self._build_app()
@@ -295,6 +299,24 @@ class MountingNodesApiTests(unittest.TestCase):
                     json={
                         "name": "Confirmat node",
                         "category_code": "something_invalid",
+                        "items": [{"fitting_id": 1, "quantity": 1}],
+                    },
+                    headers={"Authorization": "Bearer token"},
+                )
+
+        self.assertEqual(response.status_code, 422)
+
+    def test_create_route_rejects_invalid_functional_code(self) -> None:
+        app = self._build_app()
+        app.dependency_overrides[auth_dependencies.require_current_user] = lambda: SimpleNamespace(id="user-1", role="admin")
+
+        with patch.object(mounting_nodes_route, "EntitlementService", _AllowedEntitlementService):
+            with TestClient(app) as client:
+                response = client.post(
+                    "/mounting-nodes",
+                    json={
+                        "name": "Confirmat node",
+                        "functional_code": "something_invalid",
                         "items": [{"fitting_id": 1, "quantity": 1}],
                     },
                     headers={"Authorization": "Bearer token"},
@@ -372,6 +394,7 @@ class MountingNodesApiTests(unittest.TestCase):
             self.assertEqual(body["versions"][0]["version_number"], 1)
             self.assertTrue(body["versions"][0]["is_current"])
             self.assertEqual(body["versions"][0]["snapshot"]["name"], "Versioned node")
+            self.assertIsNone(body["functional_code"])
         finally:
             session.close()
             engine.dispose()
@@ -532,12 +555,14 @@ class MountingNodesApiTests(unittest.TestCase):
 
             def update_mounting_node(self, node_id, payload, **kwargs):
                 test_case.assertEqual(payload.get("category_code"), "fastening")
+                test_case.assertEqual(payload.get("functional_code"), "cabinet_leg")
                 return {
                     "id": node_id,
                     "code": "mounting-node-confirmat-7x50",
                     "name": "Confirmat node",
                     "description": None,
                     "category_code": "fastening",
+                    "functional_code": "cabinet_leg",
                     "owner_user_id": None,
                     "ownership_type": "system",
                     "is_system": True,
@@ -634,6 +659,7 @@ class MountingNodesApiTests(unittest.TestCase):
                         "/mounting-nodes/1",
                         json={
                             "category_code": "fastening",
+                            "functional_code": "cabinet_leg",
                             "templates": [
                                 {
                                     "template_id": 7428,
@@ -661,6 +687,7 @@ class MountingNodesApiTests(unittest.TestCase):
         self.assertEqual(body["node"]["templates"][0]["template"]["points"][0]["id"], 29)
         self.assertEqual(body["node"]["templates"][0]["template"]["points"][1]["id"], 31)
         self.assertEqual(body["node"]["category_code"], "fastening")
+        self.assertEqual(body["node"]["functional_code"], "cabinet_leg")
 
     def test_update_route_requires_mounting_nodes_edit_access(self) -> None:
         app = self._build_app()

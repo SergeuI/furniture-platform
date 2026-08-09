@@ -28,6 +28,9 @@ import {
   getMountingNodeCategoryOptions,
   normalizeMountingNodeCategoryCode,
 } from "../../mountingNodeCategories.js";
+import {
+  getMountingNodeFunctionalLabel,
+} from "../../mountingNodeFunctionalCodes.js";
 import surfaceMountIcon from "../../assets/hole-mounting/surface_mount.png";
 import faceToEdgeIcon from "../../assets/hole-mounting/face_to_edge.png";
 import edgeToEdgeIcon from "../../assets/hole-mounting/edge_to_edge.png";
@@ -380,6 +383,13 @@ function getNodeCategoryLabel(node, language) {
   );
 }
 
+function getNodeFunctionalLabel(node, language) {
+  return (
+    getMountingNodeFunctionalLabel(node?.functional_code, language) ||
+    (language === "uk" ? "Не вказано" : "Not set")
+  );
+}
+
 export function buildNodeEditorContext(nodeDetail, fallbackNodeId = "") {
   const resolvedContext = resolveMountingNodeEditorContext(
     nodeDetail && typeof nodeDetail === "object" ? nodeDetail : null,
@@ -393,6 +403,7 @@ export function buildNodeEditorContext(nodeDetail, fallbackNodeId = "") {
   return {
     ...resolvedContext,
     nodeCode: String(nodeDetail?.code || "").trim(),
+    functional_code: resolvedContext?.functional_code ?? null,
   };
 }
 
@@ -2054,6 +2065,10 @@ export default function MountingNodesPanelRefined({
                     <DetailField
                       label={language === "uk" ? "Категорія" : "Category"}
                       value={getNodeCategoryLabel(selectedNodeDetailForDisplay, language)}
+                    />
+                    <DetailField
+                      label={language === "uk" ? "Функціональне призначення" : "Functional purpose"}
+                      value={getNodeFunctionalLabel(selectedNodeDetailForDisplay, language)}
                     />
                   </div>
                   {selectedNodeVersionBanner ? (

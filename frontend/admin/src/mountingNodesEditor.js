@@ -1,4 +1,5 @@
 import { normalizeMountingNodeCategoryCode } from "./mountingNodeCategories.js";
+import { normalizeMountingNodeFunctionalCode } from "./mountingNodeFunctionalCodes.js";
 
 function normalizeText(value) {
   return String(value || "").trim();
@@ -325,6 +326,7 @@ export function resolveMountingNodeEditorContext(nodeDetail, fallbackNodeId = ""
     fittingId,
     mountingNodeId,
     mountingVariantKey,
+    functional_code: normalizeMountingNodeFunctionalCode(snapshotNodeDetail.functional_code) || null,
     nodeDetail: snapshotNodeDetail,
     nodeName: normalizeText(snapshotNodeDetail.name),
     points,
@@ -529,6 +531,10 @@ export function buildMountingNodeEditorSavePayload({
     normalizeMountingNodeCategoryCode(context?.category_code) ||
     normalizeMountingNodeCategoryCode(nodeDetail.category_code) ||
     undefined;
+  const hasFunctionalCode = Object.prototype.hasOwnProperty.call(context || {}, "functional_code");
+  const functionalCode = hasFunctionalCode
+    ? (normalizeMountingNodeFunctionalCode(context?.functional_code) || null)
+    : (normalizeMountingNodeFunctionalCode(nodeDetail.functional_code) || undefined);
   const currentTemplateIndex = templates.findIndex((link) => {
     const linkTemplateId = resolveMountingNodeTemplateId(link);
     return linkTemplateId === templateId;
@@ -566,6 +572,7 @@ export function buildMountingNodeEditorSavePayload({
   return {
     category_code: categoryCode,
     code: normalizeOptionalText(nodeDetail.code) || undefined,
+    functional_code: functionalCode,
     name: normalizeText(nodeDetail.name),
     description: normalizeOptionalText(nodeDetail.description),
     is_active: normalizeBoolean(nodeDetail.is_active, true),

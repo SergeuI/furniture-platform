@@ -132,6 +132,11 @@ import {
   normalizeMountingNodeCategoryCode,
 } from "./mountingNodeCategories.js";
 import {
+  getMountingNodeFunctionalLabel,
+  getMountingNodeFunctionalOptions,
+  normalizeMountingNodeFunctionalCode,
+} from "./mountingNodeFunctionalCodes.js";
+import {
   buildMountingNodesRestoreState,
   buildMountingNodesBreadcrumbItems,
   buildMountingNodesRestoredRoute,
@@ -7365,6 +7370,7 @@ export default function App() {
   const holeMountingVariantRefreshRef = useRef({ reason: "", templateId: "", variantKey: "" });
   const mountingNodeEditorHydrationKeyRef = useRef("");
   const mountingNodeEditorCategoryCodeRef = useRef("");
+  const mountingNodeEditorFunctionalCodeRef = useRef(null);
   const [newFittingForm, setNewFittingForm] = useState(DEFAULT_FITTING_FORM);
   const [autoRefreshStatus, setAutoRefreshStatus] = useState(null);
   const storedProjectId = localStorage.getItem(ACTIVE_PROJECT_ID_STORAGE_KEY) || "";
@@ -10835,18 +10841,30 @@ export default function App() {
         hydratedEditorState?.context?.nodeDetail?.category_code ??
         mountingNodesRouteState?.categoryCode,
     );
+    const resolvedFunctionalCode = normalizeMountingNodeFunctionalCode(
+      resolvedContext?.functional_code ??
+        resolvedContext?.nodeDetail?.functional_code ??
+        hydratedEditorState?.context?.functional_code ??
+        hydratedEditorState?.context?.nodeDetail?.functional_code,
+    ) || null;
     const nextContext = resolvedContext
       ? {
-        ...resolvedContext,
-        category_code: resolvedCategoryCode,
-        skipHistoryUpdate: !shouldUpdateUrl,
-        nodeName: resolvedNodeName,
-      }
+          ...resolvedContext,
+          category_code: resolvedCategoryCode,
+          functional_code: resolvedFunctionalCode,
+          skipHistoryUpdate: !shouldUpdateUrl,
+          nodeName: resolvedNodeName,
+        }
       : resolvedContext;
 
     setCatalogHolesDetailOpen(false);
     mountingNodeEditorCategoryCodeRef.current = resolvedCategoryCode || "";
-    setMountingNodeEditorDraft(cloneMountingNodeEditorDraft(hydratedEditorState?.context?.nodeDetail || resolvedContext?.nodeDetail));
+    mountingNodeEditorFunctionalCodeRef.current = resolvedFunctionalCode;
+    const nextEditorDraft = cloneMountingNodeEditorDraft(hydratedEditorState?.context?.nodeDetail || resolvedContext?.nodeDetail);
+    if (nextEditorDraft && !Object.prototype.hasOwnProperty.call(nextEditorDraft, "functional_code")) {
+      nextEditorDraft.functional_code = resolvedFunctionalCode;
+    }
+    setMountingNodeEditorDraft(nextEditorDraft);
     setMountingNodeEditorDraftNodeId(resolvedNodeId);
     if (resolvedNodeId) {
       setCatalogHolesBreadcrumbNodeId(resolvedNodeId);
@@ -10913,6 +10931,7 @@ export default function App() {
       nodeCode: String(nodeDetail.code || "").trim(),
       nodeName: String(nodeDetail.name || "").trim(),
       category_code: normalizeMountingNodeCategoryCode(nodeDetail.category_code),
+      functional_code: normalizeMountingNodeFunctionalCode(nodeDetail.functional_code) || null,
       fittingId: String(primaryTemplate?.fitting_id || primaryItem?.fitting_id || "").trim(),
       templateId: String(primaryTemplate?.template_id || "").trim(),
       mountingVariantKey: String(primaryTemplate?.mounting_variant_key || "").trim(),
@@ -11043,6 +11062,42 @@ export default function App() {
     setMountingNodeEditorHasChanges(true);
   }
 
+  function handleMountingNodeEditorFunctionalChange(nextFunctionalCode) {
+    const normalizedFunctionalCode = normalizeMountingNodeFunctionalCode(nextFunctionalCode) || null;
+    mountingNodeEditorFunctionalCodeRef.current = normalizedFunctionalCode;
+
+    setMountingNodeEditorDraft((current) => {
+      if (!current || typeof current !== "object") {
+        return current;
+      }
+
+      return {
+        ...current,
+        functional_code: normalizedFunctionalCode,
+        is_dirty: true,
+      };
+    });
+    setCatalogHolesOpenContext((current) => {
+      if (!current || typeof current !== "object") {
+        return current;
+      }
+
+      const nextNodeDetail = current.nodeDetail && typeof current.nodeDetail === "object"
+        ? {
+            ...current.nodeDetail,
+            functional_code: normalizedFunctionalCode,
+          }
+        : current.nodeDetail;
+
+      return {
+        ...current,
+        functional_code: normalizedFunctionalCode,
+        nodeDetail: nextNodeDetail,
+      };
+    });
+    setMountingNodeEditorHasChanges(true);
+  }
+
   function openMountingNodeEditorSelector() {
     const currentItems = Array.isArray(mountingNodeEditorDraft?.items) ? mountingNodeEditorDraft.items : [];
     setMountingNodeEditorSelectorDraftItemIds(
@@ -11115,6 +11170,15 @@ export default function App() {
   const mountingNodeEditorCategoryOptions = useMemo(
     () => getMountingNodeCategoryOptions(language),
     [language],
+  );
+  const mountingNodeEditorFunctionalOptions = useMemo(
+    () => getMountingNodeFunctionalOptions(language),
+    [language],
+  );
+  const mountingNodeEditorSelectedFunctionalCode = normalizeMountingNodeFunctionalCode(
+    mountingNodeEditorFunctionalCodeRef.current ??
+      mountingNodeEditorDraft?.functional_code ??
+      catalogHolesOpenContext?.functional_code,
   );
   const mountingNodeEditorSelectedVariantLabel =
     getProcessingTemplateMountingVariantLabel(mountingNodeEditorSelectedVariantKey, language) ||
@@ -11276,6 +11340,7 @@ export default function App() {
       name: String(draft.name || "").trim(),
       description: String(draft.description || "").trim() || undefined,
       category_code: categoryCode || undefined,
+      functional_code: normalizeMountingNodeFunctionalCode(draft.functional_code) || undefined,
       is_active: draft.is_active !== false,
       ownership_type: ownershipType,
       items: selectedItems.map((item, index) => ({
@@ -11404,9 +11469,15 @@ export default function App() {
         mountingNodeEditorDraft?.category_code ||
         catalogHolesOpenContext?.category_code,
     );
+    const selectedFunctionalCode = normalizeMountingNodeFunctionalCode(
+      mountingNodeEditorFunctionalCodeRef.current ??
+        mountingNodeEditorDraft?.functional_code ??
+        catalogHolesOpenContext?.functional_code,
+    ) || null;
     const editorContext = {
       ...(catalogHolesOpenContext || {}),
       category_code: selectedCategoryCode || undefined,
+      functional_code: selectedFunctionalCode,
       nodeDetail: mountingNodeEditorDraft || catalogHolesOpenContext?.nodeDetail || null,
     };
     const mountingNodeId = String(catalogHolesOpenContext?.mountingNodeId || "").trim();
@@ -11479,6 +11550,9 @@ export default function App() {
           savedNode.category_code,
           selectedCategoryCode,
         );
+        const savedFunctionalCode = normalizeMountingNodeFunctionalCode(
+          savedNode.functional_code ?? selectedFunctionalCode,
+        ) || null;
         const savedRestoreRoute = normalizeMountingNodesRoute({
           mode: "detail",
           nodeId: savedNode.id,
@@ -11493,6 +11567,7 @@ export default function App() {
         setMountingNodeEditorDraft(cloneMountingNodeEditorDraft(savedNode));
         setMountingNodeEditorDraftNodeId(String(savedNode.id || "").trim() || "");
         setMountingNodeEditorHasChanges(false);
+        mountingNodeEditorFunctionalCodeRef.current = savedFunctionalCode;
         setMountingNodesRouteState(
           normalizeMountingNodesRoute({
             mode: "editor",
@@ -11517,9 +11592,11 @@ export default function App() {
           templateId: String(savedCurrentLink?.template_id || savedCurrentTemplate?.id || selectedTemplateId || ""),
           mountingVariantKey: String(savedCurrentLink?.mounting_variant_key || savedCurrentTemplate?.mounting_variant_key || current?.mountingVariantKey || ""),
           category_code: savedCategoryCode,
+          functional_code: savedFunctionalCode,
           nodeDetail: savedNode,
         }));
         mountingNodeEditorCategoryCodeRef.current = savedCategoryCode || "";
+        mountingNodeEditorFunctionalCodeRef.current = savedFunctionalCode;
         setCatalogHolesReturnState((current) => ({
           ...(current || {}),
           ...savedRestoreState,
@@ -21247,6 +21324,25 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                         ))}
                       </select>
                       <span className="mounting-node-create-field-hint">{mountingNodeEditorSelectedCategoryLabel}</span>
+                    </label>
+                    <label className="mounting-node-create-field mounting-node-editor-functional-field">
+                      <span>{language === "uk" ? "Функціональне призначення" : "Functional purpose"}</span>
+                      <select
+                        disabled={catalogHolesSaving}
+                        onChange={(event) => handleMountingNodeEditorFunctionalChange(event.target.value)}
+                        value={mountingNodeEditorSelectedFunctionalCode}
+                      >
+                        <option value="">{language === "uk" ? "Не вказано" : "Not set"}</option>
+                        {mountingNodeEditorFunctionalOptions.map((functional) => (
+                          <option key={functional.code} value={functional.code}>
+                            {functional.label}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="mounting-node-create-field-hint">
+                        {getMountingNodeFunctionalLabel(mountingNodeEditorSelectedFunctionalCode, language) ||
+                          (language === "uk" ? "Не вказано" : "Not set")}
+                      </span>
                     </label>
                   </section>
                   <section className="mounting-node-create-card mounting-node-editor-items-card">

@@ -23,6 +23,7 @@ TABLES = {
             name VARCHAR(255) NOT NULL,
             description TEXT,
             category_code VARCHAR,
+            functional_code VARCHAR,
             owner_user_id VARCHAR,
             is_active BOOLEAN NOT NULL DEFAULT 1,
             created_by_user_id VARCHAR,

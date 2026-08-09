@@ -71,6 +71,7 @@ class UpgradeMountingNodesSchemaTests(unittest.TestCase):
                 self.assertIn("archived_at", self._get_column_names(connection, "mounting_nodes"))
                 self.assertIn("archived_by_user_id", self._get_column_names(connection, "mounting_nodes"))
                 self.assertIn("category_code", self._get_column_names(connection, "mounting_nodes"))
+                self.assertIn("functional_code", self._get_column_names(connection, "mounting_nodes"))
                 self.assertIn("snapshot", self._get_column_names(connection, "mounting_node_versions"))
 
     def test_missing_prerequisites_are_reported(self) -> None:

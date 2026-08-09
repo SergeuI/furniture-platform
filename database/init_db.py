@@ -388,6 +388,7 @@ def upgrade_sqlite_schema():
 
         mounting_node_columns = {
             "category_code": "VARCHAR",
+            "functional_code": "VARCHAR",
             "is_archived": "BOOLEAN NOT NULL DEFAULT 0",
             "archived_at": "DATETIME",
             "archived_by_user_id": "VARCHAR",

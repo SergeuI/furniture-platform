@@ -17,6 +17,10 @@ from database.mounting_node_categories import (
     ALLOWED_MOUNTING_NODE_CATEGORY_CODES,
     normalize_mounting_node_category_code,
 )
+from database.mounting_node_functional_codes import (
+    ALLOWED_MOUNTING_NODE_FUNCTIONAL_CODES,
+    normalize_mounting_node_functional_code,
+)
 from database.repositories.mounting_node_repository import MountingNodeRepository
 from database.session import SessionLocal
 from database.models.service_drilling_rule import ServiceDrillingRuleModel
@@ -137,6 +141,19 @@ class MountingNodeService:
         if normalized is None:
             allowed = ", ".join(ALLOWED_MOUNTING_NODE_CATEGORY_CODES)
             raise ValueError(f"category_code must be one of: {allowed}")
+        return normalized
+
+    @staticmethod
+    def _normalize_functional_code(value: Any) -> str | None:
+        if value is None:
+            return None
+        if str(value).strip() == "":
+            allowed = ", ".join(ALLOWED_MOUNTING_NODE_FUNCTIONAL_CODES)
+            raise ValueError(f"functional_code must be one of: {allowed}")
+        normalized = normalize_mounting_node_functional_code(value)
+        if not normalized:
+            allowed = ", ".join(ALLOWED_MOUNTING_NODE_FUNCTIONAL_CODES)
+            raise ValueError(f"functional_code must be one of: {allowed}")
         return normalized
 
     @classmethod
@@ -461,6 +478,7 @@ class MountingNodeService:
             "name": node.name,
             "description": node.description,
             "category_code": getattr(node, "category_code", None),
+            "functional_code": getattr(node, "functional_code", None),
             **ownership_snapshot,
             "is_active": bool(getattr(node, "is_active", True)),
             "created_by_user_id": getattr(node, "created_by_user_id", None),
@@ -1112,6 +1130,7 @@ class MountingNodeService:
         code = self._optional_text(payload.get("code")) or self._generate_code(name)
         description = self._optional_text(payload.get("description"))
         category_code = self._normalize_category_code(payload.get("category_code"))
+        functional_code = self._normalize_functional_code(payload.get("functional_code"))
         is_active = self._normalize_bool(payload.get("is_active"), True)
         owner_user_id, created_by_user_id, updated_by_user_id = self._resolve_create_ownership(
             payload,
@@ -1134,6 +1153,7 @@ class MountingNodeService:
                 name=name,
                 description=description,
                 category_code=category_code,
+                functional_code=functional_code,
                 is_active=is_active,
                 owner_user_id=owner_user_id,
                 created_by_user_id=created_by_user_id,
@@ -1232,6 +1252,9 @@ class MountingNodeService:
 
         if "category_code" in payload:
             update_fields["category_code"] = self._normalize_category_code(payload.get("category_code"))
+
+        if "functional_code" in payload:
+            update_fields["functional_code"] = self._normalize_functional_code(payload.get("functional_code"))
 
         if "is_active" in payload:
             update_fields["is_active"] = self._normalize_bool(payload.get("is_active"), True)

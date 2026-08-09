@@ -9,6 +9,7 @@ export const MOUNTING_NODE_CREATE_ROLE_OPTIONS = [
 
 import { getAngledTwoPlanesPointFormPreset } from "./angledTwoPlanesThreePreview.js";
 import { normalizeMountingNodeCategoryCode } from "./mountingNodeCategories.js";
+import { normalizeMountingNodeFunctionalCode } from "./mountingNodeFunctionalCodes.js";
 import { getSurfaceMountPointFormPreset } from "./surfaceMountThreePreview.js";
 
 export const MOUNTING_NODE_CREATE_DRAFT_STORAGE_KEY = "mountingNodesCreateDraft";
@@ -117,6 +118,7 @@ function getMountingNodeCreateDraftStorage() {
 function pickMountingNodeCreateDraftStorageFields(draft = {}) {
   return {
     category_code: normalizeMountingNodeCategoryCode(draft.category_code),
+    functional_code: normalizeMountingNodeFunctionalCode(draft.functional_code),
     name: normalizeText(draft.name),
     description: normalizeText(draft.description),
     is_active: normalizeBoolean(draft.is_active, true),
@@ -170,6 +172,7 @@ export function loadMountingNodeCreateDraft() {
   if (!storage) {
     return createMountingNodeCreateDraft({
       category_code: "",
+      functional_code: "",
       mounting_variant_key: "",
     });
   }
@@ -179,6 +182,7 @@ export function loadMountingNodeCreateDraft() {
     if (!storedValue) {
       return createMountingNodeCreateDraft({
         category_code: "",
+        functional_code: "",
         mounting_variant_key: "",
       });
     }
@@ -197,6 +201,7 @@ export function loadMountingNodeCreateDraft() {
     ) {
       return createMountingNodeCreateDraft({
         category_code: "",
+        functional_code: "",
         mounting_variant_key: "",
       });
     }
@@ -229,6 +234,7 @@ export function createMountingNodeCreateDraft(overrides = {}) {
 
   return {
     category_code: normalizeMountingNodeCategoryCode(overrides.category_code),
+    functional_code: normalizeMountingNodeFunctionalCode(overrides.functional_code),
     name: normalizeText(overrides.name),
     description: normalizeText(overrides.description),
     is_active: normalizeBoolean(overrides.is_active, true),

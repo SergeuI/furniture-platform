@@ -9,6 +9,10 @@ from database.mounting_node_categories import (
     ALLOWED_MOUNTING_NODE_CATEGORY_CODES,
     normalize_mounting_node_category_code,
 )
+from database.mounting_node_functional_codes import (
+    ALLOWED_MOUNTING_NODE_FUNCTIONAL_CODES,
+    normalize_mounting_node_functional_code,
+)
 
 
 class MountingNodeItemCreateSchema(BaseModel):
@@ -161,6 +165,7 @@ class MountingNodeCreateSchema(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     description: str | None = Field(default=None, max_length=5000)
     category_code: str | None = Field(default=None, max_length=64)
+    functional_code: str | None = Field(default=None, max_length=64)
     is_active: bool = True
     ownership_type: str = Field(default="mine", max_length=16)
     items: list[MountingNodeItemCreateSchema] = Field(default_factory=list)
@@ -179,12 +184,26 @@ class MountingNodeCreateSchema(BaseModel):
             raise ValueError(f"category_code must be one of: {allowed}")
         return normalized
 
+    @field_validator("functional_code", mode="before")
+    @classmethod
+    def _validate_functional_code(cls, value):
+        if value is None:
+            return None
+        if str(value).strip() == "":
+            raise ValueError("functional_code must be one of: " + ", ".join(ALLOWED_MOUNTING_NODE_FUNCTIONAL_CODES))
+        normalized = normalize_mounting_node_functional_code(value)
+        if not normalized:
+            allowed = ", ".join(ALLOWED_MOUNTING_NODE_FUNCTIONAL_CODES)
+            raise ValueError(f"functional_code must be one of: {allowed}")
+        return normalized
+
 
 class MountingNodeUpdateSchema(BaseModel):
     code: str | None = Field(default=None, max_length=128)
     name: str | None = Field(default=None, min_length=1, max_length=255)
     description: str | None = Field(default=None, max_length=5000)
     category_code: str | None = Field(default=None, max_length=64)
+    functional_code: str | None = Field(default=None, max_length=64)
     is_active: bool | None = None
     items: list[MountingNodeItemCreateSchema] | None = None
     templates: list[MountingNodeTemplateLinkCreateSchema] | None = None
@@ -202,6 +221,19 @@ class MountingNodeUpdateSchema(BaseModel):
             raise ValueError(f"category_code must be one of: {allowed}")
         return normalized
 
+    @field_validator("functional_code", mode="before")
+    @classmethod
+    def _validate_functional_code(cls, value):
+        if value is None:
+            return None
+        if str(value).strip() == "":
+            raise ValueError("functional_code must be one of: " + ", ".join(ALLOWED_MOUNTING_NODE_FUNCTIONAL_CODES))
+        normalized = normalize_mounting_node_functional_code(value)
+        if not normalized:
+            allowed = ", ".join(ALLOWED_MOUNTING_NODE_FUNCTIONAL_CODES)
+            raise ValueError(f"functional_code must be one of: {allowed}")
+        return normalized
+
 
 class MountingNodeListItemSchema(BaseModel):
     id: int
@@ -209,6 +241,7 @@ class MountingNodeListItemSchema(BaseModel):
     name: str
     description: str | None = None
     category_code: str | None = None
+    functional_code: str | None = None
     owner_user_id: str | None = None
     ownership_type: str = "system"
     is_system: bool = True

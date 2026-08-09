@@ -434,3 +434,18 @@ test("mounting node create draft normalizes null entries out of stored arrays", 
     assert.equal(restored.points.length, 0);
   });
 });
+
+test("mounting node create draft persists functional code through storage", () => {
+  withSessionStorageMock(() => {
+    const draft = createMountingNodeCreateDraft({
+      name: "Stored node",
+      functional_code: "cabinet_leg",
+      is_dirty: true,
+    });
+
+    saveMountingNodeCreateDraft(draft);
+    const loadedDraft = loadMountingNodeCreateDraft();
+
+    assert.equal(loadedDraft.functional_code, "cabinet_leg");
+  });
+});

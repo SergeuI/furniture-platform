@@ -31,12 +31,21 @@ function loadBuildNodeEditorContextFromSource() {
     helperSource.indexOf("function normalizeText(value) {"),
     helperSource.indexOf("function buildTemplatePayload({"),
   );
+  const functionalNormalizeSource = `
+function normalizeMountingNodeFunctionalCode(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  return normalized && ["connector","door_hinge","drawer_slide","furniture_handle","profile_handle","cabinet_leg","wall_hanger","sink","cooktop","ventilation_grille","electrical_socket"].includes(normalized)
+    ? normalized
+    : "";
+}
+`;
 
   if (!buildNodeEditorContextSource || !helperBlockSource) {
     throw new Error("Unable to isolate the mounting node editor helper block.");
   }
 
   const combinedSource = [
+    functionalNormalizeSource,
     helperBlockSource.replaceAll("export function", "function"),
     buildNodeEditorContextSource.replace("export function buildNodeEditorContext", "function buildNodeEditorContext"),
   ].join("\n");
@@ -267,6 +276,7 @@ test("mounting nodes panel builds editor context from the full detail template l
     fittingId: "42",
     templateId: "7480",
     mountingVariantKey: "angled_two_planes",
+    functional_code: null,
     nodeDetail,
     points: [],
   });
@@ -301,6 +311,7 @@ test("mounting nodes panel builds editor context from legacy flat template objec
     fittingId: "77",
     templateId: "8800",
     mountingVariantKey: "drawer_slides",
+    functional_code: null,
     nodeDetail,
     points: [],
   });
