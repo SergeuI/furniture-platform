@@ -15783,6 +15783,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
           ? { mode: "editor", nodeId: contextMountingNodeId }
           : { mode: "categories", nodeId: null },
       );
+      setMountingNodesRouteState(nextMountingNodesRoute);
       setCatalogHolesDetailOpen(false);
       setCatalogHolesMode(nextCatalogHolesMode);
 

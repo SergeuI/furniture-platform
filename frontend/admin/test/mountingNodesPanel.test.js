@@ -817,6 +817,7 @@ test("app exposes the mounting node category catalog view and route wiring", () 
   assert.equal(source.includes("mode === \"categories\""), true);
   assert.equal(source.includes("handleOpenMountingNodesCategoryCatalog"), true);
   assert.equal(source.includes("handleOpenAllMountingNodesList"), false);
+  assert.equal(source.includes("setMountingNodesRouteState(nextMountingNodesRoute);"), true);
   assert.equal(source.includes("buildMountingNodesRouteUrl(normalizedRoute, window.location.search)"), true);
   assert.equal(source.includes("mountingNodesCategorySummary"), true);
   assert.equal(source.includes("mountingNodesCategorySummaryLoading"), true);
