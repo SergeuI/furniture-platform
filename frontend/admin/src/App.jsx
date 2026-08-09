@@ -45,6 +45,7 @@ import MountingNodesFittingSelectorModal from "./components/processing/MountingN
 import HolesMountingThreePreview from "./components/processing/HolesMountingThreePreview.jsx";
 import MountingNodesPanel from "./components/processing/MountingNodesPanelRefined.jsx";
 import ProcessingWorkspace from "./components/processing/ProcessingWorkspace.jsx";
+import ConnectionsWorkspace from "./components/connections/ConnectionsWorkspace.jsx";
 import {
   getProcessingWorkspaceSidebarTabs,
   getProcessingWorkspaceTabTargetView,
@@ -53,6 +54,12 @@ import {
   PROCESSING_WORKSPACE_STORAGE_KEY,
   shouldAutoOpenCatalogMenu,
 } from "./processingWorkspace.js";
+import {
+  getConnectionsWorkspacePageLabel,
+  getConnectionsWorkspaceSidebarTabs,
+  resolveActiveConnectionsNavigationKey,
+  shouldAutoOpenConnectionsMenu,
+} from "./connectionsWorkspace.js";
 import {
   getProcessingTemplateMountingVariantLabel,
   readProcessingTemplatesReturnState,
@@ -320,8 +327,13 @@ const ADMIN_SECTION_BY_VIEW = {
   catalogValues: "catalog-values",
   catalogViyar: "catalog-viyar",
   createProject: "create-project",
+  connectionTypes: "connection-types",
+  connectionsOverview: "connections-overview",
+  connectionsTesting: "connections-testing",
   entitlements: "entitlements",
   home: "home",
+  mountingCompatibility: "mounting-compatibility",
+  mountingSchemes: "mounting-schemes",
   projects: "projects",
   processing: "processing-overview",
   settings: "settings",
@@ -365,6 +377,23 @@ function readAdminRouteFromLocation() {
       mountingNodesRoute: mountingNodesRoute || normalizeMountingNodesRoute({ mode: "list", nodeId: null }),
       processingTab: null,
       view: "catalogHoles",
+    };
+  }
+
+  if (
+    [
+      "connections-overview",
+      "mounting-schemes",
+      "connection-types",
+      "mounting-compatibility",
+      "connections-testing",
+    ].includes(section)
+  ) {
+    return {
+      hasSection: true,
+      mountingNodesRoute: null,
+      processingTab: null,
+      view: ADMIN_VIEW_BY_SECTION[section],
     };
   }
 
@@ -417,6 +446,16 @@ function buildAdminHistoryUrl(
     );
 
     return `${window.location.pathname}${buildMountingNodesRouteUrl(normalizedRoute, window.location.search)}${currentHash || ""}`;
+  } else if (
+    [
+      "connectionsOverview",
+      "mountingSchemes",
+      "connectionTypes",
+      "mountingCompatibility",
+      "connectionsTesting",
+    ].includes(normalizedView)
+  ) {
+    params.set("section", ADMIN_SECTION_BY_VIEW[normalizedView] || "connections-overview");
   } else if (normalizedView === "processing") {
     const normalizedProcessingTab = normalizeProcessingWorkspaceTab(processingTab, {
       canUseFittingHoles: true,
@@ -7225,6 +7264,7 @@ export default function App() {
     () => initialAdminRoute.view || normalizeCatalogView(localStorage.getItem(ACTIVE_VIEW_STORAGE_KEY) || "home"),
   );
   const [isCatalogMenuOpen, setIsCatalogMenuOpen] = useState(false);
+  const [isConnectionsMenuOpen, setIsConnectionsMenuOpen] = useState(false);
   const [activeProcessingTab, setActiveProcessingTab] = useState(
     () =>
       initialAdminRoute.view === "processing"
@@ -9330,6 +9370,18 @@ export default function App() {
   const isCatalogViyarView = activeView === "catalogViyar";
   const isCatalogManualView = activeView === "catalogManual";
   const isCatalogHubView = activeView === "catalogHub";
+  const isConnectionsOverviewView = activeView === "connectionsOverview";
+  const isMountingSchemesView = activeView === "mountingSchemes";
+  const isConnectionTypesView = activeView === "connectionTypes";
+  const isMountingCompatibilityView = activeView === "mountingCompatibility";
+  const isConnectionsTestingView = activeView === "connectionsTesting";
+  const isConnectionsWorkspaceView =
+    isConnectionsOverviewView ||
+    isMountingSchemesView ||
+    isConnectionTypesView ||
+    isMountingCompatibilityView ||
+    isConnectionsTestingView;
+  const isConnectionsNavigationView = shouldAutoOpenConnectionsMenu(activeView) || isConnectionsWorkspaceView;
   const isProcessingView = activeView === "processing";
   const activeCity = (user?.city || "").trim();
   const canAccessProcessingWorkspace = user?.role === "admin" || canViewFittingHoles;
@@ -9341,6 +9393,14 @@ export default function App() {
         canUseFittingHoles: canViewFittingHoles,
       }),
     [canViewFittingHoles, language, user?.role],
+  );
+  const connectionsWorkspaceTabs = useMemo(
+    () => getConnectionsWorkspaceSidebarTabs({ language }),
+    [language],
+  );
+  const activeConnectionsNavigationKey = useMemo(
+    () => resolveActiveConnectionsNavigationKey({ activeView }),
+    [activeView],
   );
   const activeProcessingNavigationKey = useMemo(
     () =>
@@ -10067,6 +10127,12 @@ export default function App() {
   }, [activeView]);
 
   useEffect(() => {
+    if (shouldAutoOpenConnectionsMenu(activeView)) {
+      setIsConnectionsMenuOpen(true);
+    }
+  }, [activeView]);
+
+  useEffect(() => {
     if (
       !token ||
       (!isCatalogHolesRequestedView && !isCatalogBundlesRequestedView) ||
@@ -10241,6 +10307,10 @@ export default function App() {
       return language === "uk" ? "Обробка деталей" : "Processing";
     }
 
+    if (isConnectionsWorkspaceView) {
+      return getConnectionsWorkspacePageLabel(activeView, language);
+    }
+
     if (activeView === "settings") {
       return t.myData;
     }
@@ -10271,6 +10341,7 @@ export default function App() {
     isCatalogManualView,
     isCatalogValuesView,
     isCatalogViyarView,
+    isConnectionsWorkspaceView,
     isProcessingView,
     materialItems.length,
     manualServiceItems.length,
@@ -15784,6 +15855,10 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
       setIsProcessingMenuOpen(true);
     }
 
+    if (shouldAutoOpenConnectionsMenu(nextView)) {
+      setIsConnectionsMenuOpen(true);
+    }
+
     if (nextView === "processing" && openContext?.processingTab) {
       const normalizedProcessingTab = normalizeProcessingWorkspaceTab(openContext.processingTab, {
         canUseFittingHoles: canViewFittingHoles,
@@ -18222,6 +18297,50 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                 ) : null}
               </div>
             ) : null}
+            <div className={`nav-group${isConnectionsNavigationView ? " active" : ""}`}>
+              <div className={`nav-group-header${isConnectionsNavigationView ? " active" : ""}`}>
+                <button
+                  className={`nav-group-link${isConnectionsNavigationView ? " active" : ""}`}
+                  onClick={() => {
+                    switchView("connectionsOverview");
+                    closeSidebarOnMobile();
+                  }}
+                  type="button"
+                >
+                  <span className="nav-group-title">
+                    {language === "uk" ? "Кріплення та з'єднання" : "Connections"}
+                  </span>
+                </button>
+                <button
+                  aria-expanded={isConnectionsMenuOpen}
+                  className={`nav-group-toggle${isConnectionsNavigationView ? " active" : ""}`}
+                  onClick={() => setIsConnectionsMenuOpen((current) => !current)}
+                  type="button"
+                >
+                  <ChevronRight
+                    className={`nav-group-icon${isConnectionsMenuOpen ? " expanded" : ""}`}
+                    size={16}
+                  />
+                </button>
+              </div>
+              {isConnectionsMenuOpen ? (
+                <div className="nav-subtabs">
+                  {connectionsWorkspaceTabs.map((tab) => (
+                    <button
+                      className={tab.key === activeConnectionsNavigationKey ? "active" : ""}
+                      key={tab.key}
+                      onClick={() => {
+                        switchView(tab.view || tab.key);
+                        closeSidebarOnMobile();
+                      }}
+                      type="button"
+                    >
+                      <span>{tab.label}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
             <div className={`nav-group${isCatalogView ? " active" : ""}`}>
               <div className={`nav-group-header${isCatalogView ? " active" : ""}`}>
                 <button
@@ -18406,6 +18525,8 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                       ? t.catalogManual
                     : isProcessingView
                       ? (language === "uk" ? "Обробка деталей" : "Processing")
+                    : isConnectionsWorkspaceView
+                      ? getConnectionsWorkspacePageLabel(activeView, language)
                     : activeView === "settings"
                       ? t.settings
                     : activeView === "entitlements"
@@ -18820,6 +18941,12 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
             language={language}
             onOpenFittingHolesEditor={(context) => switchView("catalogHoles", user, context)}
             token={token}
+          />
+        ) : isConnectionsWorkspaceView ? (
+          <ConnectionsWorkspace
+            activeView={activeView}
+            language={language}
+            onNavigate={(viewKey) => switchView(viewKey)}
           />
         ) : activeView === "projects" ? (
           <section className="table-panel full-panel">

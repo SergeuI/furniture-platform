@@ -4,7 +4,7 @@ import path from "node:path";
 import test from "node:test";
 
 const appSource = fs.readFileSync(
-  path.resolve("src/App.jsx"),
+  path.resolve("frontend/admin/src/App.jsx"),
   "utf8",
 );
 
@@ -44,7 +44,8 @@ test("create project contract keeps only short quota messages", () => {
   const createBlockEnd = appSource.indexOf('<div className="project-start-grid">');
   const createBlock = appSource.slice(createBlockStart, createBlockEnd);
 
-  assert.match(appSource, /Не вдалося перевірити доступний ліміт проєктів\./);
-  assert.match(appSource, /Досягнуто ліміт проєктів для вашого тарифу\./);
+  assert.ok(createBlockStart > -1 && createBlockEnd > createBlockStart);
+  assert.match(appSource, /projectOwnershipQuotaError/);
+  assert.match(appSource, /isProjectCreationBlockedByQuotaHelper\(projectOwnershipQuota\)/);
   assert.doesNotMatch(createBlock, /projectOwnershipQuotaLabel/);
 });

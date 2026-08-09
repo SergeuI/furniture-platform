@@ -12,4 +12,9 @@ test("admin app uses canonical section-based navigation helpers", () => {
   assert.match(source, /updateAdminHistory\(\{\s*mountingNodesRoute: nextMountingNodesRoute,\s*processingTab: nextProcessingTab,\s*view: nextView,/);
   assert.match(source, /processingTab: "overview"/);
   assert.match(source, /setMountingNodesRouteState\(nextRoute\);\s*setMountingNodesRouteReady\(true\);\s*setMountingNodesInitialState\(null\);\s*setCatalogHolesMode\("create"\);/);
+  assert.match(source, /connectionsOverview: "connections-overview"/);
+  assert.match(source, /switchView\("connectionsOverview"\)/);
+  assert.match(source, /getConnectionsWorkspaceSidebarTabs\(\{ language \}\)/);
+  assert.match(source, /const isConnectionsWorkspaceView =[\s\S]*const isConnectionsNavigationView = shouldAutoOpenConnectionsMenu\(activeView\) \|\| isConnectionsWorkspaceView;/);
+  assert.match(source, /isConnectionsWorkspaceView \?\s*\(\r?\n\s*<ConnectionsWorkspace/);
 });

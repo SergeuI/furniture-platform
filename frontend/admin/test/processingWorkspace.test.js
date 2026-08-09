@@ -18,17 +18,17 @@ test("processing workspace tabs keep admin pages and restrict non-admin users to
   const adminTabs = getProcessingWorkspaceTabs({
     canUseFittingHoles: true,
     isAdmin: true,
-    language: "uk",
+    language: "en",
   });
   const fittingUserTabs = getProcessingWorkspaceTabs({
     canUseFittingHoles: true,
     isAdmin: false,
-    language: "uk",
+    language: "en",
   });
   const blockedUserTabs = getProcessingWorkspaceTabs({
     canUseFittingHoles: false,
     isAdmin: false,
-    language: "uk",
+    language: "en",
   });
 
   assert.deepEqual(
@@ -113,33 +113,32 @@ test("processing sidebar tabs show only names without status text", () => {
   const sidebarTabs = getProcessingWorkspaceSidebarTabs({
     canUseFittingHoles: true,
     isAdmin: true,
-    language: "uk",
+    language: "en",
   });
 
   assert.deepEqual(
     sidebarTabs.map((tab) => tab.label),
     [
-      "Огляд",
-      "Операції обробки",
-      "Шаблони обробки",
-      "Монтажні вузли",
-      "Послуги та ціни",
-      "Правила розрахунку",
-      "Тестування",
+      "Overview",
+      "Processing operations",
+      "Processing templates",
+      "Services & prices",
+      "Pricing rules",
+      "Testing",
     ],
   );
   assert.equal(sidebarTabs.every((tab) => tab.status === undefined), true);
-  assert.equal(sidebarTabs.some((tab) => ["Працює", "Заплановано", "Потребує налаштування"].includes(tab.label)), false);
+  assert.equal(sidebarTabs.some((tab) => ["Working", "Planned", "Needs setup"].includes(tab.label)), false);
 });
 
 test("processing overview cards use the current working and planned statuses", () => {
-  const cards = getProcessingOverviewCards("uk");
+  const cards = getProcessingOverviewCards("en");
 
-  assert.ok(cards.some((card) => card.label === "Отвори" && card.status === "Працює"));
-  assert.ok(cards.some((card) => card.label === "Попередній перегляд операцій" && card.status === "Працює"));
+  assert.ok(cards.some((card) => card.label === "Holes" && card.status === "Working"));
+  assert.ok(cards.some((card) => card.label === "Operation preview" && card.status === "Working"));
   assert.equal(cards.some((card) => card.label === "operations-preview"), false);
-  assert.ok(cards.some((card) => card.label === "Пази" && card.status === "Заплановано"));
-  assert.ok(cards.some((card) => card.label === "Ціни компаній" && card.status === "Заплановано"));
+  assert.ok(cards.some((card) => card.label === "Grooves" && card.status === "Planned"));
+  assert.ok(cards.some((card) => card.label === "Company prices" && card.status === "Planned"));
 });
 
 test("operations-preview api helper calls the new read-only endpoint", async () => {
@@ -192,5 +191,5 @@ test("processing app opens catalog holes with the selected template context", ()
   assert.equal(source.includes("pendingHoleTemplateOpenContext"), false);
   assert.equal(source.includes("openPendingHoleTemplateInEditor"), false);
   assert.equal(source.includes("setPendingHoleTemplateOpenContext"), false);
-  assert.equal(source.includes("Завантаження шаблону ID"), false);
+  assert.equal(source.includes("Loading template ID"), false);
 });

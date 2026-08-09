@@ -283,10 +283,12 @@ export function getProcessingWorkspaceSidebarTabs({
     language,
     isAdmin,
     canUseFittingHoles,
-  }).map(({ key, label }) => ({
-    key,
-    label,
-  }));
+  })
+    .filter((tab) => tab.key !== "fitting-holes")
+    .map(({ key, label }) => ({
+      key,
+      label,
+    }));
 }
 
 export function getProcessingWorkspaceTabTargetView(tabKey) {
