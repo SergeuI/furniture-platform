@@ -813,4 +813,7 @@ test("app exposes the mounting node category catalog view and route wiring", () 
   assert.equal(source.includes("mountingNodesCategorySummaryLoading"), true);
   assert.equal(source.includes("getMountingNodeCategoryImageUrl"), true);
   assert.equal(source.includes("catalog-category-art-image"), true);
+  assert.equal(source.includes("mounting-node-category-card"), true);
+  assert.equal(source.includes("mounting-node-category-art"), true);
+  assert.equal(source.includes("mounting-node-category-count"), true);
 });

@@ -22055,12 +22055,12 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
 
                         return (
                           <button
-                            className="catalog-category-card"
+                            className="catalog-category-card mounting-node-category-card"
                             key={category.code}
                             onClick={() => handleOpenMountingNodesCategoryList(category.code)}
                             type="button"
                           >
-                            <span className="catalog-category-art" style={{ "--catalog-accent": visual.accent }}>
+                            <span className="catalog-category-art mounting-node-category-art" style={{ "--catalog-accent": visual.accent }}>
                               {imageUrl ? (
                                 <img
                                   alt=""
@@ -22071,24 +22071,24 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                                 />
                               ) : (
                                 <visual.icon size={44} />
-                              )}
+                                )}
                             </span>
-                            <div className="catalog-category-copy">
+                            <div className="catalog-category-copy mounting-node-category-copy">
                               <strong>{category.label}</strong>
                               <span>{description}</span>
                             </div>
-                            <span className="service-tree-badge subtle">{count}</span>
+                            <span className="service-tree-badge subtle mounting-node-category-count">{count}</span>
                           </button>
                         );
                       })}
 
                       {Number(mountingNodesCategorySummary?.uncategorized || 0) > 0 ? (
                         <button
-                          className="catalog-category-card"
+                          className="catalog-category-card mounting-node-category-card"
                           onClick={() => handleOpenMountingNodesCategoryList("null")}
                           type="button"
                         >
-                          <span className="catalog-category-art" style={{ "--catalog-accent": MOUNTING_NODE_CATEGORY_VISUALS.uncategorized.accent }}>
+                          <span className="catalog-category-art mounting-node-category-art" style={{ "--catalog-accent": MOUNTING_NODE_CATEGORY_VISUALS.uncategorized.accent }}>
                             <img
                               alt=""
                               aria-hidden="true"
@@ -22097,11 +22097,11 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                               src={getMountingNodeCategoryImageUrl("uncategorized")}
                             />
                           </span>
-                          <div className="catalog-category-copy">
+                          <div className="catalog-category-copy mounting-node-category-copy">
                             <strong>{language === "uk" ? "Без категорії" : "Uncategorized"}</strong>
                             <span>{MOUNTING_NODE_CATEGORY_DESCRIPTIONS.uncategorized[language]}</span>
                           </div>
-                          <span className="service-tree-badge subtle">
+                          <span className="service-tree-badge subtle mounting-node-category-count">
                             {mountingNodesCategorySummary?.uncategorized || 0}
                           </span>
                         </button>
