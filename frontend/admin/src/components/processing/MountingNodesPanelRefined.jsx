@@ -1746,12 +1746,12 @@ export default function MountingNodesPanelRefined({
               ) : null}
               {activeCategoryFilter !== "all" ? (
                 <button
-                  className="ghost-button compact-button"
+                  className="primary-button mounting-node-detail-action-button mounting-node-return-button"
                   onClick={handleReturnToCategories}
                   type="button"
                 >
                   <ArrowLeft size={16} />
-                  {language === "uk" ? "Всі категорії" : "All categories"}
+                  {language === "uk" ? "Повернутися до категорій" : "Return to categories"}
                 </button>
               ) : null}
               {typeof onOpenMountingNodeCreate === "function" ? (

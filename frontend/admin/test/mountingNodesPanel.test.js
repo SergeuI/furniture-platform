@@ -818,7 +818,8 @@ test("mounting nodes list exposes the category catalog return action", () => {
 
   assert.equal(source.includes("onOpenMountingNodeCategories"), true);
   assert.equal(source.includes("handleReturnToCategories"), true);
-  assert.equal(source.includes("Всі категорії"), true);
+  assert.equal(source.includes("Повернутися до категорій"), true);
+  assert.equal(source.includes("primary-button mounting-node-detail-action-button mounting-node-return-button"), true);
   assert.equal(source.includes("Категорія:"), true);
 });
 
