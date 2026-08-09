@@ -2326,6 +2326,31 @@ tbody tr.selected {
   gap: 8px;
 }
 
+#mounting-nodes-panel .mounting-nodes-filters {
+  align-items: flex-end;
+  flex-wrap: nowrap;
+}
+
+#mounting-nodes-panel .mounting-nodes-filter-main {
+  flex-wrap: nowrap;
+}
+
+#mounting-nodes-panel .mounting-nodes-search {
+  flex: 1 1 240px;
+  min-width: 220px;
+}
+
+#mounting-nodes-panel .mounting-nodes-filter-field {
+  flex: 0 0 auto;
+}
+
+#mounting-nodes-panel .mounting-nodes-search-button,
+#mounting-nodes-panel .mounting-nodes-refresh-button,
+#mounting-nodes-panel .mounting-nodes-display-toggle {
+  min-width: 0;
+  width: auto;
+}
+
 .mounting-nodes-list {
   display: flex;
   flex-direction: column;

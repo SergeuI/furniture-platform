@@ -833,6 +833,10 @@ test("mounting nodes list header keeps the compact controls layout contract", ()
   assert.equal(styles.includes(".mounting-nodes-filter-row {"), true);
   assert.equal(styles.includes(".mounting-nodes-filter-main {"), true);
   assert.equal(styles.includes(".mounting-nodes-filters {"), true);
+  assert.equal(styles.includes("#mounting-nodes-panel .mounting-nodes-filters {"), true);
+  assert.equal(styles.includes("#mounting-nodes-panel .mounting-nodes-filter-main {"), true);
+  assert.equal(styles.includes("#mounting-nodes-panel .mounting-nodes-search {"), true);
+  assert.equal(styles.includes("#mounting-nodes-panel .mounting-nodes-search-button,"), true);
   assert.equal(styles.includes("padding: 12px 14px;"), true);
   assert.equal(styles.includes(".settings-grid.mounting-nodes-grid {"), true);
   assert.equal(styles.includes("margin-top: 4px;"), true);
