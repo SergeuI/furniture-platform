@@ -36,6 +36,23 @@ function normalizeMountingNodeCategoryRouteValue(value) {
   return normalizeMountingNodeCategoryCode(rawValue) || null;
 }
 
+function hasMountingNodeCategoryRouteValue(route = {}) {
+  if (!route || typeof route !== "object") {
+    return false;
+  }
+
+  if (!Object.prototype.hasOwnProperty.call(route, "categoryCode")) {
+    return false;
+  }
+
+  const rawCategoryCode = route.categoryCode;
+  if (rawCategoryCode === null) {
+    return true;
+  }
+
+  return String(rawCategoryCode || "").trim() !== "";
+}
+
 function buildMountingNodesDetailRestoreKey(nodeId) {
   const normalizedNodeId = normalizeMountingNodeId(nodeId);
 
@@ -58,6 +75,7 @@ export function normalizeMountingNodesRoute(route = {}) {
   const mode = String(route?.mode || "").trim();
   const nodeId = normalizeMountingNodeId(route?.nodeId);
   const categoryCode = normalizeMountingNodeCategoryRouteValue(route?.categoryCode);
+  const hasCategoryCode = hasMountingNodeCategoryRouteValue(route);
 
   if (mode === "categories") {
     return {
@@ -84,6 +102,14 @@ export function normalizeMountingNodesRoute(route = {}) {
   }
 
   if (mode === "list") {
+    if (!hasCategoryCode) {
+      return {
+        mode: "categories",
+        nodeId: null,
+        categoryCode: null,
+      };
+    }
+
     return {
       mode,
       nodeId: null,
@@ -105,11 +131,19 @@ export function parseMountingNodesRoute(search = "") {
     return null;
   }
 
-  return normalizeMountingNodesRoute({
+  const categoryParam = String(params.get("category") || "").trim();
+  const route = {
     mode: params.get("mode"),
     nodeId: params.get("node"),
-    categoryCode: params.get("category"),
-  });
+  };
+
+  if (params.has("category") && categoryParam) {
+    route.categoryCode = params.get("category");
+  } else if (params.has("category") && categoryParam === "null") {
+    route.categoryCode = "null";
+  }
+
+  return normalizeMountingNodesRoute(route);
 }
 
 export function buildMountingNodesRouteUrl(route = {}, currentSearch = "") {

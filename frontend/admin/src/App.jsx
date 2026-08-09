@@ -10451,10 +10451,6 @@ export default function App() {
     });
   }
 
-  function handleOpenAllMountingNodesList() {
-    handleOpenMountingNodesCategoryList("");
-  }
-
   function handleCatalogHolesBackToList() {
     if (catalogHolesMode === "editor") {
       const restoredNodeId = String(
@@ -22099,8 +22095,8 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                       <h3>{language === "uk" ? "Каталог категорій монтажних вузлів" : "Mounting node category catalog"}</h3>
                       <p>
                         {language === "uk"
-                          ? "Оберіть категорію для перегляду списку монтажних вузлів або відкрийте повний список без категорії."
-                          : "Choose a category to browse mounting nodes or open the full list without category filtering."}
+                          ? "Оберіть категорію для перегляду монтажних вузлів."
+                          : "Choose a category to browse mounting nodes."}
                       </p>
                     </div>
                     <div className="service-catalog-header-actions">
@@ -22114,13 +22110,6 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                           ? t.loading
                           : `${mountingNodesCategorySummary?.total || 0} ${language === "uk" ? "вузлів" : "nodes"}`}
                       </span>
-                      <button
-                        className="primary-button"
-                        onClick={handleOpenAllMountingNodesList}
-                        type="button"
-                      >
-                        {language === "uk" ? "Усі монтажні вузли" : "All mounting nodes"}
-                      </button>
                       {typeof onOpenMountingNodeCreate === "function" ? (
                         <button
                           className="ghost-button"

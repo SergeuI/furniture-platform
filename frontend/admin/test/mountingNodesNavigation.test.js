@@ -13,9 +13,9 @@ import {
   shouldHydrateMountingNodeDetail,
 } from "../src/mountingNodesNavigation.js";
 
-test("mounting nodes route parser recognizes the list URL", () => {
+test("mounting nodes route parser normalizes the list URL to categories", () => {
   assert.deepEqual(parseMountingNodesRoute("?section=mounting-nodes&mode=list"), {
-    mode: "list",
+    mode: "categories",
     nodeId: null,
     categoryCode: null,
   });
@@ -56,14 +56,29 @@ test("mounting nodes route parser recognizes the categories URL", () => {
 test("mounting nodes route builder preserves unrelated query params", () => {
   assert.equal(
     buildMountingNodesRouteUrl({ mode: "list", nodeId: null }, "?foo=bar"),
-    "?foo=bar&section=mounting-nodes&mode=list",
+    "?foo=bar&section=mounting-nodes&mode=categories",
   );
+});
+
+test("mounting nodes route parser keeps the NULL category list as a list URL", () => {
+  assert.deepEqual(parseMountingNodesRoute("?section=mounting-nodes&mode=list&category=null"), {
+    mode: "list",
+    nodeId: null,
+    categoryCode: "null",
+  });
 });
 
 test("mounting nodes route builder keeps the category filter in the URL", () => {
   assert.equal(
     buildMountingNodesRouteUrl({ mode: "list", nodeId: null, categoryCode: "hinges" }, "?foo=bar"),
     "?foo=bar&section=mounting-nodes&mode=list&category=hinges",
+  );
+});
+
+test("mounting nodes route builder keeps the NULL category list in the URL", () => {
+  assert.equal(
+    buildMountingNodesRouteUrl({ mode: "list", nodeId: null, categoryCode: "null" }, "?foo=bar"),
+    "?foo=bar&section=mounting-nodes&mode=list&category=null",
   );
 });
 
