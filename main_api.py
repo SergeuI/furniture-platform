@@ -34,6 +34,9 @@ from api.routes.fitting_holes import (
 from api.routes.mounting_nodes import (
     router as mounting_nodes_router
 )
+from api.routes.mounting_schemes import (
+    router as mounting_schemes_router
+)
 from api.routes.processing import (
     router as processing_router
 )
@@ -167,6 +170,15 @@ app.include_router(
     prefix="/mounting-nodes",
 
     tags=["Mounting Nodes"]
+)
+
+app.include_router(
+
+    mounting_schemes_router,
+
+    prefix="/mounting-schemes",
+
+    tags=["Mounting Schemes"]
 )
 
 app.include_router(

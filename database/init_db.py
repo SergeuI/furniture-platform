@@ -75,6 +75,11 @@ from database.models.mounting_node import (
     MountingNodeVersionModel,
     MountingNodeTemplateModel,
 )
+from database.models.mounting_scheme import (
+    MountingSchemeModel,
+    MountingSchemeNodeModel,
+    MountingSchemePlacementRuleModel,
+)
 from database.models.fitting_image import (
     FittingImageModel,
 )
@@ -96,6 +101,9 @@ from services.auth_service import (
 from services.legacy_db_config import (
     ensure_unified_legacy_schema,
     migrate_legacy_sqlite_to_unified_db,
+)
+from scripts.upgrade_mounting_schemes_schema import (
+    ensure_mounting_schemes_schema,
 )
 
 
@@ -908,6 +916,8 @@ def init_database():
     migrate_legacy_sqlite_to_unified_db()
 
     upgrade_sqlite_schema()
+    with engine.begin() as connection:
+        ensure_mounting_schemes_schema(connection)
     _backfill_mounting_node_versions()
     seed_demo_access_users()
 
