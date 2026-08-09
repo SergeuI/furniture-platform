@@ -1,4 +1,4 @@
-import { ArrowLeft, Box, ChevronRight, Info, LayoutGrid, List, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
+﻿import { ArrowLeft, Box, ChevronRight, Info, LayoutGrid, List, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
 import { createPortal } from "react-dom";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
@@ -165,23 +165,23 @@ function getNodeVariantDescription(variantKey, language) {
   const descriptions = {
     angled_two_planes:
       language === "uk"
-        ? "Кріплення між двома непаралельними площинами."
+        ? "РљСЂС–РїР»РµРЅРЅСЏ РјС–Р¶ РґРІРѕРјР° РЅРµРїР°СЂР°Р»РµР»СЊРЅРёРјРё РїР»РѕС‰РёРЅР°РјРё."
         : "Mounting between two non-parallel planes.",
     drawer_slides:
       language === "uk"
-        ? "Напрямні для висувних елементів."
+        ? "РќР°РїСЂСЏРјРЅС– РґР»СЏ РІРёСЃСѓРІРЅРёС… РµР»РµРјРµРЅС‚С–РІ."
         : "Slides for pull-out elements.",
     edge_to_edge:
       language === "uk"
-        ? "Установлення фурнітури по торцях панелей."
+        ? "РЈСЃС‚Р°РЅРѕРІР»РµРЅРЅСЏ С„СѓСЂРЅС–С‚СѓСЂРё РїРѕ С‚РѕСЂС†СЏС… РїР°РЅРµР»РµР№."
         : "Hardware mounted on the edges of panels.",
     face_to_edge:
       language === "uk"
-        ? "Установлення на площині однієї та торці іншої панелі."
+        ? "РЈСЃС‚Р°РЅРѕРІР»РµРЅРЅСЏ РЅР° РїР»РѕС‰РёРЅС– РѕРґРЅС–С”С— С‚Р° С‚РѕСЂС†С– С–РЅС€РѕС— РїР°РЅРµР»С–."
         : "Mounting on one panel face and another panel edge.",
     surface_mount:
       language === "uk"
-        ? "Установлення фурнітури на площині."
+        ? "РЈСЃС‚Р°РЅРѕРІР»РµРЅРЅСЏ С„СѓСЂРЅС–С‚СѓСЂРё РЅР° РїР»РѕС‰РёРЅС–."
         : "Hardware mounted on a panel face.",
   };
 
@@ -246,16 +246,16 @@ function formatBooleanLabel(value, t) {
 function formatMountingNodeRoleLabel(value, language, t) {
   const normalizedRole = String(value || "").trim().toLowerCase();
 
-  if (["primary", "main", "основний"].includes(normalizedRole)) {
-    return language === "uk" ? "Основний" : "Primary";
+  if (["primary", "main", "РѕСЃРЅРѕРІРЅРёР№"].includes(normalizedRole)) {
+    return language === "uk" ? "РћСЃРЅРѕРІРЅРёР№" : "Primary";
   }
 
-  if (["additional", "додатковий"].includes(normalizedRole)) {
-    return language === "uk" ? "Додатковий" : "Additional";
+  if (["additional", "РґРѕРґР°С‚РєРѕРІРёР№"].includes(normalizedRole)) {
+    return language === "uk" ? "Р”РѕРґР°С‚РєРѕРІРёР№" : "Additional";
   }
 
-  if (["replacement", "substitute", "заміна"].includes(normalizedRole)) {
-    return language === "uk" ? "Заміна" : "Replacement";
+  if (["replacement", "substitute", "Р·Р°РјС–РЅР°"].includes(normalizedRole)) {
+    return language === "uk" ? "Р—Р°РјС–РЅР°" : "Replacement";
   }
 
   return String(value || "").trim() || t.notSet;
@@ -279,7 +279,7 @@ function formatTemplateSummary(template, t, language) {
 
   return {
     label: templateLabel,
-    meta: `${variantLabel} · ${templateState}`,
+    meta: `${variantLabel} В· ${templateState}`,
     pointsCount: Number(template?.points_count || 0) || 0,
   };
 }
@@ -322,10 +322,10 @@ function getMountingNodeVersionSummary(version, language, t) {
   const normalizedEventType = String(version?.event_type || "").trim();
   const eventLabel =
     normalizedEventType === "create"
-      ? (language === "uk" ? "Створення" : "Created")
+      ? (language === "uk" ? "РЎС‚РІРѕСЂРµРЅРЅСЏ" : "Created")
       : normalizedEventType === "delete" || normalizedEventType === "archive"
-        ? (language === "uk" ? "Архів" : "Archived")
-        : (language === "uk" ? "Редагування" : "Updated");
+        ? (language === "uk" ? "РђСЂС…С–РІ" : "Archived")
+        : (language === "uk" ? "Р РµРґР°РіСѓРІР°РЅРЅСЏ" : "Updated");
 
   return {
     dateLabel,
@@ -343,10 +343,10 @@ function getNodeCardPreviewText(nodeDetail, t, language) {
   const itemText = items.slice(0, 2).map((item) => formatItemSummary(item, t)).filter(Boolean);
   const templateText = templates.slice(0, 2).map((template) => {
     const summary = formatTemplateSummary(template, t, language);
-    return `${summary.label} · ${summary.meta}`;
+    return `${summary.label} В· ${summary.meta}`;
   });
 
-  return [itemText.length ? itemText.join(" · ") : "", templateText.length ? templateText.join(" · ") : ""].filter(Boolean);
+  return [itemText.length ? itemText.join(" В· ") : "", templateText.length ? templateText.join(" В· ") : ""].filter(Boolean);
 }
 
 function DetailField({ label, value }) {
@@ -362,31 +362,31 @@ function getOwnershipLabel(node, language) {
   const ownershipType = String(node?.ownership_type || "").trim().toLowerCase();
 
   if (ownershipType === "system" || node?.is_system) {
-    return language === "uk" ? "Системний" : "System";
+    return language === "uk" ? "РЎРёСЃС‚РµРјРЅРёР№" : "System";
   }
 
   if (node?.is_owner) {
-    return language === "uk" ? "Власний" : "Owned";
+    return language === "uk" ? "Р’Р»Р°СЃРЅРёР№" : "Owned";
   }
 
   if (ownershipType === "private" || node?.owner_user_id) {
-    return language === "uk" ? "Користувацький" : "Custom";
+    return language === "uk" ? "РљРѕСЂРёСЃС‚СѓРІР°С†СЊРєРёР№" : "Custom";
   }
 
-  return language === "uk" ? "Невідомий доступ" : "Unknown ownership";
+  return language === "uk" ? "РќРµРІС–РґРѕРјРёР№ РґРѕСЃС‚СѓРї" : "Unknown ownership";
 }
 
 function getNodeCategoryLabel(node, language) {
   return (
     getMountingNodeCategoryLabel(node?.category_code, language) ||
-    (language === "uk" ? "Категорію не вказано" : "Category not set")
+    (language === "uk" ? "РљР°С‚РµРіРѕСЂС–СЋ РЅРµ РІРєР°Р·Р°РЅРѕ" : "Category not set")
   );
 }
 
 function getNodeFunctionalLabel(node, language) {
   return (
     getMountingNodeFunctionalLabel(node?.functional_code, language) ||
-    (language === "uk" ? "Не вказано" : "Not set")
+    (language === "uk" ? "РќРµ РІРєР°Р·Р°РЅРѕ" : "Not set")
   );
 }
 
@@ -480,9 +480,9 @@ function renderNodeItemGallery(items, language, t, fittingThumbnailStateById) {
 
   if (!nodeItems.length || !visibleItems.length && !hasLoadingImages) {
     return (
-      <div className="mounting-node-item-gallery is-empty" aria-label={language === "uk" ? "Немає зображень" : "No images"}>
+      <div className="mounting-node-item-gallery is-empty" aria-label={language === "uk" ? "РќРµРјР°С” Р·РѕР±СЂР°Р¶РµРЅСЊ" : "No images"}>
         <div className="mounting-node-item-thumb is-empty">
-          <span>{t.holeWorkspaceNoImage || (language === "uk" ? "Без зображення" : "No image")}</span>
+          <span>{t.holeWorkspaceNoImage || (language === "uk" ? "Р‘РµР· Р·РѕР±СЂР°Р¶РµРЅРЅСЏ" : "No image")}</span>
         </div>
       </div>
     );
@@ -490,16 +490,16 @@ function renderNodeItemGallery(items, language, t, fittingThumbnailStateById) {
 
   if (!visibleItems.length) {
     return (
-      <div className="mounting-node-item-gallery is-empty" aria-label={language === "uk" ? "Завантаження зображень" : "Loading images"}>
+      <div className="mounting-node-item-gallery is-empty" aria-label={language === "uk" ? "Р—Р°РІР°РЅС‚Р°Р¶РµРЅРЅСЏ Р·РѕР±СЂР°Р¶РµРЅСЊ" : "Loading images"}>
         <div className="mounting-node-item-thumb is-empty">
-          <span>{t.mountingNodesLoading || (language === "uk" ? "Завантаження..." : "Loading...")}</span>
+          <span>{t.mountingNodesLoading || (language === "uk" ? "Р—Р°РІР°РЅС‚Р°Р¶РµРЅРЅСЏ..." : "Loading...")}</span>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="mounting-node-item-gallery" aria-label={language === "uk" ? "Зображення фурнітури" : "Fitting images"}>
+    <div className="mounting-node-item-gallery" aria-label={language === "uk" ? "Р—РѕР±СЂР°Р¶РµРЅРЅСЏ С„СѓСЂРЅС–С‚СѓСЂРё" : "Fitting images"}>
       {visibleItems.map((item) => {
         return (
           <div className="mounting-node-item-thumb" key={item.itemKey}>
@@ -513,8 +513,8 @@ function renderNodeItemGallery(items, language, t, fittingThumbnailStateById) {
 
 function renderNodeCardActions(node, nodeDetail, language, t, onOpenNodeDetail, onOpenNodeEditor) {
   const canEdit = Boolean((nodeDetail || node)?.can_edit);
-  const openNodeDetailLabel = language === "uk" ? "Інформація про вузол" : "Node info";
-  const openNodeEditorLabel = language === "uk" ? "Отвори та 3D" : "Open editor and 3D";
+  const openNodeDetailLabel = language === "uk" ? "Р†РЅС„РѕСЂРјР°С†С–СЏ РїСЂРѕ РІСѓР·РѕР»" : "Node info";
+  const openNodeEditorLabel = language === "uk" ? "РћС‚РІРѕСЂРё С‚Р° 3D" : "Open editor and 3D";
 
   return (
     <div className="mounting-node-card-actions">
@@ -589,14 +589,14 @@ function getNodeVariantOptions(language) {
 
 function getNodeVariantChangeWarning(language) {
   if (language === "uk") {
-    return "У вузлі вже є налаштовані точки. Зміна варіанта кріплення може змінити їх відображення. Після збереження перевірте точки у розділі «Отвори та 3D». Продовжити?";
+    return "РЈ РІСѓР·Р»С– РІР¶Рµ С” РЅР°Р»Р°С€С‚РѕРІР°РЅС– С‚РѕС‡РєРё. Р—РјС–РЅР° РІР°СЂС–Р°РЅС‚Р° РєСЂС–РїР»РµРЅРЅСЏ РјРѕР¶Рµ Р·РјС–РЅРёС‚Рё С—С… РІС–РґРѕР±СЂР°Р¶РµРЅРЅСЏ. РџС–СЃР»СЏ Р·Р±РµСЂРµР¶РµРЅРЅСЏ РїРµСЂРµРІС–СЂС‚Рµ С‚РѕС‡РєРё Сѓ СЂРѕР·РґС–Р»С– В«РћС‚РІРѕСЂРё С‚Р° 3DВ». РџСЂРѕРґРѕРІР¶РёС‚Рё?";
   }
 
   return 'This node already has configured points. Changing the mounting variant may affect how they are shown. After saving, check the points in the "Openings and 3D" section. Continue?';
 }
 
 function getNodeVariantChangeTitle(language) {
-  return language === "uk" ? "Змінити варіант кріплення" : "Change mounting variant";
+  return language === "uk" ? "Р—РјС–РЅРёС‚Рё РІР°СЂС–Р°РЅС‚ РєСЂС–РїР»РµРЅРЅСЏ" : "Change mounting variant";
 }
 
 
@@ -616,9 +616,9 @@ function renderNodeDetailItemCard(
   const fittingThumbnailState = fittingId ? fittingThumbnailStateById?.[fittingId] || null : null;
   const imageUrl = getNodeItemImageUrl(item, fittingThumbnailState);
   const itemLabel = getNodeItemLabel(item, t);
-  const detailLabel = language === "uk" ? "Відкрити картку фурнітури" : "Open fitting details";
-  const quantityLabel = language === "uk" ? "Кількість" : "Quantity";
-  const roleLabel = language === "uk" ? "Роль" : "Role";
+  const detailLabel = language === "uk" ? "Р’С–РґРєСЂРёС‚Рё РєР°СЂС‚РєСѓ С„СѓСЂРЅС–С‚СѓСЂРё" : "Open fitting details";
+  const quantityLabel = language === "uk" ? "РљС–Р»СЊРєС–СЃС‚СЊ" : "Quantity";
+  const roleLabel = language === "uk" ? "Р РѕР»СЊ" : "Role";
   const isLoaded = fittingThumbnailState?.status === "loaded" && imageUrl;
   const roleValue = formatMountingNodeRoleLabel(item?.role, language, t);
   const isDetailLoading = Boolean(fittingId && openFittingDetailLoadingId === fittingId);
@@ -661,19 +661,19 @@ function renderNodeDetailItemCard(
       type="button"
     >
       <div className={`mounting-node-detail-item-thumb${isLoaded ? "" : " is-empty"}`}>
-        {isLoaded ? <img alt={itemLabel} loading="lazy" src={imageUrl} /> : <span>{t.holeWorkspaceNoImage || (language === "uk" ? "Без зображення" : "No image")}</span>}
+        {isLoaded ? <img alt={itemLabel} loading="lazy" src={imageUrl} /> : <span>{t.holeWorkspaceNoImage || (language === "uk" ? "Р‘РµР· Р·РѕР±СЂР°Р¶РµРЅРЅСЏ" : "No image")}</span>}
       </div>
       <div className="mounting-node-detail-item-copy">
         <strong>{itemLabel}</strong>
         <div className="mounting-node-detail-item-meta">
           <span>
-            {language === "uk" ? "Артикул" : "Article"}: {item.fitting_article || item.fitting_code || item.fitting_name || t.notSet}
+            {language === "uk" ? "РђСЂС‚РёРєСѓР»" : "Article"}: {item.fitting_article || item.fitting_code || item.fitting_name || t.notSet}
           </span>
           <span>
             {roleLabel}: {roleValue}
           </span>
           <span>
-            {quantityLabel}: × {item.quantity ?? 0}
+            {quantityLabel}: Г— {item.quantity ?? 0}
           </span>
         </div>
       </div>
@@ -1199,7 +1199,7 @@ export default function MountingNodesPanelRefined({
     () => [
       {
         value: "all",
-        label: language === "uk" ? "Усі варіанти" : "All variants",
+        label: language === "uk" ? "РЈСЃС– РІР°СЂС–Р°РЅС‚Рё" : "All variants",
       },
       ...KNOWN_MOUNTING_VARIANT_KEYS.map((variantKey) => ({
         value: variantKey,
@@ -1212,11 +1212,11 @@ export default function MountingNodesPanelRefined({
     () => [
       {
         value: "all",
-        label: language === "uk" ? "Усі категорії" : "All categories",
+        label: language === "uk" ? "РЈСЃС– РєР°С‚РµРіРѕСЂС–С—" : "All categories",
       },
       {
         value: MOUNTING_NODE_CATEGORY_FILTER_NULL,
-        label: language === "uk" ? "Категорію не вказано" : "Category not set",
+        label: language === "uk" ? "РљР°С‚РµРіРѕСЂС–СЋ РЅРµ РІРєР°Р·Р°РЅРѕ" : "Category not set",
       },
       ...getMountingNodeCategoryOptions(language).map((category) => ({
         value: category.code,
@@ -1227,12 +1227,12 @@ export default function MountingNodesPanelRefined({
   );
   const activeMountingCategoryLabel = useMemo(() => {
     if (activeCategoryFilter === MOUNTING_NODE_CATEGORY_FILTER_NULL) {
-      return language === "uk" ? "Категорію не вказано" : "Category not set";
+      return language === "uk" ? "РљР°С‚РµРіРѕСЂС–СЋ РЅРµ РІРєР°Р·Р°РЅРѕ" : "Category not set";
     }
 
     return (
       getMountingNodeCategoryLabel(activeCategoryFilter, language) ||
-      (language === "uk" ? "Усі категорії" : "All categories")
+      (language === "uk" ? "РЈСЃС– РєР°С‚РµРіРѕСЂС–С—" : "All categories")
     );
   }, [activeCategoryFilter, language]);
   const detailVariantOptions = useMemo(() => getNodeVariantOptions(language), [language]);
@@ -1522,13 +1522,13 @@ export default function MountingNodesPanelRefined({
     try {
       const result = await getMountingNodeVersion(token, nodeId, versionId);
       if (!result.success || !result.version) {
-        setSelectedNodeVersionError(result.error || (language === "uk" ? "Не вдалося відкрити версію." : "Unable to open version."));
+        setSelectedNodeVersionError(result.error || (language === "uk" ? "РќРµ РІРґР°Р»РѕСЃСЏ РІС–РґРєСЂРёС‚Рё РІРµСЂСЃС–СЋ." : "Unable to open version."));
         return;
       }
 
       setSelectedNodeVersionDetail(result.version);
     } catch (error) {
-      setSelectedNodeVersionError(error?.message || (language === "uk" ? "Не вдалося відкрити версію." : "Unable to open version."));
+      setSelectedNodeVersionError(error?.message || (language === "uk" ? "РќРµ РІРґР°Р»РѕСЃСЏ РІС–РґРєСЂРёС‚Рё РІРµСЂСЃС–СЋ." : "Unable to open version."));
     } finally {
       setSelectedNodeVersionLoadingId("");
     }
@@ -1583,7 +1583,7 @@ export default function MountingNodesPanelRefined({
       const result = await updateMountingNode(token, selectedNodeDetail.id, payload);
 
       if (!result.success || !result.node) {
-        setVariantSaveError(result.error || (language === "uk" ? "Не вдалося зберегти варіант кріплення." : "Unable to save mounting variant."));
+        setVariantSaveError(result.error || (language === "uk" ? "РќРµ РІРґР°Р»РѕСЃСЏ Р·Р±РµСЂРµРіС‚Рё РІР°СЂС–Р°РЅС‚ РєСЂС–РїР»РµРЅРЅСЏ." : "Unable to save mounting variant."));
         setSelectedNodeVariantKey(selectedNodeCurrentVariantKey);
         return;
       }
@@ -1601,7 +1601,7 @@ export default function MountingNodesPanelRefined({
       closeVariantDropdown(false);
       setVariantConfirmOpen(false);
     } catch (error) {
-      setVariantSaveError(error?.message || (language === "uk" ? "Не вдалося зберегти варіант кріплення." : "Unable to save mounting variant."));
+      setVariantSaveError(error?.message || (language === "uk" ? "РќРµ РІРґР°Р»РѕСЃСЏ Р·Р±РµСЂРµРіС‚Рё РІР°СЂС–Р°РЅС‚ РєСЂС–РїР»РµРЅРЅСЏ." : "Unable to save mounting variant."));
       setSelectedNodeVariantKey(selectedNodeCurrentVariantKey);
     } finally {
       setVariantSaveLoading(false);
@@ -1643,13 +1643,13 @@ export default function MountingNodesPanelRefined({
     const resolvedNodeDetail = nodeDetail || selectedNodeDetail || nodeDetailsById[String(selectedNodeId)] || null;
 
     if (!resolvedNodeDetail || typeof onOpenMountingNodeEditor !== "function") {
-      setOpenEditorError(language === "uk" ? "Не вдалося відкрити редактор: відсутній ідентифікатор монтажного вузла." : "Unable to open the editor: missing mounting node identifier.");
+      setOpenEditorError(language === "uk" ? "РќРµ РІРґР°Р»РѕСЃСЏ РІС–РґРєСЂРёС‚Рё СЂРµРґР°РєС‚РѕСЂ: РІС–РґСЃСѓС‚РЅС–Р№ С–РґРµРЅС‚РёС„С–РєР°С‚РѕСЂ РјРѕРЅС‚Р°Р¶РЅРѕРіРѕ РІСѓР·Р»Р°." : "Unable to open the editor: missing mounting node identifier.");
       return;
     }
 
     const resolvedNodeId = String(resolvedNodeDetail.id || resolvedNodeDetail.node_id || selectedNodeId || "").trim();
     if (!resolvedNodeId) {
-      setOpenEditorError(language === "uk" ? "Не вдалося відкрити редактор: відсутній ідентифікатор монтажного вузла." : "Unable to open the editor: missing mounting node identifier.");
+      setOpenEditorError(language === "uk" ? "РќРµ РІРґР°Р»РѕСЃСЏ РІС–РґРєСЂРёС‚Рё СЂРµРґР°РєС‚РѕСЂ: РІС–РґСЃСѓС‚РЅС–Р№ С–РґРµРЅС‚РёС„С–РєР°С‚РѕСЂ РјРѕРЅС‚Р°Р¶РЅРѕРіРѕ РІСѓР·Р»Р°." : "Unable to open the editor: missing mounting node identifier.");
       return;
     }
 
@@ -1706,7 +1706,7 @@ export default function MountingNodesPanelRefined({
     try {
       const result = await deleteMountingNode(token, deleteConfirmNode.id);
       if (!result.success) {
-        setDeleteConfirmError(result.error || (language === "uk" ? "Не вдалося архівувати монтажний вузол." : "Unable to archive mounting node."));
+        setDeleteConfirmError(result.error || (language === "uk" ? "РќРµ РІРґР°Р»РѕСЃСЏ Р°СЂС…С–РІСѓРІР°С‚Рё РјРѕРЅС‚Р°Р¶РЅРёР№ РІСѓР·РѕР»." : "Unable to archive mounting node."));
         return;
       }
 
@@ -1719,7 +1719,7 @@ export default function MountingNodesPanelRefined({
       setSelectedNodeId("");
       handleRefresh();
     } catch (error) {
-      setDeleteConfirmError(error?.message || (language === "uk" ? "Не вдалося архівувати монтажний вузол." : "Unable to archive mounting node."));
+      setDeleteConfirmError(error?.message || (language === "uk" ? "РќРµ РІРґР°Р»РѕСЃСЏ Р°СЂС…С–РІСѓРІР°С‚Рё РјРѕРЅС‚Р°Р¶РЅРёР№ РІСѓР·РѕР»." : "Unable to archive mounting node."));
     } finally {
       setDeleteConfirmLoading(false);
     }
@@ -1739,10 +1739,10 @@ export default function MountingNodesPanelRefined({
                 <p>{t.mountingNodesDescription || ""}</p>
               </div>
               <div className="mounting-nodes-toolbar-main">
-                <span className="service-tree-badge subtle">{language === "uk" ? `Знайдено: ${nodes.length}` : `Found: ${nodes.length}`}</span>
+                <span className="service-tree-badge subtle">{language === "uk" ? `Р—РЅР°Р№РґРµРЅРѕ: ${nodes.length}` : `Found: ${nodes.length}`}</span>
                 {activeCategoryFilter !== "all" ? (
                   <span className="service-tree-badge subtle">
-                    {language === "uk" ? "Категорія:" : "Category:"} {activeMountingCategoryLabel}
+                    {language === "uk" ? "РљР°С‚РµРіРѕСЂС–СЏ:" : "Category:"} {activeMountingCategoryLabel}
                   </span>
                 ) : null}
                 {activeCategoryFilter !== "all" ? (
@@ -1752,7 +1752,7 @@ export default function MountingNodesPanelRefined({
                     type="button"
                   >
                     <ArrowLeft size={16} />
-                    {language === "uk" ? "Повернутися до категорій" : "Return to categories"}
+                    {language === "uk" ? "РџРѕРІРµСЂРЅСѓС‚РёСЃСЏ РґРѕ РєР°С‚РµРіРѕСЂС–Р№" : "Return to categories"}
                   </button>
                 ) : null}
                 {typeof onOpenMountingNodeCreate === "function" ? (
@@ -1762,96 +1762,98 @@ export default function MountingNodesPanelRefined({
                     type="button"
                   >
                     <Plus size={16} />
-                    {language === "uk" ? "Створити монтажний вузол" : "Create mounting node"}
+                    {language === "uk" ? "РЎС‚РІРѕСЂРёС‚Рё РјРѕРЅС‚Р°Р¶РЅРёР№ РІСѓР·РѕР»" : "Create mounting node"}
                   </button>
                 ) : null}
               </div>
             </div>
 
-            <form className="project-filter-form mounting-nodes-filters mounting-nodes-filter-row" onSubmit={handleSearchSubmit}>
-              <div className="mounting-nodes-filter-main">
-                <label className="mounting-nodes-search mounting-nodes-search-field">
-                  {t.mountingNodesSearchPlaceholder || "Search mounting nodes"}
-                  <input
-                    onChange={(event) => setSearchInput(event.target.value)}
-                    placeholder={t.mountingNodesSearchPlaceholder || "Search mounting nodes"}
-                    type="search"
-                    value={searchInput}
-                  />
-                </label>
-                {activeCategoryFilter === "all" ? (
+            <div className="mounting-nodes-filter-row">
+              <form className="project-filter-form mounting-nodes-filters" onSubmit={handleSearchSubmit}>
+                <div className="mounting-nodes-filter-main">
+                  <label className="mounting-nodes-search mounting-nodes-search-field">
+                    {t.mountingNodesSearchPlaceholder || "Search mounting nodes"}
+                    <input
+                      onChange={(event) => setSearchInput(event.target.value)}
+                      placeholder={t.mountingNodesSearchPlaceholder || "Search mounting nodes"}
+                      type="search"
+                      value={searchInput}
+                    />
+                  </label>
+                  {activeCategoryFilter === "all" ? (
+                    <label className="mounting-nodes-filter-field">
+                      {language === "uk" ? "РљР°С‚РµРіРѕСЂС–СЏ" : "Category"}
+                      <select onChange={(event) => handleCategoryFilterChange(event.target.value)} value={activeCategoryFilter}>
+                        {categoryFilterOptions.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
                   <label className="mounting-nodes-filter-field">
-                    {language === "uk" ? "Категорія" : "Category"}
-                    <select onChange={(event) => handleCategoryFilterChange(event.target.value)} value={activeCategoryFilter}>
-                      {categoryFilterOptions.map((option) => (
+                    {language === "uk" ? "РЎС‚Р°С‚СѓСЃ" : "Status"}
+                    <select onChange={(event) => handleStatusFilterChange(event.target.value)} value={activeStatusFilter}>
+                      <option value="all">{language === "uk" ? "РЈСЃС–" : "All"}</option>
+                      <option value="active">{t.active || (language === "uk" ? "РђРєС‚РёРІРЅРёР№" : "Active")}</option>
+                      <option value="inactive">{t.inactive || (language === "uk" ? "РќРµР°РєС‚РёРІРЅРР№" : "Inactive")}</option>
+                    </select>
+                  </label>
+                  <label className="mounting-nodes-filter-field">
+                    {language === "uk" ? "Р’Р°СЂС–Р°РЅС‚ РєСЂС–РїР»РµРЅРЅСЏ" : "Mounting variant"}
+                    <select onChange={(event) => handleVariantFilterChange(event.target.value)} value={activeVariantFilter}>
+                      {variantOptions.map((option) => (
                         <option key={option.value} value={option.value}>
                           {option.label}
                         </option>
                       ))}
                     </select>
                   </label>
-                ) : null}
-                <label className="mounting-nodes-filter-field">
-                  {language === "uk" ? "Статус" : "Status"}
-                  <select onChange={(event) => handleStatusFilterChange(event.target.value)} value={activeStatusFilter}>
-                    <option value="all">{language === "uk" ? "Усі" : "All"}</option>
-                    <option value="active">{t.active || (language === "uk" ? "Активний" : "Active")}</option>
-                    <option value="inactive">{t.inactive || (language === "uk" ? "Неактивний" : "Inactive")}</option>
-                  </select>
-                </label>
-                <label className="mounting-nodes-filter-field">
-                  {language === "uk" ? "Варіант кріплення" : "Mounting variant"}
-                  <select onChange={(event) => handleVariantFilterChange(event.target.value)} value={activeVariantFilter}>
-                    {variantOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <button className="primary-button mounting-nodes-search-button" type="submit">
-                  <Search size={16} />
-                  {language === "uk" ? "Шукати" : "Search"}
-                </button>
-                <button className="ghost-button mounting-nodes-refresh-button" onClick={handleRefresh} type="button">
-                  <RefreshCw size={16} />
-                  {t.mountingNodesRetry || (language === "uk" ? "Повторити" : "Retry")}
-                </button>
-              </div>
-              <div className="mounting-nodes-display-toggle materials-mode-switch" role="group" aria-label={language === "uk" ? "Вигляд каталогу" : "Catalog view mode"}>
+                  <button className="primary-button mounting-nodes-search-button" type="submit">
+                    <Search size={16} />
+                    {language === "uk" ? "РЁСѓРєР°С‚Рё" : "Search"}
+                  </button>
+                  <button className="ghost-button mounting-nodes-refresh-button" onClick={handleRefresh} type="button">
+                    <RefreshCw size={16} />
+                    {t.mountingNodesRetry || (language === "uk" ? "РџРѕРІС‚РѕСЂРёС‚Рё" : "Retry")}
+                  </button>
+                </div>
+              </form>
+              <div className="mounting-nodes-display-toggle materials-mode-switch" role="group" aria-label={language === "uk" ? "Р’РёРіР»СЏРґ РєР°С‚Р°Р»РѕРіСѓ" : "Catalog view mode"}>
                 <button
                   aria-pressed={displayMode === "grid"}
                   className={`ghost-button compact-button${displayMode === "grid" ? " active" : ""}`}
                   onClick={() => setDisplayMode("grid")}
-                  title={language === "uk" ? "Плитка" : "Grid"}
+                  title={language === "uk" ? "РџР»РёС‚РєР°" : "Grid"}
                   type="button"
                 >
                   <LayoutGrid size={16} />
-                  <span>{language === "uk" ? "Плитка" : "Grid"}</span>
+                  <span>{language === "uk" ? "РџР»РёС‚РєР°" : "Grid"}</span>
                 </button>
                 <button
                   aria-pressed={displayMode === "list"}
                   className={`ghost-button compact-button${displayMode === "list" ? " active" : ""}`}
                   onClick={() => setDisplayMode("list")}
-                  title={language === "uk" ? "Список" : "List"}
+                  title={language === "uk" ? "РЎРїРёСЃРѕРє" : "List"}
                   type="button"
                 >
                   <List size={16} />
-                  <span>{language === "uk" ? "Список" : "List"}</span>
+                  <span>{language === "uk" ? "РЎРїРёСЃРѕРє" : "List"}</span>
                 </button>
               </div>
-            </form>
+            </div>
           </div>
 
           {listLoading ? (
             <div className="empty-state compact-empty-state">
-              <span>{t.mountingNodesLoading || (language === "uk" ? "Завантаження монтажних вузлів…" : "Loading mounting nodes…")}</span>
+              <span>{t.mountingNodesLoading || (language === "uk" ? "Р—Р°РІР°РЅС‚Р°Р¶РµРЅРЅСЏ РјРѕРЅС‚Р°Р¶РЅРёС… РІСѓР·Р»С–РІвЂ¦" : "Loading mounting nodesвЂ¦")}</span>
             </div>
           ) : listError ? (
             <div className="empty-state compact-empty-state">
               <span>{listError}</span>
               <button className="primary-button" onClick={handleRefresh} type="button">
-                {t.mountingNodesRetry || (language === "uk" ? "Повторити" : "Retry")}
+                {t.mountingNodesRetry || (language === "uk" ? "РџРѕРІС‚РѕСЂРёС‚Рё" : "Retry")}
               </button>
             </div>
           ) : nodes.length ? (
@@ -1952,16 +1954,16 @@ export default function MountingNodesPanelRefined({
             <div className="empty-state compact-empty-state">
               <span>
                 {language === "uk"
-                  ? "У цій категорії монтажних вузлів поки немає"
+                  ? "РЈ С†С–Р№ РєР°С‚РµРіРѕСЂС–С— РјРѕРЅС‚Р°Р¶РЅРёС… РІСѓР·Р»С–РІ РїРѕРєРё РЅРµРјР°С”"
                   : "There are no mounting nodes in this category yet"}
               </span>
               <button className="primary-button" onClick={handleRefresh} type="button">
-                {t.mountingNodesRetry || (language === "uk" ? "Повторити" : "Retry")}
+                {t.mountingNodesRetry || (language === "uk" ? "РџРѕРІС‚РѕСЂРёС‚Рё" : "Retry")}
               </button>
             </div>
           ) : (
             <div className="empty-state compact-empty-state">
-              <span>{t.mountingNodesEmpty || (language === "uk" ? "Монтажні вузли ще не створені." : "Mounting nodes have not been created yet.")}</span>
+              <span>{t.mountingNodesEmpty || (language === "uk" ? "РњРѕРЅС‚Р°Р¶РЅС– РІСѓР·Р»Рё С‰Рµ РЅРµ СЃС‚РІРѕСЂРµРЅС–." : "Mounting nodes have not been created yet.")}</span>
             </div>
           )}
         </>
@@ -1970,16 +1972,16 @@ export default function MountingNodesPanelRefined({
         <article className="catalog-card service-catalog-card service-catalog-card-full holes-view-card mounting-node-detail-screen">
           <div className="catalog-page-header mounting-node-detail-header">
             <div className="service-catalog-title">
-              <p>{t.mountingNodeDetailsDescription || (language === "uk" ? "Переглядайте склад вузла, варіант кріплення та переходьте до редактора за потреби." : "Inspect the node fittings, mounting variant, and open the editor when needed.")}</p>
+              <p>{t.mountingNodeDetailsDescription || (language === "uk" ? "РџРµСЂРµРіР»СЏРґР°Р№С‚Рµ СЃРєР»Р°Рґ РІСѓР·Р»Р°, РІР°СЂС–Р°РЅС‚ РєСЂС–РїР»РµРЅРЅСЏ С‚Р° РїРµСЂРµС…РѕРґСЊС‚Рµ РґРѕ СЂРµРґР°РєС‚РѕСЂР° Р·Р° РїРѕС‚СЂРµР±Рё." : "Inspect the node fittings, mounting variant, and open the editor when needed.")}</p>
             </div>
             <div className="service-catalog-header-actions mounting-node-detail-actions">
               <button className="ghost-button mounting-node-detail-action-button mounting-node-return-button" onClick={handleBackToList} type="button">
                 <ArrowLeft size={16} />
-                {t.mountingNodeBackToList || (language === "uk" ? "Повернутися до монтажних вузлів" : "Return to mounting nodes")}
+                {t.mountingNodeBackToList || (language === "uk" ? "РџРѕРІРµСЂРЅСѓС‚РёСЃСЏ РґРѕ РјРѕРЅС‚Р°Р¶РЅРёС… РІСѓР·Р»С–РІ" : "Return to mounting nodes")}
               </button>
               {selectedNodeVersionBanner ? (
                 <button className="ghost-button mounting-node-detail-action-button mounting-node-version-back-button" onClick={handleReturnToActiveVersion} type="button">
-                  {language === "uk" ? "Повернутися до активної версії" : "Return to active version"}
+                  {language === "uk" ? "РџРѕРІРµСЂРЅСѓС‚РёСЃСЏ РґРѕ Р°РєС‚РёРІРЅРѕС— РІРµСЂСЃС–С—" : "Return to active version"}
                 </button>
               ) : selectedNodeDetail ? (
                 <>
@@ -1988,12 +1990,12 @@ export default function MountingNodesPanelRefined({
                     without changing the shared translations in App.jsx.
                   */}
                   <button className="primary-button mounting-node-detail-action-button mounting-node-editor-button" onClick={() => handleOpenEditor()} type="button">
-                    {language === "uk" ? "Редагувати склад та отвори" : "Edit composition and openings"}
+                    {language === "uk" ? "Р РµРґР°РіСѓРІР°С‚Рё СЃРєР»Р°Рґ С‚Р° РѕС‚РІРѕСЂРё" : "Edit composition and openings"}
                   </button>
                   {selectedNodeDetail.can_delete ? (
                     <button className="danger-button mounting-node-detail-action-button mounting-node-delete-button" onClick={handleOpenDeleteConfirm} type="button">
                       <Trash2 size={16} />
-                      {language === "uk" ? "Архівувати" : "Archive"}
+                      {language === "uk" ? "РђСЂС…С–РІСѓРІР°С‚Рё" : "Archive"}
                     </button>
                   ) : null}
                 </>
@@ -2003,24 +2005,24 @@ export default function MountingNodesPanelRefined({
 
           {selectedNodeLoading ? (
             <div className="empty-state compact-empty-state">
-              <span>{t.mountingNodeLoading || (language === "uk" ? "Завантаження монтажного вузла…" : "Loading mounting node…")}</span>
+              <span>{t.mountingNodeLoading || (language === "uk" ? "Р—Р°РІР°РЅС‚Р°Р¶РµРЅРЅСЏ РјРѕРЅС‚Р°Р¶РЅРѕРіРѕ РІСѓР·Р»Р°вЂ¦" : "Loading mounting nodeвЂ¦")}</span>
             </div>
           ) : selectedNodeError ? (
             <div className="empty-state compact-empty-state">
               <span>{selectedNodeError}</span>
               <button className="primary-button" onClick={handleRefresh} type="button">
-                {t.mountingNodesRetry || (language === "uk" ? "Повторити" : "Retry")}
+                {t.mountingNodesRetry || (language === "uk" ? "РџРѕРІС‚РѕСЂРёС‚Рё" : "Retry")}
               </button>
             </div>
           ) : selectedNodeDetail ? (
             <>
               <div className="mounting-node-detail-hero">
                 <div className="mounting-node-detail-hero-copy">
-                  <strong>{language === "uk" ? "Опис" : "Description"}</strong>
+                  <strong>{language === "uk" ? "РћРїРёСЃ" : "Description"}</strong>
                   <p>
                     {selectedNodeDetailForDisplay?.description
                       ? selectedNodeDetailForDisplay.description
-                      : (language === "uk" ? "Опис не вказано" : "Description not set")}
+                      : (language === "uk" ? "РћРїРёСЃ РЅРµ РІРєР°Р·Р°РЅРѕ" : "Description not set")}
                   </p>
                 </div>
 
@@ -2029,49 +2031,49 @@ export default function MountingNodesPanelRefined({
                     <div>
                       <strong>
                         {language === "uk"
-                          ? `Активна версія: ${selectedNodeActiveVersion?.version_number || 1}`
+                          ? `РђРєС‚РёРІРЅР° РІРµСЂСЃС–СЏ: ${selectedNodeActiveVersion?.version_number || 1}`
                           : `Active version: ${selectedNodeActiveVersion?.version_number || 1}`}
                       </strong>
                       <p>
                         {language === "uk"
-                          ? "Кожне збереження створює окрему версію монтажного вузла."
+                          ? "РљРѕР¶РЅРµ Р·Р±РµСЂРµР¶РµРЅРЅСЏ СЃС‚РІРѕСЂСЋС” РѕРєСЂРµРјСѓ РІРµСЂСЃС–СЋ РјРѕРЅС‚Р°Р¶РЅРѕРіРѕ РІСѓР·Р»Р°."
                           : "Each save creates a separate mounting node version."}
                       </p>
                     </div>
                     <div className="mounting-node-detail-version-summary-actions">
                       <button className="ghost-button compact-button" onClick={handleScrollToVersionHistory} type="button">
-                        {language === "uk" ? "Історія версій" : "Version history"}
+                        {language === "uk" ? "Р†СЃС‚РѕСЂС–СЏ РІРµСЂСЃС–Р№" : "Version history"}
                       </button>
                       {selectedNodeVersionBanner ? (
                         <button className="ghost-button compact-button" onClick={handleReturnToActiveVersion} type="button">
-                          {language === "uk" ? "Повернутися до активної версії" : "Return to active version"}
+                          {language === "uk" ? "РџРѕРІРµСЂРЅСѓС‚РёСЃСЏ РґРѕ Р°РєС‚РёРІРЅРѕС— РІРµСЂСЃС–С—" : "Return to active version"}
                         </button>
                       ) : null}
                     </div>
                   </div>
                   <div className="mounting-node-detail-version-summary-grid">
                     <DetailField
-                      label={language === "uk" ? "Дата створення" : "Created"}
+                      label={language === "uk" ? "Р”Р°С‚Р° СЃС‚РІРѕСЂРµРЅРЅСЏ" : "Created"}
                       value={selectedNodeVersionBannerSummary?.dateLabel || formatMountingNodeVersionDate(selectedNodeActiveVersion?.created_at, language) || t.notSet}
                     />
                     <DetailField
-                      label={language === "uk" ? "Позиції фурнітури" : "Items"}
+                      label={language === "uk" ? "РџРѕР·РёС†С–С— С„СѓСЂРЅС–С‚СѓСЂРё" : "Items"}
                       value={selectedNodeActiveVersion?.items_count ?? selectedNodeDetail?.items?.length ?? 0}
                     />
                     <DetailField
-                      label={language === "uk" ? "Точки" : "Points"}
+                      label={language === "uk" ? "РўРѕС‡РєРё" : "Points"}
                       value={selectedNodeActivePointCount}
                     />
                     <DetailField
-                      label={language === "uk" ? "Варіант кріплення" : "Mounting variant"}
+                      label={language === "uk" ? "Р’Р°СЂС–Р°РЅС‚ РєСЂС–РїР»РµРЅРЅСЏ" : "Mounting variant"}
                       value={selectedNodeActiveVariantLabel}
                     />
                     <DetailField
-                      label={language === "uk" ? "Категорія" : "Category"}
+                      label={language === "uk" ? "РљР°С‚РµРіРѕСЂС–СЏ" : "Category"}
                       value={getNodeCategoryLabel(selectedNodeDetailForDisplay, language)}
                     />
                     <DetailField
-                      label={language === "uk" ? "Функціональне призначення" : "Functional purpose"}
+                      label={language === "uk" ? "Р¤СѓРЅРєС†С–РѕРЅР°Р»СЊРЅРµ РїСЂРёР·РЅР°С‡РµРЅРЅСЏ" : "Functional purpose"}
                       value={getNodeFunctionalLabel(selectedNodeDetailForDisplay, language)}
                     />
                   </div>
@@ -2079,17 +2081,17 @@ export default function MountingNodesPanelRefined({
                     <div className="mounting-node-detail-version-preview-note">
                       <strong>
                         {language === "uk"
-                          ? `Перегляд версії ${selectedNodeVersionBanner.version_number}`
+                          ? `РџРµСЂРµРіР»СЏРґ РІРµСЂСЃС–С— ${selectedNodeVersionBanner.version_number}`
                           : `Viewing version ${selectedNodeVersionBanner.version_number}`}
                       </strong>
                       <p>
                         {language === "uk"
-                          ? `Ця версія відкрита лише для перегляду. Позиції: ${selectedNodeVersionBannerSummary?.itemsCount || 0}, шаблони: ${selectedNodeVersionBannerSummary?.templatesCount || 0}, точки: ${selectedNodeVersionBannerSummary?.pointCount || 0}.`
+                          ? `Р¦СЏ РІРµСЂСЃС–СЏ РІС–РґРєСЂРёС‚Р° Р»РёС€Рµ РґР»СЏ РїРµСЂРµРіР»СЏРґСѓ. РџРѕР·РёС†С–С—: ${selectedNodeVersionBannerSummary?.itemsCount || 0}, С€Р°Р±Р»РѕРЅРё: ${selectedNodeVersionBannerSummary?.templatesCount || 0}, С‚РѕС‡РєРё: ${selectedNodeVersionBannerSummary?.pointCount || 0}.`
                           : `This version is read-only. Items: ${selectedNodeVersionBannerSummary?.itemsCount || 0}, templates: ${selectedNodeVersionBannerSummary?.templatesCount || 0}, points: ${selectedNodeVersionBannerSummary?.pointCount || 0}.`}
                       </p>
                       <p>
                         {language === "uk"
-                          ? "Поверніться до активної версії, щоб редагувати вузол."
+                          ? "РџРѕРІРµСЂРЅС–С‚СЊСЃСЏ РґРѕ Р°РєС‚РёРІРЅРѕС— РІРµСЂСЃС–С—, С‰РѕР± СЂРµРґР°РіСѓРІР°С‚Рё РІСѓР·РѕР»."
                           : "Return to the active version to edit the node."}
                       </p>
                     </div>
@@ -2097,7 +2099,7 @@ export default function MountingNodesPanelRefined({
                   {!selectedNodeDetail?.can_edit ? (
                     <p className="mounting-node-detail-readonly-note">
                       {language === "uk"
-                        ? "Системний монтажний вузол доступний лише для перегляду."
+                        ? "РЎРёСЃС‚РµРјРЅРёР№ РјРѕРЅС‚Р°Р¶РЅРёР№ РІСѓР·РѕР» РґРѕСЃС‚СѓРїРЅРёР№ Р»РёС€Рµ РґР»СЏ РїРµСЂРµРіР»СЏРґСѓ."
                         : "This mounting node is read-only."}
                     </p>
                   ) : null}
@@ -2111,8 +2113,8 @@ export default function MountingNodesPanelRefined({
                 <article className="settings-card mounting-node-detail-items-card">
                   <div className="settings-card-header">
                     <div>
-                      <strong>{language === "uk" ? "Фурнітура вузла" : "Node fittings"}</strong>
-                      <p>{language === "uk" ? "Клікніть картку, щоб відкрити ту саму картку фурнітури в модалі." : "Click a card to open the same fitting details modal."}</p>
+                      <strong>{language === "uk" ? "Р¤СѓСЂРЅС–С‚СѓСЂР° РІСѓР·Р»Р°" : "Node fittings"}</strong>
+                      <p>{language === "uk" ? "РљР»С–РєРЅС–С‚СЊ РєР°СЂС‚РєСѓ, С‰РѕР± РІС–РґРєСЂРёС‚Рё С‚Сѓ СЃР°РјСѓ РєР°СЂС‚РєСѓ С„СѓСЂРЅС–С‚СѓСЂРё РІ РјРѕРґР°Р»С–." : "Click a card to open the same fitting details modal."}</p>
                     </div>
                   </div>
                   <div className="mounting-node-detail-item-list">
@@ -2142,14 +2144,14 @@ export default function MountingNodesPanelRefined({
                 <article className="settings-card mounting-node-detail-variant-card">
                   <div className="settings-card-header">
                     <div>
-                      <strong>{language === "uk" ? "Варіант кріплення" : "Mounting variant"}</strong>
+                      <strong>{language === "uk" ? "Р’Р°СЂС–Р°РЅС‚ РєСЂС–РїР»РµРЅРЅСЏ" : "Mounting variant"}</strong>
                       <p>
                         {selectedNodeVersionBanner
                           ? (language === "uk"
-                            ? "Ви переглядаєте read-only snapshot версії."
+                            ? "Р’Рё РїРµСЂРµРіР»СЏРґР°С”С‚Рµ read-only snapshot РІРµСЂСЃС–С—."
                             : "You are viewing a read-only version snapshot.")
                           : (language === "uk"
-                            ? "Змініть варіант кріплення поточного вузла та збережіть зміни."
+                            ? "Р—РјС–РЅС–С‚СЊ РІР°СЂС–Р°РЅС‚ РєСЂС–РїР»РµРЅРЅСЏ РїРѕС‚РѕС‡РЅРѕРіРѕ РІСѓР·Р»Р° С‚Р° Р·Р±РµСЂРµР¶С–С‚СЊ Р·РјС–РЅРё."
                             : "Change the current node mounting variant and save the update.")}
                       </p>
                     </div>
@@ -2168,13 +2170,13 @@ export default function MountingNodesPanelRefined({
                         type="button"
                       >
                         <span className="holes-mounting-variant-toggle-mark" aria-hidden="true">
-                          {selectedNodeVariantModel?.icon ? <img alt="" src={selectedNodeVariantModel.icon} /> : <span>⋯</span>}
+                          {selectedNodeVariantModel?.icon ? <img alt="" src={selectedNodeVariantModel.icon} /> : <span>в‹Ї</span>}
                         </span>
                         <span className="holes-mounting-variant-toggle-copy">
                           <strong>{selectedNodeVariantModel?.label || selectedNodeCurrentVariantLabel}</strong>
                           <span>
                             {selectedNodeVariantModel?.description ||
-                              (language === "uk" ? "Без опису" : "No description")}
+                              (language === "uk" ? "Р‘РµР· РѕРїРёСЃСѓ" : "No description")}
                           </span>
                         </span>
                         {canEditVariant ? <ChevronRight className="holes-mounting-variant-toggle-arrow" size={16} /> : null}
@@ -2190,8 +2192,8 @@ export default function MountingNodesPanelRefined({
                           type="button"
                         >
                           {variantSaveLoading
-                            ? (language === "uk" ? "Збереження..." : "Saving...")
-                            : (language === "uk" ? "Зберегти варіант кріплення" : "Save mounting variant")}
+                            ? (language === "uk" ? "Р—Р±РµСЂРµР¶РµРЅРЅСЏ..." : "Saving...")
+                            : (language === "uk" ? "Р—Р±РµСЂРµРіС‚Рё РІР°СЂС–Р°РЅС‚ РєСЂС–РїР»РµРЅРЅСЏ" : "Save mounting variant")}
                         </button>
                       </div>
                     ) : null}
@@ -2202,10 +2204,10 @@ export default function MountingNodesPanelRefined({
                 <article className="settings-card mounting-node-detail-history-card" ref={mountingNodeHistoryCardRef}>
                   <div className="settings-card-header">
                     <div>
-                      <strong>{language === "uk" ? "Історія версій" : "Version history"}</strong>
+                      <strong>{language === "uk" ? "Р†СЃС‚РѕСЂС–СЏ РІРµСЂСЃС–Р№" : "Version history"}</strong>
                       <p>
                         {language === "uk"
-                          ? "Кожне збереження створює окрему версію монтажного вузла."
+                          ? "РљРѕР¶РЅРµ Р·Р±РµСЂРµР¶РµРЅРЅСЏ СЃС‚РІРѕСЂСЋС” РѕРєСЂРµРјСѓ РІРµСЂСЃС–СЋ РјРѕРЅС‚Р°Р¶РЅРѕРіРѕ РІСѓР·Р»Р°."
                           : "Each save creates a separate mounting node version."}
                       </p>
                     </div>
@@ -2223,12 +2225,12 @@ export default function MountingNodesPanelRefined({
                         >
                           <div className="mounting-node-version-item-head">
                             <strong>
-                              {language === "uk" ? "Версія" : "Version"} {version.version_number}
+                              {language === "uk" ? "Р’РµСЂСЃС–СЏ" : "Version"} {version.version_number}
                             </strong>
                             <div className="mounting-node-version-item-actions">
                               {version.is_current ? (
                                 <span className="service-tree-badge subtle">
-                                  {language === "uk" ? "Поточна" : "Current"}
+                                  {language === "uk" ? "РџРѕС‚РѕС‡РЅР°" : "Current"}
                                 </span>
                               ) : (
                                 <button
@@ -2238,8 +2240,8 @@ export default function MountingNodesPanelRefined({
                                   type="button"
                                 >
                                   {isLoadingVersion
-                                    ? (language === "uk" ? "Відкриття..." : "Opening...")
-                                    : (language === "uk" ? "Переглянути" : "View")}
+                                    ? (language === "uk" ? "Р’С–РґРєСЂРёС‚С‚СЏ..." : "Opening...")
+                                    : (language === "uk" ? "РџРµСЂРµРіР»СЏРЅСѓС‚Рё" : "View")}
                                 </button>
                               )}
                             </div>
@@ -2249,10 +2251,10 @@ export default function MountingNodesPanelRefined({
                             <span>{summary.dateLabel}</span>
                             <span>{summary.variantLabel}</span>
                             <span>
-                              {language === "uk" ? "Фурнітура" : "Items"}: {summary.itemsCount}
+                              {language === "uk" ? "Р¤СѓСЂРЅС–С‚СѓСЂР°" : "Items"}: {summary.itemsCount}
                             </span>
                             <span>
-                              {language === "uk" ? "Шаблони" : "Templates"}: {summary.templatesCount}
+                              {language === "uk" ? "РЁР°Р±Р»РѕРЅРё" : "Templates"}: {summary.templatesCount}
                             </span>
                           </div>
                         </div>
@@ -2300,11 +2302,11 @@ export default function MountingNodesPanelRefined({
                               type="button"
                             >
                               <span className="holes-mounting-variant-option-mark" aria-hidden="true">
-                                {option.icon ? <img alt="" src={option.icon} /> : <span>⋯</span>}
+                                {option.icon ? <img alt="" src={option.icon} /> : <span>в‹Ї</span>}
                               </span>
                               <span className="holes-mounting-variant-option-copy">
                                 <strong>{option.label}</strong>
-                                <span>{option.description || (language === "uk" ? "Без опису" : "No description")}</span>
+                                <span>{option.description || (language === "uk" ? "Р‘РµР· РѕРїРёСЃСѓ" : "No description")}</span>
                               </span>
                             </button>
                           );
@@ -2317,30 +2319,30 @@ export default function MountingNodesPanelRefined({
             </>
           ) : (
             <div className="empty-state compact-empty-state">
-              <span>{t.mountingNodesEmpty || (language === "uk" ? "Монтажні вузли ще не створені." : "Mounting nodes have not been created yet.")}</span>
+              <span>{t.mountingNodesEmpty || (language === "uk" ? "РњРѕРЅС‚Р°Р¶РЅС– РІСѓР·Р»Рё С‰Рµ РЅРµ СЃС‚РІРѕСЂРµРЅС–." : "Mounting nodes have not been created yet.")}</span>
             </div>
           )}
       {deleteConfirmNode ? (
         <div aria-modal="true" className="modal-backdrop" onClick={closeDeleteConfirm} role="dialog">
           <section className="confirm-modal" onClick={(event) => event.stopPropagation()}>
             <header className="confirm-header">
-              <h2>{language === "uk" ? "Архівувати монтажний вузол" : "Archive mounting node"}</h2>
-              <button aria-label={language === "uk" ? "Закрити підтвердження" : "Close confirmation"} className="icon-button" disabled={deleteConfirmLoading} onClick={closeDeleteConfirm} type="button">
+              <h2>{language === "uk" ? "РђСЂС…С–РІСѓРІР°С‚Рё РјРѕРЅС‚Р°Р¶РЅРёР№ РІСѓР·РѕР»" : "Archive mounting node"}</h2>
+              <button aria-label={language === "uk" ? "Р—Р°РєСЂРёС‚Рё РїС–РґС‚РІРµСЂРґР¶РµРЅРЅСЏ" : "Close confirmation"} className="icon-button" disabled={deleteConfirmLoading} onClick={closeDeleteConfirm} type="button">
                 <X size={18} />
               </button>
             </header>
             <p>
               {language === "uk"
-                ? `Архівувати вузол "${deleteConfirmNode.name || deleteConfirmNode.code || deleteConfirmNode.id}"?`
+                ? `РђСЂС…С–РІСѓРІР°С‚Рё РІСѓР·РѕР» "${deleteConfirmNode.name || deleteConfirmNode.code || deleteConfirmNode.id}"?`
                 : `Archive mounting node "${deleteConfirmNode.name || deleteConfirmNode.code || deleteConfirmNode.id}"?`}
             </p>
             {deleteConfirmError ? <p className="form-error">{deleteConfirmError}</p> : null}
             <div className="confirm-actions">
               <button className="ghost-button" disabled={deleteConfirmLoading} onClick={closeDeleteConfirm} type="button">
-                {language === "uk" ? "Скасувати" : "Cancel"}
+                {language === "uk" ? "РЎРєР°СЃСѓРІР°С‚Рё" : "Cancel"}
               </button>
               <button className="danger-button" disabled={deleteConfirmLoading} onClick={handleConfirmDelete} type="button">
-                {deleteConfirmLoading ? (language === "uk" ? "Архівування..." : "Archiving...") : (language === "uk" ? "Архівувати" : "Archive")}
+                {deleteConfirmLoading ? (language === "uk" ? "РђСЂС…С–РІСѓРІР°РЅРЅСЏ..." : "Archiving...") : (language === "uk" ? "РђСЂС…С–РІСѓРІР°С‚Рё" : "Archive")}
               </button>
             </div>
           </section>
@@ -2352,7 +2354,7 @@ export default function MountingNodesPanelRefined({
             <header className="confirm-header">
               <h2>{getNodeVariantChangeTitle(language)}</h2>
               <button
-                aria-label={language === "uk" ? "Закрити підтвердження" : "Close confirmation"}
+                aria-label={language === "uk" ? "Р—Р°РєСЂРёС‚Рё РїС–РґС‚РІРµСЂРґР¶РµРЅРЅСЏ" : "Close confirmation"}
                 className="icon-button"
                 disabled={variantSaveLoading}
                 onClick={handleCloseVariantConfirm}
@@ -2365,7 +2367,7 @@ export default function MountingNodesPanelRefined({
             {variantSaveError ? <p className="form-error">{variantSaveError}</p> : null}
             <div className="confirm-actions">
               <button className="ghost-button" disabled={variantSaveLoading} onClick={handleCloseVariantConfirm} type="button">
-                {language === "uk" ? "Скасувати" : "Cancel"}
+                {language === "uk" ? "РЎРєР°СЃСѓРІР°С‚Рё" : "Cancel"}
               </button>
               <button
                 className="primary-button"
@@ -2373,7 +2375,7 @@ export default function MountingNodesPanelRefined({
                 onClick={() => void handleSaveVariantKey(selectedNodeVariantKey)}
                 type="button"
               >
-                {variantSaveLoading ? (language === "uk" ? "Збереження..." : "Saving...") : (language === "uk" ? "Продовжити" : "Continue")}
+                {variantSaveLoading ? (language === "uk" ? "Р—Р±РµСЂРµР¶РµРЅРЅСЏ..." : "Saving...") : (language === "uk" ? "РџСЂРѕРґРѕРІР¶РёС‚Рё" : "Continue")}
               </button>
             </div>
           </section>
@@ -2385,3 +2387,4 @@ export default function MountingNodesPanelRefined({
     </section>
   );
 }
+

@@ -2266,16 +2266,24 @@ tbody tr.selected {
 }
 
 .mounting-nodes-filters {
-  align-items: end;
-  display: grid;
-  gap: 16px;
-  grid-template-columns: minmax(0, 1fr) auto;
   margin-bottom: 12px;
   padding: 12px 14px;
+  width: 100%;
 }
 
 .mounting-nodes-filter-row {
   align-items: end;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.mounting-nodes-filter-row > .mounting-nodes-filters {
+  align-items: stretch;
+  display: grid;
+  grid-template-columns: 1fr;
+  min-width: 0;
+  width: 100%;
 }
 
 .mounting-nodes-search {
@@ -2325,6 +2333,7 @@ tbody tr.selected {
 }
 
 .mounting-nodes-display-toggle {
+  align-self: end;
   justify-self: end;
   min-width: 0;
   width: auto;
