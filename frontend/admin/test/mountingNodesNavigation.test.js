@@ -2,6 +2,7 @@
 import test from "node:test";
 
 import {
+  buildMountingNodesBreadcrumbItems,
   buildMountingNodesRestoreState,
   buildMountingNodesRestoredRoute,
   buildMountingNodesRouteUrl,
@@ -85,6 +86,111 @@ test("mounting nodes route builder keeps the create mode in the URL", () => {
     buildMountingNodesRouteUrl({ mode: "create", nodeId: null, categoryCode: "hinges" }, "?foo=bar"),
     "?foo=bar&section=mounting-nodes&mode=create&category=hinges",
   );
+});
+
+test("mounting nodes breadcrumb builder renders the categories page", () => {
+  assert.deepEqual(
+    buildMountingNodesBreadcrumbItems({
+      language: "uk",
+      listLabel: "Монтажні вузли",
+      mode: "categories",
+    }),
+    [
+      {
+        current: true,
+        label: "Монтажні вузли",
+        title: "Монтажні вузли",
+      },
+    ],
+  );
+});
+
+test("mounting nodes breadcrumb builder renders the all list page", () => {
+  const items = buildMountingNodesBreadcrumbItems({
+    allListLabel: "Усі монтажні вузли",
+    language: "uk",
+    listLabel: "Монтажні вузли",
+    mode: "list",
+    onOpenCategories: () => {},
+  });
+
+  assert.equal(items.length, 2);
+  assert.equal(items[0].label, "Монтажні вузли");
+  assert.equal(typeof items[0].onClick, "function");
+  assert.equal(items[1].current, true);
+  assert.equal(items[1].label, "Усі монтажні вузли");
+});
+
+test("mounting nodes breadcrumb builder renders a categorized detail page", () => {
+  const clicked = [];
+  const items = buildMountingNodesBreadcrumbItems({
+    categoryCode: "hinges",
+    language: "uk",
+    listLabel: "Монтажні вузли",
+    mode: "detail",
+    nodeName: "петля",
+    onOpenCategories: () => clicked.push("categories"),
+    onOpenCategoryList: () => clicked.push("category"),
+  });
+
+  assert.equal(items.length, 3);
+  assert.equal(items[1].label, "Завіси");
+  assert.equal(items[1].current, undefined);
+  items[1].onClick();
+  assert.deepEqual(clicked, ["category"]);
+  assert.equal(items[2].label, "петля");
+  assert.equal(items[2].current, true);
+});
+
+test("mounting nodes breadcrumb builder renders the editor page", () => {
+  const clicked = [];
+  const items = buildMountingNodesBreadcrumbItems({
+    categoryCode: "hinges",
+    editingLabel: "Редагування вузла",
+    language: "uk",
+    listLabel: "Монтажні вузли",
+    mode: "editor",
+    nodeName: "петля",
+    onOpenCategoryList: () => clicked.push("category"),
+    onOpenNodeDetail: () => clicked.push("detail"),
+  });
+
+  assert.equal(items.length, 4);
+  assert.equal(items[1].label, "Завіси");
+  assert.equal(items[2].label, "петля");
+  items[2].onClick();
+  assert.deepEqual(clicked, ["detail"]);
+  assert.equal(items[3].current, true);
+  assert.equal(items[3].label, "Редагування вузла");
+});
+
+test("mounting nodes breadcrumb builder renders uncategorized detail pages", () => {
+  const items = buildMountingNodesBreadcrumbItems({
+    categoryCode: "null",
+    language: "uk",
+    listLabel: "Монтажні вузли",
+    mode: "detail",
+    nodeName: "Безіменний вузол",
+  });
+
+  assert.equal(items.length, 3);
+  assert.equal(items[1].label, "Без категорії");
+  assert.equal(items[2].label, "Безіменний вузол");
+});
+
+test("mounting nodes breadcrumb builder renders create pages inside a category", () => {
+  const items = buildMountingNodesBreadcrumbItems({
+    categoryCode: "hinges",
+    createLabel: "Створення вузла",
+    language: "uk",
+    listLabel: "Монтажні вузли",
+    mode: "create",
+  });
+
+  assert.equal(items.length, 3);
+  assert.equal(items[1].label, "Завіси");
+  assert.equal(items[2].current, true);
+  assert.equal(items[2].label, "Створення вузла");
 });
 
 test("mounting nodes route parser normalizes unknown modes to list", () => {

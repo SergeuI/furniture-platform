@@ -1,4 +1,4 @@
-import { normalizeMountingNodeCategoryCode } from "./mountingNodeCategories.js";
+import { getMountingNodeCategoryLabel, normalizeMountingNodeCategoryCode } from "./mountingNodeCategories.js";
 
 const MOUNTING_NODES_SECTION = "mounting-nodes";
 
@@ -160,6 +160,133 @@ export function buildMountingNodesRestoreState(route = {}, nodeDetail = null) {
     selectedNodeId: normalizedRoute.mode === "list" ? "" : String(normalizedRoute.nodeId || restoredNodeId || ""),
     selectedNodeLoading: false,
   };
+}
+
+export function resolveMountingNodesCategoryCode(categoryCode, fallbackCategoryCode = undefined) {
+  if (categoryCode === "null" || categoryCode === null) {
+    return "null";
+  }
+
+  if (categoryCode !== undefined) {
+    const normalizedCategoryCode = normalizeMountingNodeCategoryCode(categoryCode);
+    if (normalizedCategoryCode) {
+      return normalizedCategoryCode;
+    }
+
+    if (String(categoryCode || "").trim()) {
+      return fallbackCategoryCode === undefined
+        ? null
+        : resolveMountingNodesCategoryCode(fallbackCategoryCode);
+    }
+  }
+
+  if (fallbackCategoryCode !== undefined) {
+    return resolveMountingNodesCategoryCode(fallbackCategoryCode);
+  }
+
+  return null;
+}
+
+export function buildMountingNodesBreadcrumbItems({
+  allListLabel = "",
+  categoryLabel = "",
+  categoryCode = undefined,
+  createLabel = "",
+  editingLabel = "",
+  language = "en",
+  listLabel = "",
+  mode = "list",
+  nodeName = "",
+  onOpenCategories = null,
+  onOpenCategoryList = null,
+  onOpenNodeDetail = null,
+} = {}) {
+  const normalizedMode = String(mode || "").trim();
+  const normalizedListLabel = String(listLabel || "").trim();
+  const normalizedAllListLabel = String(allListLabel || "").trim();
+  const resolvedCategoryCode = resolveMountingNodesCategoryCode(categoryCode);
+  const normalizedCategoryLabel =
+    String(categoryLabel || "").trim() ||
+    (resolvedCategoryCode === "null"
+      ? (language === "uk" ? "Без категорії" : "Uncategorized")
+      : resolvedCategoryCode
+        ? getMountingNodeCategoryLabel(resolvedCategoryCode, language)
+        : "");
+  const normalizedNodeName = String(nodeName || "").trim();
+  const normalizedCreateLabel = String(createLabel || "").trim();
+  const normalizedEditingLabel = String(editingLabel || "").trim();
+  const items = [];
+
+  if (normalizedMode === "categories") {
+    return normalizedListLabel
+      ? [
+          {
+            current: true,
+            label: normalizedListLabel,
+            title: normalizedListLabel,
+          },
+        ]
+      : [];
+  }
+
+  if (normalizedListLabel) {
+    items.push({
+      label: normalizedListLabel,
+      onClick: onOpenCategories || undefined,
+      title: normalizedListLabel,
+    });
+  }
+
+  if (normalizedMode === "list") {
+    items.push({
+      current: true,
+      label: normalizedCategoryLabel || normalizedAllListLabel,
+      title: normalizedCategoryLabel || normalizedAllListLabel,
+    });
+    return items;
+  }
+
+  if (normalizedCategoryLabel) {
+    items.push({
+      label: normalizedCategoryLabel,
+      onClick: onOpenCategoryList || undefined,
+      title: normalizedCategoryLabel,
+    });
+  }
+
+  if (normalizedMode === "detail") {
+    items.push({
+      current: true,
+      label: normalizedNodeName || normalizedListLabel,
+      title: normalizedNodeName || normalizedListLabel,
+    });
+    return items;
+  }
+
+  if (normalizedMode === "editor") {
+    items.push({
+      label: normalizedNodeName,
+      onClick: onOpenNodeDetail || undefined,
+      title: normalizedNodeName,
+    });
+    items.push({
+      current: true,
+      label: normalizedEditingLabel,
+      title: normalizedEditingLabel,
+    });
+    return items;
+  }
+
+  if (normalizedMode === "create") {
+    items.push({
+      current: true,
+      label: normalizedCreateLabel,
+      title: normalizedCreateLabel,
+    });
+    return items;
+  }
+
+  return items;
 }
 
 export function shouldHydrateMountingNodeDetail(route = {}, nodeDetail = null) {

@@ -1457,7 +1457,7 @@ export default function MountingNodesPanelRefined({
     const resolvedNodeName = String(selectedNode?.name || "").trim();
 
     if (typeof onOpenMountingNodeDetail === "function" && resolvedNodeId && resolvedNodeName) {
-      onOpenMountingNodeDetail(resolvedNodeId, resolvedNodeName);
+      onOpenMountingNodeDetail(resolvedNodeId, resolvedNodeName, selectedNode?.category_code ?? null);
     }
 
     pendingReturnStateRef.current = captureReturnState("list", false);

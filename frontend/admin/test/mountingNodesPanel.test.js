@@ -68,6 +68,7 @@ test("mounting nodes panel keeps the DETAIL white panel free of breadcrumb marku
   assert.equal(source.includes("onOpenMountingNodeCategories"), true);
   assert.equal(source.includes("onClick={() => handleOpenEditor()}"), true);
   assert.equal(source.includes("onClick={handleOpenEditor}"), false);
+  assert.equal(source.includes("onOpenMountingNodeDetail(resolvedNodeId, resolvedNodeName, selectedNode?.category_code ?? null)"), true);
   assert.equal(source.includes("listRequestToken"), true);
   assert.equal(source.includes("listRequestTokenRef"), true);
   assert.equal(source.includes("handleSelectNode(nodeId)"), true);
@@ -147,7 +148,7 @@ test("toolbar breadcrumb for mounting nodes uses stable App primitives", () => {
   assert.equal(source.includes("handleCloseCatalogHolesDetail"), true);
   assert.equal(source.includes("handleCatalogHolesToolbarListClick"), true);
   assert.equal(source.includes("renderCatalogHolesToolbarBreadcrumb("), true);
-  assert.equal(source.includes("getCatalogHolesToolbarBreadcrumbItems()"), true);
+  assert.equal(source.includes("getMountingNodesToolbarBreadcrumbItems()"), true);
   assert.equal(source.includes("if (catalogHolesDetailOpen)"), true);
   assert.equal(source.includes("setCatalogHolesDetailOpen(true)"), true);
   assert.equal(source.includes("setCatalogHolesDetailOpen(false)"), true);
@@ -178,8 +179,8 @@ test("mounting node editor category select lives in the App editor flow", () => 
   assert.equal(source.includes("category_code: selectedCategoryCode || undefined"), true);
   assert.equal(source.includes("category_code: normalizeMountingNodeCategoryCode(nodeDetail.category_code)"), true);
   assert.equal(source.includes("setCatalogHolesOpenContext((current) => {"), true);
-  assert.equal(source.includes("mountingNodeEditorCategoryCodeRef.current = normalizedCategoryCode;"), true);
-  assert.equal(source.includes("mountingNodeEditorCategoryCodeRef.current = normalizeMountingNodeCategoryCode("), true);
+  assert.equal(source.includes("mountingNodeEditorCategoryCodeRef.current = resolvedCategoryCode || \"\";"), true);
+  assert.equal(source.includes("resolveMountingNodesCategoryCode("), true);
 });
 
 test("mounting nodes list renders nodes before the category empty state branch", () => {
@@ -658,7 +659,9 @@ test("mounting node editor save refreshes cached detail state after a successful
   const source = readFileSync(sourcePath, "utf8");
 
   assert.equal(source.includes("const savedRestoreState = buildMountingNodesRestoreState("), true);
-  assert.equal(source.includes('{ mode: "detail", nodeId: savedNode.id }'), true);
+  assert.equal(source.includes("const savedCategoryCode = resolveMountingNodesCategoryCode("), true);
+  assert.equal(source.includes("normalizeMountingNodesRoute({"), true);
+  assert.equal(source.includes('mode: "editor"'), true);
   assert.equal(source.includes("setCatalogHolesReturnState((current) => ({"), true);
   assert.equal(source.includes("setMountingNodesInitialState((current) => ({"), true);
 });
