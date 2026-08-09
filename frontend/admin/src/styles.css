@@ -1042,7 +1042,17 @@ tbody tr.selected {
   display: inline-flex;
   height: 72px;
   justify-content: center;
+  overflow: hidden;
   width: 72px;
+}
+
+.catalog-category-art-image {
+  display: block;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+  padding: 8px;
+  width: 100%;
 }
 
 .catalog-choice-media {

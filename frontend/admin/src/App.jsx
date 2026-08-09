@@ -127,6 +127,7 @@ import {
 } from "./mountingNodesCreateDraft.js";
 import {
   getMountingNodeCategoryLabel,
+  getMountingNodeCategoryImageUrl,
   getMountingNodeCategoryOptions,
   normalizeMountingNodeCategoryCode,
 } from "./mountingNodeCategories.js";
@@ -22048,7 +22049,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                     <div className="catalog-category-grid">
                       {getMountingNodeCategoryOptions(language).map((category) => {
                         const visual = MOUNTING_NODE_CATEGORY_VISUALS[category.code] || MOUNTING_NODE_CATEGORY_VISUALS.other;
-                        const Icon = visual.icon;
+                        const imageUrl = getMountingNodeCategoryImageUrl(category.code);
                         const count = Number(mountingNodesCategorySummary?.categories?.[category.code] || 0) || 0;
                         const description = MOUNTING_NODE_CATEGORY_DESCRIPTIONS[category.code]?.[language] || "";
 
@@ -22060,7 +22061,17 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                             type="button"
                           >
                             <span className="catalog-category-art" style={{ "--catalog-accent": visual.accent }}>
-                              <Icon size={44} />
+                              {imageUrl ? (
+                                <img
+                                  alt=""
+                                  aria-hidden="true"
+                                  className="catalog-category-art-image"
+                                  loading="lazy"
+                                  src={imageUrl}
+                                />
+                              ) : (
+                                <visual.icon size={44} />
+                              )}
                             </span>
                             <div className="catalog-category-copy">
                               <strong>{category.label}</strong>
@@ -22078,7 +22089,13 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                           type="button"
                         >
                           <span className="catalog-category-art" style={{ "--catalog-accent": MOUNTING_NODE_CATEGORY_VISUALS.uncategorized.accent }}>
-                            <MOUNTING_NODE_CATEGORY_VISUALS.uncategorized.icon size={44} />
+                            <img
+                              alt=""
+                              aria-hidden="true"
+                              className="catalog-category-art-image"
+                              loading="lazy"
+                              src={getMountingNodeCategoryImageUrl("uncategorized")}
+                            />
                           </span>
                           <div className="catalog-category-copy">
                             <strong>{language === "uk" ? "Без категорії" : "Uncategorized"}</strong>
