@@ -7015,7 +7015,12 @@ export default function App() {
   const [mountingNodesRouteState, setMountingNodesRouteState] = useState(
     () => initialMountingNodesRoute,
   );
-  const [mountingNodesInitialState, setMountingNodesInitialState] = useState(null);
+  const [mountingNodesInitialState, setMountingNodesInitialState] = useState(
+    () =>
+      initialAdminRoute.view === "catalogHoles" && initialAdminRoute.mountingNodesRoute
+        ? buildMountingNodesRestoreState(initialAdminRoute.mountingNodesRoute)
+        : null,
+  );
   const [mountingNodesRouteLoadingMessage, setMountingNodesRouteLoadingMessage] = useState("");
   const [mountingNodesRouteError, setMountingNodesRouteError] = useState("");
   const [mountingNodesCategorySummary, setMountingNodesCategorySummary] = useState(null);

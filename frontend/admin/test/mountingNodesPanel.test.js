@@ -139,6 +139,8 @@ test("toolbar breadcrumb for mounting nodes uses stable App primitives", () => {
   const sourcePath = fileURLToPath(new URL("../src/App.jsx", import.meta.url));
   const source = readFileSync(sourcePath, "utf8");
 
+  assert.equal(source.includes("initialAdminRoute.view === \"catalogHoles\" && initialAdminRoute.mountingNodesRoute"), true);
+  assert.equal(source.includes("buildMountingNodesRestoreState(initialAdminRoute.mountingNodesRoute)"), true);
   assert.equal(source.includes("catalogHolesDetailOpen"), true);
   assert.equal(source.includes("catalogHolesBreadcrumbNodeId"), true);
   assert.equal(source.includes("catalogHolesBreadcrumbNodeName"), true);
