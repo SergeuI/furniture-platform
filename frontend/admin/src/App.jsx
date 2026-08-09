@@ -22055,55 +22055,63 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
 
                         return (
                           <button
-                            className="catalog-category-card mounting-node-category-card"
+                            className="catalog-choice-card fitting-category-card mounting-node-category-card"
                             key={category.code}
                             onClick={() => handleOpenMountingNodesCategoryList(category.code)}
                             type="button"
                           >
-                            <span className="catalog-category-art mounting-node-category-art" style={{ "--catalog-accent": visual.accent }}>
+                            <span className="catalog-choice-media mounting-node-category-media" style={{ "--catalog-accent": visual.accent }}>
                               {imageUrl ? (
                                 <img
                                   alt=""
                                   aria-hidden="true"
-                                  className="catalog-category-art-image"
                                   loading="lazy"
                                   src={imageUrl}
                                 />
                               ) : (
-                                <visual.icon size={44} />
-                                )}
+                                <visual.icon size={30} />
+                              )}
                             </span>
-                            <div className="catalog-category-copy mounting-node-category-copy">
-                              <strong>{category.label}</strong>
-                              <span>{description}</span>
+                            <div className="fitting-category-content mounting-node-category-content">
+                              <div className="catalog-choice-copy mounting-node-category-copy">
+                                <strong>{category.label}</strong>
+                                <span>{description}</span>
+                              </div>
+                              <div className="catalog-choice-meta mounting-node-category-meta">
+                                <span className="service-tree-badge subtle">{count}</span>
+                                <span>{language === "uk" ? "Вузлів" : "Nodes"}</span>
+                              </div>
                             </div>
-                            <span className="service-tree-badge subtle mounting-node-category-count">{count}</span>
                           </button>
                         );
                       })}
 
                       {Number(mountingNodesCategorySummary?.uncategorized || 0) > 0 ? (
                         <button
-                          className="catalog-category-card mounting-node-category-card"
+                          className="catalog-choice-card fitting-category-card mounting-node-category-card"
                           onClick={() => handleOpenMountingNodesCategoryList("null")}
                           type="button"
                         >
-                          <span className="catalog-category-art mounting-node-category-art" style={{ "--catalog-accent": MOUNTING_NODE_CATEGORY_VISUALS.uncategorized.accent }}>
+                          <span className="catalog-choice-media mounting-node-category-media" style={{ "--catalog-accent": MOUNTING_NODE_CATEGORY_VISUALS.uncategorized.accent }}>
                             <img
                               alt=""
                               aria-hidden="true"
-                              className="catalog-category-art-image"
                               loading="lazy"
                               src={getMountingNodeCategoryImageUrl("uncategorized")}
                             />
                           </span>
-                          <div className="catalog-category-copy mounting-node-category-copy">
-                            <strong>{language === "uk" ? "Без категорії" : "Uncategorized"}</strong>
-                            <span>{MOUNTING_NODE_CATEGORY_DESCRIPTIONS.uncategorized[language]}</span>
+                          <div className="fitting-category-content mounting-node-category-content">
+                            <div className="catalog-choice-copy mounting-node-category-copy">
+                              <strong>{language === "uk" ? "Без категорії" : "Uncategorized"}</strong>
+                              <span>{MOUNTING_NODE_CATEGORY_DESCRIPTIONS.uncategorized[language]}</span>
+                            </div>
+                            <div className="catalog-choice-meta mounting-node-category-meta">
+                              <span className="service-tree-badge subtle">
+                                {mountingNodesCategorySummary?.uncategorized || 0}
+                              </span>
+                              <span>{language === "uk" ? "Вузлів" : "Nodes"}</span>
+                            </div>
                           </div>
-                          <span className="service-tree-badge subtle mounting-node-category-count">
-                            {mountingNodesCategorySummary?.uncategorized || 0}
-                          </span>
                         </button>
                       ) : null}
                     </div>
