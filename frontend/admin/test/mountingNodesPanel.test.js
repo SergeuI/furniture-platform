@@ -818,13 +818,20 @@ test("mounting nodes list header keeps the compact controls layout contract", ()
   const stylesPath = fileURLToPath(new URL("../src/styles.css", import.meta.url));
   const styles = readFileSync(stylesPath, "utf8");
 
+  assert.equal(source.includes("mounting-nodes-header-row"), true);
+  assert.equal(source.includes("mounting-nodes-header-copy"), true);
   assert.equal(source.includes("mounting-nodes-toolbar-main"), true);
+  assert.equal(source.includes("mounting-nodes-filter-row"), true);
+  assert.equal(source.includes("mounting-nodes-filter-main"), true);
   assert.equal(source.includes("mounting-nodes-display-toggle materials-mode-switch"), true);
   assert.equal(source.includes("Повернутися до категорій"), true);
   assert.equal(source.includes("primary-button mounting-node-detail-action-button mounting-node-return-button"), true);
   assert.equal(styles.includes(".mounting-nodes-toolbar-main {"), true);
+  assert.equal(styles.includes(".mounting-nodes-header-row {"), true);
+  assert.equal(styles.includes(".mounting-nodes-header-copy {"), true);
   assert.equal(styles.includes(".mounting-nodes-display-toggle {"), true);
-  assert.equal(styles.includes("margin-left: auto;"), true);
+  assert.equal(styles.includes(".mounting-nodes-filter-row {"), true);
+  assert.equal(styles.includes(".mounting-nodes-filter-main {"), true);
   assert.equal(styles.includes(".mounting-nodes-filters {"), true);
   assert.equal(styles.includes("padding: 12px 14px;"), true);
   assert.equal(styles.includes(".settings-grid.mounting-nodes-grid {"), true);

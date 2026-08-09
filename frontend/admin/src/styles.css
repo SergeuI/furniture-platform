@@ -2216,34 +2216,37 @@ tbody tr.selected {
 
 .mounting-nodes-panel-head {
   align-items: start;
-  gap: 8px;
+  gap: 10px;
 }
 
 .mounting-nodes-panel-head > div:first-child p {
   margin-bottom: 0;
 }
 
-.mounting-nodes-toolbar {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  justify-content: flex-end;
-}
-
 .mounting-nodes-toolbar-main {
   align-items: center;
   display: flex;
-  flex: 1 1 auto;
   flex-wrap: wrap;
   gap: 8px;
+  min-width: 0;
+}
+
+.mounting-nodes-header-row {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.mounting-nodes-header-copy {
+  flex: 1 1 420px;
   min-width: 0;
 }
 
 .mounting-nodes-display-toggle {
   display: inline-flex;
   gap: 8px;
-  margin-left: auto;
+  justify-content: flex-end;
 }
 
 .mounting-nodes-display-toggle .ghost-button.active {
@@ -2263,15 +2266,30 @@ tbody tr.selected {
 }
 
 .mounting-nodes-filters {
-  align-items: end;
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
   gap: 10px;
-  grid-template-columns: minmax(240px, 1.45fr) minmax(140px, 170px) minmax(160px, 210px) auto auto;
+  justify-content: space-between;
   margin-bottom: 12px;
   padding: 12px 14px;
 }
 
+.mounting-nodes-filter-row {
+  align-items: center;
+}
+
 .mounting-nodes-search {
   min-width: 260px;
+}
+
+.mounting-nodes-filter-main {
+  align-items: center;
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
 }
 
 .mounting-nodes-search-field {
@@ -10016,9 +10034,19 @@ tbody tr.selected {
     grid-template-columns: 1fr;
   }
 
-  .mounting-nodes-toolbar,
   .mounting-node-detail-actions {
     justify-content: flex-start;
+  }
+
+  .mounting-nodes-header-row,
+  .mounting-nodes-filter-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .mounting-nodes-filter-main,
+  .mounting-nodes-header-copy {
+    width: 100%;
   }
 
   .mounting-nodes-toolbar-main,
@@ -10027,7 +10055,7 @@ tbody tr.selected {
   }
 
   .mounting-nodes-display-toggle {
-    margin-left: 0;
+    justify-content: flex-start;
   }
 
   .mounting-node-card-summary,

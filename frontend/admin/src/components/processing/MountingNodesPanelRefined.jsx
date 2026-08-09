@@ -1734,10 +1734,10 @@ export default function MountingNodesPanelRefined({
       {mountingNodesViewMode === "list" ? (
         <>
           <div className="dashboard-panel-head mounting-nodes-panel-head">
-            <div>
-              <p>{t.mountingNodesDescription || ""}</p>
-            </div>
-            <div className="mounting-nodes-toolbar">
+            <div className="mounting-nodes-header-row">
+              <div className="mounting-nodes-header-copy">
+                <p>{t.mountingNodesDescription || ""}</p>
+              </div>
               <div className="mounting-nodes-toolbar-main">
                 <span className="service-tree-badge subtle">{language === "uk" ? `Знайдено: ${nodes.length}` : `Found: ${nodes.length}`}</span>
                 {activeCategoryFilter !== "all" ? (
@@ -1766,6 +1766,58 @@ export default function MountingNodesPanelRefined({
                   </button>
                 ) : null}
               </div>
+            </div>
+
+            <form className="project-filter-form mounting-nodes-filters mounting-nodes-filter-row" onSubmit={handleSearchSubmit}>
+              <div className="mounting-nodes-filter-main">
+                <label className="mounting-nodes-search mounting-nodes-search-field">
+                  {t.mountingNodesSearchPlaceholder || "Search mounting nodes"}
+                  <input
+                    onChange={(event) => setSearchInput(event.target.value)}
+                    placeholder={t.mountingNodesSearchPlaceholder || "Search mounting nodes"}
+                    type="search"
+                    value={searchInput}
+                  />
+                </label>
+                {activeCategoryFilter === "all" ? (
+                  <label className="mounting-nodes-filter-field">
+                    {language === "uk" ? "Категорія" : "Category"}
+                    <select onChange={(event) => handleCategoryFilterChange(event.target.value)} value={activeCategoryFilter}>
+                      {categoryFilterOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+                <label className="mounting-nodes-filter-field">
+                  {language === "uk" ? "Статус" : "Status"}
+                  <select onChange={(event) => handleStatusFilterChange(event.target.value)} value={activeStatusFilter}>
+                    <option value="all">{language === "uk" ? "Усі" : "All"}</option>
+                    <option value="active">{t.active || (language === "uk" ? "Активний" : "Active")}</option>
+                    <option value="inactive">{t.inactive || (language === "uk" ? "Неактивний" : "Inactive")}</option>
+                  </select>
+                </label>
+                <label className="mounting-nodes-filter-field">
+                  {language === "uk" ? "Варіант кріплення" : "Mounting variant"}
+                  <select onChange={(event) => handleVariantFilterChange(event.target.value)} value={activeVariantFilter}>
+                    {variantOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button className="primary-button mounting-nodes-search-button" type="submit">
+                  <Search size={16} />
+                  {language === "uk" ? "Шукати" : "Search"}
+                </button>
+                <button className="ghost-button mounting-nodes-refresh-button" onClick={handleRefresh} type="button">
+                  <RefreshCw size={16} />
+                  {t.mountingNodesRetry || (language === "uk" ? "Повторити" : "Retry")}
+                </button>
+              </div>
               <div className="mounting-nodes-display-toggle materials-mode-switch" role="group" aria-label={language === "uk" ? "Вигляд каталогу" : "Catalog view mode"}>
                 <button
                   aria-pressed={displayMode === "grid"}
@@ -1788,58 +1840,8 @@ export default function MountingNodesPanelRefined({
                   <span>{language === "uk" ? "Список" : "List"}</span>
                 </button>
               </div>
-            </div>
+            </form>
           </div>
-
-          <form className="project-filter-form mounting-nodes-filters" onSubmit={handleSearchSubmit}>
-            <label className="mounting-nodes-search mounting-nodes-search-field">
-              {t.mountingNodesSearchPlaceholder || "Search mounting nodes"}
-              <input
-                onChange={(event) => setSearchInput(event.target.value)}
-                placeholder={t.mountingNodesSearchPlaceholder || "Search mounting nodes"}
-                type="search"
-                value={searchInput}
-              />
-            </label>
-            {activeCategoryFilter === "all" ? (
-              <label className="mounting-nodes-filter-field">
-                {language === "uk" ? "Категорія" : "Category"}
-                <select onChange={(event) => handleCategoryFilterChange(event.target.value)} value={activeCategoryFilter}>
-                  {categoryFilterOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : null}
-            <label className="mounting-nodes-filter-field">
-              {language === "uk" ? "Статус" : "Status"}
-              <select onChange={(event) => handleStatusFilterChange(event.target.value)} value={activeStatusFilter}>
-                <option value="all">{language === "uk" ? "Усі" : "All"}</option>
-                <option value="active">{t.active || (language === "uk" ? "Активний" : "Active")}</option>
-                <option value="inactive">{t.inactive || (language === "uk" ? "Неактивний" : "Inactive")}</option>
-              </select>
-            </label>
-            <label className="mounting-nodes-filter-field">
-              {language === "uk" ? "Варіант кріплення" : "Mounting variant"}
-              <select onChange={(event) => handleVariantFilterChange(event.target.value)} value={activeVariantFilter}>
-                {variantOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button className="primary-button mounting-nodes-search-button" type="submit">
-              <Search size={16} />
-              {language === "uk" ? "Шукати" : "Search"}
-            </button>
-            <button className="ghost-button mounting-nodes-refresh-button" onClick={handleRefresh} type="button">
-              <RefreshCw size={16} />
-              {t.mountingNodesRetry || (language === "uk" ? "Повторити" : "Retry")}
-            </button>
-          </form>
 
           {listLoading ? (
             <div className="empty-state compact-empty-state">
