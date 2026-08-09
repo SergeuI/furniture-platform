@@ -2216,19 +2216,34 @@ tbody tr.selected {
 
 .mounting-nodes-panel-head {
   align-items: start;
+  gap: 8px;
+}
+
+.mounting-nodes-panel-head > div:first-child p {
+  margin-bottom: 0;
 }
 
 .mounting-nodes-toolbar {
-  align-items: flex-start;
+  align-items: center;
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 10px;
   justify-content: flex-end;
+}
+
+.mounting-nodes-toolbar-main {
+  align-items: center;
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
 }
 
 .mounting-nodes-display-toggle {
   display: inline-flex;
   gap: 8px;
+  margin-left: auto;
 }
 
 .mounting-nodes-display-toggle .ghost-button.active {
@@ -2249,8 +2264,10 @@ tbody tr.selected {
 
 .mounting-nodes-filters {
   align-items: end;
-  grid-template-columns: minmax(260px, 1.45fr) minmax(150px, 180px) minmax(170px, 220px) auto auto;
-  margin-bottom: 1rem;
+  gap: 10px;
+  grid-template-columns: minmax(240px, 1.45fr) minmax(140px, 170px) minmax(160px, 210px) auto auto;
+  margin-bottom: 12px;
+  padding: 12px 14px;
 }
 
 .mounting-nodes-search {
@@ -2295,6 +2312,11 @@ tbody tr.selected {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  margin-top: 4px;
+}
+
+.settings-grid.mounting-nodes-grid {
+  margin-top: 4px;
 }
 
 .mounting-node-card,
@@ -9997,6 +10019,15 @@ tbody tr.selected {
   .mounting-nodes-toolbar,
   .mounting-node-detail-actions {
     justify-content: flex-start;
+  }
+
+  .mounting-nodes-toolbar-main,
+  .mounting-nodes-display-toggle {
+    width: 100%;
+  }
+
+  .mounting-nodes-display-toggle {
+    margin-left: 0;
   }
 
   .mounting-node-card-summary,

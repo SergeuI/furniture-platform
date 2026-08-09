@@ -1738,32 +1738,34 @@ export default function MountingNodesPanelRefined({
               <p>{t.mountingNodesDescription || ""}</p>
             </div>
             <div className="mounting-nodes-toolbar">
-              <span className="service-tree-badge subtle">{language === "uk" ? `Знайдено: ${nodes.length}` : `Found: ${nodes.length}`}</span>
-              {activeCategoryFilter !== "all" ? (
-                <span className="service-tree-badge subtle">
-                  {language === "uk" ? "Категорія:" : "Category:"} {activeMountingCategoryLabel}
-                </span>
-              ) : null}
-              {activeCategoryFilter !== "all" ? (
-                <button
-                  className="primary-button mounting-node-detail-action-button mounting-node-return-button"
-                  onClick={handleReturnToCategories}
-                  type="button"
-                >
-                  <ArrowLeft size={16} />
-                  {language === "uk" ? "Повернутися до категорій" : "Return to categories"}
-                </button>
-              ) : null}
-              {typeof onOpenMountingNodeCreate === "function" ? (
-                <button
-                  className="primary-button mounting-node-create-button"
-                  onClick={handleOpenCreate}
-                  type="button"
-                >
-                  <Plus size={16} />
-                  {language === "uk" ? "Створити монтажний вузол" : "Create mounting node"}
-                </button>
-              ) : null}
+              <div className="mounting-nodes-toolbar-main">
+                <span className="service-tree-badge subtle">{language === "uk" ? `Знайдено: ${nodes.length}` : `Found: ${nodes.length}`}</span>
+                {activeCategoryFilter !== "all" ? (
+                  <span className="service-tree-badge subtle">
+                    {language === "uk" ? "Категорія:" : "Category:"} {activeMountingCategoryLabel}
+                  </span>
+                ) : null}
+                {activeCategoryFilter !== "all" ? (
+                  <button
+                    className="primary-button mounting-node-detail-action-button mounting-node-return-button"
+                    onClick={handleReturnToCategories}
+                    type="button"
+                  >
+                    <ArrowLeft size={16} />
+                    {language === "uk" ? "Повернутися до категорій" : "Return to categories"}
+                  </button>
+                ) : null}
+                {typeof onOpenMountingNodeCreate === "function" ? (
+                  <button
+                    className="primary-button mounting-node-create-button"
+                    onClick={handleOpenCreate}
+                    type="button"
+                  >
+                    <Plus size={16} />
+                    {language === "uk" ? "Створити монтажний вузол" : "Create mounting node"}
+                  </button>
+                ) : null}
+              </div>
               <div className="mounting-nodes-display-toggle materials-mode-switch" role="group" aria-label={language === "uk" ? "Вигляд каталогу" : "Catalog view mode"}>
                 <button
                   aria-pressed={displayMode === "grid"}

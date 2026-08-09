@@ -810,17 +810,25 @@ test("mounting nodes tile and list layouts keep the responsive grid contract in 
   assert.equal(source.includes("flex-direction: column;"), true);
 });
 
-test("mounting nodes list exposes the category catalog return action", () => {
+test("mounting nodes list header keeps the compact controls layout contract", () => {
   const sourcePath = fileURLToPath(
     new URL("../src/components/processing/MountingNodesPanelRefined.jsx", import.meta.url),
   );
   const source = readFileSync(sourcePath, "utf8");
+  const stylesPath = fileURLToPath(new URL("../src/styles.css", import.meta.url));
+  const styles = readFileSync(stylesPath, "utf8");
 
-  assert.equal(source.includes("onOpenMountingNodeCategories"), true);
-  assert.equal(source.includes("handleReturnToCategories"), true);
+  assert.equal(source.includes("mounting-nodes-toolbar-main"), true);
+  assert.equal(source.includes("mounting-nodes-display-toggle materials-mode-switch"), true);
   assert.equal(source.includes("Повернутися до категорій"), true);
   assert.equal(source.includes("primary-button mounting-node-detail-action-button mounting-node-return-button"), true);
-  assert.equal(source.includes("Категорія:"), true);
+  assert.equal(styles.includes(".mounting-nodes-toolbar-main {"), true);
+  assert.equal(styles.includes(".mounting-nodes-display-toggle {"), true);
+  assert.equal(styles.includes("margin-left: auto;"), true);
+  assert.equal(styles.includes(".mounting-nodes-filters {"), true);
+  assert.equal(styles.includes("padding: 12px 14px;"), true);
+  assert.equal(styles.includes(".settings-grid.mounting-nodes-grid {"), true);
+  assert.equal(styles.includes("margin-top: 4px;"), true);
 });
 
 test("app exposes the mounting node category catalog view and route wiring", () => {
