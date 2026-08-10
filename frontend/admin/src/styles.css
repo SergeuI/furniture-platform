@@ -227,6 +227,14 @@ tbody tr.selected {
   background: rgba(255, 255, 255, 0.14);
 }
 
+.sidebar-control-icon {
+  display: block;
+  height: 18px;
+  object-fit: contain;
+  object-position: center;
+  width: 18px;
+}
+
 .sidebar-flyout-backdrop {
   background: transparent;
   inset: 0;
@@ -266,9 +274,26 @@ tbody tr.selected {
 .sidebar-flyout-items button {
   background: rgba(255, 255, 255, 0.03);
   color: #d8e5e8;
+  gap: 10px;
   justify-content: flex-start;
   min-height: 42px;
   padding: 0 12px;
+}
+
+.sidebar-flyout-item-icon {
+  align-items: center;
+  display: inline-flex;
+  flex: 0 0 auto;
+  justify-content: center;
+  width: 22px;
+}
+
+.sidebar-flyout-icon {
+  display: block;
+  height: 20px;
+  object-fit: contain;
+  object-position: center;
+  width: 20px;
 }
 
 .sidebar-flyout-items button:hover,
@@ -693,6 +718,15 @@ tbody tr.selected {
   display: inline-flex;
   flex: 0 0 auto;
   justify-content: center;
+  width: 26px;
+}
+
+.sidebar-nav-icon {
+  display: block;
+  height: 26px;
+  object-fit: contain;
+  object-position: center;
+  width: 26px;
 }
 
 .nav-group.active .nav-group-title {
@@ -702,6 +736,8 @@ tbody tr.selected {
 .nav-group-icon {
   color: #8ea3aa;
   flex-shrink: 0;
+  height: 18px;
+  width: 18px;
   transition: transform 0.18s ease, color 0.18s ease;
 }
 
@@ -712,6 +748,12 @@ tbody tr.selected {
 
 .nav-group-icon.expanded {
   transform: rotate(90deg);
+}
+
+.sidebar-group-toggle-icon {
+  display: block;
+  object-fit: contain;
+  object-position: center;
 }
 
 .nav-subtabs {
@@ -746,6 +788,12 @@ tbody tr.selected {
 
 .sidebar.collapsed .nav-item-icon {
   color: #b9f4c2;
+  width: 30px;
+}
+
+.sidebar.collapsed .sidebar-nav-icon {
+  height: 30px;
+  width: 30px;
 }
 
 .sidebar.collapsed .nav-tabs button.active,

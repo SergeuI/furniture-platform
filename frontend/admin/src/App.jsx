@@ -79,6 +79,12 @@ import {
   isMaterialCreationBlockedByQuota as isMaterialCreationBlockedByQuotaHelper,
 } from "./materialEntitlements.js";
 import {
+  SidebarAssetIcon,
+  getSidebarControlIconAsset,
+  getSidebarFlyoutIconAsset,
+  getSidebarNavIconAsset,
+} from "./sidebarIcons.js";
+import {
   canCreateProjects,
   canDeleteProjects,
   canEditProjects,
@@ -2135,19 +2141,6 @@ const CATALOG_TILE_VISUALS = {
     accent: "#1f6b34",
     icon: FolderTree,
   },
-};
-
-const ADMIN_SIDEBAR_ICON_MAP = {
-  home: House,
-  projects: FolderTree,
-  createProject: Plus,
-  users: Users,
-  audit: History,
-  entitlements: FileSliders,
-  processing: Blocks,
-  connections: Wrench,
-  catalog: Package,
-  settings: Settings2,
 };
 
 const MOUNTING_NODE_CATEGORY_VISUALS = {
@@ -9429,7 +9422,14 @@ export default function App() {
       setSidebarFlyout(null);
     }
   }, [isDesktopSidebarCollapsed]);
-  const getSidebarNavIcon = (key) => ADMIN_SIDEBAR_ICON_MAP[key] || MoreHorizontal;
+  const renderSidebarIcon = (asset, fallbackIcon, className) => (
+    <SidebarAssetIcon
+      asset={asset}
+      className={className}
+      fallback={fallbackIcon}
+      fallbackSize={16}
+    />
+  );
   const processingWorkspaceTabs = useMemo(
     () =>
       getProcessingWorkspaceSidebarTabs({
@@ -18291,7 +18291,11 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
             onClick={() => setIsSidebarCollapsed((current) => !current)}
             type="button"
           >
-            {isDesktopSidebarCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+            {renderSidebarIcon(
+              getSidebarControlIconAsset(isDesktopSidebarCollapsed ? "expand" : "collapse"),
+              isDesktopSidebarCollapsed ? ChevronRight : ChevronLeft,
+              "sidebar-control-icon",
+            )}
           </button>
           <button
             aria-label="Close menu"
@@ -18383,10 +18387,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
               type="button"
             >
               <span className="nav-item-icon" aria-hidden="true">
-                {(() => {
-                  const Icon = getSidebarNavIcon("home");
-                  return <Icon size={16} />;
-                })()}
+                {renderSidebarIcon(getSidebarNavIconAsset("home"), House, "sidebar-nav-icon")}
               </span>
               <span className="nav-item-label">{t.home}</span>
             </button>
@@ -18405,10 +18406,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                 type="button"
               >
                 <span className="nav-item-icon" aria-hidden="true">
-                  {(() => {
-                    const Icon = getSidebarNavIcon("projects");
-                    return <Icon size={16} />;
-                  })()}
+                  {renderSidebarIcon(getSidebarNavIconAsset("projects"), FolderTree, "sidebar-nav-icon")}
                 </span>
                 <span className="nav-item-label">{t.projects}</span>
               </button>
@@ -18424,10 +18422,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                 type="button"
               >
                 <span className="nav-item-icon" aria-hidden="true">
-                  {(() => {
-                    const Icon = getSidebarNavIcon("createProject");
-                    return <Icon size={16} />;
-                  })()}
+                  {renderSidebarIcon(getSidebarNavIconAsset("createProject"), Plus, "sidebar-nav-icon")}
                 </span>
                 <span className="nav-item-label">{t.createProject}</span>
               </button>
@@ -18444,10 +18439,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   type="button"
                 >
                   <span className="nav-item-icon" aria-hidden="true">
-                    {(() => {
-                      const Icon = getSidebarNavIcon("users");
-                      return <Icon size={16} />;
-                    })()}
+                    {renderSidebarIcon(getSidebarNavIconAsset("users"), Users, "sidebar-nav-icon")}
                   </span>
                   <span className="nav-item-label">{t.users}</span>
                 </button>
@@ -18461,10 +18453,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   type="button"
                 >
                   <span className="nav-item-icon" aria-hidden="true">
-                    {(() => {
-                      const Icon = getSidebarNavIcon("audit");
-                      return <Icon size={16} />;
-                    })()}
+                    {renderSidebarIcon(getSidebarNavIconAsset("audit"), History, "sidebar-nav-icon")}
                   </span>
                   <span className="nav-item-label">{t.audit}</span>
                 </button>
@@ -18478,10 +18467,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   title={isDesktopSidebarCollapsed ? (language === "uk" ? "\u0422\u0430\u0440\u0438\u0444\u0438 \u0442\u0430 \u043f\u0440\u0430\u0432\u0430" : "Entitlements") : undefined}
                 >
                   <span className="nav-item-icon" aria-hidden="true">
-                    {(() => {
-                      const Icon = getSidebarNavIcon("entitlements");
-                      return <Icon size={16} />;
-                    })()}
+                    {renderSidebarIcon(getSidebarNavIconAsset("entitlements"), FileSliders, "sidebar-nav-icon")}
                   </span>
                   <span className="nav-item-label">{language === "uk" ? "\u0422\u0430\u0440\u0438\u0444\u0438 \u0442\u0430 \u043f\u0440\u0430\u0432\u0430" : "Entitlements"}</span>
                 </button>
@@ -18504,15 +18490,12 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   }}
                   type="button"
                 >
-                    <span className="nav-item-icon" aria-hidden="true">
-                      {(() => {
-                        const Icon = getSidebarNavIcon("processing");
-                        return <Icon size={16} />;
-                      })()}
-                    </span>
-                    <span className="nav-group-title">
-                      {language === "uk" ? "Обробка деталей" : "Processing"}
-                    </span>
+                  <span className="nav-item-icon" aria-hidden="true">
+                    {renderSidebarIcon(getSidebarNavIconAsset("processing"), Blocks, "sidebar-nav-icon")}
+                  </span>
+                  <span className="nav-group-title">
+                    {language === "uk" ? "Обробка деталей" : "Processing"}
+                  </span>
                   </button>
                   <button
                     aria-expanded={isProcessingMenuOpen}
@@ -18520,10 +18503,11 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                     onClick={() => setIsProcessingMenuOpen((current) => !current)}
                     type="button"
                   >
-                    <ChevronRight
-                      className={`nav-group-icon${isProcessingMenuOpen ? " expanded" : ""}`}
-                      size={16}
-                    />
+                    {renderSidebarIcon(
+                      getSidebarControlIconAsset("next"),
+                      ChevronRight,
+                      `nav-group-icon sidebar-group-toggle-icon${isProcessingMenuOpen ? " expanded" : ""}`,
+                    )}
                   </button>
                 </div>
                 {isProcessingMenuOpen ? (
@@ -18567,10 +18551,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   type="button"
                 >
                   <span className="nav-item-icon" aria-hidden="true">
-                    {(() => {
-                      const Icon = getSidebarNavIcon("connections");
-                      return <Icon size={16} />;
-                    })()}
+                    {renderSidebarIcon(getSidebarNavIconAsset("connections"), Wrench, "sidebar-nav-icon")}
                   </span>
                   <span className="nav-group-title">
                     {language === "uk" ? "Кріплення та з'єднання" : "Connections"}
@@ -18582,10 +18563,11 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   onClick={() => setIsConnectionsMenuOpen((current) => !current)}
                   type="button"
                 >
-                  <ChevronRight
-                    className={`nav-group-icon${isConnectionsMenuOpen ? " expanded" : ""}`}
-                    size={16}
-                  />
+                  {renderSidebarIcon(
+                    getSidebarControlIconAsset("next"),
+                    ChevronRight,
+                    `nav-group-icon sidebar-group-toggle-icon${isConnectionsMenuOpen ? " expanded" : ""}`,
+                  )}
                 </button>
               </div>
               {isConnectionsMenuOpen ? (
@@ -18621,10 +18603,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   type="button"
                 >
                   <span className="nav-item-icon" aria-hidden="true">
-                    {(() => {
-                      const Icon = getSidebarNavIcon("catalog");
-                      return <Icon size={16} />;
-                    })()}
+                    {renderSidebarIcon(getSidebarNavIconAsset("catalog"), Package, "sidebar-nav-icon")}
                   </span>
                   <span className="nav-group-title">{t.catalog}</span>
                 </button>
@@ -18634,10 +18613,11 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   onClick={() => setIsCatalogMenuOpen((current) => !current)}
                   type="button"
                 >
-                  <ChevronRight
-                    className={`nav-group-icon${isCatalogMenuOpen ? " expanded" : ""}`}
-                    size={16}
-                  />
+                  {renderSidebarIcon(
+                    getSidebarControlIconAsset("next"),
+                    ChevronRight,
+                    `nav-group-icon sidebar-group-toggle-icon${isCatalogMenuOpen ? " expanded" : ""}`,
+                  )}
                 </button>
               </div>
               {isCatalogMenuOpen ? (
@@ -18735,10 +18715,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
               type="button"
             >
               <span className="nav-item-icon" aria-hidden="true">
-                {(() => {
-                  const Icon = getSidebarNavIcon("settings");
-                  return <Icon size={16} />;
-                })()}
+                {renderSidebarIcon(getSidebarNavIconAsset("settings"), Settings2, "sidebar-nav-icon")}
               </span>
               <span className="nav-item-label">{t.settings}</span>
             </button>
@@ -18775,7 +18752,14 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                       onClick={item.onClick}
                       type="button"
                     >
-                      {item.label}
+                      <span className="sidebar-flyout-item-icon" aria-hidden="true">
+                        {renderSidebarIcon(
+                          getSidebarFlyoutIconAsset(sidebarFlyout.groupKey, item.key),
+                          MoreHorizontal,
+                          "sidebar-flyout-icon",
+                        )}
+                      </span>
+                      <span className="sidebar-flyout-item-label">{item.label}</span>
                     </button>
                   ))}
                 </div>
