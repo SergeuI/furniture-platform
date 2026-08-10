@@ -7290,12 +7290,6 @@ export default function App() {
     writePersistedSidebarCollapsedState(undefined, isSidebarCollapsed);
   }, [isSidebarCollapsed]);
 
-  useEffect(() => {
-    if (!isDesktopSidebarCollapsed) {
-      setSidebarFlyout(null);
-    }
-  }, [isDesktopSidebarCollapsed]);
-
   const [loginLoading, setLoginLoading] = useState(false);
   const [trialClockNow, setTrialClockNow] = useState(() => Date.now());
   const trialRefreshTriggeredRef = useRef(false);
@@ -9429,7 +9423,44 @@ export default function App() {
     isCompactSidebarMode,
     isSidebarCollapsed,
   });
+
+  useEffect(() => {
+    if (!isDesktopSidebarCollapsed) {
+      setSidebarFlyout(null);
+    }
+  }, [isDesktopSidebarCollapsed]);
   const getSidebarNavIcon = (key) => ADMIN_SIDEBAR_ICON_MAP[key] || MoreHorizontal;
+  const processingWorkspaceTabs = useMemo(
+    () =>
+      getProcessingWorkspaceSidebarTabs({
+        language,
+        isAdmin: user?.role === "admin",
+        canUseFittingHoles: canViewFittingHoles,
+      }),
+    [canViewFittingHoles, language, user?.role],
+  );
+  const connectionsWorkspaceTabs = useMemo(
+    () => getConnectionsWorkspaceSidebarTabs({ language }),
+    [language],
+  );
+  const activeConnectionsNavigationKey = useMemo(
+    () => resolveActiveConnectionsNavigationKey({ activeView }),
+    [activeView],
+  );
+  const activeProcessingNavigationKey = useMemo(
+    () =>
+      resolveActiveProcessingNavigationKey({
+        activeView,
+        activeProcessingTab,
+        canUseFittingHoles: canViewFittingHoles,
+        isAdmin: user?.role === "admin",
+      }),
+    [activeProcessingTab, activeView, canViewFittingHoles, user?.role],
+  );
+  const processingWorkspaceTab = activeProcessingNavigationKey || "overview";
+  const isProcessingSectionView = activeProcessingNavigationKey !== null;
+  const isCatalogView = shouldAutoOpenCatalogMenu(activeView);
+
   const openSidebarFlyout = (groupKey, event) => {
     if (!isDesktopSidebarCollapsed) {
       return;
@@ -9555,36 +9586,6 @@ export default function App() {
               : []),
           ]
         : [];
-  const processingWorkspaceTabs = useMemo(
-    () =>
-      getProcessingWorkspaceSidebarTabs({
-        language,
-        isAdmin: user?.role === "admin",
-        canUseFittingHoles: canViewFittingHoles,
-      }),
-    [canViewFittingHoles, language, user?.role],
-  );
-  const connectionsWorkspaceTabs = useMemo(
-    () => getConnectionsWorkspaceSidebarTabs({ language }),
-    [language],
-  );
-  const activeConnectionsNavigationKey = useMemo(
-    () => resolveActiveConnectionsNavigationKey({ activeView }),
-    [activeView],
-  );
-  const activeProcessingNavigationKey = useMemo(
-    () =>
-      resolveActiveProcessingNavigationKey({
-        activeView,
-        activeProcessingTab,
-        canUseFittingHoles: canViewFittingHoles,
-        isAdmin: user?.role === "admin",
-      }),
-    [activeProcessingTab, activeView, canViewFittingHoles, user?.role],
-  );
-  const processingWorkspaceTab = activeProcessingNavigationKey || "overview";
-  const isProcessingSectionView = activeProcessingNavigationKey !== null;
-  const isCatalogView = shouldAutoOpenCatalogMenu(activeView);
   const fastenerItems = useMemo(
     () => fittingItems.filter((item) => isFastenerFitting(item)),
     [fittingItems],
