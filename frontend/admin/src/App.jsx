@@ -156,6 +156,12 @@ import {
   shouldHydrateMountingNodeDetail,
 } from "./mountingNodesNavigation.js";
 import {
+  SIDEBAR_COLLAPSE_BREAKPOINT,
+  readPersistedSidebarCollapsedState,
+  shouldUseCollapsedSidebar,
+  writePersistedSidebarCollapsedState,
+} from "./sidebarShell.js";
+import {
   buildMountingNodeEditorSavePayload,
   canAddMountingNodeEditorPoint,
   canSaveMountingNodeEditor,
@@ -289,7 +295,6 @@ const API_BASE_URL = (
 );
 const ADMIN_ASSET_BASE_URL = import.meta.env.BASE_URL || "/";
 const PAGE_SIZE = 20;
-const SIDEBAR_COLLAPSE_BREAKPOINT = 1180;
 
 function buildAdminAssetUrl(path) {
   return `${ADMIN_ASSET_BASE_URL}${String(path || "").replace(/^\/+/, "")}`;
@@ -2130,6 +2135,19 @@ const CATALOG_TILE_VISUALS = {
     accent: "#1f6b34",
     icon: FolderTree,
   },
+};
+
+const ADMIN_SIDEBAR_ICON_MAP = {
+  home: House,
+  projects: FolderTree,
+  createProject: Plus,
+  users: Users,
+  audit: History,
+  entitlements: FileSliders,
+  processing: Blocks,
+  connections: Wrench,
+  catalog: Package,
+  settings: Settings2,
 };
 
 const MOUNTING_NODE_CATEGORY_VISUALS = {
@@ -7235,6 +7253,9 @@ export default function App() {
         ? window.matchMedia(`(min-width: ${SIDEBAR_COLLAPSE_BREAKPOINT + 1}px)`).matches
         : true),
   );
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() =>
+    readPersistedSidebarCollapsedState(),
+  );
   const sidebarTouchState = useRef({
     active: false,
     startX: 0,
@@ -7263,6 +7284,10 @@ export default function App() {
     mediaQuery.addListener(syncSidebarState);
     return () => mediaQuery.removeListener(syncSidebarState);
   }, []);
+
+  useEffect(() => {
+    writePersistedSidebarCollapsedState(undefined, isSidebarCollapsed);
+  }, [isSidebarCollapsed]);
 
   const [loginLoading, setLoginLoading] = useState(false);
   const [trialClockNow, setTrialClockNow] = useState(() => Date.now());
@@ -9393,6 +9418,11 @@ export default function App() {
   const isProcessingView = activeView === "processing";
   const activeCity = (user?.city || "").trim();
   const canAccessProcessingWorkspace = user?.role === "admin" || canViewFittingHoles;
+  const isDesktopSidebarCollapsed = shouldUseCollapsedSidebar({
+    isCompactSidebarMode,
+    isSidebarCollapsed,
+  });
+  const getSidebarNavIcon = (key) => ADMIN_SIDEBAR_ICON_MAP[key] || MoreHorizontal;
   const processingWorkspaceTabs = useMemo(
     () =>
       getProcessingWorkspaceSidebarTabs({
@@ -18087,7 +18117,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
 
   return (
     <main
-      className={`app-shell${!isSidebarOpen && isCompactSidebarMode ? " compact-topbar" : ""}`}
+      className={`app-shell${!isSidebarOpen && isCompactSidebarMode ? " compact-topbar" : ""}${isDesktopSidebarCollapsed ? " sidebar-collapsed" : ""}`}
       onTouchCancel={finishSidebarGesture}
       onTouchEnd={finishSidebarGesture}
       onTouchMove={handleSidebarTouchMove}
@@ -18120,8 +18150,16 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
           role="presentation"
         />
       ) : null}
-      <aside className={`sidebar${isSidebarOpen ? " open" : ""}`}>
+      <aside className={`sidebar${isSidebarOpen ? " open" : ""}${isDesktopSidebarCollapsed ? " collapsed" : ""}`}>
         <div className="sidebar-top">
+          <button
+            aria-label={isDesktopSidebarCollapsed ? (language === "uk" ? "Розгорнути меню" : "Expand menu") : (language === "uk" ? "Згорнути меню" : "Collapse menu")}
+            className="sidebar-collapse-button"
+            onClick={() => setIsSidebarCollapsed((current) => !current)}
+            type="button"
+          >
+            {isDesktopSidebarCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+          </button>
           <button
             aria-label="Close menu"
             className="sidebar-close-button"
@@ -18211,7 +18249,13 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
               }}
               type="button"
             >
-              {t.home}
+              <span className="nav-item-icon" aria-hidden="true">
+                {(() => {
+                  const Icon = getSidebarNavIcon("home");
+                  return <Icon size={16} />;
+                })()}
+              </span>
+              <span className="nav-item-label">{t.home}</span>
             </button>
             {canViewProjects(user) ? (
               <button
@@ -18226,7 +18270,13 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                 }}
                 type="button"
               >
-                {t.projects}
+                <span className="nav-item-icon" aria-hidden="true">
+                  {(() => {
+                    const Icon = getSidebarNavIcon("projects");
+                    return <Icon size={16} />;
+                  })()}
+                </span>
+                <span className="nav-item-label">{t.projects}</span>
               </button>
             ) : null}
             {canCreateNewProject ? (
@@ -18238,7 +18288,13 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                 }}
                 type="button"
               >
-                {t.createProject}
+                <span className="nav-item-icon" aria-hidden="true">
+                  {(() => {
+                    const Icon = getSidebarNavIcon("createProject");
+                    return <Icon size={16} />;
+                  })()}
+                </span>
+                <span className="nav-item-label">{t.createProject}</span>
               </button>
             ) : null}
             {user.role === "admin" ? (
@@ -18251,7 +18307,13 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   }}
                   type="button"
                 >
-                  {t.users}
+                  <span className="nav-item-icon" aria-hidden="true">
+                    {(() => {
+                      const Icon = getSidebarNavIcon("users");
+                      return <Icon size={16} />;
+                    })()}
+                  </span>
+                  <span className="nav-item-label">{t.users}</span>
                 </button>
                 <button
                   className={activeView === "audit" ? "active" : ""}
@@ -18261,9 +18323,15 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   }}
                   type="button"
                 >
-                  {t.audit}
+                  <span className="nav-item-icon" aria-hidden="true">
+                    {(() => {
+                      const Icon = getSidebarNavIcon("audit");
+                      return <Icon size={16} />;
+                    })()}
+                  </span>
+                  <span className="nav-item-label">{t.audit}</span>
                 </button>
-                <button
+                                <button
                   className={activeView === "entitlements" ? "active" : ""}
                   onClick={() => {
                     switchView("entitlements");
@@ -18271,7 +18339,13 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   }}
                   type="button"
                 >
-                  Тарифи та права
+                  <span className="nav-item-icon" aria-hidden="true">
+                    {(() => {
+                      const Icon = getSidebarNavIcon("entitlements");
+                      return <Icon size={16} />;
+                    })()}
+                  </span>
+                  <span className="nav-item-label">������ �� �����</span>
                 </button>
               </>
             ) : null}
@@ -18288,6 +18362,12 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   }}
                   type="button"
                 >
+                    <span className="nav-item-icon" aria-hidden="true">
+                      {(() => {
+                        const Icon = getSidebarNavIcon("processing");
+                        return <Icon size={16} />;
+                      })()}
+                    </span>
                     <span className="nav-group-title">
                       {language === "uk" ? "Обробка деталей" : "Processing"}
                     </span>
@@ -18340,6 +18420,12 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   }}
                   type="button"
                 >
+                  <span className="nav-item-icon" aria-hidden="true">
+                    {(() => {
+                      const Icon = getSidebarNavIcon("connections");
+                      return <Icon size={16} />;
+                    })()}
+                  </span>
                   <span className="nav-group-title">
                     {language === "uk" ? "Кріплення та з'єднання" : "Connections"}
                   </span>
@@ -18384,6 +18470,12 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   }}
                   type="button"
                 >
+                  <span className="nav-item-icon" aria-hidden="true">
+                    {(() => {
+                      const Icon = getSidebarNavIcon("catalog");
+                      return <Icon size={16} />;
+                    })()}
+                  </span>
                   <span className="nav-group-title">{t.catalog}</span>
                 </button>
                 <button
@@ -18491,7 +18583,13 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
               }}
               type="button"
             >
-              {t.settings}
+              <span className="nav-item-icon" aria-hidden="true">
+                {(() => {
+                  const Icon = getSidebarNavIcon("settings");
+                  return <Icon size={16} />;
+                })()}
+              </span>
+              <span className="nav-item-label">{t.settings}</span>
             </button>
           </nav>
 

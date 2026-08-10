@@ -184,6 +184,10 @@ tbody tr.selected {
   position: relative;
 }
 
+.app-shell.sidebar-collapsed {
+  grid-template-columns: 78px minmax(0, 1fr);
+}
+
 .sidebar {
   background: var(--brand-graphite);
   color: #ffffff;
@@ -197,10 +201,30 @@ tbody tr.selected {
   top: 0;
 }
 
+.sidebar.collapsed {
+  gap: 12px;
+  overflow-x: hidden;
+  padding: 14px 10px 16px;
+}
+
 .sidebar-toggle-button,
 .sidebar-close-button,
 .sidebar-backdrop {
   display: none;
+}
+
+.sidebar-collapse-button {
+  align-self: flex-end;
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  display: inline-flex;
+  min-height: 36px;
+  padding: 0;
+  width: 36px;
+}
+
+.sidebar-collapse-button:hover {
+  background: rgba(255, 255, 255, 0.14);
 }
 
 .sidebar-close-button {
@@ -243,6 +267,32 @@ tbody tr.selected {
 .sidebar-brand-block {
   display: grid;
   gap: 8px;
+}
+
+.sidebar.collapsed .sidebar-brand-block,
+.sidebar.collapsed .user-block,
+.sidebar.collapsed .trial-status,
+.sidebar.collapsed .nav-item-label,
+.sidebar.collapsed .nav-group-title,
+.sidebar.collapsed .nav-group-toggle,
+.sidebar.collapsed .nav-subtabs,
+.sidebar.collapsed .ghost-button {
+  display: none;
+}
+
+.sidebar.collapsed .sidebar-top {
+  align-items: center;
+  gap: 0;
+  padding-bottom: 0;
+}
+
+.sidebar.collapsed .sidebar-collapse-button {
+  align-self: center;
+  margin: 0 auto;
+}
+
+.sidebar.collapsed .sidebar-scroll {
+  padding-top: 0;
 }
 
 .auth-brand {
@@ -497,6 +547,7 @@ tbody tr.selected {
 .nav-tabs button {
   background: transparent;
   color: #d8e5e8;
+  gap: 10px;
   justify-content: flex-start;
   padding: 0 12px;
 }
@@ -529,6 +580,7 @@ tbody tr.selected {
 
 .nav-group-link {
   border-radius: 8px;
+  gap: 10px;
   padding: 0 12px;
   text-align: left;
 }
@@ -581,6 +633,14 @@ tbody tr.selected {
   text-transform: none;
 }
 
+.nav-item-icon {
+  align-items: center;
+  color: inherit;
+  display: inline-flex;
+  flex: 0 0 auto;
+  justify-content: center;
+}
+
 .nav-group.active .nav-group-title {
   color: #ffffff;
 }
@@ -620,6 +680,29 @@ tbody tr.selected {
 .nav-subtabs button:hover {
   background: rgba(57, 211, 83, 0.12);
   color: #ffffff;
+}
+
+.sidebar.collapsed .nav-tabs button,
+.sidebar.collapsed .nav-group-link {
+  justify-content: center;
+  min-height: 44px;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.sidebar.collapsed .nav-item-icon {
+  color: #b9f4c2;
+}
+
+.sidebar.collapsed .nav-tabs button.active,
+.sidebar.collapsed .nav-tabs button:hover,
+.sidebar.collapsed .nav-group-link.active,
+.sidebar.collapsed .nav-group-link:hover {
+  border-radius: 12px;
+}
+
+.sidebar.collapsed .nav-group-header {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .nav-subtabs button.active {
@@ -10109,6 +10192,10 @@ tbody tr.selected {
   .sidebar-close-button,
   .sidebar-backdrop {
     display: block;
+  }
+
+  .sidebar-collapse-button {
+    display: none;
   }
 
   .toolbar-heading .sidebar-toggle-button {
