@@ -274,7 +274,7 @@ tbody tr.selected {
 
 .sidebar-flyout-backdrop {
   background: transparent;
-  inset: 0;
+  inset: 0 0 0 86px;
   position: fixed;
   z-index: 27;
 }
