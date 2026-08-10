@@ -708,35 +708,15 @@ export default function MountingSchemesPanel({ language = "uk", token = "" }) {
             {workspaceChrome.backActionCount ? (
               <button className="ghost-button mounting-node-return-button" onClick={handleBackToList} type="button">
                 <ArrowLeft size={16} />
-                {language === "uk" ? "РџРѕРІРµСЂРЅСѓС‚РёСЃСЏ РґРѕ СЃРїРёСЃРєСѓ" : "Back to list"}
+                {language === "uk" ? "Повернутися до списку" : "Back to list"}
               </button>
             ) : null}
             {workspaceChrome.editActionCount ? (
               <button className="primary-button" onClick={handleStartEdit} type="button">
                 <Pencil size={16} />
-                {language === "uk" ? "Р РµРґР°РіСѓРІР°С‚Рё СЃС…РµРјСѓ" : "Edit scheme"}
+                {language === "uk" ? "Редагувати схему" : "Edit scheme"}
               </button>
             ) : null}
-          </div>
-          <div className="dashboard-panel-head mounting-schemes-panel-head">
-            <div>
-              <h3>{detailScheme?.name || (language === "uk" ? "Деталі схеми" : "Scheme details")}</h3>
-              <p>{detailScheme?.description || (language === "uk" ? "Перегляд схеми без редагування." : "Read-only scheme view.")}</p>
-            </div>
-            <div className="mounting-schemes-panel-head-actions">
-              {workspaceChrome.backActionCount ? (
-                <button className="ghost-button mounting-node-return-button" onClick={handleBackToList} type="button">
-                  <ArrowLeft size={16} />
-                  {language === "uk" ? "Повернутися до списку" : "Back to list"}
-                </button>
-              ) : null}
-              {workspaceChrome.editActionCount ? (
-                <button className="primary-button" onClick={handleStartEdit} type="button">
-                  <Pencil size={16} />
-                  {language === "uk" ? "Редагувати схему" : "Edit scheme"}
-                </button>
-              ) : null}
-            </div>
           </div>
 
           {currentSchemeLoading ? (
@@ -822,39 +802,15 @@ export default function MountingSchemesPanel({ language = "uk", token = "" }) {
             {workspaceChrome.backActionCount ? (
               <button className="ghost-button mounting-node-return-button" onClick={handleBackToList} type="button">
                 <ArrowLeft size={16} />
-                {language === "uk" ? "РџРѕРІРµСЂРЅСѓС‚РёСЃСЏ РґРѕ СЃРїРёСЃРєСѓ" : "Back to list"}
+                {language === "uk" ? "Повернутися до списку" : "Back to list"}
               </button>
             ) : null}
             {workspaceChrome.saveActionCount ? (
               <button className="primary-button" disabled={saving} type="submit">
                 <Save size={16} />
-                {saving ? (language === "uk" ? "Р—Р±РµСЂРµР¶РµРЅРЅСЏ..." : "Saving...") : language === "uk" ? "Р—Р±РµСЂРµРіС‚Рё" : "Save"}
+                {saving ? (language === "uk" ? "Збереження..." : "Saving...") : language === "uk" ? "Зберегти" : "Save"}
               </button>
             ) : null}
-          </div>
-          <div className="dashboard-panel-head mounting-schemes-panel-head">
-            <div>
-              <h3>{route.mode === "create" ? (language === "uk" ? "Створення схеми" : "Create scheme") : (currentScheme?.name || (language === "uk" ? "Редагування схеми" : "Edit scheme"))}</h3>
-              <p>
-                {language === "uk"
-                  ? "Одна форма для основних даних, вибору монтажних вузлів і правил їх розстановки."
-                  : "One form for basic data, node selection, and placement rules."}
-              </p>
-            </div>
-            <div className="mounting-schemes-panel-head-actions">
-              {workspaceChrome.backActionCount ? (
-                <button className="ghost-button mounting-node-return-button" onClick={handleBackToList} type="button">
-                  <ArrowLeft size={16} />
-                  {language === "uk" ? "Повернутися до списку" : "Back to list"}
-                </button>
-              ) : null}
-              {workspaceChrome.saveActionCount ? (
-                <button className="primary-button" disabled={saving} type="submit">
-                  <Save size={16} />
-                  {saving ? (language === "uk" ? "Збереження..." : "Saving...") : language === "uk" ? "Зберегти" : "Save"}
-                </button>
-              ) : null}
-            </div>
           </div>
 
           {saveError ? <div className="mounting-schemes-alert error">{saveError}</div> : null}

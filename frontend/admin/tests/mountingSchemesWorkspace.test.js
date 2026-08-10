@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -203,6 +204,32 @@ test("mounting-schemes breadcrumb trail follows list/create/detail/edit contract
       },
     ],
   );
+});
+
+test("mounting-schemes source keeps utf-8 labels and panel padding contract", () => {
+  const panelSource = readFileSync(new URL("../src/components/connections/MountingSchemesPanel.jsx", import.meta.url), "utf8");
+  const workspaceSource = readFileSync(new URL("../src/mountingSchemesWorkspace.js", import.meta.url), "utf8");
+  const stylesSource = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
+
+  for (const expected of [
+    "Повернутися до списку",
+    "Редагувати схему",
+    "Зберегти",
+    "Створити схему кріплення",
+    "Основне",
+    "Монтажні вузли схеми",
+    "Правила розстановки",
+    "Схем ще немає",
+  ]) {
+    assert(panelSource.includes(expected) || workspaceSource.includes(expected));
+  }
+
+  for (const fragment of ["РџРѕРІ", "Р РµРґ", "Р—Р±Рµ", "РЎС…РµРј"]) {
+    assert.equal(panelSource.includes(fragment), false);
+  }
+
+  assert(stylesSource.includes(".mounting-schemes-table-panel,\n.mounting-schemes-detail-panel,\n.mounting-schemes-editor-panel"));
+  assert(stylesSource.includes("padding: 20px;"));
 });
 
 test("mounting-schemes dev proxy forwards to the backend route", async () => {
