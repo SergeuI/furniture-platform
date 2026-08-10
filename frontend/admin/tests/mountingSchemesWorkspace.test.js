@@ -208,6 +208,7 @@ test("mounting-schemes breadcrumb trail follows list/create/detail/edit contract
 
 test("mounting-schemes source keeps utf-8 labels and panel padding contract", () => {
   const panelSource = readFileSync(new URL("../src/components/connections/MountingSchemesPanel.jsx", import.meta.url), "utf8");
+  const appSource = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
   const workspaceSource = readFileSync(new URL("../src/mountingSchemesWorkspace.js", import.meta.url), "utf8");
   const stylesSource = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
 
@@ -228,6 +229,7 @@ test("mounting-schemes source keeps utf-8 labels and panel padding contract", ()
     assert.equal(panelSource.includes(fragment), false);
   }
 
+  assert(appSource.includes("isMountingSchemesView ? null"));
   assert(stylesSource.includes(".mounting-schemes-table-panel,\n.mounting-schemes-detail-panel,\n.mounting-schemes-editor-panel"));
   assert(stylesSource.includes("padding: 20px;"));
 });

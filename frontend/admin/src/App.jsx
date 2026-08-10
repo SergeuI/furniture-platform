@@ -18524,6 +18524,8 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
             </button>
             {isCatalogHolesView
               ? renderCatalogHolesToolbarBreadcrumb(getMountingNodesToolbarBreadcrumbItemsCanonical())
+              : isMountingSchemesView
+              ? null
               : (
                 <h2>
                   {isHomeView
@@ -18567,7 +18569,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                       : t.audit}
                 </h2>
               )}
-            {activeView === "projectDetails" && selectedProject ? (
+            {isMountingSchemesView ? null : activeView === "projectDetails" && selectedProject ? (
               <div className="toolbar-project-meta">
                 <span>{selectedProject.project_name || t.newProjectDefault}</span>
                 <button
