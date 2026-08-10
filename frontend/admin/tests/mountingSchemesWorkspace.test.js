@@ -190,28 +190,37 @@ test("mounting-schemes validation stays hidden until submit and localizes the fi
 test("mounting-schemes workspace chrome keeps only the expected actions per mode", () => {
   assert.deepEqual(getMountingSchemesWorkspaceChrome("list"), {
     showHero: false,
+    listPanelTitleVisible: false,
     listCreateActionCount: 1,
     emptyStateCreateActionCount: 0,
     backActionCount: 0,
     saveActionCount: 0,
     editActionCount: 0,
+    nodeEmptyStateAddActionCount: 0,
+    ruleEmptyStateAddActionCount: 0,
   });
 
   assert.deepEqual(getMountingSchemesWorkspaceChrome("create"), {
     showHero: false,
+    listPanelTitleVisible: true,
     listCreateActionCount: 0,
     emptyStateCreateActionCount: 0,
     backActionCount: 1,
     saveActionCount: 1,
     editActionCount: 0,
+    nodeEmptyStateAddActionCount: 0,
+    ruleEmptyStateAddActionCount: 0,
   });
 
   assert.deepEqual(getMountingSchemesWorkspaceChrome("detail"), {
     showHero: false,
+    listPanelTitleVisible: true,
     listCreateActionCount: 0,
     emptyStateCreateActionCount: 0,
     backActionCount: 1,
     saveActionCount: 0,
     editActionCount: 1,
+    nodeEmptyStateAddActionCount: 0,
+    ruleEmptyStateAddActionCount: 0,
   });
 });

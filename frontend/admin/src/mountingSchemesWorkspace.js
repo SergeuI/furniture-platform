@@ -314,11 +314,14 @@ export function getMountingSchemesWorkspaceChrome(mode = "list") {
 
   return {
     showHero: false,
+    listPanelTitleVisible: normalizedMode !== "list",
     listCreateActionCount: normalizedMode === "list" ? 1 : 0,
     emptyStateCreateActionCount: 0,
     backActionCount: normalizedMode === "list" ? 0 : 1,
     saveActionCount: normalizedMode === "create" || normalizedMode === "edit" ? 1 : 0,
     editActionCount: normalizedMode === "detail" ? 1 : 0,
+    nodeEmptyStateAddActionCount: 0,
+    ruleEmptyStateAddActionCount: 0,
   };
 }
 

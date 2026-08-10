@@ -615,11 +615,10 @@ export default function MountingSchemesPanel({ language = "uk", token = "" }) {
         <article className="table-panel full-panel mounting-schemes-table-panel">
           <div className="dashboard-panel-head mounting-schemes-panel-head">
             <div>
-              <h3>{language === "uk" ? "Схеми кріплення" : "Mounting schemes"}</h3>
               <p>
                 {language === "uk"
-                  ? "Створюйте схеми з монтажних вузлів і задавайте правила їх розстановки."
-                  : "Create schemes from mounting nodes and define their placement rules."}
+                  ? "Керуйте схемами кріплення в одному списку."
+                  : "Manage mounting schemes in one compact list."}
               </p>
             </div>
             {workspaceChrome.listCreateActionCount ? (
@@ -943,10 +942,6 @@ export default function MountingSchemesPanel({ language = "uk", token = "" }) {
                     ? "Додайте існуючі монтажні вузли, щоб почати збирати схему."
                     : "Add existing mounting nodes to start building the scheme."}
                 </p>
-                <button className="primary-button" onClick={() => setSelectorOpen(true)} type="button">
-                  <Plus size={16} />
-                  {language === "uk" ? "Додати вузол" : "Add node"}
-                </button>
               </div>
             )}
           </section>
