@@ -54,7 +54,10 @@ import {
   PROCESSING_WORKSPACE_STORAGE_KEY,
   shouldAutoOpenCatalogMenu,
 } from "./processingWorkspace.js";
-import { getSidebarGroupVisualState } from "./sidebarGroupState.js";
+import {
+  getCollapsedSidebarVisualActiveGroupKey,
+  getSidebarGroupVisualState,
+} from "./sidebarGroupState.js";
 import {
   getConnectionsWorkspacePageLabel,
   getConnectionsWorkspaceSidebarTabs,
@@ -9466,17 +9469,45 @@ export default function App() {
   const isProcessingFlyoutOpen = sidebarFlyoutGroupKey === "processing";
   const isConnectionsFlyoutOpen = sidebarFlyoutGroupKey === "connections";
   const isCatalogFlyoutOpen = sidebarFlyoutGroupKey === "catalog";
+  const sidebarRouteActiveKey = isProcessingSectionView
+    ? "processing"
+    : isConnectionsNavigationView
+      ? "connections"
+      : isCatalogView
+        ? "catalog"
+        : activeView === "home"
+          ? "home"
+          : activeView === "projects" || activeView === "projectDetails"
+            ? "projects"
+            : activeView === "createProject"
+              ? "createProject"
+              : activeView === "users"
+                ? "users"
+                : activeView === "audit"
+                  ? "audit"
+                  : activeView === "entitlements"
+                    ? "entitlements"
+                    : activeView === "settings"
+                      ? "settings"
+                      : "";
+  const sidebarVisualActiveKey = getCollapsedSidebarVisualActiveGroupKey({
+    isCollapsed: isDesktopSidebarCollapsed,
+    openFlyoutGroupKey: sidebarFlyoutGroupKey,
+    routeActiveGroupKey: sidebarRouteActiveKey,
+  });
+  const isSidebarItemVisuallyActive = (key, routeActive) =>
+    isDesktopSidebarCollapsed ? sidebarVisualActiveKey === key : Boolean(routeActive);
   const processingGroupState = getSidebarGroupVisualState({
-    flyoutOpen: isProcessingFlyoutOpen,
-    routeActive: isProcessingSectionView,
+    flyoutOpen: !isDesktopSidebarCollapsed && isProcessingFlyoutOpen,
+    routeActive: isSidebarItemVisuallyActive("processing", isProcessingSectionView),
   });
   const connectionsGroupState = getSidebarGroupVisualState({
-    flyoutOpen: isConnectionsFlyoutOpen,
-    routeActive: isConnectionsNavigationView,
+    flyoutOpen: !isDesktopSidebarCollapsed && isConnectionsFlyoutOpen,
+    routeActive: isSidebarItemVisuallyActive("connections", isConnectionsNavigationView),
   });
   const catalogGroupState = getSidebarGroupVisualState({
-    flyoutOpen: isCatalogFlyoutOpen,
-    routeActive: isCatalogView,
+    flyoutOpen: !isDesktopSidebarCollapsed && isCatalogFlyoutOpen,
+    routeActive: isSidebarItemVisuallyActive("catalog", isCatalogView),
   });
 
   const openSidebarFlyout = (groupKey, event) => {
@@ -18393,7 +18424,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
 
           <nav className="nav-tabs" aria-label="Admin sections">
             <button
-              className={isHomeView ? "active" : ""}
+              className={isSidebarItemVisuallyActive("home", isHomeView) ? "active" : ""}
               onClick={() => {
                 switchView("home");
                 closeSidebarOnMobile();
@@ -18407,11 +18438,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
             </button>
             {canViewProjects(user) ? (
               <button
-                className={
-                  activeView === "projects" || activeView === "projectDetails"
-                    ? "active"
-                    : ""
-                }
+                className={isSidebarItemVisuallyActive("projects", activeView === "projects" || activeView === "projectDetails") ? "active" : ""}
                 title={isDesktopSidebarCollapsed ? t.projects : undefined}
                 onClick={() => {
                   switchView("projects");
@@ -18427,7 +18454,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
             ) : null}
             {canCreateNewProject ? (
               <button
-                className={activeView === "createProject" ? "active" : ""}
+                className={isSidebarItemVisuallyActive("createProject", activeView === "createProject") ? "active" : ""}
                 title={isDesktopSidebarCollapsed ? t.createProject : undefined}
                 onClick={() => {
                   switchView("createProject");
@@ -18444,7 +18471,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
             {user.role === "admin" ? (
               <>
                 <button
-                  className={activeView === "users" ? "active" : ""}
+                  className={isSidebarItemVisuallyActive("users", activeView === "users") ? "active" : ""}
                   title={isDesktopSidebarCollapsed ? t.users : undefined}
                   onClick={() => {
                     switchView("users");
@@ -18458,7 +18485,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   <span className="nav-item-label">{t.users}</span>
                 </button>
                 <button
-                  className={activeView === "audit" ? "active" : ""}
+                  className={isSidebarItemVisuallyActive("audit", activeView === "audit") ? "active" : ""}
                   title={isDesktopSidebarCollapsed ? t.audit : undefined}
                   onClick={() => {
                     switchView("audit");
@@ -18472,7 +18499,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   <span className="nav-item-label">{t.audit}</span>
                 </button>
                 <button
-                  className={activeView === "entitlements" ? "active" : ""}
+                  className={isSidebarItemVisuallyActive("entitlements", activeView === "entitlements") ? "active" : ""}
                   onClick={() => {
                     switchView("entitlements");
                     closeSidebarOnMobile();
@@ -18717,7 +18744,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
               ) : null}
             </div>
             <button
-              className={activeView === "settings" ? "active" : ""}
+              className={isSidebarItemVisuallyActive("settings", activeView === "settings") ? "active" : ""}
               title={isDesktopSidebarCollapsed ? t.settings : undefined}
               onClick={() => {
                 switchView("settings");

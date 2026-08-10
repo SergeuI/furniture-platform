@@ -8,3 +8,15 @@ export function getSidebarGroupVisualState({ routeActive = false, flyoutOpen = f
     isRouteActive,
   };
 }
+
+export function getCollapsedSidebarVisualActiveGroupKey({
+  isCollapsed = false,
+  openFlyoutGroupKey = "",
+  routeActiveGroupKey = "",
+} = {}) {
+  if (isCollapsed && openFlyoutGroupKey) {
+    return openFlyoutGroupKey;
+  }
+
+  return routeActiveGroupKey || "";
+}

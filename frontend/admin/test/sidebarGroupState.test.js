@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { getSidebarGroupVisualState } from "../src/sidebarGroupState.js";
+import {
+  getCollapsedSidebarVisualActiveGroupKey,
+  getSidebarGroupVisualState,
+} from "../src/sidebarGroupState.js";
 
 test("sidebar group visual state keeps route-active and flyout-open separate", () => {
   assert.deepEqual(getSidebarGroupVisualState({ routeActive: true, flyoutOpen: false }), {
@@ -27,4 +30,33 @@ test("sidebar group visual state keeps route-active and flyout-open separate", (
     isFlyoutOpen: false,
     isRouteActive: false,
   });
+});
+
+test("collapsed sidebar visual active key prefers the open flyout", () => {
+  assert.equal(
+    getCollapsedSidebarVisualActiveGroupKey({
+      isCollapsed: true,
+      openFlyoutGroupKey: "processing",
+      routeActiveGroupKey: "entitlements",
+    }),
+    "processing",
+  );
+
+  assert.equal(
+    getCollapsedSidebarVisualActiveGroupKey({
+      isCollapsed: true,
+      openFlyoutGroupKey: "",
+      routeActiveGroupKey: "entitlements",
+    }),
+    "entitlements",
+  );
+
+  assert.equal(
+    getCollapsedSidebarVisualActiveGroupKey({
+      isCollapsed: false,
+      openFlyoutGroupKey: "processing",
+      routeActiveGroupKey: "entitlements",
+    }),
+    "entitlements",
+  );
 });
