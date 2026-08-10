@@ -5,6 +5,8 @@ import {
   buildMountingSchemePayload,
   buildMountingSchemesRouteUrl,
   collectDistinctGroupKeys,
+  createEmptyMountingSchemeDraft,
+  getMountingSchemeValidationMessage,
   normalizeMountingSchemesRoute,
   parseMountingSchemesRoute,
   syncPlacementRulesWithGroupKeys,
@@ -114,4 +116,69 @@ test("mounting-schemes route normalization defaults to list", () => {
     mode: "list",
     schemeId: "",
   });
+});
+
+test("mounting-schemes dev proxy forwards to the backend route", async () => {
+  const viteConfigModule = await import("../vite.config.js");
+  const config = viteConfigModule.default({ command: "serve" });
+
+  assert.equal(config.server.proxy["/mounting-schemes"], "http://127.0.0.1:8000");
+});
+
+test("mounting-schemes list helper uses the canonical endpoint and treats HTML as transport error", async () => {
+  const { listMountingSchemes } = await import("../src/api.js");
+  const originalFetch = global.fetch;
+  let seenUrl = "";
+
+  global.fetch = async (url) => {
+    seenUrl = String(url);
+    return {
+      ok: true,
+      status: 200,
+      text: async () => "<!doctype html><html><body>App shell</body></html>",
+    };
+  };
+
+  try {
+    const result = await listMountingSchemes("token");
+
+    assert.equal(seenUrl.endsWith("/mounting-schemes"), true);
+    assert.equal(result.success, false);
+    assert.equal(result.error, "Server returned an HTML error page (HTTP 200)");
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test("mounting-schemes list helper keeps an empty JSON response as an empty list", async () => {
+  const { listMountingSchemes } = await import("../src/api.js");
+  const originalFetch = global.fetch;
+  let seenUrl = "";
+
+  global.fetch = async (url) => {
+    seenUrl = String(url);
+    return {
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ success: true, schemes: [], error: null }),
+    };
+  };
+
+  try {
+    const result = await listMountingSchemes("token");
+
+    assert.equal(seenUrl.endsWith("/mounting-schemes"), true);
+    assert.equal(result.success, true);
+    assert.deepEqual(result.schemes, []);
+    assert.equal(result.error, null);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test("mounting-schemes validation stays hidden until submit and localizes the first error", () => {
+  const draft = createEmptyMountingSchemeDraft();
+
+  assert.equal(getMountingSchemeValidationMessage(draft, { language: "uk", visible: false }), "");
+  assert.equal(getMountingSchemeValidationMessage(draft, { language: "uk", visible: true }), "Вкажіть назву схеми.");
 });

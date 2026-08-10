@@ -254,6 +254,61 @@ export function validateMountingSchemeDraft(draft = {}) {
   return errors;
 }
 
+const MOUNTING_SCHEMES_VALIDATION_MESSAGES_UK = {
+  "Name is required": "Вкажіть назву схеми.",
+  "Add at least one mounting node": "Додайте хоча б один монтажний вузол.",
+  "node is required": "виберіть монтажний вузол",
+  "group key is required": "вкажіть ключ групи",
+  "quantity per group must be greater than 0": "кількість у групі має бути більшою за 0",
+  "group key must match one of the selected nodes": "ключ групи має збігатися з одним із вибраних вузлів",
+  "distribution mode is invalid": "вкажіть допустимий режим розподілу",
+  "minimum group count must be greater than 0": "мінімальна кількість груп має бути більшою за 0",
+  "maximum group count must be greater than or equal to minimum": "максимальна кількість груп має бути більшою або дорівнювати мінімальній",
+  "fixed group count must be greater than 0": "фіксована кількість груп має бути більшою за 0",
+  "start offset cannot be negative": "початкове зміщення не може бути від'ємним",
+  "end offset cannot be negative": "кінцеве зміщення не може бути від'ємним",
+  "maximum spacing must be greater than 0": "максимальний інтервал має бути більшим за 0",
+  "fixed spacing must be greater than 0": "фіксований інтервал має бути більшим за 0",
+  "fixed group count must match minimum group count": "фіксована кількість груп має збігатися з мінімальною кількістю груп",
+  "fixed group count must match maximum group count": "фіксована кількість груп має збігатися з максимальною кількістю груп",
+};
+
+export function localizeMountingSchemeValidationMessage(message = "", language = "uk") {
+  const normalizedMessage = normalizeText(message);
+
+  if (!normalizedMessage || language !== "uk") {
+    return normalizedMessage;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(MOUNTING_SCHEMES_VALIDATION_MESSAGES_UK, normalizedMessage)) {
+    return MOUNTING_SCHEMES_VALIDATION_MESSAGES_UK[normalizedMessage];
+  }
+
+  const prefixMatch = normalizedMessage.match(/^(Node|Placement rule) (\d+): (.+)$/);
+  if (!prefixMatch) {
+    return normalizedMessage;
+  }
+
+  const [, label, index, detail] = prefixMatch;
+  const translatedDetail = MOUNTING_SCHEMES_VALIDATION_MESSAGES_UK[detail] || detail;
+
+  if (label === "Node") {
+    return `Вузол ${index}: ${translatedDetail}`;
+  }
+
+  return `Правило розміщення ${index}: ${translatedDetail}`;
+}
+
+export function getMountingSchemeValidationMessage(draft = {}, { language = "uk", visible = false } = {}) {
+  if (!visible) {
+    return "";
+  }
+
+  const errors = validateMountingSchemeDraft(draft);
+  const firstError = errors[0] || "";
+  return localizeMountingSchemeValidationMessage(firstError, language);
+}
+
 function normalizeDraftRuleValue(value) {
   return value === "" || value === null || value === undefined ? null : value;
 }

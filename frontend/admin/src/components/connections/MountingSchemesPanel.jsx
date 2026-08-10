@@ -24,6 +24,7 @@ import {
   buildMountingSchemesRouteUrl,
   collectDistinctGroupKeys,
   createEmptyMountingSchemeDraft,
+  getMountingSchemeValidationMessage,
   normalizeMountingSchemesRoute,
   parseMountingSchemesRoute,
   syncPlacementRulesWithGroupKeys,
@@ -253,6 +254,7 @@ export default function MountingSchemesPanel({ language = "uk", token = "" }) {
   const [draft, setDraft] = useState(createEmptyMountingSchemeDraft());
   const [saveError, setSaveError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [submitAttempted, setSubmitAttempted] = useState(false);
   const [availableNodes, setAvailableNodes] = useState([]);
   const [availableNodesLoading, setAvailableNodesLoading] = useState(false);
   const [availableNodesError, setAvailableNodesError] = useState("");
@@ -374,6 +376,7 @@ export default function MountingSchemesPanel({ language = "uk", token = "" }) {
     if (route.mode === "create") {
       setDraft(createEmptyMountingSchemeDraft());
       setCurrentScheme(null);
+      setSubmitAttempted(false);
       void loadAvailableNodes();
       return;
     }
@@ -388,12 +391,14 @@ export default function MountingSchemesPanel({ language = "uk", token = "" }) {
     if (route.mode === "create") {
       setDraft(createEmptyMountingSchemeDraft());
       setSaveError("");
+      setSubmitAttempted(false);
       return;
     }
 
     if (route.mode === "edit" && currentScheme) {
       setDraft(buildMountingSchemeDraftFromScheme(currentScheme));
       setSaveError("");
+      setSubmitAttempted(false);
     }
   }, [currentScheme, route.mode]);
 
@@ -410,7 +415,13 @@ export default function MountingSchemesPanel({ language = "uk", token = "" }) {
 
   const draftNodes = Array.isArray(draft.nodes) ? draft.nodes.slice().sort(sortByOrderIndex) : [];
   const draftRules = Array.isArray(draft.placement_rules) ? draft.placement_rules : [];
-  const draftErrors = validateMountingSchemeDraft({ ...draft, nodes: draftNodes, placement_rules: draftRules });
+  const draftValidationMessage = getMountingSchemeValidationMessage(
+    { ...draft, nodes: draftNodes, placement_rules: draftRules },
+    {
+      language,
+      visible: submitAttempted,
+    },
+  );
   const canSave = route.mode === "create" || route.mode === "edit";
 
   const detailScheme = route.mode === "detail" ? currentScheme : route.mode === "edit" ? currentScheme : null;
@@ -474,9 +485,10 @@ export default function MountingSchemesPanel({ language = "uk", token = "" }) {
 
   async function handleSave(event) {
     event.preventDefault();
+    setSubmitAttempted(true);
     const nextErrors = validateMountingSchemeDraft({ ...draft, nodes: draftNodes, placement_rules: draftRules });
     if (nextErrors.length) {
-      setSaveError(nextErrors[0]);
+      setSaveError("");
       return;
     }
 
@@ -503,6 +515,7 @@ export default function MountingSchemesPanel({ language = "uk", token = "" }) {
 
     setCurrentScheme(result.scheme);
     setDraft(buildMountingSchemeDraftFromScheme(result.scheme));
+    setSubmitAttempted(false);
     navigate({ mode: "detail", schemeId: result.scheme.id }, { replace: true });
     void loadSchemes(false);
   }
@@ -510,6 +523,7 @@ export default function MountingSchemesPanel({ language = "uk", token = "" }) {
   function handleStartCreate() {
     setCurrentScheme(null);
     setSaveError("");
+    setSubmitAttempted(false);
     setSelectorSearch("");
     setDraft(createEmptyMountingSchemeDraft());
     navigate({ mode: "create", schemeId: "" });
@@ -517,6 +531,7 @@ export default function MountingSchemesPanel({ language = "uk", token = "" }) {
 
   function handleOpenDetail(schemeId) {
     setSaveError("");
+    setSubmitAttempted(false);
     navigate({ mode: "detail", schemeId });
   }
 
@@ -527,12 +542,14 @@ export default function MountingSchemesPanel({ language = "uk", token = "" }) {
 
     setDraft(buildMountingSchemeDraftFromScheme(detailScheme));
     setSaveError("");
+    setSubmitAttempted(false);
     navigate({ mode: "edit", schemeId: detailScheme.id });
   }
 
   function handleBackToList() {
     setCurrentScheme(null);
     setSaveError("");
+    setSubmitAttempted(false);
     navigate({ mode: "list", schemeId: "" });
   }
 
@@ -839,7 +856,7 @@ export default function MountingSchemesPanel({ language = "uk", token = "" }) {
           </div>
 
           {saveError ? <div className="mounting-schemes-alert error">{saveError}</div> : null}
-          {draftErrors.length ? <div className="mounting-schemes-alert subtle">{draftErrors[0]}</div> : null}
+          {draftValidationMessage ? <div className="mounting-schemes-alert subtle">{draftValidationMessage}</div> : null}
 
           <section className="mounting-schemes-form-section">
             <h4>{language === "uk" ? "Основне" : "Basic info"}</h4>
