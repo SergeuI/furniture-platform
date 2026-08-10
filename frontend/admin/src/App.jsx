@@ -18336,16 +18336,9 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
           role="presentation"
         />
       ) : null}
+      <div className="sidebar-shell">
       <aside className={`sidebar${isSidebarOpen ? " open" : ""}${isDesktopSidebarCollapsed ? " collapsed" : ""}`}>
         <div className="sidebar-top">
-          <button
-            aria-label={isDesktopSidebarCollapsed ? (language === "uk" ? "Розгорнути меню" : "Expand menu") : (language === "uk" ? "Згорнути меню" : "Collapse menu")}
-            className="sidebar-collapse-button"
-            onClick={() => setIsSidebarCollapsed((current) => !current)}
-            type="button"
-          >
-            {isDesktopSidebarCollapsed ? <ChevronRight className="sidebar-control-icon" size={18} /> : <ChevronLeft className="sidebar-control-icon" size={18} />}
-          </button>
           <button
             aria-label="Close menu"
             className="sidebar-close-button"
@@ -18776,6 +18769,15 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
           </button>
         </div>
       </aside>
+      <button
+        aria-label={isDesktopSidebarCollapsed ? (language === "uk" ? "Розгорнути меню" : "Expand menu") : (language === "uk" ? "Згорнути меню" : "Collapse menu")}
+        className="sidebar-collapse-handle"
+        onClick={() => setIsSidebarCollapsed((current) => !current)}
+        type="button"
+      >
+        {isDesktopSidebarCollapsed ? <ChevronRight className="sidebar-control-icon" size={18} /> : <ChevronLeft className="sidebar-control-icon" size={18} />}
+      </button>
+      </div>
       {isDesktopSidebarCollapsed && sidebarFlyout && typeof document !== "undefined"
         ? createPortal(
             <>
