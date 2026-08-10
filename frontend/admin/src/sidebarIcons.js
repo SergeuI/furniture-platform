@@ -13,7 +13,7 @@ export const SIDEBAR_NAV_ICON_ASSETS = {
   entitlements: iconUrl("tariffs_rights.png"),
   processing: iconUrl("processing_operations.png"),
   connections: iconUrl("fastening_schemes.png"),
-  catalog: iconUrl("hardware_catalog.png"),
+  catalog: iconUrl("values_guide.png"),
   settings: iconUrl("settings.png"),
 };
 

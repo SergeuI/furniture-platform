@@ -10,7 +10,7 @@ import {
 test("sidebar icon assets map to the prepared PNG set", () => {
   assert.match(getSidebarNavIconAsset("home"), /home\.png$/);
   assert.match(getSidebarNavIconAsset("processing"), /processing_operations\.png$/);
-  assert.match(getSidebarNavIconAsset("catalog"), /hardware_catalog\.png$/);
+  assert.match(getSidebarNavIconAsset("catalog"), /values_guide\.png$/);
   assert.match(getSidebarControlIconAsset("expand"), /sidebar_expand\.png$/);
   assert.match(getSidebarControlIconAsset("collapse"), /sidebar_collapse\.png$/);
   assert.match(getSidebarControlIconAsset("next"), /next_arrow\.png$/);

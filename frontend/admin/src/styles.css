@@ -285,15 +285,15 @@ tbody tr.selected {
   display: inline-flex;
   flex: 0 0 auto;
   justify-content: center;
-  width: 22px;
+  width: 20px;
 }
 
 .sidebar-flyout-icon {
   display: block;
-  height: 20px;
+  height: 18px;
   object-fit: contain;
   object-position: center;
-  width: 20px;
+  width: 18px;
 }
 
 .sidebar-flyout-items button:hover,
@@ -718,15 +718,15 @@ tbody tr.selected {
   display: inline-flex;
   flex: 0 0 auto;
   justify-content: center;
-  width: 26px;
+  width: 24px;
 }
 
 .sidebar-nav-icon {
   display: block;
-  height: 26px;
+  height: 24px;
   object-fit: contain;
   object-position: center;
-  width: 26px;
+  width: 24px;
 }
 
 .nav-group.active .nav-group-title {
@@ -801,6 +801,28 @@ tbody tr.selected {
 .sidebar.collapsed .nav-group-link.active,
 .sidebar.collapsed .nav-group-link:hover {
   border-radius: 12px;
+}
+
+.nav-group-link.flyout-open:not(.active),
+.nav-group-header.flyout-open .nav-group-link:not(.active),
+.nav-group-toggle.flyout-open:not(.active) {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.nav-group-link.flyout-open:not(.active):hover,
+.nav-group-header.flyout-open .nav-group-link:not(.active):hover,
+.nav-group-toggle.flyout-open:not(.active):hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.sidebar.collapsed .nav-group-link.flyout-open:not(.active),
+.sidebar.collapsed .nav-group-toggle.flyout-open:not(.active) {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.sidebar.collapsed .nav-group-link.flyout-open:not(.active):hover,
+.sidebar.collapsed .nav-group-toggle.flyout-open:not(.active):hover {
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .sidebar.collapsed .nav-group-header {

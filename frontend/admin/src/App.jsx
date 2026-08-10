@@ -80,7 +80,6 @@ import {
 } from "./materialEntitlements.js";
 import {
   SidebarAssetIcon,
-  getSidebarControlIconAsset,
   getSidebarFlyoutIconAsset,
   getSidebarNavIconAsset,
 } from "./sidebarIcons.js";
@@ -9449,17 +9448,23 @@ export default function App() {
   );
   const activeProcessingNavigationKey = useMemo(
     () =>
-      resolveActiveProcessingNavigationKey({
-        activeView,
-        activeProcessingTab,
-        canUseFittingHoles: canViewFittingHoles,
-        isAdmin: user?.role === "admin",
-      }),
+      activeView === "processing"
+        ? resolveActiveProcessingNavigationKey({
+            activeView,
+            activeProcessingTab,
+            canUseFittingHoles: canViewFittingHoles,
+            isAdmin: user?.role === "admin",
+          })
+        : null,
     [activeProcessingTab, activeView, canViewFittingHoles, user?.role],
   );
   const processingWorkspaceTab = activeProcessingNavigationKey || "overview";
   const isProcessingSectionView = activeProcessingNavigationKey !== null;
   const isCatalogView = shouldAutoOpenCatalogMenu(activeView);
+  const sidebarFlyoutGroupKey = sidebarFlyout?.groupKey || "";
+  const isProcessingFlyoutOpen = sidebarFlyoutGroupKey === "processing";
+  const isConnectionsFlyoutOpen = sidebarFlyoutGroupKey === "connections";
+  const isCatalogFlyoutOpen = sidebarFlyoutGroupKey === "catalog";
 
   const openSidebarFlyout = (groupKey, event) => {
     if (!isDesktopSidebarCollapsed) {
@@ -18291,11 +18296,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
             onClick={() => setIsSidebarCollapsed((current) => !current)}
             type="button"
           >
-            {renderSidebarIcon(
-              getSidebarControlIconAsset(isDesktopSidebarCollapsed ? "expand" : "collapse"),
-              isDesktopSidebarCollapsed ? ChevronRight : ChevronLeft,
-              "sidebar-control-icon",
-            )}
+            {isDesktopSidebarCollapsed ? <ChevronRight className="sidebar-control-icon" size={18} /> : <ChevronLeft className="sidebar-control-icon" size={18} />}
           </button>
           <button
             aria-label="Close menu"
@@ -18475,9 +18476,9 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
             ) : null}
             {canAccessProcessingWorkspace ? (
               <div className={`nav-group${isProcessingSectionView ? " active" : ""}`}>
-                <div className={`nav-group-header${isProcessingSectionView ? " active" : ""}`}>
+                <div className={`nav-group-header${isProcessingSectionView ? " active" : isProcessingFlyoutOpen ? " flyout-open" : ""}`}>
                 <button
-                  className={`nav-group-link${isProcessingSectionView ? " active" : ""}`}
+                  className={`nav-group-link${isProcessingSectionView ? " active" : isProcessingFlyoutOpen ? " flyout-open" : ""}`}
                   onClick={(event) => {
                     if (isDesktopSidebarCollapsed) {
                       openSidebarFlyout("processing", event);
@@ -18499,15 +18500,14 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   </button>
                   <button
                     aria-expanded={isProcessingMenuOpen}
-                    className={`nav-group-toggle${isProcessingSectionView ? " active" : ""}`}
+                    className={`nav-group-toggle${isProcessingSectionView ? " active" : isProcessingFlyoutOpen ? " flyout-open" : ""}`}
                     onClick={() => setIsProcessingMenuOpen((current) => !current)}
                     type="button"
                   >
-                    {renderSidebarIcon(
-                      getSidebarControlIconAsset("next"),
-                      ChevronRight,
-                      `nav-group-icon sidebar-group-toggle-icon${isProcessingMenuOpen ? " expanded" : ""}`,
-                    )}
+                    <ChevronRight
+                      className={`nav-group-icon sidebar-group-toggle-icon${isProcessingMenuOpen ? " expanded" : ""}`}
+                      size={18}
+                    />
                   </button>
                 </div>
                 {isProcessingMenuOpen ? (
@@ -18537,9 +18537,9 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
               </div>
             ) : null}
             <div className={`nav-group${isConnectionsNavigationView ? " active" : ""}`}>
-              <div className={`nav-group-header${isConnectionsNavigationView ? " active" : ""}`}>
+              <div className={`nav-group-header${isConnectionsNavigationView ? " active" : isConnectionsFlyoutOpen ? " flyout-open" : ""}`}>
                 <button
-                  className={`nav-group-link${isConnectionsNavigationView ? " active" : ""}`}
+                  className={`nav-group-link${isConnectionsNavigationView ? " active" : isConnectionsFlyoutOpen ? " flyout-open" : ""}`}
                   onClick={(event) => {
                     if (isDesktopSidebarCollapsed) {
                       openSidebarFlyout("connections", event);
@@ -18559,15 +18559,14 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                 </button>
                 <button
                   aria-expanded={isConnectionsMenuOpen}
-                  className={`nav-group-toggle${isConnectionsNavigationView ? " active" : ""}`}
+                  className={`nav-group-toggle${isConnectionsNavigationView ? " active" : isConnectionsFlyoutOpen ? " flyout-open" : ""}`}
                   onClick={() => setIsConnectionsMenuOpen((current) => !current)}
                   type="button"
                 >
-                  {renderSidebarIcon(
-                    getSidebarControlIconAsset("next"),
-                    ChevronRight,
-                    `nav-group-icon sidebar-group-toggle-icon${isConnectionsMenuOpen ? " expanded" : ""}`,
-                  )}
+                  <ChevronRight
+                    className={`nav-group-icon sidebar-group-toggle-icon${isConnectionsMenuOpen ? " expanded" : ""}`}
+                    size={18}
+                  />
                 </button>
               </div>
               {isConnectionsMenuOpen ? (
@@ -18588,10 +18587,10 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                 </div>
               ) : null}
             </div>
-            <div className={`nav-group${isCatalogView ? " active" : ""}`}>
-              <div className={`nav-group-header${isCatalogView ? " active" : ""}`}>
+              <div className={`nav-group${isCatalogView ? " active" : ""}`}>
+                <div className={`nav-group-header${isCatalogView ? " active" : isCatalogFlyoutOpen ? " flyout-open" : ""}`}>
                 <button
-                  className={`nav-group-link${isCatalogHubView || isCatalogMaterialsView || isCatalogFittingsView || isCatalogFastenersView || isCatalogHolesView || isCatalogBundlesView || isCatalogServiceRulesView || isCatalogDrillingRulesView ? " active" : ""}`}
+                  className={`nav-group-link${isCatalogHubView || isCatalogMaterialsView || isCatalogFittingsView || isCatalogFastenersView || isCatalogBundlesView || isCatalogServiceRulesView || isCatalogDrillingRulesView ? " active" : isCatalogFlyoutOpen ? " flyout-open" : ""}`}
                   onClick={(event) => {
                     if (isDesktopSidebarCollapsed) {
                       openSidebarFlyout("catalog", event);
@@ -18609,15 +18608,14 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                 </button>
                 <button
                   aria-expanded={isCatalogMenuOpen}
-                  className={`nav-group-toggle${isCatalogView ? " active" : ""}`}
+                  className={`nav-group-toggle${isCatalogHubView || isCatalogMaterialsView || isCatalogFittingsView || isCatalogFastenersView || isCatalogBundlesView || isCatalogServiceRulesView || isCatalogDrillingRulesView ? " active" : isCatalogFlyoutOpen ? " flyout-open" : ""}`}
                   onClick={() => setIsCatalogMenuOpen((current) => !current)}
                   type="button"
                 >
-                  {renderSidebarIcon(
-                    getSidebarControlIconAsset("next"),
-                    ChevronRight,
-                    `nav-group-icon sidebar-group-toggle-icon${isCatalogMenuOpen ? " expanded" : ""}`,
-                  )}
+                  <ChevronRight
+                    className={`nav-group-icon sidebar-group-toggle-icon${isCatalogMenuOpen ? " expanded" : ""}`}
+                    size={18}
+                  />
                 </button>
               </div>
               {isCatalogMenuOpen ? (
