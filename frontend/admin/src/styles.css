@@ -348,8 +348,6 @@ tbody tr.selected {
   gap: 8px;
 }
 
-.sidebar.collapsed .sidebar-brand-block,
-.sidebar.collapsed .user-block,
 .sidebar.collapsed .trial-status,
 .sidebar.collapsed .nav-item-label,
 .sidebar.collapsed .nav-group-title,
@@ -361,8 +359,8 @@ tbody tr.selected {
 
 .sidebar.collapsed .sidebar-top {
   align-items: center;
-  gap: 0;
-  padding-bottom: 0;
+  gap: 8px;
+  padding-bottom: 4px;
 }
 
 .sidebar.collapsed .sidebar-collapse-button {
@@ -370,8 +368,72 @@ tbody tr.selected {
   margin: 0 auto;
 }
 
+.sidebar.collapsed .sidebar-brand-block {
+  gap: 6px;
+  justify-items: center;
+  padding-top: 2px;
+}
+
+.sidebar.collapsed .sidebar-brand-link {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.sidebar.collapsed .sidebar-brand-logo {
+  max-height: 42px;
+  max-width: 42px;
+  width: 42px;
+}
+
+.sidebar.collapsed .brand-copy {
+  width: 100%;
+}
+
+.sidebar.collapsed .brand-copy-header {
+  justify-content: center;
+}
+
+.sidebar.collapsed .brand-copy h1 {
+  display: none;
+}
+
+.sidebar.collapsed .user-block {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(185, 244, 194, 0.14);
+  border-radius: 14px;
+  display: grid;
+  gap: 0;
+  justify-items: center;
+  margin-top: 4px;
+  padding: 8px 8px 9px;
+  text-align: center;
+  width: 100%;
+}
+
+.sidebar.collapsed .user-block span,
+.sidebar.collapsed .user-block small {
+  display: none;
+}
+
+.sidebar.collapsed .user-block strong {
+  background: linear-gradient(180deg, rgba(27, 92, 44, 0.98), rgba(20, 71, 36, 0.96));
+  border: 1px solid rgba(95, 235, 123, 0.75);
+  border-radius: 999px;
+  box-shadow:
+    0 0 0 1px rgba(64, 184, 88, 0.18),
+    0 0 12px rgba(57, 211, 83, 0.16);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  min-height: 26px;
+  padding: 0 10px;
+}
+
 .sidebar.collapsed .sidebar-scroll {
-  padding-top: 0;
+  padding-top: 4px;
 }
 
 .auth-brand {
@@ -625,15 +687,26 @@ tbody tr.selected {
 
 .nav-tabs button {
   background: transparent;
+  border: 1px solid transparent;
+  border-radius: 10px;
   color: #d8e5e8;
   gap: 10px;
   justify-content: flex-start;
   padding: 0 12px;
 }
 
-.nav-tabs button.active,
 .nav-tabs button:hover {
-  background: rgba(57, 211, 83, 0.16);
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+}
+
+.nav-tabs button.active,
+.nav-tabs button.active:hover {
+  background: linear-gradient(180deg, rgba(27, 92, 44, 0.98), rgba(20, 71, 36, 0.96));
+  border: 1px solid rgba(95, 235, 123, 0.75);
+  box-shadow:
+    0 0 0 1px rgba(64, 184, 88, 0.18),
+    0 0 12px rgba(57, 211, 83, 0.16);
   color: #ffffff;
 }
 
@@ -664,12 +737,6 @@ tbody tr.selected {
   text-align: left;
 }
 
-.nav-group-link:hover,
-.nav-group-link.active,
-.nav-group-header.active .nav-group-link {
-  background: rgba(57, 211, 83, 0.1);
-}
-
 .nav-group-trigger {
   align-items: center;
   background: transparent;
@@ -691,15 +758,30 @@ tbody tr.selected {
   width: 32px;
 }
 
-.nav-group-toggle:hover,
-.nav-group-toggle.active {
-  background: rgba(57, 211, 83, 0.1);
+.nav-group-link:hover,
+.nav-group-trigger:hover,
+.nav-group-toggle:hover {
+  background: rgba(255, 255, 255, 0.06);
 }
 
-.nav-group-trigger:hover,
-.nav-group-trigger.active {
-  background: rgba(57, 211, 83, 0.1);
-  border-radius: 8px;
+.nav-group-link.active,
+.nav-group-link.active:hover,
+.nav-group-header.active .nav-group-link,
+.nav-group-header.active .nav-group-link:hover,
+.nav-group-toggle.active,
+.nav-group-toggle.active:hover,
+.nav-group.is-route-active .nav-group-link,
+.nav-group.is-route-active .nav-group-link:hover,
+.nav-group-header.is-route-active .nav-group-link,
+.nav-group-header.is-route-active .nav-group-link:hover,
+.nav-group-toggle.is-route-active,
+.nav-group-toggle.is-route-active:hover {
+  background: linear-gradient(180deg, rgba(27, 92, 44, 0.98), rgba(20, 71, 36, 0.96));
+  border: 1px solid rgba(95, 235, 123, 0.75);
+  box-shadow:
+    0 0 0 1px rgba(64, 184, 88, 0.18),
+    0 0 12px rgba(57, 211, 83, 0.16);
+  color: #ffffff;
 }
 
 .nav-group-title {

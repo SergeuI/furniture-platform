@@ -9414,11 +9414,15 @@ export default function App() {
   const isConnectionsNavigationView = shouldAutoOpenConnectionsMenu(activeView) || isConnectionsWorkspaceView;
   const isProcessingView = activeView === "processing";
   const activeCity = (user?.city || "").trim();
+  const sidebarIdentityTitle = [userLoginName, userTierLabel, activeCity ? formatCatalogLabel(activeCity, t) : ""]
+    .filter(Boolean)
+    .join(" · ");
   const canAccessProcessingWorkspace = user?.role === "admin" || canViewFittingHoles;
   const isDesktopSidebarCollapsed = shouldUseCollapsedSidebar({
     isCompactSidebarMode,
     isSidebarCollapsed,
   });
+  const sidebarRoleMarker = isDesktopSidebarCollapsed ? "ADM" : userTierLabel;
 
   useEffect(() => {
     if (!isDesktopSidebarCollapsed) {
@@ -18392,9 +18396,9 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
         </div>
 
         <div className="sidebar-scroll">
-          <div className="user-block">
+          <div className="user-block" title={sidebarIdentityTitle}>
             <span>{userLoginName}</span>
-            <strong>{userTierLabel}</strong>
+            <strong>{sidebarRoleMarker}</strong>
             <small>
               {t.currentCity}: {formatCatalogLabel(user.city, t)}
             </small>
