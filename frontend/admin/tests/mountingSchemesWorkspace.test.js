@@ -7,6 +7,7 @@ import {
   collectDistinctGroupKeys,
   createEmptyMountingSchemeDraft,
   getMountingSchemeValidationMessage,
+  getMountingSchemesWorkspaceChrome,
   normalizeMountingSchemesRoute,
   parseMountingSchemesRoute,
   syncPlacementRulesWithGroupKeys,
@@ -104,7 +105,10 @@ test("mounting-schemes helper keeps placement rules aligned with node groups", (
     ["primary", "joint"],
   );
 
-  assert.deepEqual(collectDistinctGroupKeys([{ group_key: "joint" }, { group_key: "primary" }, { group_key: "primary" }]), ["joint", "primary"]);
+  assert.deepEqual(
+    collectDistinctGroupKeys([{ group_key: "joint" }, { group_key: "primary" }, { group_key: "primary" }]),
+    ["joint", "primary"],
+  );
   assert.deepEqual(
     synced.map((rule) => rule.group_key),
     ["primary", "joint"],
@@ -181,4 +185,33 @@ test("mounting-schemes validation stays hidden until submit and localizes the fi
 
   assert.equal(getMountingSchemeValidationMessage(draft, { language: "uk", visible: false }), "");
   assert.equal(getMountingSchemeValidationMessage(draft, { language: "uk", visible: true }), "Вкажіть назву схеми.");
+});
+
+test("mounting-schemes workspace chrome keeps only the expected actions per mode", () => {
+  assert.deepEqual(getMountingSchemesWorkspaceChrome("list"), {
+    showHero: false,
+    listCreateActionCount: 1,
+    emptyStateCreateActionCount: 0,
+    backActionCount: 0,
+    saveActionCount: 0,
+    editActionCount: 0,
+  });
+
+  assert.deepEqual(getMountingSchemesWorkspaceChrome("create"), {
+    showHero: false,
+    listCreateActionCount: 0,
+    emptyStateCreateActionCount: 0,
+    backActionCount: 1,
+    saveActionCount: 1,
+    editActionCount: 0,
+  });
+
+  assert.deepEqual(getMountingSchemesWorkspaceChrome("detail"), {
+    showHero: false,
+    listCreateActionCount: 0,
+    emptyStateCreateActionCount: 0,
+    backActionCount: 1,
+    saveActionCount: 0,
+    editActionCount: 1,
+  });
 });

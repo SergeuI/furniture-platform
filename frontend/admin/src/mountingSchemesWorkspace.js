@@ -309,6 +309,19 @@ export function getMountingSchemeValidationMessage(draft = {}, { language = "uk"
   return localizeMountingSchemeValidationMessage(firstError, language);
 }
 
+export function getMountingSchemesWorkspaceChrome(mode = "list") {
+  const normalizedMode = MOUNTING_SCHEMES_ROUTE_MODES.includes(normalizeText(mode)) ? normalizeText(mode) : "list";
+
+  return {
+    showHero: false,
+    listCreateActionCount: normalizedMode === "list" ? 1 : 0,
+    emptyStateCreateActionCount: 0,
+    backActionCount: normalizedMode === "list" ? 0 : 1,
+    saveActionCount: normalizedMode === "create" || normalizedMode === "edit" ? 1 : 0,
+    editActionCount: normalizedMode === "detail" ? 1 : 0,
+  };
+}
+
 function normalizeDraftRuleValue(value) {
   return value === "" || value === null || value === undefined ? null : value;
 }

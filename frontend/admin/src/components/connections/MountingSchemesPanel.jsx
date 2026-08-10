@@ -1,4 +1,4 @@
-import { ArrowLeft, Box, LayoutGrid, Pencil, Plus, RefreshCw, Save, Search, Trash2, X } from "lucide-react";
+import { ArrowLeft, Pencil, Plus, Save, Search, Trash2, X } from "lucide-react";
 import { createPortal } from "react-dom";
 import { useEffect, useMemo, useState } from "react";
 
@@ -25,6 +25,7 @@ import {
   collectDistinctGroupKeys,
   createEmptyMountingSchemeDraft,
   getMountingSchemeValidationMessage,
+  getMountingSchemesWorkspaceChrome,
   normalizeMountingSchemesRoute,
   parseMountingSchemesRoute,
   syncPlacementRulesWithGroupKeys,
@@ -222,27 +223,6 @@ function NodeSelectorModal({
   );
 }
 
-function SchemeModeBadge({ language, mode }) {
-  const label =
-    mode === "create"
-      ? language === "uk"
-        ? "Створення"
-        : "Create"
-      : mode === "edit"
-        ? language === "uk"
-          ? "Редагування"
-          : "Edit"
-        : mode === "detail"
-          ? language === "uk"
-            ? "Деталі"
-            : "Detail"
-          : language === "uk"
-            ? "Список"
-            : "List";
-
-  return <span className="service-tree-badge subtle">{label}</span>;
-}
-
 export default function MountingSchemesPanel({ language = "uk", token = "" }) {
   const [route, setRoute] = useState(() => normalizeMountingSchemesRoute(parseMountingSchemesRoute(window.location.search) || {}));
   const [schemes, setSchemes] = useState([]);
@@ -422,6 +402,7 @@ export default function MountingSchemesPanel({ language = "uk", token = "" }) {
       visible: submitAttempted,
     },
   );
+  const workspaceChrome = getMountingSchemesWorkspaceChrome(route.mode);
   const canSave = route.mode === "create" || route.mode === "edit";
 
   const detailScheme = route.mode === "detail" ? currentScheme : route.mode === "edit" ? currentScheme : null;
@@ -628,52 +609,8 @@ export default function MountingSchemesPanel({ language = "uk", token = "" }) {
     }));
   }
 
-  function renderToolbarActions() {
-    if (route.mode === "list") {
-      return (
-        <button className="primary-button" onClick={handleStartCreate} type="button">
-          <Plus size={16} />
-          {language === "uk" ? "Створити схему кріплення" : "Create mounting scheme"}
-        </button>
-      );
-    }
-
-    return (
-      <>
-        <button className="ghost-button mounting-node-return-button" onClick={handleBackToList} type="button">
-          <ArrowLeft size={16} />
-          {language === "uk" ? "Повернутися до списку" : "Back to list"}
-        </button>
-        {route.mode === "detail" && detailScheme ? (
-          <button className="primary-button" onClick={handleStartEdit} type="button">
-            <Pencil size={16} />
-            {language === "uk" ? "Редагувати схему" : "Edit scheme"}
-          </button>
-        ) : null}
-      </>
-    );
-  }
-
   return (
     <section className="dashboard-layout mounting-schemes-workspace">
-      <article className="dashboard-hero-card mounting-schemes-hero">
-        <div className="dashboard-hero-copy">
-          <span className="dashboard-eyebrow">
-            {language === "uk" ? "Кріплення та з’єднання" : "Connections"}
-          </span>
-          <h3>{language === "uk" ? "Схеми кріплення" : "Mounting schemes"}</h3>
-          <p>
-            {language === "uk"
-              ? "Створюйте схеми з монтажних вузлів, групуйте їх за групами розстановки та задавайте правила розміщення."
-              : "Create schemes from mounting nodes, group them, and define their placement rules."}
-          </p>
-        </div>
-        <div className="dashboard-hero-actions mounting-schemes-hero-actions">
-          <SchemeModeBadge language={language} mode={route.mode} />
-          {renderToolbarActions()}
-        </div>
-      </article>
-
       {route.mode === "list" ? (
         <article className="table-panel full-panel mounting-schemes-table-panel">
           <div className="dashboard-panel-head mounting-schemes-panel-head">
@@ -685,10 +622,12 @@ export default function MountingSchemesPanel({ language = "uk", token = "" }) {
                   : "Create schemes from mounting nodes and define their placement rules."}
               </p>
             </div>
-            <button className="primary-button" onClick={handleStartCreate} type="button">
-              <Plus size={16} />
-              {language === "uk" ? "Створити схему кріплення" : "Create mounting scheme"}
-            </button>
+            {workspaceChrome.listCreateActionCount ? (
+              <button className="primary-button" onClick={handleStartCreate} type="button">
+                <Plus size={16} />
+                {language === "uk" ? "Створити схему кріплення" : "Create mounting scheme"}
+              </button>
+            ) : null}
           </div>
 
           {schemesError ? <div className="mounting-schemes-alert error">{schemesError}</div> : null}
@@ -702,10 +641,6 @@ export default function MountingSchemesPanel({ language = "uk", token = "" }) {
                   ? "Створіть першу схему кріплення, щоб пов’язати монтажні вузли та правила їх розстановки."
                   : "Create the first mounting scheme to connect nodes and placement rules."}
               </p>
-              <button className="primary-button" onClick={handleStartCreate} type="button">
-                <Plus size={16} />
-                {language === "uk" ? "Створити схему кріплення" : "Create mounting scheme"}
-              </button>
             </div>
           ) : null}
 
@@ -744,14 +679,18 @@ export default function MountingSchemesPanel({ language = "uk", token = "" }) {
               <p>{detailScheme?.description || (language === "uk" ? "Перегляд схеми без редагування." : "Read-only scheme view.")}</p>
             </div>
             <div className="mounting-schemes-panel-head-actions">
-              <button className="ghost-button mounting-node-return-button" onClick={handleBackToList} type="button">
-                <ArrowLeft size={16} />
-                {language === "uk" ? "Повернутися до списку" : "Back to list"}
-              </button>
-              <button className="primary-button" onClick={handleStartEdit} type="button">
-                <Pencil size={16} />
-                {language === "uk" ? "Редагувати схему" : "Edit scheme"}
-              </button>
+              {workspaceChrome.backActionCount ? (
+                <button className="ghost-button mounting-node-return-button" onClick={handleBackToList} type="button">
+                  <ArrowLeft size={16} />
+                  {language === "uk" ? "Повернутися до списку" : "Back to list"}
+                </button>
+              ) : null}
+              {workspaceChrome.editActionCount ? (
+                <button className="primary-button" onClick={handleStartEdit} type="button">
+                  <Pencil size={16} />
+                  {language === "uk" ? "Редагувати схему" : "Edit scheme"}
+                </button>
+              ) : null}
             </div>
           </div>
 
@@ -844,14 +783,18 @@ export default function MountingSchemesPanel({ language = "uk", token = "" }) {
               </p>
             </div>
             <div className="mounting-schemes-panel-head-actions">
-              <button className="ghost-button mounting-node-return-button" onClick={handleBackToList} type="button">
-                <ArrowLeft size={16} />
-                {language === "uk" ? "Повернутися до списку" : "Back to list"}
-              </button>
-              <button className="primary-button" disabled={saving} type="submit">
-                <Save size={16} />
-                {saving ? (language === "uk" ? "Збереження..." : "Saving...") : language === "uk" ? "Зберегти" : "Save"}
-              </button>
+              {workspaceChrome.backActionCount ? (
+                <button className="ghost-button mounting-node-return-button" onClick={handleBackToList} type="button">
+                  <ArrowLeft size={16} />
+                  {language === "uk" ? "Повернутися до списку" : "Back to list"}
+                </button>
+              ) : null}
+              {workspaceChrome.saveActionCount ? (
+                <button className="primary-button" disabled={saving} type="submit">
+                  <Save size={16} />
+                  {saving ? (language === "uk" ? "Збереження..." : "Saving...") : language === "uk" ? "Зберегти" : "Save"}
+                </button>
+              ) : null}
             </div>
           </div>
 
