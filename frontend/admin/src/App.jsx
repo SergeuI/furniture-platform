@@ -54,6 +54,7 @@ import {
   PROCESSING_WORKSPACE_STORAGE_KEY,
   shouldAutoOpenCatalogMenu,
 } from "./processingWorkspace.js";
+import { getSidebarGroupVisualState } from "./sidebarGroupState.js";
 import {
   getConnectionsWorkspacePageLabel,
   getConnectionsWorkspaceSidebarTabs,
@@ -9465,6 +9466,18 @@ export default function App() {
   const isProcessingFlyoutOpen = sidebarFlyoutGroupKey === "processing";
   const isConnectionsFlyoutOpen = sidebarFlyoutGroupKey === "connections";
   const isCatalogFlyoutOpen = sidebarFlyoutGroupKey === "catalog";
+  const processingGroupState = getSidebarGroupVisualState({
+    flyoutOpen: isProcessingFlyoutOpen,
+    routeActive: isProcessingSectionView,
+  });
+  const connectionsGroupState = getSidebarGroupVisualState({
+    flyoutOpen: isConnectionsFlyoutOpen,
+    routeActive: isConnectionsNavigationView,
+  });
+  const catalogGroupState = getSidebarGroupVisualState({
+    flyoutOpen: isCatalogFlyoutOpen,
+    routeActive: isCatalogView,
+  });
 
   const openSidebarFlyout = (groupKey, event) => {
     if (!isDesktopSidebarCollapsed) {
@@ -18475,10 +18488,10 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
               </>
             ) : null}
             {canAccessProcessingWorkspace ? (
-              <div className={`nav-group${isProcessingSectionView ? " active" : ""}`}>
-                <div className={`nav-group-header${isProcessingSectionView ? " active" : isProcessingFlyoutOpen ? " flyout-open" : ""}`}>
+              <div className={`nav-group${processingGroupState.className ? ` ${processingGroupState.className}` : ""}`}>
+                <div className={`nav-group-header${processingGroupState.className ? ` ${processingGroupState.className}` : ""}`}>
                 <button
-                  className={`nav-group-link${isProcessingSectionView ? " active" : isProcessingFlyoutOpen ? " flyout-open" : ""}`}
+                  className={`nav-group-link${processingGroupState.className ? ` ${processingGroupState.className}` : ""}`}
                   onClick={(event) => {
                     if (isDesktopSidebarCollapsed) {
                       openSidebarFlyout("processing", event);
@@ -18500,7 +18513,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   </button>
                   <button
                     aria-expanded={isProcessingMenuOpen}
-                    className={`nav-group-toggle${isProcessingSectionView ? " active" : isProcessingFlyoutOpen ? " flyout-open" : ""}`}
+                    className={`nav-group-toggle${processingGroupState.className ? ` ${processingGroupState.className}` : ""}`}
                     onClick={() => setIsProcessingMenuOpen((current) => !current)}
                     type="button"
                   >
@@ -18536,10 +18549,10 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                 ) : null}
               </div>
             ) : null}
-            <div className={`nav-group${isConnectionsNavigationView ? " active" : ""}`}>
-              <div className={`nav-group-header${isConnectionsNavigationView ? " active" : isConnectionsFlyoutOpen ? " flyout-open" : ""}`}>
+            <div className={`nav-group${connectionsGroupState.className ? ` ${connectionsGroupState.className}` : ""}`}>
+              <div className={`nav-group-header${connectionsGroupState.className ? ` ${connectionsGroupState.className}` : ""}`}>
                 <button
-                  className={`nav-group-link${isConnectionsNavigationView ? " active" : isConnectionsFlyoutOpen ? " flyout-open" : ""}`}
+                  className={`nav-group-link${connectionsGroupState.className ? ` ${connectionsGroupState.className}` : ""}`}
                   onClick={(event) => {
                     if (isDesktopSidebarCollapsed) {
                       openSidebarFlyout("connections", event);
@@ -18559,7 +18572,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                 </button>
                 <button
                   aria-expanded={isConnectionsMenuOpen}
-                  className={`nav-group-toggle${isConnectionsNavigationView ? " active" : isConnectionsFlyoutOpen ? " flyout-open" : ""}`}
+                  className={`nav-group-toggle${connectionsGroupState.className ? ` ${connectionsGroupState.className}` : ""}`}
                   onClick={() => setIsConnectionsMenuOpen((current) => !current)}
                   type="button"
                 >
@@ -18587,10 +18600,10 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                 </div>
               ) : null}
             </div>
-              <div className={`nav-group${isCatalogView ? " active" : ""}`}>
-                <div className={`nav-group-header${isCatalogView ? " active" : isCatalogFlyoutOpen ? " flyout-open" : ""}`}>
+              <div className={`nav-group${catalogGroupState.className ? ` ${catalogGroupState.className}` : ""}`}>
+                <div className={`nav-group-header${catalogGroupState.className ? ` ${catalogGroupState.className}` : ""}`}>
                 <button
-                  className={`nav-group-link${isCatalogHubView || isCatalogMaterialsView || isCatalogFittingsView || isCatalogFastenersView || isCatalogBundlesView || isCatalogServiceRulesView || isCatalogDrillingRulesView ? " active" : isCatalogFlyoutOpen ? " flyout-open" : ""}`}
+                  className={`nav-group-link${catalogGroupState.className ? ` ${catalogGroupState.className}` : ""}`}
                   onClick={(event) => {
                     if (isDesktopSidebarCollapsed) {
                       openSidebarFlyout("catalog", event);
@@ -18608,7 +18621,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                 </button>
                 <button
                   aria-expanded={isCatalogMenuOpen}
-                  className={`nav-group-toggle${isCatalogHubView || isCatalogMaterialsView || isCatalogFittingsView || isCatalogFastenersView || isCatalogBundlesView || isCatalogServiceRulesView || isCatalogDrillingRulesView ? " active" : isCatalogFlyoutOpen ? " flyout-open" : ""}`}
+                  className={`nav-group-toggle${catalogGroupState.className ? ` ${catalogGroupState.className}` : ""}`}
                   onClick={() => setIsCatalogMenuOpen((current) => !current)}
                   type="button"
                 >

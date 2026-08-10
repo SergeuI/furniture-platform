@@ -729,7 +729,8 @@ tbody tr.selected {
   width: 26px;
 }
 
-.nav-group.active .nav-group-title {
+.nav-group.active .nav-group-title,
+.nav-group.is-route-active .nav-group-title {
   color: #ffffff;
 }
 
@@ -813,9 +814,29 @@ tbody tr.selected {
     0 0 12px rgba(57, 211, 83, 0.16);
 }
 
+.sidebar.collapsed .nav-group.is-route-active .nav-group-link,
+.sidebar.collapsed .nav-group-header.is-route-active .nav-group-link,
+.sidebar.collapsed .nav-group-toggle.is-route-active {
+  background: linear-gradient(180deg, rgba(27, 92, 44, 0.98), rgba(20, 71, 36, 0.96));
+  border: 1px solid rgba(95, 235, 123, 0.75);
+  box-shadow:
+    0 0 0 1px rgba(64, 184, 88, 0.18),
+    0 0 12px rgba(57, 211, 83, 0.16);
+}
+
 .sidebar.collapsed .nav-group-link.active:hover,
 .sidebar.collapsed .nav-group-header.active .nav-group-link:hover,
 .sidebar.collapsed .nav-group-toggle.active:hover {
+  background: linear-gradient(180deg, rgba(31, 100, 48, 0.98), rgba(22, 77, 39, 0.96));
+  border-color: rgba(111, 243, 136, 0.82);
+  box-shadow:
+    0 0 0 1px rgba(64, 184, 88, 0.22),
+    0 0 14px rgba(57, 211, 83, 0.18);
+}
+
+.sidebar.collapsed .nav-group.is-route-active .nav-group-link:hover,
+.sidebar.collapsed .nav-group-header.is-route-active .nav-group-link:hover,
+.sidebar.collapsed .nav-group-toggle.is-route-active:hover {
   background: linear-gradient(180deg, rgba(31, 100, 48, 0.98), rgba(22, 77, 39, 0.96));
   border-color: rgba(111, 243, 136, 0.82);
   box-shadow:
@@ -842,6 +863,28 @@ tbody tr.selected {
 
 .sidebar.collapsed .nav-group-link.flyout-open:not(.active):hover,
 .sidebar.collapsed .nav-group-toggle.flyout-open:not(.active):hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.nav-group-link.is-flyout-open:not(.is-route-active),
+.nav-group-header.is-flyout-open .nav-group-link:not(.is-route-active),
+.nav-group-toggle.is-flyout-open:not(.is-route-active) {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.nav-group-link.is-flyout-open:not(.is-route-active):hover,
+.nav-group-header.is-flyout-open .nav-group-link:not(.is-route-active):hover,
+.nav-group-toggle.is-flyout-open:not(.is-route-active):hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.sidebar.collapsed .nav-group-link.is-flyout-open:not(.is-route-active),
+.sidebar.collapsed .nav-group-toggle.is-flyout-open:not(.is-route-active) {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.sidebar.collapsed .nav-group-link.is-flyout-open:not(.is-route-active):hover,
+.sidebar.collapsed .nav-group-toggle.is-flyout-open:not(.is-route-active):hover {
   background: rgba(255, 255, 255, 0.1);
 }
 
