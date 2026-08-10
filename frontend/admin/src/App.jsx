@@ -57,6 +57,7 @@ import {
 import {
   getCollapsedSidebarVisualActiveGroupKey,
   getSidebarGroupVisualState,
+  getNextCollapsedSidebarFlyoutState,
 } from "./sidebarGroupState.js";
 import {
   getConnectionsWorkspacePageLabel,
@@ -9429,6 +9430,10 @@ export default function App() {
       setSidebarFlyout(null);
     }
   }, [isDesktopSidebarCollapsed]);
+
+  useEffect(() => {
+    setSidebarFlyout(null);
+  }, [activeView]);
   const renderSidebarIcon = (asset, fallbackIcon, className) => (
     <SidebarAssetIcon
       asset={asset}
@@ -9520,7 +9525,13 @@ export default function App() {
     }
 
     const targetTop = Math.max(12, Number(event?.currentTarget?.getBoundingClientRect?.().top || 12));
-    setSidebarFlyout({ groupKey, top: targetTop });
+    setSidebarFlyout((currentFlyout) =>
+      getNextCollapsedSidebarFlyoutState({
+        currentFlyoutGroupKey: currentFlyout?.groupKey || "",
+        nextFlyoutGroupKey: groupKey,
+        nextTop: targetTop,
+      }),
+    );
   };
 
   const closeSidebarFlyout = () => setSidebarFlyout(null);

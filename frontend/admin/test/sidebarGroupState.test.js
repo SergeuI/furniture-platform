@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   getCollapsedSidebarVisualActiveGroupKey,
+  getNextCollapsedSidebarFlyoutState,
   getSidebarGroupVisualState,
 } from "../src/sidebarGroupState.js";
 
@@ -59,4 +60,75 @@ test("collapsed sidebar visual active key prefers the open flyout", () => {
     }),
     "entitlements",
   );
+});
+
+test("collapsed sidebar flyout toggles and visual active key follows the open group", () => {
+  let flyoutState = null;
+
+  flyoutState = getNextCollapsedSidebarFlyoutState({
+    currentFlyoutGroupKey: flyoutState?.groupKey || "",
+    nextFlyoutGroupKey: "processing",
+    nextTop: 88,
+  });
+
+  assert.deepEqual(flyoutState, {
+    groupKey: "processing",
+    top: 88,
+  });
+  assert.equal(
+    getCollapsedSidebarVisualActiveGroupKey({
+      isCollapsed: true,
+      openFlyoutGroupKey: flyoutState?.groupKey || "",
+      routeActiveGroupKey: "entitlements",
+    }),
+    "processing",
+  );
+
+  flyoutState = null;
+  assert.equal(
+    getCollapsedSidebarVisualActiveGroupKey({
+      isCollapsed: true,
+      openFlyoutGroupKey: flyoutState?.groupKey || "",
+      routeActiveGroupKey: "entitlements",
+    }),
+    "entitlements",
+  );
+
+  flyoutState = getNextCollapsedSidebarFlyoutState({
+    currentFlyoutGroupKey: flyoutState?.groupKey || "",
+    nextFlyoutGroupKey: "connections",
+    nextTop: 104,
+  });
+
+  assert.deepEqual(flyoutState, {
+    groupKey: "connections",
+    top: 104,
+  });
+
+  flyoutState = getNextCollapsedSidebarFlyoutState({
+    currentFlyoutGroupKey: flyoutState?.groupKey || "",
+    nextFlyoutGroupKey: "processing",
+    nextTop: 120,
+  });
+
+  assert.deepEqual(flyoutState, {
+    groupKey: "processing",
+    top: 120,
+  });
+  assert.equal(
+    getCollapsedSidebarVisualActiveGroupKey({
+      isCollapsed: true,
+      openFlyoutGroupKey: flyoutState?.groupKey || "",
+      routeActiveGroupKey: "entitlements",
+    }),
+    "processing",
+  );
+
+  flyoutState = getNextCollapsedSidebarFlyoutState({
+    currentFlyoutGroupKey: flyoutState?.groupKey || "",
+    nextFlyoutGroupKey: "processing",
+    nextTop: 120,
+  });
+
+  assert.equal(flyoutState, null);
 });

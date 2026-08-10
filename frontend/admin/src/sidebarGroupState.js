@@ -20,3 +20,22 @@ export function getCollapsedSidebarVisualActiveGroupKey({
 
   return routeActiveGroupKey || "";
 }
+
+export function getNextCollapsedSidebarFlyoutState({
+  currentFlyoutGroupKey = "",
+  nextFlyoutGroupKey = "",
+  nextTop = 12,
+} = {}) {
+  if (!nextFlyoutGroupKey) {
+    return null;
+  }
+
+  if (currentFlyoutGroupKey === nextFlyoutGroupKey) {
+    return null;
+  }
+
+  return {
+    groupKey: nextFlyoutGroupKey,
+    top: nextTop,
+  };
+}
