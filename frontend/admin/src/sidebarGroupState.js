@@ -21,6 +21,30 @@ export function getCollapsedSidebarVisualActiveGroupKey({
   return routeActiveGroupKey || "";
 }
 
+export function getCollapsedSidebarGroupClickTarget({
+  currentView = "",
+  groupKey = "",
+  userRole = "admin",
+} = {}) {
+  const targetView =
+    groupKey === "processing"
+      ? "processing"
+      : groupKey === "connections"
+        ? "connectionsOverview"
+        : groupKey === "catalog"
+          ? (userRole === "admin" ? "catalogHub" : "catalogMaterials")
+          : "";
+
+  if (!targetView) {
+    return null;
+  }
+
+  return {
+    shouldPreserveFlyoutOnRouteChange: currentView !== targetView,
+    targetView,
+  };
+}
+
 export function getNextCollapsedSidebarFlyoutState({
   currentFlyoutGroupKey = "",
   nextFlyoutGroupKey = "",

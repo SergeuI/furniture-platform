@@ -55,6 +55,7 @@ import {
   shouldAutoOpenCatalogMenu,
 } from "./processingWorkspace.js";
 import {
+  getCollapsedSidebarGroupClickTarget,
   getCollapsedSidebarVisualActiveGroupKey,
   getSidebarGroupVisualState,
   getNextCollapsedSidebarFlyoutState,
@@ -7254,6 +7255,7 @@ export default function App() {
     readPersistedSidebarCollapsedState(),
   );
   const [sidebarFlyout, setSidebarFlyout] = useState(null);
+  const sidebarFlyoutPreserveRouteChangeRef = useRef(false);
   const sidebarTouchState = useRef({
     active: false,
     startX: 0,
@@ -9432,6 +9434,11 @@ export default function App() {
   }, [isDesktopSidebarCollapsed]);
 
   useEffect(() => {
+    if (sidebarFlyoutPreserveRouteChangeRef.current) {
+      sidebarFlyoutPreserveRouteChangeRef.current = false;
+      return;
+    }
+
     setSidebarFlyout(null);
   }, [activeView]);
   const renderSidebarIcon = (asset, fallbackIcon, className) => (
@@ -18529,7 +18536,18 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   className={`nav-group-link${processingGroupState.className ? ` ${processingGroupState.className}` : ""}`}
                   onClick={(event) => {
                     if (isDesktopSidebarCollapsed) {
+                      const collapsedTarget = getCollapsedSidebarGroupClickTarget({
+                        currentView: activeViewRef.current,
+                        groupKey: "processing",
+                        userRole: user?.role,
+                      });
+                      if (collapsedTarget?.shouldPreserveFlyoutOnRouteChange) {
+                        sidebarFlyoutPreserveRouteChangeRef.current = true;
+                      }
                       openSidebarFlyout("processing", event);
+                      switchView(collapsedTarget?.targetView || "processing", user, {
+                        processingTab: "overview",
+                      });
                       return;
                     }
                     switchView("processing", user, {
@@ -18590,7 +18608,16 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   className={`nav-group-link${connectionsGroupState.className ? ` ${connectionsGroupState.className}` : ""}`}
                   onClick={(event) => {
                     if (isDesktopSidebarCollapsed) {
+                      const collapsedTarget = getCollapsedSidebarGroupClickTarget({
+                        currentView: activeViewRef.current,
+                        groupKey: "connections",
+                        userRole: user?.role,
+                      });
+                      if (collapsedTarget?.shouldPreserveFlyoutOnRouteChange) {
+                        sidebarFlyoutPreserveRouteChangeRef.current = true;
+                      }
                       openSidebarFlyout("connections", event);
+                      switchView(collapsedTarget?.targetView || "connectionsOverview");
                       return;
                     }
                     switchView("connectionsOverview");
@@ -18641,7 +18668,16 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   className={`nav-group-link${catalogGroupState.className ? ` ${catalogGroupState.className}` : ""}`}
                   onClick={(event) => {
                     if (isDesktopSidebarCollapsed) {
+                      const collapsedTarget = getCollapsedSidebarGroupClickTarget({
+                        currentView: activeViewRef.current,
+                        groupKey: "catalog",
+                        userRole: user?.role,
+                      });
+                      if (collapsedTarget?.shouldPreserveFlyoutOnRouteChange) {
+                        sidebarFlyoutPreserveRouteChangeRef.current = true;
+                      }
                       openSidebarFlyout("catalog", event);
+                      switchView(collapsedTarget?.targetView || (user.role === "admin" ? "catalogHub" : "catalogMaterials"));
                       return;
                     }
                     switchView(user.role === "admin" ? "catalogHub" : "catalogMaterials");

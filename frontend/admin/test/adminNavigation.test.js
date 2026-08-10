@@ -16,5 +16,7 @@ test("admin app uses canonical section-based navigation helpers", () => {
   assert.match(source, /switchView\("connectionsOverview"\)/);
   assert.match(source, /getConnectionsWorkspaceSidebarTabs\(\{ language \}\)/);
   assert.match(source, /const isConnectionsWorkspaceView =[\s\S]*const isConnectionsNavigationView = shouldAutoOpenConnectionsMenu\(activeView\) \|\| isConnectionsWorkspaceView;/);
+  assert.match(source, /getCollapsedSidebarGroupClickTarget\(\{\s*currentView: activeViewRef\.current,\s*groupKey: "processing",\s*userRole: user\?\.role,\s*}\)/);
+  assert.match(source, /sidebarFlyoutPreserveRouteChangeRef\.current = true;/);
   assert.match(source, /isConnectionsWorkspaceView \?\s*\(\r?\n\s*<ConnectionsWorkspace/);
 });

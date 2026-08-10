@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  getCollapsedSidebarGroupClickTarget,
   getCollapsedSidebarVisualActiveGroupKey,
   getNextCollapsedSidebarFlyoutState,
   getSidebarGroupVisualState,
@@ -131,4 +132,48 @@ test("collapsed sidebar flyout toggles and visual active key follows the open gr
   });
 
   assert.equal(flyoutState, null);
+});
+
+test("collapsed sidebar group clicks navigate through canonical overview routes in sequence", () => {
+  const clickSequence = ["processing", "connections", "catalog", "catalog"];
+  let currentView = "entitlements";
+
+  const results = clickSequence.map((groupKey) => {
+    const target = getCollapsedSidebarGroupClickTarget({
+      currentView,
+      groupKey,
+      userRole: "admin",
+    });
+
+    assert.ok(target);
+    currentView = target.targetView;
+    return {
+      groupKey,
+      currentView,
+      preserveFlyout: target.shouldPreserveFlyoutOnRouteChange,
+    };
+  });
+
+  assert.deepEqual(results, [
+    {
+      groupKey: "processing",
+      currentView: "processing",
+      preserveFlyout: true,
+    },
+    {
+      groupKey: "connections",
+      currentView: "connectionsOverview",
+      preserveFlyout: true,
+    },
+    {
+      groupKey: "catalog",
+      currentView: "catalogHub",
+      preserveFlyout: true,
+    },
+    {
+      groupKey: "catalog",
+      currentView: "catalogHub",
+      preserveFlyout: false,
+    },
+  ]);
 });
