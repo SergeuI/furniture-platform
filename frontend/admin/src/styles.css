@@ -189,7 +189,10 @@ tbody tr.selected {
 }
 
 .sidebar-shell {
+  align-items: flex-start;
+  display: flex;
   min-width: 0;
+  overflow: visible;
   position: relative;
 }
 
@@ -243,13 +246,12 @@ tbody tr.selected {
     inset 0 1px 0 rgba(255, 255, 255, 0.04);
   color: #ffffff;
   display: inline-flex;
-  height: 42px;
+  flex: 0 0 auto;
+  height: 48px;
   justify-content: center;
   padding: 0;
-  position: absolute;
-  right: -13px;
-  top: 18px;
-  width: 26px;
+  position: relative;
+  width: 30px;
   z-index: 5;
 }
 
@@ -390,12 +392,12 @@ tbody tr.selected {
 
 .sidebar.collapsed .sidebar-top {
   align-items: center;
-  gap: 6px;
-  padding-bottom: 2px;
+  gap: 4px;
+  padding-bottom: 0;
 }
 
 .sidebar.collapsed .sidebar-brand-block {
-  gap: 4px;
+  gap: 2px;
   justify-items: center;
   padding-top: 0;
 }
@@ -407,9 +409,9 @@ tbody tr.selected {
 }
 
 .sidebar.collapsed .sidebar-brand-logo {
-  max-height: 42px;
-  max-width: 42px;
-  width: 42px;
+  max-height: 54px;
+  max-width: 54px;
+  width: 54px;
 }
 
 .sidebar.collapsed .brand-copy {
@@ -419,7 +421,7 @@ tbody tr.selected {
 .sidebar.collapsed .brand-copy-header {
   align-items: center;
   display: grid;
-  gap: 6px;
+  gap: 4px;
   justify-content: center;
   justify-items: center;
 }
@@ -431,15 +433,15 @@ tbody tr.selected {
 .sidebar.collapsed .language-switcher.compact {
   align-items: center;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
 .sidebar.collapsed .user-block {
   display: grid;
-  gap: 2px;
+  gap: 1px;
   justify-items: center;
-  margin-top: 2px;
-  padding: 2px 0 0;
+  margin-top: 0;
+  padding: 0;
   text-align: center;
   width: 100%;
 }
@@ -456,13 +458,13 @@ tbody tr.selected {
   color: var(--brand-green-soft);
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.1em;
   min-height: 0;
   padding: 0;
 }
 
 .sidebar.collapsed .sidebar-scroll {
-  padding-top: 2px;
+  padding-top: 0;
 }
 
 .auth-brand {
