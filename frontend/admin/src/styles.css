@@ -846,6 +846,19 @@ tbody tr.selected {
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
+.mounting-schemes-detail-panel .dashboard-panel-head,
+.mounting-schemes-editor-panel .dashboard-panel-head {
+  display: none;
+}
+
+.mounting-schemes-workspace-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
 .mounting-schemes-table-panel,
 .mounting-schemes-detail-panel,
 .mounting-schemes-editor-panel {

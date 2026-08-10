@@ -325,6 +325,67 @@ export function getMountingSchemesWorkspaceChrome(mode = "list") {
   };
 }
 
+export function getMountingSchemesBreadcrumbTrail(route = {}, currentScheme = {}, language = "uk") {
+  const normalizedRoute = normalizeMountingSchemesRoute(route);
+  const listLabel = language === "uk" ? "Схеми кріплення" : "Mounting schemes";
+  const createLabel = language === "uk" ? "Створення схеми" : "Create scheme";
+  const editLabel = language === "uk" ? "Редагування схеми" : "Edit scheme";
+  const detailFallbackLabel = language === "uk" ? "Деталі схеми" : "Scheme details";
+  const schemeName = normalizeText(currentScheme?.name) || detailFallbackLabel;
+  const listRoute = { mode: "list", schemeId: "" };
+  const detailRoute = normalizedRoute.schemeId ? { mode: "detail", schemeId: normalizedRoute.schemeId } : listRoute;
+
+  if (normalizedRoute.mode === "list") {
+    return [
+      {
+        current: true,
+        label: listLabel,
+      },
+    ];
+  }
+
+  if (normalizedRoute.mode === "create") {
+    return [
+      {
+        label: listLabel,
+        route: listRoute,
+      },
+      {
+        current: true,
+        label: createLabel,
+      },
+    ];
+  }
+
+  if (normalizedRoute.mode === "detail") {
+    return [
+      {
+        label: listLabel,
+        route: listRoute,
+      },
+      {
+        current: true,
+        label: schemeName,
+      },
+    ];
+  }
+
+  return [
+    {
+      label: listLabel,
+      route: listRoute,
+    },
+    {
+      label: schemeName,
+      route: detailRoute,
+    },
+    {
+      current: true,
+      label: editLabel,
+    },
+  ];
+}
+
 function normalizeDraftRuleValue(value) {
   return value === "" || value === null || value === undefined ? null : value;
 }

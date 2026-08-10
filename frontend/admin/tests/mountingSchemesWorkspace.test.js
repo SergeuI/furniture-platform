@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   buildMountingSchemePayload,
   buildMountingSchemesRouteUrl,
+  getMountingSchemesBreadcrumbTrail,
   collectDistinctGroupKeys,
   createEmptyMountingSchemeDraft,
   getMountingSchemeValidationMessage,
@@ -120,6 +121,88 @@ test("mounting-schemes route normalization defaults to list", () => {
     mode: "list",
     schemeId: "",
   });
+});
+
+test("mounting-schemes breadcrumb trail follows list/create/detail/edit contracts", () => {
+  assert.deepEqual(
+    getMountingSchemesBreadcrumbTrail({ mode: "list" }, null, "uk").map((item) => ({
+      current: Boolean(item.current),
+      label: item.label,
+      route: item.route ? item.route.mode : "",
+    })),
+    [
+      {
+        current: true,
+        label: "Схеми кріплення",
+        route: "",
+      },
+    ],
+  );
+
+  assert.deepEqual(
+    getMountingSchemesBreadcrumbTrail({ mode: "create" }, null, "uk").map((item) => ({
+      current: Boolean(item.current),
+      label: item.label,
+      route: item.route ? item.route.mode : "",
+    })),
+    [
+      {
+        current: false,
+        label: "Схеми кріплення",
+        route: "list",
+      },
+      {
+        current: true,
+        label: "Створення схеми",
+        route: "",
+      },
+    ],
+  );
+
+  assert.deepEqual(
+    getMountingSchemesBreadcrumbTrail({ mode: "detail", schemeId: "42" }, { name: "Завіси" }, "uk").map((item) => ({
+      current: Boolean(item.current),
+      label: item.label,
+      route: item.route ? item.route.mode : "",
+    })),
+    [
+      {
+        current: false,
+        label: "Схеми кріплення",
+        route: "list",
+      },
+      {
+        current: true,
+        label: "Завіси",
+        route: "",
+      },
+    ],
+  );
+
+  assert.deepEqual(
+    getMountingSchemesBreadcrumbTrail({ mode: "edit", schemeId: "42" }, { name: "Завіси" }, "uk").map((item) => ({
+      current: Boolean(item.current),
+      label: item.label,
+      route: item.route ? item.route.mode : "",
+    })),
+    [
+      {
+        current: false,
+        label: "Схеми кріплення",
+        route: "list",
+      },
+      {
+        current: false,
+        label: "Завіси",
+        route: "detail",
+      },
+      {
+        current: true,
+        label: "Редагування схеми",
+        route: "",
+      },
+    ],
+  );
 });
 
 test("mounting-schemes dev proxy forwards to the backend route", async () => {
