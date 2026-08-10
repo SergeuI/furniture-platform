@@ -520,6 +520,61 @@ export async function deleteMountingNode(token, nodeId) {
   });
 }
 
+export async function listMountingSchemes(token, includeInactive = false) {
+  const searchParams = new URLSearchParams();
+  if (includeInactive) {
+    searchParams.set("include_inactive", "true");
+  }
+
+  const query = searchParams.toString();
+
+  return request(`/mounting-schemes${query ? `?${query}` : ""}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function getMountingScheme(token, schemeId) {
+  const normalizedSchemeId = String(schemeId || "").trim();
+
+  if (!normalizedSchemeId) {
+    return {
+      success: false,
+      error: "Mounting scheme ID is required",
+      status: 0,
+    };
+  }
+
+  return request(`/mounting-schemes/${encodeURIComponent(normalizedSchemeId)}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function createMountingScheme(token, payload) {
+  return request("/mounting-schemes", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateMountingScheme(token, schemeId, payload) {
+  const normalizedSchemeId = String(schemeId || "").trim();
+
+  if (!normalizedSchemeId) {
+    return {
+      success: false,
+      error: "Mounting scheme ID is required",
+      status: 0,
+    };
+  }
+
+  return request(`/mounting-schemes/${encodeURIComponent(normalizedSchemeId)}`, {
+    method: "PATCH",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function listFittingHoleBundles(token) {
   return request("/fitting-holes/bundles", {
     headers: authHeaders(token),

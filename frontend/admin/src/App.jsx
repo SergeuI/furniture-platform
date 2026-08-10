@@ -18980,6 +18980,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
             activeView={activeView}
             language={language}
             onNavigate={(viewKey) => switchView(viewKey)}
+            token={token}
           />
         ) : activeView === "projects" ? (
           <section className="table-panel full-panel">

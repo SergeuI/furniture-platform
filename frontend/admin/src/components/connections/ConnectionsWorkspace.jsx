@@ -4,6 +4,7 @@ import {
   getConnectionsWorkspaceOverviewCards,
   getConnectionsWorkspacePageLabel,
 } from "../../connectionsWorkspace.js";
+import MountingSchemesPanel from "./MountingSchemesPanel.jsx";
 
 function getPageMeta(activeView, language) {
   if (activeView === "connectionsOverview") {
@@ -46,9 +47,14 @@ export default function ConnectionsWorkspace({
   activeView = "connectionsOverview",
   language = "uk",
   onNavigate = null,
+  token = "",
 }) {
   const meta = getPageMeta(activeView, language);
   const overviewCards = getConnectionsWorkspaceOverviewCards({ language });
+
+  if (activeView === "mountingSchemes") {
+    return <MountingSchemesPanel language={language} token={token} />;
+  }
 
   if (activeView !== "connectionsOverview") {
     return (
