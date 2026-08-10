@@ -7256,6 +7256,7 @@ export default function App() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() =>
     readPersistedSidebarCollapsedState(),
   );
+  const [sidebarFlyout, setSidebarFlyout] = useState(null);
   const sidebarTouchState = useRef({
     active: false,
     startX: 0,
@@ -7288,6 +7289,12 @@ export default function App() {
   useEffect(() => {
     writePersistedSidebarCollapsedState(undefined, isSidebarCollapsed);
   }, [isSidebarCollapsed]);
+
+  useEffect(() => {
+    if (!isDesktopSidebarCollapsed) {
+      setSidebarFlyout(null);
+    }
+  }, [isDesktopSidebarCollapsed]);
 
   const [loginLoading, setLoginLoading] = useState(false);
   const [trialClockNow, setTrialClockNow] = useState(() => Date.now());
@@ -9423,6 +9430,131 @@ export default function App() {
     isSidebarCollapsed,
   });
   const getSidebarNavIcon = (key) => ADMIN_SIDEBAR_ICON_MAP[key] || MoreHorizontal;
+  const openSidebarFlyout = (groupKey, event) => {
+    if (!isDesktopSidebarCollapsed) {
+      return;
+    }
+
+    const targetTop = Math.max(12, Number(event?.currentTarget?.getBoundingClientRect?.().top || 12));
+    setSidebarFlyout({ groupKey, top: targetTop });
+  };
+
+  const closeSidebarFlyout = () => setSidebarFlyout(null);
+
+  const sidebarFlyoutTitle = sidebarFlyout?.groupKey === "processing"
+    ? (language === "uk" ? "\u041e\u0431\u0440\u043e\u0431\u043a\u0430 \u0434\u0435\u0442\u0430\u043b\u0435\u0439" : "Processing")
+    : sidebarFlyout?.groupKey === "connections"
+      ? (language === "uk" ? "\u041a\u0440\u0456\u043f\u043b\u0435\u043d\u043d\u044f \u0442\u0430 \u0437'\u0454\u0434\u043d\u0430\u043d\u043d\u044f" : "Connections")
+      : sidebarFlyout?.groupKey === "catalog"
+        ? (language === "uk" ? "\u0414\u043e\u0432\u0456\u0434\u043d\u0438\u043a\u0438" : "Catalog")
+        : "";
+
+  const sidebarFlyoutItems = sidebarFlyout?.groupKey === "processing"
+    ? processingWorkspaceTabs.map((tab) => ({
+        active: tab.key === activeProcessingNavigationKey,
+        key: tab.key,
+        label: tab.label,
+        onClick: () => {
+          setIsProcessingMenuOpen(true);
+          if (getProcessingWorkspaceTabTargetView(tab.key) === "catalogHoles") {
+            switchView("catalogHoles", user);
+          } else {
+            switchView("processing", user, {
+              processingTab: tab.key,
+            });
+          }
+          closeSidebarOnMobile();
+          closeSidebarFlyout();
+        },
+      }))
+    : sidebarFlyout?.groupKey === "connections"
+      ? connectionsWorkspaceTabs.map((tab) => ({
+          active: tab.key === activeConnectionsNavigationKey,
+          key: tab.key,
+          label: tab.label,
+          onClick: () => {
+            switchView(tab.view || tab.key);
+            closeSidebarOnMobile();
+            closeSidebarFlyout();
+          },
+        }))
+      : sidebarFlyout?.groupKey === "catalog"
+        ? [
+            {
+              active: isCatalogMaterialsView,
+              key: "catalogMaterials",
+              label: t.catalogMaterials,
+              onClick: () => {
+                switchView("catalogMaterials");
+                closeSidebarOnMobile();
+                closeSidebarFlyout();
+              },
+            },
+            ...(canViewFittingCatalog
+              ? [{
+                  active: isCatalogFittingsView,
+                  key: "catalogFittings",
+                  label: t.catalogFittings,
+                  onClick: () => {
+                    switchView("catalogFittings");
+                    closeSidebarOnMobile();
+                    closeSidebarFlyout();
+                  },
+                }]
+              : []),
+            ...(canViewFittingHoles
+              ? [{
+                  active: isCatalogBundlesView,
+                  key: "catalogBundles",
+                  label: t.fittingBundlesTitle,
+                  onClick: () => {
+                    switchView("catalogBundles");
+                    closeSidebarOnMobile();
+                    closeSidebarFlyout();
+                  },
+                }]
+              : []),
+            ...(user.role === "admin"
+              ? [{
+                  active: isCatalogDrillingRulesView,
+                  key: "catalogDrillingRules",
+                  label: t.drillingServiceRulesTitle,
+                  onClick: () => {
+                    switchView("catalogDrillingRules");
+                    closeSidebarOnMobile();
+                    closeSidebarFlyout();
+                  },
+                }, {
+                  active: isCatalogViyarView,
+                  key: "catalogViyar",
+                  label: t.catalogViyar,
+                  onClick: () => {
+                    switchView("catalogViyar");
+                    closeSidebarOnMobile();
+                    closeSidebarFlyout();
+                  },
+                }, {
+                  active: isCatalogManualView,
+                  key: "catalogManual",
+                  label: t.catalogManual,
+                  onClick: () => {
+                    switchView("catalogManual");
+                    closeSidebarOnMobile();
+                    closeSidebarFlyout();
+                  },
+                }, {
+                  active: isCatalogValuesView,
+                  key: "catalogValues",
+                  label: t.catalogValues,
+                  onClick: () => {
+                    switchView("catalogValues");
+                    closeSidebarOnMobile();
+                    closeSidebarFlyout();
+                  },
+                }]
+              : []),
+          ]
+        : [];
   const processingWorkspaceTabs = useMemo(
     () =>
       getProcessingWorkspaceSidebarTabs({
@@ -18264,6 +18396,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                     ? "active"
                     : ""
                 }
+                title={isDesktopSidebarCollapsed ? t.projects : undefined}
                 onClick={() => {
                   switchView("projects");
                   closeSidebarOnMobile();
@@ -18282,6 +18415,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
             {canCreateNewProject ? (
               <button
                 className={activeView === "createProject" ? "active" : ""}
+                title={isDesktopSidebarCollapsed ? t.createProject : undefined}
                 onClick={() => {
                   switchView("createProject");
                   closeSidebarOnMobile();
@@ -18301,6 +18435,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
               <>
                 <button
                   className={activeView === "users" ? "active" : ""}
+                  title={isDesktopSidebarCollapsed ? t.users : undefined}
                   onClick={() => {
                     switchView("users");
                     closeSidebarOnMobile();
@@ -18317,6 +18452,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                 </button>
                 <button
                   className={activeView === "audit" ? "active" : ""}
+                  title={isDesktopSidebarCollapsed ? t.audit : undefined}
                   onClick={() => {
                     switchView("audit");
                     closeSidebarOnMobile();
@@ -18331,13 +18467,14 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   </span>
                   <span className="nav-item-label">{t.audit}</span>
                 </button>
-                                <button
+                <button
                   className={activeView === "entitlements" ? "active" : ""}
                   onClick={() => {
                     switchView("entitlements");
                     closeSidebarOnMobile();
                   }}
                   type="button"
+                  title={isDesktopSidebarCollapsed ? (language === "uk" ? "\u0422\u0430\u0440\u0438\u0444\u0438 \u0442\u0430 \u043f\u0440\u0430\u0432\u0430" : "Entitlements") : undefined}
                 >
                   <span className="nav-item-icon" aria-hidden="true">
                     {(() => {
@@ -18345,7 +18482,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                       return <Icon size={16} />;
                     })()}
                   </span>
-                  <span className="nav-item-label">Тарифи та права</span>
+                  <span className="nav-item-label">{language === "uk" ? "\u0422\u0430\u0440\u0438\u0444\u0438 \u0442\u0430 \u043f\u0440\u0430\u0432\u0430" : "Entitlements"}</span>
                 </button>
               </>
             ) : null}
@@ -18354,7 +18491,11 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                 <div className={`nav-group-header${isProcessingSectionView ? " active" : ""}`}>
                 <button
                   className={`nav-group-link${isProcessingSectionView ? " active" : ""}`}
-                  onClick={() => {
+                  onClick={(event) => {
+                    if (isDesktopSidebarCollapsed) {
+                      openSidebarFlyout("processing", event);
+                      return;
+                    }
                     switchView("processing", user, {
                       processingTab: "overview",
                     });
@@ -18414,7 +18555,11 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
               <div className={`nav-group-header${isConnectionsNavigationView ? " active" : ""}`}>
                 <button
                   className={`nav-group-link${isConnectionsNavigationView ? " active" : ""}`}
-                  onClick={() => {
+                  onClick={(event) => {
+                    if (isDesktopSidebarCollapsed) {
+                      openSidebarFlyout("connections", event);
+                      return;
+                    }
                     switchView("connectionsOverview");
                     closeSidebarOnMobile();
                   }}
@@ -18464,7 +18609,11 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
               <div className={`nav-group-header${isCatalogView ? " active" : ""}`}>
                 <button
                   className={`nav-group-link${isCatalogHubView || isCatalogMaterialsView || isCatalogFittingsView || isCatalogFastenersView || isCatalogHolesView || isCatalogBundlesView || isCatalogServiceRulesView || isCatalogDrillingRulesView ? " active" : ""}`}
-                  onClick={() => {
+                  onClick={(event) => {
+                    if (isDesktopSidebarCollapsed) {
+                      openSidebarFlyout("catalog", event);
+                      return;
+                    }
                     switchView(user.role === "admin" ? "catalogHub" : "catalogMaterials");
                     closeSidebarOnMobile();
                   }}
@@ -18577,6 +18726,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
             </div>
             <button
               className={activeView === "settings" ? "active" : ""}
+              title={isDesktopSidebarCollapsed ? t.settings : undefined}
               onClick={() => {
                 switchView("settings");
                 closeSidebarOnMobile();
@@ -18606,6 +18756,33 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
           </button>
         </div>
       </aside>
+      {isDesktopSidebarCollapsed && sidebarFlyout && typeof document !== "undefined"
+        ? createPortal(
+            <>
+              <div
+                className="sidebar-flyout-backdrop"
+                onClick={closeSidebarFlyout}
+                role="presentation"
+              />
+              <div className="sidebar-flyout" style={{ top: `${sidebarFlyout.top}px` }}>
+                <strong className="sidebar-flyout-title">{sidebarFlyoutTitle}</strong>
+                <div className="sidebar-flyout-items" role="menu">
+                  {sidebarFlyoutItems.map((item) => (
+                    <button
+                      className={item.active ? "active" : ""}
+                      key={item.key}
+                      onClick={item.onClick}
+                      type="button"
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>,
+            document.body,
+          )
+        : null}
 
       <section className="workspace">
         <header

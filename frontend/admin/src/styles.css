@@ -227,6 +227,60 @@ tbody tr.selected {
   background: rgba(255, 255, 255, 0.14);
 }
 
+.sidebar-flyout-backdrop {
+  background: transparent;
+  inset: 0;
+  position: fixed;
+  z-index: 27;
+}
+
+.sidebar-flyout {
+  background: linear-gradient(180deg, #111a20 0%, #0d141a 100%);
+  border: 1px solid rgba(185, 244, 194, 0.14);
+  border-radius: 14px;
+  box-shadow: 0 24px 64px rgba(13, 20, 26, 0.32);
+  display: grid;
+  gap: 10px;
+  max-height: calc(100vh - 24px);
+  overflow: auto;
+  padding: 14px;
+  position: fixed;
+  left: 86px;
+  width: min(320px, calc(100vw - 102px));
+  z-index: 28;
+}
+
+.sidebar-flyout-title {
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.sidebar-flyout-items {
+  display: grid;
+  gap: 4px;
+}
+
+.sidebar-flyout-items button {
+  background: rgba(255, 255, 255, 0.03);
+  color: #d8e5e8;
+  justify-content: flex-start;
+  min-height: 42px;
+  padding: 0 12px;
+}
+
+.sidebar-flyout-items button:hover,
+.sidebar-flyout-items button.active {
+  background: rgba(57, 211, 83, 0.16);
+  color: #ffffff;
+}
+
+.sidebar-flyout-items button.active {
+  box-shadow: inset 3px 0 0 #39d353;
+}
+
 .sidebar-close-button {
   align-self: flex-end;
   background: rgba(255, 255, 255, 0.08);
