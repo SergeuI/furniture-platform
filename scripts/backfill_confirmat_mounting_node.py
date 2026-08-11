@@ -18,6 +18,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from database.models.user import UserModel  # noqa: F401
 from services.mounting_node_service import MountingNodeService
+from scripts import upgrade_mounting_nodes_schema as mounting_nodes_schema
 
 
 DEFAULT_NODE_CODE = "mn_confirmat_7x50"
@@ -655,6 +656,14 @@ def _print_plan(
 
 
 def _apply_backfill(database_path: Path, plan: BackfillPlan) -> dict[str, Any]:
+    with sqlite3.connect(database_path) as connection:
+        schema_plan = mounting_nodes_schema._build_plan(connection)
+        if not schema_plan["prerequisite_missing"] and any(
+            schema_plan[key]
+            for key in ("missing_tables", "missing_indexes")
+        ):
+            mounting_nodes_schema._apply_plan(connection, schema_plan)
+
     session_factory, engine = _build_session_factory(database_path)
     try:
         with session_factory() as session:

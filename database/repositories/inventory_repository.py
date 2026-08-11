@@ -4,8 +4,8 @@ from datetime import date, datetime, timedelta
 from typing import Sequence
 from urllib.parse import urlparse
 
-from sqlalchemy import func
-from sqlalchemy.orm import load_only
+from sqlalchemy import func, text
+from sqlalchemy.orm import load_only, object_session
 
 from database.models.fitting import (
     FittingModel,
@@ -37,6 +37,9 @@ from database.session import (
 from services.fitting_image_gallery_service import (
     PreparedFittingGalleryImage,
 )
+
+
+_FITTINGS_CATALOG_KEY_COLUMN_CACHE: dict[int, bool] = {}
 
 
 _UNSET = object()
@@ -375,7 +378,38 @@ def _normalize_fitting_city_key(value: str | None) -> str | None:
     return normalized.casefold()
 
 
+def _fitting_catalog_key_column_exists(item: FittingModel) -> bool:
+
+    session = object_session(item)
+    if session is None:
+        return False
+
+    bind = session.get_bind()
+    cache_key = id(bind)
+    if cache_key in _FITTINGS_CATALOG_KEY_COLUMN_CACHE:
+        return _FITTINGS_CATALOG_KEY_COLUMN_CACHE[cache_key]
+
+    rows = session.execute(text("PRAGMA table_info(fittings)")).fetchall()
+    exists = any(str(row[1]) == "catalog_key" for row in rows)
+    _FITTINGS_CATALOG_KEY_COLUMN_CACHE[cache_key] = exists
+    return exists
+
+
 def _get_fitting_catalog_key(item: FittingModel) -> str:
+
+    catalog_key = _normalize_fitting_value(item.__dict__.get("catalog_key"))
+    if catalog_key is None and _fitting_catalog_key_column_exists(item):
+        session = object_session(item)
+        if session is not None:
+            row = session.execute(
+                text("SELECT catalog_key FROM fittings WHERE id = :id"),
+                {"id": item.id},
+            ).first()
+            if row is not None:
+                catalog_key = _normalize_fitting_value(row[0])
+
+    if catalog_key:
+        return f"catalog_key:{catalog_key.casefold()}"
 
     article = _normalize_fitting_value(item.article)
     if article:

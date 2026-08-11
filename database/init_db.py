@@ -68,6 +68,8 @@ from database.models.fitting import (
     FittingHolePointModel,
     FittingHoleTemplateModel,
     FittingModel,
+    FittingSupplierOfferModel,
+    SupplierModel,
 )
 from database.models.mounting_node import (
     MountingNodeItemModel,
@@ -104,6 +106,9 @@ from services.legacy_db_config import (
 )
 from scripts.upgrade_mounting_schemes_schema import (
     ensure_mounting_schemes_schema,
+)
+from scripts.upgrade_fittings_foundation_schema import (
+    ensure_fittings_foundation_schema,
 )
 
 
@@ -917,6 +922,7 @@ def init_database():
 
     upgrade_sqlite_schema()
     with engine.begin() as connection:
+        ensure_fittings_foundation_schema(connection)
         ensure_mounting_schemes_schema(connection)
     _backfill_mounting_node_versions()
     seed_demo_access_users()

@@ -95,6 +95,12 @@ class MountingNodeService:
         return text or None
 
     @staticmethod
+    def _raw_node_value(node: MountingNodeModel, field_name: str, default: Any = None) -> Any:
+        if hasattr(node, "__dict__") and field_name in node.__dict__:
+            return node.__dict__.get(field_name, default)
+        return default
+
+    @staticmethod
     def _text_or_default(value: Any, default: str) -> str:
         text = "" if value is None else str(value).strip()
         return text or default
@@ -241,11 +247,11 @@ class MountingNodeService:
         viewer_can_edit: bool | None = None,
         viewer_can_delete: bool | None = None,
     ) -> dict[str, Any]:
-        owner_user_id = self._optional_text(getattr(node, "owner_user_id", None))
+        owner_user_id = self._optional_text(self._raw_node_value(node, "owner_user_id"))
         normalized_viewer_user_id = self._normalize_viewer_user_id(viewer_user_id)
         is_admin = self._is_admin_role(viewer_role)
         is_system = owner_user_id is None
-        is_archived = bool(getattr(node, "is_archived", False))
+        is_archived = bool(self._raw_node_value(node, "is_archived", False))
         is_owner = bool(owner_user_id and normalized_viewer_user_id and owner_user_id == normalized_viewer_user_id)
         can_edit = bool(
             not is_archived
@@ -273,8 +279,8 @@ class MountingNodeService:
             "is_system": is_system,
             "is_owner": is_owner,
             "is_archived": is_archived,
-            "archived_at": getattr(node, "archived_at", None),
-            "archived_by_user_id": getattr(node, "archived_by_user_id", None),
+            "archived_at": self._raw_node_value(node, "archived_at"),
+            "archived_by_user_id": self._raw_node_value(node, "archived_by_user_id"),
             "can_edit": can_edit,
             "can_delete": can_delete,
         }
@@ -477,14 +483,14 @@ class MountingNodeService:
             "code": node.code,
             "name": node.name,
             "description": node.description,
-            "category_code": getattr(node, "category_code", None),
-            "functional_code": getattr(node, "functional_code", None),
+            "category_code": self._raw_node_value(node, "category_code"),
+            "functional_code": self._raw_node_value(node, "functional_code"),
             **ownership_snapshot,
-            "is_active": bool(getattr(node, "is_active", True)),
-            "created_by_user_id": getattr(node, "created_by_user_id", None),
-            "updated_by_user_id": getattr(node, "updated_by_user_id", None),
-            "created_at": getattr(node, "created_at", None),
-            "updated_at": getattr(node, "updated_at", None),
+            "is_active": bool(self._raw_node_value(node, "is_active", True)),
+            "created_by_user_id": self._raw_node_value(node, "created_by_user_id"),
+            "updated_by_user_id": self._raw_node_value(node, "updated_by_user_id"),
+            "created_at": self._raw_node_value(node, "created_at"),
+            "updated_at": self._raw_node_value(node, "updated_at"),
             "items_count": len(items),
             "templates_count": len(templates),
             "items": [self._serialize_item(item) for item in items],
@@ -1221,7 +1227,7 @@ class MountingNodeService:
         if node is None:
             return None
 
-        if bool(getattr(node, "is_archived", False)):
+        if bool(self._raw_node_value(node, "is_archived", False)):
             return True
 
         access_snapshot = self._assert_mutation_access(
@@ -1353,7 +1359,7 @@ class MountingNodeService:
                 is_archived=True,
                 archived_at=datetime.utcnow(),
                 archived_by_user_id=archived_by_user_id,
-                updated_by_user_id=archived_by_user_id or getattr(node, "updated_by_user_id", None),
+                updated_by_user_id=archived_by_user_id or self._raw_node_value(node, "updated_by_user_id"),
             )
             self.session.flush()
             self._record_version_snapshot(

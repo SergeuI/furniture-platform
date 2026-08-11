@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from sqlalchemy import or_
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy import or_, text
+from sqlalchemy.orm import Session, load_only, selectinload
 
 from database.models.fitting import FittingHolePointModel, FittingHoleTemplateModel, FittingModel
 from database.models.mounting_node import (
@@ -18,9 +18,99 @@ class MountingNodeRepository:
     def __init__(self, session: Session) -> None:
         self.session = session
 
+    def _mounting_node_column_names(self) -> set[str]:
+        bind = self.session.get_bind()
+        cache_key = id(bind)
+        if not hasattr(self, "_mounting_node_column_cache"):
+            self._mounting_node_column_cache = {}
+        cache = self._mounting_node_column_cache
+        if cache_key in cache:
+            return cache[cache_key]
+        rows = self.session.connection().exec_driver_sql(
+            "PRAGMA table_info(mounting_nodes)",
+        ).fetchall()
+        column_names = {str(row[1]) for row in rows}
+        cache[cache_key] = column_names
+        return column_names
+
+    def _load_node_by_id_legacy_safe(self, node_id: int) -> Optional[MountingNodeModel]:
+        column_names = self._mounting_node_column_names()
+        selected_columns = [
+            getattr(MountingNodeModel, column_name)
+            for column_name in (
+                "id",
+                "code",
+                "name",
+                "description",
+                "category_code",
+                "functional_code",
+                "owner_user_id",
+                "is_active",
+                "created_by_user_id",
+                "updated_by_user_id",
+                "is_archived",
+                "archived_at",
+                "archived_by_user_id",
+                "created_at",
+                "updated_at",
+            )
+            if column_name in column_names and hasattr(MountingNodeModel, column_name)
+        ]
+
+        if not selected_columns:
+            return None
+
+        node = (
+            self.session.query(MountingNodeModel)
+            .options(load_only(*selected_columns))
+            .filter(MountingNodeModel.id == node_id)
+            .one_or_none()
+        )
+        if node is None:
+            return None
+
+        for column_name in (
+            "category_code",
+            "functional_code",
+            "owner_user_id",
+            "is_active",
+            "created_by_user_id",
+            "updated_by_user_id",
+            "is_archived",
+            "archived_at",
+            "archived_by_user_id",
+        ):
+            if column_name not in column_names:
+                node.__dict__.setdefault(column_name, None)
+
+        return node
+
     def _node_query(self):
+        column_names = self._mounting_node_column_names()
+        load_columns = [
+            getattr(MountingNodeModel, column_name)
+            for column_name in (
+                "id",
+                "code",
+                "name",
+                "description",
+                "category_code",
+                "functional_code",
+                "owner_user_id",
+                "is_active",
+                "created_by_user_id",
+                "updated_by_user_id",
+                "is_archived",
+                "archived_at",
+                "archived_by_user_id",
+                "created_at",
+                "updated_at",
+            )
+            if column_name in column_names and hasattr(MountingNodeModel, column_name)
+        ]
         return (
             self.session.query(MountingNodeModel)
+            .options(load_only(*load_columns))
             .options(selectinload(MountingNodeModel.items).selectinload(MountingNodeItemModel.fitting))
             .options(
                 selectinload(MountingNodeModel.templates)
@@ -35,11 +125,13 @@ class MountingNodeRepository:
         )
 
     def get_node_by_id(self, node_id: int) -> Optional[MountingNodeModel]:
-        return (
-            self._node_query()
-            .filter(MountingNodeModel.id == node_id)
-            .one_or_none()
-        )
+        if "category_code" in self._mounting_node_column_names():
+            return (
+                self._node_query()
+                .filter(MountingNodeModel.id == node_id)
+                .one_or_none()
+            )
+        return self._load_node_by_id_legacy_safe(node_id)
 
     def get_node_by_code(self, code: str, exclude_node_id: int | None = None) -> Optional[MountingNodeModel]:
         query = self._node_query().filter(MountingNodeModel.code == code)
@@ -104,10 +196,43 @@ class MountingNodeRepository:
         ).all()
 
     def create_node(self, **data: Any) -> MountingNodeModel:
-        node = MountingNodeModel(**data)
-        self.session.add(node)
-        self.session.flush()
-        self.session.refresh(node)
+        if "category_code" in self._mounting_node_column_names():
+            node = MountingNodeModel(**data)
+            self.session.add(node)
+            self.session.flush()
+            self.session.refresh(node)
+            return node
+
+        column_names = self._mounting_node_column_names()
+        insert_columns = [
+            column_name
+            for column_name in (
+                "code",
+                "name",
+                "description",
+                "category_code",
+                "functional_code",
+                "owner_user_id",
+                "is_active",
+                "created_by_user_id",
+                "updated_by_user_id",
+                "is_archived",
+                "archived_at",
+                "archived_by_user_id",
+            )
+            if column_name in column_names and column_name in data
+        ]
+        values = {column_name: data[column_name] for column_name in insert_columns}
+        placeholders = ", ".join(f":{column_name}" for column_name in insert_columns)
+        columns_sql = ", ".join(insert_columns)
+        result = self.session.execute(
+            text(f"INSERT INTO mounting_nodes ({columns_sql}) VALUES ({placeholders})"),
+            values,
+        )
+        node_id = int(result.lastrowid)
+        node = self.get_node_by_id(node_id)
+        if node is None:
+            raise RuntimeError("Failed to load inserted mounting node")
         return node
 
     def create_version(self, **data: Any) -> MountingNodeVersionModel:
