@@ -1222,6 +1222,7 @@ class WizardApp(tk.Tk):
             "danger_bg": "#ffd7d7",
             "danger_fg": "#7f1d1d",
         }
+        palette.setdefault("success", palette["success_bg"])
 
         self.configure(background=palette["bg"])
         self.option_add("*Font", ("Segoe UI", 10))
@@ -5052,6 +5053,16 @@ class WizardApp(tk.Tk):
             except Exception:
                 existing.kill()
             self.managed_processes.pop("api", None)
+
+        if self._service_responds(LOCAL_API_HEALTH_URL):
+            self._set_service_status("api", "online")
+            self._set_component_launch_status("api", "online")
+            self._set_action_button_state("api", "success")
+            self._set_launch_status("Локальний API уже запущено.")
+            self._append_product_log("[API] already responding on 127.0.0.1:8000; duplicate launch skipped")
+            self.refresh_managed_processes()
+            self.refresh_product_status_async()
+            return
 
         mode_label = "enabled" if self.allow_local_registration_test_mode.get() else "disabled"
         self.record_history(

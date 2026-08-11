@@ -3,6 +3,7 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import product_center_launcher
 from scripts import db_update_wizard
@@ -35,6 +36,49 @@ class ProductCenterRuntimeTests(unittest.TestCase):
 
             with self.assertRaises(FileNotFoundError):
                 db_update_wizard.resolve_repo_python(root)
+
+    def test_start_local_api_skips_duplicate_launch_when_health_is_up(self) -> None:
+        class DummyVar:
+            def __init__(self, value: str = "") -> None:
+                self.value = value
+
+            def get(self) -> str:
+                return self.value
+
+            def set(self, value: str) -> None:
+                self.value = value
+
+        dummy = db_update_wizard.WizardApp.__new__(db_update_wizard.WizardApp)
+        dummy.managed_processes = {}
+        dummy.allow_local_registration_test_mode = DummyVar("false")
+        dummy.allow_local_registration = DummyVar("false")
+        dummy.main_db = DummyVar("D:\\PY\\furniture_platform.db")
+        dummy.legacy_db = DummyVar("D:\\PY\\mebli_calculator.db")
+        dummy.launch_status_var = DummyVar()
+        dummy.logs: list[str] = []
+        dummy.service_status_calls: list[tuple[str, str]] = []
+        dummy.component_status_calls: list[tuple[str, str]] = []
+        dummy.action_state_calls: list[tuple[str, str]] = []
+        dummy.refresh_managed_processes = lambda: None
+        dummy.refresh_product_status_async = lambda: None
+        dummy._set_service_status = lambda key, status: dummy.service_status_calls.append((key, status))
+        dummy._set_component_launch_status = lambda key, status: dummy.component_status_calls.append((key, status))
+        dummy._set_action_button_state = lambda key, state: dummy.action_state_calls.append((key, state))
+        dummy._set_launch_status = lambda text: dummy.launch_status_var.set(text)
+        dummy._append_product_log = lambda text: dummy.logs.append(text)
+        dummy.record_history = lambda *args, **kwargs: None
+
+        with patch.object(db_update_wizard.WizardApp, "_service_responds", return_value=True), patch.object(
+            db_update_wizard.WizardApp, "_start_managed_process"
+        ) as start_mock:
+            db_update_wizard.WizardApp.start_local_api(dummy)
+
+        start_mock.assert_not_called()
+        self.assertEqual(dummy.launch_status_var.get(), "Локальний API уже запущено.")
+        self.assertIn(("api", "online"), dummy.service_status_calls)
+        self.assertIn(("api", "online"), dummy.component_status_calls)
+        self.assertIn(("api", "success"), dummy.action_state_calls)
+        self.assertTrue(any("duplicate launch skipped" in line for line in dummy.logs))
 
 
 if __name__ == "__main__":
