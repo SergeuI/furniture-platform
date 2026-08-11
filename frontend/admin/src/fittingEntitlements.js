@@ -17,6 +17,19 @@ export const DEFAULT_FITTING_FORM = {
   sort_order: 0,
   stock: "",
   source_url: "",
+  supplier_offer: {
+    offer_id: null,
+    supplier_id: "",
+    article: "",
+    external_product_id: "",
+    source_url: "",
+    price: "",
+    currency: "UAH",
+    unit: "",
+    stock: "",
+    is_active: true,
+    priority: 100,
+  },
 };
 
 export function getFittingEntitlementFlags(user) {
@@ -164,6 +177,9 @@ export function getFittingOwnerDisplay(item, currentUser, language) {
 }
 
 export function createFittingFormDraft(item = null, options = {}) {
+  const primaryOffer = Array.isArray(item?.supplier_offers) && item.supplier_offers.length
+    ? item.supplier_offers[0]
+    : null;
   const base = {
     ...DEFAULT_FITTING_FORM,
     fitting_group: String(options.fitting_group || item?.fitting_group || DEFAULT_FITTING_FORM.fitting_group),
@@ -188,6 +204,20 @@ export function createFittingFormDraft(item = null, options = {}) {
     sort_order: Number(item?.sort_order || 0),
     stock: String(item?.stock || ""),
     source_url: String(item?.source_url || ""),
+    supplier_offer: {
+      ...DEFAULT_FITTING_FORM.supplier_offer,
+      offer_id: primaryOffer?.id ?? null,
+      supplier_id: primaryOffer?.supplier_id ?? "",
+      article: String(primaryOffer?.article || ""),
+      external_product_id: String(primaryOffer?.external_product_id || ""),
+      source_url: String(primaryOffer?.source_url || ""),
+      price: primaryOffer?.price === null || primaryOffer?.price === undefined ? "" : String(primaryOffer.price),
+      currency: String(primaryOffer?.currency || DEFAULT_FITTING_FORM.supplier_offer.currency),
+      unit: String(primaryOffer?.unit || ""),
+      stock: String(primaryOffer?.stock || ""),
+      is_active: primaryOffer?.is_active !== false,
+      priority: Number(primaryOffer?.priority || DEFAULT_FITTING_FORM.supplier_offer.priority),
+    },
   };
 }
 
@@ -203,6 +233,14 @@ export function buildFittingSubmissionPayload(form, options = {}) {
   const normalizedName = String(form?.name || "").trim();
   const normalizedSourceUrl = String(form?.source_url || "").trim();
   const normalizedStock = String(form?.stock || "").trim();
+  const supplierOffer = form?.supplier_offer || null;
+  const normalizedSupplierId = String(supplierOffer?.supplier_id || "").trim();
+  const normalizedSupplierArticle = String(supplierOffer?.article || "").trim();
+  const normalizedSupplierExternalProductId = String(supplierOffer?.external_product_id || "").trim();
+  const normalizedSupplierSourceUrl = String(supplierOffer?.source_url || "").trim();
+  const normalizedSupplierCurrency = String(supplierOffer?.currency || "").trim();
+  const normalizedSupplierUnit = String(supplierOffer?.unit || "").trim();
+  const normalizedSupplierStock = String(supplierOffer?.stock || "").trim();
   const inferredSourceUrl = normalizedSourceUrl || (looksLikeUrl(normalizedName) ? normalizedName : "");
   const inferredName = looksLikeUrl(normalizedName) && inferredSourceUrl === normalizedName ? "" : normalizedName;
   const fallbackSystemName = String(options.fallbackSystemName || "").trim();
@@ -231,9 +269,49 @@ export function buildFittingSubmissionPayload(form, options = {}) {
     stock: normalizedStock || null,
   };
 
+  const normalizedSupplierOffer = normalizedSupplierId
+    ? {
+        offer_id:
+          supplierOffer?.offer_id === "" || supplierOffer?.offer_id === null || supplierOffer?.offer_id === undefined
+            ? null
+            : Number(supplierOffer.offer_id),
+        supplier_id: Number(normalizedSupplierId),
+        article: normalizedSupplierArticle || null,
+        external_product_id: normalizedSupplierExternalProductId || null,
+        source_url: normalizedSupplierSourceUrl || null,
+        price:
+          supplierOffer?.price === "" || supplierOffer?.price === null || supplierOffer?.price === undefined
+            ? null
+            : Number(String(supplierOffer.price).replace(",", ".")),
+        currency: normalizedSupplierCurrency || null,
+        unit: normalizedSupplierUnit || null,
+        stock: normalizedSupplierStock || null,
+        is_active: supplierOffer?.is_active !== false,
+        priority: Number(supplierOffer?.priority || 0),
+      }
+    : null;
+
   if (mode === "create" && canEditSystemFittings) {
     payload.is_system = Boolean(form?.is_system);
   }
+
+  const hasMeaningfulSupplierOffer = Boolean(
+    normalizedSupplierOffer &&
+      (
+        normalizedSupplierOffer.offer_id !== null ||
+        normalizedSupplierOffer.article ||
+        normalizedSupplierOffer.external_product_id ||
+        normalizedSupplierOffer.source_url ||
+        normalizedSupplierOffer.price !== null ||
+        normalizedSupplierOffer.currency ||
+        normalizedSupplierOffer.unit ||
+        normalizedSupplierOffer.stock ||
+        normalizedSupplierOffer.is_active === false ||
+        normalizedSupplierOffer.priority !== 100
+      ),
+  );
+
+  payload.supplier_offer = hasMeaningfulSupplierOffer ? normalizedSupplierOffer : null;
 
   return {
     is_system: isSystemFitting,

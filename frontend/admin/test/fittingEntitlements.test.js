@@ -259,6 +259,19 @@ test("fitting form drafts preserve editable fields and keep protected scope out 
     sort_order: 0,
     stock: "",
     source_url: "",
+    supplier_offer: {
+      offer_id: null,
+      supplier_id: "",
+      article: "",
+      external_product_id: "",
+      source_url: "",
+      price: "",
+      currency: "UAH",
+      unit: "",
+      stock: "",
+      is_active: true,
+      priority: 100,
+    },
   });
 
   const draft = createFittingFormDraft(
@@ -277,6 +290,23 @@ test("fitting form drafts preserve editable fields and keep protected scope out 
       sort_order: 7,
       stock: "in stock",
       source_url: "https://example.com/product",
+      supplier_offers: [
+        {
+          id: 41,
+          supplier_id: 1,
+          supplier_code: "viyar",
+          supplier_name: "VIYAR",
+          article: "190106",
+          external_product_id: "ext-1",
+          source_url: "https://supplier.example/item",
+          price: 1.14,
+          currency: "UAH",
+          unit: "шт",
+          stock: "in stock",
+          is_active: true,
+          priority: 100,
+        },
+      ],
     },
     { city: "Lviv" },
   );
@@ -285,6 +315,9 @@ test("fitting form drafts preserve editable fields and keep protected scope out 
   assert.equal(draft.brand, "BLUM");
   assert.equal(draft.code, "CODE-1");
   assert.equal(draft.sort_order, 7);
+  assert.equal(draft.supplier_offer.offer_id, 41);
+  assert.equal(draft.supplier_offer.supplier_id, 1);
+  assert.equal(draft.supplier_offer.article, "190106");
 
   const createPayload = buildFittingSubmissionPayload(
     {
@@ -302,6 +335,19 @@ test("fitting form drafts preserve editable fields and keep protected scope out 
       sort_order: 7,
       stock: "in stock",
       source_url: "https://example.com/product",
+      supplier_offer: {
+        offer_id: null,
+        supplier_id: "",
+        article: "",
+        external_product_id: "",
+        source_url: "",
+        price: "",
+        currency: "UAH",
+        unit: "",
+        stock: "",
+        is_active: true,
+        priority: 100,
+      },
     },
     { canEditSystemFittings: true, allowSystemToggle: true, mode: "create", fallbackSystemName: "System" },
   );
@@ -322,6 +368,7 @@ test("fitting form drafts preserve editable fields and keep protected scope out 
     price: 25.5,
     sort_order: 7,
     stock: "in stock",
+    supplier_offer: null,
   });
 
   const editPayload = buildFittingSubmissionPayload(
@@ -340,6 +387,19 @@ test("fitting form drafts preserve editable fields and keep protected scope out 
       sort_order: 9,
       stock: "out of stock",
       source_url: "https://example.com/updated",
+      supplier_offer: {
+        offer_id: 99,
+        supplier_id: 1,
+        article: "190106",
+        external_product_id: "ext-9",
+        source_url: "https://supplier.example/item",
+        price: "1.14",
+        currency: "UAH",
+        unit: "шт",
+        stock: "in stock",
+        is_active: false,
+        priority: 50,
+      },
     },
     { currentItem: { is_system: true }, mode: "edit", fallbackSystemName: "System" },
   );
@@ -349,4 +409,17 @@ test("fitting form drafts preserve editable fields and keep protected scope out 
   assert.equal(editPayload.payload.code, "CODE-9");
   assert.equal(editPayload.payload.brand, "Hettich");
   assert.equal(editPayload.payload.stock, "out of stock");
+  assert.deepEqual(editPayload.payload.supplier_offer, {
+    offer_id: 99,
+    supplier_id: 1,
+    article: "190106",
+    external_product_id: "ext-9",
+    source_url: "https://supplier.example/item",
+    price: 1.14,
+    currency: "UAH",
+    unit: "шт",
+    stock: "in stock",
+    is_active: false,
+    priority: 50,
+  });
 });

@@ -35,6 +35,10 @@ from schemas.catalog import (
     FittingCatalogListResponseSchema,
     FittingCatalogOperationResponseSchema,
     FittingCatalogUpdateSchema,
+    FittingSupplierOfferInputSchema,
+    FittingSupplierListResponseSchema,
+    FittingSupplierOfferListResponseSchema,
+    FittingSupplierOfferOperationResponseSchema,
     CatalogItemUpdateSchema,
     ManualServiceCatalogItemCreateSchema,
     ManualServiceCatalogItemUpdateSchema,
@@ -55,6 +59,7 @@ from schemas.catalog import (
 )
 from database.models.fitting import (
     FittingModel,
+    SupplierModel,
 )
 from database.repositories.catalog_repository import (
     ALLOWED_CATALOG_CATEGORIES,
@@ -88,12 +93,15 @@ from database.repositories.inventory_repository import (
     get_material_by_article,
     get_material_owners,
     list_fitting_images,
+    list_fitting_supplier_offers,
     list_fittings,
     list_fitting_categories,
     list_inventory_cities,
+    list_suppliers,
     list_material_categories,
     list_materials,
     _serialize_fitting,
+    _serialize_fitting_supplier_offer,
     upsert_material,
     upsert_material_edge_option,
     upsert_material_edge_price,
@@ -104,6 +112,9 @@ from database.repositories.inventory_repository import (
     update_material,
     update_material_edge_image_cache,
     update_material_image_cache,
+)
+from database.repositories.fitting_foundation_repository import (
+    FittingFoundationRepository,
 )
 from database.session import (
     SessionLocal,
@@ -350,6 +361,7 @@ def _normalize_fitting_characteristics(value: object | None) -> dict[str, str]:
 def _serialize_fitting_detail(item: FittingModel) -> dict:
     serialized = dict(_serialize_fitting(item))
     serialized["id"] = int(item.id)
+    serialized["supplier_offers"] = list_fitting_supplier_offers(item.id)
     source_payload = _safe_parse_source_payload_json(item.source_payload_json)
     parsed_item = source_payload.get("parsed_item") if isinstance(source_payload, dict) else {}
     if not isinstance(parsed_item, dict):
@@ -384,6 +396,37 @@ def _serialize_fitting_detail(item: FittingModel) -> dict:
     )
 
     return serialized
+
+
+def _load_fitting_detail_item(item_id: str | int, current_user=None) -> dict | None:
+    db = SessionLocal()
+    try:
+        fitting_model = (
+            db.query(FittingModel)
+            .filter(FittingModel.id == int(item_id))
+            .first()
+        )
+        if not fitting_model:
+            return None
+
+        item = _serialize_fitting_detail(fitting_model)
+        item["images"] = list_fitting_images(item_id)
+
+        if current_user is not None:
+            fitting = get_fitting_by_id(
+                item_id,
+                viewer_user_id=current_user.id,
+                viewer_role=current_user.role,
+            )
+            if fitting:
+                item["owner_user_id"] = fitting.get("owner_user_id")
+                item["owner_display_name"] = fitting.get("owner_display_name")
+                item["owner_login"] = fitting.get("owner_login")
+                item["owner_email"] = fitting.get("owner_email")
+
+        return item
+    finally:
+        db.close()
 
 
 def _image_response(
@@ -1925,6 +1968,227 @@ async def list_fittings_route(
     }
 
 
+@router.get(
+    "/suppliers",
+    response_model=FittingSupplierListResponseSchema,
+)
+async def list_fitting_suppliers_route(
+    include_inactive: bool = Query(default=False),
+    current_user = Depends(require_catalog_reader),
+):
+    _ensure_fitting_feature_access(current_user, "fittings.view")
+
+    return {
+        "success": True,
+        "items": list_suppliers(include_inactive=include_inactive),
+    }
+
+
+@router.get(
+    "/fittings/{item_id}/supplier-offers",
+    response_model=FittingSupplierOfferListResponseSchema,
+)
+async def list_fitting_supplier_offers_route(
+    item_id: str,
+    current_user = Depends(require_catalog_reader),
+):
+    _ensure_fitting_feature_access(current_user, "fittings.view")
+
+    fitting = get_fitting_by_id(
+        item_id,
+        viewer_user_id=current_user.id,
+        viewer_role=current_user.role,
+    )
+    if not fitting:
+        raise HTTPException(status_code=404, detail="Fitting not found")
+
+    return {
+        "success": True,
+        "items": list_fitting_supplier_offers(item_id),
+    }
+
+
+@router.post(
+    "/fittings/{item_id}/supplier-offers",
+    response_model=FittingSupplierOfferOperationResponseSchema,
+)
+async def create_fitting_supplier_offer_route(
+    item_id: str,
+    payload: FittingSupplierOfferInputSchema,
+    current_user = Depends(require_catalog_reader),
+):
+    _ensure_fitting_feature_access(current_user, "fittings.edit")
+
+    fitting = get_fitting_by_id(
+        item_id,
+        viewer_user_id=current_user.id,
+        viewer_role=current_user.role,
+    )
+    if not fitting:
+        raise HTTPException(status_code=404, detail="Fitting not found")
+
+    if payload.supplier_id is None:
+        return {
+            "success": False,
+            "error": "Supplier is required",
+        }
+
+    has_meaningful_offer_data = any(
+        getattr(payload, field) not in (None, "", 0)
+        for field in (
+            "article",
+            "external_product_id",
+            "source_url",
+            "price",
+            "currency",
+            "unit",
+            "stock",
+        )
+    ) or payload.is_active is False or int(payload.priority or 0) != 100
+
+    if not has_meaningful_offer_data:
+        return {
+            "success": False,
+            "error": "Supplier offer data is required",
+        }
+
+    db = SessionLocal()
+    try:
+        fitting_model = db.query(FittingModel).filter(FittingModel.id == int(item_id)).first()
+        if not fitting_model:
+            raise HTTPException(status_code=404, detail="Fitting not found")
+
+        supplier = (
+            db.query(SupplierModel)
+            .filter(SupplierModel.id == int(payload.supplier_id))
+            .first()
+        )
+        if not supplier or not supplier.is_active:
+            return {
+                "success": False,
+                "error": "Supplier not found or inactive",
+            }
+
+        foundation_repo = FittingFoundationRepository(db)
+        offer = foundation_repo.create_offer(
+            fitting_id=fitting_model.id,
+            supplier_id=int(payload.supplier_id),
+            article=payload.article,
+            external_product_id=payload.external_product_id,
+            source_url=payload.source_url,
+            price=payload.price,
+            currency=payload.currency,
+            unit=payload.unit,
+            stock=payload.stock,
+            is_active=payload.is_active,
+            priority=payload.priority,
+        )
+        if offer is None:
+            return {
+                "success": False,
+                "error": "Unable to create supplier offer",
+            }
+
+        db.commit()
+        db.refresh(offer)
+        offer.supplier = supplier
+        return {
+            "success": True,
+            "item": _serialize_fitting_supplier_offer(offer),
+        }
+    except Exception as error:
+        db.rollback()
+        logger.exception("Fitting supplier offer create failed")
+        return {
+            "success": False,
+            "error": str(error) or "Unable to create supplier offer",
+        }
+    finally:
+        db.close()
+
+
+@router.put(
+    "/fittings/{item_id}/supplier-offers/{offer_id}",
+    response_model=FittingSupplierOfferOperationResponseSchema,
+)
+async def update_fitting_supplier_offer_route(
+    item_id: str,
+    offer_id: str,
+    payload: FittingSupplierOfferInputSchema,
+    current_user = Depends(require_catalog_reader),
+):
+    _ensure_fitting_feature_access(current_user, "fittings.edit")
+
+    fitting = get_fitting_by_id(
+        item_id,
+        viewer_user_id=current_user.id,
+        viewer_role=current_user.role,
+    )
+    if not fitting:
+        raise HTTPException(status_code=404, detail="Fitting not found")
+
+    db = SessionLocal()
+    try:
+        fitting_model = db.query(FittingModel).filter(FittingModel.id == int(item_id)).first()
+        if not fitting_model:
+            raise HTTPException(status_code=404, detail="Fitting not found")
+
+        foundation_repo = FittingFoundationRepository(db)
+        offer = foundation_repo.get_offer_by_id(int(offer_id))
+        if not offer or int(offer.fitting_id) != int(fitting_model.id):
+            return {
+                "success": False,
+                "error": "Supplier offer not found",
+            }
+
+        if payload.supplier_id is not None:
+            supplier = (
+                db.query(SupplierModel)
+                .filter(SupplierModel.id == int(payload.supplier_id))
+                .first()
+            )
+            if not supplier:
+                return {
+                    "success": False,
+                    "error": "Supplier not found",
+                }
+        else:
+            supplier = db.query(SupplierModel).filter(SupplierModel.id == int(offer.supplier_id)).first()
+
+        updated_offer = foundation_repo.update_offer(
+            offer,
+            supplier_id=int(payload.supplier_id) if payload.supplier_id is not None else int(offer.supplier_id),
+            article=payload.article,
+            external_product_id=payload.external_product_id,
+            source_url=payload.source_url,
+            price=payload.price,
+            currency=payload.currency,
+            unit=payload.unit,
+            stock=payload.stock,
+            is_active=payload.is_active,
+            priority=payload.priority,
+        )
+
+        db.commit()
+        db.refresh(updated_offer)
+        if supplier is not None:
+            updated_offer.supplier = supplier
+
+        return {
+            "success": True,
+            "item": _serialize_fitting_supplier_offer(updated_offer),
+        }
+    except Exception as error:
+        db.rollback()
+        logger.exception("Fitting supplier offer update failed")
+        return {
+            "success": False,
+            "error": str(error) or "Unable to update supplier offer",
+        }
+    finally:
+        db.close()
+
+
 @router.get("/fittings/{item_id}/image")
 async def get_fitting_image_route(
     item_id: str,
@@ -2014,24 +2278,9 @@ async def get_fitting_detail_route(
     if not fitting:
         raise HTTPException(status_code=404, detail="Fitting not found")
 
-    db = SessionLocal()
-    try:
-        fitting_model = (
-            db.query(FittingModel)
-            .filter(FittingModel.id == int(item_id))
-            .first()
-        )
-        if not fitting_model:
-            raise HTTPException(status_code=404, detail="Fitting not found")
-
-        item = _serialize_fitting_detail(fitting_model)
-        item["images"] = list_fitting_images(item_id)
-        item["owner_user_id"] = fitting.get("owner_user_id")
-        item["owner_display_name"] = fitting.get("owner_display_name")
-        item["owner_login"] = fitting.get("owner_login")
-        item["owner_email"] = fitting.get("owner_email")
-    finally:
-        db.close()
+    item = _load_fitting_detail_item(item_id, current_user=current_user)
+    if not item:
+        raise HTTPException(status_code=404, detail="Fitting not found")
 
     return {
         "success": True,
@@ -2225,27 +2474,35 @@ async def create_fitting_route(
 
     owner_user_id = None if is_system else str(current_user.id)
 
-    item = create_fitting(
-        city=selected_city,
-        code=payload.code,
-        article=effective_article,
-        name=effective_name,
-        description=effective_description,
-        price=effective_price,
-        stock=effective_stock,
-        source=effective_source,
-        brand=effective_brand,
-        fitting_type=payload.fitting_type,
-        fitting_group=payload.fitting_group,
-        image_url=effective_image_url,
-        source_url=effective_source_url,
-        source_payload_json=json.dumps(source_payload, ensure_ascii=False) if source_payload else None,
-        owner_user_id=owner_user_id,
-        is_system=is_system,
-        is_active=payload.is_active,
-        sort_order=payload.sort_order,
-        prepared_gallery_images=prepared_gallery_images,
-    )
+    try:
+        item = create_fitting(
+            city=selected_city,
+            code=payload.code,
+            article=effective_article,
+            name=effective_name,
+            description=effective_description,
+            price=effective_price,
+            stock=effective_stock,
+            source=effective_source,
+            brand=effective_brand,
+            fitting_type=payload.fitting_type,
+            fitting_group=payload.fitting_group,
+            image_url=effective_image_url,
+            source_url=effective_source_url,
+            source_payload_json=json.dumps(source_payload, ensure_ascii=False) if source_payload else None,
+            owner_user_id=owner_user_id,
+            is_system=is_system,
+            is_active=payload.is_active,
+            sort_order=payload.sort_order,
+            supplier_offer=payload.supplier_offer.model_dump() if payload.supplier_offer else None,
+            prepared_gallery_images=prepared_gallery_images,
+        )
+    except Exception as error:
+        logger.exception("Fitting create failed")
+        return {
+            "success": False,
+            "error": str(error) or "Unable to create fitting",
+        }
 
     if not prepared_gallery_images and item.get("image_url") and _claim_fitting_image_warm(item.get("id")):
         background_tasks.add_task(_warm_fitting_image_cache_task, item)
@@ -2261,7 +2518,7 @@ async def create_fitting_route(
 
     return {
         "success": True,
-        "item": item,
+        "item": _load_fitting_detail_item(item["id"], current_user=current_user) or item,
     }
 
 
@@ -2380,25 +2637,33 @@ async def update_fitting_route(
             "error": "Unable to parse fitting from source link",
         }
 
-    item = update_fitting(
-        item_id=item_id,
-        city=selected_city,
-        code=payload.code,
-        article=effective_article,
-        name=effective_name,
-        description=effective_description,
-        price=effective_price,
-        stock=effective_stock,
-        fitting_type=payload.fitting_type,
-        fitting_group=payload.fitting_group,
-        image_url=effective_image_url,
-        source_url=effective_source_url,
-        source_payload_json=json.dumps(source_payload, ensure_ascii=False) if source_payload else None,
-        owner_user_id=owner_user_id,
-        is_system=is_system,
-        is_active=payload.is_active,
-        sort_order=payload.sort_order,
-    )
+    try:
+        item = update_fitting(
+            item_id=item_id,
+            city=selected_city,
+            code=payload.code,
+            article=effective_article,
+            name=effective_name,
+            description=effective_description,
+            price=effective_price,
+            stock=effective_stock,
+            fitting_type=payload.fitting_type,
+            fitting_group=payload.fitting_group,
+            image_url=effective_image_url,
+            source_url=effective_source_url,
+            source_payload_json=json.dumps(source_payload, ensure_ascii=False) if source_payload else None,
+            owner_user_id=owner_user_id,
+            is_system=is_system,
+            is_active=payload.is_active,
+            sort_order=payload.sort_order,
+            supplier_offer=payload.supplier_offer.model_dump() if payload.supplier_offer else None,
+        )
+    except Exception as error:
+        logger.exception("Fitting update failed")
+        return {
+            "success": False,
+            "error": str(error) or "Unable to update fitting",
+        }
 
     if item and item.get("image_url") and not item.get("has_cached_image"):
         if _claim_fitting_image_warm(item.get("id")):
@@ -2415,7 +2680,7 @@ async def update_fitting_route(
 
     return {
         "success": True,
-        "item": item,
+        "item": _load_fitting_detail_item(item["id"], current_user=current_user) or item,
     }
 
 

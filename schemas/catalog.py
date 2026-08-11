@@ -470,6 +470,34 @@ class FittingCatalogImageSchema(BaseModel):
     content_type: str
 
 
+class FittingSupplierSchema(BaseModel):
+    id: int
+    code: str
+    name: str
+    is_active: bool = True
+
+
+class FittingSupplierOfferInputSchema(BaseModel):
+    offer_id: int | None = None
+    supplier_id: int | None = None
+    article: str | None = Field(default=None, max_length=128)
+    external_product_id: str | None = Field(default=None, max_length=128)
+    source_url: str | None = Field(default=None, max_length=1000)
+    price: float | None = None
+    currency: str | None = Field(default=None, max_length=16)
+    unit: str | None = Field(default=None, max_length=32)
+    stock: str | None = Field(default=None, max_length=255)
+    is_active: bool = True
+    priority: int = 100
+
+
+class FittingSupplierOfferSchema(FittingSupplierOfferInputSchema):
+    id: int
+    fitting_id: int
+    supplier_code: str
+    supplier_name: str
+
+
 class FittingCatalogDetailItemSchema(FittingCatalogItemSchema):
     id: int
     brand: str | None = None
@@ -478,6 +506,7 @@ class FittingCatalogDetailItemSchema(FittingCatalogItemSchema):
     availability: str | None = None
     characteristics: dict[str, str] = Field(default_factory=dict)
     images: List[FittingCatalogImageSchema] = Field(default_factory=list)
+    supplier_offers: List[FittingSupplierOfferSchema] = Field(default_factory=list)
     parsed_at: datetime | None = None
     price_updated_at: datetime | None = None
 
@@ -536,6 +565,7 @@ class FittingCatalogCreateSchema(BaseModel):
         default=None,
         max_length=1000,
     )
+    supplier_offer: FittingSupplierOfferInputSchema | None = None
     is_active: bool = True
     sort_order: int = 0
     is_system: bool = False
@@ -551,7 +581,25 @@ class FittingCatalogOperationResponseSchema(BaseModel):
     deleted_count: int = 0
     deleted_ids: List[str] = Field(default_factory=list)
     deleted_cities: List[str] = Field(default_factory=list)
-    item: FittingCatalogItemSchema | None = None
+    item: FittingCatalogDetailItemSchema | None = None
+    error: str | None = None
+
+
+class FittingSupplierListResponseSchema(BaseModel):
+    success: bool
+    items: List[FittingSupplierSchema] = Field(default_factory=list)
+    error: str | None = None
+
+
+class FittingSupplierOfferListResponseSchema(BaseModel):
+    success: bool
+    items: List[FittingSupplierOfferSchema] = Field(default_factory=list)
+    error: str | None = None
+
+
+class FittingSupplierOfferOperationResponseSchema(BaseModel):
+    success: bool
+    item: FittingSupplierOfferSchema | None = None
     error: str | None = None
 
 

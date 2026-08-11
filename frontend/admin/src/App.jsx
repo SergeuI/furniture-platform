@@ -203,6 +203,7 @@ import {
   createFittingHoleTemplate,
   createFittingHoleBundle,
   createFittingHolePoint,
+  createFittingSupplierOffer,
   createManualService,
   createMyEmailChangeRequest,
   createCatalogItem,
@@ -224,6 +225,8 @@ import {
   getFittingsCatalog,
   getFittingDetails,
   getFittingImageBlob,
+  listFittingSuppliers,
+  listFittingSupplierOffers,
   getMaterialDetails,
   getMaterialImportJob,
   getMaterialImageBlob,
@@ -272,6 +275,7 @@ import {
   updateCatalogItemActive,
   updateFittingHolePoint,
   updateFitting,
+  updateFittingSupplierOffer,
   updateMyViyarAuth,
   updateManualService,
   updateProject,
@@ -7326,6 +7330,8 @@ export default function App() {
   const [fittingCreateMode, setFittingCreateMode] = useState("manual");
   const [fittingModalMode, setFittingModalMode] = useState("create");
   const [editingFittingItem, setEditingFittingItem] = useState(null);
+  const [fittingSupplierItems, setFittingSupplierItems] = useState([]);
+  const [fittingSupplierListLoading, setFittingSupplierListLoading] = useState(false);
   const [fittingColumnVisibility, setFittingColumnVisibility] = useState({
     price: true,
     stock: true,
@@ -10450,6 +10456,14 @@ export default function App() {
     visibleFittingCategories,
   ]);
 
+  useEffect(() => {
+    if (!token || !fittingSourceModalOpen) {
+      return;
+    }
+
+    void loadFittingSuppliers(token);
+  }, [fittingSourceModalOpen, token]);
+
   const pageLabel = useMemo(() => {
     if (total === 0) {
       return `0 ${t.of} 0`;
@@ -12563,6 +12577,53 @@ export default function App() {
         fittingsCatalogRequestRef.current.pending = false;
         setFittingsCatalogLoading(false);
       }
+    }
+  }
+
+  async function loadFittingSuppliers(activeToken = token) {
+    if (!activeToken) {
+      setFittingSupplierItems([]);
+      return [];
+    }
+
+    if (fittingSupplierListLoading) {
+      return fittingSupplierItems;
+    }
+
+    setFittingSupplierListLoading(true);
+    try {
+      const result = await listFittingSuppliers(activeToken, false);
+
+      if (!result.success) {
+        if (result.error) {
+          console.error("Unable to load fitting suppliers", result.error, result.status);
+        }
+        setFittingSupplierItems([]);
+        return [];
+      }
+
+      let suppliers = Array.isArray(result.items) ? result.items : [];
+      const currentOffer = fittingModalMode === "edit"
+        ? editingFittingItem?.supplier_offers?.[0] || selectedFittingDetail?.supplier_offers?.[0] || null
+        : null;
+      if (
+        currentOffer?.supplier_id &&
+        !suppliers.some((supplier) => String(supplier.id) === String(currentOffer.supplier_id))
+      ) {
+        suppliers = [
+          {
+            id: Number(currentOffer.supplier_id),
+            code: String(currentOffer.supplier_code || ""),
+            name: String(currentOffer.supplier_name || `Supplier ${currentOffer.supplier_id}`),
+            is_active: false,
+          },
+          ...suppliers,
+        ];
+      }
+      setFittingSupplierItems(suppliers);
+      return suppliers;
+    } finally {
+      setFittingSupplierListLoading(false);
     }
   }
 
@@ -17465,16 +17526,45 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
     setFittingSourceModalOpen(true);
   }
 
-  function openEditFittingModal(item) {
+  async function openEditFittingModal(item) {
     if (!canEditFittingItemHelper(user, item)) {
       return;
     }
 
     setOpenFittingMenuId("");
+    let nextItem = item;
+    if (token && (!Array.isArray(item?.supplier_offers) || !item.supplier_offers.length)) {
+      const detailResult = await getFittingDetails(token, item.id);
+      if (detailResult.success && detailResult.item) {
+        nextItem = detailResult.item;
+      }
+    }
+
+    const primaryOffer = Array.isArray(nextItem?.supplier_offers) && nextItem.supplier_offers.length
+      ? nextItem.supplier_offers[0]
+      : null;
+    if (primaryOffer?.supplier_id) {
+      setFittingSupplierItems((current) => {
+        if (current.some((supplier) => String(supplier.id) === String(primaryOffer.supplier_id))) {
+          return current;
+        }
+
+        return [
+          {
+            id: Number(primaryOffer.supplier_id),
+            code: String(primaryOffer.supplier_code || ""),
+            name: String(primaryOffer.supplier_name || `Supplier ${primaryOffer.supplier_id}`),
+            is_active: false,
+          },
+          ...current,
+        ];
+      });
+    }
+
     setFittingModalMode("edit");
-    setEditingFittingItem(item);
-    setFittingCreateMode(item?.source_url ? "source" : "manual");
-    setNewFittingForm(createFittingFormDraft(item, { city: activeCity || "" }));
+    setEditingFittingItem(nextItem);
+    setFittingCreateMode(nextItem?.source_url ? "source" : "manual");
+    setNewFittingForm(createFittingFormDraft(nextItem, { city: activeCity || "" }));
     setFittingSourceModalOpen(true);
   }
 
@@ -25528,6 +25618,180 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                 </>
               )}
 
+              <section className="fitting-form-section">
+                <header className="fitting-form-section-header">
+                  <strong>Постачальник і ціна</strong>
+                </header>
+                <div className="fitting-form-grid fitting-form-grid-offer">
+                  <label>
+                    <span>Постачальник</span>
+                    <select
+                      onChange={(event) =>
+                        setNewFittingForm((current) => ({
+                          ...current,
+                          supplier_offer: {
+                            ...current.supplier_offer,
+                            supplier_id: event.target.value,
+                          },
+                        }))
+                      }
+                      value={newFittingForm.supplier_offer?.supplier_id || ""}
+                    >
+                      <option value="">Не створювати offer</option>
+                      {fittingSupplierItems.map((supplier) => (
+                        <option key={supplier.id} value={supplier.id}>
+                          {supplier.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label>
+                    <span>Артикул постачальника</span>
+                    <input
+                      onChange={(event) =>
+                        setNewFittingForm((current) => ({
+                          ...current,
+                          supplier_offer: {
+                            ...current.supplier_offer,
+                            article: event.target.value,
+                          },
+                        }))
+                      }
+                      type="text"
+                      value={newFittingForm.supplier_offer?.article || ""}
+                    />
+                  </label>
+
+                  <label>
+                    <span>Ціна</span>
+                    <input
+                      min="0"
+                      onChange={(event) =>
+                        setNewFittingForm((current) => ({
+                          ...current,
+                          supplier_offer: {
+                            ...current.supplier_offer,
+                            price: event.target.value,
+                          },
+                        }))
+                      }
+                      step="0.01"
+                      type="number"
+                      value={newFittingForm.supplier_offer?.price || ""}
+                    />
+                  </label>
+
+                  <label>
+                    <span>Валюта</span>
+                    <input
+                      onChange={(event) =>
+                        setNewFittingForm((current) => ({
+                          ...current,
+                          supplier_offer: {
+                            ...current.supplier_offer,
+                            currency: event.target.value,
+                          },
+                        }))
+                      }
+                      type="text"
+                      value={newFittingForm.supplier_offer?.currency || ""}
+                    />
+                  </label>
+
+                  <label>
+                    <span>Одиниця</span>
+                    <input
+                      onChange={(event) =>
+                        setNewFittingForm((current) => ({
+                          ...current,
+                          supplier_offer: {
+                            ...current.supplier_offer,
+                            unit: event.target.value,
+                          },
+                        }))
+                      }
+                      type="text"
+                      value={newFittingForm.supplier_offer?.unit || ""}
+                    />
+                  </label>
+
+                  <label>
+                    <span>Stock / наявність</span>
+                    <input
+                      onChange={(event) =>
+                        setNewFittingForm((current) => ({
+                          ...current,
+                          supplier_offer: {
+                            ...current.supplier_offer,
+                            stock: event.target.value,
+                          },
+                        }))
+                      }
+                      type="text"
+                      value={newFittingForm.supplier_offer?.stock || ""}
+                    />
+                  </label>
+
+                  <label>
+                    <span>URL товару</span>
+                    <input
+                      onChange={(event) =>
+                        setNewFittingForm((current) => ({
+                          ...current,
+                          supplier_offer: {
+                            ...current.supplier_offer,
+                            source_url: event.target.value,
+                          },
+                        }))
+                      }
+                      type="url"
+                      value={newFittingForm.supplier_offer?.source_url || ""}
+                    />
+                  </label>
+
+                  <label>
+                    <span>Пріоритет</span>
+                    <input
+                      min="0"
+                      onChange={(event) =>
+                        setNewFittingForm((current) => ({
+                          ...current,
+                          supplier_offer: {
+                            ...current.supplier_offer,
+                            priority: event.target.value,
+                          },
+                        }))
+                      }
+                      type="number"
+                      value={newFittingForm.supplier_offer?.priority ?? 100}
+                    />
+                  </label>
+
+                  <label className="toggle-label">
+                    <input
+                      checked={newFittingForm.supplier_offer?.is_active !== false}
+                      onChange={(event) =>
+                        setNewFittingForm((current) => ({
+                          ...current,
+                          supplier_offer: {
+                            ...current.supplier_offer,
+                            is_active: event.target.checked,
+                          },
+                        }))
+                      }
+                      type="checkbox"
+                    />
+                    Активна пропозиція
+                  </label>
+                </div>
+                <div className="fitting-form-note">
+                  {fittingSupplierListLoading
+                    ? "Завантажуємо suppliers..."
+                    : "Якщо блок порожній, буде створено лише canonical fitting."}
+                </div>
+              </section>
+
               <div className="confirm-actions fitting-source-actions">
                 <button
                   className="ghost-button"
@@ -26701,6 +26965,65 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                     </dl>
                   ) : (
                     <p className="fitting-details-empty">{t.fittingNoCharacteristics}</p>
+                  )}
+                </div>
+
+                <div className="fitting-details-offers">
+                  <div className="fitting-details-section-header">
+                    <strong>Постачальники</strong>
+                    <span className="service-tree-badge subtle">
+                      {Array.isArray(selectedFittingDetail.supplier_offers)
+                        ? selectedFittingDetail.supplier_offers.length
+                        : 0}
+                    </span>
+                  </div>
+                  {Array.isArray(selectedFittingDetail.supplier_offers) && selectedFittingDetail.supplier_offers.length ? (
+                    <div className="fitting-details-offers-list">
+                      {selectedFittingDetail.supplier_offers.map((offer) => (
+                        <article className="fitting-details-offer-card" key={offer.id}>
+                          <header>
+                            <strong>{offer.supplier_name || offer.supplier_code || `Supplier ${offer.supplier_id}`}</strong>
+                            <span className="service-tree-badge subtle">
+                              {offer.is_active ? "Активна" : "Неактивна"}
+                            </span>
+                          </header>
+                          <div className="fitting-details-offer-grid">
+                            <div>
+                              <span>Артикул</span>
+                              <strong>{offer.article || t.notSet}</strong>
+                            </div>
+                            <div>
+                              <span>Ціна</span>
+                              <strong>
+                                {offer.price === null || offer.price === undefined
+                                  ? t.notSet
+                                  : `${offer.price} ${offer.currency || "UAH"}`}
+                              </strong>
+                            </div>
+                            <div>
+                              <span>Пріоритет</span>
+                              <strong>{offer.priority}</strong>
+                            </div>
+                            <div>
+                              <span>Одиниця</span>
+                              <strong>{offer.unit || t.notSet}</strong>
+                            </div>
+                          </div>
+                          {(offer.stock || offer.source_url) ? (
+                            <div className="fitting-details-offer-meta">
+                              {offer.stock ? <span>{offer.stock}</span> : null}
+                              {offer.source_url ? (
+                                <a href={offer.source_url} rel="noreferrer" target="_blank">
+                                  URL
+                                </a>
+                              ) : null}
+                            </div>
+                          ) : null}
+                        </article>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="fitting-details-empty">Немає supplier offers</p>
                   )}
                 </div>
               </div>

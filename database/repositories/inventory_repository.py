@@ -9,6 +9,8 @@ from sqlalchemy.orm import load_only, object_session
 
 from database.models.fitting import (
     FittingModel,
+    FittingSupplierOfferModel,
+    SupplierModel,
 )
 from database.models.fitting_image import (
     FittingImageModel,
@@ -33,6 +35,9 @@ from database.models.user import (
 )
 from database.session import (
     SessionLocal,
+)
+from database.repositories.fitting_foundation_repository import (
+    FittingFoundationRepository,
 )
 from services.fitting_image_gallery_service import (
     PreparedFittingGalleryImage,
@@ -554,6 +559,100 @@ def _serialize_fitting(item: FittingModel, *, owner_profile: dict | None = None)
         "is_active": bool(item.is_active),
         "sort_order": item.sort_order or 0,
     }
+
+
+def _serialize_supplier(item: SupplierModel) -> dict:
+
+    return {
+        "id": int(item.id),
+        "code": item.code,
+        "name": item.name,
+        "is_active": bool(item.is_active),
+    }
+
+
+def _serialize_fitting_supplier_offer(item: FittingSupplierOfferModel) -> dict:
+
+    supplier = getattr(item, "supplier", None)
+    supplier_code = getattr(supplier, "code", None) or ""
+    supplier_name = getattr(supplier, "name", None) or ""
+
+    return {
+        "id": int(item.id),
+        "fitting_id": int(item.fitting_id),
+        "supplier_id": int(item.supplier_id),
+        "supplier_code": supplier_code,
+        "supplier_name": supplier_name,
+        "article": _normalize_fitting_value(item.article),
+        "external_product_id": _normalize_fitting_value(item.external_product_id),
+        "source_url": _normalize_fitting_value(item.source_url),
+        "price": _normalize_price_value(item.price),
+        "currency": _normalize_fitting_value(item.currency),
+        "unit": _normalize_fitting_value(item.unit),
+        "stock": _normalize_fitting_value(item.stock),
+        "is_active": bool(item.is_active),
+        "priority": int(item.priority or 0),
+    }
+
+
+def _normalize_fitting_supplier_offer_payload(
+    supplier_offer: dict | None,
+) -> dict | None:
+
+    if not supplier_offer:
+        return None
+
+    normalized_supplier_id = supplier_offer.get("supplier_id")
+    if normalized_supplier_id in (None, "", 0):
+        return None
+
+    normalized_article = _normalize_fitting_value(supplier_offer.get("article"))
+    normalized_external_product_id = _normalize_fitting_value(supplier_offer.get("external_product_id"))
+    normalized_source_url = _normalize_fitting_value(supplier_offer.get("source_url"))
+    normalized_currency = _normalize_fitting_value(supplier_offer.get("currency"))
+    normalized_unit = _normalize_fitting_value(supplier_offer.get("unit"))
+    normalized_stock = _normalize_fitting_value(supplier_offer.get("stock"))
+    normalized_price = _normalize_price_value(supplier_offer.get("price"))
+    normalized_priority = int(supplier_offer.get("priority") or 0)
+
+    return {
+        "offer_id": supplier_offer.get("offer_id"),
+        "supplier_id": int(normalized_supplier_id),
+        "article": normalized_article,
+        "external_product_id": normalized_external_product_id,
+        "source_url": normalized_source_url,
+        "price": normalized_price,
+        "currency": normalized_currency,
+        "unit": normalized_unit,
+        "stock": normalized_stock,
+        "is_active": bool(supplier_offer.get("is_active", True)),
+        "priority": normalized_priority,
+    }
+
+
+def _has_meaningful_supplier_offer_data(supplier_offer: dict | None) -> bool:
+
+    if not supplier_offer:
+        return False
+
+    if supplier_offer.get("is_active") is False:
+        return True
+
+    if int(supplier_offer.get("priority") or 0) not in (0, 100):
+        return True
+
+    return any(
+        supplier_offer.get(key) not in (None, "", 0)
+        for key in (
+            "article",
+            "external_product_id",
+            "source_url",
+            "price",
+            "currency",
+            "unit",
+            "stock",
+        )
+    )
 
 
 def _serialize_fitting_image_metadata(item: FittingImageModel) -> dict:
@@ -1665,6 +1764,7 @@ def create_fitting(
     is_system: bool,
     is_active: bool,
     sort_order: int = 0,
+    supplier_offer: dict | None = None,
     prepared_gallery_images: Sequence[PreparedFittingGalleryImage] | None = None,
 ) -> dict:
 
@@ -1712,6 +1812,25 @@ def create_fitting(
         )
         db.add(item)
         db.flush()
+
+        normalized_supplier_offer = _normalize_fitting_supplier_offer_payload(supplier_offer)
+        if normalized_supplier_offer and _has_meaningful_supplier_offer_data(normalized_supplier_offer):
+            foundation_repo = FittingFoundationRepository(db)
+            created_offer = foundation_repo.create_offer(
+                fitting_id=item.id,
+                supplier_id=normalized_supplier_offer["supplier_id"],
+                article=normalized_supplier_offer["article"],
+                external_product_id=normalized_supplier_offer["external_product_id"],
+                source_url=normalized_supplier_offer["source_url"],
+                price=normalized_supplier_offer["price"],
+                currency=normalized_supplier_offer["currency"],
+                unit=normalized_supplier_offer["unit"],
+                stock=normalized_supplier_offer["stock"],
+                is_active=normalized_supplier_offer["is_active"],
+                priority=normalized_supplier_offer["priority"],
+            )
+            if created_offer is None:
+                raise ValueError("Unable to create fitting supplier offer")
 
         if gallery_images:
             _add_prepared_fitting_gallery_images(
@@ -1863,6 +1982,7 @@ def update_fitting(
     is_system: bool,
     is_active: bool,
     sort_order: int = 0,
+    supplier_offer: dict | None = None,
 ) -> dict | None:
 
     db = SessionLocal()
@@ -1910,6 +2030,53 @@ def update_fitting(
         item.is_active = bool(is_active)
         item.sort_order = int(sort_order or 0)
 
+        normalized_supplier_offer = _normalize_fitting_supplier_offer_payload(supplier_offer)
+        if normalized_supplier_offer and _has_meaningful_supplier_offer_data(normalized_supplier_offer):
+            foundation_repo = FittingFoundationRepository(db)
+            offer = None
+            offer_id = normalized_supplier_offer.get("offer_id")
+            if offer_id not in (None, "", 0):
+                offer = foundation_repo.get_offer_by_id(int(offer_id))
+                if offer and int(offer.fitting_id) != int(item.id):
+                    offer = None
+            if offer is None:
+                offer = (
+                    db.query(FittingSupplierOfferModel)
+                    .filter(FittingSupplierOfferModel.fitting_id == int(item.id))
+                    .filter(FittingSupplierOfferModel.supplier_id == normalized_supplier_offer["supplier_id"])
+                    .order_by(
+                        FittingSupplierOfferModel.priority.asc(),
+                        FittingSupplierOfferModel.id.asc(),
+                    )
+                    .first()
+                )
+
+            offer_payload = {
+                "supplier_id": normalized_supplier_offer["supplier_id"],
+                "article": normalized_supplier_offer["article"],
+                "external_product_id": normalized_supplier_offer["external_product_id"],
+                "source_url": normalized_supplier_offer["source_url"],
+                "price": normalized_supplier_offer["price"],
+                "currency": normalized_supplier_offer["currency"],
+                "unit": normalized_supplier_offer["unit"],
+                "stock": normalized_supplier_offer["stock"],
+                "is_active": normalized_supplier_offer["is_active"],
+                "priority": normalized_supplier_offer["priority"],
+            }
+
+            if offer is None:
+                created_offer = foundation_repo.create_offer(
+                    fitting_id=item.id,
+                    **offer_payload,
+                )
+                if created_offer is None:
+                    raise ValueError("Unable to create fitting supplier offer")
+            else:
+                foundation_repo.update_offer(
+                    offer,
+                    **offer_payload,
+                )
+
         db.commit()
         db.refresh(item)
 
@@ -1921,6 +2088,83 @@ def update_fitting(
 
     finally:
 
+        db.close()
+
+
+def list_suppliers(include_inactive: bool = False) -> list[dict]:
+
+    db = SessionLocal()
+
+    try:
+        query = db.query(SupplierModel)
+        if not include_inactive:
+            query = query.filter(SupplierModel.is_active.is_(True))
+        rows = query.order_by(
+            SupplierModel.name.asc(),
+            SupplierModel.code.asc(),
+            SupplierModel.id.asc(),
+        ).all()
+        return [
+            _serialize_supplier(row)
+            for row in rows
+        ]
+    finally:
+        db.close()
+
+
+def list_fitting_supplier_offers(fitting_id: str | int) -> list[dict]:
+
+    db = SessionLocal()
+
+    try:
+        rows = (
+            db.query(FittingSupplierOfferModel)
+            .options(
+                load_only(
+                    FittingSupplierOfferModel.id,
+                    FittingSupplierOfferModel.fitting_id,
+                    FittingSupplierOfferModel.supplier_id,
+                    FittingSupplierOfferModel.article,
+                    FittingSupplierOfferModel.external_product_id,
+                    FittingSupplierOfferModel.source_url,
+                    FittingSupplierOfferModel.price,
+                    FittingSupplierOfferModel.currency,
+                    FittingSupplierOfferModel.unit,
+                    FittingSupplierOfferModel.stock,
+                    FittingSupplierOfferModel.is_active,
+                    FittingSupplierOfferModel.priority,
+                )
+            )
+            .filter(FittingSupplierOfferModel.fitting_id == int(fitting_id))
+            .order_by(
+                FittingSupplierOfferModel.priority.asc(),
+                FittingSupplierOfferModel.id.asc(),
+            )
+            .all()
+        )
+
+        supplier_ids = [
+            int(row.supplier_id)
+            for row in rows
+        ]
+        suppliers = {}
+        if supplier_ids:
+            supplier_rows = (
+                db.query(SupplierModel)
+                .filter(SupplierModel.id.in_(supplier_ids))
+                .all()
+            )
+            suppliers = {int(row.id): row for row in supplier_rows}
+
+        serialized_rows = []
+        for row in rows:
+            supplier = suppliers.get(int(row.supplier_id))
+            if supplier is not None:
+                row.supplier = supplier
+            serialized_rows.append(_serialize_fitting_supplier_offer(row))
+
+        return serialized_rows
+    finally:
         db.close()
 
 

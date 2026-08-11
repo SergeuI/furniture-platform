@@ -359,6 +359,42 @@ export async function updateFitting(token, itemId, payload) {
   });
 }
 
+export async function listFittingSuppliers(token, includeInactive = false) {
+  const searchParams = new URLSearchParams();
+
+  if (includeInactive) {
+    searchParams.set("include_inactive", "true");
+  }
+
+  const query = searchParams.toString();
+
+  return request(`/catalog/suppliers${query ? `?${query}` : ""}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function listFittingSupplierOffers(token, itemId) {
+  return request(`/catalog/fittings/${encodeURIComponent(String(itemId || ""))}/supplier-offers`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function createFittingSupplierOffer(token, itemId, payload) {
+  return request(`/catalog/fittings/${encodeURIComponent(String(itemId || ""))}/supplier-offers`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateFittingSupplierOffer(token, itemId, offerId, payload) {
+  return request(`/catalog/fittings/${encodeURIComponent(String(itemId || ""))}/supplier-offers/${encodeURIComponent(String(offerId || ""))}`, {
+    method: "PUT",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function deleteFitting(token, itemId) {
   return request(`/catalog/fittings/${itemId}`, {
     method: "DELETE",
