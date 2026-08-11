@@ -1335,20 +1335,24 @@ class WizardApp(tk.Tk):
         return None
 
     def _managed_button_state(self, key: str, proc: subprocess.Popen | None) -> str:
+        url = self._service_url_for_key(key)
+        if url and self._service_responds(url):
+            return "success"
         if proc is None or proc.poll() is not None:
             return "idle"
-        url = self._service_url_for_key(key)
-        if url and not self._service_responds(url):
+        if url:
             return "starting"
         return "success"
 
     def _managed_component_status(self, key: str, proc: subprocess.Popen | None) -> str:
+        url = self._service_url_for_key(key)
+        if url and self._service_responds(url):
+            return "online"
         if proc is None or proc.poll() is not None:
             return "не запущено"
         if key == "bot":
             return self._bot_runtime_status(True)
-        url = self._service_url_for_key(key)
-        if url and not self._service_responds(url):
+        if url:
             return "запускається..."
         return "працює"
 
@@ -1452,10 +1456,10 @@ class WizardApp(tk.Tk):
         return "offline"
 
     def _process_service_status(self, proc: subprocess.Popen | None, url_ok: bool) -> str:
-        if proc is None or proc.poll() is not None:
-            return "offline"
         if url_ok:
             return "online"
+        if proc is None or proc.poll() is not None:
+            return "offline"
         return "starting"
 
     def _build_ui(self) -> None:
@@ -5028,7 +5032,7 @@ class WizardApp(tk.Tk):
                 api_proc = self.managed_processes.get("api")
                 bot_proc = self.managed_processes.get("bot")
                 bot_running = bot_proc is not None and bot_proc.poll() is None
-                if api_up and app_up and admin_up and api_proc is not None and api_proc.poll() is None and bot_running:
+                if api_up and app_up and admin_up and bot_running:
                     ready = True
                     break
                 threading.Event().wait(0.5)
