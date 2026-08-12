@@ -112,8 +112,44 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _driver_execute(connection: sqlite3.Connection, statement: str, parameters=None):
+    executor = getattr(connection, "exec_driver_sql", None)
+    if callable(executor):
+        if parameters is None:
+            return executor(statement)
+        return executor(statement, parameters)
+
+    cursor = connection.cursor()
+    if parameters is None:
+        return cursor.execute(statement)
+    return cursor.execute(statement, parameters)
+
+
+def _driver_executemany(connection: sqlite3.Connection, statement: str, parameter_sets):
+    executor = getattr(connection, "exec_driver_sql", None)
+    if callable(executor):
+        return executor(statement, parameter_sets)
+
+    executemany = getattr(connection, "executemany", None)
+    if callable(executemany):
+        return executemany(statement, parameter_sets)
+
+    cursor = connection.cursor()
+    return cursor.executemany(statement, parameter_sets)
+
+
+def _connection_in_transaction(connection: sqlite3.Connection) -> bool:
+    in_transaction = getattr(connection, "in_transaction", None)
+    if callable(in_transaction):
+        return bool(in_transaction())
+    if in_transaction is not None:
+        return bool(in_transaction)
+    return False
+
+
 def _table_exists(connection: sqlite3.Connection, table_name: str) -> bool:
-    row = connection.execute(
+    row = _driver_execute(
+        connection,
         "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
         (table_name,),
     ).fetchone()
@@ -121,12 +157,13 @@ def _table_exists(connection: sqlite3.Connection, table_name: str) -> bool:
 
 
 def _column_exists(connection: sqlite3.Connection, table_name: str, column_name: str) -> bool:
-    rows = connection.execute(f"PRAGMA table_info({table_name})").fetchall()
+    rows = _driver_execute(connection, f"PRAGMA table_info({table_name})").fetchall()
     return any(str(row[1]) == column_name for row in rows)
 
 
 def _index_exists(connection: sqlite3.Connection, index_name: str) -> bool:
-    row = connection.execute(
+    row = _driver_execute(
+        connection,
         "SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = ?",
         (index_name,),
     ).fetchone()
@@ -138,7 +175,8 @@ def _build_catalog_key_rows(
     has_catalog_key_column: bool,
 ) -> list[dict[str, object]]:
     if has_catalog_key_column:
-        rows = connection.execute(
+        rows = _driver_execute(
+            connection,
             """
             SELECT id, code, name
             FROM fittings
@@ -147,7 +185,8 @@ def _build_catalog_key_rows(
             """
         ).fetchall()
     else:
-        rows = connection.execute(
+        rows = _driver_execute(
+            connection,
             """
             SELECT id, code, name
             FROM fittings
@@ -208,7 +247,8 @@ def _build_plan(connection: sqlite3.Connection) -> dict[str, object]:
 
 
 def _supplier_exists(connection: sqlite3.Connection, code: str) -> bool:
-    row = connection.execute(
+    row = _driver_execute(
+        connection,
         "SELECT 1 FROM suppliers WHERE code = ?",
         (code,),
     ).fetchone()
@@ -222,24 +262,30 @@ def _create_backup(database_path: Path) -> Path:
     return backup_path
 
 
-def _apply_plan(connection: sqlite3.Connection, plan: dict[str, object]) -> None:
+def _apply_plan(
+    connection: sqlite3.Connection,
+    plan: dict[str, object],
+    caller_owns_transaction: bool,
+) -> None:
     if plan["prerequisite_missing"]:
         raise SystemExit("Table fittings does not exist. Run the base schema first.")
 
-    connection.execute("PRAGMA foreign_keys = ON")
-    connection.execute("BEGIN")
+    _driver_execute(connection, "PRAGMA foreign_keys = ON")
+    if not caller_owns_transaction and not _connection_in_transaction(connection):
+        _driver_execute(connection, "BEGIN")
     try:
         for table_name in plan["missing_tables"]:
             if table_name == "suppliers":
-                connection.execute(SUPPLIERS_TABLE_SQL)
+                _driver_execute(connection, SUPPLIERS_TABLE_SQL)
             elif table_name == "fitting_supplier_offers":
-                connection.execute(FITTING_SUPPLIER_OFFERS_TABLE_SQL)
+                _driver_execute(connection, FITTING_SUPPLIER_OFFERS_TABLE_SQL)
 
         if "catalog_key" in plan["missing_columns"]:
-            connection.execute(FITTINGS_CATALOG_KEY_COLUMN_SQL)
+            _driver_execute(connection, FITTINGS_CATALOG_KEY_COLUMN_SQL)
 
         if plan["catalog_key_rows"]:
-            connection.executemany(
+            _driver_executemany(
+                connection,
                 """
                 UPDATE fittings
                 SET catalog_key = ?
@@ -255,7 +301,8 @@ def _apply_plan(connection: sqlite3.Connection, plan: dict[str, object]) -> None
             if not _table_exists(connection, "suppliers"):
                 raise SystemExit("Suppliers table was not created as expected.")
             if not _supplier_exists(connection, VIYAR_SUPPLIER_CODE):
-                connection.execute(
+                _driver_execute(
+                    connection,
                     """
                     INSERT INTO suppliers (code, name, is_active)
                     VALUES (?, ?, 1)
@@ -264,25 +311,35 @@ def _apply_plan(connection: sqlite3.Connection, plan: dict[str, object]) -> None
                 )
 
         for index_name in plan["missing_indexes"]:
-            connection.execute(INDEXES[index_name])
+            _driver_execute(connection, INDEXES[index_name])
     except Exception:
-        connection.rollback()
+        if not caller_owns_transaction:
+            connection.rollback()
         raise
     else:
-        connection.commit()
+        if not caller_owns_transaction:
+            connection.commit()
 
 
 def ensure_fittings_foundation_schema(connection: sqlite3.Connection) -> None:
-    plan = _build_plan(connection)
-    if plan["prerequisite_missing"]:
-        missing = ", ".join(plan["missing_prerequisites"]) or "unknown"
-        raise SystemExit(f"Missing prerequisite tables: {missing}")
+    caller_owns_transaction = _connection_in_transaction(connection)
+    try:
+        plan = _build_plan(connection)
+        if plan["prerequisite_missing"]:
+            missing = ", ".join(plan["missing_prerequisites"]) or "unknown"
+            raise SystemExit(f"Missing prerequisite tables: {missing}")
 
-    if any(
-        plan[key]
-        for key in ("missing_tables", "missing_columns", "missing_indexes", "catalog_key_rows")
-    ) or plan["seed_viyar_supplier"]:
-        _apply_plan(connection, plan)
+        if any(
+            plan[key]
+            for key in ("missing_tables", "missing_columns", "missing_indexes", "catalog_key_rows")
+        ) or plan["seed_viyar_supplier"]:
+            _apply_plan(connection, plan, caller_owns_transaction)
+        elif not caller_owns_transaction:
+            connection.commit()
+    except BaseException:
+        if not caller_owns_transaction and _connection_in_transaction(connection):
+            connection.rollback()
+        raise
 
 
 def _print_plan(

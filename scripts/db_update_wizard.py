@@ -1,4 +1,4 @@
-"""Майстер безпечного оновлення бази даних і локальних Git-комітів.
+﻿"""Майстер безпечного оновлення бази даних і локальних Git-комітів.
 
 Ця програма допомагає:
 - вибрати локальний або серверний сценарій;
@@ -53,6 +53,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SETTINGS_PATH = PROJECT_ROOT / "product_center_settings.json"
 HISTORY_PATH = PROJECT_ROOT / "product_center_history.jsonl"
 APP_LOG_PATH = PROJECT_ROOT / "product_center_app.log"
+API_STARTUP_LOG_PATH = PROJECT_ROOT / "product_center_api.log"
 UPDATE_PACKAGES_DIR = PROJECT_ROOT / "docs" / "update_packages"
 UPDATE_PACKAGES_STATE_FILE = UPDATE_PACKAGES_DIR / ".update_package_state.json"
 
@@ -1154,6 +1155,8 @@ class WizardApp(tk.Tk):
         self.component_launch_labels: dict[str, ttk.Label] = {}
         self.component_launch_markers: dict[str, ttk.Label] = {}
         self.launch_status_var = tk.StringVar(value="")
+        self._service_health_state: dict[str, bool | None] = {"api": None, "app": None, "admin": None}
+        self._service_health_refresh_inflight = False
         self.product_map_specs = build_product_component_specs()
         self.product_map_specs_by_key = {str(spec["key"]): spec for spec in self.product_map_specs}
         self.product_map_selected_key: str | None = None
@@ -1334,25 +1337,38 @@ class WizardApp(tk.Tk):
             return LOCAL_ADMIN_URL
         return None
 
+    def _cached_service_health(self, key: str) -> bool | None:
+        if key == "api":
+            return self._service_health_state.get("api")
+        if key == "frontend-app":
+            return self._service_health_state.get("app")
+        if key == "frontend-admin":
+            return self._service_health_state.get("admin")
+        return None
+
     def _managed_button_state(self, key: str, proc: subprocess.Popen | None) -> str:
-        url = self._service_url_for_key(key)
-        if url and self._service_responds(url):
+        cached_health = self._cached_service_health(key)
+        if cached_health is True:
+            return "success"
+        if key == "bot":
+            if proc is None or proc.poll() is not None:
+                return "idle"
             return "success"
         if proc is None or proc.poll() is not None:
             return "idle"
-        if url:
-            return "starting"
-        return "success"
+        return "starting"
 
     def _managed_component_status(self, key: str, proc: subprocess.Popen | None) -> str:
-        url = self._service_url_for_key(key)
-        if url and self._service_responds(url):
+        cached_health = self._cached_service_health(key)
+        if cached_health is True:
             return "online"
+        if key == "bot":
+            if proc is None or proc.poll() is not None:
+                return "не запущено"
+            return self._bot_runtime_status(True)
         if proc is None or proc.poll() is not None:
             return "не запущено"
-        if key == "bot":
-            return self._bot_runtime_status(True)
-        if url:
+        if cached_health is False:
             return "запускається..."
         return "працює"
 
@@ -4689,64 +4705,48 @@ class WizardApp(tk.Tk):
             return False
 
     def refresh_product_status(self) -> None:
-        api_up = self._service_responds(LOCAL_API_HEALTH_URL)
-        app_up = self._service_responds(LOCAL_APP_URL)
-        admin_up = self._service_responds(LOCAL_ADMIN_URL)
-
-        api_proc = self.managed_processes.get("api")
-        bot_proc = self.managed_processes.get("bot")
-        bot_running = bot_proc is not None and bot_proc.poll() is None
-        bot_status = self._bot_runtime_status(bot_running)
-
-        self._set_service_status("api", self._process_service_status(api_proc, api_up))
-        self._set_service_status("app", self._process_service_status(self.managed_processes.get("frontend-app"), app_up))
-        self._set_service_status("admin", self._process_service_status(self.managed_processes.get("frontend-admin"), admin_up))
-        self._set_service_status("bot", bot_status)
-        self._set_action_button_state("api", self._managed_button_state("api", api_proc))
-        self._set_action_button_state("frontend-app", self._managed_button_state("frontend-app", self.managed_processes.get("frontend-app")))
-        self._set_action_button_state("frontend-admin", self._managed_button_state("frontend-admin", self.managed_processes.get("frontend-admin")))
-        self._set_action_button_state("bot", "success" if bot_running else "idle")
-        self._set_component_launch_status("api", self._managed_component_status("api", api_proc))
-        self._set_component_launch_status("frontend-app", self._managed_component_status("frontend-app", self.managed_processes.get("frontend-app")))
-        self._set_component_launch_status("frontend-admin", self._managed_component_status("frontend-admin", self.managed_processes.get("frontend-admin")))
-        self._set_component_launch_status("bot", self._managed_component_status("bot", bot_proc))
-
-        if api_proc is not None and api_proc.poll() is not None:
-            self._append_product_log(f"[API] завершився з кодом {api_proc.returncode}")
-        if bot_proc is not None and bot_proc.poll() is not None:
-            self._append_product_log(f"[Bot] завершився з кодом {bot_proc.returncode}")
+        self.refresh_product_status_async()
 
     def refresh_product_status_async(self) -> None:
-        def worker() -> None:
-            api_up = self._service_responds(LOCAL_API_HEALTH_URL)
-            app_up = self._service_responds(LOCAL_APP_URL)
-            admin_up = self._service_responds(LOCAL_ADMIN_URL)
+        if self._service_health_refresh_inflight:
+            return
+        self._service_health_refresh_inflight = True
 
+        def worker() -> None:
+            api_up = app_up = admin_up = False
             api_proc = self.managed_processes.get("api")
             bot_proc = self.managed_processes.get("bot")
             bot_running = bot_proc is not None and bot_proc.poll() is None
             bot_status = self._bot_runtime_status(bot_running)
+            try:
+                api_up = self._service_responds(LOCAL_API_HEALTH_URL)
+                app_up = self._service_responds(LOCAL_APP_URL)
+                admin_up = self._service_responds(LOCAL_ADMIN_URL)
+            finally:
+                def finish() -> None:
+                    self._service_health_state["api"] = api_up
+                    self._service_health_state["app"] = app_up
+                    self._service_health_state["admin"] = admin_up
+                    self._service_health_refresh_inflight = False
+                    self._set_service_status("api", self._process_service_status(api_proc, api_up))
+                    self._set_service_status("app", self._process_service_status(self.managed_processes.get("frontend-app"), app_up))
+                    self._set_service_status("admin", self._process_service_status(self.managed_processes.get("frontend-admin"), admin_up))
+                    self._set_service_status("bot", bot_status)
+                    self._set_action_button_state("api", self._managed_button_state("api", api_proc))
+                    self._set_action_button_state("frontend-app", self._managed_button_state("frontend-app", self.managed_processes.get("frontend-app")))
+                    self._set_action_button_state("frontend-admin", self._managed_button_state("frontend-admin", self.managed_processes.get("frontend-admin")))
+                    self._set_action_button_state("bot", "success" if bot_running else "idle")
+                    self._set_component_launch_status("api", self._managed_component_status("api", api_proc))
+                    self._set_component_launch_status("frontend-app", self._managed_component_status("frontend-app", self.managed_processes.get("frontend-app")))
+                    self._set_component_launch_status("frontend-admin", self._managed_component_status("frontend-admin", self.managed_processes.get("frontend-admin")))
+                    self._set_component_launch_status("bot", self._managed_component_status("bot", bot_proc))
 
-            def finish() -> None:
-                self._set_service_status("api", self._process_service_status(api_proc, api_up))
-                self._set_service_status("app", self._process_service_status(self.managed_processes.get("frontend-app"), app_up))
-                self._set_service_status("admin", self._process_service_status(self.managed_processes.get("frontend-admin"), admin_up))
-                self._set_service_status("bot", bot_status)
-                self._set_action_button_state("api", self._managed_button_state("api", api_proc))
-                self._set_action_button_state("frontend-app", self._managed_button_state("frontend-app", self.managed_processes.get("frontend-app")))
-                self._set_action_button_state("frontend-admin", self._managed_button_state("frontend-admin", self.managed_processes.get("frontend-admin")))
-                self._set_action_button_state("bot", "success" if bot_running else "idle")
-                self._set_component_launch_status("api", self._managed_component_status("api", api_proc))
-                self._set_component_launch_status("frontend-app", self._managed_component_status("frontend-app", self.managed_processes.get("frontend-app")))
-                self._set_component_launch_status("frontend-admin", self._managed_component_status("frontend-admin", self.managed_processes.get("frontend-admin")))
-                self._set_component_launch_status("bot", self._managed_component_status("bot", bot_proc))
+                    if api_proc is not None and api_proc.poll() is not None:
+                        self._append_product_log(f"[API] завершився з кодом {api_proc.returncode}")
+                    if bot_proc is not None and bot_proc.poll() is not None:
+                        self._append_product_log(f"[Bot] завершився з кодом {bot_proc.returncode}")
 
-                if api_proc is not None and api_proc.poll() is not None:
-                    self._append_product_log(f"[API] завершився з кодом {api_proc.returncode}")
-                if bot_proc is not None and bot_proc.poll() is not None:
-                    self._append_product_log(f"[Bot] завершився з кодом {bot_proc.returncode}")
-
-            self.after(0, finish)
+                self.after(0, finish)
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -4851,13 +4851,23 @@ class WizardApp(tk.Tk):
         if env:
             merged_env.update(env)
 
+        stdout_target = subprocess.DEVNULL
+        stderr_target = subprocess.DEVNULL
+        api_log_handle = None
+        if key == "api":
+            api_log_handle = API_STARTUP_LOG_PATH.open("a", encoding="utf-8")
+            api_log_handle.write(f"[{current_timestamp()}] [{title}] Launch: {' '.join(command)}\n")
+            api_log_handle.flush()
+            stdout_target = api_log_handle
+            stderr_target = api_log_handle
+
         try:
             proc = subprocess.Popen(
                 command,
                 cwd=str(cwd),
                 env=merged_env,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                stdout=stdout_target,
+                stderr=stderr_target,
                 **safe_subprocess_kwargs(),
             )
         except Exception as exc:
@@ -4871,6 +4881,9 @@ class WizardApp(tk.Tk):
                 extra={"cwd": str(cwd), "error": str(exc)},
             )
             return
+        finally:
+            if api_log_handle is not None:
+                api_log_handle.close()
 
         self.managed_processes[key] = proc
         self._set_action_button_state(key, "starting")
@@ -4896,7 +4909,7 @@ class WizardApp(tk.Tk):
                 except tk.TclError:
                     pass
             for key in list(self.action_buttons):
-                self._set_action_button_state(key, "idle")
+                self._set_action_button_state(key, self._managed_button_state(key, None))
             return
 
         stale_keys: list[str] = []
@@ -4904,10 +4917,9 @@ class WizardApp(tk.Tk):
             if proc.poll() is not None:
                 stale_keys.append(key)
                 status = f"зупинено, код {proc.returncode}"
-                self._set_action_button_state(key, "idle")
             else:
                 status = f"працює, PID {proc.pid}"
-                self._set_action_button_state(key, self._managed_button_state(key, proc))
+            self._set_action_button_state(key, self._managed_button_state(key, proc))
             self._set_component_launch_status(key, self._managed_component_status(key, proc))
             self.process_list.insert("end", f"{key}: {status}")
             if getattr(self, "process_list_colors_enabled", False):
@@ -5049,15 +5061,6 @@ class WizardApp(tk.Tk):
         threading.Thread(target=opener, daemon=True).start()
 
     def start_local_api(self) -> None:
-        existing = self.managed_processes.get("api")
-        if existing and existing.poll() is None:
-            existing.terminate()
-            try:
-                existing.wait(timeout=5)
-            except Exception:
-                existing.kill()
-            self.managed_processes.pop("api", None)
-
         if self._service_responds(LOCAL_API_HEALTH_URL):
             self._set_service_status("api", "online")
             self._set_component_launch_status("api", "online")
@@ -5067,6 +5070,15 @@ class WizardApp(tk.Tk):
             self.refresh_managed_processes()
             self.refresh_product_status_async()
             return
+
+        existing = self.managed_processes.get("api")
+        if existing and existing.poll() is None:
+            existing.terminate()
+            try:
+                existing.wait(timeout=5)
+            except Exception:
+                existing.kill()
+            self.managed_processes.pop("api", None)
 
         mode_label = "enabled" if self.allow_local_registration_test_mode.get() else "disabled"
         self.record_history(
@@ -5213,4 +5225,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
