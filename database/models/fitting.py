@@ -18,9 +18,80 @@ from sqlalchemy.sql import func, text
 from database.base import Base
 
 
+class FittingProductModel(Base):
+
+    __tablename__ = "fitting_products"
+
+    __table_args__ = (
+        Index("ix_fitting_products_code", "code"),
+        Index("ix_fitting_products_article", "article"),
+        Index("ix_fitting_products_brand", "brand"),
+        Index("ix_fitting_products_is_active", "is_active"),
+    )
+
+    id = Column(
+        Integer,
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    code = Column(
+        String,
+        nullable=True,
+    )
+
+    article = Column(
+        String,
+        nullable=True,
+    )
+
+    name = Column(
+        String,
+        nullable=False,
+    )
+
+    brand = Column(
+        String,
+        nullable=True,
+    )
+
+    description = Column(
+        Text,
+        nullable=True,
+    )
+
+    is_active = Column(
+        Boolean,
+        nullable=False,
+        default=True,
+    )
+
+    created_at = Column(
+        DateTime,
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    updated_at = Column(
+        DateTime,
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    fittings = relationship(
+        "FittingModel",
+        back_populates="technical_product",
+    )
+
+
 class FittingModel(Base):
 
     __tablename__ = "fittings"
+
+    __table_args__ = (
+        Index("ix_fittings_technical_product_id", "technical_product_id"),
+    )
 
     id = Column(
         Integer,
@@ -146,6 +217,12 @@ class FittingModel(Base):
         nullable=True,
     )
 
+    technical_product_id = Column(
+        Integer,
+        ForeignKey("fitting_products.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
     owner_user_id = Column(
         String,
         index=True,
@@ -179,6 +256,11 @@ class FittingModel(Base):
     supplier_offers = relationship(
         "FittingSupplierOfferModel",
         back_populates="fitting",
+    )
+
+    technical_product = relationship(
+        "FittingProductModel",
+        back_populates="fittings",
     )
 
 

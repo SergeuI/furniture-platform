@@ -110,6 +110,9 @@ from scripts.upgrade_mounting_schemes_schema import (
 from scripts.upgrade_fittings_foundation_schema import (
     ensure_fittings_foundation_schema,
 )
+from scripts.upgrade_fitting_products_schema import (
+    ensure_fitting_products_schema,
+)
 
 
 def _get_column_names(
@@ -923,6 +926,7 @@ def init_database():
     upgrade_sqlite_schema()
     with engine.begin() as connection:
         ensure_fittings_foundation_schema(connection)
+        ensure_fitting_products_schema(connection)
         ensure_mounting_schemes_schema(connection)
     _backfill_mounting_node_versions()
     seed_demo_access_users()

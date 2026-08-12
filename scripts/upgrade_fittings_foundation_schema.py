@@ -265,7 +265,7 @@ def _create_backup(database_path: Path) -> Path:
 def _apply_plan(
     connection: sqlite3.Connection,
     plan: dict[str, object],
-    caller_owns_transaction: bool,
+    caller_owns_transaction: bool = False,
 ) -> None:
     if plan["prerequisite_missing"]:
         raise SystemExit("Table fittings does not exist. Run the base schema first.")
