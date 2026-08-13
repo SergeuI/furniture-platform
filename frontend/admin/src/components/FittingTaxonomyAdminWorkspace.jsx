@@ -10,10 +10,12 @@ import {
   buildProductTaxonomyPayload,
   buildSeriesForm,
   buildSeriesOptions,
+  FITTING_TAXONOMY_VIEWS,
   getCompatibleSeriesId,
   parseNullableId,
   sortFittingTaxonomyItems,
 } from "../fittingTaxonomyAdmin.js";
+import { getFittingCatalogBodyNavItems } from "../fittingCatalogView.js";
 import {
   createFittingCategory,
   createFittingManufacturer,
@@ -70,7 +72,12 @@ function sortProducts(items = []) {
   });
 }
 
-export default function FittingTaxonomyAdminWorkspace({ activeTab = "manufacturers", language = "uk", token = "" }) {
+export default function FittingTaxonomyAdminWorkspace({
+  activeTab = "manufacturers",
+  language = "uk",
+  token = "",
+  onNavigate = null,
+}) {
   const [manufacturers, setManufacturers] = useState([]);
   const [series, setSeries] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -472,6 +479,37 @@ export default function FittingTaxonomyAdminWorkspace({ activeTab = "manufacture
 
   return (
     <section className="dashboard-layout">
+      <div
+        className="service-catalog-header-actions"
+        style={{ justifyContent: "flex-start", flexWrap: "wrap" }}
+      >
+        {getFittingCatalogBodyNavItems(language).map((item) => (
+          <button
+            className={
+              item.view ===
+              (activeTab === "manufacturers"
+                ? FITTING_TAXONOMY_VIEWS.manufacturers
+                : activeTab === "series"
+                  ? FITTING_TAXONOMY_VIEWS.series
+                  : activeTab === "categories"
+                    ? FITTING_TAXONOMY_VIEWS.categories
+                    : FITTING_TAXONOMY_VIEWS.products)
+                ? "primary-button"
+                : "ghost-button"
+            }
+            key={item.view}
+            onClick={() => {
+              if (typeof onNavigate === "function") {
+                onNavigate(item.view);
+              }
+            }}
+            type="button"
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+
       <article className="dashboard-hero-card">
         <div className="dashboard-hero-copy">
           <span className="dashboard-eyebrow">
@@ -515,7 +553,17 @@ export default function FittingTaxonomyAdminWorkspace({ activeTab = "manufacture
               className={`dashboard-tile-card${activeTab === entity ? " active" : ""}`}
               key={entity}
               onClick={() => {
-                window.history.replaceState(null, document.title, `${window.location.pathname}?section=${entity === "manufacturers" ? "catalog-fitting-manufacturers" : entity === "series" ? "catalog-fitting-series" : entity === "categories" ? "catalog-fitting-categories" : "catalog-fitting-products"}`);
+                if (typeof onNavigate === "function") {
+                  onNavigate(
+                    entity === "manufacturers"
+                      ? FITTING_TAXONOMY_VIEWS.manufacturers
+                      : entity === "series"
+                        ? FITTING_TAXONOMY_VIEWS.series
+                        : entity === "categories"
+                          ? FITTING_TAXONOMY_VIEWS.categories
+                          : FITTING_TAXONOMY_VIEWS.products,
+                  );
+                }
               }}
               type="button"
             >

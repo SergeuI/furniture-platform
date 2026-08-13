@@ -57,6 +57,10 @@ import {
 import FittingTaxonomyAdminWorkspace from "./components/FittingTaxonomyAdminWorkspace.jsx";
 import { FITTING_TAXONOMY_VIEWS } from "./fittingTaxonomyAdmin.js";
 import {
+  buildCanonicalFittingCatalogView,
+  getFittingCatalogBodyNavItems,
+} from "./fittingCatalogView.js";
+import {
   getCollapsedSidebarGroupClickTarget,
   getCollapsedSidebarVisualActiveGroupKey,
   getSidebarGroupVisualState,
@@ -227,6 +231,10 @@ import {
   getFittingsCatalog,
   getFittingDetails,
   getFittingImageBlob,
+  listFittingCategories,
+  listFittingManufacturers,
+  listFittingProducts,
+  listFittingSeries,
   listFittingSuppliers,
   listFittingSupplierOffers,
   getMaterialDetails,
@@ -7334,9 +7342,14 @@ export default function App() {
 
   const [fittingItems, setFittingItems] = useState([]);
   const [fittingCategories, setFittingCategories] = useState([]);
+  const [fittingTaxonomyManufacturers, setFittingTaxonomyManufacturers] = useState([]);
+  const [fittingTaxonomySeries, setFittingTaxonomySeries] = useState([]);
+  const [fittingTaxonomyCategories, setFittingTaxonomyCategories] = useState([]);
+  const [fittingCanonicalProducts, setFittingCanonicalProducts] = useState([]);
   const [fittingSearch, setFittingSearch] = useState("");
   const [fittingOwnershipScope, setFittingOwnershipScope] = useState("all");
   const [fittingsCatalogLoading, setFittingsCatalogLoading] = useState(false);
+  const [fittingCanonicalCatalogLoading, setFittingCanonicalCatalogLoading] = useState(false);
   const [selectedFittingCategory, setSelectedFittingCategory] = useState(
     () => localStorage.getItem(FITTING_CATEGORY_STORAGE_KEY) || "",
   );
@@ -7357,6 +7370,7 @@ export default function App() {
   const [selectedFittingDetail, setSelectedFittingDetail] = useState(null);
   const [fittingDetailLoading, setFittingDetailLoading] = useState(false);
   const [fittingDetailError, setFittingDetailError] = useState("");
+  const fittingCanonicalCatalogRequestRef = useRef({ id: 0, pending: false });
   const [holeTemplateItems, setHoleTemplateItems] = useState([]);
   const [fittingBundleItems, setFittingBundleItems] = useState([]);
   const [fittingBundlesLoading, setFittingBundlesLoading] = useState(false);
@@ -9727,7 +9741,35 @@ export default function App() {
     () => fittingItems.filter((item) => isFastenerFitting(item)),
     [fittingItems],
   );
-  const visibleFittingCategories = useMemo(() => fittingCategories, [fittingCategories]);
+  const fittingCanonicalCatalogView = useMemo(
+    () =>
+      buildCanonicalFittingCatalogView({
+        activeCategoryCode: selectedFittingCategory,
+        activeCity,
+        canonicalProducts: fittingCanonicalProducts,
+        legacyCategories: fittingCategories,
+        legacyItems: fittingItems,
+        manufacturers: fittingTaxonomyManufacturers,
+        search: fittingSearch,
+        series: fittingTaxonomySeries,
+        taxonomyCategories: fittingTaxonomyCategories,
+      }),
+    [
+      activeCity,
+      fittingCanonicalProducts,
+      fittingCategories,
+      fittingItems,
+      fittingSearch,
+      fittingTaxonomyCategories,
+      fittingTaxonomyManufacturers,
+      fittingTaxonomySeries,
+      selectedFittingCategory,
+    ],
+  );
+  const visibleFittingCategories = useMemo(
+    () => fittingCanonicalCatalogView.categories || [],
+    [fittingCanonicalCatalogView],
+  );
   const activeFittingCategory = useMemo(() => {
     if (
       selectedFittingCategory &&
@@ -9745,31 +9787,8 @@ export default function App() {
     [activeFittingCategory, visibleFittingCategories],
   );
   const visibleFittingItems = useMemo(
-    () => {
-      const normalizedSearch = fittingSearch.trim().toLowerCase();
-      const categoryItems = activeFittingCategory
-        ? fittingItems.filter((item) => item.fitting_type === activeFittingCategory)
-        : [];
-
-      if (!normalizedSearch) {
-        return categoryItems;
-      }
-
-      return categoryItems.filter((item) =>
-        [
-          item.name,
-          item.article,
-          item.code,
-          item.description,
-          item.source_url,
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase()
-          .includes(normalizedSearch),
-      );
-    },
-    [activeFittingCategory, fittingItems, fittingSearch],
+    () => fittingCanonicalCatalogView.visibleCards || [],
+    [fittingCanonicalCatalogView],
   );
   const projectMaterialPickerItems = useMemo(
     () =>
@@ -12499,7 +12518,7 @@ export default function App() {
     };
   }, [materialEditModalOpen]);
 
-  async function openFittingDetails(item, returnFocusTarget = null) {
+  async function openFittingDetails(item, returnFocusTarget = null, options = {}) {
     if (!token || !item?.id || !canViewFittingCatalog) {
       return;
     }
@@ -12524,7 +12543,13 @@ export default function App() {
     }
     setFittingDetailLoading(true);
     setFittingDetailError("");
-    setSelectedFittingDetail(item);
+    setSelectedFittingDetail({
+      ...item,
+      canonical_product: options.canonicalProduct || null,
+      canonical_product_id: options.canonicalProduct?.id ?? null,
+      linked_legacy_rows: Array.isArray(options.linkedLegacyRows) ? options.linkedLegacyRows : [],
+      linked_legacy_rows_count: Array.isArray(options.linkedLegacyRows) ? options.linkedLegacyRows.length : 0,
+    });
 
     try {
       const result = await getFittingDetails(token, itemId);
@@ -12541,17 +12566,54 @@ export default function App() {
 
       if (!result.success) {
         setFittingDetailError(result.error || t.fittingDetailsFailed);
-        setSelectedFittingDetail(item);
+        setSelectedFittingDetail({
+          ...item,
+          canonical_product: options.canonicalProduct || null,
+          canonical_product_id: options.canonicalProduct?.id ?? null,
+          linked_legacy_rows: Array.isArray(options.linkedLegacyRows) ? options.linkedLegacyRows : [],
+          linked_legacy_rows_count: Array.isArray(options.linkedLegacyRows) ? options.linkedLegacyRows.length : 0,
+        });
         return;
       }
 
-      setSelectedFittingDetail(result.item || item);
+      setSelectedFittingDetail({
+        ...(result.item || item),
+        canonical_product: options.canonicalProduct || null,
+        canonical_product_id: options.canonicalProduct?.id ?? null,
+        linked_legacy_rows: Array.isArray(options.linkedLegacyRows) ? options.linkedLegacyRows : [],
+        linked_legacy_rows_count: Array.isArray(options.linkedLegacyRows) ? options.linkedLegacyRows.length : 0,
+      });
       setFittingDetailError("");
     } finally {
       if (fittingDetailsRequestRef.current.id === requestId) {
         setFittingDetailLoading(false);
       }
     }
+  }
+
+  async function openCanonicalFittingDetails(item, returnFocusTarget = null) {
+    const representativeRow = item?.representative_legacy_row || item?.legacy_rows?.[0] || null;
+
+    if (representativeRow?.id) {
+      await openFittingDetails(representativeRow, returnFocusTarget, {
+        canonicalProduct: item,
+        linkedLegacyRows: item?.legacy_rows || [],
+      });
+      return;
+    }
+
+    if (!item?.id || !canViewFittingCatalog) {
+      return;
+    }
+
+    setSelectedFittingDetail({
+      ...item,
+      canonical_product: item,
+      canonical_product_id: item.id,
+      linked_legacy_rows: [],
+      linked_legacy_rows_count: 0,
+    });
+    setSelectedFittingDetailReturnFocusTarget(returnFocusTarget || null);
   }
 
   function closeFittingDetails() {
@@ -12654,6 +12716,78 @@ export default function App() {
         setFittingsCatalogLoading(false);
       }
     }
+  }
+
+  async function loadCanonicalFittingsCatalog(activeToken = token) {
+    if (!activeToken || !canViewFittingCatalog) {
+      setFittingTaxonomyManufacturers([]);
+      setFittingTaxonomySeries([]);
+      setFittingTaxonomyCategories([]);
+      setFittingCanonicalProducts([]);
+      return [];
+    }
+
+    if (fittingCanonicalCatalogRequestRef.current.pending) {
+      return fittingCanonicalProducts;
+    }
+
+    const requestId = fittingCanonicalCatalogRequestRef.current.id + 1;
+    const viewAtStart = activeViewRef.current;
+    fittingCanonicalCatalogRequestRef.current = { id: requestId, pending: true };
+    setFittingCanonicalCatalogLoading(true);
+
+    try {
+      const [manufacturersResult, seriesResult, categoriesResult, productsResult] = await Promise.all([
+        listFittingManufacturers(activeToken, false),
+        listFittingSeries(activeToken, false),
+        listFittingCategories(activeToken, false),
+        listFittingProducts(activeToken, { active_only: false }),
+      ]);
+
+      if (
+        fittingCanonicalCatalogRequestRef.current.id !== requestId ||
+        activeViewRef.current !== viewAtStart
+      ) {
+        return fittingCanonicalProducts;
+      }
+
+      if (!manufacturersResult.success) {
+        throw new Error(manufacturersResult.error || t.unableToLoadCatalog);
+      }
+
+      if (!seriesResult.success) {
+        throw new Error(seriesResult.error || t.unableToLoadCatalog);
+      }
+
+      if (!categoriesResult.success) {
+        throw new Error(categoriesResult.error || t.unableToLoadCatalog);
+      }
+
+      if (!productsResult.success) {
+        throw new Error(productsResult.error || t.unableToLoadCatalog);
+      }
+
+      setFittingTaxonomyManufacturers(Array.isArray(manufacturersResult.items) ? manufacturersResult.items : []);
+      setFittingTaxonomySeries(Array.isArray(seriesResult.items) ? seriesResult.items : []);
+      setFittingTaxonomyCategories(Array.isArray(categoriesResult.items) ? categoriesResult.items : []);
+      setFittingCanonicalProducts(Array.isArray(productsResult.items) ? productsResult.items : []);
+      return Array.isArray(productsResult.items) ? productsResult.items : [];
+    } catch (error) {
+      setStatus({ message: error?.message || t.unableToLoadCatalog, tone: "error" });
+      return [];
+    } finally {
+      if (fittingCanonicalCatalogRequestRef.current.id === requestId) {
+        fittingCanonicalCatalogRequestRef.current.pending = false;
+        setFittingCanonicalCatalogLoading(false);
+      }
+    }
+  }
+
+  async function refreshFittingsCatalogView() {
+    await Promise.all([
+      loadFittingsCatalog(token),
+      loadCanonicalFittingsCatalog(token),
+    ]);
   }
 
   async function loadFittingSuppliers(activeToken = token) {
@@ -18358,6 +18492,14 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
   }, [token, isCatalogFittingsView, isCatalogFastenersView, fittingSearch, fittingOwnershipScope]);
 
   useEffect(() => {
+    if (!token || (!isCatalogFittingsView && !isCatalogFastenersView)) {
+      return;
+    }
+
+    loadCanonicalFittingsCatalog(token);
+  }, [token, isCatalogFittingsView, isCatalogFastenersView]);
+
+  useEffect(() => {
     if (!token || !isCatalogHolesView || fittingItems.length) {
       return;
     }
@@ -21447,9 +21589,29 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
             }
             language={language}
             token={token}
+            onNavigate={switchView}
           />
         ) : isCatalogFittingsView || isCatalogFastenersView ? (
           <section className="table-panel full-panel" key="catalogFittings">
+            <div
+              className="service-catalog-header-actions"
+              style={{ justifyContent: "flex-start", marginBottom: "12px", flexWrap: "wrap" }}
+            >
+              {getFittingCatalogBodyNavItems(language).map((item) => (
+                <button
+                  className={
+                    activeView === item.view || (item.view === "catalogFittings" && activeView === "catalogFasteners")
+                      ? "primary-button"
+                      : "ghost-button"
+                  }
+                  key={item.view}
+                  onClick={() => switchView(item.view)}
+                  type="button"
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
             <article className="catalog-card service-catalog-card service-catalog-card-full">
               <div className="catalog-page-header">
                 <div className="service-catalog-title">
@@ -21481,7 +21643,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                     {t.currentCity}: {formatCatalogLabel(activeCity, t)}
                   </span>
                   <span className="service-tree-badge subtle">
-                    {fittingsCatalogLoading && !fittingItems.length
+                    {(fittingsCatalogLoading || fittingCanonicalCatalogLoading) && !fittingItems.length
                       ? t.loading
                       : `${activeFittingCategory ? visibleFittingItems.length : visibleFittingCategories.length} ${
                           activeFittingCategory ? t.fittingsCount : t.fittingCategoriesCount
@@ -21538,7 +21700,9 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   <button
                     className="ghost-button"
                     disabled={loading}
-                    onClick={() => loadFittingsCatalog(token)}
+                    onClick={() => {
+                      void refreshFittingsCatalogView();
+                    }}
                     type="button"
                   >
                     <RefreshCw size={16} />
@@ -21650,7 +21814,9 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                             <span>{category.description}</span>
                           </div>
                           <div className="catalog-choice-meta">
-                            <span className="service-tree-badge subtle">{category.item_count}</span>
+                            <span className="service-tree-badge subtle">
+                              {category.canonical_item_count ?? category.item_count ?? 0}
+                            </span>
                             <span>{category.group_name}</span>
                           </div>
                         </div>
@@ -21670,57 +21836,65 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   fittingViewMode === "cards" ? (
                     <div className="fittings-card-grid">
                       {visibleFittingItems.map((item) => {
-                        const sourceMeta = getFittingSourceMeta(item);
+                        const sourceItem = item.representative_legacy_row || item.legacy_rows?.[0] || item;
+                        const sourceMeta = getFittingSourceMeta(sourceItem);
+                        const productTitle = item.canonical_name || item.name || item.article || t.notSet;
+                        const productArticle = item.canonical_article || item.article || t.notSet;
+                        const productManufacturer = item.manufacturer_name || item.canonical_brand || item.brand || "";
+                        const productSeries = item.series_name || "";
+                        const productCategory = item.category_name || "";
+                        const canManageSourceItem = Boolean(sourceItem?.id) && canDeleteFittingItemHelper(user, sourceItem);
+
                         return (
                           <article
                             className="fitting-item-card fitting-item-card-clickable"
                             key={item.id}
-                            onClick={(event) => openFittingDetails(item, event.currentTarget)}
+                            onClick={(event) => openCanonicalFittingDetails(item, event.currentTarget)}
                             onKeyDown={(event) => {
                               if (event.key === "Enter" || event.key === " ") {
                                 event.preventDefault();
-                                openFittingDetails(item, event.currentTarget);
+                                openCanonicalFittingDetails(item, event.currentTarget);
                               }
                             }}
                             role="button"
                             tabIndex={0}
-                            aria-label={`${t.fittingDetails}: ${item.name || item.article || t.notSet}`}
+                            aria-label={`${t.fittingDetails}: ${productTitle}`}
                           >
                             <div className="fitting-item-card-head">
                               <div className="fitting-item-card-preview">
-                                {buildFittingImageCandidates(item).length ? (
+                                {buildFittingImageCandidates(sourceItem).length ? (
                                   <img
-                                    alt={item.name || item.article || t.catalogFittings}
+                                    alt={productTitle}
                                     data-fallback-index="0"
                                     decoding="async"
                                     loading="lazy"
-                                    onError={(event) => handleFittingImageError(event, item)}
-                                    src={buildFittingImageCandidates(item)[0]}
+                                    onError={(event) => handleFittingImageError(event, sourceItem)}
+                                    src={buildFittingImageCandidates(sourceItem)[0]}
                                   />
                                 ) : (
                                   <Package size={24} />
                                 )}
                               </div>
-                              {canDeleteFittingItemHelper(user, item) ? (
+                              {canManageSourceItem ? (
                                 <div className="material-card-menu fitting-row-menu">
                                   <button
                                     className="icon-button material-card-menu-trigger"
                                     onClick={(event) => {
                                       event.stopPropagation();
-                                      setOpenFittingMenuId((current) => (current === item.id ? "" : item.id))
+                                      setOpenFittingMenuId((current) => (current === sourceItem.id ? "" : sourceItem.id));
                                     }}
                                     type="button"
                                   >
                                     <MoreHorizontal size={16} />
                                   </button>
-                                  {openFittingMenuId === item.id ? (
+                                  {openFittingMenuId === sourceItem.id ? (
                                     <div className="material-card-menu-dropdown">
-                                      {canEditFittingItemHelper(user, item) ? (
+                                      {canEditFittingItemHelper(user, sourceItem) ? (
                                         <button
                                           className="material-card-menu-action"
                                           onClick={(event) => {
                                             event.stopPropagation();
-                                            openEditFittingModal(item);
+                                            openEditFittingModal(sourceItem);
                                           }}
                                           type="button"
                                         >
@@ -21732,7 +21906,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                                         className="material-card-menu-action danger"
                                         onClick={(event) => {
                                           event.stopPropagation();
-                                          openDeleteFittingConfirm(item);
+                                          openDeleteFittingConfirm(sourceItem);
                                         }}
                                         type="button"
                                       >
@@ -21745,26 +21919,57 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                               ) : null}
                             </div>
                             <div className="fitting-item-card-copy">
-                              <strong>{item.name || item.code || item.article}</strong>
+                              <strong>{productTitle}</strong>
                               <div className="fittings-table-badges">
+                                <span className="service-tree-badge subtle">
+                                  {item.is_active
+                                    ? language === "uk"
+                                      ? "Активний"
+                                      : "Active"
+                                    : language === "uk"
+                                      ? "Неактивний"
+                                      : "Inactive"}
+                                </span>
+                                {item.legacy_row_count > 1 ? (
+                                  <span className="service-tree-badge subtle">
+                                    {language === "uk"
+                                      ? `${item.legacy_row_count} пов'язаних рядків`
+                                      : `${item.legacy_row_count} linked rows`}
+                                  </span>
+                                ) : null}
                                 {fittingColumnVisibility.source ? renderSourceBadge(sourceMeta) : null}
                                 <span className="service-tree-badge subtle">
-                                  {getFittingOwnershipTypeLabel(item, user, language)}
+                                  {getFittingOwnershipTypeLabel(sourceItem, user, language)}
                                 </span>
                               </div>
-                              {getFittingOwnerDisplay(item, user, language) ? (
+                              {getFittingOwnerDisplay(sourceItem, user, language) ? (
                                 <div className="fitting-item-owner-line">
-                                  {getFittingOwnerDisplay(item, user, language)}
+                                  {getFittingOwnerDisplay(sourceItem, user, language)}
                                 </div>
                               ) : null}
                             </div>
                             <div className="fitting-item-card-meta">
-                              <span>{t.fittingArticle}: {item.article || t.notSet}</span>
+                              <span>{t.fittingArticle}: {productArticle}</span>
+                              {productManufacturer ? (
+                                <span>
+                                  {language === "uk" ? "Виробник" : "Manufacturer"}: {productManufacturer}
+                                </span>
+                              ) : null}
+                              {productSeries ? (
+                                <span>
+                                  {language === "uk" ? "Серія" : "Series"}: {productSeries}
+                                </span>
+                              ) : null}
+                              {productCategory ? (
+                                <span>
+                                  {language === "uk" ? "Категорія" : "Category"}: {productCategory}
+                                </span>
+                              ) : null}
                               {fittingColumnVisibility.price ? (
-                                <span>{t.fittingPrice}: {item.price ?? t.notSet}</span>
+                                <span>{t.fittingPrice}: {sourceItem.price ?? t.notSet}</span>
                               ) : null}
                               {fittingColumnVisibility.stock ? (
-                                <span>{t.fittingStock}: {item.stock || t.notSet}</span>
+                                <span>{t.fittingStock}: {sourceItem.stock || t.notSet}</span>
                               ) : null}
                             </div>
                           </article>
@@ -21776,6 +21981,10 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                       <div className="fittings-table-header">
                         <span>{currentFittingCategoryMeta?.name || t.catalogFittings}</span>
                         <span>{t.fittingArticle}</span>
+                        <span>{language === "uk" ? "Виробник" : "Manufacturer"}</span>
+                        <span>{language === "uk" ? "Серія" : "Series"}</span>
+                        <span>{language === "uk" ? "Категорія" : "Category"}</span>
+                        <span>{language === "uk" ? "Рядки" : "Rows"}</span>
                         {fittingColumnVisibility.price ? <span>{t.fittingPrice}</span> : null}
                         {fittingColumnVisibility.stock ? <span>{t.fittingStock}</span> : null}
                         {fittingColumnVisibility.source ? <span>{t.fittingSource}</span> : null}
@@ -21783,73 +21992,95 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
 
                       <div className="fittings-table-list">
                         {visibleFittingItems.map((item) => {
-                          const sourceMeta = getFittingSourceMeta(item);
+                          const sourceItem = item.representative_legacy_row || item.legacy_rows?.[0] || item;
+                          const sourceMeta = getFittingSourceMeta(sourceItem);
+                          const productTitle = item.canonical_name || item.name || item.article || t.notSet;
+                          const productArticle = item.canonical_article || item.article || t.notSet;
+                          const productManufacturer = item.manufacturer_name || item.canonical_brand || item.brand || "";
+                          const productSeries = item.series_name || "";
+                          const productCategory = item.category_name || "";
 
                           return (
                             <article
                               className="fittings-table-row fitting-table-row-clickable"
                               key={item.id}
-                              onClick={(event) => openFittingDetails(item, event.currentTarget)}
+                              onClick={(event) => openCanonicalFittingDetails(item, event.currentTarget)}
                               onKeyDown={(event) => {
                                 if (event.key === "Enter" || event.key === " ") {
                                   event.preventDefault();
-                                  openFittingDetails(item, event.currentTarget);
+                                  openCanonicalFittingDetails(item, event.currentTarget);
                                 }
                               }}
                               role="button"
                               tabIndex={0}
-                              aria-label={`${t.fittingDetails}: ${item.name || item.article || t.notSet}`}
+                              aria-label={`${t.fittingDetails}: ${productTitle}`}
                             >
                               <div className="fittings-table-name">
                                 <div className="fittings-table-name-main">
                                   <div className="fittings-table-thumb">
-                                    {buildFittingImageCandidates(item).length ? (
+                                    {buildFittingImageCandidates(sourceItem).length ? (
                                       <img
-                                        alt={item.name || item.article || t.catalogFittings}
+                                        alt={productTitle}
                                         data-fallback-index="0"
                                         decoding="async"
                                         loading="lazy"
-                                        onError={(event) => handleFittingImageError(event, item)}
-                                        src={buildFittingImageCandidates(item)[0]}
+                                        onError={(event) => handleFittingImageError(event, sourceItem)}
+                                        src={buildFittingImageCandidates(sourceItem)[0]}
                                       />
                                     ) : (
                                       <Package size={18} />
                                     )}
                                   </div>
                                   <div className="fittings-table-name-copy">
-                                    <strong>{item.name || item.code || item.article}</strong>
-                                  <div className="fittings-table-badges">
-                                    <span className="service-tree-badge subtle">
-                                      {getFittingOwnershipTypeLabel(item, user, language)}
-                                    </span>
-                                  </div>
-                                  {getFittingOwnerDisplay(item, user, language) ? (
-                                    <div className="fitting-item-owner-line">
-                                      {getFittingOwnerDisplay(item, user, language)}
+                                    <strong>{productTitle}</strong>
+                                    <div className="fittings-table-badges">
+                                      <span className="service-tree-badge subtle">
+                                        {item.is_active
+                                          ? language === "uk"
+                                            ? "Активний"
+                                            : "Active"
+                                          : language === "uk"
+                                            ? "Неактивний"
+                                            : "Inactive"}
+                                      </span>
+                                      {item.legacy_row_count > 1 ? (
+                                        <span className="service-tree-badge subtle">
+                                          {language === "uk"
+                                            ? `${item.legacy_row_count} пов'язаних рядків`
+                                            : `${item.legacy_row_count} linked rows`}
+                                        </span>
+                                      ) : null}
+                                      <span className="service-tree-badge subtle">
+                                        {getFittingOwnershipTypeLabel(sourceItem, user, language)}
+                                      </span>
                                     </div>
-                                  ) : null}
+                                    {getFittingOwnerDisplay(sourceItem, user, language) ? (
+                                      <div className="fitting-item-owner-line">
+                                        {getFittingOwnerDisplay(sourceItem, user, language)}
+                                      </div>
+                                    ) : null}
+                                  </div>
                                 </div>
-                              </div>
-                                {canDeleteFittingItemHelper(user, item) ? (
+                                {Boolean(sourceItem?.id) && canDeleteFittingItemHelper(user, sourceItem) ? (
                                   <div className="material-card-menu fitting-row-menu">
                                     <button
                                       className="icon-button material-card-menu-trigger"
                                       onClick={(event) => {
                                         event.stopPropagation();
-                                        setOpenFittingMenuId((current) => (current === item.id ? "" : item.id))
+                                        setOpenFittingMenuId((current) => (current === sourceItem.id ? "" : sourceItem.id));
                                       }}
                                       type="button"
                                     >
                                       <MoreHorizontal size={16} />
                                     </button>
-                                    {openFittingMenuId === item.id ? (
+                                    {openFittingMenuId === sourceItem.id ? (
                                       <div className="material-card-menu-dropdown">
-                                        {canEditFittingItemHelper(user, item) ? (
+                                        {canEditFittingItemHelper(user, sourceItem) ? (
                                           <button
                                             className="material-card-menu-action"
                                             onClick={(event) => {
                                               event.stopPropagation();
-                                              openEditFittingModal(item);
+                                              openEditFittingModal(sourceItem);
                                             }}
                                             type="button"
                                           >
@@ -21857,25 +22088,29 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                                             {t.fittingEdit}
                                           </button>
                                         ) : null}
-                                        <button
-                                          className="material-card-menu-action danger"
-                                          onClick={(event) => {
-                                            event.stopPropagation();
-                                            openDeleteFittingConfirm(item);
-                                          }}
-                                          type="button"
-                                        >
-                                          <Trash2 size={14} />
-                                          {t.fittingDelete}
+                                          <button
+                                            className="material-card-menu-action danger"
+                                            onClick={(event) => {
+                                              event.stopPropagation();
+                                              openDeleteFittingConfirm(sourceItem);
+                                            }}
+                                            type="button"
+                                          >
+                                            <Trash2 size={14} />
+                                            {t.fittingDelete}
                                         </button>
                                       </div>
                                     ) : null}
                                   </div>
                                 ) : null}
                               </div>
-                              <span>{item.article || t.notSet}</span>
-                              {fittingColumnVisibility.price ? <span>{item.price ?? t.notSet}</span> : null}
-                              {fittingColumnVisibility.stock ? <span>{item.stock || t.notSet}</span> : null}
+                              <span>{productArticle}</span>
+                              <span>{productManufacturer || t.notSet}</span>
+                              <span>{productSeries || t.notSet}</span>
+                              <span>{productCategory || t.notSet}</span>
+                              <span>{item.legacy_row_count || 0}</span>
+                              {fittingColumnVisibility.price ? <span>{sourceItem.price ?? t.notSet}</span> : null}
+                              {fittingColumnVisibility.stock ? <span>{sourceItem.stock || t.notSet}</span> : null}
                               {fittingColumnVisibility.source ? renderSourceBadge(sourceMeta) : null}
                             </article>
                           );
