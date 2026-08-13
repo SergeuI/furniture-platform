@@ -12,7 +12,10 @@ from database.models.fitting import (
     FittingHolePointModel,
     FittingHoleTemplateModel,
 )
-from database.models.mounting_node import MountingNodeModel
+from database.models.mounting_node import (
+    MountingNodeModel,
+    MountingNodeVersionModel,
+)
 from database.mounting_node_categories import (
     ALLOWED_MOUNTING_NODE_CATEGORY_CODES,
     normalize_mounting_node_category_code,
@@ -1350,23 +1353,13 @@ class MountingNodeService:
         if access_snapshot is None:
             return None
 
-        archived_by_user_id = self._normalize_viewer_user_id(viewer_user_id) or None
-
         self.session.rollback()
         with self.session.begin():
-            node = self.repository.update_node(
-                node,
-                is_archived=True,
-                archived_at=datetime.utcnow(),
-                archived_by_user_id=archived_by_user_id,
-                updated_by_user_id=archived_by_user_id or self._raw_node_value(node, "updated_by_user_id"),
-            )
+            self.session.query(MountingNodeVersionModel).filter(
+                MountingNodeVersionModel.node_id == node.id,
+            ).delete(synchronize_session=False)
+            self.session.delete(node)
             self.session.flush()
-            self._record_version_snapshot(
-                node,
-                event_type="archive",
-                actor_user_id=archived_by_user_id,
-            )
 
         return True
 

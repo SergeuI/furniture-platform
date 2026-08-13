@@ -128,6 +128,7 @@ from database.repositories.inventory_repository import (
     get_fitting_image,
     get_fitting_by_id,
     get_fitting_image_by_id,
+    list_fitting_delete_dependencies,
     get_material_by_import_identity,
     get_material_edge_image,
     get_material_by_article,
@@ -3445,6 +3446,30 @@ async def delete_fitting_route(
         return {
             "success": False,
             "error": "You do not have permission to delete this fitting",
+        }
+
+    dependent_nodes = list_fitting_delete_dependencies(item_id)
+    if dependent_nodes:
+        node_labels = []
+        for node in dependent_nodes:
+            node_name = str(node.get("name") or "").strip() or str(node.get("code") or "").strip()
+            node_id = str(node.get("id") or "").strip()
+            if node_name and node_id:
+                node_labels.append(f"{node_name} (ID {node_id})")
+            elif node_name:
+                node_labels.append(node_name)
+            elif node_id:
+                node_labels.append(f"ID {node_id}")
+
+        return {
+            "success": False,
+            "error": (
+                "Неможливо видалити фурнітуру. "
+                "Вона використовується в монтажних вузлах: "
+                + "; ".join(node_labels)
+                + ". Спочатку замініть цю фурнітуру у зазначених вузлах, збережіть вузли та повторіть видалення."
+            ),
+            "dependent_nodes": dependent_nodes,
         }
 
     result = delete_fitting(item_id)

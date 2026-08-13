@@ -9,11 +9,18 @@ from sqlalchemy.orm import load_only, object_session
 
 from database.models.fitting import (
     FittingModel,
+    FittingHolePointModel,
+    FittingHoleTemplateModel,
     FittingSupplierOfferModel,
     SupplierModel,
 )
 from database.models.fitting_image import (
     FittingImageModel,
+)
+from database.models.mounting_node import (
+    MountingNodeItemModel,
+    MountingNodeModel,
+    MountingNodeTemplateModel,
 )
 from database.models.material import (
     MaterialModel,
@@ -2237,6 +2244,26 @@ def delete_fitting(item_id: str | int) -> dict | None:
         if not item:
             return None
 
+        db.query(MountingNodeItemModel).filter(
+            MountingNodeItemModel.fitting_id == int(item.id),
+        ).delete(synchronize_session=False)
+
+        template_ids = [
+            row[0]
+            for row in db.query(FittingHoleTemplateModel.id)
+            .filter(FittingHoleTemplateModel.fitting_id == int(item.id))
+            .all()
+        ]
+
+        if template_ids:
+            db.query(FittingHolePointModel).filter(
+                FittingHolePointModel.template_id.in_(template_ids),
+            ).delete(synchronize_session=False)
+
+        db.query(FittingSupplierOfferModel).filter(
+            FittingSupplierOfferModel.fitting_id == int(item.id),
+        ).delete(synchronize_session=False)
+
         signature = _build_fitting_delete_signature(item)
         candidates = _list_fitting_delete_candidates(db, item)
         rows_to_delete = [
@@ -2273,6 +2300,11 @@ def delete_fitting(item_id: str | int) -> dict | None:
             FittingImageModel.fitting_id.in_(row_ids)
         ).delete(synchronize_session=False)
 
+        if template_ids:
+            db.query(FittingHoleTemplateModel).filter(
+                FittingHoleTemplateModel.id.in_(template_ids),
+            ).delete(synchronize_session=False)
+
         db.commit()
 
         primary_item = deleted_items[0] if deleted_items else _serialize_fitting(item)
@@ -2292,6 +2324,84 @@ def delete_fitting(item_id: str | int) -> dict | None:
 
     finally:
 
+        db.close()
+
+
+def list_fitting_delete_dependencies(item_id: str | int) -> list[dict]:
+
+    db = SessionLocal()
+
+    try:
+        item = (
+            db.query(FittingModel.id)
+            .filter(FittingModel.id == int(item_id))
+            .first()
+        )
+
+        if not item:
+            return []
+
+        item_rows = (
+            db.query(
+                MountingNodeModel.id,
+                MountingNodeModel.code,
+                MountingNodeModel.name,
+            )
+            .join(MountingNodeItemModel, MountingNodeItemModel.node_id == MountingNodeModel.id)
+            .filter(MountingNodeItemModel.fitting_id == int(item_id))
+            .filter(MountingNodeModel.is_archived.is_(False))
+            .order_by(
+                MountingNodeModel.name.asc(),
+                MountingNodeModel.code.asc(),
+                MountingNodeModel.id.asc(),
+            )
+            .distinct()
+            .all()
+        )
+
+        template_rows = (
+            db.query(
+                MountingNodeModel.id,
+                MountingNodeModel.code,
+                MountingNodeModel.name,
+            )
+            .join(MountingNodeTemplateModel, MountingNodeTemplateModel.node_id == MountingNodeModel.id)
+            .join(FittingHoleTemplateModel, FittingHoleTemplateModel.id == MountingNodeTemplateModel.template_id)
+            .filter(FittingHoleTemplateModel.fitting_id == int(item_id))
+            .filter(MountingNodeModel.is_archived.is_(False))
+            .order_by(
+                MountingNodeModel.name.asc(),
+                MountingNodeModel.code.asc(),
+                MountingNodeModel.id.asc(),
+            )
+            .distinct()
+            .all()
+        )
+
+        merged_rows: dict[int, dict] = {}
+        for row in list(item_rows) + list(template_rows):
+            merged_rows[int(row[0])] = {
+                "id": int(row[0]),
+                "code": str(row[1] or ""),
+                "name": str(row[2] or ""),
+            }
+
+        return [
+            {
+                "id": data["id"],
+                "code": data["code"],
+                "name": data["name"],
+            }
+            for data in sorted(
+                merged_rows.values(),
+                key=lambda entry: (
+                    str(entry["name"] or ""),
+                    str(entry["code"] or ""),
+                    int(entry["id"] or 0),
+                ),
+            )
+        ]
+    finally:
         db.close()
 
 

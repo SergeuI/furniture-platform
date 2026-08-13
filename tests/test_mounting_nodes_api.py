@@ -824,7 +824,7 @@ class MountingNodesApiTests(unittest.TestCase):
             session.close()
             engine.dispose()
 
-    def test_delete_route_archives_node_and_keeps_nested_template_records_for_owner(self) -> None:
+    def test_delete_route_hard_deletes_node_and_keeps_nested_template_records_for_owner(self) -> None:
         session, engine = self._build_session()
         try:
             app = self._build_app()
@@ -886,9 +886,13 @@ class MountingNodesApiTests(unittest.TestCase):
             self.assertEqual(own_delete.status_code, 200)
             self.assertIsNone(own_delete.json()["node"])
             archived_node = session.get(MountingNodeModel, own_node["id"])
-            self.assertIsNotNone(archived_node)
-            self.assertTrue(archived_node.is_archived)
-            self.assertEqual(archived_node.archived_by_user_id, owner.id)
+            self.assertIsNone(archived_node)
+            self.assertEqual(
+                session.query(MountingNodeVersionModel).filter(
+                    MountingNodeVersionModel.node_id == own_node["id"],
+                ).count(),
+                0,
+            )
             self.assertIsNotNone(session.get(FittingHoleTemplateModel, template.id))
             self.assertEqual(session.query(FittingHolePointModel).count(), 1)
 

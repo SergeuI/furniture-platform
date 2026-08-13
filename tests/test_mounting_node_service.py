@@ -1363,13 +1363,14 @@ class MountingNodeServiceTests(unittest.TestCase):
                 viewer_user_id=user_a.id,
                 viewer_role=user_a.role,
             )
-            self.assertIsNotNone(archived_node)
-            self.assertTrue(archived_node["is_archived"])
-            self.assertEqual(archived_node["archived_by_user_id"], user_a.id)
-            self.assertFalse(archived_node["can_edit"])
-            self.assertFalse(archived_node["can_delete"])
-            self.assertEqual(archived_node["versions"][0]["event_type"], "archive")
-            self.assertIsNotNone(session.get(MountingNodeModel, own_node["id"]))
+            self.assertIsNone(archived_node)
+            self.assertIsNone(session.get(MountingNodeModel, own_node["id"]))
+            self.assertEqual(
+                session.query(MountingNodeVersionModel).filter(
+                    MountingNodeVersionModel.node_id == own_node["id"],
+                ).count(),
+                0,
+            )
             self.assertIsNotNone(session.get(FittingHoleTemplateModel, nested_template.id))
             self.assertEqual(session.query(FittingHolePointModel).count(), 1)
 

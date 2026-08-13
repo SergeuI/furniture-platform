@@ -51,6 +51,7 @@ from database.repositories import material_import_job_repository
 from database.repositories import fitting_hole_service_rule_repository
 import services.entitlement_service as entitlement_service
 import services.fitting_holes_service as fitting_holes_service
+from services.mounting_node_service import MountingNodeService
 from services.fitting_image_gallery_service import PreparedFittingGalleryImage
 
 
@@ -1542,6 +1543,47 @@ class CatalogVisibilityTests(unittest.TestCase):
 
                 with session_factory() as session:
                     self.assertIsNone(session.get(FittingModel, int(fitting_id)))
+
+    def test_delete_fitting_blocks_when_it_is_used_by_mounting_node(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
+                created = client.post(
+                    "/catalog/fittings",
+                    json={
+                        "name": "Node-locked Fitting",
+                        "fitting_type": "drawer_slides",
+                        "fitting_group": "fittings",
+                    },
+                    headers=self._auth_headers("trial-token"),
+                )
+                self.assertEqual(created.status_code, 200)
+                self.assertTrue(created.json()["success"])
+                fitting_id = int(created.json()["item"]["id"])
+
+                with session_factory() as session:
+                    service = MountingNodeService(session=session)
+                    node = service.create_mounting_node(
+                        {
+                            "name": "Confirmat node",
+                            "ownership_type": "system",
+                            "items": [{"fitting_id": fitting_id, "quantity": 1}],
+                        },
+                        viewer_user_id=None,
+                        viewer_role="admin",
+                    )
+                    self.assertEqual(node["items"][0]["fitting_id"], fitting_id)
+
+                blocked = client.delete(
+                    f"/catalog/fittings/{fitting_id}",
+                    headers=self._auth_headers("trial-token"),
+                )
+                self.assertEqual(blocked.status_code, 200)
+                self.assertFalse(blocked.json()["success"])
+                self.assertIn("Confirmat node", blocked.json()["error"])
+                self.assertIn("повторіть видалення", blocked.json()["error"])
+
+                with session_factory() as session:
+                    self.assertIsNotNone(session.get(FittingModel, fitting_id))
 
     def test_source_import_success_creates_fitting(self) -> None:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
