@@ -21837,6 +21837,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                     <div className="fittings-card-grid">
                       {visibleFittingItems.map((item) => {
                         const sourceItem = item.representative_legacy_row || item.legacy_rows?.[0] || item;
+                        const imageSourceItem = item.image_legacy_row || sourceItem;
                         const sourceMeta = getFittingSourceMeta(sourceItem);
                         const productTitle = item.canonical_name || item.name || item.article || t.notSet;
                         const productArticle = item.canonical_article || item.article || t.notSet;
@@ -21862,14 +21863,14 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                           >
                             <div className="fitting-item-card-head">
                               <div className="fitting-item-card-preview">
-                                {buildFittingImageCandidates(sourceItem).length ? (
+                                {buildFittingImageCandidates(imageSourceItem).length ? (
                                   <img
                                     alt={productTitle}
                                     data-fallback-index="0"
                                     decoding="async"
                                     loading="lazy"
-                                    onError={(event) => handleFittingImageError(event, sourceItem)}
-                                    src={buildFittingImageCandidates(sourceItem)[0]}
+                                    onError={(event) => handleFittingImageError(event, imageSourceItem)}
+                                    src={buildFittingImageCandidates(imageSourceItem)[0]}
                                   />
                                 ) : (
                                   <Package size={24} />
@@ -21992,12 +21993,13 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
 
                       <div className="fittings-table-list">
                         {visibleFittingItems.map((item) => {
-                          const sourceItem = item.representative_legacy_row || item.legacy_rows?.[0] || item;
-                          const sourceMeta = getFittingSourceMeta(sourceItem);
-                          const productTitle = item.canonical_name || item.name || item.article || t.notSet;
-                          const productArticle = item.canonical_article || item.article || t.notSet;
-                          const productManufacturer = item.manufacturer_name || item.canonical_brand || item.brand || "";
-                          const productSeries = item.series_name || "";
+                        const sourceItem = item.representative_legacy_row || item.legacy_rows?.[0] || item;
+                        const imageSourceItem = item.image_legacy_row || sourceItem;
+                        const sourceMeta = getFittingSourceMeta(sourceItem);
+                        const productTitle = item.canonical_name || item.name || item.article || t.notSet;
+                        const productArticle = item.canonical_article || item.article || t.notSet;
+                        const productManufacturer = item.manufacturer_name || item.canonical_brand || item.brand || "";
+                        const productSeries = item.series_name || "";
                           const productCategory = item.category_name || "";
 
                           return (
@@ -22018,14 +22020,14 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                               <div className="fittings-table-name">
                                 <div className="fittings-table-name-main">
                                   <div className="fittings-table-thumb">
-                                    {buildFittingImageCandidates(sourceItem).length ? (
+                                    {buildFittingImageCandidates(imageSourceItem).length ? (
                                       <img
                                         alt={productTitle}
                                         data-fallback-index="0"
                                         decoding="async"
                                         loading="lazy"
-                                        onError={(event) => handleFittingImageError(event, sourceItem)}
-                                        src={buildFittingImageCandidates(sourceItem)[0]}
+                                        onError={(event) => handleFittingImageError(event, imageSourceItem)}
+                                        src={buildFittingImageCandidates(imageSourceItem)[0]}
                                       />
                                     ) : (
                                       <Package size={18} />

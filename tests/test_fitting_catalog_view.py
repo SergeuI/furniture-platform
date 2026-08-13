@@ -56,6 +56,7 @@ class FittingCatalogViewTests(unittest.TestCase):
                         "price": 10.5,
                         "stock": "low",
                         "source": "legacy",
+                        "image_url": "https://cdn.example.com/fittings/a-1.jpg",
                     },
                 ],
                 "manufacturers": [
@@ -108,6 +109,8 @@ class FittingCatalogViewTests(unittest.TestCase):
         self.assertEqual(len(view["visibleCards"]), 1)
         self.assertEqual(view["visibleCards"][0]["legacy_row_count"], 2)
         self.assertEqual(view["visibleCards"][0]["category_code"], "connectors_fasteners")
+        self.assertEqual(view["visibleCards"][0]["representative_legacy_row"]["id"], 1)
+        self.assertEqual(view["visibleCards"][0]["image_legacy_row"]["id"], 2)
 
         search_payload = dict(payload)
         search_payload["view"] = dict(payload["view"], search="BrandX")

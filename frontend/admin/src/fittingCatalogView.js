@@ -49,6 +49,23 @@ function chooseRepresentativeLegacyRow(rows = [], activeCity = "") {
   return activeRow || rows[0] || null;
 }
 
+function hasLegacyRowImage(row) {
+  return Boolean(
+    normalizeText(row?.image_url) ||
+      normalizeText(row?.image) ||
+      row?.has_cached_image,
+  );
+}
+
+function chooseDisplayImageLegacyRow(rows = [], representativeRow = null) {
+  if (hasLegacyRowImage(representativeRow)) {
+    return representativeRow;
+  }
+
+  const imageRow = (Array.isArray(rows) ? rows : []).find((row) => hasLegacyRowImage(row));
+  return imageRow || representativeRow || rows[0] || null;
+}
+
 function resolveCategoryCode({
   product = null,
   legacyRows = [],
@@ -147,6 +164,7 @@ export function buildCanonicalFittingCatalogView({
       const productId = normalizeId(product?.id);
       const legacyRows = legacyGroups.get(productId) || [];
       const representativeLegacyRow = chooseRepresentativeLegacyRow(legacyRows, activeCity);
+      const imageLegacyRow = chooseDisplayImageLegacyRow(legacyRows, representativeLegacyRow);
       const categoryCode = resolveCategoryCode({
         categoriesById: taxonomyCategoriesById,
         legacyRows,
@@ -190,6 +208,7 @@ export function buildCanonicalFittingCatalogView({
         legacy_rows: legacyRows,
         manufacturer_name: manufacturer?.name || canonicalProduct?.brand || "",
         manufacturer_code: manufacturer?.code || "",
+        image_legacy_row: imageLegacyRow,
         representative_legacy_row: representativeLegacyRow,
         search_text: searchText,
         series_name: seriesItem?.name || "",
