@@ -77,13 +77,15 @@ class FittingCatalogViewTests(unittest.TestCase):
 
         script = (
             "import { buildCanonicalFittingCatalogView, getFittingCatalogBodyNavItems } from './frontend/admin/src/fittingCatalogView.js';"
-            "import { getCanonicalFittingCatalogCountLabel, getCanonicalFittingOwnershipSource } from './frontend/admin/src/fittingCatalogView.js';"
+            "import { getCanonicalFittingsCountLabel, getCanonicalFittingOwnershipSource } from './frontend/admin/src/fittingCatalogView.js';"
             "import { getFittingOwnershipTypeLabel } from './frontend/admin/src/fittingEntitlements.js';"
             "const payload = JSON.parse(process.argv[1]);"
             "const nav = getFittingCatalogBodyNavItems(payload.language);"
             "const view = buildCanonicalFittingCatalogView(payload.view);"
             "const ownershipSource = getCanonicalFittingOwnershipSource(view.visibleCards[0]);"
-            "process.stdout.write(JSON.stringify({ nav, view, countLabel: getCanonicalFittingCatalogCountLabel(view.visibleCards, view.allCards, { of: 'of' }), ownershipSource, ownershipLabel: getFittingOwnershipTypeLabel(ownershipSource, null, payload.language) }));"
+            "const overviewCountLabel = getCanonicalFittingsCountLabel({ activeCategoryCode: '', visibleCards: Array.from({ length: 9 }, (_, index) => ({ id: index + 1 })), allCards: Array.from({ length: 20 }, (_, index) => ({ id: index + 1 })), language: payload.language });"
+            "const categoryCountLabel = getCanonicalFittingsCountLabel({ activeCategoryCode: 'connectors_fasteners', visibleCards: Array.from({ length: 9 }, (_, index) => ({ id: index + 1 })), allCards: Array.from({ length: 20 }, (_, index) => ({ id: index + 1 })), language: payload.language });"
+            "process.stdout.write(JSON.stringify({ nav, view, overviewCountLabel, categoryCountLabel, ownershipSource, ownershipLabel: getFittingOwnershipTypeLabel(ownershipSource, null, payload.language) }));"
         )
 
         completed = subprocess.run(
@@ -106,14 +108,22 @@ class FittingCatalogViewTests(unittest.TestCase):
                 "catalogFittingManufacturers",
                 "catalogFittingSeries",
                 "catalogFittingCategories",
+                "catalogFittingProducts",
             ],
         )
         self.assertEqual(
             [item["label"] for item in nav],
-            ["\u041a\u0430\u0442\u0430\u043b\u043e\u0433", "\u0412\u0438\u0440\u043e\u0431\u043d\u0438\u043a\u0438", "\u0421\u0435\u0440\u0456\u0457", "\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0456\u0457"],
+            [
+                "\u041a\u0430\u0442\u0430\u043b\u043e\u0433",
+                "\u0412\u0438\u0440\u043e\u0431\u043d\u0438\u043a\u0438",
+                "\u0421\u0435\u0440\u0456\u0457",
+                "\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0456\u0457",
+                "\u0422\u0435\u0445\u043d\u0456\u0447\u043d\u0456 \u0442\u043e\u0432\u0430\u0440\u0438",
+            ],
         )
         self.assertEqual(view["categories"][0]["canonical_item_count"], 1)
-        self.assertEqual(result["countLabel"], "1 of 1")
+        self.assertEqual(result["overviewCountLabel"], "\u0032\u0030 \u0442\u043e\u0432\u0430\u0440\u0456\u0432")
+        self.assertEqual(result["categoryCountLabel"], "\u0039 \u0442\u043e\u0432\u0430\u0440\u0456\u0432")
         self.assertEqual(len(view["visibleCards"]), 1)
         self.assertEqual(len(view["allCards"]), 1)
         self.assertEqual(view["visibleCards"][0]["legacy_row_count"], 2)

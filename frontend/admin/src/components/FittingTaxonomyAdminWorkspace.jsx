@@ -34,9 +34,9 @@ import {
 } from "../api.js";
 
 const ENTITY_LABELS = {
-  manufacturers: { uk: "Виробники", en: "Manufacturers" },
-  series: { uk: "Серії", en: "Series" },
-  categories: { uk: "Категорії", en: "Categories" },
+  manufacturers: { uk: "Виробники фурнітури", en: "Fitting manufacturers" },
+  series: { uk: "Серії фурнітури", en: "Fitting series" },
+  categories: { uk: "Категорії фурнітури", en: "Fitting categories" },
   products: { uk: "Технічні товари", en: "Technical products" },
 };
 
@@ -531,7 +531,6 @@ export default function FittingTaxonomyAdminWorkspace({
       <article className="catalog-card service-catalog-card service-catalog-card-full">
         <div className="service-catalog-header">
           <div className="service-catalog-title">
-            <h3>{activeEntityLabel}</h3>
             <p>
               {language === "uk"
                 ? "Активні записи показуються за замовчуванням. Неактивні можна показати перемикачем."

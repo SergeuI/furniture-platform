@@ -58,7 +58,7 @@ import FittingTaxonomyAdminWorkspace from "./components/FittingTaxonomyAdminWork
 import { FITTING_TAXONOMY_VIEWS } from "./fittingTaxonomyAdmin.js";
 import {
   buildCanonicalFittingCatalogView,
-  getCanonicalFittingCatalogCountLabel,
+  getCanonicalFittingsCountLabel,
   getCanonicalFittingOwnershipSource,
   getFittingCatalogBodyNavItems,
 } from "./fittingCatalogView.js";
@@ -5926,12 +5926,22 @@ function buildFittingImageCandidates(item) {
   const candidates = [];
   const itemId = String(item?.id || "").trim();
   const cacheVersion = item?.has_cached_image ? "db" : "source";
-  const cachedImage = itemId
+  const cachedImageBase = itemId
     ? `${API_BASE_URL}/catalog/fittings/${encodeURIComponent(itemId)}/image?v=${cacheVersion}`
     : "";
+  const resolvedToken = String(
+    typeof window !== "undefined"
+      ? window.localStorage.getItem(TOKEN_STORAGE_KEY) || ""
+      : "",
+  ).trim();
+  const accessToken = String(item?.access_token || resolvedToken || "").trim();
 
-  if (cachedImage) {
-    candidates.push(cachedImage);
+  if (cachedImageBase && accessToken) {
+    candidates.push(`${cachedImageBase}&access_token=${encodeURIComponent(accessToken)}`);
+  }
+
+  if (cachedImageBase) {
+    candidates.push(cachedImageBase);
   }
 
   return [...new Set(candidates.filter(Boolean))];
@@ -9678,7 +9688,7 @@ export default function App() {
                 }, {
                   active: isCatalogFittingProductsView,
                   key: FITTING_TAXONOMY_VIEWS.products,
-                  label: language === "uk" ? "Технічні товари фурнітури" : "Fitting products",
+                  label: language === "uk" ? "Технічні товари" : "Technical products",
                   onClick: () => {
                     switchView(FITTING_TAXONOMY_VIEWS.products);
                     closeSidebarOnMobile();
@@ -10611,7 +10621,12 @@ export default function App() {
     }
 
     if (isCatalogFittingsView) {
-      return getCanonicalFittingCatalogCountLabel(visibleFittingItems, fittingCanonicalCatalogView.allCards, t);
+      return getCanonicalFittingsCountLabel({
+        activeCategoryCode: activeFittingCategory,
+        visibleCards: visibleFittingItems,
+        allCards: fittingCanonicalCatalogView.allCards,
+        language,
+      });
     }
 
     if (isCatalogFastenersView) {
@@ -10619,19 +10634,19 @@ export default function App() {
     }
 
     if (isCatalogFittingManufacturersView) {
-      return language === "uk" ? "Виробники фурнітури" : "Fitting manufacturers";
+      return "";
     }
 
     if (isCatalogFittingSeriesView) {
-      return language === "uk" ? "Серії фурнітури" : "Fitting series";
+      return "";
     }
 
     if (isCatalogFittingCategoriesView) {
-      return language === "uk" ? "Категорії фурнітури" : "Fitting categories";
+      return "";
     }
 
     if (isCatalogFittingProductsView) {
-      return language === "uk" ? "Технічні товари фурнітури" : "Fitting products";
+      return "";
     }
 
     if (isCatalogValuesView) {
@@ -19082,7 +19097,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                         }}
                         type="button"
                       >
-                        {language === "uk" ? "Технічні товари фурнітури" : "Fitting products"}
+                        {language === "uk" ? "Технічні товари" : "Technical products"}
                       </button>
                     </>
                   ) : null}
@@ -19258,13 +19273,13 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                     : isCatalogFastenersView
                       ? t.catalogFasteners
                     : isCatalogFittingManufacturersView
-                      ? t.catalogFittingManufacturers
+                      ? t.catalogFittings
                     : isCatalogFittingSeriesView
-                      ? t.catalogFittingSeries
+                      ? t.catalogFittings
                     : isCatalogFittingCategoriesView
-                      ? t.catalogFittingCategories
+                      ? t.catalogFittings
                     : isCatalogFittingProductsView
-                      ? t.catalogFittingProducts
+                      ? t.catalogFittings
                     : isCatalogHolesView
                       ? t.holeTabTitle
                     : isCatalogBundlesView
@@ -21653,9 +21668,12 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   <span className="service-tree-badge subtle">
                     {(fittingsCatalogLoading || fittingCanonicalCatalogLoading) && !fittingItems.length
                       ? t.loading
-                      : `${activeFittingCategory ? visibleFittingItems.length : visibleFittingCategories.length} ${
-                          activeFittingCategory ? t.fittingsCount : t.fittingCategoriesCount
-                        }`}
+                      : getCanonicalFittingsCountLabel({
+                          activeCategoryCode: activeFittingCategory,
+                          visibleCards: visibleFittingItems,
+                          allCards: fittingCanonicalCatalogView.allCards,
+                          language,
+                        })}
                   </span>
                   {activeFittingCategory ? (
                     <div className="fittings-view-toggle" role="tablist" aria-label={t.catalogBrowseCategories}>

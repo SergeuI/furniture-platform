@@ -17,6 +17,10 @@ export const FITTING_CATALOG_BODY_NAV_ITEMS = [
     label: { uk: "\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0456\u0457", en: "Categories" },
     view: FITTING_TAXONOMY_VIEWS.categories,
   },
+  {
+    label: { uk: "\u0422\u0435\u0445\u043d\u0456\u0447\u043d\u0456 \u0442\u043e\u0432\u0430\u0440\u0438", en: "Technical products" },
+    view: FITTING_TAXONOMY_VIEWS.products,
+  },
 ];
 
 function normalizeText(value) {
@@ -67,7 +71,10 @@ function chooseDisplayImageLegacyRow(rows = [], representativeRow = null) {
 }
 
 export function getCanonicalFittingOwnershipSource(item = null) {
-  const legacyRows = Array.isArray(item?.legacy_rows) ? item.legacy_rows : [];
+  const legacyRows = [
+    ...(Array.isArray(item?.legacy_rows) ? item.legacy_rows : []),
+    ...(Array.isArray(item?.linked_legacy_rows) ? item.linked_legacy_rows : []),
+  ];
   const ownedRow = legacyRows.find((row) => row?.owner_user_id);
   if (ownedRow) {
     return ownedRow;
@@ -143,6 +150,39 @@ export function getFittingCatalogBodyNavItems(language = "uk") {
 
 export function getCanonicalFittingCatalogCountLabel(visibleCards = [], allCards = [], t = {}) {
   return `${Array.isArray(visibleCards) ? visibleCards.length : 0} ${t.of || "of"} ${Array.isArray(allCards) ? allCards.length : 0}`;
+}
+
+function pluralizeUkrainian(count = 0, one = "", few = "", many = "") {
+  const normalizedCount = Math.abs(Number(count) || 0);
+  const lastDigit = normalizedCount % 10;
+  const lastTwoDigits = normalizedCount % 100;
+
+  if (lastDigit === 1 && lastTwoDigits !== 11) {
+    return one;
+  }
+
+  if (lastDigit >= 2 && lastDigit <= 4 && (lastTwoDigits < 12 || lastTwoDigits > 14)) {
+    return few;
+  }
+
+  return many;
+}
+
+export function getCanonicalFittingsCountLabel({
+  activeCategoryCode = "",
+  visibleCards = [],
+  allCards = [],
+  language = "uk",
+} = {}) {
+  const count = activeCategoryCode
+    ? Array.isArray(visibleCards) ? visibleCards.length : 0
+    : Array.isArray(allCards) ? allCards.length : 0;
+
+  if (language === "uk") {
+    return `${count} ${pluralizeUkrainian(count, "товар", "товари", "товарів")}`;
+  }
+
+  return `${count} ${count === 1 ? "product" : "products"}`;
 }
 
 export function buildCanonicalFittingCatalogView({

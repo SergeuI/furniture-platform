@@ -18,6 +18,7 @@ import {
   DEFAULT_FITTING_FORM,
   hasUserEntitlement,
 } from "../src/fittingEntitlements.js";
+import { getCanonicalFittingOwnershipSource } from "../src/fittingCatalogView.js";
 
 test("fitting entitlement helper reads runtime snapshot only", () => {
   const user = {
@@ -174,6 +175,22 @@ test("fitting ownership helpers map scope, type, and owner labels", () => {
     ),
     "owner.one",
   );
+});
+
+test("canonical fitting ownership source prefers linked system rows over invalid fallback", () => {
+  const ownershipSource = getCanonicalFittingOwnershipSource({
+    id: 99,
+    linked_legacy_rows: [
+      {
+        id: 7,
+        is_system: true,
+        owner_user_id: null,
+      },
+    ],
+  });
+
+  assert.equal(ownershipSource.id, 7);
+  assert.equal(getFittingOwnershipTypeLabel(ownershipSource, { id: 10, role: "pro" }, "uk"), "Системна");
 });
 
 test("admin fitting owner display keeps fallback order and hides private data for non-admins", () => {
