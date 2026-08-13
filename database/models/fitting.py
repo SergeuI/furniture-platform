@@ -18,15 +18,262 @@ from sqlalchemy.sql import func, text
 from database.base import Base
 
 
+class FittingManufacturerModel(Base):
+
+    __tablename__ = "fitting_manufacturers"
+
+    __table_args__ = (
+        Index("uq_fitting_manufacturers_code", "code", unique=True),
+        Index("ix_fitting_manufacturers_is_active", "is_active"),
+    )
+
+    id = Column(
+        Integer,
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    code = Column(
+        String,
+        nullable=False,
+    )
+
+    name = Column(
+        String,
+        nullable=False,
+    )
+
+    description = Column(
+        Text,
+        nullable=True,
+    )
+
+    website_url = Column(
+        String,
+        nullable=True,
+    )
+
+    logo_url = Column(
+        String,
+        nullable=True,
+    )
+
+    country_code = Column(
+        String,
+        nullable=True,
+    )
+
+    is_active = Column(
+        Boolean,
+        nullable=False,
+        default=True,
+    )
+
+    sort_order = Column(
+        Integer,
+        nullable=False,
+        default=0,
+    )
+
+    created_at = Column(
+        DateTime,
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    updated_at = Column(
+        DateTime,
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    series = relationship(
+        "FittingSeriesModel",
+        back_populates="manufacturer",
+    )
+
+    products = relationship(
+        "FittingProductModel",
+        back_populates="manufacturer",
+    )
+
+
+class FittingSeriesModel(Base):
+
+    __tablename__ = "fitting_series"
+
+    __table_args__ = (
+        Index(
+            "uq_fitting_series_manufacturer_code",
+            "manufacturer_id",
+            "code",
+            unique=True,
+        ),
+        Index("ix_fitting_series_manufacturer_id", "manufacturer_id"),
+        Index("ix_fitting_series_is_active", "is_active"),
+    )
+
+    id = Column(
+        Integer,
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    manufacturer_id = Column(
+        Integer,
+        ForeignKey("fitting_manufacturers.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    code = Column(
+        String,
+        nullable=False,
+    )
+
+    name = Column(
+        String,
+        nullable=False,
+    )
+
+    description = Column(
+        Text,
+        nullable=True,
+    )
+
+    is_active = Column(
+        Boolean,
+        nullable=False,
+        default=True,
+    )
+
+    sort_order = Column(
+        Integer,
+        nullable=False,
+        default=0,
+    )
+
+    created_at = Column(
+        DateTime,
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    updated_at = Column(
+        DateTime,
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    manufacturer = relationship(
+        "FittingManufacturerModel",
+        back_populates="series",
+    )
+
+    products = relationship(
+        "FittingProductModel",
+        back_populates="series",
+    )
+
+
+class FittingCategoryModel(Base):
+
+    __tablename__ = "fitting_categories"
+
+    __table_args__ = (
+        Index("uq_fitting_categories_code", "code", unique=True),
+        Index("ix_fitting_categories_parent_id", "parent_id"),
+        Index("ix_fitting_categories_is_active", "is_active"),
+    )
+
+    id = Column(
+        Integer,
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    code = Column(
+        String,
+        nullable=False,
+    )
+
+    name = Column(
+        String,
+        nullable=False,
+    )
+
+    parent_id = Column(
+        Integer,
+        ForeignKey("fitting_categories.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    description = Column(
+        Text,
+        nullable=True,
+    )
+
+    is_active = Column(
+        Boolean,
+        nullable=False,
+        default=True,
+    )
+
+    sort_order = Column(
+        Integer,
+        nullable=False,
+        default=0,
+    )
+
+    created_at = Column(
+        DateTime,
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    updated_at = Column(
+        DateTime,
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    parent = relationship(
+        "FittingCategoryModel",
+        remote_side=[id],
+        back_populates="children",
+    )
+
+    children = relationship(
+        "FittingCategoryModel",
+        back_populates="parent",
+    )
+
+    products = relationship(
+        "FittingProductModel",
+        back_populates="category",
+    )
+
+
 class FittingProductModel(Base):
 
     __tablename__ = "fitting_products"
 
     __table_args__ = (
+        Index(
+            "uq_fitting_products_article",
+            "article",
+            unique=True,
+            sqlite_where=text("article IS NOT NULL AND trim(article) <> ''"),
+        ),
         Index("ix_fitting_products_code", "code"),
         Index("ix_fitting_products_article", "article"),
         Index("ix_fitting_products_brand", "brand"),
         Index("ix_fitting_products_is_active", "is_active"),
+        Index("ix_fitting_products_manufacturer_id", "manufacturer_id"),
+        Index("ix_fitting_products_series_id", "series_id"),
+        Index("ix_fitting_products_category_id", "category_id"),
     )
 
     id = Column(
@@ -60,6 +307,24 @@ class FittingProductModel(Base):
         nullable=True,
     )
 
+    manufacturer_id = Column(
+        Integer,
+        ForeignKey("fitting_manufacturers.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    series_id = Column(
+        Integer,
+        ForeignKey("fitting_series.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    category_id = Column(
+        Integer,
+        ForeignKey("fitting_categories.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
     is_active = Column(
         Boolean,
         nullable=False,
@@ -82,6 +347,21 @@ class FittingProductModel(Base):
     fittings = relationship(
         "FittingModel",
         back_populates="technical_product",
+    )
+
+    manufacturer = relationship(
+        "FittingManufacturerModel",
+        back_populates="products",
+    )
+
+    series = relationship(
+        "FittingSeriesModel",
+        back_populates="products",
+    )
+
+    category = relationship(
+        "FittingCategoryModel",
+        back_populates="products",
     )
 
 
@@ -262,7 +542,6 @@ class FittingModel(Base):
         "FittingProductModel",
         back_populates="fittings",
     )
-
 
 class SupplierModel(Base):
 

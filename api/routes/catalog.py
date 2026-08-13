@@ -42,6 +42,11 @@ from schemas.catalog import (
     CatalogItemUpdateSchema,
     ManualServiceCatalogItemCreateSchema,
     ManualServiceCatalogItemUpdateSchema,
+    FittingCategoryListResponseSchema,
+    FittingManufacturerListResponseSchema,
+    FittingProductDetailResponseSchema,
+    FittingProductListResponseSchema,
+    FittingSeriesListResponseSchema,
     MaterialCatalogCreateSchema,
     MaterialCatalogUpdateSchema,
     MaterialEdgeAttachSchema,
@@ -68,6 +73,13 @@ from database.repositories.catalog_repository import (
     list_catalog_items,
     set_catalog_item_active,
     update_catalog_item
+)
+from database.repositories.fitting_taxonomy_repository import (
+    get_fitting_product_by_id,
+    list_fitting_categories as list_taxonomy_categories,
+    list_fitting_manufacturers,
+    list_fitting_products,
+    list_fitting_series,
 )
 from database.repositories.service_catalog_repository import (
     create_manual_service_catalog_item,
@@ -1981,6 +1993,108 @@ async def list_fitting_suppliers_route(
     return {
         "success": True,
         "items": list_suppliers(include_inactive=include_inactive),
+    }
+
+
+@router.get(
+    "/fitting-manufacturers",
+    response_model=FittingManufacturerListResponseSchema,
+)
+async def list_fitting_manufacturers_route(
+    active_only: bool = Query(default=True),
+    current_user = Depends(require_catalog_reader),
+):
+    _ensure_fitting_feature_access(current_user, "fittings.view")
+
+    return {
+        "success": True,
+        "items": list_fitting_manufacturers(active_only=active_only),
+    }
+
+
+@router.get(
+    "/fitting-series",
+    response_model=FittingSeriesListResponseSchema,
+)
+async def list_fitting_series_route(
+    manufacturer_id: int | None = Query(default=None),
+    active_only: bool = Query(default=True),
+    current_user = Depends(require_catalog_reader),
+):
+    _ensure_fitting_feature_access(current_user, "fittings.view")
+
+    return {
+        "success": True,
+        "items": list_fitting_series(
+            manufacturer_id=manufacturer_id,
+            active_only=active_only,
+        ),
+    }
+
+
+@router.get(
+    "/fitting-categories",
+    response_model=FittingCategoryListResponseSchema,
+)
+async def list_fitting_taxonomy_categories_route(
+    parent_id: int | None = Query(default=None),
+    active_only: bool = Query(default=True),
+    current_user = Depends(require_catalog_reader),
+):
+    _ensure_fitting_feature_access(current_user, "fittings.view")
+
+    return {
+        "success": True,
+        "items": list_taxonomy_categories(
+            parent_id=parent_id,
+            active_only=active_only,
+        ),
+    }
+
+
+@router.get(
+    "/fitting-products",
+    response_model=FittingProductListResponseSchema,
+)
+async def list_fitting_products_route(
+    search: str | None = Query(default=None),
+    manufacturer_id: int | None = Query(default=None),
+    series_id: int | None = Query(default=None),
+    category_id: int | None = Query(default=None),
+    active_only: bool = Query(default=True),
+    current_user = Depends(require_catalog_reader),
+):
+    _ensure_fitting_feature_access(current_user, "fittings.view")
+
+    return {
+        "success": True,
+        "items": list_fitting_products(
+            search=search,
+            manufacturer_id=manufacturer_id,
+            series_id=series_id,
+            category_id=category_id,
+            active_only=active_only,
+        ),
+    }
+
+
+@router.get(
+    "/fitting-products/{item_id}",
+    response_model=FittingProductDetailResponseSchema,
+)
+async def get_fitting_product_detail_route(
+    item_id: str,
+    current_user = Depends(require_catalog_reader),
+):
+    _ensure_fitting_feature_access(current_user, "fittings.view")
+
+    item = get_fitting_product_by_id(item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Fitting product not found")
+
+    return {
+        "success": True,
+        "item": item,
     }
 
 

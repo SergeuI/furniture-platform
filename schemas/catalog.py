@@ -612,6 +612,89 @@ class FittingCatalogListResponseSchema(BaseModel):
     error: str | None = None
 
 
+class FittingManufacturerSchema(BaseModel):
+    id: int
+    code: str
+    name: str
+    description: str | None = None
+    website_url: str | None = None
+    logo_url: str | None = None
+    country_code: str | None = None
+    is_active: bool = True
+    sort_order: int = 0
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class FittingSeriesSchema(BaseModel):
+    id: int
+    manufacturer_id: int
+    code: str
+    name: str
+    description: str | None = None
+    is_active: bool = True
+    sort_order: int = 0
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class FittingTaxonomyCategorySchema(BaseModel):
+    id: int
+    code: str
+    name: str
+    parent_id: int | None = None
+    description: str | None = None
+    is_active: bool = True
+    sort_order: int = 0
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class FittingProductSchema(BaseModel):
+    id: int
+    article: str | None = None
+    code: str | None = None
+    name: str
+    brand: str | None = None
+    description: str | None = None
+    manufacturer_id: int | None = None
+    series_id: int | None = None
+    category_id: int | None = None
+    is_active: bool = True
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class FittingManufacturerListResponseSchema(BaseModel):
+    success: bool
+    items: List[FittingManufacturerSchema] = Field(default_factory=list)
+    error: str | None = None
+
+
+class FittingSeriesListResponseSchema(BaseModel):
+    success: bool
+    items: List[FittingSeriesSchema] = Field(default_factory=list)
+    error: str | None = None
+
+
+class FittingCategoryListResponseSchema(BaseModel):
+    success: bool
+    items: List[FittingTaxonomyCategorySchema] = Field(default_factory=list)
+    error: str | None = None
+
+
+class FittingProductListResponseSchema(BaseModel):
+    success: bool
+    items: List[FittingProductSchema] = Field(default_factory=list)
+    error: str | None = None
+
+
+class FittingProductDetailResponseSchema(BaseModel):
+    success: bool
+    item: FittingProductSchema | None = None
+    error: str | None = None
+
+
 class CatalogAutoRefreshStatusSchema(BaseModel):
     loop_running: bool = False
     interval_seconds: int = 0
