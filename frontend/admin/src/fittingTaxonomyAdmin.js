@@ -75,6 +75,7 @@ export function buildProductTaxonomyPayload(form = {}) {
     manufacturer_id: parseNullableId(form.manufacturer_id),
     series_id: parseNullableId(form.series_id),
     category_id: parseNullableId(form.category_id),
+    is_active: Boolean(form.is_active ?? true),
   };
 }
 
@@ -118,6 +119,7 @@ export function buildProductTaxonomyForm(item = null) {
     category_id: item?.category_id ? String(item.category_id) : "",
     manufacturer_id: item?.manufacturer_id ? String(item.manufacturer_id) : "",
     series_id: item?.series_id ? String(item.series_id) : "",
+    is_active: Boolean(item?.is_active ?? true),
   };
 }
 

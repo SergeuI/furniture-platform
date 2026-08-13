@@ -412,6 +412,13 @@ export default function FittingTaxonomyAdminWorkspace({
           is_active: nextIsActive,
           sort_order: item.sort_order || 0,
         });
+      } else if (entity === "products") {
+        result = await updateFittingProductTaxonomy(token, item.id, {
+          manufacturer_id: item.manufacturer_id,
+          series_id: item.series_id,
+          category_id: item.category_id,
+          is_active: nextIsActive,
+        });
       }
 
       if (!result?.success) {
@@ -512,67 +519,12 @@ export default function FittingTaxonomyAdminWorkspace({
 
       <article className="dashboard-hero-card">
         <div className="dashboard-hero-copy">
-          <span className="dashboard-eyebrow">
-            {language === "uk" ? "Технічна фурнітура" : "Technical fittings"}
-          </span>
-          <h3>{activeEntityLabel}</h3>
+          <h1>{activeEntityLabel}</h1>
           <p>
             {language === "uk"
-              ? "Адміністративний довідник для виробників, серій, категорій і canonical product taxonomy."
-              : "Admin workspace for manufacturers, series, categories, and canonical product taxonomy."}
+              ? "Керування виробниками, серіями, категоріями та технічними товарами."
+              : "Manage manufacturers, series, categories, and technical products."}
           </p>
-        </div>
-        <div className="dashboard-status-card">
-          <div className="dashboard-status-head">
-            <div className="dashboard-status-title">
-              <strong>{language === "uk" ? "Стан" : "Status"}</strong>
-              <p>{loading ? (language === "uk" ? "Завантаження..." : "Loading...") : language === "uk" ? "Готово" : "Ready"}</p>
-            </div>
-            <span className={`dashboard-status-badge${loading ? "" : " live"}`}>
-              {loading ? (language === "uk" ? "Чекайте" : "Busy") : (language === "uk" ? "Готово" : "Ready")}
-            </span>
-          </div>
-          <p>
-            {language === "uk"
-              ? "Зміни працюють тільки для canonical taxonomy; legacy fittings лишаються окремо."
-              : "Changes apply only to canonical taxonomy; legacy fittings stay separate."}
-          </p>
-        </div>
-      </article>
-
-      <article className="dashboard-panel">
-        <div className="dashboard-panel-head">
-          <div>
-            <h3>{language === "uk" ? "Підменю" : "Submenu"}</h3>
-            <p>{language === "uk" ? "Виберіть розділ taxonomy" : "Choose a taxonomy section"}</p>
-          </div>
-        </div>
-        <div className="dashboard-tile-grid">
-          {Object.keys(ENTITY_LABELS).map((entity) => (
-            <button
-              className={`dashboard-tile-card${activeTab === entity ? " active" : ""}`}
-              key={entity}
-              onClick={() => {
-                if (typeof onNavigate === "function") {
-                  onNavigate(
-                    entity === "manufacturers"
-                      ? FITTING_TAXONOMY_VIEWS.manufacturers
-                      : entity === "series"
-                        ? FITTING_TAXONOMY_VIEWS.series
-                        : entity === "categories"
-                          ? FITTING_TAXONOMY_VIEWS.categories
-                          : FITTING_TAXONOMY_VIEWS.products,
-                  );
-                }
-              }}
-              type="button"
-            >
-              <div className="dashboard-tile-copy">
-                <strong>{entityToLabel(entity, language)}</strong>
-                <span>{language === "uk" ? "Адміністративний розділ" : "Admin section"}</span>
-              </div>
-            </button>
-          ))}
         </div>
       </article>
 
@@ -582,8 +534,8 @@ export default function FittingTaxonomyAdminWorkspace({
             <h3>{activeEntityLabel}</h3>
             <p>
               {language === "uk"
-                ? "Активні записи показуються за замовчуванням; неактивні можна показати перемикачем."
-                : "Active records are shown by default; inactive ones can be revealed with the toggle."}
+                ? "Активні записи показуються за замовчуванням. Неактивні можна показати перемикачем."
+                : "Active records are shown by default. Inactive ones can be revealed with the toggle."}
             </p>
           </div>
           <div className="service-catalog-header-actions">
@@ -719,6 +671,7 @@ export default function FittingTaxonomyAdminWorkspace({
               <span>{language === "uk" ? "Виробник" : "Manufacturer"}</span>
               <span>{language === "uk" ? "Серія" : "Series"}</span>
               <span>{language === "uk" ? "Категорія" : "Category"}</span>
+              <span>{language === "uk" ? "Активний" : "Active"}</span>
             </div>
             <div className="fittings-table-list">
               {visibleProducts.map((item) => (
@@ -726,18 +679,20 @@ export default function FittingTaxonomyAdminWorkspace({
                   <div>
                     <strong>{item.name}</strong>
                     <div className="fitting-form-note">
-                      {language === "uk"
-                        ? `technical_product_id: ${item.id}`
-                        : `technical_product_id: ${item.id}`}
+                      {language === "uk" ? `ID: ${item.id}` : `ID: ${item.id}`}
                     </div>
                   </div>
                   <div>{item.article || "—"}</div>
                   <div>{manufacturersById.get(String(item.manufacturer_id))?.name || "—"}</div>
                   <div>{seriesById.get(String(item.series_id))?.name || "—"}</div>
                   <div>{categoriesById.get(String(item.category_id))?.name || "—"}</div>
+                  <div>{item.is_active ? (language === "uk" ? "Так" : "Yes") : (language === "uk" ? "Ні" : "No")}</div>
                   <div className="catalog-actions">
                     <button className="icon-button" onClick={() => openEditor("products", item)} type="button">
                       <Pencil size={14} />
+                    </button>
+                    <button className="icon-button" onClick={() => toggleActive("products", item)} type="button">
+                      {item.is_active ? "↘" : "↗"}
                     </button>
                   </div>
                 </article>
@@ -855,8 +810,8 @@ export default function FittingTaxonomyAdminWorkspace({
                 <>
                   <div className="fitting-form-note">
                     {language === "uk"
-                      ? "Це canonical product taxonomy. Зміни застосовуються до технічного продукту та всіх його legacy fitting записів."
-                      : "This is canonical product taxonomy. Changes apply to the technical product and its legacy fitting rows."}
+                      ? "Зміни застосовуються до технічного товару та пов'язаних записів."
+                      : "Changes apply to the technical product and its linked records."}
                   </div>
                   <label>
                     <span>{language === "uk" ? "Виробник" : "Manufacturer"}</span>
@@ -890,6 +845,14 @@ export default function FittingTaxonomyAdminWorkspace({
                         </option>
                       ))}
                     </select>
+                  </label>
+                  <label className="toggle-label">
+                    <input
+                      checked={Boolean(editorForm.is_active)}
+                      onChange={(event) => setEditorForm((current) => ({ ...current, is_active: event.target.checked }))}
+                      type="checkbox"
+                    />
+                    {language === "uk" ? "Активний" : "Active"}
                   </label>
                 </>
               )}

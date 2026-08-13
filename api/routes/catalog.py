@@ -2663,6 +2663,7 @@ async def update_fitting_product_taxonomy_route(
     manufacturer_id = payload.manufacturer_id
     series_id = payload.series_id
     category_id = payload.category_id
+    is_active = payload.is_active
 
     db = SessionLocal()
     try:
@@ -2707,6 +2708,7 @@ async def update_fitting_product_taxonomy_route(
             manufacturer_id=normalized_manufacturer_id,
             series_id=effective_series_id,
             category_id=normalized_category_id,
+            is_active=is_active,
         )
     finally:
         db.close()

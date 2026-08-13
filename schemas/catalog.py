@@ -757,6 +757,7 @@ class FittingProductTaxonomyUpdateSchema(BaseModel):
     manufacturer_id: int | None = None
     series_id: int | None = None
     category_id: int | None = None
+    is_active: bool | None = None
 
 
 class FittingProductTaxonomyOperationResponseSchema(BaseModel):

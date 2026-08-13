@@ -95,6 +95,15 @@ class FittingTaxonomyApiTests(unittest.TestCase):
                 self.assertEqual(product["series_id"], 1)
                 self.assertEqual(product["category_id"], 2)
 
+                all_products_response = client.get(
+                    "/catalog/fitting-products?manufacturer_id=1&active_only=false",
+                    headers={"Authorization": "Bearer token"},
+                )
+                self.assertEqual(all_products_response.status_code, 200)
+                all_products_payload = all_products_response.json()
+                self.assertTrue(all_products_payload["success"])
+                self.assertEqual(len(all_products_payload["items"]), 2)
+
                 detail_response = client.get(
                     "/catalog/fitting-products/1",
                     headers={"Authorization": "Bearer token"},
@@ -232,6 +241,7 @@ class FittingTaxonomyApiTests(unittest.TestCase):
                         "manufacturer_id": manufacturer_id,
                         "series_id": series_id,
                         "category_id": category_id,
+                        "is_active": False,
                     },
                     headers=headers,
                 )
@@ -241,6 +251,7 @@ class FittingTaxonomyApiTests(unittest.TestCase):
                 self.assertEqual(taxonomy_patch_payload["item"]["manufacturer_id"], manufacturer_id)
                 self.assertEqual(taxonomy_patch_payload["item"]["series_id"], series_id)
                 self.assertEqual(taxonomy_patch_payload["item"]["category_id"], category_id)
+                self.assertFalse(taxonomy_patch_payload["item"]["is_active"])
 
                 taxonomy_detail_response = client.get(
                     "/catalog/fitting-products/1",
@@ -251,6 +262,7 @@ class FittingTaxonomyApiTests(unittest.TestCase):
                 self.assertEqual(taxonomy_detail_payload["item"]["manufacturer_id"], manufacturer_id)
                 self.assertEqual(taxonomy_detail_payload["item"]["series_id"], series_id)
                 self.assertEqual(taxonomy_detail_payload["item"]["category_id"], category_id)
+                self.assertFalse(taxonomy_detail_payload["item"]["is_active"])
 
                 delete_manufacturer_blocked_response = client.delete(
                     f"/catalog/fitting-manufacturers/{manufacturer_id}",
@@ -355,6 +367,16 @@ class FittingTaxonomyApiTests(unittest.TestCase):
                         series_id=series.id,
                         category_id=child_category.id,
                         is_active=True,
+                    ),
+                    FittingProductModel(
+                        article="A0",
+                        code="A0",
+                        name="Hidden Hettich item",
+                        brand="Hettich",
+                        manufacturer_id=manufacturer.id,
+                        series_id=series.id,
+                        category_id=child_category.id,
+                        is_active=False,
                     ),
                     FittingProductModel(
                         article="A2",

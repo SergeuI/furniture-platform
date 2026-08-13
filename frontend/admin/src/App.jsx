@@ -12741,7 +12741,7 @@ export default function App() {
         listFittingManufacturers(activeToken, false),
         listFittingSeries(activeToken, false),
         listFittingCategories(activeToken, false),
-        listFittingProducts(activeToken, { active_only: false }),
+        listFittingProducts(activeToken),
       ]);
 
       if (

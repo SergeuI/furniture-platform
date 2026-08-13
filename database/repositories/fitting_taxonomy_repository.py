@@ -497,6 +497,7 @@ def update_fitting_product_taxonomy(
     manufacturer_id: int | None = None,
     series_id: int | None = None,
     category_id: int | None = None,
+    is_active: bool | None = None,
 ) -> dict | None:
     db = SessionLocal()
     try:
@@ -507,6 +508,8 @@ def update_fitting_product_taxonomy(
         item.manufacturer_id = _normalize_int(manufacturer_id)
         item.series_id = _normalize_int(series_id)
         item.category_id = _normalize_int(category_id)
+        if is_active is not None:
+            item.is_active = bool(is_active)
         db.commit()
         db.refresh(item)
         return _serialize_product(item)
