@@ -626,6 +626,28 @@ class FittingManufacturerSchema(BaseModel):
     updated_at: datetime | None = None
 
 
+class FittingManufacturerCreateSchema(BaseModel):
+    code: str = Field(min_length=1, max_length=64)
+    name: str = Field(min_length=1, max_length=160)
+    description: str | None = Field(default=None, max_length=1000)
+    website_url: str | None = Field(default=None, max_length=1000)
+    logo_url: str | None = Field(default=None, max_length=1000)
+    country_code: str | None = Field(default=None, max_length=16)
+    is_active: bool = True
+    sort_order: int = 0
+
+
+class FittingManufacturerUpdateSchema(BaseModel):
+    code: str = Field(min_length=1, max_length=64)
+    name: str = Field(min_length=1, max_length=160)
+    description: str | None = Field(default=None, max_length=1000)
+    website_url: str | None = Field(default=None, max_length=1000)
+    logo_url: str | None = Field(default=None, max_length=1000)
+    country_code: str | None = Field(default=None, max_length=16)
+    is_active: bool = True
+    sort_order: int = 0
+
+
 class FittingSeriesSchema(BaseModel):
     id: int
     manufacturer_id: int
@@ -638,6 +660,24 @@ class FittingSeriesSchema(BaseModel):
     updated_at: datetime | None = None
 
 
+class FittingSeriesCreateSchema(BaseModel):
+    manufacturer_id: int
+    code: str = Field(min_length=1, max_length=64)
+    name: str = Field(min_length=1, max_length=160)
+    description: str | None = Field(default=None, max_length=1000)
+    is_active: bool = True
+    sort_order: int = 0
+
+
+class FittingSeriesUpdateSchema(BaseModel):
+    manufacturer_id: int
+    code: str = Field(min_length=1, max_length=64)
+    name: str = Field(min_length=1, max_length=160)
+    description: str | None = Field(default=None, max_length=1000)
+    is_active: bool = True
+    sort_order: int = 0
+
+
 class FittingTaxonomyCategorySchema(BaseModel):
     id: int
     code: str
@@ -648,6 +688,24 @@ class FittingTaxonomyCategorySchema(BaseModel):
     sort_order: int = 0
     created_at: datetime | None = None
     updated_at: datetime | None = None
+
+
+class FittingTaxonomyCategoryCreateSchema(BaseModel):
+    code: str = Field(min_length=1, max_length=64)
+    name: str = Field(min_length=1, max_length=160)
+    parent_id: int | None = None
+    description: str | None = Field(default=None, max_length=1000)
+    is_active: bool = True
+    sort_order: int = 0
+
+
+class FittingTaxonomyCategoryUpdateSchema(BaseModel):
+    code: str = Field(min_length=1, max_length=64)
+    name: str = Field(min_length=1, max_length=160)
+    parent_id: int | None = None
+    description: str | None = Field(default=None, max_length=1000)
+    is_active: bool = True
+    sort_order: int = 0
 
 
 class FittingProductSchema(BaseModel):
@@ -692,6 +750,36 @@ class FittingProductListResponseSchema(BaseModel):
 class FittingProductDetailResponseSchema(BaseModel):
     success: bool
     item: FittingProductSchema | None = None
+    error: str | None = None
+
+
+class FittingProductTaxonomyUpdateSchema(BaseModel):
+    manufacturer_id: int | None = None
+    series_id: int | None = None
+    category_id: int | None = None
+
+
+class FittingProductTaxonomyOperationResponseSchema(BaseModel):
+    success: bool
+    item: FittingProductSchema | None = None
+    error: str | None = None
+
+
+class FittingManufacturerOperationResponseSchema(BaseModel):
+    success: bool
+    item: FittingManufacturerSchema | None = None
+    error: str | None = None
+
+
+class FittingSeriesOperationResponseSchema(BaseModel):
+    success: bool
+    item: FittingSeriesSchema | None = None
+    error: str | None = None
+
+
+class FittingTaxonomyCategoryOperationResponseSchema(BaseModel):
+    success: bool
+    item: FittingTaxonomyCategorySchema | None = None
     error: str | None = None
 
 

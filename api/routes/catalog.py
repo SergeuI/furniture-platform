@@ -43,10 +43,21 @@ from schemas.catalog import (
     ManualServiceCatalogItemCreateSchema,
     ManualServiceCatalogItemUpdateSchema,
     FittingCategoryListResponseSchema,
+    FittingManufacturerCreateSchema,
     FittingManufacturerListResponseSchema,
+    FittingManufacturerOperationResponseSchema,
+    FittingManufacturerUpdateSchema,
     FittingProductDetailResponseSchema,
     FittingProductListResponseSchema,
+    FittingProductTaxonomyOperationResponseSchema,
+    FittingProductTaxonomyUpdateSchema,
+    FittingSeriesCreateSchema,
     FittingSeriesListResponseSchema,
+    FittingSeriesOperationResponseSchema,
+    FittingSeriesUpdateSchema,
+    FittingTaxonomyCategoryCreateSchema,
+    FittingTaxonomyCategoryOperationResponseSchema,
+    FittingTaxonomyCategoryUpdateSchema,
     MaterialCatalogCreateSchema,
     MaterialCatalogUpdateSchema,
     MaterialEdgeAttachSchema,
@@ -63,7 +74,11 @@ from schemas.catalog import (
     SpecificationCatalogResponseSchema
 )
 from database.models.fitting import (
+    FittingCategoryModel,
     FittingModel,
+    FittingManufacturerModel,
+    FittingProductModel,
+    FittingSeriesModel,
     SupplierModel,
 )
 from database.repositories.catalog_repository import (
@@ -75,11 +90,24 @@ from database.repositories.catalog_repository import (
     update_catalog_item
 )
 from database.repositories.fitting_taxonomy_repository import (
+    create_fitting_category,
+    create_fitting_manufacturer,
+    create_fitting_series,
+    delete_fitting_category,
+    delete_fitting_manufacturer,
+    delete_fitting_series,
+    get_fitting_category_by_id,
+    get_fitting_manufacturer_by_id,
+    get_fitting_series_by_id,
     get_fitting_product_by_id,
     list_fitting_categories as list_taxonomy_categories,
     list_fitting_manufacturers,
     list_fitting_products,
     list_fitting_series,
+    update_fitting_category,
+    update_fitting_manufacturer,
+    update_fitting_product_taxonomy,
+    update_fitting_series,
 )
 from database.repositories.service_catalog_repository import (
     create_manual_service_catalog_item,
@@ -2096,6 +2124,597 @@ async def get_fitting_product_detail_route(
         "success": True,
         "item": item,
     }
+
+
+def _normalize_admin_text(value: object | None) -> str:
+    return " ".join(str(value or "").split()).strip()
+
+
+def _category_has_descendant(*, category_id: int, target_id: int) -> bool:
+    db = SessionLocal()
+    try:
+        current_parent_id = category_id
+        seen: set[int] = set()
+
+        while current_parent_id is not None and current_parent_id not in seen:
+            if int(current_parent_id) == int(target_id):
+                return True
+
+            seen.add(int(current_parent_id))
+            parent = (
+                db.query(FittingCategoryModel.parent_id)
+                .filter(FittingCategoryModel.id == int(current_parent_id))
+                .first()
+            )
+            current_parent_id = int(parent[0]) if parent and parent[0] is not None else None
+
+        return False
+    finally:
+        db.close()
+
+
+def _category_has_child_categories(category_id: int) -> bool:
+    db = SessionLocal()
+    try:
+        return (
+            db.query(FittingCategoryModel.id)
+            .filter(FittingCategoryModel.parent_id == int(category_id))
+            .first()
+            is not None
+        )
+    finally:
+        db.close()
+
+
+def _manufacturer_in_use(manufacturer_id: int) -> bool:
+    db = SessionLocal()
+    try:
+        return (
+            db.query(FittingSeriesModel.id)
+            .filter(FittingSeriesModel.manufacturer_id == int(manufacturer_id))
+            .first()
+            is not None
+        ) or (
+            db.query(FittingProductModel.id)
+            .filter(FittingProductModel.manufacturer_id == int(manufacturer_id))
+            .first()
+            is not None
+        )
+    finally:
+        db.close()
+
+
+def _series_in_use(series_id: int) -> bool:
+    db = SessionLocal()
+    try:
+        return (
+            db.query(FittingProductModel.id)
+            .filter(FittingProductModel.series_id == int(series_id))
+            .first()
+            is not None
+        )
+    finally:
+        db.close()
+
+
+def _category_in_use(category_id: int) -> bool:
+    db = SessionLocal()
+    try:
+        return (
+            db.query(FittingProductModel.id)
+            .filter(FittingProductModel.category_id == int(category_id))
+            .first()
+            is not None
+        )
+    finally:
+        db.close()
+
+
+@router.get(
+    "/fitting-manufacturers/{item_id}",
+    response_model=FittingManufacturerOperationResponseSchema,
+)
+async def get_fitting_manufacturer_detail_route(
+    item_id: str,
+    current_user = Depends(require_catalog_admin),
+):
+    item = get_fitting_manufacturer_by_id(item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Fitting manufacturer not found")
+
+    return {"success": True, "item": item}
+
+
+@router.post(
+    "/fitting-manufacturers",
+    response_model=FittingManufacturerOperationResponseSchema,
+)
+async def create_fitting_manufacturer_route(
+    payload: FittingManufacturerCreateSchema,
+    current_user = Depends(require_catalog_admin),
+):
+    code = _normalize_admin_text(payload.code)
+    name = _normalize_admin_text(payload.name)
+
+    if not code:
+        return {"success": False, "error": "Код виробника є обов'язковим"}
+
+    if not name:
+        return {"success": False, "error": "Назва виробника є обов'язковою"}
+
+    db = SessionLocal()
+    try:
+        if (
+            db.query(FittingManufacturerModel.id)
+            .filter(FittingManufacturerModel.code == code)
+            .first()
+            is not None
+        ):
+            return {"success": False, "error": "Виробник з таким кодом уже існує"}
+    finally:
+        db.close()
+
+    item = create_fitting_manufacturer(
+        code=code,
+        name=name,
+        description=payload.description,
+        website_url=payload.website_url,
+        logo_url=payload.logo_url,
+        country_code=payload.country_code,
+        is_active=payload.is_active,
+        sort_order=payload.sort_order,
+    )
+
+    if not item:
+        return {"success": False, "error": "Не вдалося створити виробника"}
+
+    return {"success": True, "item": item}
+
+
+@router.patch(
+    "/fitting-manufacturers/{item_id}",
+    response_model=FittingManufacturerOperationResponseSchema,
+)
+async def update_fitting_manufacturer_route(
+    item_id: str,
+    payload: FittingManufacturerUpdateSchema,
+    current_user = Depends(require_catalog_admin),
+):
+    code = _normalize_admin_text(payload.code)
+    name = _normalize_admin_text(payload.name)
+
+    if not code:
+        return {"success": False, "error": "Код виробника є обов'язковим"}
+
+    if not name:
+        return {"success": False, "error": "Назва виробника є обов'язковою"}
+
+    db = SessionLocal()
+    try:
+        existing = db.get(FittingManufacturerModel, int(item_id))
+        if not existing:
+            return {"success": False, "error": "Виробника не знайдено"}
+
+        duplicate = (
+            db.query(FittingManufacturerModel.id)
+            .filter(FittingManufacturerModel.code == code)
+            .filter(FittingManufacturerModel.id != int(item_id))
+            .first()
+        )
+        if duplicate:
+            return {"success": False, "error": "Виробник з таким кодом уже існує"}
+    finally:
+        db.close()
+
+    item = update_fitting_manufacturer(
+        item_id,
+        code=code,
+        name=name,
+        description=payload.description,
+        website_url=payload.website_url,
+        logo_url=payload.logo_url,
+        country_code=payload.country_code,
+        is_active=payload.is_active,
+        sort_order=payload.sort_order,
+    )
+
+    if not item:
+        return {"success": False, "error": "Не вдалося оновити виробника"}
+
+    return {"success": True, "item": item}
+
+
+@router.delete(
+    "/fitting-manufacturers/{item_id}",
+    response_model=FittingManufacturerOperationResponseSchema,
+)
+async def delete_fitting_manufacturer_route(
+    item_id: str,
+    current_user = Depends(require_catalog_admin),
+):
+    item = get_fitting_manufacturer_by_id(item_id)
+    if not item:
+        return {"success": False, "error": "Виробника не знайдено"}
+
+    if _manufacturer_in_use(int(item_id)):
+        return {
+            "success": False,
+            "error": "Неможливо видалити виробника, бо він використовується у серіях або товарах",
+        }
+
+    deleted = delete_fitting_manufacturer(item_id)
+    if not deleted:
+        return {"success": False, "error": "Не вдалося видалити виробника"}
+
+    return {"success": True, "item": deleted}
+
+
+@router.get(
+    "/fitting-series/{item_id}",
+    response_model=FittingSeriesOperationResponseSchema,
+)
+async def get_fitting_series_detail_route(
+    item_id: str,
+    current_user = Depends(require_catalog_admin),
+):
+    item = get_fitting_series_by_id(item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Fitting series not found")
+
+    return {"success": True, "item": item}
+
+
+@router.post(
+    "/fitting-series",
+    response_model=FittingSeriesOperationResponseSchema,
+)
+async def create_fitting_series_route(
+    payload: FittingSeriesCreateSchema,
+    current_user = Depends(require_catalog_admin),
+):
+    manufacturer_id = int(payload.manufacturer_id)
+    code = _normalize_admin_text(payload.code)
+    name = _normalize_admin_text(payload.name)
+
+    if not code:
+        return {"success": False, "error": "Код серії є обов'язковим"}
+
+    if not name:
+        return {"success": False, "error": "Назва серії є обов'язковою"}
+
+    db = SessionLocal()
+    try:
+        if db.get(FittingManufacturerModel, manufacturer_id) is None:
+            return {"success": False, "error": "Виробника не знайдено"}
+
+        duplicate = (
+            db.query(FittingSeriesModel.id)
+            .filter(FittingSeriesModel.manufacturer_id == manufacturer_id)
+            .filter(FittingSeriesModel.code == code)
+            .first()
+        )
+        if duplicate:
+            return {"success": False, "error": "Серія з таким кодом уже існує для цього виробника"}
+    finally:
+        db.close()
+
+    item = create_fitting_series(
+        manufacturer_id=manufacturer_id,
+        code=code,
+        name=name,
+        description=payload.description,
+        is_active=payload.is_active,
+        sort_order=payload.sort_order,
+    )
+
+    if not item:
+        return {"success": False, "error": "Не вдалося створити серію"}
+
+    return {"success": True, "item": item}
+
+
+@router.patch(
+    "/fitting-series/{item_id}",
+    response_model=FittingSeriesOperationResponseSchema,
+)
+async def update_fitting_series_route(
+    item_id: str,
+    payload: FittingSeriesUpdateSchema,
+    current_user = Depends(require_catalog_admin),
+):
+    manufacturer_id = int(payload.manufacturer_id)
+    code = _normalize_admin_text(payload.code)
+    name = _normalize_admin_text(payload.name)
+
+    if not code:
+        return {"success": False, "error": "Код серії є обов'язковим"}
+
+    if not name:
+        return {"success": False, "error": "Назва серії є обов'язковою"}
+
+    db = SessionLocal()
+    try:
+        existing = db.get(FittingSeriesModel, int(item_id))
+        if not existing:
+            return {"success": False, "error": "Серію не знайдено"}
+
+        if db.get(FittingManufacturerModel, manufacturer_id) is None:
+            return {"success": False, "error": "Виробника не знайдено"}
+
+        duplicate = (
+            db.query(FittingSeriesModel.id)
+            .filter(FittingSeriesModel.manufacturer_id == manufacturer_id)
+            .filter(FittingSeriesModel.code == code)
+            .filter(FittingSeriesModel.id != int(item_id))
+            .first()
+        )
+        if duplicate:
+            return {"success": False, "error": "Серія з таким кодом уже існує для цього виробника"}
+    finally:
+        db.close()
+
+    item = update_fitting_series(
+        item_id,
+        manufacturer_id=manufacturer_id,
+        code=code,
+        name=name,
+        description=payload.description,
+        is_active=payload.is_active,
+        sort_order=payload.sort_order,
+    )
+
+    if not item:
+        return {"success": False, "error": "Не вдалося оновити серію"}
+
+    return {"success": True, "item": item}
+
+
+@router.delete(
+    "/fitting-series/{item_id}",
+    response_model=FittingSeriesOperationResponseSchema,
+)
+async def delete_fitting_series_route(
+    item_id: str,
+    current_user = Depends(require_catalog_admin),
+):
+    item = get_fitting_series_by_id(item_id)
+    if not item:
+        return {"success": False, "error": "Серію не знайдено"}
+
+    if _series_in_use(int(item_id)):
+        return {
+            "success": False,
+            "error": "Неможливо видалити серію, бо вона використовується у товарах",
+        }
+
+    deleted = delete_fitting_series(item_id)
+    if not deleted:
+        return {"success": False, "error": "Не вдалося видалити серію"}
+
+    return {"success": True, "item": deleted}
+
+
+@router.get(
+    "/fitting-categories/{item_id}",
+    response_model=FittingTaxonomyCategoryOperationResponseSchema,
+)
+async def get_fitting_category_detail_route(
+    item_id: str,
+    current_user = Depends(require_catalog_admin),
+):
+    item = get_fitting_category_by_id(item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Fitting category not found")
+
+    return {"success": True, "item": item}
+
+
+@router.post(
+    "/fitting-categories",
+    response_model=FittingTaxonomyCategoryOperationResponseSchema,
+)
+async def create_fitting_category_route(
+    payload: FittingTaxonomyCategoryCreateSchema,
+    current_user = Depends(require_catalog_admin),
+):
+    code = _normalize_admin_text(payload.code)
+    name = _normalize_admin_text(payload.name)
+    parent_id = payload.parent_id
+
+    if not code:
+        return {"success": False, "error": "Код категорії є обов'язковим"}
+
+    if not name:
+        return {"success": False, "error": "Назва категорії є обов'язковою"}
+
+    db = SessionLocal()
+    try:
+        if (
+            db.query(FittingCategoryModel.id)
+            .filter(FittingCategoryModel.code == code)
+            .first()
+            is not None
+        ):
+            return {"success": False, "error": "Категорія з таким кодом уже існує"}
+
+        if parent_id is not None:
+            parent = db.get(FittingCategoryModel, int(parent_id))
+            if parent is None:
+                return {"success": False, "error": "Батьківську категорію не знайдено"}
+    finally:
+        db.close()
+
+    item = create_fitting_category(
+        code=code,
+        name=name,
+        parent_id=parent_id,
+        description=payload.description,
+        is_active=payload.is_active,
+        sort_order=payload.sort_order,
+    )
+
+    if not item:
+        return {"success": False, "error": "Не вдалося створити категорію"}
+
+    return {"success": True, "item": item}
+
+
+@router.patch(
+    "/fitting-categories/{item_id}",
+    response_model=FittingTaxonomyCategoryOperationResponseSchema,
+)
+async def update_fitting_category_route(
+    item_id: str,
+    payload: FittingTaxonomyCategoryUpdateSchema,
+    current_user = Depends(require_catalog_admin),
+):
+    code = _normalize_admin_text(payload.code)
+    name = _normalize_admin_text(payload.name)
+    parent_id = payload.parent_id
+
+    if not code:
+        return {"success": False, "error": "Код категорії є обов'язковим"}
+
+    if not name:
+        return {"success": False, "error": "Назва категорії є обов'язковою"}
+
+    category_id = int(item_id)
+    db = SessionLocal()
+    try:
+        existing = db.get(FittingCategoryModel, category_id)
+        if not existing:
+            return {"success": False, "error": "Категорію не знайдено"}
+
+        duplicate = (
+            db.query(FittingCategoryModel.id)
+            .filter(FittingCategoryModel.code == code)
+            .filter(FittingCategoryModel.id != category_id)
+            .first()
+        )
+        if duplicate:
+            return {"success": False, "error": "Категорія з таким кодом уже існує"}
+
+        normalized_parent_id = int(parent_id) if parent_id is not None else None
+        if normalized_parent_id is not None:
+            if normalized_parent_id == category_id:
+                return {"success": False, "error": "Категорія не може бути власною батьківською категорією"}
+
+            parent = db.get(FittingCategoryModel, normalized_parent_id)
+            if parent is None:
+                return {"success": False, "error": "Батьківську категорію не знайдено"}
+
+            if _category_has_descendant(category_id=normalized_parent_id, target_id=category_id):
+                return {"success": False, "error": "Неможливо зробити категорію дочірньою для власного нащадка"}
+    finally:
+        db.close()
+
+    item = update_fitting_category(
+        item_id,
+        code=code,
+        name=name,
+        parent_id=parent_id,
+        description=payload.description,
+        is_active=payload.is_active,
+        sort_order=payload.sort_order,
+    )
+
+    if not item:
+        return {"success": False, "error": "Не вдалося оновити категорію"}
+
+    return {"success": True, "item": item}
+
+
+@router.delete(
+    "/fitting-categories/{item_id}",
+    response_model=FittingTaxonomyCategoryOperationResponseSchema,
+)
+async def delete_fitting_category_route(
+    item_id: str,
+    current_user = Depends(require_catalog_admin),
+):
+    item = get_fitting_category_by_id(item_id)
+    if not item:
+        return {"success": False, "error": "Категорію не знайдено"}
+
+    category_id = int(item_id)
+    if _category_has_child_categories(category_id):
+        return {"success": False, "error": "Неможливо видалити категорію, бо вона має дочірні категорії"}
+
+    if _category_in_use(category_id):
+        return {"success": False, "error": "Неможливо видалити категорію, бо вона використовується у товарах"}
+
+    deleted = delete_fitting_category(item_id)
+    if not deleted:
+        return {"success": False, "error": "Не вдалося видалити категорію"}
+
+    return {"success": True, "item": deleted}
+
+
+@router.patch(
+    "/fitting-products/{item_id}/taxonomy",
+    response_model=FittingProductTaxonomyOperationResponseSchema,
+)
+async def update_fitting_product_taxonomy_route(
+    item_id: str,
+    payload: FittingProductTaxonomyUpdateSchema,
+    current_user = Depends(require_catalog_admin),
+):
+    product_id = int(item_id)
+    manufacturer_id = payload.manufacturer_id
+    series_id = payload.series_id
+    category_id = payload.category_id
+
+    db = SessionLocal()
+    try:
+        existing = db.get(FittingProductModel, product_id)
+        if not existing:
+            return {"success": False, "error": "Технічний продукт не знайдено"}
+
+        manufacturer_row = None
+        series_row = None
+        category_row = None
+        normalized_manufacturer_id = int(manufacturer_id) if manufacturer_id is not None else None
+        normalized_series_id = int(series_id) if series_id is not None else None
+        normalized_category_id = int(category_id) if category_id is not None else None
+        existing_series_id = int(existing.series_id) if existing.series_id is not None else None
+        effective_series_id = normalized_series_id
+
+        if normalized_manufacturer_id is not None:
+            manufacturer_row = db.get(FittingManufacturerModel, normalized_manufacturer_id)
+            if manufacturer_row is None:
+                return {"success": False, "error": "Виробника не знайдено"}
+
+        if normalized_series_id is not None:
+            series_row = db.get(FittingSeriesModel, normalized_series_id)
+            if series_row is None:
+                return {"success": False, "error": "Серію не знайдено"}
+            if normalized_manufacturer_id is None:
+                return {"success": False, "error": "Для серії потрібно вказати виробника"}
+            if int(series_row.manufacturer_id) != int(normalized_manufacturer_id):
+                return {"success": False, "error": "Серія має належати вибраному виробнику"}
+        elif normalized_manufacturer_id is not None and existing_series_id is not None:
+            existing_series = db.get(FittingSeriesModel, existing_series_id)
+            if existing_series is not None and int(existing_series.manufacturer_id) != int(normalized_manufacturer_id):
+                effective_series_id = None
+
+        if normalized_category_id is not None:
+            category_row = db.get(FittingCategoryModel, normalized_category_id)
+            if category_row is None:
+                return {"success": False, "error": "Категорію не знайдено"}
+
+        item = update_fitting_product_taxonomy(
+            product_id,
+            manufacturer_id=normalized_manufacturer_id,
+            series_id=effective_series_id,
+            category_id=normalized_category_id,
+        )
+    finally:
+        db.close()
+
+    if not item:
+        return {"success": False, "error": "Не вдалося оновити taxonomy технічного продукту"}
+
+    return {"success": True, "item": item}
 
 
 @router.get(

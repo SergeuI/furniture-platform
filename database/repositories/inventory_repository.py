@@ -555,6 +555,7 @@ def _serialize_fitting(item: FittingModel, *, owner_profile: dict | None = None)
         "owner_display_name": (owner_profile or {}).get("display_name"),
         "owner_login": (owner_profile or {}).get("login"),
         "owner_email": (owner_profile or {}).get("email"),
+        "technical_product_id": int(item.technical_product_id) if item.technical_product_id is not None else None,
         "is_system": bool(item.is_system),
         "is_active": bool(item.is_active),
         "sort_order": item.sort_order or 0,

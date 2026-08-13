@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy import or_
 
 from database.models.fitting import (
@@ -14,6 +15,21 @@ from database.session import SessionLocal
 def _normalize_text(value: str | None) -> str | None:
     normalized = str(value or "").strip()
     return normalized or None
+
+
+def _normalize_code(value: str | None) -> str | None:
+    normalized = str(value or "").strip()
+    return normalized or None
+
+
+def _normalize_int(value: int | str | None) -> int | None:
+    if value in (None, ""):
+        return None
+
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _serialize_manufacturer(item: FittingManufacturerModel) -> dict:
@@ -98,6 +114,103 @@ def list_fitting_manufacturers(*, active_only: bool = True) -> list[dict]:
         db.close()
 
 
+def get_fitting_manufacturer_by_id(item_id: str | int) -> dict | None:
+    db = SessionLocal()
+    try:
+        item = db.get(FittingManufacturerModel, int(item_id))
+        return _serialize_manufacturer(item) if item else None
+    finally:
+        db.close()
+
+
+def create_fitting_manufacturer(
+    *,
+    code: str,
+    name: str,
+    description: str | None = None,
+    website_url: str | None = None,
+    logo_url: str | None = None,
+    country_code: str | None = None,
+    is_active: bool = True,
+    sort_order: int = 0,
+) -> dict | None:
+    db = SessionLocal()
+    try:
+        item = FittingManufacturerModel(
+            code=_normalize_code(code),
+            name=_normalize_text(name),
+            description=_normalize_text(description),
+            website_url=_normalize_text(website_url),
+            logo_url=_normalize_text(logo_url),
+            country_code=_normalize_text(country_code),
+            is_active=bool(is_active),
+            sort_order=int(sort_order or 0),
+        )
+        db.add(item)
+        db.commit()
+        db.refresh(item)
+        return _serialize_manufacturer(item)
+    except IntegrityError:
+        db.rollback()
+        return None
+    finally:
+        db.close()
+
+
+def update_fitting_manufacturer(
+    item_id: str | int,
+    *,
+    code: str,
+    name: str,
+    description: str | None = None,
+    website_url: str | None = None,
+    logo_url: str | None = None,
+    country_code: str | None = None,
+    is_active: bool = True,
+    sort_order: int = 0,
+) -> dict | None:
+    db = SessionLocal()
+    try:
+        item = db.get(FittingManufacturerModel, int(item_id))
+        if not item:
+            return None
+
+        item.code = _normalize_code(code)
+        item.name = _normalize_text(name) or item.name
+        item.description = _normalize_text(description)
+        item.website_url = _normalize_text(website_url)
+        item.logo_url = _normalize_text(logo_url)
+        item.country_code = _normalize_text(country_code)
+        item.is_active = bool(is_active)
+        item.sort_order = int(sort_order or 0)
+        db.commit()
+        db.refresh(item)
+        return _serialize_manufacturer(item)
+    except IntegrityError:
+        db.rollback()
+        return None
+    finally:
+        db.close()
+
+
+def delete_fitting_manufacturer(item_id: str | int) -> dict | None:
+    db = SessionLocal()
+    try:
+        item = db.get(FittingManufacturerModel, int(item_id))
+        if not item:
+            return None
+
+        serialized = _serialize_manufacturer(item)
+        db.delete(item)
+        db.commit()
+        return serialized
+    except IntegrityError:
+        db.rollback()
+        return None
+    finally:
+        db.close()
+
+
 def list_fitting_series(
     *,
     manufacturer_id: int | None = None,
@@ -122,6 +235,95 @@ def list_fitting_series(
         db.close()
 
 
+def get_fitting_series_by_id(item_id: str | int) -> dict | None:
+    db = SessionLocal()
+    try:
+        item = db.get(FittingSeriesModel, int(item_id))
+        return _serialize_series(item) if item else None
+    finally:
+        db.close()
+
+
+def create_fitting_series(
+    *,
+    manufacturer_id: int,
+    code: str,
+    name: str,
+    description: str | None = None,
+    is_active: bool = True,
+    sort_order: int = 0,
+) -> dict | None:
+    db = SessionLocal()
+    try:
+        item = FittingSeriesModel(
+            manufacturer_id=int(manufacturer_id),
+            code=_normalize_code(code),
+            name=_normalize_text(name) or "",
+            description=_normalize_text(description),
+            is_active=bool(is_active),
+            sort_order=int(sort_order or 0),
+        )
+        db.add(item)
+        db.commit()
+        db.refresh(item)
+        return _serialize_series(item)
+    except IntegrityError:
+        db.rollback()
+        return None
+    finally:
+        db.close()
+
+
+def update_fitting_series(
+    item_id: str | int,
+    *,
+    manufacturer_id: int,
+    code: str,
+    name: str,
+    description: str | None = None,
+    is_active: bool = True,
+    sort_order: int = 0,
+) -> dict | None:
+    db = SessionLocal()
+    try:
+        item = db.get(FittingSeriesModel, int(item_id))
+        if not item:
+            return None
+
+        item.manufacturer_id = int(manufacturer_id)
+        item.code = _normalize_code(code)
+        item.name = _normalize_text(name) or item.name
+        item.description = _normalize_text(description)
+        item.is_active = bool(is_active)
+        item.sort_order = int(sort_order or 0)
+        db.commit()
+        db.refresh(item)
+        return _serialize_series(item)
+    except IntegrityError:
+        db.rollback()
+        return None
+    finally:
+        db.close()
+
+
+def delete_fitting_series(item_id: str | int) -> dict | None:
+    db = SessionLocal()
+    try:
+        item = db.get(FittingSeriesModel, int(item_id))
+        if not item:
+            return None
+
+        serialized = _serialize_series(item)
+        db.delete(item)
+        db.commit()
+        return serialized
+    except IntegrityError:
+        db.rollback()
+        return None
+    finally:
+        db.close()
+
+
 def list_fitting_categories(
     *,
     parent_id: int | None = None,
@@ -142,6 +344,95 @@ def list_fitting_categories(
             FittingCategoryModel.id.asc(),
         ).all()
         return [_serialize_category(item) for item in rows]
+    finally:
+        db.close()
+
+
+def get_fitting_category_by_id(item_id: str | int) -> dict | None:
+    db = SessionLocal()
+    try:
+        item = db.get(FittingCategoryModel, int(item_id))
+        return _serialize_category(item) if item else None
+    finally:
+        db.close()
+
+
+def create_fitting_category(
+    *,
+    code: str,
+    name: str,
+    parent_id: int | None = None,
+    description: str | None = None,
+    is_active: bool = True,
+    sort_order: int = 0,
+) -> dict | None:
+    db = SessionLocal()
+    try:
+        item = FittingCategoryModel(
+            code=_normalize_code(code),
+            name=_normalize_text(name) or "",
+            parent_id=_normalize_int(parent_id),
+            description=_normalize_text(description),
+            is_active=bool(is_active),
+            sort_order=int(sort_order or 0),
+        )
+        db.add(item)
+        db.commit()
+        db.refresh(item)
+        return _serialize_category(item)
+    except IntegrityError:
+        db.rollback()
+        return None
+    finally:
+        db.close()
+
+
+def update_fitting_category(
+    item_id: str | int,
+    *,
+    code: str,
+    name: str,
+    parent_id: int | None = None,
+    description: str | None = None,
+    is_active: bool = True,
+    sort_order: int = 0,
+) -> dict | None:
+    db = SessionLocal()
+    try:
+        item = db.get(FittingCategoryModel, int(item_id))
+        if not item:
+            return None
+
+        item.code = _normalize_code(code)
+        item.name = _normalize_text(name) or item.name
+        item.parent_id = _normalize_int(parent_id)
+        item.description = _normalize_text(description)
+        item.is_active = bool(is_active)
+        item.sort_order = int(sort_order or 0)
+        db.commit()
+        db.refresh(item)
+        return _serialize_category(item)
+    except IntegrityError:
+        db.rollback()
+        return None
+    finally:
+        db.close()
+
+
+def delete_fitting_category(item_id: str | int) -> dict | None:
+    db = SessionLocal()
+    try:
+        item = db.get(FittingCategoryModel, int(item_id))
+        if not item:
+            return None
+
+        serialized = _serialize_category(item)
+        db.delete(item)
+        db.commit()
+        return serialized
+    except IntegrityError:
+        db.rollback()
+        return None
     finally:
         db.close()
 
@@ -196,5 +487,31 @@ def get_fitting_product_by_id(item_id: str | int) -> dict | None:
         if not item:
             return None
         return _serialize_product(item)
+    finally:
+        db.close()
+
+
+def update_fitting_product_taxonomy(
+    item_id: str | int,
+    *,
+    manufacturer_id: int | None = None,
+    series_id: int | None = None,
+    category_id: int | None = None,
+) -> dict | None:
+    db = SessionLocal()
+    try:
+        item = db.get(FittingProductModel, int(item_id))
+        if not item:
+            return None
+
+        item.manufacturer_id = _normalize_int(manufacturer_id)
+        item.series_id = _normalize_int(series_id)
+        item.category_id = _normalize_int(category_id)
+        db.commit()
+        db.refresh(item)
+        return _serialize_product(item)
+    except IntegrityError:
+        db.rollback()
+        return None
     finally:
         db.close()

@@ -402,6 +402,163 @@ export async function deleteFitting(token, itemId) {
   });
 }
 
+export async function listFittingManufacturers(token, includeInactive = false) {
+  const searchParams = new URLSearchParams();
+  if (includeInactive) {
+    searchParams.set("active_only", "false");
+  }
+  const query = searchParams.toString();
+  return request(`/catalog/fitting-manufacturers${query ? `?${query}` : ""}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function getFittingManufacturer(token, itemId) {
+  return request(`/catalog/fitting-manufacturers/${encodeURIComponent(String(itemId || ""))}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function createFittingManufacturer(token, payload) {
+  return request("/catalog/fitting-manufacturers", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateFittingManufacturer(token, itemId, payload) {
+  return request(`/catalog/fitting-manufacturers/${encodeURIComponent(String(itemId || ""))}`, {
+    method: "PATCH",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteFittingManufacturer(token, itemId) {
+  return request(`/catalog/fitting-manufacturers/${encodeURIComponent(String(itemId || ""))}`, {
+    method: "DELETE",
+    headers: authHeaders(token),
+  });
+}
+
+export async function listFittingSeries(token, includeInactive = false) {
+  const searchParams = new URLSearchParams();
+  if (includeInactive) {
+    searchParams.set("active_only", "false");
+  }
+  const query = searchParams.toString();
+  return request(`/catalog/fitting-series${query ? `?${query}` : ""}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function getFittingSeries(token, itemId) {
+  return request(`/catalog/fitting-series/${encodeURIComponent(String(itemId || ""))}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function createFittingSeries(token, payload) {
+  return request("/catalog/fitting-series", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateFittingSeries(token, itemId, payload) {
+  return request(`/catalog/fitting-series/${encodeURIComponent(String(itemId || ""))}`, {
+    method: "PATCH",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteFittingSeries(token, itemId) {
+  return request(`/catalog/fitting-series/${encodeURIComponent(String(itemId || ""))}`, {
+    method: "DELETE",
+    headers: authHeaders(token),
+  });
+}
+
+export async function listFittingCategories(token, includeInactive = false) {
+  const searchParams = new URLSearchParams();
+  if (includeInactive) {
+    searchParams.set("active_only", "false");
+  }
+  const query = searchParams.toString();
+  return request(`/catalog/fitting-categories${query ? `?${query}` : ""}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function getFittingCategory(token, itemId) {
+  return request(`/catalog/fitting-categories/${encodeURIComponent(String(itemId || ""))}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function createFittingCategory(token, payload) {
+  return request("/catalog/fitting-categories", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateFittingCategory(token, itemId, payload) {
+  return request(`/catalog/fitting-categories/${encodeURIComponent(String(itemId || ""))}`, {
+    method: "PATCH",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteFittingCategory(token, itemId) {
+  return request(`/catalog/fitting-categories/${encodeURIComponent(String(itemId || ""))}`, {
+    method: "DELETE",
+    headers: authHeaders(token),
+  });
+}
+
+export async function listFittingProducts(token, params = {}) {
+  const searchParams = new URLSearchParams();
+  if (params.search) {
+    searchParams.set("search", params.search);
+  }
+  if (params.manufacturer_id !== undefined && params.manufacturer_id !== null && `${params.manufacturer_id}`.trim()) {
+    searchParams.set("manufacturer_id", params.manufacturer_id);
+  }
+  if (params.series_id !== undefined && params.series_id !== null && `${params.series_id}`.trim()) {
+    searchParams.set("series_id", params.series_id);
+  }
+  if (params.category_id !== undefined && params.category_id !== null && `${params.category_id}`.trim()) {
+    searchParams.set("category_id", params.category_id);
+  }
+  if (params.active_only === false) {
+    searchParams.set("active_only", "false");
+  }
+  const query = searchParams.toString();
+  return request(`/catalog/fitting-products${query ? `?${query}` : ""}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function getFittingProduct(token, itemId) {
+  return request(`/catalog/fitting-products/${encodeURIComponent(String(itemId || ""))}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function updateFittingProductTaxonomy(token, itemId, payload) {
+  return request(`/catalog/fitting-products/${encodeURIComponent(String(itemId || ""))}/taxonomy`, {
+    method: "PATCH",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function listFittingHoleTemplatesByFitting(token, fittingId) {
   return request(`/fitting-holes/fittings/${fittingId}/templates`, {
     headers: authHeaders(token),

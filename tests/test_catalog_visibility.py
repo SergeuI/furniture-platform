@@ -241,6 +241,7 @@ class CatalogVisibilityTests(unittest.TestCase):
                     self.assertNotIn("PRIVATE-MAT", {item["article"] for item in materials})
                     self.assertIn("System Fitting", {item["name"] for item in fittings})
                     self.assertNotIn("Private Fitting", {item["name"] for item in fittings})
+                    self.assertIn("technical_product_id", fittings[0])
 
     def test_admin_can_filter_materials_by_ownership_scope_without_mixing_types(self) -> None:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:

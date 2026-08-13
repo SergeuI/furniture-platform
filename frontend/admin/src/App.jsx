@@ -54,6 +54,8 @@ import {
   PROCESSING_WORKSPACE_STORAGE_KEY,
   shouldAutoOpenCatalogMenu,
 } from "./processingWorkspace.js";
+import FittingTaxonomyAdminWorkspace from "./components/FittingTaxonomyAdminWorkspace.jsx";
+import { FITTING_TAXONOMY_VIEWS } from "./fittingTaxonomyAdmin.js";
 import {
   getCollapsedSidebarGroupClickTarget,
   getCollapsedSidebarVisualActiveGroupKey,
@@ -347,6 +349,10 @@ const ADMIN_SECTION_BY_VIEW = {
   catalogDrillingRules: "catalog-drilling-rules",
   catalogFasteners: "catalog-fasteners",
   catalogFittings: "catalog-fittings",
+  catalogFittingManufacturers: "catalog-fitting-manufacturers",
+  catalogFittingSeries: "catalog-fitting-series",
+  catalogFittingCategories: "catalog-fitting-categories",
+  catalogFittingProducts: "catalog-fitting-products",
   catalogHub: "catalog-hub",
   catalogHoles: "mounting-nodes",
   catalogManual: "catalog-manual",
@@ -922,6 +928,17 @@ const CATALOG_SERVICE_VIEWS = new Set([
   "catalogServiceRules",
   "catalogFasteners",
   "catalogValues",
+  FITTING_TAXONOMY_VIEWS.manufacturers,
+  FITTING_TAXONOMY_VIEWS.series,
+  FITTING_TAXONOMY_VIEWS.categories,
+  FITTING_TAXONOMY_VIEWS.products,
+]);
+
+const CATALOG_FITTING_TAXONOMY_VIEWS = new Set([
+  FITTING_TAXONOMY_VIEWS.manufacturers,
+  FITTING_TAXONOMY_VIEWS.series,
+  FITTING_TAXONOMY_VIEWS.categories,
+  FITTING_TAXONOMY_VIEWS.products,
 ]);
 
 const DEFAULT_FITTING_FORM = {
@@ -9403,6 +9420,10 @@ export default function App() {
   const isCatalogMaterialsView = activeView === "catalogMaterials";
   const isCatalogFittingsView = activeView === "catalogFittings";
   const isCatalogFastenersView = activeView === "catalogFasteners";
+  const isCatalogFittingManufacturersView = activeView === FITTING_TAXONOMY_VIEWS.manufacturers;
+  const isCatalogFittingSeriesView = activeView === FITTING_TAXONOMY_VIEWS.series;
+  const isCatalogFittingCategoriesView = activeView === FITTING_TAXONOMY_VIEWS.categories;
+  const isCatalogFittingProductsView = activeView === FITTING_TAXONOMY_VIEWS.products;
   const isCatalogServiceRulesView = activeView === "catalogServiceRules";
   const isCatalogDrillingRulesView = activeView === "catalogDrillingRules";
   const isCatalogValuesView = activeView === "catalogValues";
@@ -9605,6 +9626,45 @@ export default function App() {
                   label: t.catalogFittings,
                   onClick: () => {
                     switchView("catalogFittings");
+                    closeSidebarOnMobile();
+                    closeSidebarFlyout();
+                  },
+                }]
+              : []),
+            ...(user.role === "admin"
+              ? [{
+                  active: isCatalogFittingManufacturersView,
+                  key: FITTING_TAXONOMY_VIEWS.manufacturers,
+                  label: language === "uk" ? "Виробники фурнітури" : "Fitting manufacturers",
+                  onClick: () => {
+                    switchView(FITTING_TAXONOMY_VIEWS.manufacturers);
+                    closeSidebarOnMobile();
+                    closeSidebarFlyout();
+                  },
+                }, {
+                  active: isCatalogFittingSeriesView,
+                  key: FITTING_TAXONOMY_VIEWS.series,
+                  label: language === "uk" ? "Серії фурнітури" : "Fitting series",
+                  onClick: () => {
+                    switchView(FITTING_TAXONOMY_VIEWS.series);
+                    closeSidebarOnMobile();
+                    closeSidebarFlyout();
+                  },
+                }, {
+                  active: isCatalogFittingCategoriesView,
+                  key: FITTING_TAXONOMY_VIEWS.categories,
+                  label: language === "uk" ? "Категорії фурнітури" : "Fitting categories",
+                  onClick: () => {
+                    switchView(FITTING_TAXONOMY_VIEWS.categories);
+                    closeSidebarOnMobile();
+                    closeSidebarFlyout();
+                  },
+                }, {
+                  active: isCatalogFittingProductsView,
+                  key: FITTING_TAXONOMY_VIEWS.products,
+                  label: language === "uk" ? "Технічні товари фурнітури" : "Fitting products",
+                  onClick: () => {
+                    switchView(FITTING_TAXONOMY_VIEWS.products);
                     closeSidebarOnMobile();
                     closeSidebarFlyout();
                   },
@@ -10537,6 +10597,22 @@ export default function App() {
 
     if (isCatalogFastenersView) {
       return `${fastenerItems.length} ${t.of} ${fastenerItems.length}`;
+    }
+
+    if (isCatalogFittingManufacturersView) {
+      return language === "uk" ? "Виробники фурнітури" : "Fitting manufacturers";
+    }
+
+    if (isCatalogFittingSeriesView) {
+      return language === "uk" ? "Серії фурнітури" : "Fitting series";
+    }
+
+    if (isCatalogFittingCategoriesView) {
+      return language === "uk" ? "Категорії фурнітури" : "Fitting categories";
+    }
+
+    if (isCatalogFittingProductsView) {
+      return language === "uk" ? "Технічні товари фурнітури" : "Fitting products";
     }
 
     if (isCatalogValuesView) {
@@ -16138,6 +16214,14 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
       return;
     }
 
+    if (CATALOG_FITTING_TAXONOMY_VIEWS.has(nextView) && viewer?.role !== "admin") {
+      const fallbackView = canViewMaterialCatalog ? "catalogMaterials" : "home";
+      setActiveView(fallbackView);
+      activeViewRef.current = fallbackView;
+      localStorage.setItem(ACTIVE_VIEW_STORAGE_KEY, fallbackView);
+      return;
+    }
+
     if ((nextView === "catalogHoles" || nextView === "catalogBundles") && !canViewFittingHoles) {
       const fallbackView = canViewMaterialCatalog ? "catalogMaterials" : "home";
       setActiveView(fallbackView);
@@ -18816,6 +18900,50 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                       {t.catalogFittings}
                     </button>
                   ) : null}
+                  {user.role === "admin" ? (
+                    <>
+                      <button
+                        className={isCatalogFittingManufacturersView ? "active" : ""}
+                        onClick={() => {
+                          switchView(FITTING_TAXONOMY_VIEWS.manufacturers);
+                          closeSidebarOnMobile();
+                        }}
+                        type="button"
+                      >
+                        {language === "uk" ? "Виробники фурнітури" : "Fitting manufacturers"}
+                      </button>
+                      <button
+                        className={isCatalogFittingSeriesView ? "active" : ""}
+                        onClick={() => {
+                          switchView(FITTING_TAXONOMY_VIEWS.series);
+                          closeSidebarOnMobile();
+                        }}
+                        type="button"
+                      >
+                        {language === "uk" ? "Серії фурнітури" : "Fitting series"}
+                      </button>
+                      <button
+                        className={isCatalogFittingCategoriesView ? "active" : ""}
+                        onClick={() => {
+                          switchView(FITTING_TAXONOMY_VIEWS.categories);
+                          closeSidebarOnMobile();
+                        }}
+                        type="button"
+                      >
+                        {language === "uk" ? "Категорії фурнітури" : "Fitting categories"}
+                      </button>
+                      <button
+                        className={isCatalogFittingProductsView ? "active" : ""}
+                        onClick={() => {
+                          switchView(FITTING_TAXONOMY_VIEWS.products);
+                          closeSidebarOnMobile();
+                        }}
+                        type="button"
+                      >
+                        {language === "uk" ? "Технічні товари фурнітури" : "Fitting products"}
+                      </button>
+                    </>
+                  ) : null}
                   {canViewFittingHoles ? (
                     <button
                       className={isCatalogBundlesView ? "active" : ""}
@@ -21306,6 +21434,20 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
               )}
             </article>
           </section>
+        ) : isCatalogFittingManufacturersView || isCatalogFittingSeriesView || isCatalogFittingCategoriesView || isCatalogFittingProductsView ? (
+          <FittingTaxonomyAdminWorkspace
+            activeTab={
+              isCatalogFittingManufacturersView
+                ? "manufacturers"
+                : isCatalogFittingSeriesView
+                  ? "series"
+                  : isCatalogFittingCategoriesView
+                    ? "categories"
+                    : "products"
+            }
+            language={language}
+            token={token}
+          />
         ) : isCatalogFittingsView || isCatalogFastenersView ? (
           <section className="table-panel full-panel" key="catalogFittings">
             <article className="catalog-card service-catalog-card service-catalog-card-full">
