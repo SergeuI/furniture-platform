@@ -58,9 +58,11 @@ import FittingTaxonomyAdminWorkspace from "./components/FittingTaxonomyAdminWork
 import { FITTING_TAXONOMY_VIEWS } from "./fittingTaxonomyAdmin.js";
 import {
   buildCanonicalFittingCatalogView,
+  canRenderCanonicalFittingOwnershipBadge,
   getCanonicalFittingsCountLabel,
   getCanonicalFittingOwnershipSource,
   getFittingCatalogBodyNavItems,
+  FITTING_CATALOG_UNCATEGORIZED_CODE,
 } from "./fittingCatalogView.js";
 import {
   getCollapsedSidebarGroupClickTarget,
@@ -92,6 +94,7 @@ import {
   hasUserEntitlement,
   isMaterialCreationBlockedByQuota as isMaterialCreationBlockedByQuotaHelper,
 } from "./materialEntitlements.js";
+import { loadPrimaryFittingImageBlob } from "./fittingImagePreview.js";
 import {
   SidebarAssetIcon,
   getSidebarFlyoutIconAsset,
@@ -5294,6 +5297,83 @@ function MaterialImage({ item, token, alt, loading = "lazy", placeholderLabel })
   return <div className="material-card-placeholder">{placeholderLabel}</div>;
 }
 
+function useFittingPrimaryImageObjectUrl(item, token, enabled = true, reloadNonce = 0) {
+  const [objectUrl, setObjectUrl] = useState("");
+  const objectUrlRef = useRef("");
+
+  useEffect(() => {
+    let active = true;
+
+    const revokeObjectUrl = (url) => {
+      if (!url) {
+        return;
+      }
+
+      try {
+        URL.revokeObjectURL(url);
+      } catch {
+        // Ignore cleanup errors.
+      }
+    };
+
+    revokeObjectUrl(objectUrlRef.current);
+    objectUrlRef.current = "";
+    setObjectUrl("");
+
+    if (!enabled || !String(item?.id || "").trim() || !token) {
+      return () => {
+        active = false;
+      };
+    }
+
+    (async () => {
+      try {
+        const result = await loadPrimaryFittingImageBlob({
+          item,
+          token,
+        });
+
+        if (!active || !result?.success || !result?.blob) {
+          return;
+        }
+
+        const nextObjectUrl = URL.createObjectURL(result.blob);
+        objectUrlRef.current = nextObjectUrl;
+        setObjectUrl(nextObjectUrl);
+      } catch {
+        if (active) {
+          setObjectUrl("");
+        }
+      }
+    })();
+
+    return () => {
+      active = false;
+      revokeObjectUrl(objectUrlRef.current);
+      objectUrlRef.current = "";
+    };
+  }, [enabled, item?.id, item?.images, reloadNonce, token]);
+
+  return objectUrl;
+}
+
+function FittingPrimaryImage({ item, token, alt, loading = "lazy", placeholder = null, enabled = true }) {
+  const objectUrl = useFittingPrimaryImageObjectUrl(item, token, enabled, 0);
+
+  if (objectUrl) {
+    return (
+      <img
+        alt={alt}
+        decoding="async"
+        loading={loading}
+        src={objectUrl}
+      />
+    );
+  }
+
+  return placeholder || <div className="material-card-placeholder" />;
+}
+
 function FittingDetailGallery({ item, token, t, loading = false }) {
   const [galleryEntries, setGalleryEntries] = useState([]);
   const [galleryLoading, setGalleryLoading] = useState(false);
@@ -5354,7 +5434,7 @@ function FittingDetailGallery({ item, token, t, loading = false }) {
   const hasGalleryImages = galleryImages.length > 0;
   const isGalleryBusy = loading || galleryLoading;
   const activeEntry = galleryEntries[activeIndex] || galleryEntries[0] || null;
-  const fallbackImageUrl = hasGalleryImages ? "" : buildFittingImageCandidates(item)[0] || "";
+  const fallbackImageUrl = useFittingPrimaryImageObjectUrl(item, token, !hasGalleryImages, reloadNonce);
   const previewImageSrc = hasGalleryImages ? activeEntry?.objectUrl || "" : fallbackImageUrl;
   const canNavigate = galleryEntries.length > 1;
 
@@ -5896,7 +5976,6 @@ function FittingDetailGallery({ item, token, t, loading = false }) {
             className="fitting-details-gallery-image"
             decoding="async"
             loading="eager"
-            onError={(event) => handleFittingImageError(event, item)}
             src={fallbackImageUrl}
           />
         </button>
@@ -21809,8 +21888,8 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                         setSelectedFittingCategory(category.code);
                         setNewFittingForm((current) => ({
                           ...current,
-                          fitting_group: category.group,
-                          fitting_type: category.code,
+                          fitting_group: category.group || "",
+                          fitting_type: category.code === FITTING_CATALOG_UNCATEGORIZED_CODE ? "" : category.code,
                           }));
                         }}
                         type="button"
@@ -21870,7 +21949,9 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                         const productArticle = item.canonical_article || item.article || t.notSet;
                         const productManufacturer = item.manufacturer_name || item.canonical_brand || item.brand || "";
                         const productSeries = item.series_name || "";
-                        const productCategory = item.category_name || "";
+                        const productCategory = item.category_code === FITTING_CATALOG_UNCATEGORIZED_CODE
+                          ? (language === "uk" ? "Без категорії" : "Uncategorized")
+                          : (item.category_name || "");
                         const canManageSourceItem = Boolean(sourceItem?.id) && canDeleteFittingItemHelper(user, sourceItem);
 
                         return (
@@ -21890,18 +21971,14 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                           >
                             <div className="fitting-item-card-head">
                               <div className="fitting-item-card-preview">
-                                {buildFittingImageCandidates(imageSourceItem).length ? (
-                                  <img
-                                    alt={productTitle}
-                                    data-fallback-index="0"
-                                    decoding="async"
-                                    loading="lazy"
-                                    onError={(event) => handleFittingImageError(event, imageSourceItem)}
-                                    src={buildFittingImageCandidates(imageSourceItem)[0]}
-                                  />
-                                ) : (
-                                  <Package size={24} />
-                                )}
+                                <FittingPrimaryImage
+                                  alt={productTitle}
+                                  enabled={Boolean(imageSourceItem?.id)}
+                                  item={imageSourceItem}
+                                  loading="lazy"
+                                  placeholder={<Package size={24} />}
+                                  token={token}
+                                />
                               </div>
                               {canManageSourceItem ? (
                                 <div className="material-card-menu fitting-row-menu">
@@ -21966,9 +22043,11 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                                   </span>
                                 ) : null}
                                 {fittingColumnVisibility.source ? renderSourceBadge(sourceMeta) : null}
-                                <span className="service-tree-badge subtle">
-                                  {getFittingOwnershipTypeLabel(ownershipSourceItem, user, language)}
-                                </span>
+                                {canRenderCanonicalFittingOwnershipBadge(ownershipSourceItem) ? (
+                                  <span className="service-tree-badge subtle">
+                                    {getFittingOwnershipTypeLabel(ownershipSourceItem, user, language)}
+                                  </span>
+                                ) : null}
                               </div>
                               {getFittingOwnerDisplay(ownershipSourceItem, user, language) ? (
                                 <div className="fitting-item-owner-line">
@@ -22028,7 +22107,9 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                           const productArticle = item.canonical_article || item.article || t.notSet;
                           const productManufacturer = item.manufacturer_name || item.canonical_brand || item.brand || "";
                           const productSeries = item.series_name || "";
-                          const productCategory = item.category_name || "";
+                          const productCategory = item.category_code === FITTING_CATALOG_UNCATEGORIZED_CODE
+                            ? (language === "uk" ? "Без категорії" : "Uncategorized")
+                            : (item.category_name || "");
 
                           return (
                             <article
@@ -22046,24 +22127,20 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                               aria-label={`${t.fittingDetails}: ${productTitle}`}
                             >
                               <div className="fittings-table-name">
-                                <div className="fittings-table-name-main">
-                                  <div className="fittings-table-thumb">
-                                    {buildFittingImageCandidates(imageSourceItem).length ? (
-                                      <img
-                                        alt={productTitle}
-                                        data-fallback-index="0"
-                                        decoding="async"
-                                        loading="lazy"
-                                        onError={(event) => handleFittingImageError(event, imageSourceItem)}
-                                        src={buildFittingImageCandidates(imageSourceItem)[0]}
-                                      />
-                                    ) : (
-                                      <Package size={18} />
-                                    )}
-                                  </div>
-                                  <div className="fittings-table-name-copy">
-                                    <strong>{productTitle}</strong>
-                                    <div className="fittings-table-badges">
+                              <div className="fittings-table-name-main">
+                                <div className="fittings-table-thumb">
+                                  <FittingPrimaryImage
+                                    alt={productTitle}
+                                    enabled={Boolean(imageSourceItem?.id)}
+                                    item={imageSourceItem}
+                                    loading="lazy"
+                                    placeholder={<Package size={18} />}
+                                    token={token}
+                                  />
+                                </div>
+                                <div className="fittings-table-name-copy">
+                                  <strong>{productTitle}</strong>
+                                  <div className="fittings-table-badges">
                                       <span className="service-tree-badge subtle">
                                         {item.is_active
                                           ? language === "uk"
@@ -22080,9 +22157,11 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                                             : `${item.legacy_row_count} linked rows`}
                                         </span>
                                       ) : null}
-                                      <span className="service-tree-badge subtle">
-                                        {getFittingOwnershipTypeLabel(ownershipSourceItem, user, language)}
-                                      </span>
+                                      {canRenderCanonicalFittingOwnershipBadge(ownershipSourceItem) ? (
+                                        <span className="service-tree-badge subtle">
+                                          {getFittingOwnershipTypeLabel(ownershipSourceItem, user, language)}
+                                        </span>
+                                      ) : null}
                                     </div>
                                     {getFittingOwnerDisplay(ownershipSourceItem, user, language) ? (
                                       <div className="fitting-item-owner-line">
@@ -27279,9 +27358,11 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                       {getFittingSourceMeta(selectedFittingDetail).label}
                     </span>
                   ) : null}
-                  <span className="service-tree-badge subtle">
-                    {selectedFittingOwnershipTypeLabel}
-                  </span>
+                  {canRenderCanonicalFittingOwnershipBadge(selectedFittingOwnershipSource) ? (
+                    <span className="service-tree-badge subtle">
+                      {selectedFittingOwnershipTypeLabel}
+                    </span>
+                  ) : null}
                   {selectedFittingDetail.article ? (
                     <span className="service-tree-badge subtle">
                       {selectedFittingDetail.article}

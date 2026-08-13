@@ -23,6 +23,8 @@ export const FITTING_CATALOG_BODY_NAV_ITEMS = [
   },
 ];
 
+export const FITTING_CATALOG_UNCATEGORIZED_CODE = "uncategorized";
+
 function normalizeText(value) {
   return String(value || "").trim();
 }
@@ -88,9 +90,17 @@ export function getCanonicalFittingOwnershipSource(item = null) {
   return item || null;
 }
 
+export function canRenderCanonicalFittingOwnershipBadge(item = null) {
+  const ownershipSource = getCanonicalFittingOwnershipSource(item);
+
+  return Boolean(
+    ownershipSource &&
+      (ownershipSource.is_system || normalizeId(ownershipSource.owner_user_id)),
+  );
+}
+
 function resolveCategoryCode({
   product = null,
-  legacyRows = [],
   categoriesById = new Map(),
 } = {}) {
   const directCategoryId = normalizeId(product?.category_id);
@@ -101,28 +111,7 @@ function resolveCategoryCode({
     }
   }
 
-  const categoryCounts = new Map();
-  for (const row of Array.isArray(legacyRows) ? legacyRows : []) {
-    const code = normalizeText(row?.fitting_type);
-    if (!code) {
-      continue;
-    }
-
-    categoryCounts.set(code, (categoryCounts.get(code) || 0) + 1);
-  }
-
-  if (!categoryCounts.size) {
-    return "";
-  }
-
-  return [...categoryCounts.entries()]
-    .sort((left, right) => {
-      if (right[1] !== left[1]) {
-        return right[1] - left[1];
-      }
-
-      return String(left[0]).localeCompare(String(right[0]), "uk");
-    })[0][0];
+  return "";
 }
 
 function buildSearchText(parts = []) {
@@ -226,7 +215,6 @@ export function buildCanonicalFittingCatalogView({
       const imageLegacyRow = chooseDisplayImageLegacyRow(legacyRows, representativeLegacyRow);
       const categoryCode = resolveCategoryCode({
         categoriesById: taxonomyCategoriesById,
-        legacyRows,
         product,
       });
       const category = categoryCode ? taxonomyCategoriesByCode.get(categoryCode) || null : null;
@@ -258,7 +246,7 @@ export function buildCanonicalFittingCatalogView({
 
       return {
         ...canonicalProduct,
-        category_code: categoryCode || "",
+        category_code: categoryCode || FITTING_CATALOG_UNCATEGORIZED_CODE,
         category_name: category?.name || "",
         canonical_article: canonicalProduct?.article || "",
         canonical_brand: canonicalProduct?.brand || "",
@@ -282,22 +270,38 @@ export function buildCanonicalFittingCatalogView({
 
   const categoryCounts = new Map();
   for (const card of canonicalCards) {
-    if (!card.category_code) {
-      continue;
-    }
-
     categoryCounts.set(card.category_code, (categoryCounts.get(card.category_code) || 0) + 1);
   }
 
-  const visibleCategories = legacyCategories.map((category) => ({
-    ...category,
-    canonical_item_count: categoryCounts.get(String(category.code || "")) || 0,
-  }));
+  const uncategorizedCount = categoryCounts.get(FITTING_CATALOG_UNCATEGORIZED_CODE) || 0;
+  const visibleCategories = [
+    ...legacyCategories.map((category) => ({
+      ...category,
+      canonical_item_count: categoryCounts.get(String(category.code || "")) || 0,
+    })),
+    ...(uncategorizedCount
+      ? [{
+          code: FITTING_CATALOG_UNCATEGORIZED_CODE,
+          description: "",
+          group: "",
+          group_name: "",
+          name: "Без категорії",
+          canonical_item_count: uncategorizedCount,
+          item_count: uncategorizedCount,
+        }]
+      : []),
+  ];
 
   const normalizedSearch = normalizeText(search).toLowerCase();
   const visibleCards = canonicalCards.filter((card) => {
-    if (activeCategoryCode && card.category_code !== activeCategoryCode) {
-      return false;
+    if (activeCategoryCode) {
+      if (activeCategoryCode === FITTING_CATALOG_UNCATEGORIZED_CODE) {
+        if (card.category_code !== FITTING_CATALOG_UNCATEGORIZED_CODE) {
+          return false;
+        }
+      } else if (card.category_code !== activeCategoryCode) {
+        return false;
+      }
     }
 
     if (!normalizedSearch) {

@@ -25,6 +25,16 @@ class FittingCatalogViewTests(unittest.TestCase):
                         "category_id": 3,
                         "is_active": True,
                     },
+                    {
+                        "id": 11,
+                        "article": "B-2",
+                        "name": "Canonical Spacer",
+                        "brand": "BrandX",
+                        "manufacturer_id": 1,
+                        "series_id": 2,
+                        "category_id": None,
+                        "is_active": True,
+                    },
                 ],
                 "legacyCategories": [
                     {
@@ -62,6 +72,19 @@ class FittingCatalogViewTests(unittest.TestCase):
                         "is_system": True,
                         "owner_user_id": None,
                     },
+                    {
+                        "id": 3,
+                        "technical_product_id": 11,
+                        "city": "kyiv",
+                        "article": "B-2",
+                        "name": "Legacy Spacer Kyiv",
+                        "fitting_type": "",
+                        "price": 12.0,
+                        "stock": "in stock",
+                        "source": "legacy",
+                        "is_system": False,
+                        "owner_user_id": 10,
+                    },
                 ],
                 "manufacturers": [
                     {"id": 1, "code": "brandx", "name": "BrandX"},
@@ -76,16 +99,17 @@ class FittingCatalogViewTests(unittest.TestCase):
         }
 
         script = (
-            "import { buildCanonicalFittingCatalogView, getFittingCatalogBodyNavItems } from './frontend/admin/src/fittingCatalogView.js';"
+            "import { buildCanonicalFittingCatalogView, getFittingCatalogBodyNavItems, canRenderCanonicalFittingOwnershipBadge } from './frontend/admin/src/fittingCatalogView.js';"
             "import { getCanonicalFittingsCountLabel, getCanonicalFittingOwnershipSource } from './frontend/admin/src/fittingCatalogView.js';"
             "import { getFittingOwnershipTypeLabel } from './frontend/admin/src/fittingEntitlements.js';"
             "const payload = JSON.parse(process.argv[1]);"
             "const nav = getFittingCatalogBodyNavItems(payload.language);"
             "const view = buildCanonicalFittingCatalogView(payload.view);"
+            "const uncategorizedView = buildCanonicalFittingCatalogView({ ...payload.view, activeCategoryCode: 'uncategorized' });"
             "const ownershipSource = getCanonicalFittingOwnershipSource(view.visibleCards[0]);"
             "const overviewCountLabel = getCanonicalFittingsCountLabel({ activeCategoryCode: '', visibleCards: Array.from({ length: 9 }, (_, index) => ({ id: index + 1 })), allCards: Array.from({ length: 20 }, (_, index) => ({ id: index + 1 })), language: payload.language });"
             "const categoryCountLabel = getCanonicalFittingsCountLabel({ activeCategoryCode: 'connectors_fasteners', visibleCards: Array.from({ length: 9 }, (_, index) => ({ id: index + 1 })), allCards: Array.from({ length: 20 }, (_, index) => ({ id: index + 1 })), language: payload.language });"
-            "process.stdout.write(JSON.stringify({ nav, view, overviewCountLabel, categoryCountLabel, ownershipSource, ownershipLabel: getFittingOwnershipTypeLabel(ownershipSource, null, payload.language) }));"
+            "process.stdout.write(JSON.stringify({ nav, view, uncategorizedView, overviewCountLabel, categoryCountLabel, ownershipSource, ownershipLabel: getFittingOwnershipTypeLabel(ownershipSource, null, payload.language), ownershipBadgeRenderable: canRenderCanonicalFittingOwnershipBadge(view.visibleCards[0]) }));"
         )
 
         completed = subprocess.run(
@@ -100,6 +124,7 @@ class FittingCatalogViewTests(unittest.TestCase):
         result = json.loads(completed.stdout)
         nav = result["nav"]
         view = result["view"]
+        uncategorized_view = result["uncategorizedView"]
 
         self.assertEqual(
             [item["view"] for item in nav],
@@ -122,16 +147,21 @@ class FittingCatalogViewTests(unittest.TestCase):
             ],
         )
         self.assertEqual(view["categories"][0]["canonical_item_count"], 1)
+        self.assertEqual(view["categories"][1]["code"], "uncategorized")
+        self.assertEqual(view["categories"][1]["canonical_item_count"], 1)
         self.assertEqual(result["overviewCountLabel"], "\u0032\u0030 \u0442\u043e\u0432\u0430\u0440\u0456\u0432")
         self.assertEqual(result["categoryCountLabel"], "\u0039 \u0442\u043e\u0432\u0430\u0440\u0456\u0432")
         self.assertEqual(len(view["visibleCards"]), 1)
-        self.assertEqual(len(view["allCards"]), 1)
+        self.assertEqual(len(view["allCards"]), 2)
         self.assertEqual(view["visibleCards"][0]["legacy_row_count"], 2)
         self.assertEqual(view["visibleCards"][0]["category_code"], "connectors_fasteners")
         self.assertEqual(view["visibleCards"][0]["representative_legacy_row"]["id"], 1)
         self.assertEqual(view["visibleCards"][0]["image_legacy_row"]["id"], 2)
         self.assertEqual(result["ownershipSource"]["id"], 1)
         self.assertEqual(result["ownershipLabel"], "\u0421\u0438\u0441\u0442\u0435\u043c\u043d\u0430")
+        self.assertTrue(result["ownershipBadgeRenderable"])
+        self.assertEqual(len(uncategorized_view["visibleCards"]), 1)
+        self.assertEqual(uncategorized_view["visibleCards"][0]["category_code"], "uncategorized")
 
         search_payload = dict(payload)
         search_payload["view"] = dict(payload["view"], search="BrandX")
