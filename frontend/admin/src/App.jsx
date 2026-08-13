@@ -58,6 +58,8 @@ import FittingTaxonomyAdminWorkspace from "./components/FittingTaxonomyAdminWork
 import { FITTING_TAXONOMY_VIEWS } from "./fittingTaxonomyAdmin.js";
 import {
   buildCanonicalFittingCatalogView,
+  getCanonicalFittingCatalogCountLabel,
+  getCanonicalFittingOwnershipSource,
   getFittingCatalogBodyNavItems,
 } from "./fittingCatalogView.js";
 import {
@@ -10061,12 +10063,7 @@ export default function App() {
       };
     }
 
-    return {
-      code: "manual",
-      label: t.fittingManualSource,
-      shortLabel: t.fittingManualSource,
-      logo: buildAdminAssetUrl("brand/source-logos/manual.svg"),
-    };
+    return null;
   };
   const selectedFittingTypeLabel = selectedFittingDetail
     ? formatCatalogSystemValue(
@@ -10082,11 +10079,14 @@ export default function App() {
         t,
       )
     : "";
+  const selectedFittingOwnershipSource = selectedFittingDetail
+    ? getCanonicalFittingOwnershipSource(selectedFittingDetail)
+    : null;
   const selectedFittingOwnershipTypeLabel = selectedFittingDetail
-    ? getFittingOwnershipTypeLabel(selectedFittingDetail, user, language)
+    ? getFittingOwnershipTypeLabel(selectedFittingOwnershipSource, user, language)
     : "";
   const selectedFittingOwnerDisplay = selectedFittingDetail
-    ? getFittingOwnerDisplay(selectedFittingDetail, user, language)
+    ? getFittingOwnerDisplay(selectedFittingOwnershipSource, user, language)
     : "";
 
   const closeProjectOptionPicker = useCallback(() => {
@@ -10611,7 +10611,7 @@ export default function App() {
     }
 
     if (isCatalogFittingsView) {
-      return `${fittingItems.length} ${t.of} ${fittingItems.length}`;
+      return getCanonicalFittingCatalogCountLabel(visibleFittingItems, fittingCanonicalCatalogView.allCards, t);
     }
 
     if (isCatalogFastenersView) {
@@ -19257,6 +19257,14 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                       ? t.catalogFittings
                     : isCatalogFastenersView
                       ? t.catalogFasteners
+                    : isCatalogFittingManufacturersView
+                      ? t.catalogFittingManufacturers
+                    : isCatalogFittingSeriesView
+                      ? t.catalogFittingSeries
+                    : isCatalogFittingCategoriesView
+                      ? t.catalogFittingCategories
+                    : isCatalogFittingProductsView
+                      ? t.catalogFittingProducts
                     : isCatalogHolesView
                       ? t.holeTabTitle
                     : isCatalogBundlesView
@@ -21838,6 +21846,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                       {visibleFittingItems.map((item) => {
                         const sourceItem = item.representative_legacy_row || item.legacy_rows?.[0] || item;
                         const imageSourceItem = item.image_legacy_row || sourceItem;
+                        const ownershipSourceItem = getCanonicalFittingOwnershipSource(item);
                         const sourceMeta = getFittingSourceMeta(sourceItem);
                         const productTitle = item.canonical_name || item.name || item.article || t.notSet;
                         const productArticle = item.canonical_article || item.article || t.notSet;
@@ -21940,12 +21949,12 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                                 ) : null}
                                 {fittingColumnVisibility.source ? renderSourceBadge(sourceMeta) : null}
                                 <span className="service-tree-badge subtle">
-                                  {getFittingOwnershipTypeLabel(sourceItem, user, language)}
+                                  {getFittingOwnershipTypeLabel(ownershipSourceItem, user, language)}
                                 </span>
                               </div>
-                              {getFittingOwnerDisplay(sourceItem, user, language) ? (
+                              {getFittingOwnerDisplay(ownershipSourceItem, user, language) ? (
                                 <div className="fitting-item-owner-line">
-                                  {getFittingOwnerDisplay(sourceItem, user, language)}
+                                  {getFittingOwnerDisplay(ownershipSourceItem, user, language)}
                                 </div>
                               ) : null}
                             </div>
@@ -21993,13 +22002,14 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
 
                       <div className="fittings-table-list">
                         {visibleFittingItems.map((item) => {
-                        const sourceItem = item.representative_legacy_row || item.legacy_rows?.[0] || item;
-                        const imageSourceItem = item.image_legacy_row || sourceItem;
-                        const sourceMeta = getFittingSourceMeta(sourceItem);
-                        const productTitle = item.canonical_name || item.name || item.article || t.notSet;
-                        const productArticle = item.canonical_article || item.article || t.notSet;
-                        const productManufacturer = item.manufacturer_name || item.canonical_brand || item.brand || "";
-                        const productSeries = item.series_name || "";
+                          const sourceItem = item.representative_legacy_row || item.legacy_rows?.[0] || item;
+                          const imageSourceItem = item.image_legacy_row || sourceItem;
+                          const ownershipSourceItem = getCanonicalFittingOwnershipSource(item);
+                          const sourceMeta = getFittingSourceMeta(sourceItem);
+                          const productTitle = item.canonical_name || item.name || item.article || t.notSet;
+                          const productArticle = item.canonical_article || item.article || t.notSet;
+                          const productManufacturer = item.manufacturer_name || item.canonical_brand || item.brand || "";
+                          const productSeries = item.series_name || "";
                           const productCategory = item.category_name || "";
 
                           return (
@@ -22053,12 +22063,12 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                                         </span>
                                       ) : null}
                                       <span className="service-tree-badge subtle">
-                                        {getFittingOwnershipTypeLabel(sourceItem, user, language)}
+                                        {getFittingOwnershipTypeLabel(ownershipSourceItem, user, language)}
                                       </span>
                                     </div>
-                                    {getFittingOwnerDisplay(sourceItem, user, language) ? (
+                                    {getFittingOwnerDisplay(ownershipSourceItem, user, language) ? (
                                       <div className="fitting-item-owner-line">
-                                        {getFittingOwnerDisplay(sourceItem, user, language)}
+                                        {getFittingOwnerDisplay(ownershipSourceItem, user, language)}
                                       </div>
                                     ) : null}
                                   </div>
@@ -27246,9 +27256,11 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   token={token}
                 />
                 <div className="fitting-details-meta">
-                  <span className="service-tree-badge subtle">
-                    {getFittingSourceMeta(selectedFittingDetail).label}
-                  </span>
+                  {getFittingSourceMeta(selectedFittingDetail) ? (
+                    <span className="service-tree-badge subtle">
+                      {getFittingSourceMeta(selectedFittingDetail).label}
+                    </span>
+                  ) : null}
                   <span className="service-tree-badge subtle">
                     {selectedFittingOwnershipTypeLabel}
                   </span>

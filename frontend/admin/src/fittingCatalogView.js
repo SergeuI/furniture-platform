@@ -66,6 +66,21 @@ function chooseDisplayImageLegacyRow(rows = [], representativeRow = null) {
   return imageRow || representativeRow || rows[0] || null;
 }
 
+export function getCanonicalFittingOwnershipSource(item = null) {
+  const legacyRows = Array.isArray(item?.legacy_rows) ? item.legacy_rows : [];
+  const ownedRow = legacyRows.find((row) => row?.owner_user_id);
+  if (ownedRow) {
+    return ownedRow;
+  }
+
+  const systemRow = legacyRows.find((row) => row?.is_system && !row?.owner_user_id);
+  if (systemRow) {
+    return systemRow;
+  }
+
+  return item || null;
+}
+
 function resolveCategoryCode({
   product = null,
   legacyRows = [],
@@ -124,6 +139,10 @@ export function getFittingCatalogBodyNavItems(language = "uk") {
     isActive: false,
     label: item.label?.[language] || item.label?.uk || item.label?.en || item.view,
   }));
+}
+
+export function getCanonicalFittingCatalogCountLabel(visibleCards = [], allCards = [], t = {}) {
+  return `${Array.isArray(visibleCards) ? visibleCards.length : 0} ${t.of || "of"} ${Array.isArray(allCards) ? allCards.length : 0}`;
 }
 
 export function buildCanonicalFittingCatalogView({
