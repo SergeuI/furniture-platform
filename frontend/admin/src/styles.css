@@ -8192,8 +8192,8 @@ tbody tr.selected {
 
 .fitting-source-modal-form {
   display: grid;
-  gap: 12px 14px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr);
   min-height: 0;
   overflow: auto;
   padding-right: 4px;
@@ -8215,6 +8215,54 @@ tbody tr.selected {
   align-self: start;
 }
 
+.fitting-source-modal-form .fitting-source-main-grid,
+.fitting-source-modal-form .fitting-form-grid-offer {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.fitting-source-modal-form .fitting-source-field,
+.fitting-source-modal-form .fitting-source-url-field,
+.fitting-source-modal-form .toggle-label {
+  align-items: center;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(180px, 220px) minmax(0, 1fr);
+  min-height: 40px;
+}
+
+.fitting-source-modal-form .fitting-source-field > span,
+.fitting-source-modal-form .fitting-source-url-field > span,
+.fitting-source-modal-form .toggle-label > span {
+  color: #24343d;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.fitting-source-modal-form .fitting-source-field > input:not([type="checkbox"]),
+.fitting-source-modal-form .fitting-source-field > select,
+.fitting-source-modal-form .fitting-source-url-field > input,
+.fitting-source-modal-form .toggle-label > input:not([type="checkbox"]) {
+  width: 100%;
+}
+
+.fitting-source-modal-form .fitting-source-field > input[type="checkbox"],
+.fitting-source-modal-form .toggle-label > input[type="checkbox"] {
+  justify-self: start;
+  width: 18px;
+}
+
+.fitting-source-modal-form .fitting-source-url-field {
+  grid-column: 1 / -1;
+}
+
+.fitting-source-modal-form .fitting-source-help-text {
+  color: #5c6875;
+  line-height: 1.4;
+  margin-left: 192px;
+}
+
 .fitting-source-modal-form .fitting-form-note {
   line-height: 1.4;
 }
@@ -8226,45 +8274,6 @@ tbody tr.selected {
   display: grid;
   gap: 12px;
   padding: 12px;
-}
-
-.fitting-source-modal-form .fitting-form-grid-offer {
-  gap: 8px;
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.fitting-source-modal-form .fitting-form-grid-offer > label {
-  align-items: center;
-  display: grid;
-  gap: 12px;
-  grid-template-columns: minmax(180px, 220px) minmax(0, 1fr);
-  min-height: 40px;
-}
-
-.fitting-source-modal-form .fitting-form-grid-offer > label > span {
-  color: #24343d;
-  font-size: 13px;
-  line-height: 1.35;
-}
-
-.fitting-source-modal-form .fitting-form-grid-offer > label > input,
-.fitting-source-modal-form .fitting-form-grid-offer > label > select {
-  width: 100%;
-}
-
-.fitting-source-modal-form .fitting-form-grid-offer > .toggle-label {
-  display: flex;
-  flex-direction: row-reverse;
-  justify-content: space-between;
-  width: 100%;
-}
-
-.fitting-source-modal-form .fitting-form-grid-offer > .toggle-label > span {
-  flex: 1 1 auto;
-}
-
-.fitting-source-modal-form .fitting-form-grid-offer > .toggle-label > input {
-  flex: 0 0 auto;
 }
 
 .fitting-source-modal-form .fitting-form-section-header strong {
@@ -8309,19 +8318,23 @@ tbody tr.selected {
   }
 
   .fitting-source-modal-form,
+  .fitting-source-modal-form .fitting-source-main-grid,
   .fitting-source-modal-form .fitting-form-grid-offer,
-  .fitting-source-modal-form .fitting-form-grid-offer > label {
+  .fitting-source-modal-form .fitting-source-field,
+  .fitting-source-modal-form .fitting-source-url-field,
+  .fitting-source-modal-form .toggle-label {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .fitting-source-modal-form .fitting-form-grid-offer > label {
+  .fitting-source-modal-form .fitting-source-field,
+  .fitting-source-modal-form .fitting-source-url-field,
+  .fitting-source-modal-form .toggle-label {
     gap: 6px;
     min-height: unset;
   }
 
-  .fitting-source-modal-form .fitting-form-grid-offer > .toggle-label {
-    flex-direction: row;
-    justify-content: flex-start;
+  .fitting-source-modal-form .fitting-source-help-text {
+    margin-left: 0;
   }
 }
 

@@ -25939,6 +25939,11 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                 </div>
               ) : null}
 
+              <section className="fitting-form-section fitting-source-span-full">
+                <header className="fitting-form-section-header">
+                  <strong>Основні дані</strong>
+                </header>
+
               <label className="fitting-source-field">
                 <span>{t.fittingType}</span>
                 <select
@@ -26051,7 +26056,9 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                       value={newFittingForm.source_url}
                     />
                   </label>
-                  <div className="fitting-form-note fitting-source-span-full">{t.fittingAutoCityNote}</div>
+                  <div className="fitting-form-note fitting-source-help-text fitting-source-span-full">
+                    {t.fittingAutoCityNote}
+                  </div>
                 </>
               ) : (
                 <>
@@ -26103,6 +26110,8 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   </div>
                 </>
               )}
+
+              </section>
 
               <section className="fitting-form-section fitting-source-span-full">
                 <header className="fitting-form-section-header">
