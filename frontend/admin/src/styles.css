@@ -8274,6 +8274,96 @@ tbody tr.selected {
   margin-left: 186px;
 }
 
+.fitting-source-modal-form .fitting-source-preview {
+  background: #ffffff;
+  border: 1px solid #dbe1e7;
+  border-radius: 10px;
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+}
+
+.fitting-source-modal-form .fitting-source-preview-header {
+  align-items: flex-start;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.fitting-source-modal-form .fitting-source-preview-header strong {
+  color: #24343d;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.fitting-source-modal-form .fitting-source-preview-header p {
+  color: #5c6875;
+  font-size: 12px;
+  line-height: 1.4;
+  margin: 2px 0 0;
+}
+
+.fitting-source-modal-form .fitting-source-preview-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.fitting-source-modal-form .fitting-source-preview-item {
+  align-items: start;
+  background: #f8fafb;
+  border: 1px solid #e1e7ec;
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  min-height: 72px;
+  padding: 8px 10px;
+}
+
+.fitting-source-modal-form .fitting-source-preview-item.is-image {
+  grid-column: 1 / -1;
+  grid-template-columns: 72px minmax(0, 1fr);
+  align-items: center;
+}
+
+.fitting-source-modal-form .fitting-source-preview-item > span {
+  color: #5c6875;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.fitting-source-modal-form .fitting-source-preview-item > strong {
+  color: #24343d;
+  font-size: 13px;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.fitting-source-modal-form .fitting-source-preview-image {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #dbe1e7;
+  border-radius: 8px;
+  display: flex;
+  justify-content: center;
+  min-height: 72px;
+  overflow: hidden;
+}
+
+.fitting-source-modal-form .fitting-source-preview-image img {
+  display: block;
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.fitting-source-modal-form .fitting-source-preview-placeholder {
+  color: #5c6875;
+  font-size: 12px;
+  padding: 12px;
+  text-align: center;
+}
+
 .fitting-source-modal-form .fitting-form-note {
   line-height: 1.4;
 }
@@ -8346,6 +8436,20 @@ tbody tr.selected {
 
   .fitting-source-modal-form .fitting-source-help-text {
     margin-left: 0;
+  }
+
+  .fitting-source-modal-form .fitting-source-preview {
+    gap: 8px;
+    padding: 9px;
+  }
+
+  .fitting-source-modal-form .fitting-source-preview-header {
+    flex-direction: column;
+  }
+
+  .fitting-source-modal-form .fitting-source-preview-grid,
+  .fitting-source-modal-form .fitting-source-preview-item.is-image {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

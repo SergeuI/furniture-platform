@@ -13,6 +13,9 @@ test("fitting source modal rows stay compact and checkbox labels align left", ()
   assert.match(appSource, /className="fitting-source-modal-form"/);
   assert.match(appSource, /className="toggle-label fitting-source-field"/);
   assert.match(appSource, /className="fitting-source-url-field fitting-source-span-full"/);
+  assert.match(appSource, /className="fitting-source-preview fitting-source-span-full"/);
+  assert.match(appSource, /className="fitting-source-preview-grid"/);
+  assert.match(appSource, /Choose the supplier here\. Other source values are shown in the preview above\./);
   assert.match(appSource, /fitting-source-help-text/);
   assert.match(stylesSource, /\.fitting-source-modal \{\s*display: flex;[\s\S]*gap: 10px;[\s\S]*padding: 16px 16px 14px;/);
   assert.match(stylesSource, /\.fitting-source-modal-form \{\s*display: grid;[\s\S]*gap: 10px;[\s\S]*overflow: auto;/);
@@ -21,8 +24,13 @@ test("fitting source modal rows stay compact and checkbox labels align left", ()
   assert.match(stylesSource, /\.fitting-source-modal-form \.toggle-label > span \{\s*order: 1;/);
   assert.match(stylesSource, /\.fitting-source-modal-form \.toggle-label > input\[type="checkbox"\] \{\s*order: 2;/);
   assert.match(stylesSource, /\.fitting-source-modal-form \.fitting-source-help-text \{\s*color: #5c6875;[\s\S]*margin-left: 186px;/);
+  assert.match(stylesSource, /\.fitting-source-modal-form \.fitting-source-preview \{\s*background: #ffffff;[\s\S]*padding: 10px;/);
+  assert.match(stylesSource, /\.fitting-source-modal-form \.fitting-source-preview-grid \{\s*display: grid;[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/);
+  assert.match(stylesSource, /\.fitting-source-modal-form \.fitting-source-preview-item\.is-image \{\s*grid-column: 1 \/ -1;[\s\S]*grid-template-columns: 72px minmax\(0, 1fr\);/);
+  assert.match(stylesSource, /\.fitting-source-modal-form \.fitting-source-preview-placeholder \{/);
   assert.match(stylesSource, /\.fitting-source-modal-form \.fitting-source-field > input:not\(\[type="checkbox"\]\):not\(\[type="file"\]\),[\s\S]*padding-bottom: 7px;[\s\S]*padding-top: 7px;/);
   assert.match(stylesSource, /@media \(max-width: 760px\) \{[\s\S]*\.fitting-source-modal \{\s*max-height: calc\(100vh - 24px\);[\s\S]*padding: 14px;/);
   assert.match(stylesSource, /@media \(max-width: 760px\) \{[\s\S]*\.fitting-source-modal-form,\s*\.fitting-source-modal-form \.fitting-source-main-grid,\s*\.fitting-source-modal-form \.fitting-form-grid-offer,\s*\.fitting-source-modal-form \.fitting-source-field,\s*\.fitting-source-modal-form \.fitting-source-url-field,\s*\.fitting-source-modal-form \.toggle-label \{\s*grid-template-columns: minmax\(0, 1fr\);/);
   assert.match(stylesSource, /@media \(max-width: 760px\) \{[\s\S]*\.fitting-source-modal-form \.fitting-source-help-text \{\s*margin-left: 0;/);
+  assert.match(stylesSource, /@media \(max-width: 760px\) \{[\s\S]*\.fitting-source-modal-form \.fitting-source-preview-grid,\s*\.fitting-source-modal-form \.fitting-source-preview-item\.is-image \{\s*grid-template-columns: minmax\(0, 1fr\);/);
 });
