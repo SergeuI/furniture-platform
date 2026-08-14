@@ -221,6 +221,7 @@ import {
   createCatalogItem,
   createUser,
   deleteFitting,
+  deleteFittingProduct,
   deleteFittingHoleBundle,
   deleteFittingHolePoint,
   deleteFittingHoleTemplate,
@@ -17864,6 +17865,21 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
     });
   }
 
+  function openDeleteCanonicalFittingProductConfirm(item, sourceItem = null) {
+    if (!canDeleteFittingItemHelper(user, sourceItem || item)) {
+      return;
+    }
+
+    setOpenFittingMenuId("");
+    setConfirmAction({
+      type: "deleteFittingProduct",
+      title: t.fittingDelete,
+      message: `${t.fittingDeleteConfirm}: ${item.name || item.article}?`,
+      confirmLabel: t.delete,
+      targetId: item.id,
+    });
+  }
+
   async function handleDeleteFitting(itemId) {
     if (!itemId || !canDeleteFittingCatalog) {
       setStatus({
@@ -17903,6 +17919,49 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
           : t.fittingDeleted;
 
       setStatus({ message: successMessage, tone: "success" });
+      closeConfirm();
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleDeleteFittingProduct(itemId) {
+    if (!itemId || !canDeleteFittingCatalog) {
+      setStatus({
+        message: language === "uk"
+          ? "Видалення технічних товарів недоступне у вашому тарифі."
+          : "Deleting technical products is unavailable for your plan.",
+        tone: "error",
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const result = await deleteFittingProduct(token, itemId);
+
+      if (!result.success) {
+        setStatus({ message: result.error || t.deleteFailed, tone: "error" });
+        return;
+      }
+
+      const deletedProductId = String(result.item?.id || itemId);
+      if (
+        selectedFittingDetail &&
+        (
+          String(selectedFittingDetail.id) === deletedProductId ||
+          String(selectedFittingDetail.canonical_product_id || "") === deletedProductId
+        )
+      ) {
+        closeFittingDetails();
+      }
+
+      await Promise.all([
+        loadFittingsCatalog(token),
+        loadCanonicalFittingsCatalog(token),
+      ]);
+
+      setStatus({ message: t.fittingDeleted, tone: "success" });
       closeConfirm();
     } finally {
       setLoading(false);
@@ -18481,6 +18540,11 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
 
     if (confirmAction.type === "deleteFitting") {
       await handleDeleteFitting(confirmAction.targetId);
+      return;
+    }
+
+    if (confirmAction.type === "deleteFittingProduct") {
+      await handleDeleteFittingProduct(confirmAction.targetId);
       return;
     }
 
@@ -22252,7 +22316,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                                         className="material-card-menu-action danger"
                                         onClick={(event) => {
                                           event.stopPropagation();
-                                          openDeleteFittingConfirm(sourceItem);
+                                          openDeleteCanonicalFittingProductConfirm(item, sourceItem);
                                         }}
                                         type="button"
                                       >
@@ -22442,7 +22506,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                                             className="material-card-menu-action danger"
                                             onClick={(event) => {
                                               event.stopPropagation();
-                                              openDeleteFittingConfirm(sourceItem);
+                                              openDeleteCanonicalFittingProductConfirm(item, sourceItem);
                                             }}
                                             type="button"
                                           >

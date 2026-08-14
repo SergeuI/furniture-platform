@@ -37,6 +37,7 @@ from database.models import user_change_request  # noqa: F401
 from database.models import user_service_catalog_price  # noqa: F401
 from database.models.fitting import (
     FittingCategoryModel,
+    FittingModel,
     FittingManufacturerModel,
     FittingProductModel,
     FittingSeriesModel,
@@ -295,6 +296,70 @@ class FittingTaxonomyApiTests(unittest.TestCase):
                 self.assertEqual(delete_spare_manufacturer_response.status_code, 200)
                 self.assertTrue(delete_spare_manufacturer_response.json()["success"])
                 self.assertEqual(int(delete_spare_manufacturer_response.json()["item"]["id"]), spare_manufacturer_id)
+
+    def test_delete_fitting_product_route_unlinks_legacy_rows_and_is_repeat_safe(self) -> None:
+        app, session_maker = self._build_app()
+        self._set_session_locals(session_maker)
+
+        with patch.object(catalog_route, "_ensure_fitting_feature_access", return_value=None):
+            with TestClient(app) as client:
+                headers = {"Authorization": "Bearer token"}
+
+                with session_maker() as db:
+                    manufacturer = FittingManufacturerModel(code="hettich", name="Hettich", is_active=True, sort_order=1)
+                    category = FittingCategoryModel(code="hinges", name="Hinges", is_active=True, sort_order=1)
+                    db.add_all([manufacturer, category])
+                    db.flush()
+
+                    product = FittingProductModel(
+                        article="TP-100",
+                        code="TP-100",
+                        name="Canonical product",
+                        brand="Hettich",
+                        manufacturer_id=manufacturer.id,
+                        category_id=category.id,
+                        is_active=True,
+                    )
+                    db.add(product)
+                    db.flush()
+
+                    linked_fitting = FittingModel(
+                        article="TP-100",
+                        name="Linked fitting",
+                        city="Kyiv",
+                        source="viyar",
+                        is_system=False,
+                        owner_user_id="user-1",
+                        is_active=True,
+                        technical_product_id=product.id,
+                    )
+                    db.add(linked_fitting)
+                    db.commit()
+                    product_id = int(product.id)
+                    fitting_id = int(linked_fitting.id)
+
+                delete_response = client.delete(
+                    f"/catalog/fitting-products/{product_id}",
+                    headers=headers,
+                )
+                self.assertEqual(delete_response.status_code, 200)
+                delete_payload = delete_response.json()
+                self.assertTrue(delete_payload["success"])
+                self.assertEqual(int(delete_payload["item"]["id"]), product_id)
+
+                with session_maker() as db:
+                    self.assertEqual(db.query(FittingProductModel).count(), 0)
+                    fitting_row = db.get(FittingModel, fitting_id)
+                    self.assertIsNotNone(fitting_row)
+                    self.assertIsNone(fitting_row.technical_product_id)
+
+                second_delete_response = client.delete(
+                    f"/catalog/fitting-products/{product_id}",
+                    headers=headers,
+                )
+                self.assertEqual(second_delete_response.status_code, 200)
+                self.assertFalse(second_delete_response.json()["success"])
+                self.assertIn("РЅРµ Р·РЅР°Р№РґРµРЅРѕ", second_delete_response.json()["error"])
 
     @staticmethod
     def _build_app():

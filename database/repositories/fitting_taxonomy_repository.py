@@ -5,6 +5,7 @@ from sqlalchemy import or_
 
 from database.models.fitting import (
     FittingCategoryModel,
+    FittingModel,
     FittingManufacturerModel,
     FittingProductModel,
     FittingSeriesModel,
@@ -487,6 +488,32 @@ def get_fitting_product_by_id(item_id: str | int) -> dict | None:
         if not item:
             return None
         return _serialize_product(item)
+    finally:
+        db.close()
+
+
+def delete_fitting_product(item_id: str | int) -> dict | None:
+    db = SessionLocal()
+    try:
+        item = db.get(FittingProductModel, int(item_id))
+        if not item:
+            return None
+
+        linked_fittings = (
+            db.query(FittingModel)
+            .filter(FittingModel.technical_product_id == int(item.id))
+            .all()
+        )
+        for fitting in linked_fittings:
+            fitting.technical_product_id = None
+
+        serialized = _serialize_product(item)
+        db.delete(item)
+        db.commit()
+        return serialized
+    except IntegrityError:
+        db.rollback()
+        return None
     finally:
         db.close()
 

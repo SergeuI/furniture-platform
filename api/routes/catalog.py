@@ -97,6 +97,7 @@ from database.repositories.fitting_taxonomy_repository import (
     create_fitting_series,
     delete_fitting_category,
     delete_fitting_manufacturer,
+    delete_fitting_product,
     delete_fitting_series,
     get_fitting_category_by_id,
     get_fitting_manufacturer_by_id,
@@ -2225,6 +2226,57 @@ async def get_fitting_product_detail_route(
         "success": True,
         "item": item,
     }
+
+
+@router.delete(
+    "/fitting-products/{item_id}",
+    response_model=FittingProductTaxonomyOperationResponseSchema,
+)
+async def delete_fitting_product_route(
+    item_id: str,
+    current_user = Depends(require_catalog_reader),
+):
+    _ensure_fitting_feature_access(current_user, "fittings.delete")
+
+    item = get_fitting_product_by_id(item_id)
+    if not item:
+        return {"success": False, "error": "РўРµС…РЅС–С‡РЅРёР№ РїСЂРѕРґСѓРєС‚ РЅРµ Р·РЅР°Р№РґРµРЅРѕ"}
+
+    db = SessionLocal()
+    try:
+        linked_rows = (
+            db.query(FittingModel)
+            .filter(FittingModel.technical_product_id == int(item_id))
+            .all()
+        )
+    finally:
+        db.close()
+
+    if current_user.role != "admin":
+        can_manage_product = any(
+            _can_manage_fitting_item(current_user, _serialize_fitting(row))
+            for row in linked_rows
+        )
+        if not can_manage_product:
+            return {
+                "success": False,
+                "error": "You do not have permission to delete this technical product",
+            }
+
+    deleted = delete_fitting_product(item_id)
+    if not deleted:
+        return {"success": False, "error": "РќРµ РІРґР°Р»РѕСЃСЏ РІРёРґР°Р»РёС‚Рё С‚РµС…РЅС–С‡РЅРёР№ РїСЂРѕРґСѓРєС‚"}
+
+    create_audit_log(
+        actor_user_id=current_user.id,
+        actor_email=current_user.email,
+        action="catalog.fitting_product_deleted",
+        entity_type="fitting_product",
+        entity_id=item_id,
+        details=deleted,
+    )
+
+    return {"success": True, "item": deleted}
 
 
 def _normalize_admin_text(value: object | None) -> str:

@@ -410,6 +410,13 @@ export async function deleteFitting(token, itemId) {
   });
 }
 
+export async function deleteFittingProduct(token, itemId) {
+  return request(`/catalog/fitting-products/${encodeURIComponent(String(itemId || ""))}`, {
+    method: "DELETE",
+    headers: authHeaders(token),
+  });
+}
+
 export async function listFittingManufacturers(token, includeInactive = false) {
   const searchParams = new URLSearchParams();
   if (includeInactive) {
