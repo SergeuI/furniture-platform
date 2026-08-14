@@ -342,11 +342,11 @@ async def _parse_fitting_source_or_error(source_url: str) -> tuple[dict | None, 
             "error": metadata.get("error"),
         },
     )
+    error_message = str(metadata.get("error") or "").strip() or "?? ??????? ???????? ???? ?? ??????????. ????????? ????????? ??? ????????? ???????."
     return None, {
         "success": False,
-        "error": "Не вдалося отримати дані за посиланням. Перевірте посилання або спробуйте пізніше.",
+        "error": error_message,
     }
-
 
 def _normalize_fitting_detail_text(value: object | None) -> str | None:
     text = " ".join(str(value or "").split()).strip()
@@ -417,7 +417,13 @@ def _build_fitting_source_preview_payload(
 )
 async def preview_fitting_source_route(
     payload: FittingSourcePreviewRequestSchema,
-    current_user = Depends(require_catalog_reader),
+    current_user = Depends(require_roles([
+        "admin",
+        "trial",
+        "premium",
+        "pro",
+        "free",
+    ])),
 ):
     _ensure_fitting_feature_access(current_user, "fittings.create")
 

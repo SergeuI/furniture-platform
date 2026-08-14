@@ -1250,6 +1250,100 @@ def _attach_page_diagnostics(
     return enriched
 
 
+_ERROR_PAGE_PATTERNS = (
+    r"\berror\s*404\b",
+    r"\b404\b",
+    r"\bnot found\b",
+    r"\bpage not found\b",
+    r"\bpage unavailable\b",
+    r"\baccess denied\b",
+    r"\bforbidden\b",
+    r"\bnot available\b",
+)
+
+
+def _looks_like_error_page_text(value: str | None) -> bool:
+    text = _clean_text(value).lower()
+    if not text:
+        return False
+
+    return any(re.search(pattern, text, re.IGNORECASE) for pattern in _ERROR_PAGE_PATTERNS)
+
+
+def _is_valid_fitting_preview(result: dict, html: str) -> bool:
+    if not result.get("success"):
+        return False
+
+    name = _clean_text(result.get("name"))
+    article = _clean_text(result.get("article"))
+    image_url = _clean_text(result.get("image_url"))
+    price = result.get("price")
+    page_text = ""
+    if html:
+        try:
+            page_text = _clean_text(BeautifulSoup(html, "html.parser").get_text(" ", strip=True))
+        except Exception:
+            page_text = ""
+
+    combined_text = " ".join(
+        value
+        for value in [
+            name,
+            article,
+            image_url,
+            _clean_text(result.get("description")),
+            _clean_text(result.get("brand")),
+            page_text,
+        ]
+        if value
+    )
+
+    if _looks_like_error_page_text(combined_text):
+        return False
+
+    if not name:
+        return False
+
+    if not (article or image_url or price is not None):
+        return False
+
+    return True
+
+
+def _finalize_fitting_source_preview(
+    result: dict,
+    *,
+    requested_url: str,
+    final_url: str,
+    http_status: int | None,
+    transport: str,
+    html: str = "",
+) -> dict:
+    if _is_valid_fitting_preview(result, html):
+        return _attach_page_diagnostics(
+            result,
+            requested_url=requested_url,
+            final_url=final_url,
+            http_status=http_status,
+            transport=transport,
+        )
+
+    error_message = _clean_text(result.get("error")) or "Не вдалося ідентифікувати товар на сторінці."
+    source_site = _clean_text(result.get("source_site")) or None
+    return _attach_page_diagnostics(
+        {
+            "success": False,
+            "error": error_message,
+            "source_site": source_site,
+        },
+        requested_url=requested_url,
+        final_url=final_url,
+        http_status=http_status,
+        transport=transport,
+        errors=[error_message],
+    )
+
+
 async def _fetch_html(url: str) -> tuple[int, str, str]:
     timeout = aiohttp.ClientTimeout(total=30)
 
@@ -1402,12 +1496,13 @@ async def parse_fitting_source_metadata(source_url: str) -> dict:
     try:
         if source_site == "mt":
             result = await _parse_mt_source(normalized_url)
-            return _attach_page_diagnostics(
+            return _finalize_fitting_source_preview(
                 result,
                 requested_url=normalized_url,
                 final_url=result.get("final_url") or normalized_url,
                 http_status=200 if result.get("success") else 0,
                 transport="Playwright",
+                html="",
             )
 
         fetch_error: Exception | None = None
@@ -1464,24 +1559,26 @@ async def parse_fitting_source_metadata(source_url: str) -> dict:
 
         if source_site == "viyar":
             result = _parse_viyar_html(html, final_url)
-            return _attach_page_diagnostics(
+            return _finalize_fitting_source_preview(
                 result,
                 requested_url=normalized_url,
                 final_url=final_url,
                 http_status=status,
                 transport=transport,
+                html=html,
             )
         elif source_site == "kronas":
             result = _parse_kronas_html(html, final_url)
         else:
             result = _parse_generic_html(html, final_url, source_site)
 
-        return _attach_page_diagnostics(
+        return _finalize_fitting_source_preview(
             result,
             requested_url=normalized_url,
             final_url=final_url,
             http_status=status,
             transport=transport,
+            html=html,
         )
     except asyncio.TimeoutError:
         return _attach_page_diagnostics(

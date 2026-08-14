@@ -1638,6 +1638,34 @@ class CatalogVisibilityTests(unittest.TestCase):
                     self.assertEqual(fitting.source_url, "https://viyar.ua/ua/catalog/test-fitting")
                     self.assertEqual(fitting.image_url, "https://cdn.example.com/fittings/p1.jpg")
 
+    def test_source_preview_route_rejects_invalid_preview_without_writes(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
+                with patch.object(
+                    catalog,
+                    "parse_fitting_source_metadata",
+                    return_value={
+                        "success": False,
+                        "error": "Not Found",
+                    },
+                    create=True,
+                ):
+                    response = client.post(
+                        "/catalog/fittings/source-preview",
+                        json={
+                            "source_url": "https://viyar.ua/ua/catalog/error-404",
+                            "city": "Київ",
+                        },
+                        headers=self._auth_headers("trial-token"),
+                    )
+
+                self.assertEqual(response.status_code, 200)
+                self.assertFalse(response.json()["success"])
+                self.assertIn("Not Found", response.json()["error"])
+
+                with session_factory() as session:
+                    self.assertEqual(session.query(FittingModel).count(), 0)
+
     def test_source_import_failure_rejects_when_name_empty(self) -> None:
         self._assert_source_import_rejected_without_create(
             payload_name="",

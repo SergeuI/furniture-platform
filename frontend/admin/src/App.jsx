@@ -7457,6 +7457,7 @@ export default function App() {
   const [fittingSourcePreview, setFittingSourcePreview] = useState(null);
   const [fittingSourcePreviewLoading, setFittingSourcePreviewLoading] = useState(false);
   const [fittingSourcePreviewError, setFittingSourcePreviewError] = useState("");
+  const [fittingSourcePreviewState, setFittingSourcePreviewState] = useState("idle");
   const [fittingSourcePreviewSelectedImageUrl, setFittingSourcePreviewSelectedImageUrl] = useState("");
   const [fittingColumnVisibility, setFittingColumnVisibility] = useState({
     price: true,
@@ -9956,11 +9957,41 @@ export default function App() {
     language,
     t,
   ]);
-  const fittingSourcePreviewReady = Boolean(
-    fittingSourcePreview &&
-    !fittingSourcePreviewLoading &&
-    !fittingSourcePreviewError,
-  );
+  const fittingSourcePreviewReady =
+    fittingSourcePreviewState === "success" && Boolean(fittingSourcePreview);
+  const fittingSourcePreviewHeaderLabel =
+    fittingSourcePreviewState === "loading"
+      ? language === "en"
+        ? "Loading"
+        : "Отримуємо дані"
+      : fittingSourcePreviewState === "success"
+        ? language === "en"
+          ? "Found"
+          : "Знайдено"
+        : fittingSourcePreviewState === "error"
+          ? language === "en"
+            ? "Unable to load data"
+            : "Не вдалося отримати дані"
+          : language === "en"
+            ? "Preview"
+            : "Попередній перегляд";
+  const fittingSourcePreviewBodyMessage =
+    fittingSourcePreviewState === "loading"
+      ? language === "en"
+        ? "Reading data from the source page."
+        : "Зчитуємо дані з джерела."
+      : fittingSourcePreviewState === "success"
+        ? language === "en"
+          ? "Read-only summary before saving."
+          : "Лише перегляд. Дані ще не збережені."
+        : fittingSourcePreviewState === "error"
+          ? fittingSourcePreviewError ||
+            (language === "en"
+              ? "Check the product page link."
+              : "Перевірте посилання на сторінку товару.")
+          : language === "en"
+            ? "Paste a link and click \"Get data\"."
+            : "Вставте посилання і натисніть «Отримати дані».";
   const visibleFittingItems = useMemo(
     () => fittingCanonicalCatalogView.visibleCards || [],
     [fittingCanonicalCatalogView],
@@ -17907,6 +17938,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
     setFittingSourcePreview(null);
     setFittingSourcePreviewLoading(false);
     setFittingSourcePreviewError("");
+    setFittingSourcePreviewState("idle");
     setFittingSourcePreviewSelectedImageUrl("");
   }
 
@@ -17919,6 +17951,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
     setFittingSourcePreview(null);
     setFittingSourcePreviewLoading(false);
     setFittingSourcePreviewError("");
+    setFittingSourcePreviewState("idle");
     setFittingSourcePreviewSelectedImageUrl("");
     setNewFittingForm(
       createFittingFormDraft(null, {
@@ -17971,6 +18004,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
     setFittingSourcePreview(null);
     setFittingSourcePreviewLoading(false);
     setFittingSourcePreviewError("");
+    setFittingSourcePreviewState("idle");
     setFittingSourcePreviewSelectedImageUrl("");
     setNewFittingForm(createFittingFormDraft(nextItem, { city: activeCity || "" }));
     setFittingSourceModalOpen(true);
@@ -17985,11 +18019,13 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
     if (!sourceUrl) {
       setFittingSourcePreviewError(t.fittingSourceUrlPrompt);
       setFittingSourcePreview(null);
+      setFittingSourcePreviewState("error");
       return;
     }
 
     setFittingSourcePreviewLoading(true);
     setFittingSourcePreviewError("");
+    setFittingSourcePreviewState("loading");
 
     const result = await previewFittingSource(token, {
       source_url: sourceUrl,
@@ -18001,6 +18037,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
     if (!result.success) {
       setFittingSourcePreview(null);
       setFittingSourcePreviewError(result.error || t.unableToLoadCatalog);
+      setFittingSourcePreviewState("error");
       setFittingSourcePreviewSelectedImageUrl("");
       return;
     }
@@ -18028,6 +18065,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
       source_site: normalizedSourceSite,
       source_url: normalizedSourceUrl,
     });
+    setFittingSourcePreviewState("success");
     setFittingSourcePreviewSelectedImageUrl(normalizedImageUrls[0] || normalizedImageUrl || "");
 
     setNewFittingForm((current) => ({
@@ -18137,7 +18175,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
     if (
       fittingModalMode === "create" &&
       fittingCreateMode === "source" &&
-      (!fittingSourcePreview || fittingSourcePreviewLoading || fittingSourcePreviewError)
+      (fittingSourcePreviewState !== "success" || !fittingSourcePreview)
     ) {
       setStatus({
         message: language === "en"
@@ -26271,6 +26309,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                           setNewFittingForm((current) => ({ ...current, source_url: nextValue }));
                           setFittingSourcePreview(null);
                           setFittingSourcePreviewError("");
+                          setFittingSourcePreviewState("idle");
                           setFittingSourcePreviewSelectedImageUrl("");
                         }
                       }
@@ -26295,38 +26334,14 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   <section className="fitting-source-preview fitting-source-span-full">
                     <header className="fitting-source-preview-header">
                       <div>
-                        <strong>
-                          {fittingSourcePreviewLoading
-                            ? language === "en"
-                              ? "Loading"
-                              : "Отримуємо дані"
-                            : fittingSourcePreview
-                              ? language === "en"
-                                ? "Found"
-                                : "Знайдено"
-                              : language === "en"
-                                ? "Preview"
-                                : "Попередній перегляд"}
-                        </strong>
-                        <p>
-                          {fittingSourcePreviewLoading
-                            ? language === "en"
-                              ? "Reading data from the source page."
-                              : "Зчитуємо дані з джерела."
-                            : fittingSourcePreviewError
-                              ? fittingSourcePreviewError
-                              : fittingSourcePreview
-                                ? language === "en"
-                                  ? "Read-only summary before saving."
-                                  : "Лише перегляд. Дані ще не збережені."
-                                : language === "en"
-                                  ? "Paste a link and click \"Get data\"."
-                                  : "Вставте посилання і натисніть «Отримати дані»."}
-                        </p>
+                        <strong>{fittingSourcePreviewHeaderLabel}</strong>
+                        <p>{fittingSourcePreviewBodyMessage}</p>
                       </div>
-                      {renderSourceBadge(getFittingSourceMeta(fittingSourcePreview || newFittingForm))}
+                      {fittingSourcePreviewState === "success" && fittingSourcePreview ? (
+                        renderSourceBadge(getFittingSourceMeta(fittingSourcePreview || newFittingForm))
+                      ) : null}
                     </header>
-                    {fittingSourcePreview ? (
+                    {fittingSourcePreviewState === "success" && fittingSourcePreview ? (
                       <div className="fitting-source-preview-body">
                         <div className="fitting-source-preview-media">
                           <div className="fitting-source-preview-image">
