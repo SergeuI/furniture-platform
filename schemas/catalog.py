@@ -575,6 +575,43 @@ class FittingCatalogUpdateSchema(FittingCatalogCreateSchema):
     pass
 
 
+class FittingSourcePreviewRequestSchema(BaseModel):
+    source_url: str = Field(
+        min_length=8,
+        max_length=1000,
+    )
+    city: str | None = Field(
+        default=None,
+        max_length=128,
+    )
+
+
+class FittingSourcePreviewSupplierSchema(BaseModel):
+    id: int
+    code: str
+    name: str
+    is_active: bool = True
+
+
+class FittingSourcePreviewResponseSchema(BaseModel):
+    success: bool
+    source: str | None = None
+    source_site: str | None = None
+    source_url: str | None = None
+    city: str | None = None
+    name: str | None = None
+    article: str | None = None
+    brand: str | None = None
+    image_url: str | None = None
+    image_urls: List[str] = Field(default_factory=list)
+    price: float | None = None
+    availability: str | None = None
+    currency: str | None = None
+    unit: str | None = None
+    supplier: FittingSourcePreviewSupplierSchema | None = None
+    error: str | None = None
+
+
 class FittingCatalogOperationResponseSchema(BaseModel):
     success: bool
     selected_item_id: str | None = None
