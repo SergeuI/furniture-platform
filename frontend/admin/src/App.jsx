@@ -7457,6 +7457,7 @@ export default function App() {
   const [fittingSourcePreview, setFittingSourcePreview] = useState(null);
   const [fittingSourcePreviewLoading, setFittingSourcePreviewLoading] = useState(false);
   const [fittingSourcePreviewError, setFittingSourcePreviewError] = useState("");
+  const [fittingSourcePreviewSelectedImageUrl, setFittingSourcePreviewSelectedImageUrl] = useState("");
   const [fittingColumnVisibility, setFittingColumnVisibility] = useState({
     price: true,
     stock: true,
@@ -9881,65 +9882,78 @@ export default function App() {
       null,
     [activeFittingCategory, visibleFittingCategories],
   );
+  const fittingSourcePreviewImages = useMemo(() => {
+    const imageUrls = Array.isArray(fittingSourcePreview?.image_urls)
+      ? fittingSourcePreview.image_urls
+      : [];
+
+    return imageUrls.map((item) => String(item || "").trim()).filter(Boolean);
+  }, [fittingSourcePreview]);
   const fittingSourcePreviewItems = useMemo(() => {
-    const supplierOffer = newFittingForm.supplier_offer || {};
     const normalizePreviewValue = (value) => {
       const text = String(value ?? "").trim();
       return text || t.notSet;
     };
+    const source = fittingSourcePreview || {};
+    const selectedImageUrl =
+      String(fittingSourcePreviewSelectedImageUrl || "").trim() ||
+      String(source.image_url || "").trim() ||
+      fittingSourcePreviewImages[0] ||
+      "";
 
     return [
       {
-        key: "image",
-        label: t.fittingImage,
-        kind: "image",
-        value: normalizePreviewValue(newFittingForm.image_url),
-      },
-      {
         key: "name",
         label: t.fittingName,
-        value: normalizePreviewValue(newFittingForm.name),
+        value: normalizePreviewValue(source.name),
       },
       {
         key: "article",
         label: t.fittingArticle,
-        value: normalizePreviewValue(newFittingForm.article),
+        value: normalizePreviewValue(source.article),
       },
       {
         key: "brand",
         label: t.brand,
-        value: normalizePreviewValue(newFittingForm.brand),
+        value: normalizePreviewValue(source.brand),
       },
       {
         key: "price",
         label: t.fittingPrice,
-        value: normalizePreviewValue(newFittingForm.price),
+        value: normalizePreviewValue(source.price),
       },
       {
         key: "availability",
         label: t.fittingStock,
-        value: normalizePreviewValue(newFittingForm.stock),
+        value: normalizePreviewValue(source.availability),
       },
       {
         key: "currency",
         label: language === "en" ? "Currency" : "Валюта",
-        value: normalizePreviewValue(supplierOffer.currency),
+        value: normalizePreviewValue(source.currency),
       },
       {
         key: "unit",
         label: language === "en" ? "Unit" : "Одиниця",
-        value: normalizePreviewValue(supplierOffer.unit),
+        value: normalizePreviewValue(source.unit),
+      },
+      {
+        key: "supplier",
+        label: language === "en" ? "Supplier" : "Постачальник",
+        value: normalizePreviewValue(source.supplier?.name),
+      },
+      {
+        key: "image",
+        label: t.fittingImage,
+        kind: "image",
+        value: normalizePreviewValue(selectedImageUrl),
       },
     ];
   }, [
+    fittingSourcePreview,
+    fittingSourcePreviewImages,
+    fittingSourcePreviewSelectedImageUrl,
     language,
-    newFittingForm.article,
-    newFittingForm.brand,
-    newFittingForm.image_url,
-    newFittingForm.name,
-    newFittingForm.price,
-    newFittingForm.stock,
-    newFittingForm.supplier_offer,
     t,
   ]);
   const visibleFittingItems = useMemo(
@@ -17888,6 +17902,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
     setFittingSourcePreview(null);
     setFittingSourcePreviewLoading(false);
     setFittingSourcePreviewError("");
+    setFittingSourcePreviewSelectedImageUrl("");
   }
 
   function openCreateFittingModal(mode = "manual") {
@@ -17899,6 +17914,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
     setFittingSourcePreview(null);
     setFittingSourcePreviewLoading(false);
     setFittingSourcePreviewError("");
+    setFittingSourcePreviewSelectedImageUrl("");
     setNewFittingForm(
       createFittingFormDraft(null, {
         city: activeCity || "",
@@ -17950,6 +17966,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
     setFittingSourcePreview(null);
     setFittingSourcePreviewLoading(false);
     setFittingSourcePreviewError("");
+    setFittingSourcePreviewSelectedImageUrl("");
     setNewFittingForm(createFittingFormDraft(nextItem, { city: activeCity || "" }));
     setFittingSourceModalOpen(true);
   }
@@ -17979,10 +17996,14 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
     if (!result.success) {
       setFittingSourcePreview(null);
       setFittingSourcePreviewError(result.error || t.unableToLoadCatalog);
+      setFittingSourcePreviewSelectedImageUrl("");
       return;
     }
 
     const normalizedImageUrl = String(result.image_url || "").trim();
+    const normalizedImageUrls = Array.isArray(result.image_urls)
+      ? result.image_urls.map((item) => String(item || "").trim()).filter(Boolean)
+      : [];
     const normalizedSourceUrl = String(result.source_url || sourceUrl).trim();
     const normalizedSourceSite = String(result.source_site || result.source || "").trim();
     const normalizedSupplierId = String(result.supplier?.id || "").trim();
@@ -17997,11 +18018,12 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
     setFittingSourcePreview({
       ...result,
       image_url: normalizedImageUrl,
-      image_urls: Array.isArray(result.image_urls) ? result.image_urls : [],
+      image_urls: normalizedImageUrls,
       source: normalizedSourceSite,
       source_site: normalizedSourceSite,
       source_url: normalizedSourceUrl,
     });
+    setFittingSourcePreviewSelectedImageUrl(normalizedImageUrls[0] || normalizedImageUrl || "");
 
     setNewFittingForm((current) => ({
       ...current,
@@ -26240,6 +26262,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                           setNewFittingForm((current) => ({ ...current, source_url: nextValue }));
                           setFittingSourcePreview(null);
                           setFittingSourcePreviewError("");
+                          setFittingSourcePreviewSelectedImageUrl("");
                         }
                       }
                       placeholder="https://..."
@@ -26295,26 +26318,52 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                       {renderSourceBadge(getFittingSourceMeta(fittingSourcePreview || newFittingForm), true)}
                     </header>
                     {fittingSourcePreview ? (
-                      <div className="fitting-source-preview-grid">
-                        {fittingSourcePreviewItems.map((field) => (
-                          <div
-                            className={`fitting-source-preview-item${field.kind === "image" ? " is-image" : ""}`}
-                            key={field.key}
-                          >
-                            <span>{field.label}</span>
-                            {field.kind === "image" ? (
-                              <div className="fitting-source-preview-image">
-                                {String(newFittingForm.image_url || "").trim() ? (
-                                  <img alt={t.fittingImage} src={newFittingForm.image_url} />
-                                ) : (
-                                  <div className="fitting-source-preview-placeholder">{t.notSet}</div>
-                                )}
-                              </div>
+                      <div className="fitting-source-preview-body">
+                        <div className="fitting-source-preview-media">
+                          <div className="fitting-source-preview-image">
+                            {String(fittingSourcePreviewSelectedImageUrl || "").trim() ? (
+                              <img
+                                alt={t.fittingImage}
+                                src={fittingSourcePreviewSelectedImageUrl}
+                              />
                             ) : (
-                              <strong>{field.value}</strong>
+                              <div className="fitting-source-preview-placeholder">
+                                {language === "en" ? "Image not found" : "Зображення не знайдено"}
+                              </div>
                             )}
                           </div>
-                        ))}
+                          {fittingSourcePreviewImages.length > 1 ? (
+                            <div className="fitting-source-preview-thumbs" aria-label={t.fittingImage}>
+                              {fittingSourcePreviewImages.map((imageUrl, index) => {
+                                const isSelected =
+                                  String(fittingSourcePreviewSelectedImageUrl || "").trim() === imageUrl ||
+                                  (!fittingSourcePreviewSelectedImageUrl && index === 0);
+
+                                return (
+                                  <button
+                                    aria-pressed={isSelected}
+                                    className={`fitting-source-preview-thumb${isSelected ? " is-selected" : ""}`}
+                                    key={`${imageUrl}-${index}`}
+                                    onClick={() => setFittingSourcePreviewSelectedImageUrl(imageUrl)}
+                                    type="button"
+                                  >
+                                    <img alt={`${t.fittingImage} ${index + 1}`} src={imageUrl} />
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          ) : null}
+                        </div>
+                        <div className="fitting-source-preview-summary">
+                          {fittingSourcePreviewItems
+                            .filter((field) => field.kind !== "image")
+                            .map((field) => (
+                              <div className="fitting-source-preview-row" key={field.key}>
+                                <span>{field.label}</span>
+                                <strong>{field.value}</strong>
+                              </div>
+                            ))}
+                        </div>
                       </div>
                     ) : (
                       <div className="fitting-source-preview-placeholder fitting-source-preview-empty">
@@ -26391,9 +26440,10 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                 </header>
                 <div className="fitting-form-grid fitting-form-grid-offer">
                   {fittingCreateMode === "source" && fittingSourcePreview?.supplier ? (
-                    <div className="fitting-source-field fitting-source-readonly">
-                      <span>{language === "en" ? "Supplier" : "Постачальник"}</span>
-                      <strong>{fittingSourcePreview.supplier.name}</strong>
+                    <div className="fitting-form-note fitting-source-span-full">
+                      {language === "en"
+                        ? `Supplier detected: ${fittingSourcePreview.supplier.name}. It is already shown in the preview above.`
+                        : `Постачальник визначений: ${fittingSourcePreview.supplier.name}. Він уже показаний у верхньому preview.`}
                     </div>
                   ) : (
                     <label className="fitting-source-field">
