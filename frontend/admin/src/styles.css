@@ -8180,13 +8180,67 @@ tbody tr.selected {
 }
 
 .fitting-source-modal {
-  max-width: 860px;
-  width: min(100%, 860px);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-height: min(90vh, calc(100vh - 32px));
+  max-width: 920px;
+  overflow: hidden;
+  padding: 18px 18px 16px;
+  width: min(100%, 920px);
 }
 
 .fitting-source-modal-form {
   display: grid;
-  gap: 14px;
+  gap: 12px 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  min-height: 0;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.fitting-source-modal-form > label,
+.fitting-source-modal-form > .fitting-form-note,
+.fitting-source-modal-form > .fitting-form-section,
+.fitting-source-modal-form > .confirm-actions,
+.fitting-source-modal-form > .fitting-source-mode-switch {
+  min-width: 0;
+}
+
+.fitting-source-span-full {
+  grid-column: 1 / -1;
+}
+
+.fitting-source-field {
+  align-self: start;
+}
+
+.fitting-source-modal-form .fitting-form-note {
+  line-height: 1.4;
+}
+
+.fitting-source-modal-form .fitting-form-section {
+  background: #f8fafb;
+  border: 1px solid #dbe1e7;
+  border-radius: 10px;
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+}
+
+.fitting-source-modal-form .fitting-form-grid-offer {
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.fitting-source-modal-form .fitting-form-section-header strong {
+  color: #24343d;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.fitting-source-modal-form .confirm-actions {
+  margin-top: 4px;
 }
 
 .fitting-source-mode-switch {
@@ -8203,6 +8257,27 @@ tbody tr.selected {
 
 .fitting-source-actions {
   justify-content: flex-end;
+}
+
+.fitting-source-modal .confirm-header {
+  flex: 0 0 auto;
+}
+
+.fitting-source-modal .confirm-header p {
+  font-size: 13px;
+}
+
+@media (max-width: 760px) {
+  .fitting-source-modal {
+    max-height: calc(100vh - 24px);
+    max-width: calc(100vw - 24px);
+    padding: 16px;
+  }
+
+  .fitting-source-modal-form,
+  .fitting-source-modal-form .fitting-form-grid-offer {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .hole-template-modal {

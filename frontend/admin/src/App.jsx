@@ -25921,7 +25921,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
             </header>
             <form className="fitting-source-modal-form" onSubmit={handleCreateFitting}>
               {fittingModalMode === "create" ? (
-                <div className="fitting-source-mode-switch">
+                <div className="fitting-source-mode-switch fitting-source-span-full">
                   <button
                     className={`ghost-button compact-button${fittingCreateMode === "manual" ? " active" : ""}`}
                     onClick={() => setFittingCreateMode("manual")}
@@ -25939,7 +25939,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                 </div>
               ) : null}
 
-              <label>
+              <label className="fitting-source-field">
                 <span>{t.fittingType}</span>
                 <select
                   onChange={(event) =>
@@ -25965,7 +25965,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                 </select>
               </label>
 
-              <label>
+              <label className="fitting-source-field">
                 <span>{t.brand}</span>
                 <input
                   onChange={(event) =>
@@ -25976,7 +25976,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                 />
               </label>
 
-              <label>
+              <label className="fitting-source-field">
                 <span>{t.fittingStock}</span>
                 <input
                   onChange={(event) =>
@@ -25987,7 +25987,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                 />
               </label>
 
-              <label>
+              <label className="fitting-source-field">
                 <span>{t.fittingSortOrder}</span>
                 <input
                   min="0"
@@ -25999,7 +25999,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                 />
               </label>
 
-              <label className="toggle-label">
+              <label className="toggle-label fitting-source-field">
                 <input
                   checked={Boolean(newFittingForm.is_active)}
                   onChange={(event) =>
@@ -26011,7 +26011,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
               </label>
 
               {fittingModalMode === "create" && canManageSystemFittingCatalog ? (
-                <label className="toggle-label">
+                <label className="toggle-label fitting-source-field">
                   <input
                     checked={Boolean(newFittingForm.is_system)}
                     onChange={(event) =>
@@ -26025,7 +26025,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   {newFittingForm.is_system ? t.fittingSystemScope : t.fittingCustomScope}
                 </label>
               ) : fittingModalMode === "edit" ? (
-                <div className="fitting-form-note">
+                <div className="fitting-form-note fitting-source-span-full">
                   {editingFittingItem?.is_system ? t.fittingSystemScope : t.fittingCustomScope}
                   {language === "uk"
                     ? ". Тип запису не можна змінити під час редагування."
@@ -26039,7 +26039,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
 
               {fittingCreateMode === "source" ? (
                 <>
-                  <label className="fitting-source-url-field">
+                  <label className="fitting-source-url-field fitting-source-span-full">
                     <span>{t.fittingSourceUrl}</span>
                     <input
                       autoFocus
@@ -26051,11 +26051,11 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                       value={newFittingForm.source_url}
                     />
                   </label>
-                  <div className="fitting-form-note">{t.fittingAutoCityNote}</div>
+                  <div className="fitting-form-note fitting-source-span-full">{t.fittingAutoCityNote}</div>
                 </>
               ) : (
                 <>
-                  <label>
+                  <label className="fitting-source-field">
                     <span>{t.fittingArticle}</span>
                     <input
                       onChange={(event) =>
@@ -26066,7 +26066,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                       value={newFittingForm.article}
                     />
                   </label>
-                  <label>
+                  <label className="fitting-source-field">
                     <span>{t.fittingName}</span>
                     <input
                       onChange={(event) =>
@@ -26077,7 +26077,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                       value={newFittingForm.name}
                     />
                   </label>
-                  <label>
+                  <label className="fitting-source-field">
                     <span>{t.fittingPrice}</span>
                     <input
                       min="0"
@@ -26090,7 +26090,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                       value={newFittingForm.price}
                     />
                   </label>
-                  <label>
+                  <label className="fitting-source-field fitting-source-span-full">
                     <span>{t.fittingImage}</span>
                     <input
                       accept="image/*"
@@ -26098,18 +26098,18 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                       type="file"
                     />
                   </label>
-                  <div className="fitting-form-note">
+                  <div className="fitting-form-note fitting-source-span-full">
                     {newFittingForm.image_url ? t.fittingImageSelected : t.fittingCustomHint}
                   </div>
                 </>
               )}
 
-              <section className="fitting-form-section">
+              <section className="fitting-form-section fitting-source-span-full">
                 <header className="fitting-form-section-header">
                   <strong>Постачальник і ціна</strong>
                 </header>
                 <div className="fitting-form-grid fitting-form-grid-offer">
-                  <label>
+                  <label className="fitting-source-field">
                     <span>Постачальник</span>
                     <select
                       onChange={(event) =>
@@ -26132,7 +26132,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                     </select>
                   </label>
 
-                  <label>
+                  <label className="fitting-source-field">
                     <span>Артикул постачальника</span>
                     <input
                       onChange={(event) =>
@@ -26149,7 +26149,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                     />
                   </label>
 
-                  <label>
+                  <label className="fitting-source-field">
                     <span>Ціна</span>
                     <input
                       min="0"
@@ -26168,7 +26168,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                     />
                   </label>
 
-                  <label>
+                  <label className="fitting-source-field">
                     <span>Валюта</span>
                     <input
                       onChange={(event) =>
@@ -26185,7 +26185,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                     />
                   </label>
 
-                  <label>
+                  <label className="fitting-source-field">
                     <span>Одиниця</span>
                     <input
                       onChange={(event) =>
@@ -26202,7 +26202,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                     />
                   </label>
 
-                  <label>
+                  <label className="fitting-source-field">
                     <span>Stock / наявність</span>
                     <input
                       onChange={(event) =>
@@ -26219,7 +26219,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                     />
                   </label>
 
-                  <label>
+                  <label className="fitting-source-field">
                     <span>URL товару</span>
                     <input
                       onChange={(event) =>
@@ -26236,7 +26236,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                     />
                   </label>
 
-                  <label>
+                  <label className="fitting-source-field">
                     <span>Пріоритет</span>
                     <input
                       min="0"
@@ -26254,7 +26254,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                     />
                   </label>
 
-                  <label className="toggle-label">
+                  <label className="toggle-label fitting-source-field">
                     <input
                       checked={newFittingForm.supplier_offer?.is_active !== false}
                       onChange={(event) =>
@@ -26271,14 +26271,14 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                     Активна пропозиція
                   </label>
                 </div>
-                <div className="fitting-form-note">
+                <div className="fitting-form-note fitting-source-span-full">
                   {fittingSupplierListLoading
                     ? "Завантажуємо suppliers..."
                     : "Якщо блок порожній, буде створено лише canonical fitting."}
                 </div>
               </section>
 
-              <div className="confirm-actions fitting-source-actions">
+              <div className="confirm-actions fitting-source-actions fitting-source-span-full">
                 <button
                   className="ghost-button"
                   disabled={loading}
