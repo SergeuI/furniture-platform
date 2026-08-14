@@ -11,7 +11,30 @@ from scripts import upgrade_fitting_products_schema as migration
 
 
 class UpgradeFittingProductsSchemaTests(unittest.TestCase):
-    def test_dry_run_reports_canonical_products_without_changes(self) -> None:
+    def test_schema_ensure_keeps_empty_database_empty(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            database_path = Path(tmpdir) / "empty.db"
+            self._create_empty_legacy_database(database_path)
+
+            with sqlite3.connect(database_path) as connection:
+                migration.ensure_fitting_products_schema(connection)
+
+            with sqlite3.connect(database_path) as connection:
+                self.assertEqual(
+                    connection.execute("SELECT COUNT(*) FROM fittings").fetchone()[0],
+                    0,
+                )
+                self.assertEqual(
+                    connection.execute("SELECT COUNT(*) FROM fitting_products").fetchone()[0],
+                    0,
+                )
+                self.assertTrue(self._column_exists(connection, "fittings", "technical_product_id"))
+                self.assertEqual(
+                    connection.execute("PRAGMA integrity_check").fetchone()[0],
+                    "ok",
+                )
+
+    def test_schema_ensure_does_not_backfill_existing_fittings(self) -> None:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             database_path = Path(tmpdir) / "legacy.db"
             self._create_legacy_database(database_path)
@@ -20,37 +43,53 @@ class UpgradeFittingProductsSchemaTests(unittest.TestCase):
                 before_count = connection.execute(
                     "SELECT COUNT(*) FROM fittings",
                 ).fetchone()[0]
-                plan = migration._build_plan(connection)
+                migration.ensure_fitting_products_schema(connection)
                 after_count = connection.execute(
                     "SELECT COUNT(*) FROM fittings",
                 ).fetchone()[0]
 
             self.assertEqual(before_count, after_count)
-            self.assertFalse(plan["prerequisite_missing"])
-            self.assertEqual(plan["missing_tables"], ["fitting_products"])
-            self.assertEqual(plan["missing_columns"], ["technical_product_id"])
-            self.assertIn("uq_fitting_products_article", plan["missing_indexes"])
-            self.assertIn("ix_fittings_technical_product_id", plan["missing_indexes"])
-            self.assertEqual(len(plan["canonical_groups"]), 2)
-            self.assertEqual(len(plan["ambiguous_groups"]), 1)
-            self.assertEqual(len(plan["products_to_upsert"]), 2)
-            self.assertEqual(len(plan["fitting_link_updates"]), 3)
-            self.assertEqual(len(plan["ambiguous_nullifications"]), 0)
+            with sqlite3.connect(database_path) as connection:
+                self.assertEqual(
+                    connection.execute("SELECT COUNT(*) FROM fitting_products").fetchone()[0],
+                    0,
+                )
+                self.assertTrue(self._column_exists(connection, "fittings", "technical_product_id"))
+                self.assertEqual(
+                    connection.execute(
+                        "SELECT COUNT(*) FROM fittings WHERE technical_product_id IS NOT NULL",
+                    ).fetchone()[0],
+                    0,
+                )
+                self.assertEqual(
+                    connection.execute(
+                        "PRAGMA integrity_check",
+                    ).fetchone()[0],
+                    "ok",
+                )
 
-    def test_apply_creates_schema_backfills_only_unambiguous_rows_and_is_idempotent(self) -> None:
+    def test_explicit_backfill_still_populates_fitting_products(self) -> None:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             database_path = Path(tmpdir) / "legacy.db"
             self._create_legacy_database(database_path)
 
             with sqlite3.connect(database_path) as connection:
-                counts_before = self._counts_snapshot(connection)
-                plan = migration._build_plan(connection)
-                migration._apply_plan(connection, plan, False)
+                migration.ensure_fitting_products_schema(connection)
+                self.assertEqual(
+                    connection.execute("SELECT COUNT(*) FROM fitting_products").fetchone()[0],
+                    0,
+                )
+                migration.backfill_fitting_products_schema(connection)
 
             with sqlite3.connect(database_path) as connection:
-                counts_after = self._counts_snapshot(connection)
-                self.assertEqual(counts_before["fittings"], counts_after["fittings"])
-                self.assertEqual(counts_after["fitting_products"], 2)
+                self.assertEqual(
+                    connection.execute("SELECT COUNT(*) FROM fitting_products").fetchone()[0],
+                    2,
+                )
+                self.assertEqual(
+                    connection.execute("SELECT COUNT(*) FROM fittings").fetchone()[0],
+                    6,
+                )
                 self.assertEqual(
                     connection.execute(
                         "PRAGMA integrity_check",
@@ -80,32 +119,7 @@ class UpgradeFittingProductsSchemaTests(unittest.TestCase):
                 self.assertIsNotNone(fitting_rows[5])
                 self.assertIsNone(fitting_rows[6])
 
-                second_plan = migration._build_plan(connection)
-                self.assertEqual(second_plan["missing_tables"], [])
-                self.assertEqual(second_plan["missing_columns"], [])
-                self.assertEqual(second_plan["missing_indexes"], [])
-                self.assertEqual(second_plan["products_to_upsert"], [])
-                self.assertEqual(second_plan["fitting_link_updates"], [])
-                self.assertEqual(second_plan["ambiguous_nullifications"], [])
-                migration.ensure_fitting_products_schema(connection)
-
-            with sqlite3.connect(database_path) as connection:
-                self.assertEqual(
-                    connection.execute(
-                        "PRAGMA integrity_check",
-                    ).fetchone()[0],
-                    "ok",
-                )
-                self.assertEqual(
-                    connection.execute("SELECT COUNT(*) FROM fitting_products").fetchone()[0],
-                    2,
-                )
-                self.assertEqual(
-                    connection.execute("SELECT COUNT(*) FROM fittings").fetchone()[0],
-                    6,
-                )
-
-    def test_ensure_inside_outer_transaction_keeps_transaction_open(self) -> None:
+    def test_ensure_inside_outer_transaction_is_idempotent_and_schema_only(self) -> None:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             database_path = Path(tmpdir) / "legacy.db"
             self._create_legacy_database(database_path)
@@ -115,7 +129,7 @@ class UpgradeFittingProductsSchemaTests(unittest.TestCase):
                 migration.ensure_fitting_products_schema(connection)
                 self.assertEqual(
                     connection.exec_driver_sql("SELECT COUNT(*) FROM fitting_products").fetchone()[0],
-                    2,
+                    0,
                 )
                 self.assertEqual(
                     connection.exec_driver_sql("SELECT 1").fetchone()[0],
@@ -124,19 +138,19 @@ class UpgradeFittingProductsSchemaTests(unittest.TestCase):
                 migration.ensure_fitting_products_schema(connection)
                 self.assertEqual(
                     connection.exec_driver_sql("SELECT COUNT(*) FROM fitting_products").fetchone()[0],
-                    2,
+                    0,
                 )
 
             with sqlite3.connect(database_path) as connection:
                 self.assertEqual(
                     connection.execute(
                         "PRAGMA integrity_check",
-                    ).fetchone()[0],
+                ).fetchone()[0],
                     "ok",
                 )
                 self.assertEqual(
                     connection.execute("SELECT COUNT(*) FROM fitting_products").fetchone()[0],
-                    2,
+                    0,
                 )
 
     @staticmethod
@@ -179,6 +193,24 @@ class UpgradeFittingProductsSchemaTests(unittest.TestCase):
             connection.commit()
 
     @staticmethod
+    def _create_empty_legacy_database(database_path: Path) -> None:
+        with sqlite3.connect(database_path) as connection:
+            connection.execute(
+                """
+                CREATE TABLE fittings (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    article TEXT,
+                    code TEXT,
+                    name TEXT,
+                    brand TEXT,
+                    description TEXT,
+                    is_active INTEGER NOT NULL DEFAULT 1
+                )
+                """
+            )
+            connection.commit()
+
+    @staticmethod
     def _counts_snapshot(connection: sqlite3.Connection) -> dict[str, int]:
         fitting_products_count = 0
         if connection.execute(
@@ -191,6 +223,11 @@ class UpgradeFittingProductsSchemaTests(unittest.TestCase):
             "fittings": connection.execute("SELECT COUNT(*) FROM fittings").fetchone()[0],
             "fitting_products": fitting_products_count,
         }
+
+    @staticmethod
+    def _column_exists(connection: sqlite3.Connection, table_name: str, column_name: str) -> bool:
+        rows = connection.execute(f"PRAGMA table_info({table_name})").fetchall()
+        return any(str(row[1]) == column_name for row in rows)
 
 
 if __name__ == "__main__":

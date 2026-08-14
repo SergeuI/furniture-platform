@@ -551,6 +551,35 @@ def ensure_fitting_products_schema(connection: sqlite3.Connection) -> None:
             missing = ", ".join(plan["missing_prerequisites"]) or "unknown"
             raise SystemExit(f"Missing prerequisite tables: {missing}")
 
+        has_schema_changes = any(
+            plan[key]
+            for key in ("missing_tables", "missing_columns", "missing_indexes")
+        )
+
+        if has_schema_changes:
+            schema_plan = {
+                **plan,
+                "products_to_upsert": [],
+                "fitting_link_updates": [],
+                "ambiguous_nullifications": [],
+            }
+            _apply_plan(connection, schema_plan, caller_owns_transaction)
+        elif not caller_owns_transaction:
+            connection.commit()
+    except BaseException:
+        if not caller_owns_transaction and _connection_in_transaction(connection):
+            connection.rollback()
+        raise
+
+
+def backfill_fitting_products_schema(connection: sqlite3.Connection) -> None:
+    caller_owns_transaction = _connection_in_transaction(connection)
+    try:
+        plan = _build_plan(connection)
+        if plan["prerequisite_missing"]:
+            missing = ", ".join(plan["missing_prerequisites"]) or "unknown"
+            raise SystemExit(f"Missing prerequisite tables: {missing}")
+
         has_changes = any(
             plan[key]
             for key in ("missing_tables", "missing_columns", "missing_indexes")
@@ -564,7 +593,6 @@ def ensure_fitting_products_schema(connection: sqlite3.Connection) -> None:
         if not caller_owns_transaction and _connection_in_transaction(connection):
             connection.rollback()
         raise
-
 
 def _print_plan(
     database_path: Path,
@@ -634,7 +662,7 @@ def main() -> None:
             raise SystemExit(1)
 
         if args.apply and has_changes:
-            _apply_plan(connection, plan, False)
+            backfill_fitting_products_schema(connection)
 
         _print_plan(database_path, plan, args.apply, backup_path)
 
