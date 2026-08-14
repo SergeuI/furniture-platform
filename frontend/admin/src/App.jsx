@@ -26439,49 +26439,38 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   <strong>{language === "en" ? "Supplier and price" : "Постачальник і ціна"}</strong>
                 </header>
                 <div className="fitting-form-grid fitting-form-grid-offer">
-                  {fittingCreateMode === "source" && fittingSourcePreview?.supplier ? (
-                    <div className="fitting-form-note fitting-source-span-full">
-                      {language === "en"
-                        ? `Supplier detected: ${fittingSourcePreview.supplier.name}. It is already shown in the preview above.`
-                        : `Постачальник визначений: ${fittingSourcePreview.supplier.name}. Він уже показаний у верхньому preview.`}
-                    </div>
-                  ) : (
-                    <label className="fitting-source-field">
-                      <span>{language === "en" ? "Supplier" : "Постачальник"}</span>
-                      <select
-                        onChange={(event) =>
-                          setNewFittingForm((current) => ({
-                            ...current,
-                            supplier_offer: {
-                              ...current.supplier_offer,
-                              supplier_id: event.target.value,
-                            },
-                          }))
-                        }
-                        value={newFittingForm.supplier_offer?.supplier_id || ""}
-                      >
-                        <option value="">
-                          {language === "en" ? "Choose supplier" : "Оберіть постачальника"}
-                        </option>
-                        {fittingSupplierItems.map((supplier) => (
-                          <option key={supplier.id} value={supplier.id}>
-                            {supplier.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  )}
-
                   {fittingCreateMode === "source" ? (
-                    <div className="fitting-form-note fitting-source-span-full">
-                      {fittingSourcePreview?.supplier
-                        ? language === "en"
-                          ? "Supplier mapping was detected automatically."
-                          : "Постачальник визначений автоматично."
-                        : language === "en"
-                          ? "Choose the supplier here if the source does not provide one."
-                          : "Оберіть постачальника вручну, якщо джерело його не підказало."}
-                    </div>
+                    fittingSourcePreview?.supplier ? null : (
+                      <>
+                        <label className="fitting-source-field">
+                          <span>{language === "en" ? "Supplier" : "Постачальник"}</span>
+                          <select
+                            onChange={(event) =>
+                              setNewFittingForm((current) => ({
+                                ...current,
+                                supplier_offer: {
+                                  ...current.supplier_offer,
+                                  supplier_id: event.target.value,
+                                },
+                              }))
+                            }
+                            value={newFittingForm.supplier_offer?.supplier_id || ""}
+                          >
+                            <option value="">
+                              {language === "en" ? "Choose supplier" : "Оберіть постачальника"}
+                            </option>
+                            {fittingSupplierItems.map((supplier) => (
+                              <option key={supplier.id} value={supplier.id}>
+                                {supplier.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <div className="fitting-form-note fitting-source-span-full">
+                          {language === "en" ? "Choose supplier." : "Оберіть постачальника."}
+                        </div>
+                      </>
+                    )
                   ) : (
                     <>
                       <label className="fitting-source-field">
@@ -26624,15 +26613,6 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                       </label>
                     </>
                   )}
-                </div>
-                <div className="fitting-form-note fitting-source-span-full">
-                  {fittingSupplierListLoading
-                    ? language === "en"
-                      ? "Loading suppliers..."
-                      : "Завантажуємо постачальників..."
-                    : language === "en"
-                      ? "If this block is empty, only the canonical fitting will be created."
-                      : "Якщо блок порожній, буде створено лише canonical фурнітуру."}
                 </div>
               </section>
 
