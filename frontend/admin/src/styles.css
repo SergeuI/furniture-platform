@@ -8229,8 +8229,42 @@ tbody tr.selected {
 }
 
 .fitting-source-modal-form .fitting-form-grid-offer {
-  gap: 10px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.fitting-source-modal-form .fitting-form-grid-offer > label {
+  align-items: center;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(180px, 220px) minmax(0, 1fr);
+  min-height: 40px;
+}
+
+.fitting-source-modal-form .fitting-form-grid-offer > label > span {
+  color: #24343d;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.fitting-source-modal-form .fitting-form-grid-offer > label > input,
+.fitting-source-modal-form .fitting-form-grid-offer > label > select {
+  width: 100%;
+}
+
+.fitting-source-modal-form .fitting-form-grid-offer > .toggle-label {
+  display: flex;
+  flex-direction: row-reverse;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.fitting-source-modal-form .fitting-form-grid-offer > .toggle-label > span {
+  flex: 1 1 auto;
+}
+
+.fitting-source-modal-form .fitting-form-grid-offer > .toggle-label > input {
+  flex: 0 0 auto;
 }
 
 .fitting-source-modal-form .fitting-form-section-header strong {
@@ -8275,8 +8309,19 @@ tbody tr.selected {
   }
 
   .fitting-source-modal-form,
-  .fitting-source-modal-form .fitting-form-grid-offer {
+  .fitting-source-modal-form .fitting-form-grid-offer,
+  .fitting-source-modal-form .fitting-form-grid-offer > label {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .fitting-source-modal-form .fitting-form-grid-offer > label {
+    gap: 6px;
+    min-height: unset;
+  }
+
+  .fitting-source-modal-form .fitting-form-grid-offer > .toggle-label {
+    flex-direction: row;
+    justify-content: flex-start;
   }
 }
 
