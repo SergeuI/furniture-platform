@@ -18258,7 +18258,11 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
     }
 
     setStatus({
-      message: isEditMode ? t.fittingUpdated : t.fittingCreateSuccess,
+      message: isEditMode
+        ? t.fittingUpdated
+        : result.operation === "reused"
+          ? t.fittingUpdated
+          : t.fittingCreateSuccess,
       tone: "success",
     });
     closeFittingFormModal();

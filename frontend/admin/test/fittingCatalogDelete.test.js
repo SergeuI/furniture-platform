@@ -18,5 +18,6 @@ test("canonical fitting delete uses product ids and refreshes both catalogs", ()
   assert.match(appSource, /Promise\.all\(\[\s*loadFittingsCatalog\(token\),\s*loadCanonicalFittingsCatalog\(token\),\s*\]\)/);
   assert.match(appSource, /openDeleteCanonicalFittingProductConfirm\(item, sourceItem\);/);
   assert.match(appSource, /deleteFittingProduct/);
+  assert.match(appSource, /result\.operation === "reused"\s*\?\s*t\.fittingUpdated\s*:\s*t\.fittingCreateSuccess/);
   assert.doesNotMatch(appSource, /openDeleteCanonicalFittingProductConfirm\(sourceItem\)/);
 });

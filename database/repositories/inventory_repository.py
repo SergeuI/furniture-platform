@@ -727,6 +727,120 @@ def _resolve_or_create_technical_product(
     return product
 
 
+def _apply_fitting_supplier_offer(
+    db,
+    *,
+    fitting_id: int,
+    supplier_offer: dict | None,
+) -> None:
+
+    normalized_supplier_offer = _normalize_fitting_supplier_offer_payload(supplier_offer)
+    if not normalized_supplier_offer or not _has_meaningful_supplier_offer_data(normalized_supplier_offer):
+        return
+
+    foundation_repo = FittingFoundationRepository(db)
+    offer = None
+    offer_id = normalized_supplier_offer.get("offer_id")
+    if offer_id not in (None, "", 0):
+        offer = foundation_repo.get_offer_by_id(int(offer_id))
+        if offer and int(offer.fitting_id) != int(fitting_id):
+            offer = None
+    if offer is None:
+        offer = (
+            db.query(FittingSupplierOfferModel)
+            .filter(FittingSupplierOfferModel.fitting_id == int(fitting_id))
+            .filter(FittingSupplierOfferModel.supplier_id == normalized_supplier_offer["supplier_id"])
+            .order_by(
+                FittingSupplierOfferModel.priority.asc(),
+                FittingSupplierOfferModel.id.asc(),
+            )
+            .first()
+        )
+
+    offer_payload = {
+        "supplier_id": normalized_supplier_offer["supplier_id"],
+        "article": normalized_supplier_offer["article"],
+        "external_product_id": normalized_supplier_offer["external_product_id"],
+        "source_url": normalized_supplier_offer["source_url"],
+        "price": normalized_supplier_offer["price"],
+        "currency": normalized_supplier_offer["currency"],
+        "unit": normalized_supplier_offer["unit"],
+        "stock": normalized_supplier_offer["stock"],
+        "is_active": normalized_supplier_offer["is_active"],
+        "priority": normalized_supplier_offer["priority"],
+    }
+
+    if offer is None:
+        created_offer = foundation_repo.create_offer(
+            fitting_id=fitting_id,
+            **offer_payload,
+        )
+        if created_offer is None:
+            raise ValueError("Unable to create fitting supplier offer")
+        return
+
+    foundation_repo.update_offer(
+        offer,
+        **offer_payload,
+    )
+
+
+def _delete_exact_fittings(db, fitting_ids: Sequence[int]) -> list[dict]:
+    normalized_ids = [
+        int(fitting_id)
+        for fitting_id in fitting_ids
+        if fitting_id not in (None, "")
+    ]
+    if not normalized_ids:
+        return []
+
+    rows = (
+        db.query(FittingModel)
+        .filter(FittingModel.id.in_(normalized_ids))
+        .order_by(FittingModel.id.asc())
+        .all()
+    )
+    if not rows:
+        return []
+
+    row_ids = [int(row.id) for row in rows]
+    deleted_items = [_serialize_fitting(row) for row in rows]
+
+    db.query(MountingNodeItemModel).filter(
+        MountingNodeItemModel.fitting_id.in_(row_ids),
+    ).delete(synchronize_session=False)
+
+    template_rows = (
+        db.query(FittingHoleTemplateModel.id)
+        .filter(FittingHoleTemplateModel.fitting_id.in_(row_ids))
+        .all()
+    )
+    template_ids = [int(row[0]) for row in template_rows]
+
+    if template_ids:
+        db.query(FittingHolePointModel).filter(
+            FittingHolePointModel.template_id.in_(template_ids),
+        ).delete(synchronize_session=False)
+
+    db.query(FittingSupplierOfferModel).filter(
+        FittingSupplierOfferModel.fitting_id.in_(row_ids),
+    ).delete(synchronize_session=False)
+
+    db.query(FittingImageModel).filter(
+        FittingImageModel.fitting_id.in_(row_ids),
+    ).delete(synchronize_session=False)
+
+    if template_ids:
+        db.query(FittingHoleTemplateModel).filter(
+            FittingHoleTemplateModel.id.in_(template_ids),
+        ).delete(synchronize_session=False)
+
+    for row in rows:
+        db.delete(row)
+
+    return deleted_items
+
+
 def _serialize_fitting_image_metadata(item: FittingImageModel) -> dict:
     return {
         "id": int(item.id),
@@ -1857,34 +1971,12 @@ def create_fitting(
         gallery_images = list(prepared_gallery_images or [])
         primary_gallery_image = gallery_images[0] if gallery_images else None
         normalized_image_url = _normalize_fitting_value(image_url)
+        normalized_city = _normalize_fitting_value(city)
+        normalized_source = _normalize_fitting_value(source)
+        normalized_source_url = _normalize_fitting_value(source_url)
 
         if primary_gallery_image:
             normalized_image_url = primary_gallery_image.source_url
-
-        item = FittingModel(
-            city=_normalize_fitting_value(city),
-            code=_normalize_fitting_value(code),
-            article=_normalize_fitting_value(article),
-            name=name.strip(),
-            description=_normalize_fitting_value(description),
-            price=_normalize_price_value(price),
-            stock=_normalize_fitting_value(stock),
-            source=_normalize_fitting_value(source),
-            brand=_normalize_fitting_value(brand),
-            fitting_type=category["code"],
-            fitting_group=category["group"],
-            image_url=normalized_image_url,
-            source_url=_normalize_fitting_value(source_url),
-            source_payload_json=_normalize_fitting_value(source_payload_json),
-            owner_user_id=_normalize_fitting_value(owner_user_id),
-            is_system=bool(is_system),
-            is_active=bool(is_active),
-            sort_order=int(sort_order or 0),
-            image_cached_bytes=primary_gallery_image.image_bytes if primary_gallery_image else None,
-            image_cached_content_type=primary_gallery_image.content_type if primary_gallery_image else None,
-        )
-        db.add(item)
-        db.flush()
 
         technical_product_item = _resolve_or_create_technical_product(
             db,
@@ -1893,28 +1985,79 @@ def create_fitting(
         if technical_product and technical_product_item is None:
             raise ValueError("Unable to create canonical fitting product")
 
+        item = None
+        if technical_product_item is not None and normalized_source_url:
+            item = (
+                db.query(FittingModel)
+                .filter(FittingModel.technical_product_id == int(technical_product_item.id))
+                .filter(FittingModel.source == normalized_source)
+                .filter(FittingModel.source_url == normalized_source_url)
+                .filter(FittingModel.city == normalized_city)
+                .order_by(FittingModel.id.asc())
+                .first()
+            )
+
+        created = item is None
+        if item is None:
+            item = FittingModel(
+                city=normalized_city,
+                code=_normalize_fitting_value(code),
+                article=_normalize_fitting_value(article),
+                name=name.strip(),
+                description=_normalize_fitting_value(description),
+                price=_normalize_price_value(price),
+                stock=_normalize_fitting_value(stock),
+                source=normalized_source,
+                brand=_normalize_fitting_value(brand),
+                fitting_type=category["code"],
+                fitting_group=category["group"],
+                image_url=normalized_image_url,
+                source_url=normalized_source_url,
+                source_payload_json=_normalize_fitting_value(source_payload_json),
+                owner_user_id=_normalize_fitting_value(owner_user_id),
+                is_system=bool(is_system),
+                is_active=bool(is_active),
+                sort_order=int(sort_order or 0),
+                image_cached_bytes=primary_gallery_image.image_bytes if primary_gallery_image else None,
+                image_cached_content_type=primary_gallery_image.content_type if primary_gallery_image else None,
+            )
+            db.add(item)
+            db.flush()
+        else:
+            item.city = normalized_city
+            item.code = _normalize_fitting_value(code)
+            item.article = _normalize_fitting_value(article)
+            item.name = name.strip()
+            item.description = _normalize_fitting_value(description)
+            item.price = _normalize_price_value(price)
+            item.stock = _normalize_fitting_value(stock)
+            item.source = normalized_source
+            item.brand = _normalize_fitting_value(brand)
+            item.fitting_type = category["code"]
+            item.fitting_group = category["group"]
+            item.image_url = normalized_image_url
+            item.source_url = normalized_source_url
+            item.source_payload_json = _normalize_fitting_value(source_payload_json)
+            item.owner_user_id = _normalize_fitting_value(owner_user_id)
+            item.is_system = bool(is_system)
+            item.is_active = bool(is_active)
+            item.sort_order = int(sort_order or 0)
+            item.image_cached_bytes = primary_gallery_image.image_bytes if primary_gallery_image else None
+            item.image_cached_content_type = primary_gallery_image.content_type if primary_gallery_image else None
+
         if technical_product_item is not None:
             item.technical_product_id = technical_product_item.id
             db.flush()
 
-        normalized_supplier_offer = _normalize_fitting_supplier_offer_payload(supplier_offer)
-        if normalized_supplier_offer and _has_meaningful_supplier_offer_data(normalized_supplier_offer):
-            foundation_repo = FittingFoundationRepository(db)
-            created_offer = foundation_repo.create_offer(
-                fitting_id=item.id,
-                supplier_id=normalized_supplier_offer["supplier_id"],
-                article=normalized_supplier_offer["article"],
-                external_product_id=normalized_supplier_offer["external_product_id"],
-                source_url=normalized_supplier_offer["source_url"],
-                price=normalized_supplier_offer["price"],
-                currency=normalized_supplier_offer["currency"],
-                unit=normalized_supplier_offer["unit"],
-                stock=normalized_supplier_offer["stock"],
-                is_active=normalized_supplier_offer["is_active"],
-                priority=normalized_supplier_offer["priority"],
-            )
-            if created_offer is None:
-                raise ValueError("Unable to create fitting supplier offer")
+        if created:
+            _apply_fitting_supplier_offer(db, fitting_id=item.id, supplier_offer=supplier_offer)
+        else:
+            _apply_fitting_supplier_offer(db, fitting_id=item.id, supplier_offer=supplier_offer)
+
+        if not created and gallery_images:
+            db.query(FittingImageModel).filter(
+                FittingImageModel.fitting_id == int(item.id),
+            ).delete(synchronize_session=False)
 
         if gallery_images:
             _add_prepared_fitting_gallery_images(
@@ -1930,7 +2073,9 @@ def create_fitting(
         if item.owner_user_id:
             owner_profile = _load_fitting_owner_profiles(db, [item.owner_user_id]).get(str(item.owner_user_id))
 
-        return _serialize_fitting(item, owner_profile=owner_profile)
+        serialized = _serialize_fitting(item, owner_profile=owner_profile)
+        serialized["operation"] = "created" if created else "reused"
+        return serialized
 
     except Exception:
         db.rollback()
@@ -2114,52 +2259,7 @@ def update_fitting(
         item.is_active = bool(is_active)
         item.sort_order = int(sort_order or 0)
 
-        normalized_supplier_offer = _normalize_fitting_supplier_offer_payload(supplier_offer)
-        if normalized_supplier_offer and _has_meaningful_supplier_offer_data(normalized_supplier_offer):
-            foundation_repo = FittingFoundationRepository(db)
-            offer = None
-            offer_id = normalized_supplier_offer.get("offer_id")
-            if offer_id not in (None, "", 0):
-                offer = foundation_repo.get_offer_by_id(int(offer_id))
-                if offer and int(offer.fitting_id) != int(item.id):
-                    offer = None
-            if offer is None:
-                offer = (
-                    db.query(FittingSupplierOfferModel)
-                    .filter(FittingSupplierOfferModel.fitting_id == int(item.id))
-                    .filter(FittingSupplierOfferModel.supplier_id == normalized_supplier_offer["supplier_id"])
-                    .order_by(
-                        FittingSupplierOfferModel.priority.asc(),
-                        FittingSupplierOfferModel.id.asc(),
-                    )
-                    .first()
-                )
-
-            offer_payload = {
-                "supplier_id": normalized_supplier_offer["supplier_id"],
-                "article": normalized_supplier_offer["article"],
-                "external_product_id": normalized_supplier_offer["external_product_id"],
-                "source_url": normalized_supplier_offer["source_url"],
-                "price": normalized_supplier_offer["price"],
-                "currency": normalized_supplier_offer["currency"],
-                "unit": normalized_supplier_offer["unit"],
-                "stock": normalized_supplier_offer["stock"],
-                "is_active": normalized_supplier_offer["is_active"],
-                "priority": normalized_supplier_offer["priority"],
-            }
-
-            if offer is None:
-                created_offer = foundation_repo.create_offer(
-                    fitting_id=item.id,
-                    **offer_payload,
-                )
-                if created_offer is None:
-                    raise ValueError("Unable to create fitting supplier offer")
-            else:
-                foundation_repo.update_offer(
-                    offer,
-                    **offer_payload,
-                )
+        _apply_fitting_supplier_offer(db, fitting_id=int(item.id), supplier_offer=supplier_offer)
 
         db.commit()
         db.refresh(item)
@@ -2401,6 +2501,34 @@ def delete_fitting(item_id: str | int) -> dict | None:
     finally:
 
         db.close()
+
+
+def delete_fittings_exact(item_ids: Sequence[str | int], db=None) -> list[dict]:
+
+    owns_session = db is None
+    db = db or SessionLocal()
+
+    try:
+        fitting_ids = [
+            int(item_id)
+            for item_id in item_ids
+            if item_id not in (None, "")
+        ]
+        deleted_items = _delete_exact_fittings(db, fitting_ids)
+        if not deleted_items:
+            return []
+
+        if owns_session:
+            db.commit()
+        return deleted_items
+
+    except Exception:
+        db.rollback()
+        raise
+
+    finally:
+        if owns_session:
+            db.close()
 
 
 def list_fitting_delete_dependencies(item_id: str | int) -> list[dict]:

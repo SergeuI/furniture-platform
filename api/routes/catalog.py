@@ -97,7 +97,6 @@ from database.repositories.fitting_taxonomy_repository import (
     create_fitting_series,
     delete_fitting_category,
     delete_fitting_manufacturer,
-    delete_fitting_product,
     delete_fitting_series,
     get_fitting_category_by_id,
     get_fitting_manufacturer_by_id,
@@ -111,6 +110,10 @@ from database.repositories.fitting_taxonomy_repository import (
     update_fitting_manufacturer,
     update_fitting_product_taxonomy,
     update_fitting_series,
+)
+from database.repositories.inventory_repository import (
+    delete_fittings_exact,
+    list_fitting_delete_dependencies,
 )
 from database.repositories.service_catalog_repository import (
     create_manual_service_catalog_item,
@@ -2238,34 +2241,68 @@ async def delete_fitting_product_route(
 ):
     _ensure_fitting_feature_access(current_user, "fittings.delete")
 
-    item = get_fitting_product_by_id(item_id)
-    if not item:
-        return {"success": False, "error": "РўРµС…РЅС–С‡РЅРёР№ РїСЂРѕРґСѓРєС‚ РЅРµ Р·РЅР°Р№РґРµРЅРѕ"}
-
     db = SessionLocal()
     try:
+        product_row = db.get(FittingProductModel, int(item_id))
+        if not product_row:
+            return {"success": False, "error": "РўРµС…РЅС–С‡РЅРёР№ РїСЂРѕРґСѓРєС‚ РЅРµ Р·РЅР°Р№РґРµРЅРѕ"}
+
         linked_rows = (
             db.query(FittingModel)
             .filter(FittingModel.technical_product_id == int(item_id))
+            .order_by(FittingModel.id.asc())
             .all()
         )
-    finally:
-        db.close()
 
-    if current_user.role != "admin":
-        can_manage_product = any(
-            _can_manage_fitting_item(current_user, _serialize_fitting(row))
-            for row in linked_rows
-        )
-        if not can_manage_product:
+        if current_user.role != "admin":
+            can_manage_product = any(
+                _can_manage_fitting_item(current_user, _serialize_fitting(row))
+                for row in linked_rows
+            )
+            if not can_manage_product:
+                return {
+                    "success": False,
+                    "error": "You do not have permission to delete this technical product",
+                }
+
+        dependent_nodes: list[dict] = []
+        for row in linked_rows:
+            dependent_nodes.extend(list_fitting_delete_dependencies(int(row.id)))
+
+        if dependent_nodes:
+            node_labels = []
+            for node in dependent_nodes:
+                node_name = str(node.get("name") or "").strip() or str(node.get("code") or "").strip()
+                node_id = str(node.get("id") or "").strip()
+                if node_name and node_id:
+                    node_labels.append(f"{node_name} (ID {node_id})")
+                elif node_name:
+                    node_labels.append(node_name)
+                elif node_id:
+                    node_labels.append(f"ID {node_id}")
+
             return {
                 "success": False,
-                "error": "You do not have permission to delete this technical product",
+                "error": (
+                    "РќРµРјРѕР¶Р»РёРІРѕ РІРёРґР°Р»РёС‚Рё С‚РµС…РЅС–С‡РЅРёР№ С‚РѕРІР°СЂ. "
+                    "Р’РѕРЅРѕ РІРёРєРѕСЂРёСЃС‚РѕРІСѓС”С‚СЊСЃСЏ РІ РјРѕРЅС‚Р°Р¶РЅРёС… РІСѓР·Р»Р°С…: "
+                    + "; ".join(node_labels)
+                    + "."
+                ),
+                "dependent_nodes": dependent_nodes,
             }
 
-    deleted = delete_fitting_product(item_id)
-    if not deleted:
-        return {"success": False, "error": "РќРµ РІРґР°Р»РѕСЃСЏ РІРёРґР°Р»РёС‚Рё С‚РµС…РЅС–С‡РЅРёР№ РїСЂРѕРґСѓРєС‚"}
+        linked_ids = [int(row.id) for row in linked_rows]
+        deleted_linked_items = delete_fittings_exact(linked_ids, db=db) if linked_ids else []
+
+        deleted = get_fitting_product_by_id(item_id)
+        db.delete(product_row)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
 
     create_audit_log(
         actor_user_id=current_user.id,
@@ -2273,10 +2310,17 @@ async def delete_fitting_product_route(
         action="catalog.fitting_product_deleted",
         entity_type="fitting_product",
         entity_id=item_id,
-        details=deleted,
+        details={
+            "deleted_product": deleted,
+            "deleted_linked_fittings": deleted_linked_items,
+        },
     )
 
-    return {"success": True, "item": deleted}
+    return {
+        "success": True,
+        "item": deleted,
+        "deleted_linked_fittings": deleted_linked_items,
+    }
 
 
 def _normalize_admin_text(value: object | None) -> str:
@@ -3420,6 +3464,7 @@ async def create_fitting_route(
     if not prepared_gallery_images and item.get("image_url") and _claim_fitting_image_warm(item.get("id")):
         background_tasks.add_task(_warm_fitting_image_cache_task, item)
 
+    operation = str(item.pop("operation", "created") or "created")
     create_audit_log(
         actor_user_id=current_user.id,
         actor_email=current_user.email,
@@ -3431,6 +3476,7 @@ async def create_fitting_route(
 
     return {
         "success": True,
+        "operation": operation,
         "item": _load_fitting_detail_item(item["id"], current_user=current_user) or item,
     }
 

@@ -614,10 +614,12 @@ class FittingSourcePreviewResponseSchema(BaseModel):
 
 class FittingCatalogOperationResponseSchema(BaseModel):
     success: bool
+    operation: str | None = None
     selected_item_id: str | None = None
     deleted_count: int = 0
     deleted_ids: List[str] = Field(default_factory=list)
     deleted_cities: List[str] = Field(default_factory=list)
+    dependent_nodes: List[dict] = Field(default_factory=list)
     item: FittingCatalogDetailItemSchema | None = None
     error: str | None = None
 
@@ -800,6 +802,7 @@ class FittingProductTaxonomyUpdateSchema(BaseModel):
 class FittingProductTaxonomyOperationResponseSchema(BaseModel):
     success: bool
     item: FittingProductSchema | None = None
+    dependent_nodes: List[dict] = Field(default_factory=list)
     error: str | None = None
 
 

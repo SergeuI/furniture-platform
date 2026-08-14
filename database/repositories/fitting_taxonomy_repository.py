@@ -499,14 +499,6 @@ def delete_fitting_product(item_id: str | int) -> dict | None:
         if not item:
             return None
 
-        linked_fittings = (
-            db.query(FittingModel)
-            .filter(FittingModel.technical_product_id == int(item.id))
-            .all()
-        )
-        for fitting in linked_fittings:
-            fitting.technical_product_id = None
-
         serialized = _serialize_product(item)
         db.delete(item)
         db.commit()

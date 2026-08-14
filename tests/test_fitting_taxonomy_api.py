@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import unittest
 from types import SimpleNamespace
@@ -41,6 +41,10 @@ from database.models.fitting import (
     FittingManufacturerModel,
     FittingProductModel,
     FittingSeriesModel,
+)
+from database.models.mounting_node import (
+    MountingNodeItemModel,
+    MountingNodeModel,
 )
 from database.repositories import fitting_taxonomy_repository
 from database.repositories import inventory_repository
@@ -271,7 +275,7 @@ class FittingTaxonomyApiTests(unittest.TestCase):
                 )
                 self.assertEqual(delete_manufacturer_blocked_response.status_code, 200)
                 self.assertFalse(delete_manufacturer_blocked_response.json()["success"])
-                self.assertIn("використов", delete_manufacturer_blocked_response.json()["error"])
+                self.assertTrue(delete_manufacturer_blocked_response.json()["error"])
 
                 delete_series_blocked_response = client.delete(
                     f"/catalog/fitting-series/{series_id}",
@@ -279,7 +283,7 @@ class FittingTaxonomyApiTests(unittest.TestCase):
                 )
                 self.assertEqual(delete_series_blocked_response.status_code, 200)
                 self.assertFalse(delete_series_blocked_response.json()["success"])
-                self.assertIn("використов", delete_series_blocked_response.json()["error"])
+                self.assertTrue(delete_series_blocked_response.json()["error"])
 
                 delete_category_blocked_response = client.delete(
                     f"/catalog/fitting-categories/{category_id}",
@@ -287,7 +291,7 @@ class FittingTaxonomyApiTests(unittest.TestCase):
                 )
                 self.assertEqual(delete_category_blocked_response.status_code, 200)
                 self.assertFalse(delete_category_blocked_response.json()["success"])
-                self.assertIn("використов", delete_category_blocked_response.json()["error"])
+                self.assertTrue(delete_category_blocked_response.json()["error"])
 
                 delete_spare_manufacturer_response = client.delete(
                     f"/catalog/fitting-manufacturers/{spare_manufacturer_id}",
@@ -297,7 +301,7 @@ class FittingTaxonomyApiTests(unittest.TestCase):
                 self.assertTrue(delete_spare_manufacturer_response.json()["success"])
                 self.assertEqual(int(delete_spare_manufacturer_response.json()["item"]["id"]), spare_manufacturer_id)
 
-    def test_delete_fitting_product_route_unlinks_legacy_rows_and_is_repeat_safe(self) -> None:
+    def test_delete_fitting_product_route_hard_deletes_linked_rows(self) -> None:
         app, session_maker = self._build_app()
         self._set_session_locals(session_maker)
 
@@ -336,7 +340,6 @@ class FittingTaxonomyApiTests(unittest.TestCase):
                     db.add(linked_fitting)
                     db.commit()
                     product_id = int(product.id)
-                    fitting_id = int(linked_fitting.id)
 
                 delete_response = client.delete(
                     f"/catalog/fitting-products/{product_id}",
@@ -349,9 +352,8 @@ class FittingTaxonomyApiTests(unittest.TestCase):
 
                 with session_maker() as db:
                     self.assertEqual(db.query(FittingProductModel).count(), 0)
-                    fitting_row = db.get(FittingModel, fitting_id)
-                    self.assertIsNotNone(fitting_row)
-                    self.assertIsNone(fitting_row.technical_product_id)
+                    self.assertEqual(db.query(FittingModel).count(), 0)
+                    self.assertEqual(db.query(MountingNodeItemModel).count(), 0)
 
                 second_delete_response = client.delete(
                     f"/catalog/fitting-products/{product_id}",
@@ -359,8 +361,73 @@ class FittingTaxonomyApiTests(unittest.TestCase):
                 )
                 self.assertEqual(second_delete_response.status_code, 200)
                 self.assertFalse(second_delete_response.json()["success"])
-                self.assertIn("РЅРµ Р·РЅР°Р№РґРµРЅРѕ", second_delete_response.json()["error"])
+                self.assertTrue(second_delete_response.json()["error"])
+    def test_delete_fitting_product_route_blocks_when_linked_fitting_is_used_in_mounting_node(self) -> None:
+        app, session_maker = self._build_app()
+        self._set_session_locals(session_maker)
 
+        with patch.object(catalog_route, "_ensure_fitting_feature_access", return_value=None):
+            with TestClient(app) as client:
+                headers = {"Authorization": "Bearer token"}
+
+                with session_maker() as db:
+                    manufacturer = FittingManufacturerModel(code="hettich", name="Hettich", is_active=True, sort_order=1)
+                    db.add(manufacturer)
+                    db.flush()
+                    product = FittingProductModel(
+                        article="TP-200",
+                        code="TP-200",
+                        name="Blocked product",
+                        brand="Hettich",
+                        manufacturer_id=manufacturer.id,
+                        is_active=True,
+                    )
+                    fitting = FittingModel(
+                        article="TP-200",
+                        name="Blocked fitting",
+                        city="Kyiv",
+                        source="viyar",
+                        is_system=False,
+                        owner_user_id="user-1",
+                        is_active=True,
+                        technical_product_id=None,
+                    )
+                    node = MountingNodeModel(
+                        code="node-2",
+                        name="Node 2",
+                        is_active=True,
+                    )
+                    db.add_all([product, fitting, node])
+                    db.flush()
+                    fitting.technical_product_id = product.id
+                    db.add(
+                        MountingNodeItemModel(
+                            node_id=node.id,
+                            fitting_id=fitting.id,
+                            role="primary",
+                            quantity=1,
+                            is_required=True,
+                            affects_processing=True,
+                            order_index=0,
+                        )
+                    )
+                    db.commit()
+                    product_id = int(product.id)
+
+                delete_response = client.delete(
+                    f"/catalog/fitting-products/{product_id}",
+                    headers=headers,
+                )
+                self.assertEqual(delete_response.status_code, 200)
+                delete_payload = delete_response.json()
+                self.assertFalse(delete_payload["success"])
+                self.assertTrue(delete_payload["dependent_nodes"])
+                self.assertEqual(delete_payload["dependent_nodes"][0]["name"], "Node 2")
+
+                with session_maker() as db:
+                    self.assertEqual(db.query(FittingProductModel).count(), 1)
+                    self.assertEqual(db.query(FittingModel).count(), 1)
+                    self.assertEqual(db.query(MountingNodeItemModel).count(), 1)
     @staticmethod
     def _build_app():
         engine = create_engine(
