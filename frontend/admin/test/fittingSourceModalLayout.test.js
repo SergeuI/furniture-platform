@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
-test("fitting source modal keeps preview compact and supplier UI conditional", () => {
+test("fitting source modal keeps preview compact and source flow stateful", () => {
   const appPath = fileURLToPath(new URL("../src/App.jsx", import.meta.url));
   const stylesPath = fileURLToPath(new URL("../src/styles.css", import.meta.url));
   const appSource = readFileSync(appPath, "utf8");
@@ -11,16 +11,27 @@ test("fitting source modal keeps preview compact and supplier UI conditional", (
   const modalStart = appSource.indexOf("      {fittingSourceModalOpen ? (");
   const modalEnd = appSource.indexOf("      {selectedProject && projectOverviewOpen ? (", modalStart);
   const modalSource = modalStart >= 0 && modalEnd > modalStart ? appSource.slice(modalStart, modalEnd) : appSource;
+  const sourceModeStart = modalSource.indexOf('fittingCreateMode === "source" ? (');
+  const sourceModeEnd = modalSource.indexOf(') : (', sourceModeStart);
+  const sourceModeSource =
+    sourceModeStart >= 0 && sourceModeEnd > sourceModeStart
+      ? modalSource.slice(sourceModeStart, sourceModeEnd)
+      : modalSource;
 
   assert.match(appSource, /previewFittingSource\(token, \{/);
   assert.match(appSource, /handlePreviewFittingSource/);
+  assert.match(appSource, /setFittingSourcePreview\(null\);\s*setFittingSourcePreviewError\(""\);\s*setFittingSourcePreviewSelectedImageUrl\(""\);/);
+  assert.match(appSource, /const fittingSourcePreviewReady = Boolean\(/);
   assert.match(appSource, /fittingSourcePreviewSelectedImageUrl/);
-  assert.match(appSource, /fitting-source-preview-body/);
-  assert.match(appSource, /fitting-source-preview-media/);
-  assert.match(appSource, /fitting-source-preview-summary/);
-  assert.match(appSource, /fitting-source-preview-row/);
-  assert.match(appSource, /fitting-source-preview-thumbs/);
-  assert.match(appSource, /fitting-source-preview-thumb/);
+  assert.match(appSource, /className=\{\`compact-button\$\{fittingSourcePreviewReady \? " ghost-button" : " primary-button recommended-action"\}\`\}/);
+  assert.match(
+    appSource,
+    /className=\{fittingModalMode === "create" && fittingCreateMode === "source" && !fittingSourcePreviewReady[\s\S]*\?\s*"ghost-button"[\s\S]*:\s*"primary-button recommended-action"\s*\}/,
+  );
+  assert.match(appSource, /disabled=\{loading \|\| \(fittingModalMode === "create" && fittingCreateMode === "source" && !fittingSourcePreviewReady\)\}/);
+  assert.match(appSource, /if \(\s*fittingModalMode === "create"\s*&&\s*fittingCreateMode === "source"\s*&&\s*\(!fittingSourcePreview \|\| fittingSourcePreviewLoading \|\| fittingSourcePreviewError\)\s*\)/);
+  assert.match(appSource, /renderSourceBadge\(getFittingSourceMeta\(fittingSourcePreview \|\| newFittingForm\)\)/);
+  assert.doesNotMatch(appSource, /renderSourceBadge\(getFittingSourceMeta\(fittingSourcePreview \|\| newFittingForm\), true\)/);
   assert.match(appSource, /fittingSourcePreview\?\.supplier \? null : \(/);
   assert.match(appSource, /Оберіть постачальника\./);
   assert.match(appSource, /Зображення не знайдено/);
@@ -31,8 +42,11 @@ test("fitting source modal keeps preview compact and supplier UI conditional", (
   assert.doesNotMatch(modalSource, /canonical/i);
   assert.doesNotMatch(modalSource, /Supplier detected:/);
   assert.doesNotMatch(modalSource, /Постачальник визначений/);
+  assert.match(modalSource, /Supplier and price/);
   assert.match(modalSource, /fittingSourcePreview\?\.supplier \? null : \(/);
   assert.match(modalSource, /Оберіть постачальника\./);
+  assert.doesNotMatch(sourceModeSource, /Постачальник і ціна/);
+  assert.doesNotMatch(sourceModeSource, /Supplier and price/);
 
   assert.match(stylesSource, /\.fitting-source-modal \{\s*display: flex;[\s\S]*max-height: min\(90vh, calc\(100vh - 32px\)\);/);
   assert.match(stylesSource, /\.fitting-source-modal-form \{\s*display: grid;[\s\S]*overflow: auto;/);

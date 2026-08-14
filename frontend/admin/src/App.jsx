@@ -9956,6 +9956,11 @@ export default function App() {
     language,
     t,
   ]);
+  const fittingSourcePreviewReady = Boolean(
+    fittingSourcePreview &&
+    !fittingSourcePreviewLoading &&
+    !fittingSourcePreviewError,
+  );
   const visibleFittingItems = useMemo(
     () => fittingCanonicalCatalogView.visibleCards || [],
     [fittingCanonicalCatalogView],
@@ -18129,7 +18134,11 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
       return;
     }
 
-    if (fittingModalMode === "create" && fittingCreateMode === "source" && !fittingSourcePreview) {
+    if (
+      fittingModalMode === "create" &&
+      fittingCreateMode === "source" &&
+      (!fittingSourcePreview || fittingSourcePreviewLoading || fittingSourcePreviewError)
+    ) {
       setStatus({
         message: language === "en"
           ? "Click \"Get data\" before saving this fitting."
@@ -26272,7 +26281,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   </label>
                   <div className="fitting-source-actions-row fitting-source-span-full">
                     <button
-                      className="ghost-button compact-button"
+                      className={`compact-button${fittingSourcePreviewReady ? " ghost-button" : " primary-button recommended-action"}`}
                       disabled={fittingSourcePreviewLoading || !String(newFittingForm.source_url || "").trim()}
                       onClick={handlePreviewFittingSource}
                       type="button"
@@ -26315,7 +26324,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                                   : "Вставте посилання і натисніть «Отримати дані»."}
                         </p>
                       </div>
-                      {renderSourceBadge(getFittingSourceMeta(fittingSourcePreview || newFittingForm), true)}
+                      {renderSourceBadge(getFittingSourceMeta(fittingSourcePreview || newFittingForm))}
                     </header>
                     {fittingSourcePreview ? (
                       <div className="fitting-source-preview-body">
@@ -26434,187 +26443,185 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
 
               </section>
 
-              <section className="fitting-form-section fitting-source-span-full">
-                <header className="fitting-form-section-header">
-                  <strong>{language === "en" ? "Supplier and price" : "Постачальник і ціна"}</strong>
-                </header>
-                <div className="fitting-form-grid fitting-form-grid-offer">
-                  {fittingCreateMode === "source" ? (
-                    fittingSourcePreview?.supplier ? null : (
-                      <>
-                        <label className="fitting-source-field">
-                          <span>{language === "en" ? "Supplier" : "Постачальник"}</span>
-                          <select
-                            onChange={(event) =>
-                              setNewFittingForm((current) => ({
-                                ...current,
-                                supplier_offer: {
-                                  ...current.supplier_offer,
-                                  supplier_id: event.target.value,
-                                },
-                              }))
-                            }
-                            value={newFittingForm.supplier_offer?.supplier_id || ""}
-                          >
-                            <option value="">
-                              {language === "en" ? "Choose supplier" : "Оберіть постачальника"}
-                            </option>
-                            {fittingSupplierItems.map((supplier) => (
-                              <option key={supplier.id} value={supplier.id}>
-                                {supplier.name}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        <div className="fitting-form-note fitting-source-span-full">
-                          {language === "en" ? "Choose supplier." : "Оберіть постачальника."}
-                        </div>
-                      </>
-                    )
-                  ) : (
-                    <>
-                      <label className="fitting-source-field">
-                        <span>{language === "en" ? "Supplier article" : "Артикул постачальника"}</span>
-                        <input
-                          onChange={(event) =>
-                            setNewFittingForm((current) => ({
-                              ...current,
-                              supplier_offer: {
-                                ...current.supplier_offer,
-                                article: event.target.value,
-                              },
-                            }))
-                          }
-                          type="text"
-                          value={newFittingForm.supplier_offer?.article || ""}
-                        />
-                      </label>
+              {fittingCreateMode === "source" ? (
+                fittingSourcePreview?.supplier ? null : (
+                  <div className="fitting-source-span-full">
+                    <label className="fitting-source-field">
+                      <span>{language === "en" ? "Supplier" : "Постачальник"}</span>
+                      <select
+                        onChange={(event) =>
+                          setNewFittingForm((current) => ({
+                            ...current,
+                            supplier_offer: {
+                              ...current.supplier_offer,
+                              supplier_id: event.target.value,
+                            },
+                          }))
+                        }
+                        value={newFittingForm.supplier_offer?.supplier_id || ""}
+                      >
+                        <option value="">
+                          {language === "en" ? "Choose supplier" : "Оберіть постачальника"}
+                        </option>
+                        {fittingSupplierItems.map((supplier) => (
+                          <option key={supplier.id} value={supplier.id}>
+                            {supplier.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <div className="fitting-form-note fitting-source-help-text">
+                      {language === "en" ? "Choose supplier." : "Оберіть постачальника."}
+                    </div>
+                  </div>
+                )
+              ) : (
+                <section className="fitting-form-section fitting-source-span-full">
+                  <header className="fitting-form-section-header">
+                    <strong>{language === "en" ? "Supplier and price" : "Постачальник і ціна"}</strong>
+                  </header>
+                  <div className="fitting-form-grid fitting-form-grid-offer">
+                    <label className="fitting-source-field">
+                      <span>{language === "en" ? "Supplier article" : "Артикул постачальника"}</span>
+                      <input
+                        onChange={(event) =>
+                          setNewFittingForm((current) => ({
+                            ...current,
+                            supplier_offer: {
+                              ...current.supplier_offer,
+                              article: event.target.value,
+                            },
+                          }))
+                        }
+                        type="text"
+                        value={newFittingForm.supplier_offer?.article || ""}
+                      />
+                    </label>
 
-                      <label className="fitting-source-field">
-                        <span>{language === "en" ? "Price" : "Ціна"}</span>
-                        <input
-                          min="0"
-                          onChange={(event) =>
-                            setNewFittingForm((current) => ({
-                              ...current,
-                              supplier_offer: {
-                                ...current.supplier_offer,
-                                price: event.target.value,
-                              },
-                            }))
-                          }
-                          step="0.01"
-                          type="number"
-                          value={newFittingForm.supplier_offer?.price || ""}
-                        />
-                      </label>
+                    <label className="fitting-source-field">
+                      <span>{language === "en" ? "Price" : "Ціна"}</span>
+                      <input
+                        min="0"
+                        onChange={(event) =>
+                          setNewFittingForm((current) => ({
+                            ...current,
+                            supplier_offer: {
+                              ...current.supplier_offer,
+                              price: event.target.value,
+                            },
+                          }))
+                        }
+                        step="0.01"
+                        type="number"
+                        value={newFittingForm.supplier_offer?.price || ""}
+                      />
+                    </label>
 
-                      <label className="fitting-source-field">
-                        <span>{language === "en" ? "Currency" : "Валюта"}</span>
-                        <input
-                          onChange={(event) =>
-                            setNewFittingForm((current) => ({
-                              ...current,
-                              supplier_offer: {
-                                ...current.supplier_offer,
-                                currency: event.target.value,
-                              },
-                            }))
-                          }
-                          type="text"
-                          value={newFittingForm.supplier_offer?.currency || ""}
-                        />
-                      </label>
+                    <label className="fitting-source-field">
+                      <span>{language === "en" ? "Currency" : "Валюта"}</span>
+                      <input
+                        onChange={(event) =>
+                          setNewFittingForm((current) => ({
+                            ...current,
+                            supplier_offer: {
+                              ...current.supplier_offer,
+                              currency: event.target.value,
+                            },
+                          }))
+                        }
+                        type="text"
+                        value={newFittingForm.supplier_offer?.currency || ""}
+                      />
+                    </label>
 
-                      <label className="fitting-source-field">
-                        <span>{language === "en" ? "Unit" : "Одиниця"}</span>
-                        <input
-                          onChange={(event) =>
-                            setNewFittingForm((current) => ({
-                              ...current,
-                              supplier_offer: {
-                                ...current.supplier_offer,
-                                unit: event.target.value,
-                              },
-                            }))
-                          }
-                          type="text"
-                          value={newFittingForm.supplier_offer?.unit || ""}
-                        />
-                      </label>
+                    <label className="fitting-source-field">
+                      <span>{language === "en" ? "Unit" : "Одиниця"}</span>
+                      <input
+                        onChange={(event) =>
+                          setNewFittingForm((current) => ({
+                            ...current,
+                            supplier_offer: {
+                              ...current.supplier_offer,
+                              unit: event.target.value,
+                            },
+                          }))
+                        }
+                        type="text"
+                        value={newFittingForm.supplier_offer?.unit || ""}
+                      />
+                    </label>
 
-                      <label className="fitting-source-field">
-                        <span>{language === "en" ? "Stock / availability" : "Stock / наявність"}</span>
-                        <input
-                          onChange={(event) =>
-                            setNewFittingForm((current) => ({
-                              ...current,
-                              supplier_offer: {
-                                ...current.supplier_offer,
-                                stock: event.target.value,
-                              },
-                            }))
-                          }
-                          type="text"
-                          value={newFittingForm.supplier_offer?.stock || ""}
-                        />
-                      </label>
+                    <label className="fitting-source-field">
+                      <span>{language === "en" ? "Stock / availability" : "Stock / наявність"}</span>
+                      <input
+                        onChange={(event) =>
+                          setNewFittingForm((current) => ({
+                            ...current,
+                            supplier_offer: {
+                              ...current.supplier_offer,
+                              stock: event.target.value,
+                            },
+                          }))
+                        }
+                        type="text"
+                        value={newFittingForm.supplier_offer?.stock || ""}
+                      />
+                    </label>
 
-                      <label className="fitting-source-field">
-                        <span>{language === "en" ? "Product URL" : "URL товару"}</span>
-                        <input
-                          onChange={(event) =>
-                            setNewFittingForm((current) => ({
-                              ...current,
-                              supplier_offer: {
-                                ...current.supplier_offer,
-                                source_url: event.target.value,
-                              },
-                            }))
-                          }
-                          type="url"
-                          value={newFittingForm.supplier_offer?.source_url || ""}
-                        />
-                      </label>
+                    <label className="fitting-source-field">
+                      <span>{language === "en" ? "Product URL" : "URL товару"}</span>
+                      <input
+                        onChange={(event) =>
+                          setNewFittingForm((current) => ({
+                            ...current,
+                            supplier_offer: {
+                              ...current.supplier_offer,
+                              source_url: event.target.value,
+                            },
+                          }))
+                        }
+                        type="url"
+                        value={newFittingForm.supplier_offer?.source_url || ""}
+                      />
+                    </label>
 
-                      <label className="fitting-source-field">
-                        <span>{language === "en" ? "Priority" : "Пріоритет"}</span>
-                        <input
-                          min="0"
-                          onChange={(event) =>
-                            setNewFittingForm((current) => ({
-                              ...current,
-                              supplier_offer: {
-                                ...current.supplier_offer,
-                                priority: event.target.value,
-                              },
-                            }))
-                          }
-                          type="number"
-                          value={newFittingForm.supplier_offer?.priority ?? 100}
-                        />
-                      </label>
+                    <label className="fitting-source-field">
+                      <span>{language === "en" ? "Priority" : "Пріоритет"}</span>
+                      <input
+                        min="0"
+                        onChange={(event) =>
+                          setNewFittingForm((current) => ({
+                            ...current,
+                            supplier_offer: {
+                              ...current.supplier_offer,
+                              priority: event.target.value,
+                            },
+                          }))
+                        }
+                        type="number"
+                        value={newFittingForm.supplier_offer?.priority ?? 100}
+                      />
+                    </label>
 
-                      <label className="toggle-label fitting-source-field">
-                        <input
-                          checked={newFittingForm.supplier_offer?.is_active !== false}
-                          onChange={(event) =>
-                            setNewFittingForm((current) => ({
-                              ...current,
-                              supplier_offer: {
-                                ...current.supplier_offer,
-                                is_active: event.target.checked,
-                              },
-                            }))
-                          }
-                          type="checkbox"
-                        />
-                        {language === "en" ? "Active offer" : "Активна пропозиція"}
-                      </label>
-                    </>
-                  )}
-                </div>
-              </section>
+                    <label className="toggle-label fitting-source-field">
+                      <input
+                        checked={newFittingForm.supplier_offer?.is_active !== false}
+                        onChange={(event) =>
+                          setNewFittingForm((current) => ({
+                            ...current,
+                            supplier_offer: {
+                              ...current.supplier_offer,
+                              is_active: event.target.checked,
+                            },
+                          }))
+                        }
+                        type="checkbox"
+                      />
+                      {language === "en" ? "Active offer" : "Активна пропозиція"}
+                    </label>
+                  </div>
+                </section>
+              )}
 
               <div className="confirm-actions fitting-source-actions fitting-source-span-full">
                 <button
@@ -26625,7 +26632,13 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                 >
                   {t.cancel}
                 </button>
-                <button className="primary-button" disabled={loading} type="submit">
+                <button
+                  className={fittingModalMode === "create" && fittingCreateMode === "source" && !fittingSourcePreviewReady
+                    ? "ghost-button"
+                    : "primary-button recommended-action"}
+                  disabled={loading || (fittingModalMode === "create" && fittingCreateMode === "source" && !fittingSourcePreviewReady)}
+                  type="submit"
+                >
                   <Plus size={16} />
                   {fittingModalMode === "edit"
                     ? t.fittingSaveChanges
