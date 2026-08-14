@@ -8182,17 +8182,17 @@ tbody tr.selected {
 .fitting-source-modal {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 10px;
   max-height: min(90vh, calc(100vh - 32px));
   max-width: 920px;
   overflow: hidden;
-  padding: 18px 18px 16px;
+  padding: 16px 16px 14px;
   width: min(100%, 920px);
 }
 
 .fitting-source-modal-form {
   display: grid;
-  gap: 12px;
+  gap: 10px;
   grid-template-columns: minmax(0, 1fr);
   min-height: 0;
   overflow: auto;
@@ -8218,7 +8218,7 @@ tbody tr.selected {
 .fitting-source-modal-form .fitting-source-main-grid,
 .fitting-source-modal-form .fitting-form-grid-offer {
   display: grid;
-  gap: 8px;
+  gap: 6px;
   grid-template-columns: minmax(0, 1fr);
 }
 
@@ -8227,9 +8227,9 @@ tbody tr.selected {
 .fitting-source-modal-form .toggle-label {
   align-items: center;
   display: grid;
-  gap: 12px;
+  gap: 10px;
   grid-template-columns: minmax(180px, 220px) minmax(0, 1fr);
-  min-height: 40px;
+  min-height: 36px;
 }
 
 .fitting-source-modal-form .fitting-source-field > span,
@@ -8240,10 +8240,13 @@ tbody tr.selected {
   line-height: 1.35;
 }
 
-.fitting-source-modal-form .fitting-source-field > input:not([type="checkbox"]),
+.fitting-source-modal-form .fitting-source-field > input:not([type="checkbox"]):not([type="file"]),
 .fitting-source-modal-form .fitting-source-field > select,
-.fitting-source-modal-form .fitting-source-url-field > input,
+.fitting-source-modal-form .fitting-source-url-field > input:not([type="file"]),
 .fitting-source-modal-form .toggle-label > input:not([type="checkbox"]) {
+  min-height: 38px;
+  padding-bottom: 7px;
+  padding-top: 7px;
   width: 100%;
 }
 
@@ -8253,6 +8256,14 @@ tbody tr.selected {
   width: 18px;
 }
 
+.fitting-source-modal-form .toggle-label > span {
+  order: 1;
+}
+
+.fitting-source-modal-form .toggle-label > input[type="checkbox"] {
+  order: 2;
+}
+
 .fitting-source-modal-form .fitting-source-url-field {
   grid-column: 1 / -1;
 }
@@ -8260,7 +8271,7 @@ tbody tr.selected {
 .fitting-source-modal-form .fitting-source-help-text {
   color: #5c6875;
   line-height: 1.4;
-  margin-left: 192px;
+  margin-left: 186px;
 }
 
 .fitting-source-modal-form .fitting-form-note {
@@ -8272,8 +8283,8 @@ tbody tr.selected {
   border: 1px solid #dbe1e7;
   border-radius: 10px;
   display: grid;
-  gap: 12px;
-  padding: 12px;
+  gap: 10px;
+  padding: 10px;
 }
 
 .fitting-source-modal-form .fitting-form-section-header strong {
@@ -8283,7 +8294,7 @@ tbody tr.selected {
 }
 
 .fitting-source-modal-form .confirm-actions {
-  margin-top: 4px;
+  margin-top: 2px;
 }
 
 .fitting-source-mode-switch {
@@ -8314,7 +8325,7 @@ tbody tr.selected {
   .fitting-source-modal {
     max-height: calc(100vh - 24px);
     max-width: calc(100vw - 24px);
-    padding: 16px;
+    padding: 14px;
   }
 
   .fitting-source-modal-form,
