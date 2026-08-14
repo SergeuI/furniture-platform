@@ -35,6 +35,8 @@ from schemas.catalog import (
     FittingCatalogListResponseSchema,
     FittingCatalogOperationResponseSchema,
     FittingCatalogUpdateSchema,
+    FittingSourcePreviewRequestSchema,
+    FittingSourcePreviewResponseSchema,
     FittingSupplierOfferInputSchema,
     FittingSupplierListResponseSchema,
     FittingSupplierOfferListResponseSchema,
@@ -349,6 +351,98 @@ async def _parse_fitting_source_or_error(source_url: str) -> tuple[dict | None, 
 def _normalize_fitting_detail_text(value: object | None) -> str | None:
     text = " ".join(str(value or "").split()).strip()
     return text or None
+
+
+def _resolve_fitting_source_supplier(source_site: str | None) -> dict | None:
+    normalized_source_site = _normalize_fitting_detail_text(source_site)
+    if not normalized_source_site:
+        return None
+
+    db = SessionLocal()
+    try:
+        repository = FittingFoundationRepository(db)
+        supplier = repository.get_supplier_by_code(normalized_source_site)
+        if not supplier:
+            return None
+
+        return {
+            "id": int(supplier.id),
+            "code": supplier.code,
+            "name": supplier.name,
+            "is_active": bool(supplier.is_active),
+        }
+    finally:
+        db.close()
+
+
+def _build_fitting_source_preview_payload(
+    metadata: dict,
+    *,
+    source_url: str,
+    city: str | None = None,
+) -> dict:
+    normalized_source_url = _normalize_fitting_detail_text(metadata.get("final_url")) or _normalize_fitting_detail_text(source_url)
+    source_site = _normalize_fitting_detail_text(metadata.get("source_site")) or detect_material_source_site(normalized_source_url)
+    raw_image_urls = metadata.get("image_urls") if isinstance(metadata.get("image_urls"), list) else []
+    normalized_image_urls = [
+        normalized
+        for normalized in (_normalize_fitting_detail_text(item) for item in raw_image_urls)
+        if normalized
+    ]
+    normalized_image_url = _normalize_fitting_detail_text(metadata.get("image_url"))
+    if not normalized_image_url and normalized_image_urls:
+        normalized_image_url = normalized_image_urls[0]
+
+    return {
+        "source": source_site,
+        "source_site": source_site,
+        "source_url": normalized_source_url,
+        "city": _normalize_fitting_detail_text(city),
+        "name": _normalize_fitting_detail_text(metadata.get("name")),
+        "article": _normalize_fitting_detail_text(metadata.get("article")),
+        "brand": _normalize_fitting_detail_text(metadata.get("brand")),
+        "image_url": normalized_image_url,
+        "image_urls": normalized_image_urls,
+        "price": metadata.get("price") if metadata.get("price") is not None else None,
+        "availability": _normalize_fitting_detail_text(metadata.get("availability")),
+        "currency": _normalize_fitting_detail_text(metadata.get("currency")),
+        "unit": _normalize_fitting_detail_text(metadata.get("unit") or metadata.get("normalized_unit")),
+        "supplier": _resolve_fitting_source_supplier(source_site),
+    }
+
+
+@router.post(
+    "/fittings/source-preview",
+    response_model=FittingSourcePreviewResponseSchema,
+)
+async def preview_fitting_source_route(
+    payload: FittingSourcePreviewRequestSchema,
+    current_user = Depends(require_catalog_reader),
+):
+    _ensure_fitting_feature_access(current_user, "fittings.create")
+
+    source_url = (payload.source_url or "").strip()
+    if not source_url:
+        return {
+            "success": False,
+            "error": "Source URL is required",
+        }
+
+    metadata, error_response = await _parse_fitting_source_or_error(source_url)
+    if error_response or not metadata:
+        return error_response or {
+            "success": False,
+            "error": "Не вдалося отримати дані за посиланням. Перевірте посилання або спробуйте пізніше.",
+        }
+
+    return {
+        "success": True,
+        **_build_fitting_source_preview_payload(
+            metadata,
+            source_url=source_url,
+            city=payload.city,
+        ),
+    }
 
 
 def _safe_parse_source_payload_json(value: object | None) -> dict[str, object]:

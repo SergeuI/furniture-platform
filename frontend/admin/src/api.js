@@ -351,6 +351,14 @@ export async function createFitting(token, payload) {
   });
 }
 
+export async function previewFittingSource(token, payload) {
+  return request("/catalog/fittings/source-preview", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function updateFitting(token, itemId, payload) {
   return request(`/catalog/fittings/${itemId}`, {
     method: "PUT",

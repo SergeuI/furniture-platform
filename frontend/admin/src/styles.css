@@ -8274,6 +8274,28 @@ tbody tr.selected {
   margin-left: 186px;
 }
 
+.fitting-source-modal-form .fitting-source-actions-row {
+  align-items: center;
+  display: grid;
+  gap: 10px 12px;
+  grid-template-columns: max-content minmax(0, 1fr);
+}
+
+.fitting-source-modal-form .fitting-source-actions-row .fitting-source-help-text {
+  margin-left: 0;
+}
+
+.fitting-source-modal-form .fitting-source-readonly {
+  align-items: center;
+}
+
+.fitting-source-modal-form .fitting-source-readonly strong {
+  color: #24343d;
+  font-size: 13px;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
 .fitting-source-modal-form .fitting-source-preview {
   background: #ffffff;
   border: 1px solid #dbe1e7;
@@ -8362,6 +8384,12 @@ tbody tr.selected {
   font-size: 12px;
   padding: 12px;
   text-align: center;
+}
+
+.fitting-source-modal-form .fitting-source-preview-empty {
+  background: #f8fafb;
+  border: 1px dashed #dbe1e7;
+  border-radius: 8px;
 }
 
 .fitting-source-modal-form .fitting-form-note {

@@ -211,6 +211,7 @@ import {
   createMountingNode,
   createMaterial,
   createFitting,
+  previewFittingSource,
   createFittingHoleTemplate,
   createFittingHoleBundle,
   createFittingHolePoint,
@@ -7453,6 +7454,9 @@ export default function App() {
   const [editingFittingItem, setEditingFittingItem] = useState(null);
   const [fittingSupplierItems, setFittingSupplierItems] = useState([]);
   const [fittingSupplierListLoading, setFittingSupplierListLoading] = useState(false);
+  const [fittingSourcePreview, setFittingSourcePreview] = useState(null);
+  const [fittingSourcePreviewLoading, setFittingSourcePreviewLoading] = useState(false);
+  const [fittingSourcePreviewError, setFittingSourcePreviewError] = useState("");
   const [fittingColumnVisibility, setFittingColumnVisibility] = useState({
     price: true,
     stock: true,
@@ -17881,6 +17885,9 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
     setEditingFittingItem(null);
     setFittingCreateMode("manual");
     setNewFittingForm(DEFAULT_FITTING_FORM);
+    setFittingSourcePreview(null);
+    setFittingSourcePreviewLoading(false);
+    setFittingSourcePreviewError("");
   }
 
   function openCreateFittingModal(mode = "manual") {
@@ -17889,6 +17896,9 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
     setFittingModalMode("create");
     setEditingFittingItem(null);
     setFittingCreateMode(mode);
+    setFittingSourcePreview(null);
+    setFittingSourcePreviewLoading(false);
+    setFittingSourcePreviewError("");
     setNewFittingForm(
       createFittingFormDraft(null, {
         city: activeCity || "",
@@ -17937,8 +17947,99 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
     setFittingModalMode("edit");
     setEditingFittingItem(nextItem);
     setFittingCreateMode(nextItem?.source_url ? "source" : "manual");
+    setFittingSourcePreview(null);
+    setFittingSourcePreviewLoading(false);
+    setFittingSourcePreviewError("");
     setNewFittingForm(createFittingFormDraft(nextItem, { city: activeCity || "" }));
     setFittingSourceModalOpen(true);
+  }
+
+  async function handlePreviewFittingSource() {
+    if (!token || fittingSourcePreviewLoading) {
+      return;
+    }
+
+    const sourceUrl = String(newFittingForm.source_url || "").trim();
+    if (!sourceUrl) {
+      setFittingSourcePreviewError(t.fittingSourceUrlPrompt);
+      setFittingSourcePreview(null);
+      return;
+    }
+
+    setFittingSourcePreviewLoading(true);
+    setFittingSourcePreviewError("");
+
+    const result = await previewFittingSource(token, {
+      source_url: sourceUrl,
+      city: String(newFittingForm.city || activeCity || "").trim() || null,
+    });
+
+    setFittingSourcePreviewLoading(false);
+
+    if (!result.success) {
+      setFittingSourcePreview(null);
+      setFittingSourcePreviewError(result.error || t.unableToLoadCatalog);
+      return;
+    }
+
+    const normalizedImageUrl = String(result.image_url || "").trim();
+    const normalizedSourceUrl = String(result.source_url || sourceUrl).trim();
+    const normalizedSourceSite = String(result.source_site || result.source || "").trim();
+    const normalizedSupplierId = String(result.supplier?.id || "").trim();
+    const normalizedSupplierName = String(result.supplier?.name || "").trim();
+    const normalizedCurrency = String(result.currency || "").trim();
+    const normalizedUnit = String(result.unit || "").trim();
+    const normalizedAvailability = String(result.availability || "").trim();
+    const normalizedPrice = result.price === null || result.price === undefined || result.price === ""
+      ? ""
+      : String(result.price);
+
+    setFittingSourcePreview({
+      ...result,
+      image_url: normalizedImageUrl,
+      image_urls: Array.isArray(result.image_urls) ? result.image_urls : [],
+      source: normalizedSourceSite,
+      source_site: normalizedSourceSite,
+      source_url: normalizedSourceUrl,
+    });
+
+    setNewFittingForm((current) => ({
+      ...current,
+      article: String(result.article || "").trim(),
+      brand: String(result.brand || "").trim(),
+      image_url: normalizedImageUrl,
+      name: String(result.name || "").trim(),
+      price: normalizedPrice,
+      source_url: normalizedSourceUrl,
+      stock: normalizedAvailability,
+      supplier_offer: {
+        ...current.supplier_offer,
+        supplier_id: normalizedSupplierId || current.supplier_offer?.supplier_id || "",
+        article: String(result.article || "").trim(),
+        source_url: normalizedSourceUrl,
+        price: normalizedPrice,
+        currency: normalizedCurrency,
+        unit: normalizedUnit,
+        stock: normalizedAvailability,
+        is_active: current.supplier_offer?.is_active !== false,
+      },
+    }));
+
+    if (normalizedSupplierId && normalizedSupplierName) {
+      setFittingSupplierItems((current) =>
+        current.some((supplier) => String(supplier.id) === normalizedSupplierId)
+          ? current
+          : [
+              {
+                id: Number(normalizedSupplierId),
+                code: normalizedSourceSite,
+                name: normalizedSupplierName,
+                is_active: Boolean(result.supplier?.is_active),
+              },
+              ...current,
+            ],
+      );
+    }
   }
 
   async function handleCreateFitting(event) {
@@ -18003,6 +18104,16 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
 
     if (!payload.source_url && !payload.name) {
       setStatus({ message: t.fittingNamePrompt, tone: "error" });
+      return;
+    }
+
+    if (fittingModalMode === "create" && fittingCreateMode === "source" && !fittingSourcePreview) {
+      setStatus({
+        message: language === "en"
+          ? "Click \"Get data\" before saving this fitting."
+          : "Спочатку натисніть «Отримати дані», а потім зберігайте фурнітуру.",
+        tone: "error",
+      });
       return;
     }
 
@@ -24006,7 +24117,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                 </label>
                 <button
                   className="primary-button"
-                  disabled={loading}
+                  disabled={loading || (fittingModalMode === "create" && fittingCreateMode === "source" && (!fittingSourcePreview || fittingSourcePreviewLoading))}
                   type="submit"
                 >
                   <Plus size={18} />
@@ -25985,24 +26096,34 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                 <div className="fitting-source-mode-switch fitting-source-span-full">
                   <button
                     className={`ghost-button compact-button${fittingCreateMode === "manual" ? " active" : ""}`}
-                    onClick={() => setFittingCreateMode("manual")}
+                    onClick={() => {
+                      setFittingCreateMode("manual");
+                      setFittingSourcePreview(null);
+                      setFittingSourcePreviewLoading(false);
+                      setFittingSourcePreviewError("");
+                    }}
                     type="button"
                   >
-                    Вручну
+                    {language === "en" ? "Manual" : "Вручну"}
                   </button>
                   <button
                     className={`ghost-button compact-button${fittingCreateMode === "source" ? " active" : ""}`}
-                    onClick={() => setFittingCreateMode("source")}
+                    onClick={() => {
+                      setFittingCreateMode("source");
+                      setFittingSourcePreview(null);
+                      setFittingSourcePreviewLoading(false);
+                      setFittingSourcePreviewError("");
+                    }}
                     type="button"
                   >
-                    Через посилання
+                    {language === "en" ? "From link" : "Через посилання"}
                   </button>
                 </div>
               ) : null}
 
               <section className="fitting-form-section fitting-source-span-full">
                 <header className="fitting-form-section-header">
-                  <strong>Основні дані</strong>
+                  <strong>{language === "en" ? "Main data" : "Основні дані"}</strong>
                 </header>
 
               <label className="fitting-source-field">
@@ -26031,39 +26152,43 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                 </select>
               </label>
 
-              <label className="fitting-source-field">
-                <span>{t.brand}</span>
-                <input
-                  onChange={(event) =>
-                    setNewFittingForm((current) => ({ ...current, brand: event.target.value }))
-                  }
-                  type="text"
-                  value={newFittingForm.brand}
-                />
-              </label>
+              {fittingCreateMode === "manual" ? (
+                <>
+                  <label className="fitting-source-field">
+                    <span>{t.brand}</span>
+                    <input
+                      onChange={(event) =>
+                        setNewFittingForm((current) => ({ ...current, brand: event.target.value }))
+                      }
+                      type="text"
+                      value={newFittingForm.brand}
+                    />
+                  </label>
 
-              <label className="fitting-source-field">
-                <span>{t.fittingStock}</span>
-                <input
-                  onChange={(event) =>
-                    setNewFittingForm((current) => ({ ...current, stock: event.target.value }))
-                  }
-                  type="text"
-                  value={newFittingForm.stock}
-                />
-              </label>
+                  <label className="fitting-source-field">
+                    <span>{t.fittingStock}</span>
+                    <input
+                      onChange={(event) =>
+                        setNewFittingForm((current) => ({ ...current, stock: event.target.value }))
+                      }
+                      type="text"
+                      value={newFittingForm.stock}
+                    />
+                  </label>
 
-              <label className="fitting-source-field">
-                <span>{t.fittingSortOrder}</span>
-                <input
-                  min="0"
-                  onChange={(event) =>
-                    setNewFittingForm((current) => ({ ...current, sort_order: event.target.value }))
-                  }
-                  type="number"
-                  value={newFittingForm.sort_order}
-                />
-              </label>
+                  <label className="fitting-source-field">
+                    <span>{t.fittingSortOrder}</span>
+                    <input
+                      min="0"
+                      onChange={(event) =>
+                        setNewFittingForm((current) => ({ ...current, sort_order: event.target.value }))
+                      }
+                      type="number"
+                      value={newFittingForm.sort_order}
+                    />
+                  </label>
+                </>
+              ) : null}
 
               <label className="toggle-label fitting-source-field">
                 <input
@@ -26110,49 +26235,100 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                     <input
                       autoFocus
                       onChange={(event) =>
-                        setNewFittingForm((current) => ({ ...current, source_url: event.target.value }))
+                        {
+                          const nextValue = event.target.value;
+                          setNewFittingForm((current) => ({ ...current, source_url: nextValue }));
+                          setFittingSourcePreview(null);
+                          setFittingSourcePreviewError("");
+                        }
                       }
                       placeholder="https://..."
                       type="url"
                       value={newFittingForm.source_url}
                     />
                   </label>
-                  <div className="fitting-form-note fitting-source-help-text fitting-source-span-full">
-                    {t.fittingAutoCityNote}
+                  <div className="fitting-source-actions-row fitting-source-span-full">
+                    <button
+                      className="ghost-button compact-button"
+                      disabled={fittingSourcePreviewLoading || !String(newFittingForm.source_url || "").trim()}
+                      onClick={handlePreviewFittingSource}
+                      type="button"
+                    >
+                      {language === "en" ? "Get data" : "Отримати дані"}
+                    </button>
+                    <div className="fitting-form-note fitting-source-help-text">
+                      {t.fittingAutoCityNote}
+                    </div>
                   </div>
                   <section className="fitting-source-preview fitting-source-span-full">
                     <header className="fitting-source-preview-header">
                       <div>
-                        <strong>{language === "en" ? "Found" : "????????"}</strong>
+                        <strong>
+                          {fittingSourcePreviewLoading
+                            ? language === "en"
+                              ? "Loading"
+                              : "Отримуємо дані"
+                            : fittingSourcePreview
+                              ? language === "en"
+                                ? "Found"
+                                : "Знайдено"
+                              : language === "en"
+                                ? "Preview"
+                                : "Попередній перегляд"}
+                        </strong>
                         <p>
-                          {language === "en"
-                            ? "Read-only summary before saving."
-                            : "???????? ????? ???????????."}
+                          {fittingSourcePreviewLoading
+                            ? language === "en"
+                              ? "Reading data from the source page."
+                              : "Зчитуємо дані з джерела."
+                            : fittingSourcePreviewError
+                              ? fittingSourcePreviewError
+                              : fittingSourcePreview
+                                ? language === "en"
+                                  ? "Read-only summary before saving."
+                                  : "Лише перегляд. Дані ще не збережені."
+                                : language === "en"
+                                  ? "Paste a link and click \"Get data\"."
+                                  : "Вставте посилання і натисніть «Отримати дані»."}
                         </p>
                       </div>
-                      {renderSourceBadge(getMaterialSourceMeta(newFittingForm, t), true)}
+                      {renderSourceBadge(getFittingSourceMeta(fittingSourcePreview || newFittingForm), true)}
                     </header>
-                    <div className="fitting-source-preview-grid">
-                      {fittingSourcePreviewItems.map((field) => (
-                        <div
-                          className={`fitting-source-preview-item${field.kind === "image" ? " is-image" : ""}`}
-                          key={field.key}
-                        >
-                          <span>{field.label}</span>
-                          {field.kind === "image" ? (
-                            <div className="fitting-source-preview-image">
-                              {String(newFittingForm.image_url || "").trim() ? (
-                                <img alt={t.fittingImage} src={newFittingForm.image_url} />
-                              ) : (
-                                <div className="fitting-source-preview-placeholder">{t.notSet}</div>
-                              )}
-                            </div>
-                          ) : (
-                            <strong>{field.value}</strong>
-                          )}
-                        </div>
-                      ))}
-                    </div>
+                    {fittingSourcePreview ? (
+                      <div className="fitting-source-preview-grid">
+                        {fittingSourcePreviewItems.map((field) => (
+                          <div
+                            className={`fitting-source-preview-item${field.kind === "image" ? " is-image" : ""}`}
+                            key={field.key}
+                          >
+                            <span>{field.label}</span>
+                            {field.kind === "image" ? (
+                              <div className="fitting-source-preview-image">
+                                {String(newFittingForm.image_url || "").trim() ? (
+                                  <img alt={t.fittingImage} src={newFittingForm.image_url} />
+                                ) : (
+                                  <div className="fitting-source-preview-placeholder">{t.notSet}</div>
+                                )}
+                              </div>
+                            ) : (
+                              <strong>{field.value}</strong>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="fitting-source-preview-placeholder fitting-source-preview-empty">
+                        {fittingSourcePreviewLoading
+                          ? language === "en"
+                            ? "Loading preview..."
+                            : "Завантажуємо preview..."
+                          : fittingSourcePreviewError
+                            ? fittingSourcePreviewError
+                            : language === "en"
+                              ? "Paste a link and click \"Get data\"."
+                              : "Вставте посилання і натисніть «Отримати дані»."}
+                      </div>
+                    )}
                   </section>
                 </>
               ) : (
@@ -26211,42 +26387,55 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
 
               <section className="fitting-form-section fitting-source-span-full">
                 <header className="fitting-form-section-header">
-                  <strong>Постачальник і ціна</strong>
+                  <strong>{language === "en" ? "Supplier and price" : "Постачальник і ціна"}</strong>
                 </header>
                 <div className="fitting-form-grid fitting-form-grid-offer">
-                  <label className="fitting-source-field">
-                    <span>????????????</span>
-                    <select
-                      onChange={(event) =>
-                        setNewFittingForm((current) => ({
-                          ...current,
-                          supplier_offer: {
-                            ...current.supplier_offer,
-                            supplier_id: event.target.value,
-                          },
-                        }))
-                      }
-                      value={newFittingForm.supplier_offer?.supplier_id || ""}
-                    >
-                      <option value="">?? ?????????? offer</option>
-                      {fittingSupplierItems.map((supplier) => (
-                        <option key={supplier.id} value={supplier.id}>
-                          {supplier.name}
+                  {fittingCreateMode === "source" && fittingSourcePreview?.supplier ? (
+                    <div className="fitting-source-field fitting-source-readonly">
+                      <span>{language === "en" ? "Supplier" : "Постачальник"}</span>
+                      <strong>{fittingSourcePreview.supplier.name}</strong>
+                    </div>
+                  ) : (
+                    <label className="fitting-source-field">
+                      <span>{language === "en" ? "Supplier" : "Постачальник"}</span>
+                      <select
+                        onChange={(event) =>
+                          setNewFittingForm((current) => ({
+                            ...current,
+                            supplier_offer: {
+                              ...current.supplier_offer,
+                              supplier_id: event.target.value,
+                            },
+                          }))
+                        }
+                        value={newFittingForm.supplier_offer?.supplier_id || ""}
+                      >
+                        <option value="">
+                          {language === "en" ? "Choose supplier" : "Оберіть постачальника"}
                         </option>
-                      ))}
-                    </select>
-                  </label>
+                        {fittingSupplierItems.map((supplier) => (
+                          <option key={supplier.id} value={supplier.id}>
+                            {supplier.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
 
                   {fittingCreateMode === "source" ? (
                     <div className="fitting-form-note fitting-source-span-full">
-                      {language === "en"
-                        ? "Choose the supplier here. Other source values are shown in the preview above."
-                        : "???????????? ??????????? ???. ????? ??????? ? ??????? ???????? ? preview ????."}
+                      {fittingSourcePreview?.supplier
+                        ? language === "en"
+                          ? "Supplier mapping was detected automatically."
+                          : "Постачальник визначений автоматично."
+                        : language === "en"
+                          ? "Choose the supplier here if the source does not provide one."
+                          : "Оберіть постачальника вручну, якщо джерело його не підказало."}
                     </div>
                   ) : (
                     <>
                       <label className="fitting-source-field">
-                        <span>??????? ?????????????</span>
+                        <span>{language === "en" ? "Supplier article" : "Артикул постачальника"}</span>
                         <input
                           onChange={(event) =>
                             setNewFittingForm((current) => ({
@@ -26263,7 +26452,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                       </label>
 
                       <label className="fitting-source-field">
-                        <span>????</span>
+                        <span>{language === "en" ? "Price" : "Ціна"}</span>
                         <input
                           min="0"
                           onChange={(event) =>
@@ -26282,7 +26471,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                       </label>
 
                       <label className="fitting-source-field">
-                        <span>??????</span>
+                        <span>{language === "en" ? "Currency" : "Валюта"}</span>
                         <input
                           onChange={(event) =>
                             setNewFittingForm((current) => ({
@@ -26299,7 +26488,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                       </label>
 
                       <label className="fitting-source-field">
-                        <span>???????</span>
+                        <span>{language === "en" ? "Unit" : "Одиниця"}</span>
                         <input
                           onChange={(event) =>
                             setNewFittingForm((current) => ({
@@ -26316,7 +26505,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                       </label>
 
                       <label className="fitting-source-field">
-                        <span>Stock / ?????????</span>
+                        <span>{language === "en" ? "Stock / availability" : "Stock / наявність"}</span>
                         <input
                           onChange={(event) =>
                             setNewFittingForm((current) => ({
@@ -26333,7 +26522,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                       </label>
 
                       <label className="fitting-source-field">
-                        <span>URL ??????</span>
+                        <span>{language === "en" ? "Product URL" : "URL товару"}</span>
                         <input
                           onChange={(event) =>
                             setNewFittingForm((current) => ({
@@ -26350,7 +26539,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                       </label>
 
                       <label className="fitting-source-field">
-                        <span>?????????</span>
+                        <span>{language === "en" ? "Priority" : "Пріоритет"}</span>
                         <input
                           min="0"
                           onChange={(event) =>
@@ -26381,15 +26570,19 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                           }
                           type="checkbox"
                         />
-                        ??????? ??????????
+                        {language === "en" ? "Active offer" : "Активна пропозиція"}
                       </label>
                     </>
                   )}
                 </div>
                 <div className="fitting-form-note fitting-source-span-full">
                   {fittingSupplierListLoading
-                    ? "Завантажуємо suppliers..."
-                    : "Якщо блок порожній, буде створено лише canonical fitting."}
+                    ? language === "en"
+                      ? "Loading suppliers..."
+                      : "Завантажуємо постачальників..."
+                    : language === "en"
+                      ? "If this block is empty, only the canonical fitting will be created."
+                      : "Якщо блок порожній, буде створено лише canonical фурнітуру."}
                 </div>
               </section>
 
@@ -26407,8 +26600,12 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   {fittingModalMode === "edit"
                     ? t.fittingSaveChanges
                     : fittingCreateMode === "source"
-                      ? "Додати з посилання"
-                      : "Додати фурнітуру"}
+                      ? language === "en"
+                        ? "Add from link"
+                        : "Додати з посилання"
+                      : language === "en"
+                        ? "Add fitting"
+                        : "Додати фурнітуру"}
                 </button>
               </div>
             </form>
