@@ -333,7 +333,9 @@ def ensure_unified_legacy_schema(
 
 def migrate_legacy_sqlite_to_unified_db(
     target_db_path: str = DEFAULT_DB_PATH,
-    legacy_db_path: str = LEGACY_DB_PATH
+    legacy_db_path: str = LEGACY_DB_PATH,
+    *,
+    copy_fittings: bool = True,
 ) -> None:
 
     if not os.path.exists(legacy_db_path):
@@ -390,12 +392,6 @@ def migrate_legacy_sqlite_to_unified_db(
             "INSERT OR IGNORE",
         ),
         (
-            "fittings",
-            "fittings",
-            ["id", "city", "code", "article", "name", "price", "stock", "updated_at"],
-            "INSERT OR IGNORE",
-        ),
-        (
             TELEGRAM_PROJECTS_TABLE,
             "projects",
             ["id", "project_id", "telegram_id", "params_json", "project_json", "cutting_json", "created_at"],
@@ -438,6 +434,16 @@ def migrate_legacy_sqlite_to_unified_db(
             "INSERT OR IGNORE",
         ),
     ]
+
+    if copy_fittings:
+        mappings.append(
+            (
+                "fittings",
+                "fittings",
+                ["id", "city", "code", "article", "name", "price", "stock", "updated_at"],
+                "INSERT OR IGNORE",
+            ),
+        )
 
     for target_table, source_table, columns, insert_mode in mappings:
 

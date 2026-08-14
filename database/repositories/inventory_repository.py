@@ -11,6 +11,7 @@ from database.models.fitting import (
     FittingModel,
     FittingHolePointModel,
     FittingHoleTemplateModel,
+    FittingProductModel,
     FittingSupplierOfferModel,
     SupplierModel,
 )
@@ -661,6 +662,69 @@ def _has_meaningful_supplier_offer_data(supplier_offer: dict | None) -> bool:
             "stock",
         )
     )
+
+
+def _resolve_or_create_technical_product(
+    db,
+    technical_product: dict | None,
+) -> FittingProductModel | None:
+
+    if not technical_product:
+        return None
+
+    normalized_name = str(technical_product.get("name") or "").strip()
+    normalized_article = _normalize_fitting_value(technical_product.get("article"))
+    normalized_code = _normalize_fitting_value(technical_product.get("code"))
+    normalized_brand = _normalize_fitting_value(technical_product.get("brand"))
+    normalized_description = _normalize_fitting_value(technical_product.get("description"))
+    manufacturer_id = technical_product.get("manufacturer_id")
+    series_id = technical_product.get("series_id")
+    category_id = technical_product.get("category_id")
+    is_active = technical_product.get("is_active")
+
+    if normalized_article:
+        existing = (
+            db.query(FittingProductModel)
+            .filter(FittingProductModel.article == normalized_article)
+            .first()
+        )
+        if existing:
+            if normalized_code and not _normalize_fitting_value(existing.code):
+                existing.code = normalized_code
+            if normalized_name and not _normalize_fitting_value(existing.name):
+                existing.name = normalized_name
+            if normalized_brand and not _normalize_fitting_value(existing.brand):
+                existing.brand = normalized_brand
+            if normalized_description and not _normalize_fitting_value(existing.description):
+                existing.description = normalized_description
+            if manufacturer_id is not None and existing.manufacturer_id is None:
+                existing.manufacturer_id = int(manufacturer_id)
+            if series_id is not None and existing.series_id is None:
+                existing.series_id = int(series_id)
+            if category_id is not None and existing.category_id is None:
+                existing.category_id = int(category_id)
+            if is_active is not None:
+                existing.is_active = bool(is_active)
+            db.flush()
+            return existing
+
+    if not normalized_name and not normalized_article and not normalized_code:
+        return None
+
+    product = FittingProductModel(
+        article=normalized_article,
+        code=normalized_code,
+        name=normalized_name or normalized_article or normalized_code or "Technical product",
+        brand=normalized_brand,
+        description=normalized_description,
+        manufacturer_id=int(manufacturer_id) if manufacturer_id is not None else None,
+        series_id=int(series_id) if series_id is not None else None,
+        category_id=int(category_id) if category_id is not None else None,
+        is_active=True if is_active is None else bool(is_active),
+    )
+    db.add(product)
+    db.flush()
+    return product
 
 
 def _serialize_fitting_image_metadata(item: FittingImageModel) -> dict:
@@ -1772,6 +1836,7 @@ def create_fitting(
     is_system: bool,
     is_active: bool,
     sort_order: int = 0,
+    technical_product: dict | None = None,
     supplier_offer: dict | None = None,
     prepared_gallery_images: Sequence[PreparedFittingGalleryImage] | None = None,
 ) -> dict:
@@ -1820,6 +1885,17 @@ def create_fitting(
         )
         db.add(item)
         db.flush()
+
+        technical_product_item = _resolve_or_create_technical_product(
+            db,
+            technical_product,
+        )
+        if technical_product and technical_product_item is None:
+            raise ValueError("Unable to create canonical fitting product")
+
+        if technical_product_item is not None:
+            item.technical_product_id = technical_product_item.id
+            db.flush()
 
         normalized_supplier_offer = _normalize_fitting_supplier_offer_payload(supplier_offer)
         if normalized_supplier_offer and _has_meaningful_supplier_offer_data(normalized_supplier_offer):

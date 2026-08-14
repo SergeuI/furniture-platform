@@ -924,7 +924,7 @@ def init_database():
     )
 
     ensure_unified_legacy_schema()
-    migrate_legacy_sqlite_to_unified_db()
+    migrate_legacy_sqlite_to_unified_db(copy_fittings=False)
 
     upgrade_sqlite_schema()
     with engine.begin() as connection:

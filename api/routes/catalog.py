@@ -3061,12 +3061,14 @@ async def create_fitting_route(
     effective_image_url = payload.image_url
     effective_source_url = (payload.source_url or "").strip() or None
     effective_article = (payload.article or "").strip() or None
+    effective_code = (payload.code or "").strip() or None
     effective_price = payload.price
     effective_stock = (payload.stock or "").strip() or None
     effective_source = None
     effective_brand = None
     effective_description = None
     source_payload: dict | None = None
+    technical_product_payload: dict | None = None
     prepared_gallery_images = None
     selected_city = (payload.city or current_user.city or "").strip() or None
     if not effective_source_url and _looks_like_url(effective_name):
@@ -3095,6 +3097,17 @@ async def create_fitting_route(
                 "source_url": effective_source_url,
                 "selected_city": selected_city,
                 "parsed_item": metadata,
+            }
+            technical_product_payload = {
+                "article": effective_article,
+                "code": effective_code or effective_article,
+                "name": effective_name or effective_article or effective_code or "",
+                "brand": effective_brand,
+                "description": effective_description,
+                "manufacturer_id": None,
+                "series_id": None,
+                "category_id": None,
+                "is_active": bool(payload.is_active),
             }
 
             metadata_image_urls = metadata.get("image_urls") or []
@@ -3153,6 +3166,17 @@ async def create_fitting_route(
                 "source_url": effective_source_url,
                 "selected_city": selected_city,
                 "parsed_item": metadata,
+            }
+            technical_product_payload = {
+                "article": effective_article,
+                "code": effective_code or effective_article,
+                "name": effective_name or effective_article or effective_code or "",
+                "brand": effective_brand,
+                "description": effective_description,
+                "manufacturer_id": None,
+                "series_id": None,
+                "category_id": None,
+                "is_active": bool(payload.is_active),
             }
             metadata_image_urls = metadata.get("image_urls") or []
 
@@ -3213,7 +3237,7 @@ async def create_fitting_route(
     try:
         item = create_fitting(
             city=selected_city,
-            code=payload.code,
+            code=effective_code,
             article=effective_article,
             name=effective_name,
             description=effective_description,
@@ -3230,6 +3254,7 @@ async def create_fitting_route(
             is_system=is_system,
             is_active=payload.is_active,
             sort_order=payload.sort_order,
+            technical_product=technical_product_payload,
             supplier_offer=payload.supplier_offer.model_dump() if payload.supplier_offer else None,
             prepared_gallery_images=prepared_gallery_images,
         )
