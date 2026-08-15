@@ -26,11 +26,30 @@ class FittingSourceCreateTests(unittest.TestCase):
             session_factory = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
             with patch.object(inventory_repository, "SessionLocal", session_factory):
+                with session_factory() as session:
+                    session.add_all(
+                        [
+                            fitting_models.FittingManufacturerModel(
+                                code="hettich",
+                                name="Hettich",
+                                is_active=True,
+                                sort_order=1,
+                            ),
+                            fitting_models.FittingCategoryModel(
+                                code="connectors_fasteners",
+                                name="Connectors and fasteners",
+                                is_active=True,
+                                sort_order=1,
+                            ),
+                        ]
+                    )
+                    session.commit()
+
                 created = inventory_repository.create_fitting(
                     city="kyiv",
                     code="SRC-1",
                     article="84628",
-                    name="Стяжка VB 35/18, біла (9116929) Hettich",
+                    name="Дюбель під стяжку VB DU 321 (9021847) Hettich",
                     description="Parsed from source",
                     price=12.5,
                     stock="in stock",
@@ -48,7 +67,7 @@ class FittingSourceCreateTests(unittest.TestCase):
                     technical_product={
                         "article": "84628",
                         "code": "SRC-1",
-                        "name": "Стяжка VB 35/18, біла (9116929) Hettich",
+                        "name": "Дюбель під стяжку VB DU 321 (9021847) Hettich",
                         "brand": "Hettich",
                         "description": "Parsed from source",
                         "manufacturer_id": None,
@@ -61,7 +80,10 @@ class FittingSourceCreateTests(unittest.TestCase):
 
             with session_factory() as session:
                 product_rows = session.execute(
-                    text("SELECT id, article, code, name, brand, is_active FROM fitting_products"),
+                    text(
+                        "SELECT id, article, code, name, brand, manufacturer_id, category_id, is_active "
+                        "FROM fitting_products",
+                    ),
                 ).fetchall()
                 fitting_rows = session.execute(
                     text("SELECT id, article, name, technical_product_id, source_url, is_system FROM fittings"),
@@ -69,10 +91,11 @@ class FittingSourceCreateTests(unittest.TestCase):
 
             self.assertEqual(len(product_rows), 1)
             self.assertEqual(product_rows[0][1], "84628")
-            self.assertEqual(product_rows[0][3], "Стяжка VB 35/18, біла (9116929) Hettich")
+            self.assertEqual(product_rows[0][3], "Дюбель під стяжку VB DU 321 (9021847) Hettich")
+            self.assertEqual(product_rows[0][4], "Hettich")
             self.assertEqual(len(fitting_rows), 1)
             self.assertEqual(fitting_rows[0][1], "84628")
-            self.assertEqual(fitting_rows[0][2], "Стяжка VB 35/18, біла (9116929) Hettich")
+            self.assertEqual(fitting_rows[0][2], "Дюбель під стяжку VB DU 321 (9021847) Hettich")
             self.assertEqual(fitting_rows[0][3], product_rows[0][0])
             self.assertEqual(fitting_rows[0][4], "https://example.com/item")
             self.assertTrue(fitting_rows[0][5])

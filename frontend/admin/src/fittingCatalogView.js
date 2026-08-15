@@ -174,6 +174,17 @@ export function getCanonicalFittingsCountLabel({
   return `${count} ${count === 1 ? "product" : "products"}`;
 }
 
+export function getCanonicalFittingsOverviewCountLabel({
+  allCards = [],
+  language = "uk",
+} = {}) {
+  return getCanonicalFittingsCountLabel({
+    activeCategoryCode: "",
+    allCards,
+    language,
+  });
+}
+
 export function buildCanonicalFittingCatalogView({
   activeCategoryCode = "",
   activeCity = "",

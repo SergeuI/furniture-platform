@@ -100,14 +100,14 @@ class FittingCatalogViewTests(unittest.TestCase):
 
         script = (
             "import { buildCanonicalFittingCatalogView, getFittingCatalogBodyNavItems, canRenderCanonicalFittingOwnershipBadge } from './frontend/admin/src/fittingCatalogView.js';"
-            "import { getCanonicalFittingsCountLabel, getCanonicalFittingOwnershipSource } from './frontend/admin/src/fittingCatalogView.js';"
+            "import { getCanonicalFittingsCountLabel, getCanonicalFittingsOverviewCountLabel, getCanonicalFittingOwnershipSource } from './frontend/admin/src/fittingCatalogView.js';"
             "import { getFittingOwnershipTypeLabel } from './frontend/admin/src/fittingEntitlements.js';"
             "const payload = JSON.parse(process.argv[1]);"
             "const nav = getFittingCatalogBodyNavItems(payload.language);"
             "const view = buildCanonicalFittingCatalogView(payload.view);"
             "const uncategorizedView = buildCanonicalFittingCatalogView({ ...payload.view, activeCategoryCode: 'uncategorized' });"
             "const ownershipSource = getCanonicalFittingOwnershipSource(view.visibleCards[0]);"
-            "const overviewCountLabel = getCanonicalFittingsCountLabel({ activeCategoryCode: '', visibleCards: Array.from({ length: 9 }, (_, index) => ({ id: index + 1 })), allCards: Array.from({ length: 20 }, (_, index) => ({ id: index + 1 })), language: payload.language });"
+            "const overviewCountLabel = getCanonicalFittingsOverviewCountLabel({ allCards: Array.from({ length: 20 }, (_, index) => ({ id: index + 1 })), language: payload.language });"
             "const categoryCountLabel = getCanonicalFittingsCountLabel({ activeCategoryCode: 'connectors_fasteners', visibleCards: Array.from({ length: 9 }, (_, index) => ({ id: index + 1 })), allCards: Array.from({ length: 20 }, (_, index) => ({ id: index + 1 })), language: payload.language });"
             "process.stdout.write(JSON.stringify({ nav, view, uncategorizedView, overviewCountLabel, categoryCountLabel, ownershipSource, ownershipLabel: getFittingOwnershipTypeLabel(ownershipSource, null, payload.language), ownershipBadgeRenderable: canRenderCanonicalFittingOwnershipBadge(view.visibleCards[0]) }));"
         )

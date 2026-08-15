@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 import unittest
+from hashlib import sha256
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -48,6 +49,7 @@ from database.models.mounting_node import (
 )
 from database.repositories import fitting_taxonomy_repository
 from database.repositories import inventory_repository
+from services.fitting_image_gallery_service import PreparedFittingGalleryImage
 
 
 class FittingTaxonomyApiTests(unittest.TestCase):
@@ -362,6 +364,100 @@ class FittingTaxonomyApiTests(unittest.TestCase):
                 self.assertEqual(second_delete_response.status_code, 200)
                 self.assertFalse(second_delete_response.json()["success"])
                 self.assertTrue(second_delete_response.json()["error"])
+
+    def test_source_create_route_assigns_taxonomy_ids_to_canonical_product(self) -> None:
+        app, session_maker = self._build_app()
+        self._set_session_locals(session_maker)
+
+        image_bytes = b"canonical-image-bytes"
+        prepared_gallery_image = PreparedFittingGalleryImage(
+            sort_order=0,
+            is_primary=True,
+            source_url="https://cdn.example.com/fittings/main.jpg",
+            image_bytes=image_bytes,
+            content_type="image/jpeg",
+            sha256=sha256(image_bytes).hexdigest(),
+        )
+
+        metadata = {
+            "success": True,
+            "source_site": "viyar",
+            "final_url": "https://viyar.ua/ua/catalog/dyubel_vvinchivaemyy_pod_styazhku_vb_du_321_9021847_hettich/",
+            "name": "Дюбель під стяжку VB DU 321 (9021847) Hettich",
+            "article": "61136",
+            "brand": "Hettich",
+            "description": "Parsed from source",
+            "price": 5.22,
+            "availability": "В наявності",
+            "currency": "UAH",
+            "unit": "шт",
+            "image_urls": ["https://cdn.example.com/fittings/main.jpg"],
+            "image_url": "https://cdn.example.com/fittings/main.jpg",
+        }
+
+        with patch.object(catalog_route, "_ensure_fitting_feature_access", return_value=None):
+            with patch.object(catalog_route, "_parse_fitting_source_or_error", return_value=(metadata, None)):
+                with patch.object(catalog_route, "prepare_fitting_gallery_images", return_value=[prepared_gallery_image]):
+                    with TestClient(app) as client:
+                        headers = {"Authorization": "Bearer token"}
+
+                        with session_maker() as db:
+                            manufacturer = FittingManufacturerModel(code="hettich", name="Hettich", is_active=True, sort_order=1)
+                            category = FittingCategoryModel(code="connectors_fasteners", name="Connectors and fasteners", is_active=True, sort_order=1)
+                            supplier = fitting.SupplierModel(code="viyar", name="VIYAR", is_active=True)
+                            db.add_all([manufacturer, category, supplier])
+                            db.commit()
+                            manufacturer_id = int(manufacturer.id)
+                            category_id = int(category.id)
+                            supplier_id = int(supplier.id)
+
+                        response = client.post(
+                            "/catalog/fittings",
+                            json={
+                                "article": "61136",
+                                "brand": "Hettich",
+                                "city": "Kyiv",
+                                "code": None,
+                                "fitting_group": "fasteners",
+                                "fitting_type": "connectors_fasteners",
+                                "image_url": None,
+                                "is_active": True,
+                                "name": "https://viyar.ua/ua/catalog/dyubel_vvinchivaemyy_pod_styazhku_vb_du_321_9021847_hettich/",
+                                "price": None,
+                                "sort_order": 0,
+                                "source_url": "https://viyar.ua/ua/catalog/dyubel_vvinchivaemyy_pod_styazhku_vb_du_321_9021847_hettich/",
+                                "stock": None,
+                                "supplier_offer": {
+                                    "supplier_id": supplier_id,
+                                    "article": "61136",
+                                    "external_product_id": None,
+                                    "source_url": "https://viyar.ua/ua/catalog/dyubel_vvinchivaemyy_pod_styazhku_vb_du_321_9021847_hettich/",
+                                    "price": 5.22,
+                                    "currency": "UAH",
+                                    "unit": "шт",
+                                    "stock": "В наявності",
+                                    "is_active": True,
+                                    "priority": 100,
+                                },
+                            },
+                            headers=headers,
+                        )
+
+                        self.assertEqual(response.status_code, 200)
+                        payload = response.json()
+                        self.assertTrue(payload["success"])
+                        self.assertEqual(payload["operation"], "created")
+
+                        with session_maker() as db:
+                            product = db.query(FittingProductModel).one()
+                            fitting_item = db.query(FittingModel).one()
+
+                        self.assertEqual(product.manufacturer_id, manufacturer_id)
+                        self.assertEqual(product.category_id, category_id)
+                        self.assertEqual(fitting_item.technical_product_id, product.id)
+                        self.assertEqual(fitting_item.article, "61136")
+                        self.assertEqual(fitting_item.source_url, metadata["final_url"])
+                        self.assertEqual(fitting_item.source, "viyar")
     def test_delete_fitting_product_route_blocks_when_linked_fitting_is_used_in_mounting_node(self) -> None:
         app, session_maker = self._build_app()
         self._set_session_locals(session_maker)

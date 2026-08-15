@@ -379,6 +379,37 @@ def _resolve_fitting_source_supplier(source_site: str | None) -> dict | None:
         db.close()
 
 
+def _resolve_fitting_manufacturer_id_from_brand(brand: str | None) -> int | None:
+    normalized_brand = _normalize_fitting_detail_text(brand)
+    if not normalized_brand:
+        return None
+
+    normalized_brand_lower = normalized_brand.casefold()
+    for manufacturer in list_fitting_manufacturers(active_only=False):
+        manufacturer_code = _normalize_fitting_detail_text(manufacturer.get("code"))
+        manufacturer_name = _normalize_fitting_detail_text(manufacturer.get("name"))
+        if manufacturer_code and manufacturer_code.casefold() == normalized_brand_lower:
+            return int(manufacturer["id"])
+        if manufacturer_name and manufacturer_name.casefold() == normalized_brand_lower:
+            return int(manufacturer["id"])
+
+    return None
+
+
+def _resolve_fitting_category_id_from_type(fitting_type: str | None) -> int | None:
+    normalized_type = _normalize_fitting_detail_text(fitting_type)
+    if not normalized_type:
+        return None
+
+    normalized_type_lower = normalized_type.casefold()
+    for category in list_taxonomy_categories(active_only=False):
+        category_code = _normalize_fitting_detail_text(category.get("code"))
+        if category_code and category_code.casefold() == normalized_type_lower:
+            return int(category["id"])
+
+    return None
+
+
 def _build_fitting_source_preview_payload(
     metadata: dict,
     *,
@@ -3300,9 +3331,9 @@ async def create_fitting_route(
                 "name": effective_name or effective_article or effective_code or "",
                 "brand": effective_brand,
                 "description": effective_description,
-                "manufacturer_id": None,
+                "manufacturer_id": _resolve_fitting_manufacturer_id_from_brand(effective_brand),
                 "series_id": None,
-                "category_id": None,
+                "category_id": _resolve_fitting_category_id_from_type(payload.fitting_type),
                 "is_active": bool(payload.is_active),
             }
 
@@ -3369,9 +3400,9 @@ async def create_fitting_route(
                 "name": effective_name or effective_article or effective_code or "",
                 "brand": effective_brand,
                 "description": effective_description,
-                "manufacturer_id": None,
+                "manufacturer_id": _resolve_fitting_manufacturer_id_from_brand(effective_brand),
                 "series_id": None,
-                "category_id": None,
+                "category_id": _resolve_fitting_category_id_from_type(payload.fitting_type),
                 "is_active": bool(payload.is_active),
             }
             metadata_image_urls = metadata.get("image_urls") or []

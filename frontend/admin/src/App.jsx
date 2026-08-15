@@ -60,6 +60,7 @@ import {
   buildCanonicalFittingCatalogView,
   canRenderCanonicalFittingOwnershipBadge,
   getCanonicalFittingsCountLabel,
+  getCanonicalFittingsOverviewCountLabel,
   getCanonicalFittingOwnershipSource,
   getFittingCatalogBodyNavItems,
   FITTING_CATALOG_UNCATEGORIZED_CODE,
@@ -22071,9 +22072,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   <span className="service-tree-badge subtle">
                     {(fittingsCatalogLoading || fittingCanonicalCatalogLoading) && !fittingItems.length
                       ? t.loading
-                      : getCanonicalFittingsCountLabel({
-                          activeCategoryCode: activeFittingCategory,
-                          visibleCards: visibleFittingItems,
+                      : getCanonicalFittingsOverviewCountLabel({
                           allCards: fittingCanonicalCatalogView.allCards,
                           language,
                         })}
