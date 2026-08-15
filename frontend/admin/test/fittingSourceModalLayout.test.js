@@ -24,6 +24,7 @@ test("fitting source modal keeps preview compact and source validation strict", 
   assert.match(appSource, /setFittingSourcePreviewState\("error"\);/);
   assert.match(appSource, /setFittingSourcePreviewState\("success"\);/);
   assert.match(appSource, /fittingSourcePreviewState !== "success" \|\| !fittingSourcePreview/);
+  assert.match(appSource, /function handleFittingSourceUrlKeyDown\(event\) \{\s*if \(event\.key === "Enter"\) \{\s*event\.preventDefault\(\);\s*event\.stopPropagation\(\);\s*\}\s*\}/);
   assert.match(appSource, /className=\{fittingModalMode === "create" && fittingCreateMode === "source" && !fittingSourcePreviewReady[\s\S]*\?\s*"ghost-button"[\s\S]*:\s*"primary-button recommended-action"\s*\}/);
   assert.match(appSource, /disabled=\{loading \|\| \(fittingModalMode === "create" && fittingCreateMode === "source" && !fittingSourcePreviewReady\)\}/);
   assert.match(appSource, /renderSourceBadge\(getFittingSourceMeta\(fittingSourcePreview \|\| newFittingForm\)\)/);
@@ -40,6 +41,8 @@ test("fitting source modal keeps preview compact and source validation strict", 
   assert.match(modalSource, /fittingSourcePreviewState === "success" && fittingSourcePreview \? \(/);
   assert.match(modalSource, /Оберіть постачальника\./);
   assert.doesNotMatch(sourceModeSource, /Supplier and price/);
+  assert.match(sourceModeSource, /onKeyDown=\{handleFittingSourceUrlKeyDown\}/);
+  assert.match(appSource, /if \(\s*fittingModalMode === "create"\s*&&\s*fittingCreateMode === "source"\s*&&\s*!event\.nativeEvent\?\.submitter\s*\)\s*\{\s*return;\s*\}/);
 
   assert.match(stylesSource, /\.fitting-source-modal \{\s*display: flex;[\s\S]*max-height: min\(90vh, calc\(100vh - 32px\)\);/);
   assert.match(stylesSource, /\.fitting-source-modal-form \{\s*display: grid;[\s\S]*overflow: auto;/);

@@ -18166,6 +18166,13 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
     }
   }
 
+  function handleFittingSourceUrlKeyDown(event) {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  }
+
   async function handleCreateFitting(event) {
     event.preventDefault();
 
@@ -18228,6 +18235,14 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
 
     if (!payload.source_url && !payload.name) {
       setStatus({ message: t.fittingNamePrompt, tone: "error" });
+      return;
+    }
+
+    if (
+      fittingModalMode === "create" &&
+      fittingCreateMode === "source" &&
+      !event.nativeEvent?.submitter
+    ) {
       return;
     }
 
@@ -26381,6 +26396,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                           setFittingSourcePreviewSelectedImageUrl("");
                         }
                       }
+                      onKeyDown={handleFittingSourceUrlKeyDown}
                       placeholder="https://..."
                       type="url"
                       value={newFittingForm.source_url}
