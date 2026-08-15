@@ -1544,6 +1544,41 @@ class CatalogVisibilityTests(unittest.TestCase):
                 with session_factory() as session:
                     self.assertIsNone(session.get(FittingModel, int(fitting_id)))
 
+    def test_fitting_list_route_handles_rows_without_timestamp_attrs(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
+                with session_factory() as session:
+                    session.add(
+                        FittingModel(
+                            name="Timestampless Fitting",
+                            article="61136",
+                            fitting_type="drawer_slides",
+                            fitting_group="fittings",
+                            owner_user_id=None,
+                            is_system=True,
+                            is_active=True,
+                            source="viyar",
+                            source_url="https://viyar.ua/ua/catalog/dyubel_vvinchivaemyy_pod_styazhku_vb_du_321_9021847_hettich/",
+                            brand="Hettich",
+                            price=5.22,
+                            stock="В наявності",
+                        )
+                    )
+                    session.commit()
+
+                response = client.get(
+                    "/catalog/fittings?city=Kyiv&ownership_scope=all",
+                    headers=self._auth_headers("admin-token"),
+                )
+
+                self.assertEqual(response.status_code, 200)
+                payload = response.json()
+                self.assertTrue(payload["success"])
+                self.assertEqual(len(payload["items"]), 1)
+                self.assertEqual(payload["items"][0]["article"], "61136")
+                self.assertNotIn("created_at", payload["items"][0])
+                self.assertNotIn("updated_at", payload["items"][0])
+
     def test_delete_fitting_blocks_when_it_is_used_by_mounting_node(self) -> None:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
