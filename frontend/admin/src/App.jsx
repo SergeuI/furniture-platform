@@ -10817,9 +10817,7 @@ export default function App() {
     }
 
     if (isCatalogFittingsView) {
-      return getCanonicalFittingsCountLabel({
-        activeCategoryCode: activeFittingCategory,
-        visibleCards: visibleFittingItems,
+      return getCanonicalFittingsOverviewCountLabel({
         allCards: fittingCanonicalCatalogView.allCards,
         language,
       });

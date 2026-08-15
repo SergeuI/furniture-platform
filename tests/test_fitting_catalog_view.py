@@ -107,9 +107,11 @@ class FittingCatalogViewTests(unittest.TestCase):
             "const view = buildCanonicalFittingCatalogView(payload.view);"
             "const uncategorizedView = buildCanonicalFittingCatalogView({ ...payload.view, activeCategoryCode: 'uncategorized' });"
             "const ownershipSource = getCanonicalFittingOwnershipSource(view.visibleCards[0]);"
-            "const overviewCountLabel = getCanonicalFittingsOverviewCountLabel({ allCards: Array.from({ length: 20 }, (_, index) => ({ id: index + 1 })), language: payload.language });"
-            "const categoryCountLabel = getCanonicalFittingsCountLabel({ activeCategoryCode: 'connectors_fasteners', visibleCards: Array.from({ length: 9 }, (_, index) => ({ id: index + 1 })), allCards: Array.from({ length: 20 }, (_, index) => ({ id: index + 1 })), language: payload.language });"
-            "process.stdout.write(JSON.stringify({ nav, view, uncategorizedView, overviewCountLabel, categoryCountLabel, ownershipSource, ownershipLabel: getFittingOwnershipTypeLabel(ownershipSource, null, payload.language), ownershipBadgeRenderable: canRenderCanonicalFittingOwnershipBadge(view.visibleCards[0]) }));"
+            "const overviewZeroVisibleLabel = getCanonicalFittingsOverviewCountLabel({ activeCategoryCode: 'connectors_fasteners', visibleCards: [], allCards: Array.from({ length: 1 }, (_, index) => ({ id: index + 1 })), language: payload.language });"
+            "const overviewTwoCardsLabel = getCanonicalFittingsOverviewCountLabel({ activeCategoryCode: 'connectors_fasteners', visibleCards: Array.from({ length: 1 }, (_, index) => ({ id: index + 1 })), allCards: Array.from({ length: 2 }, (_, index) => ({ id: index + 1 })), language: payload.language });"
+            "const overviewZeroCardsLabel = getCanonicalFittingsOverviewCountLabel({ allCards: [], language: payload.language });"
+            "const categoryCountLabel = getCanonicalFittingsCountLabel({ activeCategoryCode: 'connectors_fasteners', visibleCards: Array.from({ length: 1 }, (_, index) => ({ id: index + 1 })), allCards: Array.from({ length: 2 }, (_, index) => ({ id: index + 1 })), language: payload.language });"
+            "process.stdout.write(JSON.stringify({ nav, view, uncategorizedView, overviewZeroVisibleLabel, overviewTwoCardsLabel, overviewZeroCardsLabel, categoryCountLabel, ownershipSource, ownershipLabel: getFittingOwnershipTypeLabel(ownershipSource, null, payload.language), ownershipBadgeRenderable: canRenderCanonicalFittingOwnershipBadge(view.visibleCards[0]) }));"
         )
 
         completed = subprocess.run(
@@ -149,8 +151,10 @@ class FittingCatalogViewTests(unittest.TestCase):
         self.assertEqual(view["categories"][0]["canonical_item_count"], 1)
         self.assertEqual(view["categories"][1]["code"], "uncategorized")
         self.assertEqual(view["categories"][1]["canonical_item_count"], 1)
-        self.assertEqual(result["overviewCountLabel"], "\u0032\u0030 \u0442\u043e\u0432\u0430\u0440\u0456\u0432")
-        self.assertEqual(result["categoryCountLabel"], "\u0039 \u0442\u043e\u0432\u0430\u0440\u0456\u0432")
+        self.assertEqual(result["overviewZeroVisibleLabel"], "\u0031 \u0442\u043e\u0432\u0430\u0440")
+        self.assertEqual(result["overviewTwoCardsLabel"], "\u0032 \u0442\u043e\u0432\u0430\u0440\u0438")
+        self.assertEqual(result["overviewZeroCardsLabel"], "\u0030 \u0442\u043e\u0432\u0430\u0440\u0456\u0432")
+        self.assertEqual(result["categoryCountLabel"], "\u0031 \u0442\u043e\u0432\u0430\u0440")
         self.assertEqual(len(view["visibleCards"]), 1)
         self.assertEqual(len(view["allCards"]), 2)
         self.assertEqual(view["visibleCards"][0]["legacy_row_count"], 2)
