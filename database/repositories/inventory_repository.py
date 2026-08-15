@@ -567,6 +567,8 @@ def _serialize_fitting(item: FittingModel, *, owner_profile: dict | None = None)
         "is_system": bool(item.is_system),
         "is_active": bool(item.is_active),
         "sort_order": item.sort_order or 0,
+        "created_at": item.created_at,
+        "updated_at": item.updated_at,
     }
 
 

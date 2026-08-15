@@ -5303,6 +5303,29 @@ function MaterialImage({ item, token, alt, loading = "lazy", placeholderLabel })
 function useFittingPrimaryImageObjectUrl(item, token, enabled = true, reloadNonce = 0) {
   const [objectUrl, setObjectUrl] = useState("");
   const objectUrlRef = useRef("");
+  const imageSignature = useMemo(
+    () =>
+      [
+        String(item?.image_url || "").trim(),
+        String(item?.source_url || "").trim(),
+        item?.has_cached_image ? "cached" : "",
+        String(item?.image_cached_hash || "").trim(),
+        Array.isArray(item?.images)
+          ? item.images
+              .map((image) => [
+                String(image?.id || "").trim(),
+                Number(image?.sort_order ?? 0),
+                image?.is_primary ? 1 : 0,
+                String(image?.source_url || "").trim(),
+                String(image?.content_type || "").trim(),
+              ].join(":"))
+              .join("|")
+          : "",
+      ]
+        .filter(Boolean)
+        .join("::"),
+    [item?.has_cached_image, item?.image_cached_hash, item?.image_url, item?.images, item?.source_url],
+  );
 
   useEffect(() => {
     let active = true;
@@ -5355,7 +5378,7 @@ function useFittingPrimaryImageObjectUrl(item, token, enabled = true, reloadNonc
       revokeObjectUrl(objectUrlRef.current);
       objectUrlRef.current = "";
     };
-  }, [enabled, item?.id, item?.images, reloadNonce, token]);
+  }, [enabled, imageSignature, item?.id, reloadNonce, token]);
 
   return objectUrl;
 }
@@ -6055,6 +6078,16 @@ function buildFittingImageCandidates(item) {
   }
 
   return [...new Set(candidates.filter(Boolean))];
+}
+
+function chooseCanonicalPresentationLegacyRow(item = null) {
+  return (
+    item?.commercial_legacy_row ||
+    item?.image_legacy_row ||
+    item?.representative_legacy_row ||
+    item?.legacy_rows?.[0] ||
+    null
+  );
 }
 
 function handleFittingImageError(event, item) {
@@ -12829,10 +12862,10 @@ export default function App() {
   }
 
   async function openCanonicalFittingDetails(item, returnFocusTarget = null) {
-    const representativeRow = item?.representative_legacy_row || item?.legacy_rows?.[0] || null;
+    const presentationRow = chooseCanonicalPresentationLegacyRow(item);
 
-    if (representativeRow?.id) {
-      await openFittingDetails(representativeRow, returnFocusTarget, {
+    if (presentationRow?.id) {
+      await openFittingDetails(presentationRow, returnFocusTarget, {
         canonicalProduct: item,
         linkedLegacyRows: item?.legacy_rows || [],
       });
@@ -12844,7 +12877,7 @@ export default function App() {
     }
 
     setSelectedFittingDetail({
-      ...item,
+      ...(presentationRow || item),
       canonical_product: item,
       canonical_product_id: item.id,
       linked_legacy_rows: [],

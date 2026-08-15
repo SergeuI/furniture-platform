@@ -38,23 +38,6 @@ function buildLookup(items = []) {
   return new Map(items.filter((item) => item && item.id !== undefined && item.id !== null).map((item) => [String(item.id), item]));
 }
 
-function chooseRepresentativeLegacyRow(rows = [], activeCity = "") {
-  if (!Array.isArray(rows) || !rows.length) {
-    return null;
-  }
-
-  const normalizedCity = normalizeText(activeCity).toLowerCase();
-  if (normalizedCity) {
-    const exactCityRow = rows.find((row) => normalizeText(row?.city).toLowerCase() === normalizedCity);
-    if (exactCityRow) {
-      return exactCityRow;
-    }
-  }
-
-  const activeRow = rows.find((row) => row?.is_active !== false);
-  return activeRow || rows[0] || null;
-}
-
 function hasLegacyRowImage(row) {
   return Boolean(
     normalizeText(row?.image_url) ||
@@ -63,52 +46,84 @@ function hasLegacyRowImage(row) {
   );
 }
 
-function chooseDisplayImageLegacyRow(rows = [], representativeRow = null) {
+function parseRowTimestamp(value) {
+  const parsed = Date.parse(String(value || ""));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function scoreLegacyRow(row, activeCity = "", { preferCommercial = false, preferImage = false } = {}) {
+  if (!row) {
+    return Number.NEGATIVE_INFINITY;
+  }
+
+  const normalizedCity = normalizeText(activeCity).toLowerCase();
+  const rowCity = normalizeText(row?.city).toLowerCase();
+  const cityMatch = normalizedCity && rowCity === normalizedCity;
+  const hasCommercialValue = row?.price !== null && row?.price !== undefined && normalizeText(row?.stock);
+  const hasImageValue = hasLegacyRowImage(row);
+  const activeBoost = row?.is_active !== false ? 1000 : 0;
+  const cityBoost = cityMatch ? 50 : 0;
+  const commercialBoost = preferCommercial && hasCommercialValue ? 600 : 0;
+  const imageBoost = preferImage && hasImageValue ? 600 : 0;
+  const sourceBoost = normalizeText(row?.source_url) ? 25 : 0;
+  const timestampBoost = Math.max(parseRowTimestamp(row?.updated_at), parseRowTimestamp(row?.created_at)) / 1_000_000_000;
+  const idBoost = Number(row?.id || 0) / 1_000_000_000;
+
+  return activeBoost + cityBoost + commercialBoost + imageBoost + sourceBoost + timestampBoost + idBoost;
+}
+
+function chooseBestLegacyRow(rows = [], activeCity = "", options = {}) {
+  const candidates = Array.isArray(rows) ? rows.filter(Boolean) : [];
+  if (!candidates.length) {
+    return null;
+  }
+
+  return [...candidates].sort((left, right) => {
+    const rightScore = scoreLegacyRow(right, activeCity, options);
+    const leftScore = scoreLegacyRow(left, activeCity, options);
+
+    if (rightScore !== leftScore) {
+      return rightScore - leftScore;
+    }
+
+    const rightUpdatedAt = parseRowTimestamp(right?.updated_at) || parseRowTimestamp(right?.created_at);
+    const leftUpdatedAt = parseRowTimestamp(left?.updated_at) || parseRowTimestamp(left?.created_at);
+    if (rightUpdatedAt !== leftUpdatedAt) {
+      return rightUpdatedAt - leftUpdatedAt;
+    }
+
+    return Number(right?.id || 0) - Number(left?.id || 0);
+  })[0] || null;
+}
+
+function chooseRepresentativeLegacyRow(rows = [], activeCity = "") {
+  return chooseBestLegacyRow(rows, activeCity, { preferCommercial: false, preferImage: false });
+}
+
+function chooseDisplayImageLegacyRow(rows = [], representativeRow = null, activeCity = "") {
   if (hasLegacyRowImage(representativeRow)) {
     return representativeRow;
   }
 
-  const imageRow = (Array.isArray(rows) ? rows : []).find((row) => hasLegacyRowImage(row));
-  return imageRow || representativeRow || rows[0] || null;
+  return (
+    chooseBestLegacyRow(rows, activeCity, { preferImage: true }) ||
+    representativeRow ||
+    (Array.isArray(rows) ? rows[0] : null) ||
+    null
+  );
 }
 
 function chooseCommercialLegacyRow(rows = [], representativeRow = null, activeCity = "") {
-  if (!Array.isArray(rows) || !rows.length) {
-    return representativeRow || null;
-  }
-
-  const normalizedCity = normalizeText(activeCity).toLowerCase();
-  const hasCommercialValue = (row) =>
-    row?.price !== null &&
-    row?.price !== undefined &&
-    normalizeText(row?.stock);
-
-  if (representativeRow && hasCommercialValue(representativeRow)) {
+  if (representativeRow?.price !== null && representativeRow?.price !== undefined && normalizeText(representativeRow?.stock)) {
     return representativeRow;
   }
 
-  if (normalizedCity) {
-    const exactCityRow = rows.find(
-      (row) =>
-        normalizeText(row?.city).toLowerCase() === normalizedCity &&
-        hasCommercialValue(row),
-    );
-    if (exactCityRow) {
-      return exactCityRow;
-    }
-  }
-
-  const commercialRow = rows.find((row) => hasCommercialValue(row));
-  if (commercialRow) {
-    return commercialRow;
-  }
-
-  const stockRow = rows.find((row) => normalizeText(row?.stock));
-  if (stockRow) {
-    return stockRow;
-  }
-
-  return representativeRow || rows[0] || null;
+  return (
+    chooseBestLegacyRow(rows, activeCity, { preferCommercial: true }) ||
+    representativeRow ||
+    (Array.isArray(rows) ? rows[0] : null) ||
+    null
+  );
 }
 
 export function getCanonicalFittingOwnershipSource(item = null) {

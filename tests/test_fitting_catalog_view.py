@@ -181,3 +181,99 @@ class FittingCatalogViewTests(unittest.TestCase):
         search_result = json.loads(search_completed.stdout)["view"]
         self.assertEqual(len(search_result["visibleCards"]), 1)
         self.assertEqual(search_result["visibleCards"][0]["legacy_row_count"], 2)
+
+    def test_canonical_presentation_prefers_newer_commercial_and_image_rows(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        payload = {
+            "language": "uk",
+            "view": {
+                "activeCategoryCode": "connectors_fasteners",
+                "activeCity": "kyiv",
+                "canonicalProducts": [
+                    {
+                        "id": 31,
+                        "article": "61136",
+                        "name": "Дюбель під стяжку VB DU 321 (9021847) Hettich",
+                        "brand": "Hettich",
+                        "manufacturer_id": 2,
+                        "series_id": None,
+                        "category_id": 3,
+                        "is_active": True,
+                    },
+                ],
+                "legacyCategories": [
+                    {
+                        "code": "connectors_fasteners",
+                        "name": "З'єднувальна та кріпильна фурнітура",
+                        "group_name": "fasteners",
+                        "item_count": 1,
+                    },
+                ],
+                "legacyItems": [
+                    {
+                        "id": 70,
+                        "technical_product_id": 31,
+                        "city": "kyiv",
+                        "article": "61136",
+                        "name": "Old representative row",
+                        "fitting_type": "connectors_fasteners",
+                        "price": None,
+                        "stock": None,
+                        "source": "viyar",
+                        "source_url": "https://viyar.ua/ua/catalog/dyubel_vvinchivaemyy_pod_styazhku_vb_du_321_9021847_hettich/",
+                        "created_at": "2026-08-10T10:00:00Z",
+                        "updated_at": "2026-08-10T10:00:00Z",
+                        "is_system": True,
+                        "owner_user_id": None,
+                    },
+                    {
+                        "id": 71,
+                        "technical_product_id": 31,
+                        "city": "lviv",
+                        "article": "61136",
+                        "name": "Current commercial row",
+                        "fitting_type": "connectors_fasteners",
+                        "price": 5.22,
+                        "stock": "В наявності",
+                        "source": "viyar",
+                        "source_url": "https://viyar.ua/ua/catalog/dyubel_vvinchivaemyy_pod_styazhku_vb_du_321_9021847_hettich/",
+                        "image_url": "https://viyar.ua/store/Items/photos/ph61136.jpg",
+                        "created_at": "2026-08-12T10:00:00Z",
+                        "updated_at": "2026-08-13T10:00:00Z",
+                        "is_system": True,
+                        "owner_user_id": None,
+                    },
+                ],
+                "manufacturers": [
+                    {"id": 2, "code": "hettich", "name": "Hettich"},
+                ],
+                "series": [],
+                "taxonomyCategories": [
+                    {"id": 3, "code": "connectors_fasteners", "name": "Connectors"},
+                ],
+            },
+        }
+
+        script = (
+            "import { buildCanonicalFittingCatalogView } from './frontend/admin/src/fittingCatalogView.js';"
+            "const payload = JSON.parse(process.argv[1]);"
+            "const view = buildCanonicalFittingCatalogView(payload.view);"
+            "process.stdout.write(JSON.stringify({ view }));"
+        )
+
+        completed = subprocess.run(
+            ["node", "--input-type=module", "-e", script, json.dumps(payload)],
+            cwd=repo_root,
+            check=True,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+
+        view = json.loads(completed.stdout)["view"]
+        self.assertEqual(len(view["visibleCards"]), 1)
+        card = view["visibleCards"][0]
+        self.assertEqual(card["representative_legacy_row"]["id"], 70)
+        self.assertEqual(card["commercial_legacy_row"]["id"], 71)
+        self.assertEqual(card["image_legacy_row"]["id"], 71)
+        self.assertEqual(card["canonical_article"], "61136")

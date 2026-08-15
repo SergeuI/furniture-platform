@@ -15,14 +15,21 @@ test("canonical fitting render pipeline keeps overview counts, commercial rows, 
   );
   assert.match(
     appSource,
+    /function chooseCanonicalPresentationLegacyRow\(item = null\)\s*\{[\s\S]*item\?\.commercial_legacy_row[\s\S]*item\?\.image_legacy_row[\s\S]*item\?\.representative_legacy_row/,
+  );
+  assert.match(
+    appSource,
     /const commercialSourceItem =[\s\S]*item\.commercial_legacy_row[\s\S]*item\.representative_legacy_row[\s\S]*item\.legacy_rows\?\.\[0\][\s\S]*\|\|\s*item;/,
   );
   assert.match(appSource, /const directImageUrl = String\(item\?\.image_url \|\| ""\)\.trim\(\);/);
+  assert.match(appSource, /const imageSignature = useMemo\(/);
+  assert.match(appSource, /useFittingPrimaryImageObjectUrl\(item, token, enabled, 0\);/);
   assert.match(appSource, /if \(candidates\.length\) \{\s*return \(\s*<img[\s\S]*onError=\{\(event\) => handleFittingImageError\(event, item\)\}/);
   assert.match(appSource, /const previewFallbackCandidates = useMemo\(/);
   assert.match(appSource, /previewFallbackCandidates\[0\] \|\| ""/);
   assert.match(appSource, /commercialSourceItem\.price \?\? t\.notSet/);
   assert.match(appSource, /commercialSourceItem\.stock \|\| t\.notSet/);
+  assert.match(catalogViewSource, /function chooseBestLegacyRow\(rows = \[\], activeCity = "", options = \{\}\)/);
   assert.match(catalogViewSource, /function chooseCommercialLegacyRow\(rows = \[\], representativeRow = null, activeCity = ""\)/);
   assert.match(catalogViewSource, /commercial_legacy_row: commercialLegacyRow/);
 });
