@@ -7440,6 +7440,7 @@ export default function App() {
   );
   const [sidebarFlyout, setSidebarFlyout] = useState(null);
   const sidebarFlyoutPreserveRouteChangeRef = useRef(false);
+  const sidebarFlyoutCloseTimerRef = useRef(null);
   const sidebarTouchState = useRef({
     active: false,
     startX: 0,
@@ -9630,6 +9631,10 @@ export default function App() {
 
   useEffect(() => {
     if (!isDesktopSidebarCollapsed) {
+      if (sidebarFlyoutCloseTimerRef.current) {
+        window.clearTimeout(sidebarFlyoutCloseTimerRef.current);
+        sidebarFlyoutCloseTimerRef.current = null;
+      }
       setSidebarFlyout(null);
     }
   }, [isDesktopSidebarCollapsed]);
@@ -9642,6 +9647,11 @@ export default function App() {
 
     setSidebarFlyout(null);
   }, [activeView]);
+  useEffect(() => () => {
+    if (sidebarFlyoutCloseTimerRef.current) {
+      window.clearTimeout(sidebarFlyoutCloseTimerRef.current);
+    }
+  }, []);
   const renderSidebarIcon = (asset, fallbackIcon, className) => (
     <SidebarAssetIcon
       asset={asset}
@@ -9715,17 +9725,24 @@ export default function App() {
   const isSidebarItemVisuallyActive = (key, routeActive) =>
     isDesktopSidebarCollapsed ? sidebarVisualActiveKey === key : Boolean(routeActive);
   const processingGroupState = getSidebarGroupVisualState({
-    flyoutOpen: !isDesktopSidebarCollapsed && isProcessingFlyoutOpen,
-    routeActive: isSidebarItemVisuallyActive("processing", isProcessingSectionView),
+    flyoutOpen: isDesktopSidebarCollapsed && isProcessingFlyoutOpen,
+    routeActive: isProcessingSectionView,
   });
   const connectionsGroupState = getSidebarGroupVisualState({
-    flyoutOpen: !isDesktopSidebarCollapsed && isConnectionsFlyoutOpen,
-    routeActive: isSidebarItemVisuallyActive("connections", isConnectionsNavigationView),
+    flyoutOpen: isDesktopSidebarCollapsed && isConnectionsFlyoutOpen,
+    routeActive: isConnectionsNavigationView,
   });
   const catalogGroupState = getSidebarGroupVisualState({
-    flyoutOpen: !isDesktopSidebarCollapsed && isCatalogFlyoutOpen,
-    routeActive: isSidebarItemVisuallyActive("catalog", isCatalogView),
+    flyoutOpen: isDesktopSidebarCollapsed && isCatalogFlyoutOpen,
+    routeActive: isCatalogView,
   });
+
+  const clearSidebarFlyoutCloseTimer = () => {
+    if (sidebarFlyoutCloseTimerRef.current) {
+      window.clearTimeout(sidebarFlyoutCloseTimerRef.current);
+      sidebarFlyoutCloseTimerRef.current = null;
+    }
+  };
 
   const openSidebarFlyout = (groupKey, event) => {
     if (!isDesktopSidebarCollapsed) {
@@ -9742,7 +9759,41 @@ export default function App() {
     );
   };
 
-  const closeSidebarFlyout = () => setSidebarFlyout(null);
+  const openSidebarFlyoutOnHover = (groupKey, event) => {
+    if (!isDesktopSidebarCollapsed) {
+      return;
+    }
+
+    clearSidebarFlyoutCloseTimer();
+
+    const targetTop = Math.max(12, Number(event?.currentTarget?.getBoundingClientRect?.().top || 12));
+    setSidebarFlyout({
+      groupKey,
+      top: targetTop,
+    });
+  };
+
+  const scheduleSidebarFlyoutClose = () => {
+    if (!isDesktopSidebarCollapsed) {
+      return;
+    }
+
+    clearSidebarFlyoutCloseTimer();
+    // Keep a short grace period so the pointer can move from trigger to flyout without flicker.
+    sidebarFlyoutCloseTimerRef.current = window.setTimeout(() => {
+      sidebarFlyoutCloseTimerRef.current = null;
+      setSidebarFlyout(null);
+    }, 200);
+  };
+
+  const closeSidebarFlyout = () => {
+    clearSidebarFlyoutCloseTimer();
+    setSidebarFlyout(null);
+  };
+
+  const keepSidebarFlyoutOpen = () => {
+    clearSidebarFlyoutCloseTimer();
+  };
 
   const sidebarFlyoutTitle = sidebarFlyout?.groupKey === "processing"
     ? (language === "uk" ? "\u041e\u0431\u0440\u043e\u0431\u043a\u0430 \u0434\u0435\u0442\u0430\u043b\u0435\u0439" : "Processing")
@@ -19330,6 +19381,8 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                 <div className={`nav-group-header${processingGroupState.className ? ` ${processingGroupState.className}` : ""}`}>
                 <button
                   className={`nav-group-link${processingGroupState.className ? ` ${processingGroupState.className}` : ""}`}
+                  onPointerEnter={(event) => openSidebarFlyoutOnHover("processing", event)}
+                  onPointerLeave={scheduleSidebarFlyoutClose}
                   onClick={(event) => {
                     if (isDesktopSidebarCollapsed) {
                       const collapsedTarget = getCollapsedSidebarGroupClickTarget({
@@ -19402,6 +19455,8 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
               <div className={`nav-group-header${connectionsGroupState.className ? ` ${connectionsGroupState.className}` : ""}`}>
                 <button
                   className={`nav-group-link${connectionsGroupState.className ? ` ${connectionsGroupState.className}` : ""}`}
+                  onPointerEnter={(event) => openSidebarFlyoutOnHover("connections", event)}
+                  onPointerLeave={scheduleSidebarFlyoutClose}
                   onClick={(event) => {
                     if (isDesktopSidebarCollapsed) {
                       const collapsedTarget = getCollapsedSidebarGroupClickTarget({
@@ -19462,6 +19517,8 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                 <div className={`nav-group-header${catalogGroupState.className ? ` ${catalogGroupState.className}` : ""}`}>
                 <button
                   className={`nav-group-link${catalogGroupState.className ? ` ${catalogGroupState.className}` : ""}`}
+                  onPointerEnter={(event) => openSidebarFlyoutOnHover("catalog", event)}
+                  onPointerLeave={scheduleSidebarFlyoutClose}
                   onClick={(event) => {
                     if (isDesktopSidebarCollapsed) {
                       const collapsedTarget = getCollapsedSidebarGroupClickTarget({
@@ -19659,6 +19716,8 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
         <button
           aria-label={isDesktopSidebarCollapsed ? (language === "uk" ? "Розгорнути меню" : "Expand menu") : (language === "uk" ? "Згорнути меню" : "Collapse menu")}
           className="sidebar-collapse-handle"
+          onPointerEnter={keepSidebarFlyoutOpen}
+          onPointerLeave={scheduleSidebarFlyoutClose}
           onClick={() => setIsSidebarCollapsed((current) => !current)}
           type="button"
         >
@@ -19673,7 +19732,12 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                 onClick={closeSidebarFlyout}
                 role="presentation"
               />
-              <div className="sidebar-flyout" style={{ top: `${sidebarFlyout.top}px` }}>
+              <div
+                className="sidebar-flyout"
+                onPointerEnter={keepSidebarFlyoutOpen}
+                onPointerLeave={scheduleSidebarFlyoutClose}
+                style={{ top: `${sidebarFlyout.top}px` }}
+              >
                 <strong className="sidebar-flyout-title">{sidebarFlyoutTitle}</strong>
                 <div className="sidebar-flyout-items" role="menu">
                   {sidebarFlyoutItems.map((item) => (
