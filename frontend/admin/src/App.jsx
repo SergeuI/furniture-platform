@@ -10964,11 +10964,13 @@ export default function App() {
     isCatalogViyarView,
     isConnectionsWorkspaceView,
     isProcessingView,
+    fittingCanonicalCatalogView.allCards,
     materialItems.length,
     manualServiceItems.length,
     pageLabel,
     selectedProject,
     t,
+    language,
     usersPageLabel,
     viyarServiceCounts.services,
   ]);

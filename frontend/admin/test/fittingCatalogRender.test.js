@@ -15,6 +15,10 @@ test("canonical fitting render pipeline keeps overview counts, commercial rows, 
   );
   assert.match(
     appSource,
+    /const activePageLabel = useMemo\([\s\S]*if \(isCatalogFittingsView\) \{[\s\S]*getCanonicalFittingsOverviewCountLabel\(\{\s*allCards: fittingCanonicalCatalogView\.allCards,\s*language,\s*\}\)[\s\S]*\}\s*,\s*\[[\s\S]*fittingCanonicalCatalogView\.allCards[\s\S]*language[\s\S]*\]\s*\)/,
+  );
+  assert.match(
+    appSource,
     /function chooseCanonicalPresentationLegacyRow\(item = null\)\s*\{[\s\S]*item\?\.commercial_legacy_row[\s\S]*item\?\.image_legacy_row[\s\S]*item\?\.representative_legacy_row/,
   );
   assert.match(
