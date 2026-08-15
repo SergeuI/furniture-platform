@@ -52,8 +52,8 @@ class FittingCatalogViewTests(unittest.TestCase):
                         "article": "A-1",
                         "name": "Legacy Bolt Kyiv",
                         "fitting_type": "connectors_fasteners",
-                        "price": 10.0,
-                        "stock": "in stock",
+                        "price": None,
+                        "stock": None,
                         "source": "legacy",
                         "is_system": True,
                         "owner_user_id": None,
@@ -161,6 +161,7 @@ class FittingCatalogViewTests(unittest.TestCase):
         self.assertEqual(view["visibleCards"][0]["category_code"], "connectors_fasteners")
         self.assertEqual(view["visibleCards"][0]["representative_legacy_row"]["id"], 1)
         self.assertEqual(view["visibleCards"][0]["image_legacy_row"]["id"], 2)
+        self.assertEqual(view["visibleCards"][0]["commercial_legacy_row"]["id"], 2)
         self.assertEqual(result["ownershipSource"]["id"], 1)
         self.assertEqual(result["ownershipLabel"], "\u0421\u0438\u0441\u0442\u0435\u043c\u043d\u0430")
         self.assertTrue(result["ownershipBadgeRenderable"])

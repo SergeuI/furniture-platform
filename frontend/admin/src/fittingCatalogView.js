@@ -72,6 +72,45 @@ function chooseDisplayImageLegacyRow(rows = [], representativeRow = null) {
   return imageRow || representativeRow || rows[0] || null;
 }
 
+function chooseCommercialLegacyRow(rows = [], representativeRow = null, activeCity = "") {
+  if (!Array.isArray(rows) || !rows.length) {
+    return representativeRow || null;
+  }
+
+  const normalizedCity = normalizeText(activeCity).toLowerCase();
+  const hasCommercialValue = (row) =>
+    row?.price !== null &&
+    row?.price !== undefined &&
+    normalizeText(row?.stock);
+
+  if (representativeRow && hasCommercialValue(representativeRow)) {
+    return representativeRow;
+  }
+
+  if (normalizedCity) {
+    const exactCityRow = rows.find(
+      (row) =>
+        normalizeText(row?.city).toLowerCase() === normalizedCity &&
+        hasCommercialValue(row),
+    );
+    if (exactCityRow) {
+      return exactCityRow;
+    }
+  }
+
+  const commercialRow = rows.find((row) => hasCommercialValue(row));
+  if (commercialRow) {
+    return commercialRow;
+  }
+
+  const stockRow = rows.find((row) => normalizeText(row?.stock));
+  if (stockRow) {
+    return stockRow;
+  }
+
+  return representativeRow || rows[0] || null;
+}
+
 export function getCanonicalFittingOwnershipSource(item = null) {
   const legacyRows = [
     ...(Array.isArray(item?.legacy_rows) ? item.legacy_rows : []),
@@ -224,6 +263,7 @@ export function buildCanonicalFittingCatalogView({
       const legacyRows = legacyGroups.get(productId) || [];
       const representativeLegacyRow = chooseRepresentativeLegacyRow(legacyRows, activeCity);
       const imageLegacyRow = chooseDisplayImageLegacyRow(legacyRows, representativeLegacyRow);
+      const commercialLegacyRow = chooseCommercialLegacyRow(legacyRows, representativeLegacyRow, activeCity);
       const categoryCode = resolveCategoryCode({
         categoriesById: taxonomyCategoriesById,
         product,
@@ -264,6 +304,7 @@ export function buildCanonicalFittingCatalogView({
         canonical_name: canonicalProduct?.name || "",
         legacy_row_count: legacyRows.length,
         legacy_rows: legacyRows,
+        commercial_legacy_row: commercialLegacyRow,
         manufacturer_name: manufacturer?.name || canonicalProduct?.brand || "",
         manufacturer_code: manufacturer?.code || "",
         image_legacy_row: imageLegacyRow,

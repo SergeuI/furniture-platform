@@ -5362,6 +5362,10 @@ function useFittingPrimaryImageObjectUrl(item, token, enabled = true, reloadNonc
 
 function FittingPrimaryImage({ item, token, alt, loading = "lazy", placeholder = null, enabled = true }) {
   const objectUrl = useFittingPrimaryImageObjectUrl(item, token, enabled, 0);
+  const candidates = useMemo(
+    () => buildFittingImageCandidates(item),
+    [item?.id, item?.has_cached_image, item?.image_url, item?.source_url],
+  );
 
   if (objectUrl) {
     return (
@@ -5370,6 +5374,19 @@ function FittingPrimaryImage({ item, token, alt, loading = "lazy", placeholder =
         decoding="async"
         loading={loading}
         src={objectUrl}
+      />
+    );
+  }
+
+  if (candidates.length) {
+    return (
+      <img
+        alt={alt}
+        data-fallback-index="0"
+        decoding="async"
+        loading={loading}
+        onError={(event) => handleFittingImageError(event, item)}
+        src={candidates[0]}
       />
     );
   }
@@ -5438,7 +5455,13 @@ function FittingDetailGallery({ item, token, t, loading = false }) {
   const isGalleryBusy = loading || galleryLoading;
   const activeEntry = galleryEntries[activeIndex] || galleryEntries[0] || null;
   const fallbackImageUrl = useFittingPrimaryImageObjectUrl(item, token, !hasGalleryImages, reloadNonce);
-  const previewImageSrc = hasGalleryImages ? activeEntry?.objectUrl || "" : fallbackImageUrl;
+  const previewFallbackCandidates = useMemo(
+    () => buildFittingImageCandidates(item),
+    [item?.id, item?.has_cached_image, item?.image_url, item?.source_url],
+  );
+  const previewImageSrc = hasGalleryImages
+    ? activeEntry?.objectUrl || previewFallbackCandidates[0] || ""
+    : fallbackImageUrl || previewFallbackCandidates[0] || "";
   const canNavigate = galleryEntries.length > 1;
 
   const resetPreviewTransform = useCallback(() => {
@@ -6024,6 +6047,11 @@ function buildFittingImageCandidates(item) {
 
   if (cachedImageBase) {
     candidates.push(cachedImageBase);
+  }
+
+  const directImageUrl = String(item?.image_url || "").trim();
+  if (directImageUrl) {
+    candidates.push(directImageUrl);
   }
 
   return [...new Set(candidates.filter(Boolean))];
@@ -22262,10 +22290,14 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   fittingViewMode === "cards" ? (
                     <div className="fittings-card-grid">
                       {visibleFittingItems.map((item) => {
-                        const sourceItem = item.representative_legacy_row || item.legacy_rows?.[0] || item;
-                        const imageSourceItem = item.image_legacy_row || sourceItem;
+                        const commercialSourceItem =
+                          item.commercial_legacy_row ||
+                          item.representative_legacy_row ||
+                          item.legacy_rows?.[0] ||
+                          item;
+                        const imageSourceItem = item.image_legacy_row || commercialSourceItem;
                         const ownershipSourceItem = getCanonicalFittingOwnershipSource(item);
-                        const sourceMeta = getFittingSourceMeta(sourceItem);
+                        const sourceMeta = getFittingSourceMeta(commercialSourceItem);
                         const productTitle = item.canonical_name || item.name || item.article || t.notSet;
                         const productArticle = item.canonical_article || item.article || t.notSet;
                         const productManufacturer = item.manufacturer_name || item.canonical_brand || item.brand || "";
@@ -22273,7 +22305,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                         const productCategory = item.category_code === FITTING_CATALOG_UNCATEGORIZED_CODE
                           ? (language === "uk" ? "Без категорії" : "Uncategorized")
                           : (item.category_name || "");
-                        const canManageSourceItem = Boolean(sourceItem?.id) && canDeleteFittingItemHelper(user, sourceItem);
+                        const canManageSourceItem = Boolean(commercialSourceItem?.id) && canDeleteFittingItemHelper(user, commercialSourceItem);
 
                         return (
                           <article
@@ -22307,20 +22339,20 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                                     className="icon-button material-card-menu-trigger"
                                     onClick={(event) => {
                                       event.stopPropagation();
-                                      setOpenFittingMenuId((current) => (current === sourceItem.id ? "" : sourceItem.id));
+                                      setOpenFittingMenuId((current) => (current === commercialSourceItem.id ? "" : commercialSourceItem.id));
                                     }}
                                     type="button"
                                   >
                                     <MoreHorizontal size={16} />
                                   </button>
-                                  {openFittingMenuId === sourceItem.id ? (
+                                  {openFittingMenuId === commercialSourceItem.id ? (
                                     <div className="material-card-menu-dropdown">
-                                      {canEditFittingItemHelper(user, sourceItem) ? (
+                                      {canEditFittingItemHelper(user, commercialSourceItem) ? (
                                         <button
                                           className="material-card-menu-action"
                                           onClick={(event) => {
                                             event.stopPropagation();
-                                            openEditFittingModal(sourceItem);
+                                            openEditFittingModal(commercialSourceItem);
                                           }}
                                           type="button"
                                         >
@@ -22332,7 +22364,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                                         className="material-card-menu-action danger"
                                         onClick={(event) => {
                                           event.stopPropagation();
-                                          openDeleteCanonicalFittingProductConfirm(item, sourceItem);
+                                            openDeleteCanonicalFittingProductConfirm(item, commercialSourceItem);
                                         }}
                                         type="button"
                                       >
@@ -22394,10 +22426,10 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                                 </span>
                               ) : null}
                               {fittingColumnVisibility.price ? (
-                                <span>{t.fittingPrice}: {sourceItem.price ?? t.notSet}</span>
+                                <span>{t.fittingPrice}: {commercialSourceItem.price ?? t.notSet}</span>
                               ) : null}
                               {fittingColumnVisibility.stock ? (
-                                <span>{t.fittingStock}: {sourceItem.stock || t.notSet}</span>
+                                <span>{t.fittingStock}: {commercialSourceItem.stock || t.notSet}</span>
                               ) : null}
                             </div>
                           </article>
@@ -22420,10 +22452,14 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
 
                       <div className="fittings-table-list">
                         {visibleFittingItems.map((item) => {
-                          const sourceItem = item.representative_legacy_row || item.legacy_rows?.[0] || item;
-                          const imageSourceItem = item.image_legacy_row || sourceItem;
+                          const commercialSourceItem =
+                            item.commercial_legacy_row ||
+                            item.representative_legacy_row ||
+                            item.legacy_rows?.[0] ||
+                            item;
+                          const imageSourceItem = item.image_legacy_row || commercialSourceItem;
                           const ownershipSourceItem = getCanonicalFittingOwnershipSource(item);
-                          const sourceMeta = getFittingSourceMeta(sourceItem);
+                          const sourceMeta = getFittingSourceMeta(commercialSourceItem);
                           const productTitle = item.canonical_name || item.name || item.article || t.notSet;
                           const productArticle = item.canonical_article || item.article || t.notSet;
                           const productManufacturer = item.manufacturer_name || item.canonical_brand || item.brand || "";
@@ -22491,26 +22527,26 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                                     ) : null}
                                   </div>
                                 </div>
-                                {Boolean(sourceItem?.id) && canDeleteFittingItemHelper(user, sourceItem) ? (
+                                {Boolean(commercialSourceItem?.id) && canDeleteFittingItemHelper(user, commercialSourceItem) ? (
                                   <div className="material-card-menu fitting-row-menu">
                                     <button
                                       className="icon-button material-card-menu-trigger"
                                       onClick={(event) => {
                                         event.stopPropagation();
-                                        setOpenFittingMenuId((current) => (current === sourceItem.id ? "" : sourceItem.id));
+                                        setOpenFittingMenuId((current) => (current === commercialSourceItem.id ? "" : commercialSourceItem.id));
                                       }}
                                       type="button"
                                     >
                                       <MoreHorizontal size={16} />
                                     </button>
-                                    {openFittingMenuId === sourceItem.id ? (
+                                    {openFittingMenuId === commercialSourceItem.id ? (
                                       <div className="material-card-menu-dropdown">
-                                        {canEditFittingItemHelper(user, sourceItem) ? (
+                                        {canEditFittingItemHelper(user, commercialSourceItem) ? (
                                           <button
                                             className="material-card-menu-action"
                                             onClick={(event) => {
                                               event.stopPropagation();
-                                              openEditFittingModal(sourceItem);
+                                              openEditFittingModal(commercialSourceItem);
                                             }}
                                             type="button"
                                           >
@@ -22522,7 +22558,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                                             className="material-card-menu-action danger"
                                             onClick={(event) => {
                                               event.stopPropagation();
-                                              openDeleteCanonicalFittingProductConfirm(item, sourceItem);
+                                              openDeleteCanonicalFittingProductConfirm(item, commercialSourceItem);
                                             }}
                                             type="button"
                                           >
@@ -22539,8 +22575,8 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                               <span>{productSeries || t.notSet}</span>
                               <span>{productCategory || t.notSet}</span>
                               <span>{item.legacy_row_count || 0}</span>
-                              {fittingColumnVisibility.price ? <span>{sourceItem.price ?? t.notSet}</span> : null}
-                              {fittingColumnVisibility.stock ? <span>{sourceItem.stock || t.notSet}</span> : null}
+                              {fittingColumnVisibility.price ? <span>{commercialSourceItem.price ?? t.notSet}</span> : null}
+                              {fittingColumnVisibility.stock ? <span>{commercialSourceItem.stock || t.notSet}</span> : null}
                               {fittingColumnVisibility.source ? renderSourceBadge(sourceMeta) : null}
                             </article>
                           );
