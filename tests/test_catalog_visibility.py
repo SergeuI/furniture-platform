@@ -23,7 +23,12 @@ from database.models import audit_log  # noqa: F401
 from database.models import catalog_item  # noqa: F401
 from database.models.entitlement_feature import EntitlementFeatureModel
 from database.models import entitlement_feature  # noqa: F401
-from database.models.fitting import FittingModel
+from database.models.fitting import (
+    FittingCategoryModel,
+    FittingManufacturerModel,
+    FittingModel,
+    FittingProductModel,
+)
 from database.models import fitting_hole_service_rule  # noqa: F401
 from database.models import fitting_image  # noqa: F401
 from database.models.fitting_image import FittingImageModel
@@ -1549,9 +1554,39 @@ class CatalogVisibilityTests(unittest.TestCase):
             with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
                 with session_factory() as session:
                     session.add(
+                        FittingManufacturerModel(
+                            id=2,
+                            code="hettich",
+                            name="Hettich",
+                            is_active=True,
+                            sort_order=1,
+                        )
+                    )
+                    session.add(
+                        FittingCategoryModel(
+                            id=3,
+                            code="connectors_fasteners",
+                            name="З'єднувальна та кріпильна фурнітура",
+                            is_active=True,
+                            sort_order=1,
+                        )
+                    )
+                    session.add(
+                        FittingProductModel(
+                            id=31,
+                            article="61136",
+                            name="Дюбель під стяжку VB DU 321 (9021847) Hettich",
+                            brand="Hettich",
+                            manufacturer_id=2,
+                            category_id=3,
+                            is_active=True,
+                        )
+                    )
+                    session.add(
                         FittingModel(
                             name="Timestampless Fitting",
                             article="61136",
+                            technical_product_id=31,
                             fitting_type="drawer_slides",
                             fitting_group="fittings",
                             owner_user_id=None,
@@ -1576,6 +1611,7 @@ class CatalogVisibilityTests(unittest.TestCase):
                 self.assertTrue(payload["success"])
                 self.assertEqual(len(payload["items"]), 1)
                 self.assertEqual(payload["items"][0]["article"], "61136")
+                self.assertEqual(payload["items"][0]["technical_product_id"], 31)
                 self.assertNotIn("created_at", payload["items"][0])
                 self.assertNotIn("updated_at", payload["items"][0])
 
