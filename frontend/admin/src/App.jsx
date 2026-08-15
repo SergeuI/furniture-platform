@@ -62,7 +62,6 @@ import {
   getCanonicalFittingsCountLabel,
   getCanonicalFittingsOverviewCountLabel,
   getCanonicalFittingOwnershipSource,
-  getFittingCatalogBodyNavItems,
   FITTING_CATALOG_UNCATEGORIZED_CODE,
 } from "./fittingCatalogView.js";
 import {
@@ -22145,25 +22144,6 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
           />
         ) : isCatalogFittingsView || isCatalogFastenersView ? (
           <section className="table-panel full-panel" key="catalogFittings">
-            <div
-              className="service-catalog-header-actions"
-              style={{ justifyContent: "flex-start", marginBottom: "12px", flexWrap: "wrap" }}
-            >
-              {getFittingCatalogBodyNavItems(language).map((item) => (
-                <button
-                  className={
-                    activeView === item.view || (item.view === "catalogFittings" && activeView === "catalogFasteners")
-                      ? "primary-button"
-                      : "ghost-button"
-                  }
-                  key={item.view}
-                  onClick={() => switchView(item.view)}
-                  type="button"
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
             <article className="catalog-card service-catalog-card service-catalog-card-full">
               <div className="catalog-page-header">
                 <div className="service-catalog-title">

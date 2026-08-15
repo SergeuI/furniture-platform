@@ -15,7 +15,6 @@ import {
   parseNullableId,
   sortFittingTaxonomyItems,
 } from "../fittingTaxonomyAdmin.js";
-import { getFittingCatalogBodyNavItems } from "../fittingCatalogView.js";
 import {
   createFittingCategory,
   createFittingManufacturer,
@@ -486,37 +485,6 @@ export default function FittingTaxonomyAdminWorkspace({
 
   return (
     <section className="dashboard-layout">
-      <div
-        className="service-catalog-header-actions"
-        style={{ justifyContent: "flex-start", flexWrap: "wrap" }}
-      >
-        {getFittingCatalogBodyNavItems(language).map((item) => (
-          <button
-            className={
-              item.view ===
-              (activeTab === "manufacturers"
-                ? FITTING_TAXONOMY_VIEWS.manufacturers
-                : activeTab === "series"
-                  ? FITTING_TAXONOMY_VIEWS.series
-                  : activeTab === "categories"
-                    ? FITTING_TAXONOMY_VIEWS.categories
-                    : FITTING_TAXONOMY_VIEWS.products)
-                ? "primary-button"
-                : "ghost-button"
-            }
-            key={item.view}
-            onClick={() => {
-              if (typeof onNavigate === "function") {
-                onNavigate(item.view);
-              }
-            }}
-            type="button"
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
-
       <article className="dashboard-hero-card">
         <div className="dashboard-hero-copy">
           <h1>{activeEntityLabel}</h1>
