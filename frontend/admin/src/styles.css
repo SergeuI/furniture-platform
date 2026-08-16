@@ -2298,6 +2298,14 @@ tbody tr.selected {
   z-index: 6;
 }
 
+.fitting-action-menu-panel {
+  max-height: calc(100vh - 16px);
+  overflow: auto;
+  position: fixed;
+  width: 220px;
+  z-index: 120;
+}
+
 .material-card-menu-action {
   background: #ffffff;
   border-radius: 0;
@@ -2762,7 +2770,7 @@ tbody tr.selected {
 .fittings-table-shell {
   border: 1px solid #dbe1e7;
   border-radius: 8px;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .fittings-table-header,
@@ -2777,6 +2785,7 @@ tbody tr.selected {
     minmax(110px, 0.8fr)
     minmax(90px, 0.7fr)
     minmax(120px, 1fr)
+    minmax(110px, 0.8fr)
     minmax(120px, 0.9fr);
 }
 
@@ -2791,12 +2800,26 @@ tbody tr.selected {
 
 .fittings-table-list {
   display: grid;
+  overflow: visible;
 }
 
 .fittings-table-row {
   background: #ffffff;
   border-top: 1px solid #edf2f5;
   padding: 10px 14px;
+  overflow: visible;
+  position: relative;
+}
+
+.fitting-availability-cell {
+  min-width: 0;
+}
+
+.fitting-availability-badge {
+  display: inline-flex;
+  justify-content: center;
+  min-width: 92px;
+  white-space: nowrap;
 }
 
 .fitting-table-row-clickable {
@@ -5107,8 +5130,27 @@ tbody tr.selected {
 }
 
 .fitting-row-menu {
+  overflow: visible;
+  z-index: 20;
   justify-self: end;
   position: relative;
+}
+
+.fitting-source-modal-form .fitting-source-field-checkbox-only {
+  align-items: center;
+  display: inline-flex;
+  gap: 0;
+  justify-self: start;
+  min-height: 36px;
+}
+
+.fitting-source-modal-form .fitting-source-field-checkbox-only > input[type="checkbox"] {
+  margin: 0;
+}
+
+.fitting-item-card,
+.fitting-item-card-head {
+  overflow: visible;
 }
 
 .fittings-card-grid {
@@ -8056,9 +8098,9 @@ tbody tr.selected {
 
 .status-overlay {
   align-items: flex-start;
-  background: rgba(7, 14, 18, 0.12);
+  background: transparent;
   border: 0;
-  cursor: default;
+  pointer-events: none;
   display: flex;
   inset: 0;
   justify-content: center;
@@ -8081,6 +8123,7 @@ tbody tr.selected {
   max-width: min(640px, calc(100vw - 32px));
   padding: 14px 18px;
   text-align: left;
+  pointer-events: auto;
 }
 
 .status-toast.success {
@@ -8130,9 +8173,12 @@ tbody tr.selected {
   color: inherit;
   display: inline-flex;
   flex: 0 0 auto;
-  height: 30px;
+  appearance: none;
+  cursor: pointer;
+  height: 28px;
   justify-content: center;
-  width: 30px;
+  padding: 0;
+  width: 28px;
 }
 
 .toggle-label {
@@ -8406,6 +8452,76 @@ tbody tr.selected {
   width: 100%;
 }
 
+.fitting-source-modal-form .fitting-manual-gallery {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+
+.fitting-source-modal-form .fitting-manual-gallery-label {
+  color: #61707a;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+
+.fitting-source-modal-form .fitting-manual-gallery-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: 100%;
+}
+
+.fitting-source-modal-form .fitting-manual-gallery-item {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #dbe1e7;
+  border-radius: 12px;
+  display: flex;
+  height: 88px;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+  width: 88px;
+}
+
+.fitting-source-modal-form .fitting-manual-gallery-item img {
+  display: block;
+  height: 100%;
+  object-fit: contain;
+  width: 100%;
+}
+
+.fitting-source-modal-form .fitting-manual-gallery-remove {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(19, 26, 31, 0.12);
+  border-radius: 999px;
+  color: #24343d;
+  display: inline-flex;
+  height: 20px;
+  justify-content: center;
+  opacity: 0.72;
+  padding: 0;
+  position: absolute;
+  right: 5px;
+  top: 5px;
+  transition: background 0.16s ease, box-shadow 0.16s ease, color 0.16s ease, opacity 0.16s ease, transform 0.16s ease;
+  width: 20px;
+}
+
+.fitting-source-modal-form .fitting-manual-gallery-remove:hover,
+.fitting-source-modal-form .fitting-manual-gallery-remove:focus-visible {
+  background: rgba(255, 255, 255, 0.96);
+  color: #0f1720;
+  opacity: 1;
+  outline: none;
+  box-shadow: 0 8px 18px rgba(15, 20, 26, 0.18);
+  transform: scale(1.04);
+}
+
 .fitting-source-modal-form .fitting-source-preview-summary {
   display: grid;
   gap: 6px;
@@ -8550,6 +8666,18 @@ tbody tr.selected {
   .fitting-source-modal-form .fitting-source-preview-thumb {
     height: 52px;
     width: 52px;
+  }
+
+  .fitting-source-modal-form .fitting-manual-gallery-item {
+    height: 76px;
+    width: 76px;
+  }
+
+  .fitting-source-modal-form .fitting-manual-gallery-remove {
+    height: 20px;
+    right: 5px;
+    top: 5px;
+    width: 20px;
   }
 
   .fitting-source-modal-form .fitting-source-preview-row {
@@ -10212,6 +10340,88 @@ tbody tr.selected {
   margin: 0;
 }
 
+.fitting-details-empty-compact {
+  background: #f8fafb;
+  border: 1px solid #dbe4ea;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.fitting-details-offers-list {
+  display: grid;
+  gap: 12px;
+}
+
+.fitting-details-offer-card {
+  background: #ffffff;
+  border: 1px solid #dbe4ea;
+  border-radius: 12px;
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.fitting-details-offer-card-header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.fitting-details-offer-card-header strong {
+  color: #24343d;
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.fitting-details-offer-grid {
+  display: grid;
+  gap: 10px 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.fitting-details-offer-grid > div {
+  display: grid;
+  gap: 4px;
+}
+
+.fitting-details-offer-grid > div span {
+  color: #607182;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+}
+
+.fitting-details-offer-grid > div strong {
+  color: #24343d;
+  font-size: 14px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.fitting-details-offer-meta {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.fitting-details-offer-meta span,
+.fitting-details-offer-meta a {
+  background: #f4f7f9;
+  border-radius: 999px;
+  color: #52606d;
+  display: inline-flex;
+  font-size: 12px;
+  line-height: 1.35;
+  padding: 4px 10px;
+}
+
+.fitting-details-offer-meta a {
+  color: #1f6b34;
+}
+
 @media (max-width: 960px) {
   .fitting-details-layout,
   .fitting-details-grid {
@@ -10231,6 +10441,10 @@ tbody tr.selected {
 
   .fitting-details-characteristic dd {
     text-align: left;
+  }
+
+  .fitting-details-offer-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

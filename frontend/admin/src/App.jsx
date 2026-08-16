@@ -5162,6 +5162,44 @@ function getFittingAvailabilityLabel(value, t) {
   return text;
 }
 
+function getFittingCatalogAvailabilityBadgeLabel(value, language, t) {
+  const text = String(value || "").replace(/\s+/g, " ").trim().toLowerCase();
+
+  if (!text || text.includes("out of stock") || text.includes("нема") || text.includes("не в наявності")) {
+    return language === "en" ? "Not available" : "Немає";
+  }
+
+  return t.materialPromoInStock || (language === "en" ? "In stock" : "В наявності");
+}
+
+function getFittingMenuPosition(triggerElement, actionCount = 2) {
+  if (!triggerElement || typeof window === "undefined") {
+    return null;
+  }
+
+  const rect = triggerElement.getBoundingClientRect();
+  const margin = 8;
+  const gap = 6;
+  const menuWidth = 220;
+  const menuHeight = Math.max(48, 12 + Math.max(1, actionCount) * 40);
+  const availableBelow = window.innerHeight - rect.bottom;
+  const availableAbove = rect.top;
+  const openDown = availableBelow >= menuHeight || availableBelow >= availableAbove;
+  const rawTop = openDown ? rect.bottom + gap : rect.top - gap - menuHeight;
+  const rawLeft = rect.right - menuWidth;
+  const left = Math.min(Math.max(rawLeft, margin), Math.max(margin, window.innerWidth - menuWidth - margin));
+  const top = Math.min(
+    Math.max(rawTop, margin),
+    Math.max(margin, window.innerHeight - menuHeight - margin),
+  );
+
+  return {
+    left,
+    top,
+    width: menuWidth,
+  };
+}
+
 function formatFittingPriceValue(item, language, t) {
   const price = item?.price;
 
@@ -7381,6 +7419,9 @@ export default function App() {
   });
   const materialEditCloseButtonRef = useRef(null);
   const [openFittingMenuId, setOpenFittingMenuId] = useState("");
+  const [openFittingMenuPosition, setOpenFittingMenuPosition] = useState(null);
+  const openFittingMenuTriggerRef = useRef(null);
+  const openFittingMenuActionCountRef = useRef(2);
   const [projectOptionPicker, setProjectOptionPicker] = useState({
     open: false,
     target: "create",
@@ -8973,6 +9014,73 @@ export default function App() {
   const statusMessage = status?.message || "";
   const StatusIcon =
     statusTone === "error" ? CircleAlert : statusTone === "success" ? CheckCircle2 : Info;
+
+  useEffect(() => {
+    if (!statusMessage) {
+      return undefined;
+    }
+
+    const dismissDelay =
+      statusTone === "error" ? 4500 : statusTone === "warning" ? 3000 : 2000;
+    const timeoutId = window.setTimeout(() => {
+      setStatusState(null);
+    }, dismissDelay);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [statusMessage, statusTone]);
+
+  useEffect(() => {
+    if (!openFittingMenuId) {
+      openFittingMenuTriggerRef.current = null;
+      setOpenFittingMenuPosition(null);
+      return undefined;
+    }
+
+    function updateFittingMenuPosition() {
+      const triggerElement = openFittingMenuTriggerRef.current;
+      if (!triggerElement) {
+        setOpenFittingMenuId("");
+        setOpenFittingMenuPosition(null);
+        return;
+      }
+
+      setOpenFittingMenuPosition(
+        getFittingMenuPosition(triggerElement, openFittingMenuActionCountRef.current),
+      );
+    }
+
+    function handleFittingMenuDocumentPointerDown(event) {
+      const target = event.target;
+      if (!(target instanceof Element)) {
+        return;
+      }
+
+      if (!target.closest(".fitting-action-menu-trigger") && !target.closest(".fitting-action-menu-panel")) {
+        setOpenFittingMenuId("");
+        setOpenFittingMenuPosition(null);
+      }
+    }
+
+    function handleFittingMenuDocumentKeyDown(event) {
+      if (event.key === "Escape") {
+        setOpenFittingMenuId("");
+        setOpenFittingMenuPosition(null);
+      }
+    }
+
+    updateFittingMenuPosition();
+    document.addEventListener("pointerdown", handleFittingMenuDocumentPointerDown);
+    document.addEventListener("keydown", handleFittingMenuDocumentKeyDown);
+    window.addEventListener("scroll", updateFittingMenuPosition, true);
+    window.addEventListener("resize", updateFittingMenuPosition);
+    return () => {
+      document.removeEventListener("pointerdown", handleFittingMenuDocumentPointerDown);
+      document.removeEventListener("keydown", handleFittingMenuDocumentKeyDown);
+      window.removeEventListener("scroll", updateFittingMenuPosition, true);
+      window.removeEventListener("resize", updateFittingMenuPosition);
+    };
+  }, [openFittingMenuId]);
+
   const viyarServicesCache = user?.id ? readViyarServicesCache(user.id) : null;
   const normalizedViyarEmail = viyarAuthForm.email.trim();
   const viyarHasSavedPassword = Boolean(viyarAuth?.has_password);
@@ -9020,12 +9128,67 @@ export default function App() {
   const canUsersGoForward = usersOffset + PAGE_SIZE < usersTotal;
   const canAuditGoBack = auditOffset > 0;
   const canAuditGoForward = auditOffset + PAGE_SIZE < auditTotal;
+  const renderFittingActionMenu = ({
+    canEdit,
+    commercialSourceItem,
+    onDelete,
+    onEdit,
+    sourceItem,
+  }) => {
+    if (
+      openFittingMenuId !== commercialSourceItem.id ||
+      !openFittingMenuPosition ||
+      typeof document === "undefined"
+    ) {
+      return null;
+    }
+
+    return createPortal(
+      <div
+        className="material-card-menu-dropdown fitting-action-menu-panel"
+        onClick={(event) => event.stopPropagation()}
+        onPointerDown={(event) => event.stopPropagation()}
+        style={{
+          left: `${openFittingMenuPosition.left}px`,
+          minWidth: `${openFittingMenuPosition.width}px`,
+          position: "fixed",
+          top: `${openFittingMenuPosition.top}px`,
+        }}
+      >
+        {canEdit ? (
+          <button
+            className="material-card-menu-action"
+            onClick={(event) => {
+              event.stopPropagation();
+              setOpenFittingMenuId("");
+              setOpenFittingMenuPosition(null);
+              onEdit();
+            }}
+            type="button"
+          >
+            <Pencil size={14} />
+            {t.fittingEdit}
+          </button>
+        ) : null}
+        <button
+          className="material-card-menu-action danger"
+          onClick={(event) => {
+            event.stopPropagation();
+            setOpenFittingMenuId("");
+            setOpenFittingMenuPosition(null);
+            onDelete();
+          }}
+          type="button"
+        >
+          <Trash2 size={14} />
+          {t.fittingDelete}
+        </button>
+      </div>,
+      document.body,
+    );
+  };
   const statusNotice = statusMessage ? (
-    <button
-      className="status-overlay"
-      onClick={() => setStatus("")}
-      type="button"
-    >
+    <div className="status-overlay" role="presentation">
       <span
         className={`status-toast ${statusTone}`}
         onClick={(event) => event.stopPropagation()}
@@ -9035,17 +9198,16 @@ export default function App() {
           <StatusIcon size={18} />
         </span>
         <span className="status-toast-copy">{statusMessage}</span>
-        <span
+        <button
           aria-label={t.close}
           className="status-toast-close"
           onClick={() => setStatus("")}
-          role="button"
-          tabIndex={0}
+          type="button"
         >
           <X size={16} />
-        </span>
+        </button>
       </span>
-    </button>
+    </div>
   ) : null;
 
   const selectedProjectId = selectedProject?.id || "";
@@ -9844,12 +10006,12 @@ export default function App() {
               },
             },
             ...(canViewFittingCatalog
-              ? [{
+                ? [{
                   active: isCatalogFittingsView,
                   key: "catalogFittings",
                   label: t.catalogFittings,
                   onClick: () => {
-                    switchView("catalogFittings");
+                    openFittingCatalogRoot();
                     closeSidebarOnMobile();
                     closeSidebarFlyout();
                   },
@@ -16660,6 +16822,16 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
     setStatus(t.machiningSaved);
   }
 
+  function resetFittingCatalogNavigation() {
+    localStorage.removeItem(FITTING_CATEGORY_STORAGE_KEY);
+    setSelectedFittingCategory("");
+  }
+
+  function openFittingCatalogRoot() {
+    resetFittingCatalogNavigation();
+    switchView("catalogFittings");
+  }
+
   async function switchView(view, viewer = user, openContext = null) {
     const nextView = normalizeCatalogView(view === "catalog" ? "catalogViyar" : view);
     const skipHistoryUpdate = Boolean(openContext?.skipHistoryUpdate);
@@ -18081,23 +18253,63 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
   }
 
   async function handleFittingImageSelected(event) {
-    const file = event.target.files?.[0];
+    const files = Array.from(event.target.files || []);
     event.target.value = "";
 
-    if (!file) {
+    if (!files.length) {
       return;
     }
 
     try {
-      const imageUrl = await compressImageFileToDataUrl(file);
+      const imageUrls = await Promise.all(files.map((file) => compressImageFileToDataUrl(file)));
       setNewFittingForm((current) => ({
         ...current,
-        image_url: imageUrl,
+        image_urls: [
+          ...(Array.isArray(current.image_urls) ? current.image_urls : current.image_url ? [current.image_url] : []),
+          ...imageUrls.filter(Boolean),
+        ],
+        image_url: [
+          ...(Array.isArray(current.image_urls) ? current.image_urls : current.image_url ? [current.image_url] : []),
+          ...imageUrls.filter(Boolean),
+        ][0] || "",
       }));
       setStatus({ message: t.fittingImageSelected, tone: "success" });
     } catch (error) {
       setStatus({ message: error?.message || t.unableToLoadCatalog, tone: "error" });
     }
+  }
+
+  function isAvailabilityChecked(value) {
+    return Boolean(String(value || "").trim());
+  }
+
+  function setManualFittingAvailability(checked) {
+    setNewFittingForm((current) => ({
+      ...current,
+      stock: checked ? (String(current.stock || "").trim() || "in stock") : "",
+    }));
+  }
+
+  function setManualSupplierAvailability(checked) {
+    setNewFittingForm((current) => ({
+      ...current,
+      supplier_offer: {
+        ...current.supplier_offer,
+        stock: checked
+          ? (String(current.supplier_offer?.stock || "").trim() || "in stock")
+          : "",
+      },
+    }));
+  }
+
+  function removeFittingImageSelection(index) {
+    setNewFittingForm((current) => ({
+      ...current,
+      image_urls: (Array.isArray(current.image_urls) ? current.image_urls : current.image_url ? [current.image_url] : [])
+        .filter((_, currentIndex) => currentIndex !== index),
+      image_url: (Array.isArray(current.image_urls) ? current.image_urls : current.image_url ? [current.image_url] : [])
+        .filter((_, currentIndex) => currentIndex !== index)[0] || "",
+    }));
   }
 
   function closeFittingFormModal() {
@@ -18340,8 +18552,34 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
       return;
     }
 
-    if (isSystemFitting && !payload.source_url) {
+    if (fittingCreateMode === "source" && !payload.source_url) {
       setStatus({ message: t.fittingSourceUrlPrompt, tone: "error" });
+      return;
+    }
+
+    const supplierOfferDraft = newFittingForm.supplier_offer || null;
+    const normalizedSupplierId = String(supplierOfferDraft?.supplier_id || "").trim();
+    const hasMeaningfulSupplierOfferDraft = Boolean(
+      supplierOfferDraft &&
+        (
+          supplierOfferDraft.offer_id ||
+          supplierOfferDraft.article ||
+          supplierOfferDraft.external_product_id ||
+          supplierOfferDraft.source_url ||
+          supplierOfferDraft.price ||
+          supplierOfferDraft.currency ||
+          supplierOfferDraft.unit ||
+          supplierOfferDraft.stock
+        ),
+    );
+
+    if (!normalizedSupplierId && hasMeaningfulSupplierOfferDraft) {
+      setStatus({
+        message: language === "uk"
+          ? "Оберіть постачальника або очистіть дані постачальника."
+          : "Choose a supplier or clear the supplier fields.",
+        tone: "error",
+      });
       return;
     }
 
@@ -18400,9 +18638,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
           : current,
       );
     }
-    await loadFittingsCatalog(token, {
-      city: activeCity || "",
-    });
+    await refreshFittingsCatalogView();
   }
 
   async function handleApplyProjectFilters(event) {
@@ -19570,8 +19806,9 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                     <button
                       className={isCatalogFittingsView ? "active" : ""}
                       onClick={() => {
-                        switchView("catalogFittings");
+                        openFittingCatalogRoot();
                         closeSidebarOnMobile();
+                        closeSidebarFlyout();
                       }}
                       type="button"
                     >
@@ -22414,46 +22651,38 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                               </div>
                               {canManageSourceItem ? (
                                 <div className="material-card-menu fitting-row-menu">
-                                  <button
-                                    className="icon-button material-card-menu-trigger"
-                                    onClick={(event) => {
-                                      event.stopPropagation();
-                                      setOpenFittingMenuId((current) => (current === commercialSourceItem.id ? "" : commercialSourceItem.id));
-                                    }}
-                                    type="button"
-                                  >
-                                    <MoreHorizontal size={16} />
-                                  </button>
-                                  {openFittingMenuId === commercialSourceItem.id ? (
-                                    <div className="material-card-menu-dropdown">
-                                      {canEditFittingItemHelper(user, commercialSourceItem) ? (
-                                        <button
-                                          className="material-card-menu-action"
-                                          onClick={(event) => {
-                                            event.stopPropagation();
-                                            openEditFittingModal(commercialSourceItem);
-                                          }}
-                                          type="button"
-                                        >
-                                          <Pencil size={14} />
-                                          {t.fittingEdit}
-                                        </button>
-                                      ) : null}
-                                      <button
-                                        className="material-card-menu-action danger"
-                                        onClick={(event) => {
-                                          event.stopPropagation();
-                                            openDeleteCanonicalFittingProductConfirm(item, commercialSourceItem);
-                                        }}
-                                        type="button"
-                                      >
-                                        <Trash2 size={14} />
-                                        {t.fittingDelete}
-                                      </button>
-                                    </div>
-                                  ) : null}
-                                </div>
-                              ) : null}
+                                    <button
+                                      className="icon-button material-card-menu-trigger fitting-action-menu-trigger"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        openFittingMenuTriggerRef.current = event.currentTarget;
+                                        openFittingMenuActionCountRef.current = canEditFittingItemHelper(user, commercialSourceItem) ? 2 : 1;
+                                        if (openFittingMenuId === commercialSourceItem.id) {
+                                          setOpenFittingMenuId("");
+                                          setOpenFittingMenuPosition(null);
+                                          return;
+                                        }
+
+                                        setOpenFittingMenuPosition(
+                                          getFittingMenuPosition(
+                                            event.currentTarget,
+                                            canEditFittingItemHelper(user, commercialSourceItem) ? 2 : 1,
+                                          ),
+                                        );
+                                        setOpenFittingMenuId(commercialSourceItem.id);
+                                      }}
+                                      type="button"
+                                    >
+                                      <MoreHorizontal size={16} />
+                                    </button>
+                                    {renderFittingActionMenu({
+                                      canEdit: canEditFittingItemHelper(user, commercialSourceItem),
+                                      commercialSourceItem,
+                                      onDelete: () => openDeleteCanonicalFittingProductConfirm(item, commercialSourceItem),
+                                      onEdit: () => openEditFittingModal(commercialSourceItem),
+                                    })}
+                                  </div>
+                                ) : null}
                             </div>
                             <div className="fitting-item-card-copy">
                               <strong>{productTitle}</strong>
@@ -22478,6 +22707,11 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                                 {canRenderCanonicalFittingOwnershipBadge(ownershipSourceItem) ? (
                                   <span className="service-tree-badge subtle">
                                     {getFittingOwnershipTypeLabel(ownershipSourceItem, user, language)}
+                                  </span>
+                                ) : null}
+                                {fittingColumnVisibility.stock ? (
+                                  <span className="service-tree-badge subtle">
+                                    {t.fittingStock}: {commercialSourceItem.stock || t.notSet}
                                   </span>
                                 ) : null}
                               </div>
@@ -22507,9 +22741,6 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                               {fittingColumnVisibility.price ? (
                                 <span>{t.fittingPrice}: {commercialSourceItem.price ?? t.notSet}</span>
                               ) : null}
-                              {fittingColumnVisibility.stock ? (
-                                <span>{t.fittingStock}: {commercialSourceItem.stock || t.notSet}</span>
-                              ) : null}
                             </div>
                           </article>
                         );
@@ -22524,8 +22755,8 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                         <span>{language === "uk" ? "Серія" : "Series"}</span>
                         <span>{language === "uk" ? "Категорія" : "Category"}</span>
                         <span>{language === "uk" ? "Рядки" : "Rows"}</span>
+                        <span>{t.fittingStock}</span>
                         {fittingColumnVisibility.price ? <span>{t.fittingPrice}</span> : null}
-                        {fittingColumnVisibility.stock ? <span>{t.fittingStock}</span> : null}
                         {fittingColumnVisibility.source ? <span>{t.fittingSource}</span> : null}
                       </div>
 
@@ -22609,43 +22840,35 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                                 {Boolean(commercialSourceItem?.id) && canDeleteFittingItemHelper(user, commercialSourceItem) ? (
                                   <div className="material-card-menu fitting-row-menu">
                                     <button
-                                      className="icon-button material-card-menu-trigger"
+                                      className="icon-button material-card-menu-trigger fitting-action-menu-trigger"
                                       onClick={(event) => {
                                         event.stopPropagation();
-                                        setOpenFittingMenuId((current) => (current === commercialSourceItem.id ? "" : commercialSourceItem.id));
+                                        openFittingMenuTriggerRef.current = event.currentTarget;
+                                        openFittingMenuActionCountRef.current = canEditFittingItemHelper(user, commercialSourceItem) ? 2 : 1;
+                                        if (openFittingMenuId === commercialSourceItem.id) {
+                                          setOpenFittingMenuId("");
+                                          setOpenFittingMenuPosition(null);
+                                          return;
+                                        }
+
+                                        setOpenFittingMenuPosition(
+                                          getFittingMenuPosition(
+                                            event.currentTarget,
+                                            canEditFittingItemHelper(user, commercialSourceItem) ? 2 : 1,
+                                          ),
+                                        );
+                                        setOpenFittingMenuId(commercialSourceItem.id);
                                       }}
                                       type="button"
                                     >
                                       <MoreHorizontal size={16} />
                                     </button>
-                                    {openFittingMenuId === commercialSourceItem.id ? (
-                                      <div className="material-card-menu-dropdown">
-                                        {canEditFittingItemHelper(user, commercialSourceItem) ? (
-                                          <button
-                                            className="material-card-menu-action"
-                                            onClick={(event) => {
-                                              event.stopPropagation();
-                                              openEditFittingModal(commercialSourceItem);
-                                            }}
-                                            type="button"
-                                          >
-                                            <Pencil size={14} />
-                                            {t.fittingEdit}
-                                          </button>
-                                        ) : null}
-                                          <button
-                                            className="material-card-menu-action danger"
-                                            onClick={(event) => {
-                                              event.stopPropagation();
-                                              openDeleteCanonicalFittingProductConfirm(item, commercialSourceItem);
-                                            }}
-                                            type="button"
-                                          >
-                                            <Trash2 size={14} />
-                                            {t.fittingDelete}
-                                        </button>
-                                      </div>
-                                    ) : null}
+                                    {renderFittingActionMenu({
+                                      canEdit: canEditFittingItemHelper(user, commercialSourceItem),
+                                      commercialSourceItem,
+                                      onDelete: () => openDeleteCanonicalFittingProductConfirm(item, commercialSourceItem),
+                                      onEdit: () => openEditFittingModal(commercialSourceItem),
+                                    })}
                                   </div>
                                 ) : null}
                               </div>
@@ -22654,8 +22877,16 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                               <span>{productSeries || t.notSet}</span>
                               <span>{productCategory || t.notSet}</span>
                               <span>{item.legacy_row_count || 0}</span>
+                              <span className="fitting-availability-cell">
+                                <span className="service-tree-badge subtle fitting-availability-badge">
+                                  {getFittingCatalogAvailabilityBadgeLabel(
+                                    commercialSourceItem.stock,
+                                    language,
+                                    t,
+                                  )}
+                                </span>
+                              </span>
                               {fittingColumnVisibility.price ? <span>{commercialSourceItem.price ?? t.notSet}</span> : null}
-                              {fittingColumnVisibility.stock ? <span>{commercialSourceItem.stock || t.notSet}</span> : null}
                               {fittingColumnVisibility.source ? renderSourceBadge(sourceMeta) : null}
                             </article>
                           );
@@ -26429,16 +26660,17 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                     />
                   </label>
 
-                  <label className="fitting-source-field">
+                  <div className="fitting-source-field">
                     <span>{t.fittingStock}</span>
-                    <input
-                      onChange={(event) =>
-                        setNewFittingForm((current) => ({ ...current, stock: event.target.value }))
-                      }
-                      type="text"
-                      value={newFittingForm.stock}
-                    />
-                  </label>
+                    <label className="fitting-source-field-inline fitting-source-field-checkbox-only">
+                      <input
+                        aria-label={t.fittingStock}
+                        checked={isAvailabilityChecked(newFittingForm.stock)}
+                        onChange={(event) => setManualFittingAvailability(event.target.checked)}
+                        type="checkbox"
+                      />
+                    </label>
+                  </div>
 
                   <label className="fitting-source-field">
                     <span>{t.fittingSortOrder}</span>
@@ -26626,7 +26858,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                     />
                   </label>
                   <label className="fitting-source-field">
-                    <span>{t.fittingPrice}</span>
+                    <span>{language === "en" ? "Main price" : "Основна ціна"}</span>
                     <input
                       min="0"
                       onChange={(event) =>
@@ -26642,13 +26874,40 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                     <span>{t.fittingImage}</span>
                     <input
                       accept="image/*"
+                      multiple
                       onChange={handleFittingImageSelected}
                       type="file"
                     />
                   </label>
-                  <div className="fitting-form-note fitting-source-span-full">
-                    {newFittingForm.image_url ? t.fittingImageSelected : t.fittingCustomHint}
-                  </div>
+                  {Array.isArray(newFittingForm.image_urls) && newFittingForm.image_urls.length ? (
+                    <div className="fitting-manual-gallery fitting-source-span-full">
+                      <div className="fitting-manual-gallery-label">
+                        {language === "en" ? "Selected images" : "Вибрані зображення"}
+                      </div>
+                      <div className="fitting-manual-gallery-strip">
+                        {newFittingForm.image_urls.map((imageUrl, index) => (
+                          <div
+                            className="fitting-manual-gallery-item"
+                            key={`${imageUrl}-${index}`}
+                          >
+                            <img alt={`${t.fittingImage} ${index + 1}`} src={imageUrl} />
+                            <button
+                              aria-label={`${t.clearSelection} ${index + 1}`}
+                              className="icon-button fitting-manual-gallery-remove"
+                              onClick={() => removeFittingImageSelection(index)}
+                              type="button"
+                            >
+                              <X size={12} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="fitting-form-note fitting-source-span-full">
+                      {t.fittingCustomHint}
+                    </div>
+                  )}
                 </>
               )}
 
@@ -26693,6 +26952,31 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   </header>
                   <div className="fitting-form-grid fitting-form-grid-offer">
                     <label className="fitting-source-field">
+                      <span>{language === "en" ? "Supplier" : "Постачальник"}</span>
+                      <select
+                        onChange={(event) =>
+                          setNewFittingForm((current) => ({
+                            ...current,
+                            supplier_offer: {
+                              ...current.supplier_offer,
+                              supplier_id: event.target.value,
+                            },
+                          }))
+                        }
+                        value={newFittingForm.supplier_offer?.supplier_id || ""}
+                      >
+                        <option value="">
+                          {language === "en" ? "Choose supplier" : "Оберіть постачальника"}
+                        </option>
+                        {fittingSupplierItems.map((supplier) => (
+                          <option key={supplier.id} value={supplier.id}>
+                            {supplier.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label className="fitting-source-field">
                       <span>{language === "en" ? "Supplier article" : "Артикул постачальника"}</span>
                       <input
                         onChange={(event) =>
@@ -26710,7 +26994,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                     </label>
 
                     <label className="fitting-source-field">
-                      <span>{language === "en" ? "Price" : "Ціна"}</span>
+                      <span>{language === "en" ? "Supplier price" : "Ціна постачальника"}</span>
                       <input
                         min="0"
                         onChange={(event) =>
@@ -26762,21 +27046,13 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                       />
                     </label>
 
-                    <label className="fitting-source-field">
-                      <span>{language === "en" ? "Stock / availability" : "Stock / наявність"}</span>
+                    <label className="toggle-label fitting-source-field">
                       <input
-                        onChange={(event) =>
-                          setNewFittingForm((current) => ({
-                            ...current,
-                            supplier_offer: {
-                              ...current.supplier_offer,
-                              stock: event.target.value,
-                            },
-                          }))
-                        }
-                        type="text"
-                        value={newFittingForm.supplier_offer?.stock || ""}
+                        checked={isAvailabilityChecked(newFittingForm.supplier_offer?.stock)}
+                        onChange={(event) => setManualSupplierAvailability(event.target.checked)}
+                        type="checkbox"
                       />
+                      <span>{language === "en" ? "Stock / availability" : "Stock / наявність"}</span>
                     </label>
 
                     <label className="fitting-source-field">
@@ -28003,14 +28279,14 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   </div>
                 ) : null}
 
-                <div className="fitting-details-characteristics">
-                  <div className="fitting-details-section-header">
-                    <strong>{t.fittingCharacteristics}</strong>
-                    <span className="service-tree-badge subtle">
-                      {Object.keys(selectedFittingDetail.characteristics || {}).length}
-                    </span>
-                  </div>
-                  {Object.entries(selectedFittingDetail.characteristics || {}).length ? (
+                {Object.entries(selectedFittingDetail.characteristics || {}).length ? (
+                  <div className="fitting-details-characteristics">
+                    <div className="fitting-details-section-header">
+                      <strong>{t.fittingCharacteristics}</strong>
+                      <span className="service-tree-badge subtle">
+                        {Object.keys(selectedFittingDetail.characteristics || {}).length}
+                      </span>
+                    </div>
                     <dl className="fitting-details-characteristics-list">
                       {Object.entries(selectedFittingDetail.characteristics || {}).map(([name, value]) => (
                         <div className="fitting-details-characteristic" key={name}>
@@ -28019,25 +28295,24 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                         </div>
                       ))}
                     </dl>
-                  ) : (
-                    <p className="fitting-details-empty">{t.fittingNoCharacteristics}</p>
-                  )}
-                </div>
+                  </div>
+                ) : null}
 
                 <div className="fitting-details-offers">
                   <div className="fitting-details-section-header">
                     <strong>Постачальники</strong>
                     <span className="service-tree-badge subtle">
-                      {Array.isArray(selectedFittingDetail.supplier_offers)
+                      {Array.isArray(selectedFittingDetail.supplier_offers) &&
+                      selectedFittingDetail.supplier_offers.length
                         ? selectedFittingDetail.supplier_offers.length
-                        : 0}
+                        : null}
                     </span>
                   </div>
                   {Array.isArray(selectedFittingDetail.supplier_offers) && selectedFittingDetail.supplier_offers.length ? (
                     <div className="fitting-details-offers-list">
                       {selectedFittingDetail.supplier_offers.map((offer) => (
                         <article className="fitting-details-offer-card" key={offer.id}>
-                          <header>
+                          <header className="fitting-details-offer-card-header">
                             <strong>{offer.supplier_name || offer.supplier_code || `Supplier ${offer.supplier_id}`}</strong>
                             <span className="service-tree-badge subtle">
                               {offer.is_active ? "Активна" : "Неактивна"}
@@ -28055,10 +28330,6 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                                   ? t.notSet
                                   : `${offer.price} ${offer.currency || "UAH"}`}
                               </strong>
-                            </div>
-                            <div>
-                              <span>Пріоритет</span>
-                              <strong>{offer.priority}</strong>
                             </div>
                             <div>
                               <span>Одиниця</span>
@@ -28079,7 +28350,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                       ))}
                     </div>
                   ) : (
-                    <p className="fitting-details-empty">Немає supplier offers</p>
+                    <p className="fitting-details-empty fitting-details-empty-compact">Постачальника не вказано</p>
                   )}
                 </div>
               </div>

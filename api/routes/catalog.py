@@ -1,6 +1,8 @@
 import asyncio
 
+import base64
 import logging
+from typing import Sequence
 
 from fastapi import (
     APIRouter,
@@ -11,6 +13,7 @@ from fastapi import (
     Query,
 )
 from fastapi.responses import Response
+from binascii import Error as BinasciiError
 from hashlib import sha256
 from datetime import datetime
 import json
@@ -186,6 +189,8 @@ from services.fitting_source_parser import (
 )
 from services.fitting_image_gallery_service import (
     FittingGalleryPreparationError,
+    PreparedFittingGalleryImage,
+    prepare_fitting_gallery_image_from_bytes,
     normalize_fitting_gallery_image_urls,
     prepare_fitting_gallery_images,
 )
@@ -444,6 +449,55 @@ def _build_fitting_source_preview_payload(
         "unit": _normalize_fitting_detail_text(metadata.get("unit") or metadata.get("normalized_unit")),
         "supplier": _resolve_fitting_source_supplier(source_site),
     }
+
+
+def _prepare_manual_fitting_gallery_images(
+    image_urls: Sequence[object] | None,
+    legacy_image_url: str | None = None,
+) -> tuple[PreparedFittingGalleryImage, ...]:
+    normalized_image_urls = [
+        normalized
+        for normalized in (_normalize_fitting_detail_text(item) for item in (image_urls or []))
+        if normalized and normalized.startswith("data:")
+    ]
+
+    if not normalized_image_urls:
+        normalized_legacy_image_url = _normalize_fitting_detail_text(legacy_image_url)
+        if not normalized_legacy_image_url or not normalized_legacy_image_url.startswith("data:"):
+            return ()
+        normalized_image_urls = [normalized_legacy_image_url]
+
+    prepared_images: list[PreparedFittingGalleryImage] = []
+    for sort_order, normalized_image_url in enumerate(normalized_image_urls):
+        header, separator, encoded_payload = normalized_image_url.partition(",")
+        if not separator or not encoded_payload:
+            raise ValueError("Manual fitting image data URL is invalid")
+
+        header_lower = header.casefold()
+        if not header_lower.startswith("data:") or ";base64" not in header_lower:
+            raise ValueError("Manual fitting image data URL must be base64-encoded")
+
+        content_type = header[5:].split(";", 1)[0].strip() or "image/jpeg"
+
+        try:
+            image_bytes = base64.b64decode(encoded_payload, validate=True)
+        except (BinasciiError, ValueError) as error:
+            raise ValueError("Manual fitting image data URL is invalid") from error
+
+        if not image_bytes:
+            raise ValueError("Manual fitting image data URL is empty")
+
+        prepared_images.append(
+            prepare_fitting_gallery_image_from_bytes(
+                source_url=normalized_image_url,
+                image_bytes=image_bytes,
+                content_type=content_type,
+                sort_order=sort_order,
+                is_primary=sort_order == 0,
+            ),
+        )
+
+    return tuple(prepared_images)
 
 
 @router.post(
@@ -3457,6 +3511,42 @@ async def create_fitting_route(
         return {
             "success": False,
             "error": "Fitting name is required",
+        }
+
+    if not effective_source_url:
+        try:
+            prepared_gallery_images = _prepare_manual_fitting_gallery_images(
+                payload.image_urls,
+                effective_image_url,
+            )
+        except (FittingGalleryPreparationError, ValueError) as error:
+            logger.warning(
+                "Manual fitting image preparation failed",
+                extra={
+                    "image_urls": payload.image_urls,
+                    "image_url": effective_image_url,
+                    "error": str(error),
+                },
+            )
+            return {
+                "success": False,
+                "error": str(error) or "Unable to create fitting",
+            }
+
+        if prepared_gallery_images:
+            effective_image_url = prepared_gallery_images[0].source_url
+
+    if technical_product_payload is None:
+        technical_product_payload = {
+            "article": effective_article,
+            "code": effective_code or effective_article,
+            "name": effective_name or effective_article or effective_code or "",
+            "brand": effective_brand,
+            "description": effective_description,
+            "manufacturer_id": _resolve_fitting_manufacturer_id_from_brand(effective_brand),
+            "series_id": None,
+            "category_id": _resolve_fitting_category_id_from_type(payload.fitting_type),
+            "is_active": bool(payload.is_active),
         }
 
     owner_user_id = None if is_system else str(current_user.id)

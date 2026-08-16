@@ -33,6 +33,15 @@ test("canonical fitting render pipeline keeps overview counts, commercial rows, 
   assert.match(appSource, /previewFallbackCandidates\[0\] \|\| ""/);
   assert.match(appSource, /commercialSourceItem\.price \?\? t\.notSet/);
   assert.match(appSource, /commercialSourceItem\.stock \|\| t\.notSet/);
+  assert.match(appSource, /className="fitting-availability-cell"/);
+  assert.match(appSource, /<span>\{t\.fittingStock\}<\/span>/);
+  assert.doesNotMatch(
+    appSource.slice(
+      appSource.indexOf('<div className="fittings-table-header">'),
+      appSource.indexOf('<div className="fittings-table-list">', appSource.indexOf('<div className="fittings-table-header">')),
+    ),
+    /commercialSourceItem\.stock \|\| t\.notSet/,
+  );
   assert.match(catalogViewSource, /function chooseBestLegacyRow\(rows = \[\], activeCity = "", options = \{\}\)/);
   assert.match(catalogViewSource, /function chooseCommercialLegacyRow\(rows = \[\], representativeRow = null, activeCity = ""\)/);
   assert.match(catalogViewSource, /commercial_legacy_row: commercialLegacyRow/);

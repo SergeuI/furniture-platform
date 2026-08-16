@@ -562,6 +562,7 @@ class FittingCatalogCreateSchema(BaseModel):
         default=None,
         max_length=500000,
     )
+    image_urls: List[str] | None = None
     source_url: str | None = Field(
         default=None,
         max_length=1000,

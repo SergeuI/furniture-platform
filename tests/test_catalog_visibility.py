@@ -28,6 +28,8 @@ from database.models.fitting import (
     FittingManufacturerModel,
     FittingModel,
     FittingProductModel,
+    FittingSupplierOfferModel,
+    SupplierModel,
 )
 from database.models import fitting_hole_service_rule  # noqa: F401
 from database.models import fitting_image  # noqa: F401
@@ -1763,19 +1765,140 @@ class CatalogVisibilityTests(unittest.TestCase):
                         "/catalog/fittings",
                         json={
                             "name": "Manual Fitting",
-                            "fitting_type": "drawer_slides",
+                            "article": "MF-001",
+                            "fitting_type": "manual_test_type",
                             "fitting_group": "fittings",
+                            "is_active": True,
                         },
                         headers=self._auth_headers("trial-token"),
                     )
 
                 self.assertEqual(response.status_code, 200)
-                self.assertTrue(response.json()["success"])
+                payload = response.json()
+                self.assertTrue(payload["success"])
                 parse_mock.assert_not_called()
 
                 with session_factory() as session:
                     fitting = session.query(FittingModel).filter(FittingModel.name == "Manual Fitting").one()
+                    product = session.query(FittingProductModel).one()
+                    self.assertEqual(session.query(FittingImageModel).count(), 0)
+                    self.assertEqual(session.query(FittingSupplierOfferModel).count(), 0)
+                    self.assertEqual(session.query(FittingProductModel).count(), 1)
+                    self.assertEqual(session.query(FittingModel).count(), 1)
+                    self.assertEqual(product.name, "Manual Fitting")
+                    self.assertEqual(product.article, "MF-001")
+                    self.assertIsNone(product.brand)
+                    self.assertIsNone(product.manufacturer_id)
+                    self.assertIsNone(product.category_id)
+                    self.assertTrue(product.is_active)
                     self.assertIsNone(fitting.source_url)
+                    self.assertEqual(fitting.article, "MF-001")
+                    self.assertEqual(fitting.technical_product_id, product.id)
+                    self.assertEqual(payload["item"]["technical_product_id"], product.id)
+
+    def test_manual_create_with_supplier_id_persists_supplier_offer(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
+                with session_factory() as session:
+                    supplier = SupplierModel(code="viyar", name="VIYAR", is_active=True)
+                    session.add(supplier)
+                    session.commit()
+                    supplier_id = supplier.id
+
+                response = client.post(
+                    "/catalog/fittings",
+                    json={
+                        "name": "Manual Fitting With Supplier",
+                        "article": "MF-SUP-001",
+                        "fitting_type": "manual_test_type",
+                        "fitting_group": "fittings",
+                        "is_active": True,
+                        "supplier_offer": {
+                            "supplier_id": supplier_id,
+                            "article": "SUP-001",
+                            "price": 19.5,
+                            "currency": "UAH",
+                            "unit": "шт",
+                            "stock": "in stock",
+                            "priority": 0,
+                            "is_active": True,
+                        },
+                    },
+                    headers=self._auth_headers("trial-token"),
+                )
+
+                self.assertEqual(response.status_code, 200)
+                payload = response.json()
+                self.assertTrue(payload["success"])
+
+                with session_factory() as session:
+                    fitting = session.query(FittingModel).filter(FittingModel.article == "MF-SUP-001").one()
+                    product = session.query(FittingProductModel).one()
+                    offer = session.query(FittingSupplierOfferModel).one()
+
+                    self.assertEqual(session.query(FittingSupplierOfferModel).count(), 1)
+                    self.assertEqual(session.query(FittingProductModel).count(), 1)
+                    self.assertEqual(session.query(FittingModel).count(), 1)
+                    self.assertEqual(fitting.technical_product_id, product.id)
+                    self.assertEqual(offer.fitting_id, fitting.id)
+                    self.assertEqual(offer.supplier_id, supplier_id)
+                    self.assertEqual(offer.article, "SUP-001")
+                    self.assertEqual(offer.price, 19.5)
+                    self.assertEqual(offer.currency, "UAH")
+                    self.assertEqual(offer.unit, "шт")
+                    self.assertEqual(offer.stock, "in stock")
+                    self.assertEqual(offer.priority, 0)
+                    self.assertTrue(offer.is_active)
+                    self.assertEqual(payload["item"]["technical_product_id"], product.id)
+
+    def test_manual_create_without_source_url_persists_gallery_images(self) -> None:
+        manual_image_one_data_url = (
+            "data:image/png;base64,"
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg=="
+        )
+        manual_image_two_data_url = (
+            "data:image/png;base64,"
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgaPj/HwAEggJ/59habAAAAABJRU5ErkJggg=="
+        )
+
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
+                response = client.post(
+                    "/catalog/fittings",
+                    json={
+                        "name": "Manual Fitting With Image",
+                        "article": "MF-IMG-001",
+                        "fitting_type": "manual_test_type",
+                        "fitting_group": "fittings",
+                        "image_url": manual_image_one_data_url,
+                        "image_urls": [manual_image_one_data_url, manual_image_two_data_url],
+                        "is_active": True,
+                    },
+                    headers=self._auth_headers("trial-token"),
+                )
+
+                self.assertEqual(response.status_code, 200)
+                payload = response.json()
+                self.assertTrue(payload["success"])
+
+                with session_factory() as session:
+                    fitting = session.query(FittingModel).filter(FittingModel.name == "Manual Fitting With Image").one()
+                    product = session.query(FittingProductModel).one()
+                    images = session.query(FittingImageModel).order_by(FittingImageModel.sort_order.asc()).all()
+
+                    self.assertEqual(session.query(FittingProductModel).count(), 1)
+                    self.assertEqual(session.query(FittingModel).count(), 1)
+                    self.assertEqual(session.query(FittingImageModel).count(), 2)
+                    self.assertEqual(fitting.technical_product_id, product.id)
+                    self.assertEqual([image.fitting_id for image in images], [fitting.id, fitting.id])
+                    self.assertEqual([image.sort_order for image in images], [0, 1])
+                    self.assertEqual([image.is_primary for image in images], [True, False])
+                    self.assertTrue(images[0].image_cached_bytes)
+                    self.assertTrue(images[1].image_cached_bytes)
+                    self.assertEqual(images[0].image_cached_content_type, "image/png")
+                    self.assertEqual(images[1].image_cached_content_type, "image/png")
+                    self.assertEqual(payload["item"]["technical_product_id"], product.id)
+                    self.assertEqual(payload["item"]["image_url"], manual_image_one_data_url)
 
     def test_source_import_rejects_when_gallery_images_missing_uses_generic_message(self) -> None:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:

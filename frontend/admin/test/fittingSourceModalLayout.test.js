@@ -14,6 +14,8 @@ test("fitting source modal keeps preview compact and source validation strict", 
   const sourceModeStart = modalSource.indexOf('fittingCreateMode === "source" ? (');
   const sourceModeEnd = modalSource.indexOf('              ) : (', sourceModeStart);
   const sourceModeSource = sourceModeStart >= 0 && sourceModeEnd > sourceModeStart ? modalSource.slice(sourceModeStart, sourceModeEnd) : modalSource;
+  const manualSupplierStart = modalSource.indexOf('              ) : (', sourceModeStart);
+  const manualSupplierSource = manualSupplierStart >= 0 ? modalSource.slice(manualSupplierStart) : modalSource;
 
   assert.match(appSource, /const \[fittingSourcePreviewState, setFittingSourcePreviewState\] = useState\("idle"\);/);
   assert.match(appSource, /const fittingSourcePreviewReady =\s*fittingSourcePreviewState === "success" && Boolean\(fittingSourcePreview\);/);
@@ -27,22 +29,33 @@ test("fitting source modal keeps preview compact and source validation strict", 
   assert.match(appSource, /function handleFittingSourceUrlKeyDown\(event\) \{\s*if \(event\.key === "Enter"\) \{\s*event\.preventDefault\(\);\s*event\.stopPropagation\(\);\s*\}\s*\}/);
   assert.match(appSource, /className=\{fittingModalMode === "create" && fittingCreateMode === "source" && !fittingSourcePreviewReady[\s\S]*\?\s*"ghost-button"[\s\S]*:\s*"primary-button recommended-action"\s*\}/);
   assert.match(appSource, /disabled=\{loading \|\| \(fittingModalMode === "create" && fittingCreateMode === "source" && !fittingSourcePreviewReady\)\}/);
+  assert.match(appSource, /async function handleFittingImageSelected\(event\) \{\s*const files = Array\.from\(event\.target\.files \|\| \[\]\);\s*event\.target\.value = "";\s*\s*if \(!files\.length\) \{\s*return;\s*\}\s*\s*try \{\s*const imageUrls = await Promise\.all\(files\.map\(\(file\) => compressImageFileToDataUrl\(file\)\)\);\s*setNewFittingForm\(\(current\) => \(\{\s*\.\.\.current,\s*image_urls: \[/);
+  assert.match(appSource, /function removeFittingImageSelection\(index\) \{\s*setNewFittingForm\(\(current\) => \(\{\s*\.\.\.current,\s*image_urls:/);
+  assert.match(appSource, /if \(fittingCreateMode === "source" && !payload\.source_url\) \{/);
+  assert.doesNotMatch(appSource, /if \(isSystemFitting && !payload\.source_url\)/);
+  assert.match(appSource, /image_urls: \[/);
   assert.match(appSource, /renderSourceBadge\(getFittingSourceMeta\(fittingSourcePreview \|\| newFittingForm\)\)/);
   assert.doesNotMatch(appSource, /renderSourceBadge\(getFittingSourceMeta\(fittingSourcePreview \|\| newFittingForm\), true\)/);
-  assert.match(appSource, /Не вдалося отримати дані/);
-  assert.match(appSource, /Перевірте посилання на сторінку товару\./);
-  assert.match(appSource, /Знайдено/);
   assert.doesNotMatch(appSource, /fitting-source-preview-grid/);
   assert.doesNotMatch(appSource, /fitting-source-preview-item\.is-image/);
 
   assert.doesNotMatch(modalSource, /canonical/i);
   assert.doesNotMatch(modalSource, /Supplier detected:/);
-  assert.doesNotMatch(modalSource, /Постачальник визначений/);
   assert.match(modalSource, /fittingSourcePreviewState === "success" && fittingSourcePreview \? \(/);
-  assert.match(modalSource, /Оберіть постачальника\./);
   assert.doesNotMatch(sourceModeSource, /Supplier and price/);
   assert.match(sourceModeSource, /onKeyDown=\{handleFittingSourceUrlKeyDown\}/);
   assert.match(appSource, /if \(\s*fittingModalMode === "create"\s*&&\s*fittingCreateMode === "source"\s*&&\s*!event\.nativeEvent\?\.submitter\s*\)\s*\{\s*return;\s*\}/);
+  assert.match(modalSource, /<input\s+accept="image\/\*"\s+multiple\s+onChange=\{handleFittingImageSelected\}\s+type="file"\s*\/>/);
+  assert.match(modalSource, /Array\.isArray\(newFittingForm\.image_urls\) && newFittingForm\.image_urls\.length \?/);
+  assert.match(modalSource, /className="fitting-manual-gallery fitting-source-span-full"/);
+  assert.match(modalSource, /className="fitting-manual-gallery-strip"/);
+  assert.match(modalSource, /className="fitting-manual-gallery-item"/);
+  assert.match(modalSource, /className="icon-button fitting-manual-gallery-remove"/);
+  assert.match(modalSource, /onClick=\{\(\) => removeFittingImageSelection\(index\)\}/);
+  assert.match(manualSupplierSource, /<span>\{language === "en" \? "Supplier" : "Постачальник"\}<\/span>/);
+  assert.match(manualSupplierSource, /value=\{newFittingForm\.supplier_offer\?\.supplier_id \|\| ""\}/);
+  assert.match(manualSupplierSource, /Choose supplier/);
+  assert.match(appSource, /Choose a supplier or clear the supplier fields\./);
 
   assert.match(stylesSource, /\.fitting-source-modal \{\s*display: flex;[\s\S]*max-height: min\(90vh, calc\(100vh - 32px\)\);/);
   assert.match(stylesSource, /\.fitting-source-modal-form \{\s*display: grid;[\s\S]*overflow: auto;/);
@@ -50,6 +63,10 @@ test("fitting source modal keeps preview compact and source validation strict", 
   assert.match(stylesSource, /\.fitting-source-modal-form \.fitting-source-preview-image \{\s*align-items: center;[\s\S]*height: 190px;[\s\S]*max-width: 220px;/);
   assert.match(stylesSource, /\.fitting-source-modal-form \.fitting-source-preview-thumbs \{\s*display: flex;[\s\S]*overflow-x: auto;/);
   assert.match(stylesSource, /\.fitting-source-modal-form \.fitting-source-preview-thumb \{\s*align-items: center;[\s\S]*height: 56px;[\s\S]*width: 56px;/);
+  assert.match(stylesSource, /\.fitting-source-modal-form \.fitting-manual-gallery \{\s*display: grid;[\s\S]*justify-items: start;/);
+  assert.match(stylesSource, /\.fitting-source-modal-form \.fitting-manual-gallery-strip \{\s*display: flex;[\s\S]*flex-wrap: wrap;[\s\S]*gap: 8px;/);
+  assert.match(stylesSource, /\.fitting-source-modal-form \.fitting-manual-gallery-item \{\s*align-items: center;[\s\S]*height: 88px;[\s\S]*position: relative;[\s\S]*width: 88px;/);
+  assert.match(stylesSource, /\.fitting-source-modal-form \.fitting-manual-gallery-remove \{\s*align-items: center;[\s\S]*position: absolute;[\s\S]*right: 5px;[\s\S]*top: 5px;/);
   assert.match(stylesSource, /\.fitting-source-modal-form \.fitting-source-preview-summary \{\s*display: grid;[\s\S]*gap: 6px;/);
   assert.match(stylesSource, /\.fitting-source-modal-form \.fitting-source-preview-row \{\s*align-items: start;[\s\S]*grid-template-columns: minmax\(140px, 180px\) minmax\(0, 1fr\);/);
   assert.match(stylesSource, /\.fitting-source-modal-form \.fitting-source-preview-empty \{/);
@@ -59,4 +76,6 @@ test("fitting source modal keeps preview compact and source validation strict", 
   );
   assert.match(stylesSource, /@media \(max-width: 760px\) \{[\s\S]*\.fitting-source-modal-form \.fitting-source-preview-thumb \{\s*height: 52px;[\s\S]*width: 52px;/);
   assert.match(stylesSource, /@media \(max-width: 760px\) \{[\s\S]*\.fitting-source-modal-form \.fitting-source-preview-image \{\s*max-width: none;[\s\S]*width: 100%;/);
+  assert.match(stylesSource, /@media \(max-width: 760px\) \{[\s\S]*\.fitting-source-modal-form \.fitting-manual-gallery-item \{\s*height: 76px;[\s\S]*width: 76px;/);
+  assert.match(stylesSource, /@media \(max-width: 760px\) \{[\s\S]*\.fitting-source-modal-form \.fitting-manual-gallery-remove \{\s*height: 20px;[\s\S]*right: 5px;[\s\S]*top: 5px;[\s\S]*width: 20px;/);
 });

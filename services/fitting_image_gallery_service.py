@@ -121,6 +121,23 @@ def _prepare_image_record(
     )
 
 
+def prepare_fitting_gallery_image_from_bytes(
+    *,
+    source_url: str,
+    image_bytes: bytes,
+    content_type: object | None,
+    sort_order: int,
+    is_primary: bool,
+) -> PreparedFittingGalleryImage:
+    return _prepare_image_record(
+        source_url=source_url,
+        image_bytes=image_bytes,
+        content_type=content_type,
+        sort_order=sort_order,
+        is_primary=is_primary,
+    )
+
+
 def prepare_fitting_gallery_images(
     image_urls: Sequence[object],
     *,

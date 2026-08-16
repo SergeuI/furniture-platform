@@ -19,4 +19,21 @@ test("admin app uses canonical section-based navigation helpers", () => {
   assert.match(source, /getCollapsedSidebarGroupClickTarget\(\{\s*currentView: activeViewRef\.current,\s*groupKey: "processing",\s*userRole: user\?\.role,\s*}\)/);
   assert.match(source, /sidebarFlyoutPreserveRouteChangeRef\.current = true;/);
   assert.match(source, /isConnectionsWorkspaceView \?\s*\(\r?\n\s*<ConnectionsWorkspace/);
+  assert.match(
+    source,
+    /function resetFittingCatalogNavigation\(\) \{[\s\S]*localStorage\.removeItem\(FITTING_CATEGORY_STORAGE_KEY\);[\s\S]*setSelectedFittingCategory\(""\);[\s\S]*\}/,
+  );
+  assert.match(
+    source,
+    /function openFittingCatalogRoot\(\) \{[\s\S]*resetFittingCatalogNavigation\(\);[\s\S]*switchView\("catalogFittings"\);[\s\S]*\}/,
+  );
+  assert.match(
+    source,
+    /sidebarFlyout\?\.groupKey === "catalog"[\s\S]*key: "catalogFittings"[\s\S]*onClick: \(\) => \{[\s\S]*openFittingCatalogRoot\(\);[\s\S]*closeSidebarOnMobile\(\);[\s\S]*closeSidebarFlyout\(\);[\s\S]*\}/,
+  );
+  assert.match(
+    source,
+    /isCatalogMenuOpen \? \(\r?\n\s*<div className="nav-subtabs">[\s\S]*openFittingCatalogRoot\(\);[\s\S]*closeSidebarOnMobile\(\);[\s\S]*closeSidebarFlyout\(\);[\s\S]*\}/,
+  );
+  assert.match(source, /onClick=\{\(\) => \{[\s\S]*setSelectedFittingCategory\(category\.code\);[\s\S]*\}\}/);
 });

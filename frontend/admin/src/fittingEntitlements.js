@@ -10,6 +10,7 @@ export const DEFAULT_FITTING_FORM = {
   fitting_group: "fittings",
   fitting_type: "drawer_slides",
   image_url: "",
+  image_urls: [],
   is_active: true,
   is_system: false,
   name: "",
@@ -197,6 +198,9 @@ export function createFittingFormDraft(item = null, options = {}) {
     brand: String(item?.brand || ""),
     code: String(item?.code || ""),
     image_url: String(item?.image_url || ""),
+    image_urls: Array.isArray(item?.image_urls)
+      ? item.image_urls.map((url) => String(url || "").trim()).filter(Boolean)
+      : [],
     is_active: item?.is_active !== false,
     is_system: Boolean(item?.is_system),
     name: String(item?.name || ""),
@@ -230,6 +234,9 @@ export function buildFittingSubmissionPayload(form, options = {}) {
   const normalizedCity = String(form?.city || "").trim();
   const normalizedCode = String(form?.code || "").trim();
   const normalizedImageUrl = String(form?.image_url || "").trim();
+  const normalizedImageUrls = Array.isArray(form?.image_urls)
+    ? form.image_urls.map((item) => String(item || "").trim()).filter(Boolean)
+    : [];
   const normalizedName = String(form?.name || "").trim();
   const normalizedSourceUrl = String(form?.source_url || "").trim();
   const normalizedStock = String(form?.stock || "").trim();
@@ -257,7 +264,8 @@ export function buildFittingSubmissionPayload(form, options = {}) {
     code: mode === "edit" ? normalizedCode || null : null,
     fitting_group: String(form?.fitting_group || DEFAULT_FITTING_FORM.fitting_group),
     fitting_type: String(form?.fitting_type || DEFAULT_FITTING_FORM.fitting_type),
-    image_url: normalizedImageUrl || null,
+    image_url: normalizedImageUrls[0] || normalizedImageUrl || null,
+    image_urls: normalizedImageUrls.length ? normalizedImageUrls : (normalizedImageUrl ? [normalizedImageUrl] : null),
     source_url: inferredSourceUrl || null,
     is_active: Boolean(form?.is_active),
     name: inferredName || normalizedArticle || inferredSourceUrl || (isSystemFitting ? fallbackSystemName : ""),
