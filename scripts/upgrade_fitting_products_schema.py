@@ -161,7 +161,11 @@ def _normalize_text(value) -> str | None:
 
 
 def _load_fitting_rows(connection: sqlite3.Connection) -> list[dict[str, object]]:
+    has_brand = _column_exists(connection, "fittings", "brand")
+    has_description = _column_exists(connection, "fittings", "description")
     has_technical_product_id = _column_exists(connection, "fittings", "technical_product_id")
+    brand_select = "brand" if has_brand else "NULL AS brand"
+    description_select = "description" if has_description else "NULL AS description"
     if has_technical_product_id:
         rows = _driver_execute(
             connection,
@@ -171,13 +175,16 @@ def _load_fitting_rows(connection: sqlite3.Connection) -> list[dict[str, object]
                 article,
                 code,
                 name,
-                brand,
-                description,
+                {brand_select},
+                {description_select},
                 is_active,
                 technical_product_id
             FROM fittings
             ORDER BY article, id
-            """,
+            """.format(
+                brand_select=brand_select,
+                description_select=description_select,
+            ),
         ).fetchall()
     else:
         rows = _driver_execute(
@@ -188,12 +195,15 @@ def _load_fitting_rows(connection: sqlite3.Connection) -> list[dict[str, object]
                 article,
                 code,
                 name,
-                brand,
-                description,
+                {brand_select},
+                {description_select},
                 is_active
             FROM fittings
             ORDER BY article, id
-            """,
+            """.format(
+                brand_select=brand_select,
+                description_select=description_select,
+            ),
         ).fetchall()
     fitting_rows: list[dict[str, object]] = []
     for row in rows:

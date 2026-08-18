@@ -5,7 +5,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from sqlalchemy import create_engine
+
+from database.base import Base
 from scripts import upgrade_fittings_foundation_schema as migration
+from scripts import upgrade_fitting_products_schema as fitting_products_migration
+from scripts import upgrade_fitting_taxonomy_schema as fitting_taxonomy_migration
+from scripts import upgrade_suppliers_ownership_schema as suppliers_ownership_migration
 
 
 class UpgradeFittingsFoundationSchemaTests(unittest.TestCase):
@@ -96,6 +102,59 @@ class UpgradeFittingsFoundationSchemaTests(unittest.TestCase):
                 )
                 self.assertEqual(
                     connection.execute("SELECT COUNT(*) FROM keep_me").fetchone()[0],
+                    1,
+                )
+
+    def test_current_schema_create_all_then_foundation_upgrade_is_compatible(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            database_path = Path(tmpdir) / "staging.db"
+            self._create_legacy_database(database_path)
+
+            temp_engine = create_engine(f"sqlite:///{database_path.as_posix()}")
+            try:
+                Base.metadata.create_all(bind=temp_engine)
+            finally:
+                temp_engine.dispose()
+
+            with sqlite3.connect(database_path) as connection:
+                plan = migration._build_plan(connection)
+                self.assertFalse(plan["prerequisite_missing"])
+                self.assertTrue(plan["seed_viyar_supplier"])
+
+                migration.ensure_fittings_foundation_schema(connection)
+                suppliers_ownership_migration.ensure_suppliers_ownership_schema(connection)
+                fitting_products_migration.ensure_fitting_products_schema(connection)
+                fitting_taxonomy_migration.ensure_fitting_taxonomy_schema(connection)
+
+                supplier_rows = connection.execute(
+                    "SELECT code, name, is_active, owner_user_id, is_system FROM suppliers WHERE code = ?",
+                    ("viyar",),
+                ).fetchall()
+                self.assertEqual(len(supplier_rows), 1)
+                self.assertEqual(
+                    tuple(supplier_rows[0]),
+                    ("viyar", "VIYAR", 1, None, 1),
+                )
+                self.assertEqual(
+                    connection.execute(
+                        "SELECT COUNT(*) FROM suppliers WHERE code = ?",
+                        ("viyar",),
+                    ).fetchone()[0],
+                    1,
+                )
+                self.assertTrue(self._column_exists(connection, "fittings", "catalog_key"))
+                self.assertTrue(self._column_exists(connection, "fittings", "technical_product_id"))
+                self.assertEqual(
+                    connection.execute("SELECT COUNT(*) FROM keep_me").fetchone()[0],
+                    1,
+                )
+
+                migration.ensure_fittings_foundation_schema(connection)
+                self.assertEqual(
+                    connection.execute(
+                        "SELECT COUNT(*) FROM suppliers WHERE code = ?",
+                        ("viyar",),
+                    ).fetchone()[0],
                     1,
                 )
 

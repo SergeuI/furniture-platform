@@ -339,14 +339,24 @@ def _load_legacy_category_rows(connection) -> dict[int, dict[str, object]]:
     if not _table_exists(connection, "fittings"):
         return {}
 
+    if not _column_exists(connection, "fittings", "technical_product_id"):
+        return {}
+
+    has_fitting_type = _column_exists(connection, "fittings", "fitting_type")
+    has_fitting_group = _column_exists(connection, "fittings", "fitting_group")
+    fitting_type_select = "fitting_type" if has_fitting_type else "NULL AS fitting_type"
+    fitting_group_select = "fitting_group" if has_fitting_group else "NULL AS fitting_group"
     rows = _driver_execute(
         connection,
         """
-        SELECT technical_product_id, fitting_type, fitting_group
+        SELECT technical_product_id, {fitting_type_select}, {fitting_group_select}
         FROM fittings
         WHERE technical_product_id IS NOT NULL
         ORDER BY technical_product_id, id
-        """,
+        """.format(
+            fitting_type_select=fitting_type_select,
+            fitting_group_select=fitting_group_select,
+        ),
     ).fetchall()
 
     grouped: dict[int, dict[str, object]] = {}

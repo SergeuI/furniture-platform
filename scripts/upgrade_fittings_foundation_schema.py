@@ -93,6 +93,14 @@ INDEXES = {
 
 VIYAR_SUPPLIER_CODE = "viyar"
 VIYAR_SUPPLIER_NAME = "VIYAR"
+VIYAR_SUPPLIER_SEED_VALUES = {
+    "code": VIYAR_SUPPLIER_CODE,
+    "name": VIYAR_SUPPLIER_NAME,
+    "is_active": 1,
+    "is_system": 1,
+    "owner_user_id": None,
+    "logo_url": None,
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -255,6 +263,34 @@ def _supplier_exists(connection: sqlite3.Connection, code: str) -> bool:
     return row is not None
 
 
+def _table_column_names(connection: sqlite3.Connection, table_name: str) -> list[str]:
+    rows = _driver_execute(connection, f"PRAGMA table_info({table_name})").fetchall()
+    return [str(row[1]) for row in rows]
+
+
+def _build_viyar_supplier_insert(connection: sqlite3.Connection) -> tuple[str, tuple[object, ...]]:
+    available_columns = set(_table_column_names(connection, "suppliers"))
+    insert_columns = [
+        column_name
+        for column_name in (
+            "code",
+            "name",
+            "is_active",
+            "is_system",
+            "owner_user_id",
+            "logo_url",
+        )
+        if column_name in available_columns
+    ]
+    if not insert_columns:
+        raise SystemExit("Suppliers table does not expose any insertable columns.")
+
+    placeholders = ", ".join("?" for _ in insert_columns)
+    statement = f"INSERT INTO suppliers ({', '.join(insert_columns)}) VALUES ({placeholders})"
+    values = tuple(VIYAR_SUPPLIER_SEED_VALUES[column_name] for column_name in insert_columns)
+    return statement, values
+
+
 def _create_backup(database_path: Path) -> Path:
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     backup_path = database_path.with_name(f"{database_path.name}.{timestamp}.bak")
@@ -301,13 +337,11 @@ def _apply_plan(
             if not _table_exists(connection, "suppliers"):
                 raise SystemExit("Suppliers table was not created as expected.")
             if not _supplier_exists(connection, VIYAR_SUPPLIER_CODE):
+                statement, parameters = _build_viyar_supplier_insert(connection)
                 _driver_execute(
                     connection,
-                    """
-                    INSERT INTO suppliers (code, name, is_active)
-                    VALUES (?, ?, 1)
-                    """,
-                    (VIYAR_SUPPLIER_CODE, VIYAR_SUPPLIER_NAME),
+                    statement,
+                    parameters,
                 )
 
         for index_name in plan["missing_indexes"]:
