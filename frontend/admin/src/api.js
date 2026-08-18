@@ -99,6 +99,37 @@ function authHeaders(token) {
   };
 }
 
+function dispatchUnauthorized(token, path, status) {
+  const authToken = String(token || "").trim();
+  if (!authToken) {
+    return;
+  }
+
+  window.dispatchEvent(
+    new CustomEvent("furniture-admin-unauthorized", {
+      detail: {
+        token: authToken,
+        path,
+        status,
+      },
+    }),
+  );
+}
+
+export function resolveAdminAssetUrl(path) {
+  const normalizedPath = String(path || "").trim();
+
+  if (!normalizedPath) {
+    return "";
+  }
+
+  if (/^(?:https?:\/\/|blob:|data:)/i.test(normalizedPath)) {
+    return normalizedPath;
+  }
+
+  return `${API_BASE_URL}${normalizedPath.startsWith("/") ? normalizedPath : `/${normalizedPath}`}`;
+}
+
 export async function getMaterialImageBlob(token, article, timeoutMs = 30000) {
   const normalizedArticle = String(article || "").trim();
 
@@ -250,6 +281,138 @@ export async function getFittingImageBlob(token, itemId, imageId, timeoutMs = 30
   }
 }
 
+export async function uploadSupplierLogo(token, file, timeoutMs = 30000) {
+  if (!file) {
+    return {
+      success: false,
+      status: 0,
+      error: "File is required",
+    };
+  }
+
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/catalog/suppliers/logo`, {
+      method: "POST",
+      headers: authHeaders(token),
+      body: formData,
+      signal: controller.signal,
+    });
+
+    const responseText = await response.text();
+    let payload = {};
+
+    if (responseText) {
+      try {
+        payload = JSON.parse(responseText);
+      } catch {
+        payload = {
+          success: false,
+          error: responseText.trim().startsWith("<")
+            ? `Server returned an HTML error page (HTTP ${response.status})`
+            : `Server returned an invalid response (HTTP ${response.status})`,
+        };
+      }
+    }
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        dispatchUnauthorized(token, "/catalog/suppliers/logo", response.status);
+      }
+
+      return {
+        success: false,
+        error: extractErrorMessage(payload),
+        status: response.status,
+      };
+    }
+
+    return payload;
+  } catch (error) {
+    return {
+      success: false,
+      error:
+        error?.name === "AbortError"
+          ? `Request timed out after ${Math.round(timeoutMs / 1000)} seconds`
+          : error?.message || "Network request failed",
+      status: 0,
+    };
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+export async function uploadFittingManufacturerLogo(token, file, timeoutMs = 30000) {
+  if (!file) {
+    return {
+      success: false,
+      status: 0,
+      error: "File is required",
+    };
+  }
+
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/catalog/fitting-manufacturers/logo`, {
+      method: "POST",
+      headers: authHeaders(token),
+      body: formData,
+      signal: controller.signal,
+    });
+
+    const responseText = await response.text();
+    let payload = {};
+
+    if (responseText) {
+      try {
+        payload = JSON.parse(responseText);
+      } catch {
+        payload = {
+          success: false,
+          error: responseText.trim().startsWith("<")
+            ? `Server returned an HTML error page (HTTP ${response.status})`
+            : `Server returned an invalid response (HTTP ${response.status})`,
+        };
+      }
+    }
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        dispatchUnauthorized(token, "/catalog/fitting-manufacturers/logo", response.status);
+      }
+
+      return {
+        success: false,
+        error: extractErrorMessage(payload),
+        status: response.status,
+      };
+    }
+
+    return payload;
+  } catch (error) {
+    return {
+      success: false,
+      error:
+        error?.name === "AbortError"
+          ? `Request timed out after ${Math.round(timeoutMs / 1000)} seconds`
+          : error?.message || "Network request failed",
+      status: 0,
+    };
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 export async function login(email, password) {
   return request("/auth/login", {
     method: "POST",
@@ -377,6 +540,49 @@ export async function listFittingSuppliers(token, includeInactive = false) {
   const query = searchParams.toString();
 
   return request(`/catalog/suppliers${query ? `?${query}` : ""}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function createFittingSupplier(token, payload) {
+  return request("/catalog/suppliers", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateFittingSupplier(token, supplierId, payload) {
+  const normalizedSupplierId = String(supplierId || "").trim();
+
+  if (!normalizedSupplierId) {
+    return {
+      success: false,
+      error: "Supplier ID is required",
+      status: 0,
+    };
+  }
+
+  return request(`/catalog/suppliers/${encodeURIComponent(normalizedSupplierId)}`, {
+    method: "PATCH",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteFittingSupplier(token, supplierId) {
+  const normalizedSupplierId = String(supplierId || "").trim();
+
+  if (!normalizedSupplierId) {
+    return {
+      success: false,
+      error: "Supplier ID is required",
+      status: 0,
+    };
+  }
+
+  return request(`/catalog/suppliers/${encodeURIComponent(normalizedSupplierId)}`, {
+    method: "DELETE",
     headers: authHeaders(token),
   });
 }

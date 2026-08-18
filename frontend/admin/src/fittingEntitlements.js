@@ -33,6 +33,57 @@ export const DEFAULT_FITTING_FORM = {
   },
 };
 
+function normalizeFittingAvailabilityDraftValue(value) {
+  const text = String(value ?? "").replace(/\s+/g, " ").trim();
+
+  if (!text) {
+    return "";
+  }
+
+  const normalized = text.toLowerCase();
+
+  if (
+    value === true ||
+    value === 1 ||
+    normalized === "наявність" ||
+    normalized === "в наявності" ||
+    normalized === "in stock" ||
+    normalized === "true" ||
+    normalized === "1" ||
+    normalized === "yes"
+  ) {
+    return "in stock";
+  }
+
+  if (
+    value === false ||
+    value === 0 ||
+    normalized === "немає в наявності" ||
+    normalized === "нема в наявності" ||
+    normalized === "out of stock" ||
+    normalized === "false" ||
+    normalized === "0" ||
+    normalized === "no"
+  ) {
+    return "out of stock";
+  }
+
+  return text;
+}
+
+function normalizeFittingAvailabilityPayloadValue(value) {
+  const normalized = normalizeFittingAvailabilityDraftValue(value);
+  if (normalized === "in stock" || normalized === "out of stock") {
+    return normalized;
+  }
+
+  return null;
+}
+
+export function getFittingAvailabilityCheckedValue(value) {
+  return normalizeFittingAvailabilityDraftValue(value) === "in stock";
+}
+
 export function getFittingEntitlementFlags(user) {
   return {
     view: hasUserEntitlement(user, "fittings.view"),
@@ -206,7 +257,7 @@ export function createFittingFormDraft(item = null, options = {}) {
     name: String(item?.name || ""),
     price: item?.price === null || item?.price === undefined ? "" : String(item.price),
     sort_order: Number(item?.sort_order || 0),
-    stock: String(item?.stock || ""),
+    stock: normalizeFittingAvailabilityDraftValue(item?.stock),
     source_url: String(item?.source_url || ""),
     supplier_offer: {
       ...DEFAULT_FITTING_FORM.supplier_offer,
@@ -218,7 +269,7 @@ export function createFittingFormDraft(item = null, options = {}) {
       price: primaryOffer?.price === null || primaryOffer?.price === undefined ? "" : String(primaryOffer.price),
       currency: String(primaryOffer?.currency || DEFAULT_FITTING_FORM.supplier_offer.currency),
       unit: String(primaryOffer?.unit || ""),
-      stock: String(primaryOffer?.stock || ""),
+      stock: normalizeFittingAvailabilityDraftValue(primaryOffer?.stock),
       is_active: primaryOffer?.is_active !== false,
       priority: Number(primaryOffer?.priority || DEFAULT_FITTING_FORM.supplier_offer.priority),
     },
@@ -239,7 +290,7 @@ export function buildFittingSubmissionPayload(form, options = {}) {
     : [];
   const normalizedName = String(form?.name || "").trim();
   const normalizedSourceUrl = String(form?.source_url || "").trim();
-  const normalizedStock = String(form?.stock || "").trim();
+  const normalizedStock = normalizeFittingAvailabilityPayloadValue(form?.stock);
   const supplierOffer = form?.supplier_offer || null;
   const normalizedSupplierId = String(supplierOffer?.supplier_id || "").trim();
   const normalizedSupplierArticle = String(supplierOffer?.article || "").trim();
@@ -247,7 +298,7 @@ export function buildFittingSubmissionPayload(form, options = {}) {
   const normalizedSupplierSourceUrl = String(supplierOffer?.source_url || "").trim();
   const normalizedSupplierCurrency = String(supplierOffer?.currency || "").trim();
   const normalizedSupplierUnit = String(supplierOffer?.unit || "").trim();
-  const normalizedSupplierStock = String(supplierOffer?.stock || "").trim();
+  const normalizedSupplierStock = normalizeFittingAvailabilityPayloadValue(supplierOffer?.stock);
   const inferredSourceUrl = normalizedSourceUrl || (looksLikeUrl(normalizedName) ? normalizedName : "");
   const inferredName = looksLikeUrl(normalizedName) && inferredSourceUrl === normalizedName ? "" : normalizedName;
   const fallbackSystemName = String(options.fallbackSystemName || "").trim();

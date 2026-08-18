@@ -8,9 +8,11 @@ from fastapi import (
     APIRouter,
     BackgroundTasks,
     Depends,
+    File,
     HTTPException,
     Header,
     Query,
+    UploadFile,
 )
 from fastapi.responses import Response
 from binascii import Error as BinasciiError
@@ -42,6 +44,8 @@ from schemas.catalog import (
     FittingSourcePreviewResponseSchema,
     FittingSupplierOfferInputSchema,
     FittingSupplierListResponseSchema,
+    FittingSupplierCreateUpdateSchema,
+    FittingSupplierOperationResponseSchema,
     FittingSupplierOfferListResponseSchema,
     FittingSupplierOfferOperationResponseSchema,
     CatalogItemUpdateSchema,
@@ -84,6 +88,7 @@ from database.models.fitting import (
     FittingManufacturerModel,
     FittingProductModel,
     FittingSeriesModel,
+    FittingSupplierOfferModel,
     SupplierModel,
 )
 from database.repositories.catalog_repository import (
@@ -116,7 +121,10 @@ from database.repositories.fitting_taxonomy_repository import (
 )
 from database.repositories.inventory_repository import (
     delete_fittings_exact,
+    create_supplier,
+    delete_supplier,
     list_fitting_delete_dependencies,
+    update_supplier,
 )
 from database.repositories.service_catalog_repository import (
     create_manual_service_catalog_item,
@@ -216,6 +224,10 @@ from services.material_catalog_service import (
 )
 from services.catalog_auto_refresh_service import (
     get_catalog_auto_refresh_status,
+)
+from services.upload_service import (
+    save_supplier_logo_file,
+    save_manufacturer_logo_file,
 )
 
 router = APIRouter()
@@ -500,6 +512,21 @@ def _prepare_manual_fitting_gallery_images(
     return tuple(prepared_images)
 
 
+def _prepare_remote_fitting_gallery_images(
+    image_urls: Sequence[object] | None,
+    *,
+    selected_city: str | None = None,
+) -> tuple[PreparedFittingGalleryImage, ...]:
+    normalized_image_urls = normalize_fitting_gallery_image_urls(image_urls or [])
+    return prepare_fitting_gallery_images(
+        normalized_image_urls,
+        fetcher=lambda source_url: fetch_remote_image_payload(
+            source_url,
+            city=selected_city,
+        ),
+    )
+
+
 @router.post(
     "/fittings/source-preview",
     response_model=FittingSourcePreviewResponseSchema,
@@ -599,7 +626,9 @@ def _serialize_fitting_detail(item: FittingModel) -> dict:
     preview_payload = source_payload.get("preview") if isinstance(source_payload, dict) else {}
     parsed_item_dict = parsed_item if isinstance(parsed_item, dict) else {}
     preview_dict = preview_payload if isinstance(preview_payload, dict) else {}
-    source_site = _normalize_fitting_detail_text(item.source) or detect_material_source_site(item.source_url)
+    source_site = _normalize_fitting_detail_text(item.source)
+    if not source_site and _normalize_fitting_detail_text(item.source_url):
+        source_site = detect_material_source_site(item.source_url)
     parsed_characteristics = _normalize_fitting_characteristics(parsed_item_dict.get("characteristics"))
     parsed_description = _normalize_fitting_detail_text(parsed_item_dict.get("description"))
     parsed_brand = _normalize_fitting_detail_text(parsed_item_dict.get("brand"))
@@ -845,6 +874,21 @@ def _ensure_fitting_feature_access(current_user, feature_key: str) -> None:
 
     with EntitlementService() as service:
         if service.has_feature(current_user, feature_key):
+            return
+
+    raise HTTPException(
+        status_code=403,
+        detail={
+            "success": False,
+            "error": "Insufficient permissions",
+        },
+    )
+
+
+def _ensure_fitting_supplier_logo_upload_access(current_user) -> None:
+
+    with EntitlementService() as service:
+        if service.has_feature(current_user, "fittings.create") or service.has_feature(current_user, "fittings.edit"):
             return
 
     raise HTTPException(
@@ -2210,8 +2254,259 @@ async def list_fitting_suppliers_route(
 
     return {
         "success": True,
-        "items": list_suppliers(include_inactive=include_inactive),
+        "items": list_suppliers(
+            include_inactive=include_inactive,
+            current_user_id=str(current_user.id),
+        ),
     }
+
+
+@router.post(
+    "/suppliers",
+    response_model=FittingSupplierOperationResponseSchema,
+)
+async def create_fitting_supplier_route(
+    payload: FittingSupplierCreateUpdateSchema,
+    current_user = Depends(require_roles([
+        "admin",
+        "trial",
+        "premium",
+        "pro",
+        "free",
+    ])),
+):
+    _ensure_fitting_feature_access(current_user, "fittings.create")
+
+    is_system = bool(payload.is_system)
+    if is_system and current_user.role != "admin":
+        return {
+            "success": False,
+            "error": "Only admin can create system suppliers",
+        }
+
+    item = create_supplier(
+        code=payload.code,
+        name=payload.name,
+        logo_url=payload.logo_url,
+        owner_user_id=None if is_system else str(current_user.id),
+        is_system=is_system,
+        is_active=payload.is_active,
+    )
+    if not item:
+        return {
+            "success": False,
+            "error": "Unable to create supplier",
+        }
+
+    return {
+        "success": True,
+        "item": item,
+    }
+
+
+@router.patch(
+    "/suppliers/{supplier_id}",
+    response_model=FittingSupplierOperationResponseSchema,
+)
+async def update_fitting_supplier_route(
+    supplier_id: str,
+    payload: FittingSupplierCreateUpdateSchema,
+    current_user = Depends(require_roles([
+        "admin",
+        "trial",
+        "premium",
+        "pro",
+        "free",
+    ])),
+):
+    _ensure_fitting_feature_access(current_user, "fittings.edit")
+
+    db = SessionLocal()
+    try:
+        item = db.get(SupplierModel, int(supplier_id))
+        if not item:
+            return {
+                "success": False,
+                "error": "Supplier not found",
+            }
+
+        if current_user.role != "admin" and (
+            bool(item.is_system) or str(item.owner_user_id or "").strip() != str(current_user.id)
+        ):
+            return {
+                "success": False,
+                "error": "You do not have permission to edit this supplier",
+            }
+
+        if payload.is_system and current_user.role != "admin":
+            return {
+                "success": False,
+                "error": "Only admin can mark suppliers as system",
+            }
+
+        item_payload = update_supplier(
+            supplier_id,
+            code=payload.code,
+            name=payload.name,
+            logo_url=payload.logo_url,
+            owner_user_id=None if payload.is_system else str(item.owner_user_id or current_user.id),
+            is_system=payload.is_system,
+            is_active=payload.is_active,
+        )
+        if not item_payload:
+            return {
+                "success": False,
+                "error": "Unable to update supplier",
+            }
+
+        return {
+            "success": True,
+            "item": item_payload,
+        }
+    finally:
+        db.close()
+
+
+@router.post(
+    "/suppliers/logo",
+)
+async def upload_fitting_supplier_logo_route(
+    file: UploadFile = File(...),
+    current_user = Depends(require_roles([
+        "admin",
+        "trial",
+        "premium",
+        "pro",
+        "free",
+    ])),
+):
+    _ensure_fitting_supplier_logo_upload_access(current_user)
+
+    if not file.filename:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "success": False,
+                "error": "File name is required",
+            },
+        )
+
+    try:
+        logo_url = await save_supplier_logo_file(file)
+    except ValueError as error:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "success": False,
+                "error": str(error),
+            },
+        ) from error
+
+    return {
+        "success": True,
+        "logo_url": logo_url,
+    }
+
+
+@router.post(
+    "/fitting-manufacturers/logo",
+)
+async def upload_fitting_manufacturer_logo_route(
+    file: UploadFile = File(...),
+    current_user = Depends(require_roles([
+        "admin",
+        "trial",
+        "premium",
+        "pro",
+        "free",
+    ])),
+):
+    _ensure_fitting_supplier_logo_upload_access(current_user)
+
+    if not file.filename:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "success": False,
+                "error": "File name is required",
+            },
+        )
+
+    try:
+        logo_url = await save_manufacturer_logo_file(file)
+    except ValueError as error:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "success": False,
+                "error": str(error),
+            },
+        ) from error
+
+    return {
+        "success": True,
+        "logo_url": logo_url,
+    }
+
+
+@router.delete(
+    "/suppliers/{supplier_id}",
+    response_model=FittingSupplierOperationResponseSchema,
+)
+async def delete_fitting_supplier_route(
+    supplier_id: str,
+    current_user = Depends(require_roles([
+        "admin",
+        "trial",
+        "premium",
+        "pro",
+        "free",
+    ])),
+):
+    _ensure_fitting_feature_access(current_user, "fittings.delete")
+
+    db = SessionLocal()
+    try:
+        item = db.get(SupplierModel, int(supplier_id))
+        if not item:
+            return {
+                "success": False,
+                "error": "Supplier not found",
+            }
+
+        if current_user.role != "admin" and (
+            bool(item.is_system) or str(item.owner_user_id or "").strip() != str(current_user.id)
+        ):
+            return {
+                "success": False,
+                "error": "You do not have permission to delete this supplier",
+            }
+
+        has_offers = (
+            db.query(FittingSupplierOfferModel.id)
+            .filter(FittingSupplierOfferModel.supplier_id == int(supplier_id))
+            .first()
+            is not None
+        )
+        if has_offers:
+            return {
+                "success": False,
+                "error": "Supplier is used by fitting offers",
+            }
+
+        item_payload = delete_supplier(supplier_id)
+        if not item_payload:
+            return {
+                "success": False,
+                "error": "Unable to delete supplier",
+            }
+
+        return {
+            "success": True,
+            "item": item_payload,
+        }
+    finally:
+        db.close()
 
 
 @router.get(
@@ -3402,16 +3697,13 @@ async def create_fitting_route(
                 )
                 return {
                     "success": False,
-                    "error": "Не вдалося отримати дані за посиланням. Перевірте посилання або спробуйте пізніше.",
+                    "error": "Не вдалося додати фурнітуру. Перевірте дані та спробуйте ще раз.",
                 }
 
             try:
-                prepared_gallery_images = prepare_fitting_gallery_images(
-                    normalize_fitting_gallery_image_urls(metadata_image_urls),
-                    fetcher=lambda source_url: fetch_remote_image_payload(
-                        source_url,
-                        city=selected_city,
-                    ),
+                prepared_gallery_images = _prepare_remote_fitting_gallery_images(
+                    payload.image_urls or metadata_image_urls,
+                    selected_city=selected_city,
                 )
             except FittingGalleryPreparationError as error:
                 logger.warning(
@@ -3424,7 +3716,7 @@ async def create_fitting_route(
                 )
                 return {
                     "success": False,
-                    "error": "Не вдалося отримати дані за посиланням. Перевірте посилання або спробуйте пізніше.",
+                    "error": "Не вдалося додати фурнітуру. Перевірте дані та спробуйте ще раз.",
                 }
 
             effective_image_url = prepared_gallery_images[0].source_url
@@ -3475,12 +3767,9 @@ async def create_fitting_route(
                 }
 
             try:
-                prepared_gallery_images = prepare_fitting_gallery_images(
-                    normalize_fitting_gallery_image_urls(metadata_image_urls),
-                    fetcher=lambda source_url: fetch_remote_image_payload(
-                        source_url,
-                        city=selected_city,
-                    ),
+                prepared_gallery_images = _prepare_remote_fitting_gallery_images(
+                    payload.image_urls or metadata_image_urls,
+                    selected_city=selected_city,
                 )
             except FittingGalleryPreparationError as error:
                 logger.warning(
@@ -3640,10 +3929,13 @@ async def update_fitting_route(
     effective_image_url = payload.image_url
     effective_source_url = (payload.source_url or "").strip() or None
     effective_article = (payload.article or "").strip() or None
+    effective_code = (payload.code or "").strip() or None
     effective_price = payload.price
     effective_stock = payload.stock
     effective_description = None
     source_payload: dict | None = None
+    technical_product_payload: dict | None = None
+    prepared_gallery_images = None
     if not effective_source_url and _looks_like_url(effective_name):
         effective_source_url = effective_name
         effective_name = ""
@@ -3678,28 +3970,62 @@ async def update_fitting_route(
             if first_result:
                 selected_price = city_prices.get(selected_city) if selected_city else None
                 effective_name = first_result.get("name") or effective_name
-                effective_image_url = first_result.get("image") or effective_image_url
                 effective_source_url = first_result.get("source_url") or effective_source_url
                 effective_article = effective_article or first_result.get("article")
                 effective_price = selected_price if selected_price is not None else first_result.get("price")
                 effective_description = first_result.get("description") or effective_description
+                parsed_characteristics: dict[str, object] = {}
+                try:
+                    source_preview = await parse_fitting_source_metadata(effective_source_url)
+                except Exception:
+                    source_preview = {}
+                if isinstance(source_preview, dict):
+                    preview_characteristics = source_preview.get("characteristics")
+                    if isinstance(preview_characteristics, dict):
+                        parsed_characteristics = preview_characteristics
                 source_payload = {
                     "source_site": source_site,
                     "source_url": effective_source_url,
                     "selected_city": selected_city,
                     "city_prices": city_prices,
-                    "parsed_item": first_result,
+                    "parsed_item": {
+                        **first_result,
+                        **({"characteristics": parsed_characteristics} if parsed_characteristics else {}),
+                    },
                 }
+                if payload.image_urls:
+                    try:
+                        prepared_gallery_images = _prepare_remote_fitting_gallery_images(
+                            payload.image_urls,
+                            selected_city=selected_city,
+                        )
+                        effective_image_url = prepared_gallery_images[0].source_url
+                    except FittingGalleryPreparationError as error:
+                        logger.warning(
+                            "Fitting gallery update failed",
+                            extra={
+                                "item_id": item_id,
+                                "source_url": effective_source_url,
+                                "source_site": source_site,
+                                "error": str(error),
+                            },
+                        )
+                        return {
+                            "success": False,
+                            "error": "Не вдалося зберегти галерею фурнітури. Перевірте зображення або спробуйте пізніше.",
+                        }
+                else:
+                    effective_image_url = first_result.get("image") or effective_image_url
         else:
             metadata, error_response = await _parse_fitting_source_or_error(effective_source_url)
             if error_response:
                 return error_response
 
             effective_name = metadata.get("name") or effective_name
-            effective_image_url = metadata.get("image_url") or effective_image_url
             effective_source_url = metadata.get("final_url") or effective_source_url
             effective_article = effective_article or metadata.get("article")
             effective_price = metadata.get("price") if metadata.get("price") is not None else effective_price
+            effective_brand = (metadata.get("brand") or "").strip() or None
             effective_description = metadata.get("description") or effective_description
             source_payload = {
                 "source_site": source_site,
@@ -3707,6 +4033,51 @@ async def update_fitting_route(
                 "selected_city": selected_city,
                 "parsed_item": metadata,
             }
+            if source_site == "mt":
+                technical_product_payload = {
+                    "article": effective_article,
+                    "code": effective_code or effective_article,
+                    "name": effective_name or effective_article or effective_code or "",
+                    "brand": effective_brand,
+                    "description": effective_description,
+                    "manufacturer_id": _resolve_fitting_manufacturer_id_from_brand(effective_brand),
+                    "series_id": None,
+                    "category_id": _resolve_fitting_category_id_from_type(payload.fitting_type),
+                    "is_active": bool(payload.is_active),
+                }
+            metadata_image_urls = metadata.get("image_urls") or []
+            if payload.image_urls:
+                try:
+                    prepared_gallery_images = _prepare_remote_fitting_gallery_images(
+                        payload.image_urls,
+                        selected_city=selected_city,
+                    )
+                    effective_image_url = prepared_gallery_images[0].source_url
+                except FittingGalleryPreparationError as error:
+                    logger.warning(
+                        "Fitting gallery update failed",
+                        extra={
+                            "item_id": item_id,
+                            "source_url": effective_source_url,
+                            "source_site": source_site,
+                            "error": str(error),
+                        },
+                    )
+                    return {
+                        "success": False,
+                        "error": "Не вдалося зберегти галерею фурнітури. Перевірте зображення або спробуйте пізніше.",
+                    }
+            else:
+                effective_image_url = metadata.get("image_url") or effective_image_url
+                if metadata_image_urls:
+                    try:
+                        prepared_gallery_images = _prepare_remote_fitting_gallery_images(
+                            metadata_image_urls,
+                            selected_city=selected_city,
+                        )
+                        effective_image_url = prepared_gallery_images[0].source_url
+                    except FittingGalleryPreparationError:
+                        prepared_gallery_images = None
 
     if not effective_name and effective_article:
         effective_name = effective_article
@@ -3736,7 +4107,9 @@ async def update_fitting_route(
             is_system=is_system,
             is_active=payload.is_active,
             sort_order=payload.sort_order,
+            technical_product=technical_product_payload,
             supplier_offer=payload.supplier_offer.model_dump() if payload.supplier_offer else None,
+            prepared_gallery_images=prepared_gallery_images,
         )
     except Exception as error:
         logger.exception("Fitting update failed")
@@ -3805,24 +4178,30 @@ async def delete_fitting_route(
             elif node_id:
                 node_labels.append(f"ID {node_id}")
 
-        return {
-            "success": False,
-            "error": (
-                "Неможливо видалити фурнітуру. "
-                "Вона використовується в монтажних вузлах: "
-                + "; ".join(node_labels)
-                + ". Спочатку замініть цю фурнітуру у зазначених вузлах, збережіть вузли та повторіть видалення."
-            ),
-            "dependent_nodes": dependent_nodes,
-        }
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "success": False,
+                "error": (
+                    "Неможливо видалити фурнітуру. "
+                    "Вона використовується в монтажних вузлах: "
+                    + "; ".join(node_labels)
+                    + ". Спочатку замініть цю фурнітуру у зазначених вузлах, збережіть вузли та повторіть видалення."
+                ),
+                "dependent_nodes": dependent_nodes,
+            },
+        )
 
     result = delete_fitting(item_id)
 
     if not result or not result.get("success"):
-        return {
-            "success": False,
-            "error": "Unable to delete fitting",
-        }
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "success": False,
+                "error": "Unable to delete fitting",
+            },
+        )
 
     create_audit_log(
         actor_user_id=current_user.id,

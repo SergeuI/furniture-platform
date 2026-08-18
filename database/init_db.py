@@ -110,6 +110,9 @@ from scripts.upgrade_mounting_schemes_schema import (
 from scripts.upgrade_fittings_foundation_schema import (
     ensure_fittings_foundation_schema,
 )
+from scripts.upgrade_suppliers_ownership_schema import (
+    ensure_suppliers_ownership_schema,
+)
 from scripts.upgrade_fitting_products_schema import (
     ensure_fitting_products_schema,
 )
@@ -929,6 +932,7 @@ def init_database():
     upgrade_sqlite_schema()
     with engine.begin() as connection:
         ensure_fittings_foundation_schema(connection)
+        ensure_suppliers_ownership_schema(connection)
         ensure_fitting_products_schema(connection)
         ensure_fitting_taxonomy_schema(connection)
         ensure_mounting_schemes_schema(connection)

@@ -115,6 +115,58 @@ class UpgradeFittingTaxonomySchemaTests(unittest.TestCase):
                 self.assertEqual(third_plan["manufacturer_seed_rows"], [])
                 self.assertEqual(third_plan["category_seed_rows"], [])
 
+    def test_apply_preserves_existing_manufacturer_logo_url(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            database_path = Path(tmpdir) / "legacy.db"
+            self._create_legacy_database(database_path)
+
+            with sqlite3.connect(database_path) as connection:
+                connection.execute(
+                    """
+                    CREATE TABLE fitting_manufacturers (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        code TEXT NOT NULL UNIQUE,
+                        name TEXT NOT NULL,
+                        description TEXT,
+                        website_url TEXT,
+                        logo_url TEXT,
+                        country_code TEXT,
+                        is_active INTEGER NOT NULL DEFAULT 1,
+                        sort_order INTEGER NOT NULL DEFAULT 0,
+                        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                    )
+                    """,
+                )
+                connection.execute(
+                    """
+                    INSERT INTO fitting_manufacturers (
+                        code, name, description, website_url, logo_url, country_code, is_active, sort_order
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        "hettich",
+                        "Hettich",
+                        None,
+                        None,
+                        "https://example.test/hettich-logo.png",
+                        None,
+                        1,
+                        1,
+                    ),
+                )
+                plan = migration._build_plan(connection)
+                self.assertFalse(
+                    any(row["code"] == "hettich" for row in plan["manufacturer_seed_rows"]),
+                )
+                migration._apply_plan(connection, plan, caller_owns_transaction=False)
+                logo_url = connection.execute(
+                    "SELECT logo_url FROM fitting_manufacturers WHERE code = ?",
+                    ("hettich",),
+                ).fetchone()[0]
+                self.assertEqual(logo_url, "https://example.test/hettich-logo.png")
+
     def test_caller_owned_transaction_keeps_outer_connection_open(self) -> None:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             database_path = Path(tmpdir) / "legacy.db"

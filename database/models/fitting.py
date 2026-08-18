@@ -547,6 +547,11 @@ class SupplierModel(Base):
 
     __tablename__ = "suppliers"
 
+    __table_args__ = (
+        Index("ix_suppliers_owner_user_id", "owner_user_id"),
+        Index("ix_suppliers_is_system", "is_system"),
+    )
+
     id = Column(
         Integer,
         primary_key=True,
@@ -562,6 +567,23 @@ class SupplierModel(Base):
     name = Column(
         String,
         nullable=False,
+    )
+
+    logo_url = Column(
+        String,
+        nullable=True,
+    )
+
+    owner_user_id = Column(
+        String,
+        ForeignKey("users.id"),
+        nullable=True,
+    )
+
+    is_system = Column(
+        Boolean,
+        nullable=False,
+        default=True,
     )
 
     is_active = Column(

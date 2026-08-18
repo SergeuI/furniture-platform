@@ -38,6 +38,7 @@ import {
   formatTrialCountdown,
   getSubscriptionLabel,
 } from "../../shared/trialStatus.js";
+import { resolveAdminAssetUrl } from "./api.js";
 import EntitlementsAdminPage from "./components/EntitlementsAdminPage.jsx";
 import FittingHolesWorkspace from "./components/processing/FittingHolesWorkspace.jsx";
 import MountingNodesCreatePanel from "./components/processing/MountingNodesCreatePanel.jsx";
@@ -46,6 +47,7 @@ import HolesMountingThreePreview from "./components/processing/HolesMountingThre
 import MountingNodesPanel from "./components/processing/MountingNodesPanelRefined.jsx";
 import ProcessingWorkspace from "./components/processing/ProcessingWorkspace.jsx";
 import ConnectionsWorkspace from "./components/connections/ConnectionsWorkspace.jsx";
+import FittingSuppliersAdminWorkspace from "./components/FittingSuppliersAdminWorkspace.jsx";
 import {
   getProcessingWorkspaceSidebarTabs,
   getProcessingWorkspaceTabTargetView,
@@ -88,7 +90,13 @@ import {
   getFittingOwnershipTypeLabel,
   getFittingOwnerDisplay,
   createFittingFormDraft,
+  getFittingAvailabilityCheckedValue,
 } from "./fittingEntitlements.js";
+import {
+  getFittingGalleryPrimaryImageUrl,
+  moveFittingGalleryImageUrl,
+  normalizeFittingGalleryImageUrls,
+} from "./fittingGallery.js";
 import {
   getMaterialEntitlementFlags,
   hasUserEntitlement,
@@ -368,6 +376,7 @@ const ADMIN_SECTION_BY_VIEW = {
   catalogFittingSeries: "catalog-fitting-series",
   catalogFittingCategories: "catalog-fitting-categories",
   catalogFittingProducts: "catalog-fitting-products",
+  catalogSuppliers: "catalog-suppliers",
   catalogHub: "catalog-hub",
   catalogHoles: "mounting-nodes",
   catalogManual: "catalog-manual",
@@ -1880,6 +1889,48 @@ function getMaterialAvailabilityLabel(value, t) {
   }
 
   return text;
+}
+
+function getFittingAvailabilityState(value, t) {
+  const text = String(value ?? "").replace(/\s+/g, " ").trim();
+
+  if (!text) {
+    return { label: t.notSet, tone: "subtle" };
+  }
+
+  if (value === true || value === 1) {
+    return { label: t.materialPromoInStock, tone: "success" };
+  }
+
+  if (value === false || value === 0) {
+    return { label: t.materialPromoOutOfStock, tone: "danger" };
+  }
+
+  const normalized = text.toLowerCase();
+
+  if (
+    normalized === "наявність" ||
+    normalized === "в наявності" ||
+    normalized === "in stock" ||
+    normalized === "true" ||
+    normalized === "1" ||
+    normalized === "yes"
+  ) {
+    return { label: t.materialPromoInStock, tone: "success" };
+  }
+
+  if (
+    normalized === "немає в наявності" ||
+    normalized === "нема в наявності" ||
+    normalized === "out of stock" ||
+    normalized === "false" ||
+    normalized === "0" ||
+    normalized === "no"
+  ) {
+    return { label: t.materialPromoOutOfStock, tone: "danger" };
+  }
+
+  return { label: text, tone: "subtle" };
 }
 
 function getMaterialPromoViewModel(item, t, language) {
@@ -5139,37 +5190,21 @@ function formatFittingUnitLabel(unit, language) {
 }
 
 function getFittingAvailabilityLabel(value, t) {
-  const text = String(value || "").replace(/\s+/g, " ").trim();
+  const state = getFittingAvailabilityState(value, t);
 
-  if (!text) {
-    return t.notSet;
+  if (state.label !== t.notSet) {
+    const normalized = String(value ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+
+    if (normalized === "під замовлення" || normalized === "pre-order" || normalized === "pre order") {
+      return t.fittingAvailabilityPreOrder;
+    }
   }
 
-  const normalized = text.toLowerCase();
-
-  if (normalized === "в наявності" || normalized === "in stock") {
-    return t.materialPromoInStock;
-  }
-
-  if (normalized === "немає в наявності" || normalized === "нема в наявності" || normalized === "out of stock") {
-    return t.materialPromoOutOfStock;
-  }
-
-  if (normalized === "під замовлення" || normalized === "pre-order" || normalized === "pre order") {
-    return t.fittingAvailabilityPreOrder;
-  }
-
-  return text;
+  return state.label;
 }
 
 function getFittingCatalogAvailabilityBadgeLabel(value, language, t) {
-  const text = String(value || "").replace(/\s+/g, " ").trim().toLowerCase();
-
-  if (!text || text.includes("out of stock") || text.includes("нема") || text.includes("не в наявності")) {
-    return language === "en" ? "Not available" : "Немає";
-  }
-
-  return t.materialPromoInStock || (language === "en" ? "In stock" : "В наявності");
+  return getFittingAvailabilityState(value, t).label;
 }
 
 function getFittingMenuPosition(triggerElement, actionCount = 2) {
@@ -6296,6 +6331,46 @@ function getMaterialOwnerDisplayName(owner, language) {
   return language === "en" ? "Unknown owner" : "Невідомий власник";
 }
 
+function getPrimaryFittingSupplierOffer(item) {
+  const directOffers = Array.isArray(item?.supplier_offers) ? item.supplier_offers : [];
+  if (directOffers.length) {
+    return directOffers[0] || null;
+  }
+
+  const sourceRows = [
+    item?.commercial_legacy_row,
+    item?.representative_legacy_row,
+    ...(Array.isArray(item?.legacy_rows) ? item.legacy_rows : []),
+  ].filter(Boolean);
+
+  for (const row of sourceRows) {
+    if (Array.isArray(row?.supplier_offers) && row.supplier_offers.length) {
+      return row.supplier_offers[0] || null;
+    }
+  }
+
+  return null;
+}
+
+function getFittingSupplierMeta(item) {
+  const offer = getPrimaryFittingSupplierOffer(item);
+
+  if (!offer) {
+    return null;
+  }
+
+  const supplierCode = String(offer.supplier_code || "").trim().toLowerCase();
+  const supplierName = String(offer.supplier_name || "").replace(/\s+/g, " ").trim();
+  const supplierLogoUrl = String(offer.supplier_logo_url || "").trim();
+  const label = supplierName || offer.supplier_code || `Supplier ${offer.supplier_id}`;
+
+  return {
+    code: supplierCode || "supplier",
+    label,
+    logo: supplierLogoUrl ? resolveAdminAssetUrl(supplierLogoUrl) : "",
+  };
+}
+
 function getMaterialSourceMeta(item, t) {
   const sourceSite = item?.source_site || detectFittingSourceSite(item?.source_url);
 
@@ -6370,19 +6445,121 @@ function getMaterialColorText(item, t) {
   return stripMaterialSizeSuffix(color) || color;
 }
 
-function renderSourceBadge(sourceMeta, withLabel = false) {
+function SourceBadgeLogo({ sourceMeta, showLabel = false, className = "" }) {
+  const [hasBrokenLogo, setHasBrokenLogo] = useState(false);
+  const normalizedLogo = String(sourceMeta?.logo || "").trim();
+
+  useEffect(() => {
+    setHasBrokenLogo(false);
+  }, [normalizedLogo]);
+
+  if (!sourceMeta) {
+    return null;
+  }
+
+  const rootClassName = [
+    "fitting-source-logo",
+    sourceMeta.code,
+    showLabel ? "with-label" : "",
+    className,
+  ].filter(Boolean).join(" ");
+
+  if (normalizedLogo && !hasBrokenLogo) {
+    return (
+      <span className={rootClassName} title={sourceMeta.label}>
+        <img
+          alt={sourceMeta.label}
+          className="fitting-source-logo-image"
+          onError={() => setHasBrokenLogo(true)}
+          src={normalizedLogo}
+        />
+        {showLabel ? <span className="fitting-source-logo-text">{sourceMeta.label}</span> : null}
+      </span>
+    );
+  }
+
+  return (
+    <span className={rootClassName} title={sourceMeta.label}>
+      <span className="fitting-source-logo-text">{sourceMeta.label}</span>
+    </span>
+  );
+}
+
+function renderSourceBadge(sourceMeta, options = {}) {
   if (!sourceMeta) {
     return null;
   }
 
   return (
-    <span className={`fitting-source-logo ${sourceMeta.code}`} title={sourceMeta.label}>
-      {sourceMeta.logo ? (
-        <img alt={sourceMeta.label} className="fitting-source-logo-image" src={sourceMeta.logo} />
-      ) : null}
-      {withLabel ? <span className="fitting-source-logo-text">{sourceMeta.label}</span> : null}
+    <SourceBadgeLogo
+      className={String(options.className || "").trim()}
+      showLabel={Boolean(options.showLabel)}
+      sourceMeta={sourceMeta}
+    />
+  );
+}
+
+function ManufacturerBadgeLogo({ manufacturerMeta, className = "" }) {
+  const [hasBrokenLogo, setHasBrokenLogo] = useState(false);
+  const normalizedLogo = String(manufacturerMeta?.logo || "").trim();
+  const fallbackLabel = String(manufacturerMeta?.label || "").trim() || "—";
+
+  useEffect(() => {
+    setHasBrokenLogo(false);
+  }, [normalizedLogo]);
+
+  if (!manufacturerMeta) {
+    return null;
+  }
+
+  if (normalizedLogo && !hasBrokenLogo) {
+    const rootClassName = [
+      "fitting-manufacturer-logo",
+      className,
+    ].filter(Boolean).join(" ");
+
+    return (
+      <span className={rootClassName} title={fallbackLabel}>
+        <img
+          alt={fallbackLabel}
+          className="fitting-manufacturer-logo-image"
+          onError={() => setHasBrokenLogo(true)}
+          src={normalizedLogo}
+        />
+      </span>
+    );
+  }
+
+  const rootClassName = [
+    "fitting-source-logo",
+    "fitting-manufacturer-badge",
+    className,
+  ].filter(Boolean).join(" ");
+
+  return (
+    <span className={rootClassName} title={fallbackLabel}>
+      <span className="fitting-source-logo-text">{fallbackLabel}</span>
     </span>
   );
+}
+
+function renderManufacturerBadge(manufacturerMeta, options = {}) {
+  if (!manufacturerMeta) {
+    return null;
+  }
+
+  return (
+    <ManufacturerBadgeLogo
+      className={String(options.className || "").trim()}
+      manufacturerMeta={manufacturerMeta}
+    />
+  );
+}
+
+function renderFittingAvailabilityBadge(value, t) {
+  const state = getFittingAvailabilityState(value, t);
+
+  return <span className={`service-tree-badge fitting-availability-badge ${state.tone}`}>{state.label}</span>;
 }
 
 function getMaterialEdgeItem(item, edgeKey) {
@@ -7569,6 +7746,9 @@ export default function App() {
     source: true,
   });
   const [selectedFittingDetail, setSelectedFittingDetail] = useState(null);
+  const [isFittingDescriptionOpen, setIsFittingDescriptionOpen] = useState(false);
+  const [isFittingCharacteristicsOpen, setIsFittingCharacteristicsOpen] = useState(false);
+  const [isFittingSuppliersOpen, setIsFittingSuppliersOpen] = useState(false);
   const [fittingDetailLoading, setFittingDetailLoading] = useState(false);
   const [fittingDetailError, setFittingDetailError] = useState("");
   const fittingCanonicalCatalogRequestRef = useRef({ id: 0, pending: false });
@@ -9760,6 +9940,7 @@ export default function App() {
   const isCatalogFittingSeriesView = activeView === FITTING_TAXONOMY_VIEWS.series;
   const isCatalogFittingCategoriesView = activeView === FITTING_TAXONOMY_VIEWS.categories;
   const isCatalogFittingProductsView = activeView === FITTING_TAXONOMY_VIEWS.products;
+  const isCatalogSuppliersView = activeView === "catalogSuppliers";
   const isCatalogServiceRulesView = activeView === "catalogServiceRules";
   const isCatalogDrillingRulesView = activeView === "catalogDrillingRules";
   const isCatalogValuesView = activeView === "catalogValues";
@@ -10054,6 +10235,15 @@ export default function App() {
                     closeSidebarOnMobile();
                     closeSidebarFlyout();
                   },
+                }, {
+                  active: isCatalogSuppliersView,
+                  key: "catalogSuppliers",
+                  label: language === "uk" ? "Постачальники" : "Suppliers",
+                  onClick: () => {
+                    switchView("catalogSuppliers");
+                    closeSidebarOnMobile();
+                    closeSidebarFlyout();
+                  },
                 }]
               : []),
             ...(canViewFittingHoles
@@ -10138,6 +10328,10 @@ export default function App() {
       selectedFittingCategory,
     ],
   );
+  const fittingTaxonomyManufacturersById = useMemo(
+    () => new Map(fittingTaxonomyManufacturers.map((item) => [String(item.id), item])),
+    [fittingTaxonomyManufacturers],
+  );
   const visibleFittingCategories = useMemo(
     () => fittingCanonicalCatalogView.categories || [],
     [fittingCanonicalCatalogView],
@@ -10201,7 +10395,7 @@ export default function App() {
       {
         key: "availability",
         label: t.fittingStock,
-        value: normalizePreviewValue(source.availability),
+        value: getFittingAvailabilityLabel(source.availability, t),
       },
       {
         key: "currency",
@@ -10567,6 +10761,58 @@ export default function App() {
   const selectedFittingOwnerDisplay = selectedFittingDetail
     ? getFittingOwnerDisplay(selectedFittingOwnershipSource, user, language)
     : "";
+  const getFittingManufacturerMeta = (item) => {
+    const manufacturerId = String(item?.manufacturer_id || "").trim();
+    const normalizedBrand = String(
+      item?.manufacturer_name ||
+        item?.canonical_brand ||
+        item?.brand ||
+        "",
+    ).replace(/\s+/g, " ").trim();
+    const manufacturerFromBrand = normalizedBrand
+      ? fittingTaxonomyManufacturers.find((candidate) => {
+          const candidateCode = String(candidate?.code || "").trim().toLowerCase();
+          const candidateName = String(candidate?.name || "").trim().toLowerCase();
+          const brandValue = normalizedBrand.toLowerCase();
+          return candidateCode === brandValue || candidateName === brandValue;
+        }) || null
+      : null;
+    const manufacturer = manufacturerId
+      ? fittingTaxonomyManufacturersById.get(manufacturerId) || manufacturerFromBrand
+      : manufacturerFromBrand;
+    const manufacturerName = String(
+      manufacturer?.name ||
+        item?.manufacturer_name ||
+        normalizedBrand ||
+        "",
+    ).replace(/\s+/g, " ").trim();
+    const manufacturerLogoUrl = String(manufacturer?.logo_url || "").trim();
+
+    if (!manufacturerName) {
+      return null;
+    }
+
+    return {
+      code: String(manufacturer?.code || manufacturerId || "manufacturer").trim().toLowerCase() || "manufacturer",
+      label: manufacturerName,
+      logo: manufacturerLogoUrl ? resolveAdminAssetUrl(manufacturerLogoUrl) : "",
+    };
+  };
+  const selectedFittingSupplierMeta = selectedFittingDetail
+    ? getFittingSupplierMeta(selectedFittingDetail)
+    : null;
+  const selectedFittingManufacturerMeta = selectedFittingDetail
+    ? getFittingManufacturerMeta(selectedFittingDetail)
+    : null;
+  const selectedFittingSourceMeta = selectedFittingDetail
+    ? getFittingSourceMeta(selectedFittingDetail)
+    : null;
+
+  useEffect(() => {
+    setIsFittingDescriptionOpen(false);
+    setIsFittingCharacteristicsOpen(false);
+    setIsFittingSuppliersOpen(false);
+  }, [selectedFittingDetail?.id]);
 
   const closeProjectOptionPicker = useCallback(() => {
     setProjectOptionPicker({
@@ -11101,7 +11347,9 @@ export default function App() {
     }
 
     if (isCatalogFittingManufacturersView) {
-      return "";
+      return language === "uk"
+        ? "Керування виробниками фурнітури."
+        : "Manage fitting manufacturers.";
     }
 
     if (isCatalogFittingSeriesView) {
@@ -11113,6 +11361,10 @@ export default function App() {
     }
 
     if (isCatalogFittingProductsView) {
+      return "";
+    }
+
+    if (isCatalogSuppliersView) {
       return "";
     }
 
@@ -11173,6 +11425,7 @@ export default function App() {
     isCatalogDrillingRulesView,
     isCatalogManualView,
     isCatalogValuesView,
+    isCatalogSuppliersView,
     isCatalogViyarView,
     isConnectionsWorkspaceView,
     isProcessingView,
@@ -16842,7 +17095,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
       return;
     }
 
-    if (CATALOG_FITTING_TAXONOMY_VIEWS.has(nextView) && viewer?.role !== "admin") {
+    if ((CATALOG_FITTING_TAXONOMY_VIEWS.has(nextView) || nextView === "catalogSuppliers") && viewer?.role !== "admin") {
       const fallbackView = canViewMaterialCatalog ? "catalogMaterials" : "home";
       setActiveView(fallbackView);
       activeViewRef.current = fallbackView;
@@ -18265,13 +18518,13 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
       setNewFittingForm((current) => ({
         ...current,
         image_urls: [
-          ...(Array.isArray(current.image_urls) ? current.image_urls : current.image_url ? [current.image_url] : []),
+          ...normalizeFittingGalleryImageUrls(current.image_urls),
           ...imageUrls.filter(Boolean),
         ],
-        image_url: [
-          ...(Array.isArray(current.image_urls) ? current.image_urls : current.image_url ? [current.image_url] : []),
+        image_url: getFittingGalleryPrimaryImageUrl([
+          ...normalizeFittingGalleryImageUrls(current.image_urls),
           ...imageUrls.filter(Boolean),
-        ][0] || "",
+        ]),
       }));
       setStatus({ message: t.fittingImageSelected, tone: "success" });
     } catch (error) {
@@ -18280,13 +18533,13 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
   }
 
   function isAvailabilityChecked(value) {
-    return Boolean(String(value || "").trim());
+    return getFittingAvailabilityCheckedValue(value);
   }
 
   function setManualFittingAvailability(checked) {
     setNewFittingForm((current) => ({
       ...current,
-      stock: checked ? (String(current.stock || "").trim() || "in stock") : "",
+      stock: checked ? "in stock" : "out of stock",
     }));
   }
 
@@ -18295,21 +18548,51 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
       ...current,
       supplier_offer: {
         ...current.supplier_offer,
-        stock: checked
-          ? (String(current.supplier_offer?.stock || "").trim() || "in stock")
-          : "",
+        stock: checked ? "in stock" : "out of stock",
       },
     }));
   }
 
   function removeFittingImageSelection(index) {
-    setNewFittingForm((current) => ({
-      ...current,
-      image_urls: (Array.isArray(current.image_urls) ? current.image_urls : current.image_url ? [current.image_url] : [])
-        .filter((_, currentIndex) => currentIndex !== index),
-      image_url: (Array.isArray(current.image_urls) ? current.image_urls : current.image_url ? [current.image_url] : [])
-        .filter((_, currentIndex) => currentIndex !== index)[0] || "",
-    }));
+    setNewFittingForm((current) => {
+      const nextImageUrls = normalizeFittingGalleryImageUrls(current.image_urls).filter(
+        (_, currentIndex) => currentIndex !== index,
+      );
+
+      return {
+        ...current,
+        image_urls: nextImageUrls,
+        image_url: getFittingGalleryPrimaryImageUrl(nextImageUrls),
+      };
+    });
+  }
+
+  function moveFittingSourcePreviewImage(index, direction) {
+    setFittingSourcePreview((current) => {
+      if (!current) {
+        return current;
+      }
+
+      const nextImageUrls = moveFittingGalleryImageUrl(current.image_urls, index, direction);
+      const nextPrimaryImageUrl = getFittingGalleryPrimaryImageUrl(nextImageUrls);
+
+      if (nextImageUrls === current.image_urls) {
+        return current;
+      }
+
+      setNewFittingForm((formCurrent) => ({
+        ...formCurrent,
+        image_urls: nextImageUrls,
+        image_url: nextPrimaryImageUrl,
+      }));
+      setFittingSourcePreviewSelectedImageUrl(nextPrimaryImageUrl);
+
+      return {
+        ...current,
+        image_url: nextPrimaryImageUrl,
+        image_urls: nextImageUrls,
+      };
+    });
   }
 
   function closeFittingFormModal() {
@@ -18455,7 +18738,8 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
       ...current,
       article: String(result.article || "").trim(),
       brand: String(result.brand || "").trim(),
-      image_url: normalizedImageUrl,
+      image_url: normalizedImageUrls[0] || normalizedImageUrl || "",
+      image_urls: normalizedImageUrls,
       name: String(result.name || "").trim(),
       price: normalizedPrice,
       source_url: normalizedSourceUrl,
@@ -19857,6 +20141,16 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                       >
                         {language === "uk" ? "Технічні товари" : "Technical products"}
                       </button>
+                      <button
+                        className={isCatalogSuppliersView ? "active" : ""}
+                        onClick={() => {
+                          switchView("catalogSuppliers");
+                          closeSidebarOnMobile();
+                        }}
+                        type="button"
+                      >
+                        {language === "uk" ? "Постачальники" : "Suppliers"}
+                      </button>
                     </>
                   ) : null}
                   {canViewFittingHoles ? (
@@ -20015,7 +20309,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
             </button>
             {isCatalogHolesView
               ? renderCatalogHolesToolbarBreadcrumb(getMountingNodesToolbarBreadcrumbItemsCanonical())
-              : isMountingSchemesView
+            : isMountingSchemesView || isCatalogSuppliersView
               ? null
               : (
                 <h2>
@@ -20025,7 +20319,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                     ? t.projects
                     : activeView === "createProject"
                       ? t.createProject
-                    : activeView === "projectDetails"
+    : activeView === "projectDetails"
                       ? t.projectDetails
                     : activeView === "users"
                       ? t.users
@@ -20038,7 +20332,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                     : isCatalogFastenersView
                       ? t.catalogFasteners
                     : isCatalogFittingManufacturersView
-                      ? t.catalogFittings
+                      ? (language === "uk" ? "Виробники фурнітури" : "Fitting manufacturers")
                     : isCatalogFittingSeriesView
                       ? t.catalogFittings
                     : isCatalogFittingCategoriesView
@@ -22379,6 +22673,13 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
             token={token}
             onNavigate={switchView}
           />
+        ) : isCatalogSuppliersView ? (
+          <FittingSuppliersAdminWorkspace
+            currentUserId={user?.id || ""}
+            currentUserRole={user?.role || "free"}
+            language={language}
+            token={token}
+          />
         ) : isCatalogFittingsView || isCatalogFastenersView ? (
           <section className="table-panel full-panel" key="catalogFittings">
             <article className="catalog-card service-catalog-card service-catalog-card-full">
@@ -22414,7 +22715,9 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   <span className="service-tree-badge subtle">
                     {(fittingsCatalogLoading || fittingCanonicalCatalogLoading) && !fittingItems.length
                       ? t.loading
-                      : getCanonicalFittingsOverviewCountLabel({
+                      : getCanonicalFittingsCountLabel({
+                          activeCategoryCode: activeFittingCategory,
+                          visibleCards: fittingCanonicalCatalogView.visibleCards,
                           allCards: fittingCanonicalCatalogView.allCards,
                           language,
                         })}
@@ -22613,10 +22916,11 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                           item;
                         const imageSourceItem = item.image_legacy_row || commercialSourceItem;
                         const ownershipSourceItem = getCanonicalFittingOwnershipSource(item);
-                        const sourceMeta = getFittingSourceMeta(commercialSourceItem);
+                        const supplierMeta = getFittingSupplierMeta(item);
+                        const productManufacturerMeta = getFittingManufacturerMeta(item);
                         const productTitle = item.canonical_name || item.name || item.article || t.notSet;
                         const productArticle = item.canonical_article || item.article || t.notSet;
-                        const productManufacturer = item.manufacturer_name || item.canonical_brand || item.brand || "";
+                        const productManufacturer = productManufacturerMeta?.label || "";
                         const productSeries = item.series_name || "";
                         const productCategory = item.category_code === FITTING_CATALOG_UNCATEGORIZED_CODE
                           ? (language === "uk" ? "Без категорії" : "Uncategorized")
@@ -22649,8 +22953,10 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                                   token={token}
                                 />
                               </div>
-                              {canManageSourceItem ? (
-                                <div className="material-card-menu fitting-row-menu">
+                              <div className="fitting-item-card-head-actions">
+                                {supplierMeta ? renderSourceBadge(supplierMeta) : null}
+                                {canManageSourceItem ? (
+                                  <div className="material-card-menu fitting-row-menu">
                                     <button
                                       className="icon-button material-card-menu-trigger fitting-action-menu-trigger"
                                       onClick={(event) => {
@@ -22683,6 +22989,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                                     })}
                                   </div>
                                 ) : null}
+                              </div>
                             </div>
                             <div className="fitting-item-card-copy">
                               <strong>{productTitle}</strong>
@@ -22703,16 +23010,13 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                                       : `${item.legacy_row_count} linked rows`}
                                   </span>
                                 ) : null}
-                                {fittingColumnVisibility.source ? renderSourceBadge(sourceMeta) : null}
                                 {canRenderCanonicalFittingOwnershipBadge(ownershipSourceItem) ? (
                                   <span className="service-tree-badge subtle">
                                     {getFittingOwnershipTypeLabel(ownershipSourceItem, user, language)}
                                   </span>
                                 ) : null}
                                 {fittingColumnVisibility.stock ? (
-                                  <span className="service-tree-badge subtle">
-                                    {t.fittingStock}: {commercialSourceItem.stock || t.notSet}
-                                  </span>
+                                  renderFittingAvailabilityBadge(commercialSourceItem.stock, t)
                                 ) : null}
                               </div>
                               {getFittingOwnerDisplay(ownershipSourceItem, user, language) ? (
@@ -22725,7 +23029,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                               <span>{t.fittingArticle}: {productArticle}</span>
                               {productManufacturer ? (
                                 <span>
-                                  {language === "uk" ? "Виробник" : "Manufacturer"}: {productManufacturer}
+                                  {language === "uk" ? "Виробник" : "Manufacturer"}: {renderManufacturerBadge(productManufacturerMeta, { className: "fitting-manufacturer-badge" })}
                                 </span>
                               ) : null}
                               {productSeries ? (
@@ -22751,13 +23055,15 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                       <div className="fittings-table-header">
                         <span>{currentFittingCategoryMeta?.name || t.catalogFittings}</span>
                         <span>{t.fittingArticle}</span>
+                        {fittingColumnVisibility.source ? (
+                          <span>{language === "uk" ? "Постачальник" : "Supplier"}</span>
+                        ) : null}
                         <span>{language === "uk" ? "Виробник" : "Manufacturer"}</span>
                         <span>{language === "uk" ? "Серія" : "Series"}</span>
                         <span>{language === "uk" ? "Категорія" : "Category"}</span>
                         <span>{language === "uk" ? "Рядки" : "Rows"}</span>
                         <span>{t.fittingStock}</span>
                         {fittingColumnVisibility.price ? <span>{t.fittingPrice}</span> : null}
-                        {fittingColumnVisibility.source ? <span>{t.fittingSource}</span> : null}
                       </div>
 
                       <div className="fittings-table-list">
@@ -22769,10 +23075,11 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                             item;
                           const imageSourceItem = item.image_legacy_row || commercialSourceItem;
                           const ownershipSourceItem = getCanonicalFittingOwnershipSource(item);
-                          const sourceMeta = getFittingSourceMeta(commercialSourceItem);
+                          const supplierMeta = getFittingSupplierMeta(item);
+                          const productManufacturerMeta = getFittingManufacturerMeta(item);
                           const productTitle = item.canonical_name || item.name || item.article || t.notSet;
                           const productArticle = item.canonical_article || item.article || t.notSet;
-                          const productManufacturer = item.manufacturer_name || item.canonical_brand || item.brand || "";
+                          const productManufacturer = productManufacturerMeta?.label || "";
                           const productSeries = item.series_name || "";
                           const productCategory = item.category_code === FITTING_CATALOG_UNCATEGORIZED_CODE
                             ? (language === "uk" ? "Без категорії" : "Uncategorized")
@@ -22805,9 +23112,9 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                                     token={token}
                                   />
                                 </div>
-                                <div className="fittings-table-name-copy">
-                                  <strong>{productTitle}</strong>
-                                  <div className="fittings-table-badges">
+                              <div className="fittings-table-name-copy">
+                                <strong>{productTitle}</strong>
+                                <div className="fittings-table-badges">
                                       <span className="service-tree-badge subtle">
                                         {item.is_active
                                           ? language === "uk"
@@ -22817,23 +23124,23 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                                             ? "Неактивний"
                                             : "Inactive"}
                                       </span>
-                                      {item.legacy_row_count > 1 ? (
-                                        <span className="service-tree-badge subtle">
-                                          {language === "uk"
-                                            ? `${item.legacy_row_count} пов'язаних рядків`
-                                            : `${item.legacy_row_count} linked rows`}
-                                        </span>
-                                      ) : null}
-                                      {canRenderCanonicalFittingOwnershipBadge(ownershipSourceItem) ? (
-                                        <span className="service-tree-badge subtle">
-                                          {getFittingOwnershipTypeLabel(ownershipSourceItem, user, language)}
-                                        </span>
-                                      ) : null}
-                                    </div>
-                                    {getFittingOwnerDisplay(ownershipSourceItem, user, language) ? (
-                                      <div className="fitting-item-owner-line">
-                                        {getFittingOwnerDisplay(ownershipSourceItem, user, language)}
-                                      </div>
+                                  {item.legacy_row_count > 1 ? (
+                                    <span className="service-tree-badge subtle">
+                                      {language === "uk"
+                                        ? `${item.legacy_row_count} пов'язаних рядків`
+                                        : `${item.legacy_row_count} linked rows`}
+                                    </span>
+                                  ) : null}
+                                  {canRenderCanonicalFittingOwnershipBadge(ownershipSourceItem) ? (
+                                    <span className="service-tree-badge subtle">
+                                      {getFittingOwnershipTypeLabel(ownershipSourceItem, user, language)}
+                                    </span>
+                                  ) : null}
+                                </div>
+                                {getFittingOwnerDisplay(ownershipSourceItem, user, language) ? (
+                                  <div className="fitting-item-owner-line">
+                                    {getFittingOwnerDisplay(ownershipSourceItem, user, language)}
+                                  </div>
                                     ) : null}
                                   </div>
                                 </div>
@@ -22873,21 +23180,17 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                                 ) : null}
                               </div>
                               <span>{productArticle}</span>
-                              <span>{productManufacturer || t.notSet}</span>
+                              {fittingColumnVisibility.source ? (
+                                <span>{supplierMeta ? renderSourceBadge(supplierMeta) : t.notSet}</span>
+                              ) : null}
+                              <span>{productManufacturerMeta ? renderManufacturerBadge(productManufacturerMeta, { className: "fitting-manufacturer-badge" }) : t.notSet}</span>
                               <span>{productSeries || t.notSet}</span>
                               <span>{productCategory || t.notSet}</span>
                               <span>{item.legacy_row_count || 0}</span>
                               <span className="fitting-availability-cell">
-                                <span className="service-tree-badge subtle fitting-availability-badge">
-                                  {getFittingCatalogAvailabilityBadgeLabel(
-                                    commercialSourceItem.stock,
-                                    language,
-                                    t,
-                                  )}
-                                </span>
+                                {renderFittingAvailabilityBadge(commercialSourceItem.stock, t)}
                               </span>
                               {fittingColumnVisibility.price ? <span>{commercialSourceItem.price ?? t.notSet}</span> : null}
-                              {fittingColumnVisibility.source ? renderSourceBadge(sourceMeta) : null}
                             </article>
                           );
                         })}
@@ -26660,17 +26963,15 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                     />
                   </label>
 
-                  <div className="fitting-source-field">
+                  <label className="toggle-label fitting-source-field">
                     <span>{t.fittingStock}</span>
-                    <label className="fitting-source-field-inline fitting-source-field-checkbox-only">
-                      <input
-                        aria-label={t.fittingStock}
-                        checked={isAvailabilityChecked(newFittingForm.stock)}
-                        onChange={(event) => setManualFittingAvailability(event.target.checked)}
-                        type="checkbox"
-                      />
-                    </label>
-                  </div>
+                    <input
+                      aria-label={t.fittingStock}
+                      checked={isAvailabilityChecked(newFittingForm.stock)}
+                      onChange={(event) => setManualFittingAvailability(event.target.checked)}
+                      type="checkbox"
+                    />
+                  </label>
 
                   <label className="fitting-source-field">
                     <span>{t.fittingSortOrder}</span>
@@ -26790,17 +27091,43 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                                 const isSelected =
                                   String(fittingSourcePreviewSelectedImageUrl || "").trim() === imageUrl ||
                                   (!fittingSourcePreviewSelectedImageUrl && index === 0);
+                                const canMoveLeft = index > 0;
+                                const canMoveRight = index < fittingSourcePreviewImages.length - 1;
 
                                 return (
-                                  <button
-                                    aria-pressed={isSelected}
+                                  <div
                                     className={`fitting-source-preview-thumb${isSelected ? " is-selected" : ""}`}
                                     key={`${imageUrl}-${index}`}
-                                    onClick={() => setFittingSourcePreviewSelectedImageUrl(imageUrl)}
-                                    type="button"
                                   >
-                                    <img alt={`${t.fittingImage} ${index + 1}`} src={imageUrl} />
-                                  </button>
+                                    <button
+                                      aria-pressed={isSelected}
+                                      className="fitting-source-preview-thumb-select"
+                                      onClick={() => setFittingSourcePreviewSelectedImageUrl(imageUrl)}
+                                      type="button"
+                                    >
+                                      <img alt={`${t.fittingImage} ${index + 1}`} src={imageUrl} />
+                                    </button>
+                                    <div className="fitting-source-preview-thumb-controls">
+                                      <button
+                                        className="icon-button fitting-source-preview-thumb-move"
+                                        disabled={!canMoveLeft}
+                                        onClick={() => moveFittingSourcePreviewImage(index, -1)}
+                                        title={language === "en" ? "Move left" : "Ліворуч"}
+                                        type="button"
+                                      >
+                                        <ChevronLeft size={12} />
+                                      </button>
+                                      <button
+                                        className="icon-button fitting-source-preview-thumb-move"
+                                        disabled={!canMoveRight}
+                                        onClick={() => moveFittingSourcePreviewImage(index, 1)}
+                                        title={language === "en" ? "Move right" : "Праворуч"}
+                                        type="button"
+                                      >
+                                        <ChevronRight size={12} />
+                                      </button>
+                                    </div>
+                                  </div>
                                 );
                               })}
                             </div>
@@ -28195,11 +28522,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   token={token}
                 />
                 <div className="fitting-details-meta">
-                  {getFittingSourceMeta(selectedFittingDetail) ? (
-                    <span className="service-tree-badge subtle">
-                      {getFittingSourceMeta(selectedFittingDetail).label}
-                    </span>
-                  ) : null}
+                  {renderSourceBadge(selectedFittingSupplierMeta || selectedFittingSourceMeta)}
                   {canRenderCanonicalFittingOwnershipBadge(selectedFittingOwnershipSource) ? (
                     <span className="service-tree-badge subtle">
                       {selectedFittingOwnershipTypeLabel}
@@ -28208,11 +28531,6 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   {selectedFittingDetail.article ? (
                     <span className="service-tree-badge subtle">
                       {selectedFittingDetail.article}
-                    </span>
-                  ) : null}
-                  {selectedFittingDetail.brand ? (
-                    <span className="service-tree-badge subtle">
-                      {selectedFittingDetail.brand}
                     </span>
                   ) : null}
                 </div>
@@ -28244,7 +28562,9 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   </div>
                   <div>
                     <span>{t.fittingStock}</span>
-                    <strong>{getFittingAvailabilityLabel(selectedFittingDetail.availability, t)}</strong>
+                    <strong className={`service-tree-badge fitting-availability-badge ${getFittingAvailabilityState(selectedFittingDetail.availability, t).tone}`}>
+                      {getFittingAvailabilityLabel(selectedFittingDetail.availability, t)}
+                    </strong>
                   </div>
                   {selectedFittingTypeLabel ? (
                     <div>
@@ -28258,10 +28578,10 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                       <strong>{selectedFittingGroupLabel}</strong>
                     </div>
                   ) : null}
-                  {String(selectedFittingDetail.brand || "").trim() ? (
+                  {selectedFittingManufacturerMeta ? (
                     <div>
                       <span>{t.brand}</span>
-                      <strong>{selectedFittingDetail.brand}</strong>
+                      <strong>{renderManufacturerBadge(selectedFittingManufacturerMeta, { className: "fitting-manufacturer-badge" })}</strong>
                     </div>
                   ) : null}
                   {selectedFittingOwnerDisplay ? (
@@ -28273,86 +28593,142 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                 </div>
 
                 {selectedFittingDetail.description ? (
-                  <div className="fitting-details-description">
-                    <span>{t.fittingDescription}</span>
-                    <p>{selectedFittingDetail.description}</p>
-                  </div>
+                  <section className={`fitting-details-section-card${isFittingDescriptionOpen ? " is-open" : ""}`}>
+                    <button
+                      className="fitting-details-section-header fitting-details-section-toggle"
+                      onClick={() => setIsFittingDescriptionOpen((current) => !current)}
+                      type="button"
+                    >
+                      <strong>{t.fittingDescription}</strong>
+                      <ChevronRight className={isFittingDescriptionOpen ? "expanded" : ""} size={16} />
+                    </button>
+                    {isFittingDescriptionOpen ? (
+                      <div className="fitting-details-section-body fitting-details-description">
+                        <p>{selectedFittingDetail.description}</p>
+                      </div>
+                    ) : null}
+                  </section>
                 ) : null}
 
                 {Object.entries(selectedFittingDetail.characteristics || {}).length ? (
-                  <div className="fitting-details-characteristics">
-                    <div className="fitting-details-section-header">
-                      <strong>{t.fittingCharacteristics}</strong>
-                      <span className="service-tree-badge subtle">
-                        {Object.keys(selectedFittingDetail.characteristics || {}).length}
+                  <section className={`fitting-details-section-card${isFittingCharacteristicsOpen ? " is-open" : ""}`}>
+                    <button
+                      className="fitting-details-section-header fitting-details-section-toggle"
+                      onClick={() => setIsFittingCharacteristicsOpen((current) => !current)}
+                      type="button"
+                    >
+                      <span className="fitting-details-section-title">
+                        <strong>{t.fittingCharacteristics}</strong>
+                        <span className="service-tree-badge subtle">
+                          {Object.keys(selectedFittingDetail.characteristics || {}).length}
+                        </span>
                       </span>
-                    </div>
-                    <dl className="fitting-details-characteristics-list">
-                      {Object.entries(selectedFittingDetail.characteristics || {}).map(([name, value]) => (
-                        <div className="fitting-details-characteristic" key={name}>
-                          <dt>{name}</dt>
-                          <dd>{String(value)}</dd>
-                        </div>
-                      ))}
-                    </dl>
-                  </div>
+                      <ChevronRight className={isFittingCharacteristicsOpen ? "expanded" : ""} size={16} />
+                    </button>
+                    {isFittingCharacteristicsOpen ? (
+                      <div className="fitting-details-section-body">
+                        <dl className="fitting-details-characteristics-list">
+                          {Object.entries(selectedFittingDetail.characteristics || {}).map(([name, value]) => (
+                            <div className="fitting-details-characteristic" key={name}>
+                              <dt>{name}</dt>
+                              <dd>{String(value)}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                      </div>
+                    ) : null}
+                  </section>
                 ) : null}
 
-                <div className="fitting-details-offers">
-                  <div className="fitting-details-section-header">
-                    <strong>Постачальники</strong>
-                    <span className="service-tree-badge subtle">
-                      {Array.isArray(selectedFittingDetail.supplier_offers) &&
-                      selectedFittingDetail.supplier_offers.length
-                        ? selectedFittingDetail.supplier_offers.length
-                        : null}
+                <section className={`fitting-details-section-card${isFittingSuppliersOpen ? " is-open" : ""}`}>
+                  <button
+                    className="fitting-details-section-header fitting-details-section-toggle"
+                    onClick={() => setIsFittingSuppliersOpen((current) => !current)}
+                    type="button"
+                  >
+                    <span className="fitting-details-section-title">
+                      <strong>Постачальники</strong>
+                      <span className="service-tree-badge subtle">
+                        {Array.isArray(selectedFittingDetail.supplier_offers) &&
+                        selectedFittingDetail.supplier_offers.length
+                          ? selectedFittingDetail.supplier_offers.length
+                          : null}
+                      </span>
                     </span>
-                  </div>
-                  {Array.isArray(selectedFittingDetail.supplier_offers) && selectedFittingDetail.supplier_offers.length ? (
-                    <div className="fitting-details-offers-list">
-                      {selectedFittingDetail.supplier_offers.map((offer) => (
-                        <article className="fitting-details-offer-card" key={offer.id}>
-                          <header className="fitting-details-offer-card-header">
-                            <strong>{offer.supplier_name || offer.supplier_code || `Supplier ${offer.supplier_id}`}</strong>
-                            <span className="service-tree-badge subtle">
-                              {offer.is_active ? "Активна" : "Неактивна"}
-                            </span>
-                          </header>
-                          <div className="fitting-details-offer-grid">
-                            <div>
-                              <span>Артикул</span>
-                              <strong>{offer.article || t.notSet}</strong>
-                            </div>
-                            <div>
-                              <span>Ціна</span>
-                              <strong>
-                                {offer.price === null || offer.price === undefined
-                                  ? t.notSet
-                                  : `${offer.price} ${offer.currency || "UAH"}`}
-                              </strong>
-                            </div>
-                            <div>
-                              <span>Одиниця</span>
-                              <strong>{offer.unit || t.notSet}</strong>
-                            </div>
-                          </div>
-                          {(offer.stock || offer.source_url) ? (
-                            <div className="fitting-details-offer-meta">
-                              {offer.stock ? <span>{offer.stock}</span> : null}
-                              {offer.source_url ? (
-                                <a href={offer.source_url} rel="noreferrer" target="_blank">
-                                  URL
-                                </a>
-                              ) : null}
-                            </div>
-                          ) : null}
-                        </article>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="fitting-details-empty fitting-details-empty-compact">Постачальника не вказано</p>
-                  )}
-                </div>
+                    <ChevronRight className={isFittingSuppliersOpen ? "expanded" : ""} size={16} />
+                  </button>
+                  {isFittingSuppliersOpen ? (
+                    Array.isArray(selectedFittingDetail.supplier_offers) && selectedFittingDetail.supplier_offers.length ? (
+                      <div className="fitting-details-section-body">
+                        <div className="fitting-details-offers-list">
+                          {selectedFittingDetail.supplier_offers.map((offer) => {
+                            const offerAvailability = String(offer.stock ?? "").replace(/\s+/g, " ").trim();
+
+                            return (
+                              <article className="fitting-details-offer-card" key={offer.id}>
+                                <header className="fitting-details-offer-card-header">
+                                  <strong>{offer.supplier_name || offer.supplier_code || `Supplier ${offer.supplier_id}`}</strong>
+                                  <span className="service-tree-badge subtle">
+                                    {offer.is_active ? "Активна" : "Неактивна"}
+                                  </span>
+                                </header>
+                                <dl className="fitting-details-offer-list">
+                                  <div className="fitting-details-characteristic fitting-details-offer-row">
+                                    <dt>Артикул</dt>
+                                    <dd>{offer.article || t.notSet}</dd>
+                                  </div>
+                                  <div className="fitting-details-characteristic fitting-details-offer-row">
+                                    <dt>Ціна</dt>
+                                    <dd>
+                                      {offer.price === null || offer.price === undefined
+                                        ? t.notSet
+                                        : `${offer.price} ${offer.currency || "UAH"}`}
+                                    </dd>
+                                  </div>
+                                  <div className="fitting-details-characteristic fitting-details-offer-row">
+                                    <dt>Одиниця</dt>
+                                    <dd>{offer.unit || t.notSet}</dd>
+                                  </div>
+                                  <div className="fitting-details-characteristic fitting-details-offer-row">
+                                    <dt>Наявність</dt>
+                                    <dd>
+                                      {offerAvailability ? (
+                                        <span className={`service-tree-badge fitting-availability-badge ${getFittingAvailabilityState(offer.stock, t).tone}`}>
+                                          {getFittingAvailabilityLabel(offer.stock, t)}
+                                        </span>
+                                      ) : (
+                                        t.notSet
+                                      )}
+                                    </dd>
+                                  </div>
+                                  <div className="fitting-details-characteristic fitting-details-offer-row">
+                                    <dt>Джерело</dt>
+                                    <dd>
+                                      {offer.source_url ? (
+                                        <a
+                                          className="fitting-details-offer-source-link"
+                                          href={offer.source_url}
+                                          rel="noreferrer"
+                                          target="_blank"
+                                        >
+                                          {language === "en" ? "Open product" : "Відкрити товар"}
+                                        </a>
+                                      ) : (
+                                        t.notSet
+                                      )}
+                                    </dd>
+                                  </div>
+                                </dl>
+                              </article>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="fitting-details-empty fitting-details-empty-compact">Постачальника не вказано</p>
+                    )
+                  ) : null}
+                </section>
               </div>
             </div>
           </section>

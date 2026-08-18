@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from hashlib import sha256
@@ -101,6 +102,105 @@ class FittingSourceCreateTests(unittest.TestCase):
             self.assertTrue(fitting_rows[0][5])
             self.assertEqual(created["technical_product_id"], product_rows[0][0])
 
+    def test_source_creation_persists_source_payload_characteristics(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            database_path = Path(tmpdir) / "catalog.db"
+            engine = create_engine(f"sqlite:///{database_path.as_posix()}")
+            Base.metadata.create_all(bind=engine)
+            session_factory = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+
+            source_payload_json = json.dumps(
+                {
+                    "source_site": "mt",
+                    "source_url": "https://mt.ua/products/petlya-clip-top-blumotion-110-nakladnaya-specialnaya-chernyj-61148",
+                    "parsed_item": {
+                        "article": "092799",
+                        "price": 138.8,
+                        "currency": "UAH",
+                        "unit": "шт",
+                        "availability": "in stock",
+                        "brand": "BLUM",
+                        "characteristics": {
+                            "Система завіс": "CLIP top BLUMOTION",
+                            "Кут відкривання завіси, °": "110",
+                            "Бренд": "BLUM",
+                        }
+                    },
+                },
+                ensure_ascii=False,
+            )
+
+            with patch.object(inventory_repository, "SessionLocal", session_factory):
+                with session_factory() as session:
+                    session.add_all(
+                        [
+                            fitting_models.FittingManufacturerModel(
+                                code="blum",
+                                name="BLUM",
+                                is_active=True,
+                                sort_order=1,
+                            ),
+                            fitting_models.FittingCategoryModel(
+                                code="connectors_fasteners",
+                                name="Connectors and fasteners",
+                                is_active=True,
+                                sort_order=1,
+                            ),
+                        ]
+                    )
+                    session.commit()
+
+                created = inventory_repository.create_fitting(
+                    city="kyiv",
+                    code="MT-1",
+                    article="092799",
+                    name="CLIP top BLUMOTION спеціальна завіса 110°",
+                    description="Parsed from MT source",
+                    price=138.8,
+                    stock="in stock",
+                    source="mt",
+                    brand="BLUM",
+                    fitting_type="connectors_fasteners",
+                    fitting_group="fasteners",
+                    image_url="https://example.com/mt-image.jpg",
+                    source_url="https://mt.ua/products/petlya-clip-top-blumotion-110-nakladnaya-specialnaya-chernyj-61148",
+                    source_payload_json=source_payload_json,
+                    owner_user_id=None,
+                    is_system=True,
+                    is_active=True,
+                    sort_order=0,
+                    technical_product={
+                        "article": "092799",
+                        "code": "MT-1",
+                        "name": "CLIP top BLUMOTION спеціальна завіса 110°",
+                        "brand": "BLUM",
+                        "description": "Parsed from MT source",
+                        "manufacturer_id": None,
+                        "series_id": None,
+                        "category_id": None,
+                        "is_active": True,
+                    },
+                    prepared_gallery_images=None,
+                )
+
+            with session_factory() as session:
+                row = session.execute(
+                    text("SELECT source_payload_json FROM fittings WHERE id = :id"),
+                    {"id": created["id"]},
+                ).fetchone()
+
+            self.assertIsNotNone(row)
+            stored_payload = json.loads(row._mapping["source_payload_json"])
+            self.assertIn("parsed_item", stored_payload)
+            self.assertIn("characteristics", stored_payload["parsed_item"])
+            self.assertEqual(len(stored_payload["parsed_item"]["characteristics"]), 3)
+            self.assertEqual(stored_payload["parsed_item"]["characteristics"]["Бренд"], "BLUM")
+            self.assertEqual(stored_payload["parsed_item"]["article"], "092799")
+            self.assertEqual(stored_payload["parsed_item"]["price"], 138.8)
+            self.assertEqual(stored_payload["parsed_item"]["currency"], "UAH")
+            self.assertEqual(stored_payload["parsed_item"]["unit"], "шт")
+            self.assertEqual(stored_payload["parsed_item"]["availability"], "in stock")
+
     def test_source_creation_reuses_equivalent_source_row_without_duplicates(self) -> None:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             database_path = Path(tmpdir) / "catalog.db"
@@ -165,7 +265,15 @@ class FittingSourceCreateTests(unittest.TestCase):
 
             with patch.object(inventory_repository, "SessionLocal", session_factory):
                 with session_factory() as session:
-                    session.add(fitting_models.SupplierModel(code="viyar", name="VIYAR", is_active=True))
+                    session.add(
+                        fitting_models.SupplierModel(
+                            code="viyar",
+                            name="VIYAR",
+                            owner_user_id=None,
+                            is_system=True,
+                            is_active=True,
+                        )
+                    )
                     session.commit()
 
                 first = inventory_repository.create_fitting(**payload)

@@ -733,6 +733,195 @@ def _extract_kronas_characteristics(soup: BeautifulSoup) -> dict[str, str]:
     return characteristics
 
 
+def _extract_mt_characteristics(soup: BeautifulSoup) -> dict[str, str]:
+    characteristics: dict[str, str] = {}
+    seen_pairs: set[tuple[str, str]] = set()
+
+    for container in soup.select("#product-tab-chars, .product-characteristics"):
+        for row in container.select("table tr"):
+            cells = row.find_all("td", recursive=False)
+            if len(cells) < 2:
+                cells = row.find_all("td")
+
+            values = [_clean_text(cell.get_text(" ", strip=True)) for cell in cells]
+            values = [value for value in values if value]
+            if len(values) < 2:
+                continue
+
+            key = values[0].rstrip(":").strip()
+            value = values[1].strip()
+            if not key or not value:
+                continue
+
+            normalized_pair = (key, value)
+            if normalized_pair in seen_pairs:
+                continue
+
+            seen_pairs.add(normalized_pair)
+            if key not in characteristics:
+                characteristics[key] = value
+
+    return characteristics
+
+
+def _normalize_mt_availability(value: str | None) -> str | None:
+    text = _clean_text(value)
+    if not text:
+        return None
+
+    lowered = text.lower()
+    token = lowered.rsplit("/", 1)[-1]
+    if token in {"in stock", "instock"}:
+        return "in stock"
+    if "в наявності" in lowered or "є в наявності" in lowered or "есть в наличии" in lowered:
+        return "in stock"
+    if token in {"out of stock", "outofstock"}:
+        return "out of stock"
+    if "немає в наявності" in lowered or "нема в наявності" in lowered or "нет в наличии" in lowered:
+        return "out of stock"
+    if token in {"preorder", "pre-order"} or "під замовлення" in lowered or "под заказ" in lowered:
+        return "preorder"
+
+    return None
+
+
+def _extract_mt_article(soup: BeautifulSoup, final_url: str) -> str | None:
+    article = _first_meta_content(
+        soup,
+        [
+            "meta[itemprop='sku']",
+            "meta[name='sku']",
+        ],
+    )
+    if article:
+        return article
+
+    article = _first_text(
+        soup,
+        [
+            "[itemprop='sku']",
+            "#artikul",
+            ".sku",
+            ".product-code",
+        ],
+    )
+    if article:
+        return article
+
+    page_text = soup.get_text(" ", strip=True)
+    for pattern in (
+        r"\bКод[:\s]*([0-9]{4,})\b",
+        r"\bАртикул[:\s]*([0-9]{4,})\b",
+        r"\bSKU[:\s]*([0-9]{4,})\b",
+    ):
+        match = re.search(pattern, page_text, re.IGNORECASE)
+        if match:
+            return match.group(1)
+
+    return _extract_article_from_text(final_url)
+
+
+def _extract_mt_price_text(soup: BeautifulSoup) -> str | None:
+    price_text = _first_meta_content(
+        soup,
+        [
+            "meta[itemprop='price']",
+            "meta[property='product:price:amount']",
+            "meta[property='og:price:amount']",
+        ],
+    )
+    if price_text:
+        return price_text
+
+    return _first_text(
+        soup,
+        [
+            ".product-page-price__current",
+            ".product-page-price [itemprop='price']",
+            ".product-page-price",
+            ".product-price",
+            ".price-current",
+            ".price",
+            "[data-price]",
+        ],
+    )
+
+
+def _extract_mt_currency(soup: BeautifulSoup, price_text: str | None = None) -> str | None:
+    currency = _first_meta_content(
+        soup,
+        [
+            "meta[itemprop='priceCurrency']",
+            "meta[property='product:price:currency']",
+        ],
+    )
+    if currency:
+        normalized = _clean_text(currency).upper()
+        if normalized in {"UAH", "UA", "HRN", "ГРН"} or "грн" in normalized.lower() or "₴" in normalized:
+            return "UAH"
+        return normalized or None
+
+    text = _clean_text(price_text)
+    if not text:
+        text = soup.get_text(" ", strip=True)
+    lowered = text.lower()
+    if "грн" in lowered or "₴" in text or "uah" in lowered:
+        return "UAH"
+    if "€" in text or "eur" in lowered:
+        return "EUR"
+    if "$" in text or "usd" in lowered:
+        return "USD"
+
+    return None
+
+
+def _extract_mt_unit(soup: BeautifulSoup, price_text: str | None = None) -> str | None:
+    unit = _first_text(
+        soup,
+        [
+            ".product-page-price__unit",
+            ".product-price__unit",
+            ".price-unit",
+            ".product-unit",
+            "[itemprop='unitText']",
+        ],
+    )
+    if unit:
+        return unit
+
+    text = _clean_text(price_text)
+    if not text:
+        return None
+
+    match = re.search(r"/\s*([^\s,;]+)", text)
+    if match:
+        return _clean_text(match.group(1)) or None
+
+    return None
+
+
+def _extract_mt_availability(soup: BeautifulSoup) -> str | None:
+    raw_value = _first_meta_content(
+        soup,
+        [
+            "meta[itemprop='availability']",
+            "meta[property='product:availability']",
+        ],
+    )
+    if not raw_value:
+        raw_value = _first_text(
+            soup,
+            [
+                ".productLabel",
+                ".product-availability",
+                ".availability",
+                "[itemprop='availability']",
+            ],
+        )
+
+    return _normalize_mt_availability(raw_value)
+
+
 def _extract_kronas_description(soup: BeautifulSoup, product_name: str | None) -> str | None:
     description = (
         _first_meta_content(
@@ -770,6 +959,20 @@ def _is_disallowed_kronas_gallery_url(value: str | None) -> bool:
         return True
 
     if url.startswith(("data:", "blob:")):
+        return True
+
+    media_markers = (
+        "youtube",
+        "youtu.be",
+        "video",
+        "player",
+        "embed",
+        "preview",
+        "media-player",
+        "vimeo",
+    )
+
+    if any(marker in url for marker in media_markers):
         return True
 
     if "/media/images/catalog/big/" in url:
@@ -1390,7 +1593,7 @@ async def _parse_mt_source(source_url: str) -> dict:
     )
     name = _clean_product_name(name)
 
-    article = _extract_article_from_text(final_url)
+    article = _extract_mt_article(soup, final_url)
 
     if not article:
         page_text = soup.get_text(" ", strip=True)
@@ -1398,9 +1601,19 @@ async def _parse_mt_source(source_url: str) -> dict:
         if article_match:
             article = article_match.group(1)
 
-    price_text = _first_text(
+    price_meta_text = _first_meta_content(
         soup,
         [
+            "meta[itemprop='price']",
+            "meta[property='product:price:amount']",
+            "meta[property='og:price:amount']",
+        ],
+    )
+    price_block_text = _first_text(
+        soup,
+        [
+            ".product-page-price__current",
+            ".product-page-price [itemprop='price']",
             ".product-page-price",
             ".product-price",
             ".price-current",
@@ -1408,11 +1621,7 @@ async def _parse_mt_source(source_url: str) -> dict:
             "[data-price]",
         ],
     )
-
-    if not price_text:
-        node = soup.select_one("[data-price]")
-        if node:
-            price_text = _clean_text(node.get("data-price"))
+    price_text = price_meta_text or price_block_text
 
     if not price_text:
         for script in soup.find_all("script"):
@@ -1467,6 +1676,11 @@ async def _parse_mt_source(source_url: str) -> dict:
         )
     )
     description = _extract_description(soup, name)
+    characteristics = _extract_mt_characteristics(soup)
+    brand = characteristics.get("Бренд") or characteristics.get("Виробник")
+    unit = _extract_mt_unit(soup, price_block_text or price_text)
+    currency = _extract_mt_currency(soup, price_block_text or price_text)
+    availability = _extract_mt_availability(soup)
 
     return {
         "success": True,
@@ -1477,8 +1691,12 @@ async def _parse_mt_source(source_url: str) -> dict:
         "article": article,
         "price": _extract_price(price_text),
         "price_raw": price_text or None,
-        "unit": None,
+        "unit": unit or None,
         "image_url": image_url or None,
+        "brand": brand or None,
+        "currency": currency,
+        "availability": availability,
+        "characteristics": characteristics,
     }
 
 

@@ -161,6 +161,16 @@ class FittingTaxonomyApiTests(unittest.TestCase):
                 self.assertEqual(update_manufacturer_response.status_code, 200)
                 self.assertTrue(update_manufacturer_response.json()["success"])
                 self.assertEqual(update_manufacturer_response.json()["item"]["name"], "Blum Updated")
+                self.assertEqual(update_manufacturer_response.json()["item"]["logo_url"], "https://example.com/logo.svg")
+
+                manufacturers_response = client.get(
+                    "/catalog/fitting-manufacturers?active_only=false",
+                    headers=headers,
+                )
+                self.assertEqual(manufacturers_response.status_code, 200)
+                self.assertTrue(manufacturers_response.json()["success"])
+                manufacturer_items = manufacturers_response.json()["items"]
+                self.assertTrue(any(item["id"] == manufacturer_id and item["logo_url"] == "https://example.com/logo.svg" for item in manufacturer_items))
 
                 spare_manufacturer_response = client.post(
                     "/catalog/fitting-manufacturers",
@@ -404,7 +414,13 @@ class FittingTaxonomyApiTests(unittest.TestCase):
                         with session_maker() as db:
                             manufacturer = FittingManufacturerModel(code="hettich", name="Hettich", is_active=True, sort_order=1)
                             category = FittingCategoryModel(code="connectors_fasteners", name="Connectors and fasteners", is_active=True, sort_order=1)
-                            supplier = fitting.SupplierModel(code="viyar", name="VIYAR", is_active=True)
+                            supplier = fitting.SupplierModel(
+                                code="viyar",
+                                name="VIYAR",
+                                owner_user_id=None,
+                                is_system=True,
+                                is_active=True,
+                            )
                             db.add_all([manufacturer, category, supplier])
                             db.commit()
                             manufacturer_id = int(manufacturer.id)

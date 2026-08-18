@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Pencil, Plus, RefreshCw, Save, Trash2, X } from "lucide-react";
 
 import {
@@ -30,6 +30,8 @@ import {
   updateFittingManufacturer,
   updateFittingProductTaxonomy,
   updateFittingSeries,
+  resolveAdminAssetUrl,
+  uploadFittingManufacturerLogo,
 } from "../api.js";
 
 const ENTITY_LABELS = {
@@ -71,6 +73,52 @@ function sortProducts(items = []) {
   });
 }
 
+function normalizeManufacturerCode(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9а-яіїєґ]+/gi, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+const MANUFACTURER_LOGO_ACCEPT = "image/png,image/jpeg,image/webp";
+const MANUFACTURER_LOGO_ALLOWED_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
+const MANUFACTURER_LOGO_MAX_SIZE_BYTES = 12 * 1024 * 1024;
+
+function ManufacturerLogo({ name = "", logoUrl = "", className = "" }) {
+  const [hasBrokenImage, setHasBrokenImage] = useState(false);
+  const normalizedLogoUrl = String(logoUrl || "").trim();
+  const resolvedLogoUrl = resolveAdminAssetUrl(normalizedLogoUrl);
+  const fallbackLabel = String(name || "").trim() || "—";
+
+  useEffect(() => {
+    setHasBrokenImage(false);
+  }, [normalizedLogoUrl]);
+
+  const rootClassName = ["supplier-logo-mark", className].filter(Boolean).join(" ");
+
+  if (!normalizedLogoUrl || hasBrokenImage) {
+    return (
+      <div className={rootClassName}>
+        <span className="supplier-logo-fallback">{fallbackLabel}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className={rootClassName}>
+      <img
+        alt={fallbackLabel}
+        className="supplier-logo-image"
+        loading="lazy"
+        onError={() => setHasBrokenImage(true)}
+        src={resolvedLogoUrl}
+      />
+    </div>
+  );
+}
+
 export default function FittingTaxonomyAdminWorkspace({
   activeTab = "manufacturers",
   language = "uk",
@@ -91,7 +139,11 @@ export default function FittingTaxonomyAdminWorkspace({
   const [editorError, setEditorError] = useState("");
   const [editorSaving, setEditorSaving] = useState(false);
   const [editorForm, setEditorForm] = useState(emptyStateFor("manufacturers"));
+  const [editorLogoFile, setEditorLogoFile] = useState(null);
+  const [editorLogoPreviewUrl, setEditorLogoPreviewUrl] = useState("");
+  const [editorLogoRemoved, setEditorLogoRemoved] = useState(false);
   const [search, setSearch] = useState("");
+  const logoFileInputRef = useRef(null);
 
   const manufacturersById = useMemo(() => new Map(manufacturers.map((item) => [String(item.id), item])), [manufacturers]);
   const seriesById = useMemo(() => new Map(series.map((item) => [String(item.id), item])), [series]);
@@ -193,6 +245,14 @@ export default function FittingTaxonomyAdminWorkspace({
     [categories, editorForm.parent_id, editorItemId],
   );
 
+  useEffect(() => {
+    return () => {
+      if (editorLogoPreviewUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(editorLogoPreviewUrl);
+      }
+    };
+  }, [editorLogoPreviewUrl]);
+
   async function loadAllData() {
     if (!token) {
       return;
@@ -262,13 +322,86 @@ export default function FittingTaxonomyAdminWorkspace({
     );
     setEditorError("");
     setEditorOpen(true);
+
+    if (logoFileInputRef.current) {
+      logoFileInputRef.current.value = "";
+    }
+    if (editorLogoPreviewUrl.startsWith("blob:")) {
+      URL.revokeObjectURL(editorLogoPreviewUrl);
+    }
+    setEditorLogoFile(null);
+    setEditorLogoPreviewUrl("");
+    setEditorLogoRemoved(false);
   }
 
   function closeEditor() {
+    if (logoFileInputRef.current) {
+      logoFileInputRef.current.value = "";
+    }
+    if (editorLogoPreviewUrl.startsWith("blob:")) {
+      URL.revokeObjectURL(editorLogoPreviewUrl);
+    }
     setEditorOpen(false);
     setEditorItemId("");
     setEditorError("");
     setEditorForm(emptyStateFor(editorEntity));
+    setEditorLogoFile(null);
+    setEditorLogoPreviewUrl("");
+    setEditorLogoRemoved(false);
+  }
+
+  function openLogoFilePicker() {
+    if (logoFileInputRef.current) {
+      logoFileInputRef.current.click();
+    }
+  }
+
+  function handleLogoFileChange(event) {
+    const file = event.target.files?.[0] || null;
+    if (!file) {
+      return;
+    }
+
+    const normalizedType = String(file.type || "").toLowerCase();
+    if (!MANUFACTURER_LOGO_ALLOWED_TYPES.has(normalizedType)) {
+      setEditorError(
+        language === "uk"
+          ? "Дозволені тільки PNG, JPG, JPEG або WEBP"
+          : "Only PNG, JPG, JPEG, or WEBP files are allowed",
+      );
+      event.target.value = "";
+      return;
+    }
+
+    if (file.size > MANUFACTURER_LOGO_MAX_SIZE_BYTES) {
+      setEditorError(language === "uk" ? "Файл занадто великий" : "File is too large");
+      event.target.value = "";
+      return;
+    }
+
+    if (editorLogoPreviewUrl.startsWith("blob:")) {
+      URL.revokeObjectURL(editorLogoPreviewUrl);
+    }
+
+    setEditorLogoFile(file);
+    setEditorLogoPreviewUrl(URL.createObjectURL(file));
+    setEditorLogoRemoved(false);
+    setEditorError("");
+    event.target.value = "";
+  }
+
+  function removeEditorLogo() {
+    if (logoFileInputRef.current) {
+      logoFileInputRef.current.value = "";
+    }
+
+    if (editorLogoPreviewUrl.startsWith("blob:")) {
+      URL.revokeObjectURL(editorLogoPreviewUrl);
+    }
+
+    setEditorLogoFile(null);
+    setEditorLogoPreviewUrl("");
+    setEditorLogoRemoved(true);
   }
 
   async function submitEditor(event) {
@@ -285,12 +418,27 @@ export default function FittingTaxonomyAdminWorkspace({
       let result = null;
 
       if (editorEntity === "manufacturers") {
+        let logoUrl = editorLogoRemoved ? null : String(editorForm.logo_url || "").trim() || null;
+
+        if (editorLogoFile) {
+          const uploadResult = await uploadFittingManufacturerLogo(token, editorLogoFile);
+          if (!uploadResult?.success) {
+            setEditorError(uploadResult?.error || (language === "uk" ? "Не вдалося завантажити логотип" : "Unable to upload logo"));
+            return;
+          }
+
+          logoUrl = String(uploadResult.logo_url || "").trim() || null;
+        }
+
+        const nextCode = editorMode === "edit"
+          ? String(editorForm.code || "").trim()
+          : normalizeManufacturerCode(editorForm.name || "");
         const payload = {
-          code: String(editorForm.code || ""),
+          code: nextCode,
           name: String(editorForm.name || ""),
           description: String(editorForm.description || "") || null,
           website_url: String(editorForm.website_url || "") || null,
-          logo_url: String(editorForm.logo_url || "") || null,
+          logo_url: logoUrl,
           country_code: String(editorForm.country_code || "") || null,
           is_active: Boolean(editorForm.is_active),
           sort_order: Number(editorForm.sort_order || 0),
@@ -431,6 +579,16 @@ export default function FittingTaxonomyAdminWorkspace({
     }
   }
 
+  function handleManufacturerNameChange(value) {
+    setEditorForm((current) => ({
+      ...current,
+      code: editorEntity === "manufacturers" && editorMode === "create"
+        ? normalizeManufacturerCode(value)
+        : current.code,
+      name: value,
+    }));
+  }
+
   function handleManufacturerFieldChange(nextManufacturerId) {
     setEditorForm((current) => {
       if (editorEntity !== "products") {
@@ -474,37 +632,14 @@ export default function FittingTaxonomyAdminWorkspace({
     });
   }, [editorEntity, series]);
 
-  const activeEntityLabel = entityToLabel(activeTab, language);
-  const currentEntityItems = activeTab === "manufacturers"
-    ? visibleManufacturers
-    : activeTab === "series"
-      ? visibleSeries
-      : activeTab === "categories"
-        ? visibleCategories
-        : visibleProducts;
+  const editorLogoPreviewSource = editorLogoPreviewUrl || (!editorLogoRemoved ? resolveAdminAssetUrl(editorForm.logo_url) : "");
+  const editorHasLogo = Boolean(editorLogoPreviewSource);
+  const editorLogoFileName = editorLogoFile?.name || "";
 
   return (
     <section className="dashboard-layout">
-      <article className="dashboard-hero-card">
-        <div className="dashboard-hero-copy">
-          <h1>{activeEntityLabel}</h1>
-          <p>
-            {language === "uk"
-              ? "Керування виробниками, серіями, категоріями та технічними товарами."
-              : "Manage manufacturers, series, categories, and technical products."}
-          </p>
-        </div>
-      </article>
-
       <article className="catalog-card service-catalog-card service-catalog-card-full">
         <div className="service-catalog-header">
-          <div className="service-catalog-title">
-            <p>
-              {language === "uk"
-                ? "Активні записи показуються за замовчуванням. Неактивні можна показати перемикачем."
-                : "Active records are shown by default. Inactive ones can be revealed with the toggle."}
-            </p>
-          </div>
           <div className="service-catalog-header-actions">
             <label className="materials-filter">
               <span>{language === "uk" ? "Пошук" : "Search"}</span>
@@ -544,7 +679,7 @@ export default function FittingTaxonomyAdminWorkspace({
           <div className="table-panel full-panel">
             <div className="fittings-table-header">
               <span>{language === "uk" ? "Назва" : "Name"}</span>
-              <span>{language === "uk" ? "Код" : "Code"}</span>
+              <span>{language === "uk" ? "Логотип" : "Logo"}</span>
               <span>{language === "uk" ? "Країна" : "Country"}</span>
               <span>{language === "uk" ? "Активна" : "Active"}</span>
             </div>
@@ -552,7 +687,9 @@ export default function FittingTaxonomyAdminWorkspace({
               {visibleManufacturers.map((item) => (
                 <article className="fittings-table-row" key={item.id}>
                   <div>{item.name}</div>
-                  <div>{item.code}</div>
+                  <div className="manufacturer-logo-cell">
+                    <ManufacturerLogo name={item.name} logoUrl={item.logo_url} />
+                  </div>
                   <div>{item.country_code || "—"}</div>
                   <div>{item.is_active ? (language === "uk" ? "Так" : "Yes") : (language === "uk" ? "Ні" : "No")}</div>
                   <div className="catalog-actions">
@@ -671,10 +808,10 @@ export default function FittingTaxonomyAdminWorkspace({
 
       {editorOpen ? (
         <div aria-modal="true" className="modal-backdrop" onClick={closeEditor} role="dialog">
-          <section className="confirm-modal" onClick={(event) => event.stopPropagation()}>
+          <section className="confirm-modal supplier-confirm-modal" onClick={(event) => event.stopPropagation()}>
             <header className="confirm-header">
               <div>
-                <strong>{entityToLabel(editorEntity, language)}</strong>
+                <strong>{language === "uk" ? "Виробник фурнітури" : "Fitting manufacturer"}</strong>
                 <p>{editorMode === "edit" ? (language === "uk" ? "Редагування" : "Edit") : (language === "uk" ? "Створення" : "Create")}</p>
               </div>
               <button aria-label="Close" className="ghost-button compact-button detail-info-button" onClick={closeEditor} type="button">
@@ -684,34 +821,75 @@ export default function FittingTaxonomyAdminWorkspace({
             <form className="catalog-form" onSubmit={submitEditor}>
               {editorEntity === "manufacturers" ? (
                 <>
-                  <label>
-                    <span>{language === "uk" ? "Назва" : "Name"}</span>
-                    <input value={editorForm.name} onChange={(event) => setEditorForm((current) => ({ ...current, name: event.target.value }))} />
-                  </label>
-                  <label>
-                    <span>{language === "uk" ? "Код" : "Code"}</span>
-                    <input value={editorForm.code} onChange={(event) => setEditorForm((current) => ({ ...current, code: event.target.value }))} />
-                  </label>
-                  <label>
-                    <span>{language === "uk" ? "Країна" : "Country"}</span>
-                    <input value={editorForm.country_code} onChange={(event) => setEditorForm((current) => ({ ...current, country_code: event.target.value }))} />
-                  </label>
-                  <label>
-                    <span>{language === "uk" ? "Сайт" : "Website"}</span>
-                    <input value={editorForm.website_url} onChange={(event) => setEditorForm((current) => ({ ...current, website_url: event.target.value }))} />
-                  </label>
-                  <label>
-                    <span>{language === "uk" ? "Логотип URL" : "Logo URL"}</span>
-                    <input value={editorForm.logo_url} onChange={(event) => setEditorForm((current) => ({ ...current, logo_url: event.target.value }))} />
-                  </label>
-                  <label>
-                    <span>{language === "uk" ? "Опис" : "Description"}</span>
-                    <textarea value={editorForm.description} onChange={(event) => setEditorForm((current) => ({ ...current, description: event.target.value }))} />
-                  </label>
-                  <label>
-                    <span>{language === "uk" ? "Порядок" : "Sort order"}</span>
-                    <input type="number" value={editorForm.sort_order} onChange={(event) => setEditorForm((current) => ({ ...current, sort_order: event.target.value }))} />
-                  </label>
+                  <div className="supplier-form-body">
+                    <label className="supplier-form-field">
+                      <span>{language === "uk" ? "Назва" : "Name"}</span>
+                      <input
+                        onChange={(event) => handleManufacturerNameChange(event.target.value)}
+                        value={editorForm.name}
+                      />
+                    </label>
+
+                    <label className="supplier-form-field supplier-logo-field">
+                      <span>{language === "uk" ? "Логотип" : "Logo"}</span>
+                      <input
+                        accept={MANUFACTURER_LOGO_ACCEPT}
+                        className="supplier-logo-file-input"
+                        onChange={handleLogoFileChange}
+                        ref={logoFileInputRef}
+                        type="file"
+                      />
+                      <div className="supplier-logo-upload-panel">
+                        <div className="supplier-logo-preview">
+                          {editorHasLogo ? (
+                            <ManufacturerLogo
+                              className="supplier-logo-preview-mark"
+                              name={editorForm.name}
+                              logoUrl={editorLogoPreviewSource}
+                            />
+                          ) : (
+                            <div className="supplier-logo-preview-placeholder">
+                              <span className="supplier-logo-fallback">{String(editorForm.name || "").trim() || "—"}</span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="supplier-logo-input-row">
+                          <button className="ghost-button compact-button" onClick={openLogoFilePicker} type="button">
+                            {editorLogoFile || editorLogoRemoved || editorForm.logo_url
+                              ? (language === "uk" ? "Замінити" : "Replace")
+                              : (language === "uk" ? "Вибрати зображення" : "Choose image")}
+                          </button>
+                          <button
+                            className="ghost-button compact-button"
+                            disabled={!editorHasLogo}
+                            onClick={removeEditorLogo}
+                            type="button"
+                          >
+                            {language === "uk" ? "Видалити" : "Remove"}
+                          </button>
+                        </div>
+                        {editorLogoFileName ? <p className="supplier-logo-file-name">{editorLogoFileName}</p> : null}
+                      </div>
+                    </label>
+
+                    <div className="supplier-form-options">
+                      <label className="supplier-form-field">
+                        <span>{language === "uk" ? "Країна" : "Country"}</span>
+                        <input
+                          onChange={(event) => setEditorForm((current) => ({ ...current, country_code: event.target.value }))}
+                          value={editorForm.country_code}
+                        />
+                      </label>
+                      <label className="toggle-label supplier-toggle">
+                        <input
+                          checked={Boolean(editorForm.is_active)}
+                          onChange={(event) => setEditorForm((current) => ({ ...current, is_active: event.target.checked }))}
+                          type="checkbox"
+                        />
+                        {language === "uk" ? "Активний" : "Active"}
+                      </label>
+                    </div>
+                  </div>
                 </>
               ) : editorEntity === "series" ? (
                 <>
@@ -824,9 +1002,9 @@ export default function FittingTaxonomyAdminWorkspace({
                 </>
               )}
 
-              {editorError ? <p className="status-message error">{editorError}</p> : null}
+              {editorError ? <p className="status-message error supplier-form-error">{editorError}</p> : null}
 
-              <div className="confirm-actions">
+              <div className="supplier-form-footer confirm-actions">
                 <button className="ghost-button" disabled={editorSaving} onClick={closeEditor} type="button">
                   {language === "uk" ? "Скасувати" : "Cancel"}
                 </button>

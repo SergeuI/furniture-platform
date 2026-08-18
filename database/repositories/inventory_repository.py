@@ -1,11 +1,14 @@
 from collections import defaultdict
 from hashlib import sha256
 from datetime import date, datetime, timedelta
+import re
 from typing import Sequence
 from urllib.parse import urlparse
+from uuid import uuid4
 
 from sqlalchemy import func, text
-from sqlalchemy.orm import load_only, object_session
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import load_only, object_session, selectinload
 
 from database.models.fitting import (
     FittingModel,
@@ -540,6 +543,14 @@ def _serialize_fitting(item: FittingModel, *, owner_profile: dict | None = None)
     )
 
     source_site = _detect_fitting_source_site(item.source_url)
+    supplier_offers = [
+        _serialize_fitting_supplier_offer(offer)
+        for offer in sorted(
+            getattr(item, "supplier_offers", []) or [],
+            key=lambda offer: (int(offer.priority or 0), int(offer.id or 0)),
+        )
+    ]
+    technical_product = getattr(item, "technical_product", None)
 
     return {
         "id": str(item.id),
@@ -564,6 +575,8 @@ def _serialize_fitting(item: FittingModel, *, owner_profile: dict | None = None)
         "owner_login": (owner_profile or {}).get("login"),
         "owner_email": (owner_profile or {}).get("email"),
         "technical_product_id": int(item.technical_product_id) if item.technical_product_id is not None else None,
+        "manufacturer_id": int(technical_product.manufacturer_id) if technical_product and technical_product.manufacturer_id is not None else None,
+        "supplier_offers": supplier_offers,
         "is_system": bool(item.is_system),
         "is_active": bool(item.is_active),
         "sort_order": item.sort_order or 0,
@@ -578,8 +591,143 @@ def _serialize_supplier(item: SupplierModel) -> dict:
         "id": int(item.id),
         "code": item.code,
         "name": item.name,
+        "logo_url": item.logo_url,
+        "owner_user_id": item.owner_user_id,
+        "is_system": bool(item.is_system),
         "is_active": bool(item.is_active),
+        "created_at": item.created_at,
+        "updated_at": item.updated_at,
     }
+
+
+def get_supplier_by_id(item_id: str | int) -> dict | None:
+
+    db = SessionLocal()
+
+    try:
+        item = db.get(SupplierModel, int(item_id))
+        return _serialize_supplier(item) if item else None
+    finally:
+        db.close()
+
+
+def _generate_supplier_code(name: str | None, code: str | None = None) -> str:
+
+    normalized_code = _normalize_fitting_value(code)
+    if normalized_code:
+        return normalized_code
+
+    normalized_name = _normalize_fitting_value(name) or "supplier"
+    slug = re.sub(r"[^a-zA-Z0-9]+", "-", normalized_name.casefold()).strip("-")
+    if not slug:
+        slug = "supplier"
+    return f"{slug}-{uuid4().hex[:8]}"
+
+
+def create_supplier(
+    *,
+    code: str | None = None,
+    name: str,
+    logo_url: str | None = None,
+    owner_user_id: str | None = None,
+    is_system: bool = False,
+    is_active: bool = True,
+) -> dict | None:
+
+    db = SessionLocal()
+
+    try:
+        normalized_name = _normalize_fitting_value(name)
+        if not normalized_name:
+            return None
+
+        item = SupplierModel(
+            code=_generate_supplier_code(normalized_name, code),
+            name=normalized_name,
+            logo_url=_normalize_fitting_value(logo_url),
+            owner_user_id=_normalize_fitting_value(owner_user_id),
+            is_system=bool(is_system),
+            is_active=bool(is_active),
+        )
+        db.add(item)
+        db.commit()
+        db.refresh(item)
+        return _serialize_supplier(item)
+    except IntegrityError:
+        db.rollback()
+        return None
+    finally:
+        db.close()
+
+
+def update_supplier(
+    item_id: str | int,
+    *,
+    code: str | None = None,
+    name: str | None = None,
+    logo_url: str | None = None,
+    owner_user_id: str | None = None,
+    is_system: bool | None = None,
+    is_active: bool | None = None,
+) -> dict | None:
+
+    db = SessionLocal()
+
+    try:
+        item = db.get(SupplierModel, int(item_id))
+        if not item:
+            return None
+
+        if code is not None:
+            normalized_code = _normalize_fitting_value(code)
+            if normalized_code:
+                item.code = normalized_code
+
+        if name is not None:
+            normalized_name = _normalize_fitting_value(name)
+            if normalized_name:
+                item.name = normalized_name
+
+        if logo_url is not None:
+            item.logo_url = _normalize_fitting_value(logo_url)
+
+        if owner_user_id is not None:
+            item.owner_user_id = _normalize_fitting_value(owner_user_id)
+
+        if is_system is not None:
+            item.is_system = bool(is_system)
+
+        if is_active is not None:
+            item.is_active = bool(is_active)
+
+        db.commit()
+        db.refresh(item)
+        return _serialize_supplier(item)
+    except IntegrityError:
+        db.rollback()
+        return None
+    finally:
+        db.close()
+
+
+def delete_supplier(item_id: str | int) -> dict | None:
+
+    db = SessionLocal()
+
+    try:
+        item = db.get(SupplierModel, int(item_id))
+        if not item:
+            return None
+
+        serialized = _serialize_supplier(item)
+        db.delete(item)
+        db.commit()
+        return serialized
+    except IntegrityError:
+        db.rollback()
+        return None
+    finally:
+        db.close()
 
 
 def _serialize_fitting_supplier_offer(item: FittingSupplierOfferModel) -> dict:
@@ -587,6 +735,7 @@ def _serialize_fitting_supplier_offer(item: FittingSupplierOfferModel) -> dict:
     supplier = getattr(item, "supplier", None)
     supplier_code = getattr(supplier, "code", None) or ""
     supplier_name = getattr(supplier, "name", None) or ""
+    supplier_logo_url = getattr(supplier, "logo_url", None) or ""
 
     return {
         "id": int(item.id),
@@ -594,6 +743,7 @@ def _serialize_fitting_supplier_offer(item: FittingSupplierOfferModel) -> dict:
         "supplier_id": int(item.supplier_id),
         "supplier_code": supplier_code,
         "supplier_name": supplier_name,
+        "supplier_logo_url": supplier_logo_url,
         "article": _normalize_fitting_value(item.article),
         "external_product_id": _normalize_fitting_value(item.external_product_id),
         "source_url": _normalize_fitting_value(item.source_url),
@@ -837,8 +987,9 @@ def _delete_exact_fittings(db, fitting_ids: Sequence[int]) -> list[dict]:
             FittingHoleTemplateModel.id.in_(template_ids),
         ).delete(synchronize_session=False)
 
-    for row in rows:
-        db.delete(row)
+    db.query(FittingModel).filter(
+        FittingModel.id.in_(row_ids),
+    ).delete(synchronize_session=False)
 
     return deleted_items
 
@@ -1806,6 +1957,10 @@ def list_fittings(
     try:
 
         query = db.query(FittingModel)
+        query = query.options(
+            selectinload(FittingModel.supplier_offers).selectinload(FittingSupplierOfferModel.supplier),
+            selectinload(FittingModel.technical_product),
+        )
 
         if search:
             search_value = f"%{search.strip()}%"
@@ -2100,6 +2255,7 @@ def get_fitting_by_id(
 
         item = (
             db.query(FittingModel)
+            .options(selectinload(FittingModel.technical_product))
             .filter(FittingModel.id == int(item_id))
             .first()
         )
@@ -2213,7 +2369,9 @@ def update_fitting(
     is_system: bool,
     is_active: bool,
     sort_order: int = 0,
+    technical_product: dict | None = None,
     supplier_offer: dict | None = None,
+    prepared_gallery_images: Sequence[PreparedFittingGalleryImage] | None = None,
 ) -> dict | None:
 
     db = SessionLocal()
@@ -2238,6 +2396,50 @@ def update_fitting(
             stock,
         )
 
+        technical_product_item = None
+        if technical_product:
+            if item.technical_product_id is not None:
+                technical_product_item = (
+                    db.query(FittingProductModel)
+                    .filter(FittingProductModel.id == int(item.technical_product_id))
+                    .first()
+                )
+            if technical_product_item is None:
+                technical_product_item = _resolve_or_create_technical_product(
+                    db,
+                    technical_product,
+                )
+            else:
+                normalized_name = str(technical_product.get("name") or "").strip()
+                normalized_article = _normalize_fitting_value(technical_product.get("article"))
+                normalized_code = _normalize_fitting_value(technical_product.get("code"))
+                normalized_brand = _normalize_fitting_value(technical_product.get("brand"))
+                normalized_description = _normalize_fitting_value(technical_product.get("description"))
+                manufacturer_id = technical_product.get("manufacturer_id")
+                series_id = technical_product.get("series_id")
+                category_id = technical_product.get("category_id")
+                is_active = technical_product.get("is_active")
+
+                if normalized_article:
+                    technical_product_item.article = normalized_article
+                if normalized_code:
+                    technical_product_item.code = normalized_code
+                if normalized_name:
+                    technical_product_item.name = normalized_name
+                if normalized_brand:
+                    technical_product_item.brand = normalized_brand
+                if normalized_description:
+                    technical_product_item.description = normalized_description
+                if manufacturer_id is not None:
+                    technical_product_item.manufacturer_id = int(manufacturer_id)
+                if series_id is not None:
+                    technical_product_item.series_id = int(series_id)
+                if category_id is not None:
+                    technical_product_item.category_id = int(category_id)
+                if is_active is not None:
+                    technical_product_item.is_active = bool(is_active)
+                db.flush()
+
         item.city = _normalize_fitting_value(city)
         item.code = _normalize_fitting_value(code)
         item.article = _normalize_fitting_value(article)
@@ -2260,8 +2462,24 @@ def update_fitting(
         item.is_system = bool(is_system)
         item.is_active = bool(is_active)
         item.sort_order = int(sort_order or 0)
+        gallery_images = list(prepared_gallery_images or [])
+
+        if technical_product_item is not None:
+            item.technical_product_id = technical_product_item.id
 
         _apply_fitting_supplier_offer(db, fitting_id=int(item.id), supplier_offer=supplier_offer)
+
+        if prepared_gallery_images is not None:
+            db.query(FittingImageModel).filter(
+                FittingImageModel.fitting_id == int(item.id),
+            ).delete(synchronize_session=False)
+
+        if gallery_images:
+            _add_prepared_fitting_gallery_images(
+                db,
+                fitting_id=item.id,
+                prepared_gallery_images=gallery_images,
+            )
 
         db.commit()
         db.refresh(item)
@@ -2277,7 +2495,10 @@ def update_fitting(
         db.close()
 
 
-def list_suppliers(include_inactive: bool = False) -> list[dict]:
+def list_suppliers(
+    include_inactive: bool = False,
+    current_user_id: str | None = None,
+) -> list[dict]:
 
     db = SessionLocal()
 
@@ -2285,6 +2506,18 @@ def list_suppliers(include_inactive: bool = False) -> list[dict]:
         query = db.query(SupplierModel)
         if not include_inactive:
             query = query.filter(SupplierModel.is_active.is_(True))
+        normalized_current_user_id = _normalize_fitting_value(current_user_id)
+        if normalized_current_user_id:
+            query = query.filter(
+                (
+                    SupplierModel.is_system.is_(True)
+                )
+                | (
+                    SupplierModel.owner_user_id == normalized_current_user_id
+                )
+            )
+        else:
+            query = query.filter(SupplierModel.is_system.is_(True))
         rows = query.order_by(
             SupplierModel.name.asc(),
             SupplierModel.code.asc(),
@@ -2460,6 +2693,7 @@ def delete_fitting(item_id: str | int) -> dict | None:
             rows_to_delete = [item]
 
         row_ids = [int(row.id) for row in rows_to_delete]
+        selected_item_id = str(item.id)
         deleted_items = [
             _serialize_fitting(row)
             for row in rows_to_delete
@@ -2471,17 +2705,29 @@ def delete_fitting(item_id: str | int) -> dict | None:
             if row.get("city") is not None
         ]
 
-        for row in rows_to_delete:
-            db.delete(row)
+        # Remove fitting-owned children before deleting the parent rows.
+        # Mounting-node dependencies are blocked at the route level and are
+        # intentionally not removed here.
+        if template_ids:
+            db.query(FittingHolePointModel).filter(
+                FittingHolePointModel.template_id.in_(template_ids),
+            ).delete(synchronize_session=False)
+
+            db.query(FittingHoleTemplateModel).filter(
+                FittingHoleTemplateModel.id.in_(template_ids),
+            ).delete(synchronize_session=False)
+
+        db.query(FittingSupplierOfferModel).filter(
+            FittingSupplierOfferModel.fitting_id == int(item.id),
+        ).delete(synchronize_session=False)
 
         db.query(FittingImageModel).filter(
             FittingImageModel.fitting_id.in_(row_ids)
         ).delete(synchronize_session=False)
 
-        if template_ids:
-            db.query(FittingHoleTemplateModel).filter(
-                FittingHoleTemplateModel.id.in_(template_ids),
-            ).delete(synchronize_session=False)
+        db.query(FittingModel).filter(
+            FittingModel.id.in_(row_ids),
+        ).delete(synchronize_session=False)
 
         db.commit()
 
@@ -2489,7 +2735,7 @@ def delete_fitting(item_id: str | int) -> dict | None:
 
         return {
             "success": True,
-            "selected_item_id": str(item.id),
+            "selected_item_id": selected_item_id,
             "deleted_count": len(deleted_items),
             "deleted_ids": deleted_ids,
             "deleted_cities": deleted_cities,

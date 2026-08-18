@@ -22,10 +22,26 @@ class FittingFoundationRepository:
             .one_or_none()
         )
 
-    def list_suppliers(self, include_inactive: bool = True) -> list[SupplierModel]:
+    def list_suppliers(
+        self,
+        include_inactive: bool = True,
+        current_user_id: str | None = None,
+    ) -> list[SupplierModel]:
         query = self.session.query(SupplierModel)
         if not include_inactive:
             query = query.filter(SupplierModel.is_active.is_(True))
+        normalized_current_user_id = str(current_user_id or "").strip() or None
+        if normalized_current_user_id:
+            query = query.filter(
+                (
+                    SupplierModel.is_system.is_(True)
+                )
+                | (
+                    SupplierModel.owner_user_id == normalized_current_user_id
+                )
+            )
+        else:
+            query = query.filter(SupplierModel.is_system.is_(True))
         return query.order_by(
             SupplierModel.name.asc(),
             SupplierModel.code.asc(),

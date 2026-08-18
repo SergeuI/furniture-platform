@@ -19,6 +19,9 @@ test("admin app uses canonical section-based navigation helpers", () => {
   assert.match(source, /getCollapsedSidebarGroupClickTarget\(\{\s*currentView: activeViewRef\.current,\s*groupKey: "processing",\s*userRole: user\?\.role,\s*}\)/);
   assert.match(source, /sidebarFlyoutPreserveRouteChangeRef\.current = true;/);
   assert.match(source, /isConnectionsWorkspaceView \?\s*\(\r?\n\s*<ConnectionsWorkspace/);
+  assert.match(source, /catalogSuppliers: "catalog-suppliers"/);
+  assert.match(source, /switchView\("catalogSuppliers"\)/);
+  assert.match(source, /<FittingSuppliersAdminWorkspace/);
   assert.match(
     source,
     /function resetFittingCatalogNavigation\(\) \{[\s\S]*localStorage\.removeItem\(FITTING_CATEGORY_STORAGE_KEY\);[\s\S]*setSelectedFittingCategory\(""\);[\s\S]*\}/,

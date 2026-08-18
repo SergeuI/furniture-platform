@@ -1,9 +1,11 @@
 import os
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import (
     CORSMiddleware
 )
+from fastapi.staticfiles import StaticFiles
 import uvicorn
 from dotenv import load_dotenv
 
@@ -53,6 +55,10 @@ app = FastAPI(
 
     title="Furniture Platform API"
 )
+
+uploads_root = Path("data/uploads")
+uploads_root.mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=uploads_root.as_posix()), name="uploads")
 
 
 @app.get("/health")

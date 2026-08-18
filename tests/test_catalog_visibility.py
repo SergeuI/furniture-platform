@@ -6,13 +6,15 @@ import unittest
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from io import BytesIO
 from pathlib import Path
 from hashlib import sha256
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, event
+from PIL import Image
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import sessionmaker
 
 from api.dependencies import auth as auth_dependencies
@@ -25,6 +27,8 @@ from database.models.entitlement_feature import EntitlementFeatureModel
 from database.models import entitlement_feature  # noqa: F401
 from database.models.fitting import (
     FittingCategoryModel,
+    FittingHolePointModel,
+    FittingHoleTemplateModel,
     FittingManufacturerModel,
     FittingModel,
     FittingProductModel,
@@ -50,7 +54,6 @@ from database.models import registration_identity  # noqa: F401
 from database.models import service_catalog_item  # noqa: F401
 from database.models import service_drilling_rule  # noqa: F401
 from database.models import user  # noqa: F401
-from database.models.user import UserModel
 from database.models import user_change_request  # noqa: F401
 from database.models import user_service_catalog_price  # noqa: F401
 from database.repositories import inventory_repository
@@ -58,6 +61,7 @@ from database.repositories import material_import_job_repository
 from database.repositories import fitting_hole_service_rule_repository
 import services.entitlement_service as entitlement_service
 import services.fitting_holes_service as fitting_holes_service
+from services import fitting_source_parser
 from services.mounting_node_service import MountingNodeService
 from services.fitting_image_gallery_service import PreparedFittingGalleryImage
 
@@ -141,6 +145,12 @@ class CatalogVisibilityTests(unittest.TestCase):
             content_type="image/png",
             sha256=sha256(b"fake-image-bytes").hexdigest(),
         )
+
+    @staticmethod
+    def _make_png_bytes(color: tuple[int, int, int]) -> bytes:
+        buffer = BytesIO()
+        Image.new("RGB", (120, 120), color).save(buffer, format="PNG")
+        return buffer.getvalue()
 
     @staticmethod
     def _remove_material_entitlement(
@@ -1585,6 +1595,16 @@ class CatalogVisibilityTests(unittest.TestCase):
                         )
                     )
                     session.add(
+                        SupplierModel(
+                            code="viyar",
+                            name="VIYAR",
+                            logo_url="https://example.test/viyar-logo.png",
+                            owner_user_id=None,
+                            is_system=True,
+                            is_active=True,
+                        )
+                    )
+                    session.add(
                         FittingModel(
                             name="Timestampless Fitting",
                             article="61136",
@@ -1603,6 +1623,25 @@ class CatalogVisibilityTests(unittest.TestCase):
                     )
                     session.commit()
 
+                    fitting = session.query(FittingModel).filter(FittingModel.article == "61136").one()
+                    supplier = session.query(SupplierModel).filter(SupplierModel.code == "viyar").one()
+                    session.add(
+                        FittingSupplierOfferModel(
+                            fitting_id=fitting.id,
+                            supplier_id=supplier.id,
+                            article="61136",
+                            source_url="https://viyar.ua/ua/catalog/dyubel_vvinchivaemyy_pod_styazhku_vb_du_321_9021847_hettich/",
+                            price=5.22,
+                            currency="UAH",
+                            unit="шт",
+                            stock="in stock",
+                            is_active=True,
+                            priority=100,
+                        )
+                    )
+                    session.commit()
+                    fitting_id = str(fitting.id)
+
                 response = client.get(
                     "/catalog/fittings?city=Kyiv&ownership_scope=all",
                     headers=self._auth_headers("admin-token"),
@@ -1614,24 +1653,109 @@ class CatalogVisibilityTests(unittest.TestCase):
                 self.assertEqual(len(payload["items"]), 1)
                 self.assertEqual(payload["items"][0]["article"], "61136")
                 self.assertEqual(payload["items"][0]["technical_product_id"], 31)
+                self.assertEqual(payload["items"][0]["manufacturer_id"], 2)
+                self.assertEqual(payload["items"][0]["supplier_offers"][0]["supplier_name"], "VIYAR")
+                self.assertEqual(
+                    payload["items"][0]["supplier_offers"][0]["supplier_logo_url"],
+                    "https://example.test/viyar-logo.png",
+                )
+                detail_response = client.get(
+                    f"/catalog/fittings/{fitting_id}",
+                    headers=self._auth_headers("admin-token"),
+                )
+                self.assertEqual(detail_response.status_code, 200)
+                self.assertEqual(detail_response.json()["item"]["manufacturer_id"], 2)
                 self.assertNotIn("created_at", payload["items"][0])
                 self.assertNotIn("updated_at", payload["items"][0])
+
+    def test_manual_fitting_keeps_supplier_offer_without_import_source(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
+                with session_factory() as session:
+                    supplier = SupplierModel(
+                        code="viyar",
+                        name="VIYAR",
+                        logo_url="https://example.test/viyar-logo.png",
+                        owner_user_id=None,
+                        is_system=True,
+                        is_active=True,
+                    )
+                    session.add(supplier)
+                    session.add(
+                        FittingModel(
+                            name="Manual fitting",
+                            article="0006",
+                            fitting_type="drawer_slides",
+                            fitting_group="fittings",
+                            owner_user_id=None,
+                            is_system=True,
+                            is_active=True,
+                            source=None,
+                            source_url=None,
+                            brand="Hettich",
+                            price=80.0,
+                            stock="in stock",
+                        )
+                    )
+                    session.commit()
+
+                    fitting = session.query(FittingModel).filter(FittingModel.article == "0006").one()
+                    session.add(
+                        FittingSupplierOfferModel(
+                            fitting_id=fitting.id,
+                            supplier_id=supplier.id,
+                            article="006",
+                            source_url=None,
+                            price=70.0,
+                            currency="UAH",
+                            unit="шт.",
+                            stock="in stock",
+                            is_active=True,
+                            priority=100,
+                        )
+                    )
+                    session.commit()
+
+                list_response = client.get(
+                    "/catalog/fittings?city=Kyiv&ownership_scope=all&search=0006",
+                    headers=self._auth_headers("admin-token"),
+                )
+                self.assertEqual(list_response.status_code, 200)
+                list_payload = list_response.json()
+                self.assertEqual(len(list_payload["items"]), 1)
+                self.assertEqual(list_payload["items"][0]["article"], "0006")
+                self.assertEqual(list_payload["items"][0]["source_site"], "manual")
+                self.assertEqual(list_payload["items"][0]["supplier_offers"][0]["supplier_name"], "VIYAR")
+                self.assertEqual(
+                    list_payload["items"][0]["supplier_offers"][0]["supplier_logo_url"],
+                    "https://example.test/viyar-logo.png",
+                )
+
+                detail_response = client.get(
+                    f"/catalog/fittings/{list_payload['items'][0]['id']}",
+                    headers=self._auth_headers("admin-token"),
+                )
+                self.assertEqual(detail_response.status_code, 200)
+                detail_payload = detail_response.json()["item"]
+                self.assertIsNone(detail_payload["source_site"])
+                self.assertEqual(detail_payload["supplier_offers"][0]["supplier_name"], "VIYAR")
+                self.assertEqual(detail_payload["supplier_offers"][0]["supplier_logo_url"], "https://example.test/viyar-logo.png")
 
     def test_delete_fitting_blocks_when_it_is_used_by_mounting_node(self) -> None:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
-                created = client.post(
-                    "/catalog/fittings",
-                    json={
-                        "name": "Node-locked Fitting",
-                        "fitting_type": "drawer_slides",
-                        "fitting_group": "fittings",
-                    },
-                    headers=self._auth_headers("trial-token"),
-                )
-                self.assertEqual(created.status_code, 200)
-                self.assertTrue(created.json()["success"])
-                fitting_id = int(created.json()["item"]["id"])
+                with session_factory() as session:
+                    fitting = FittingModel(
+                        name="Node-locked Fitting",
+                        article="NODE-LOCKED-0001",
+                        city="Kyiv",
+                        owner_user_id="trial-user",
+                        is_system=False,
+                        is_active=True,
+                    )
+                    session.add(fitting)
+                    session.commit()
+                    fitting_id = int(fitting.id)
 
                 with session_factory() as session:
                     service = MountingNodeService(session=session)
@@ -1650,13 +1774,194 @@ class CatalogVisibilityTests(unittest.TestCase):
                     f"/catalog/fittings/{fitting_id}",
                     headers=self._auth_headers("trial-token"),
                 )
-                self.assertEqual(blocked.status_code, 200)
-                self.assertFalse(blocked.json()["success"])
-                self.assertIn("Confirmat node", blocked.json()["error"])
-                self.assertIn("повторіть видалення", blocked.json()["error"])
+                self.assertEqual(blocked.status_code, 409)
+                blocked_payload = blocked.json()
+                self.assertFalse(blocked_payload["detail"]["success"])
+                self.assertIn("Confirmat node", blocked_payload["detail"]["error"])
+                self.assertIn("повторіть видалення", blocked_payload["detail"]["error"])
+                self.assertTrue(blocked_payload["detail"]["dependent_nodes"])
 
                 with session_factory() as session:
                     self.assertIsNotNone(session.get(FittingModel, fitting_id))
+
+    def test_delete_fitting_removes_supplier_offer_images_and_hole_templates(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
+                with session_factory() as session:
+                    supplier = SupplierModel(
+                        code="custom-viyar",
+                        name="Custom VIYAR",
+                        owner_user_id=None,
+                        is_system=True,
+                        is_active=True,
+                    )
+                    session.add(supplier)
+                    session.flush()
+
+                    fitting = FittingModel(
+                        name="Delete candidate",
+                        article="0003",
+                        city="Kyiv",
+                        owner_user_id=None,
+                        is_system=True,
+                        is_active=True,
+                    )
+                    session.add(fitting)
+                    session.flush()
+
+                    session.add_all(
+                        [
+                            FittingSupplierOfferModel(
+                                fitting_id=fitting.id,
+                                supplier_id=supplier.id,
+                                article="0003",
+                                source_url=None,
+                                price=15.0,
+                                currency="UAH",
+                                unit="шт",
+                                stock="in stock",
+                                is_active=True,
+                                priority=100,
+                            ),
+                            FittingImageModel(
+                                fitting_id=fitting.id,
+                                sort_order=0,
+                                is_primary=True,
+                                source_url="https://example.com/fitting.jpg",
+                                image_cached_bytes=b"delete-candidate-image",
+                                image_cached_content_type="image/jpeg",
+                                image_sha256=sha256(b"delete-candidate-image").hexdigest(),
+                            ),
+                        ]
+                    )
+                    template = FittingHoleTemplateModel(
+                        fitting_id=fitting.id,
+                        name="Template",
+                        bundle_key="bundle-a",
+                        bundle_name="Bundle A",
+                        template_type="surface_mount",
+                        side="left",
+                        coordinate_system="cartesian",
+                        mounting_variant_key="surface_mount",
+                        is_default=True,
+                        is_active=True,
+                    )
+                    session.add(template)
+                    session.flush()
+                    session.add(
+                        FittingHolePointModel(
+                            template_id=template.id,
+                            label="P1",
+                            x_mm=10.0,
+                            y_mm=20.0,
+                            z_mm=0.0,
+                            order_index=0,
+                            quantity=1,
+                            mirrored=False,
+                        )
+                    )
+                    session.commit()
+                    fitting_id = int(fitting.id)
+                    supplier_id = int(supplier.id)
+
+                response = client.delete(
+                    f"/catalog/fittings/{fitting_id}",
+                    headers=self._auth_headers("admin-token"),
+                )
+                self.assertEqual(response.status_code, 200)
+                payload = response.json()
+                self.assertTrue(payload["success"])
+
+                with session_factory() as session:
+                    self.assertIsNone(session.get(FittingModel, fitting_id))
+                    self.assertIsNotNone(session.get(SupplierModel, supplier_id))
+                    self.assertEqual(
+                        session.query(FittingSupplierOfferModel).filter(FittingSupplierOfferModel.fitting_id == fitting_id).count(),
+                        0,
+                    )
+                    self.assertEqual(
+                        session.query(FittingImageModel).filter(FittingImageModel.fitting_id == fitting_id).count(),
+                        0,
+                    )
+                    self.assertEqual(
+                        session.query(FittingHolePointModel).join(FittingHoleTemplateModel).filter(
+                            FittingHoleTemplateModel.fitting_id == fitting_id,
+                        ).count(),
+                        0,
+                    )
+                    self.assertEqual(
+                        session.query(FittingHoleTemplateModel).filter(FittingHoleTemplateModel.fitting_id == fitting_id).count(),
+                        0,
+                    )
+
+    def test_delete_fitting_repository_handles_supplier_offer_image_rows_without_stale_data_error(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
+                with session_factory() as session:
+                    supplier = SupplierModel(
+                        code="delete-test-supplier",
+                        name="Delete Test Supplier",
+                        owner_user_id=None,
+                        is_system=True,
+                        is_active=True,
+                    )
+                    fitting = FittingModel(
+                        name="Delete repository candidate",
+                        article="0010",
+                        city="Kyiv",
+                        owner_user_id=None,
+                        is_system=True,
+                        is_active=True,
+                    )
+                    session.add_all([supplier, fitting])
+                    session.flush()
+
+                    session.add_all(
+                        [
+                            FittingSupplierOfferModel(
+                                fitting_id=fitting.id,
+                                supplier_id=supplier.id,
+                                article="0010",
+                                source_url=None,
+                                price=80.0,
+                                currency="UAH",
+                                unit="шт",
+                                stock="in stock",
+                                is_active=True,
+                                priority=100,
+                            ),
+                            FittingImageModel(
+                                fitting_id=fitting.id,
+                                sort_order=0,
+                                is_primary=True,
+                                source_url="https://example.com/delete-test.jpg",
+                                image_cached_bytes=b"delete-test-image",
+                                image_cached_content_type="image/jpeg",
+                                image_sha256=sha256(b"delete-test-image").hexdigest(),
+                            ),
+                        ]
+                    )
+                    session.commit()
+                    fitting_id = int(fitting.id)
+                    supplier_id = int(supplier.id)
+
+                deleted = inventory_repository.delete_fitting(fitting_id)
+
+                self.assertIsNotNone(deleted)
+                self.assertTrue(deleted["success"])
+                self.assertEqual(int(deleted["selected_item_id"]), fitting_id)
+
+                with session_factory() as session:
+                    self.assertIsNone(session.get(FittingModel, fitting_id))
+                    self.assertIsNotNone(session.get(SupplierModel, supplier_id))
+                    self.assertEqual(
+                        session.query(FittingSupplierOfferModel).filter(FittingSupplierOfferModel.fitting_id == fitting_id).count(),
+                        0,
+                    )
+                    self.assertEqual(
+                        session.query(FittingImageModel).filter(FittingImageModel.fitting_id == fitting_id).count(),
+                        0,
+                    )
 
     def test_source_import_success_creates_fitting(self) -> None:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
@@ -1710,6 +2015,150 @@ class CatalogVisibilityTests(unittest.TestCase):
                     self.assertEqual(fitting.name, "Parsed Fitting")
                     self.assertEqual(fitting.source_url, "https://viyar.ua/ua/catalog/test-fitting")
                     self.assertEqual(fitting.image_url, "https://cdn.example.com/fittings/p1.jpg")
+
+    def test_source_import_success_filters_kronas_media_gallery_entries_and_creates_fitting(self) -> None:
+        kronas_url = (
+            "https://kronas.com.ua/furnitura-270/petli-i-komplektuyushhie-334/"
+            "petli-dlya-dsp-454/petli-plavnogo-zakryvaniya-351/"
+            "petlja-nakladnaja-c-dovodchikom-clip-on-3d-giff-prime-d35-h0-chernyj-nikel"
+        )
+        kronas_html = """
+            <html>
+              <head>
+                <title>Петля накладная c доводчиком Clip-on 3D GIFF PRIME d=35 H=0 черный никель</title>
+                <meta itemprop="price" content="71.77">
+                <meta itemprop="priceCurrency" content="UAH">
+              </head>
+              <body>
+                <h1>Петля накладная c доводчиком Clip-on 3D GIFF PRIME d=35 H=0 черный никель</h1>
+                <span id="artikul" itemprop="sku">134376</span>
+                <div class="productLabel">Є в наявності</div>
+                <div class="productAttr">
+                  <div class="productAttr__key">Виробник:</div>
+                  <div class="productAttr__value">GIFF PRIME</div>
+                  <div class="productAttr__key">Одиниця виміру:</div>
+                  <div class="productAttr__value">шт</div>
+                </div>
+                <div class="productImageBlock__slider">
+                  <div class="js-productImage" data-src="https://cdn.example.com/kronas/image-a.png"></div>
+                  <div class="js-productImage" data-src="https://www.youtube.com/embed/abc123"></div>
+                  <div class="js-productImage" data-src="https://cdn.example.com/kronas/image-b.png"></div>
+                  <div class="js-productImage" data-src="https://cdn.example.com/kronas/image-c.png"></div>
+                </div>
+              </body>
+            </html>
+        """
+
+        image_bytes_map = {
+            "https://cdn.example.com/kronas/image-a.png": self._make_png_bytes((220, 40, 40)),
+            "https://cdn.example.com/kronas/image-b.png": self._make_png_bytes((40, 220, 40)),
+            "https://cdn.example.com/kronas/image-c.png": self._make_png_bytes((40, 40, 220)),
+        }
+
+        def fake_fetch_remote_image_payload(url: str, city: str | None = None):
+            payload = image_bytes_map.get(url)
+            if payload is None:
+                return None
+            return {
+                "bytes": payload,
+                "content_type": "image/png",
+            }
+
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
+                with session_factory() as session:
+                    session.add(
+                        SupplierModel(
+                            code="kronas",
+                            name="Кронас",
+                            owner_user_id=None,
+                            is_system=True,
+                            is_active=True,
+                        ),
+                    )
+                    session.commit()
+                    supplier_id = session.query(SupplierModel.id).filter(SupplierModel.code == "kronas").one()[0]
+
+                with patch.object(
+                    fitting_source_parser,
+                    "_fetch_html",
+                    new=AsyncMock(return_value=(200, kronas_url, kronas_html)),
+                ), patch.object(
+                    catalog,
+                    "fetch_remote_image_payload",
+                    side_effect=fake_fetch_remote_image_payload,
+                ), patch.object(
+                    catalog,
+                    "_resolve_fitting_manufacturer_id_from_brand",
+                    return_value=None,
+                ), patch.object(
+                    catalog,
+                    "_resolve_fitting_category_id_from_type",
+                    return_value=None,
+                ):
+                    response = client.post(
+                        "/catalog/fittings",
+                        json={
+                            "name": kronas_url,
+                            "source_url": kronas_url,
+                            "fitting_type": "fittings",
+                            "fitting_group": "fittings",
+                            "is_active": True,
+                            "image_urls": [
+                                "https://cdn.example.com/kronas/image-a.png",
+                                "https://cdn.example.com/kronas/image-b.png",
+                                "https://cdn.example.com/kronas/image-c.png",
+                            ],
+                            "supplier_offer": {
+                                "supplier_id": supplier_id,
+                                "article": "134376",
+                                "price": 71.77,
+                                "currency": "UAH",
+                                "unit": "шт",
+                                "stock": "in stock",
+                                "is_active": True,
+                                "priority": 100,
+                            },
+                        },
+                        headers=self._auth_headers("trial-token"),
+                    )
+
+                self.assertEqual(response.status_code, 200)
+                payload = response.json()
+                self.assertTrue(payload["success"])
+                self.assertEqual(payload["item"]["article"], "134376")
+                self.assertEqual(payload["item"]["brand"], "GIFF PRIME")
+                self.assertEqual(payload["item"]["price"], 71.77)
+                self.assertEqual(payload["item"]["source_url"], kronas_url)
+                self.assertEqual(payload["item"]["image_url"], "https://cdn.example.com/kronas/image-a.png")
+
+                with session_factory() as session:
+                    fitting = session.query(FittingModel).filter(FittingModel.article == "134376").one()
+                    image_rows = (
+                        session.query(FittingImageModel)
+                        .filter(FittingImageModel.fitting_id == fitting.id)
+                        .order_by(FittingImageModel.sort_order.asc())
+                        .all()
+                    )
+                    offer = (
+                        session.query(FittingSupplierOfferModel)
+                        .filter(FittingSupplierOfferModel.fitting_id == fitting.id)
+                        .one()
+                    )
+
+                self.assertEqual(fitting.image_url, "https://cdn.example.com/kronas/image-a.png")
+                self.assertEqual(
+                    [row.source_url for row in image_rows],
+                    [
+                        "https://cdn.example.com/kronas/image-a.png",
+                        "https://cdn.example.com/kronas/image-b.png",
+                        "https://cdn.example.com/kronas/image-c.png",
+                    ],
+                )
+                self.assertEqual(offer.supplier_id, supplier_id)
+                self.assertEqual(offer.article, "134376")
+                self.assertEqual(offer.price, 71.77)
+                self.assertNotIn("youtube", " ".join(row.source_url for row in image_rows).lower())
 
     def test_source_preview_route_rejects_invalid_preview_without_writes(self) -> None:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
@@ -1800,7 +2249,13 @@ class CatalogVisibilityTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
                 with session_factory() as session:
-                    supplier = SupplierModel(code="viyar", name="VIYAR", is_active=True)
+                    supplier = SupplierModel(
+                        code="viyar",
+                        name="VIYAR",
+                        owner_user_id=None,
+                        is_system=True,
+                        is_active=True,
+                    )
                     session.add(supplier)
                     session.commit()
                     supplier_id = supplier.id
@@ -2243,6 +2698,253 @@ class CatalogVisibilityTests(unittest.TestCase):
 
                 self.assertEqual(before_count, after_count)
 
+    def test_supplier_listing_shows_system_and_current_user_suppliers_only(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
+                with session_factory() as session:
+                    session.execute(
+                        text(
+                            """
+                            INSERT INTO users (id, email, password_hash, role, is_active)
+                            VALUES (:id, :email, :password_hash, :role, :is_active)
+                            """
+                        ),
+                        [
+                            {
+                                "id": "owner-1",
+                                "email": "owner@example.com",
+                                "password_hash": "hash-owner",
+                                "role": "trial",
+                                "is_active": True,
+                            },
+                            {
+                                "id": "pro-user",
+                                "email": "pro@example.com",
+                                "password_hash": "hash-pro",
+                                "role": "pro",
+                                "is_active": True,
+                            },
+                            {
+                                "id": "stranger-user",
+                                "email": "stranger@example.com",
+                                "password_hash": "hash-stranger",
+                                "role": "trial",
+                                "is_active": True,
+                            },
+                        ],
+                    )
+                    session.commit()
+                    session.add_all(
+                        [
+                            SupplierModel(
+                                code="viyar",
+                                name="VIYAR",
+                                owner_user_id=None,
+                                is_system=True,
+                                is_active=True,
+                            ),
+                            SupplierModel(
+                                code="private-a",
+                                name="Private A",
+                                owner_user_id="owner-1",
+                                is_system=False,
+                                is_active=True,
+                            ),
+                            SupplierModel(
+                                code="private-b",
+                                name="Private B",
+                                owner_user_id="stranger-user",
+                                is_system=False,
+                                is_active=True,
+                            ),
+                        ]
+                    )
+                    session.commit()
+
+                owner_response = client.get(
+                    "/catalog/suppliers",
+                    headers=self._auth_headers("owner-token"),
+                )
+                self.assertEqual(owner_response.status_code, 200)
+                owner_codes = {item["code"] for item in owner_response.json()["items"]}
+                self.assertIn("viyar", owner_codes)
+                self.assertIn("private-a", owner_codes)
+                self.assertNotIn("private-b", owner_codes)
+
+                stranger_response = client.get(
+                    "/catalog/suppliers",
+                    headers=self._auth_headers("stranger-token"),
+                )
+                self.assertEqual(stranger_response.status_code, 200)
+                stranger_codes = {item["code"] for item in stranger_response.json()["items"]}
+                self.assertIn("viyar", stranger_codes)
+                self.assertIn("private-b", stranger_codes)
+                self.assertNotIn("private-a", stranger_codes)
+
+                admin_response = client.get(
+                    "/catalog/suppliers",
+                    headers=self._auth_headers("admin-token"),
+                )
+                self.assertEqual(admin_response.status_code, 200)
+                admin_codes = {item["code"] for item in admin_response.json()["items"]}
+                self.assertEqual(admin_codes, {"viyar"})
+
+    def test_supplier_crud_respects_ownership_and_dependency_blocks(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
+                with session_factory() as session:
+                    session.execute(
+                        text(
+                            """
+                            INSERT INTO users (id, email, password_hash, role, is_active)
+                            VALUES (:id, :email, :password_hash, :role, :is_active)
+                            """
+                        ),
+                        [
+                            {
+                                "id": "owner-1",
+                                "email": "owner@example.com",
+                                "password_hash": "hash-owner",
+                                "role": "trial",
+                                "is_active": True,
+                            },
+                            {
+                                "id": "pro-user",
+                                "email": "pro@example.com",
+                                "password_hash": "hash-pro",
+                                "role": "pro",
+                                "is_active": True,
+                            },
+                            {
+                                "id": "stranger-user",
+                                "email": "stranger@example.com",
+                                "password_hash": "hash-stranger",
+                                "role": "trial",
+                                "is_active": True,
+                            },
+                        ],
+                    )
+                    session.commit()
+                    session.add_all(
+                        [
+                            SupplierModel(
+                                code="shared-viyar",
+                                name="VIYAR",
+                                owner_user_id=None,
+                                is_system=True,
+                                is_active=True,
+                            ),
+                            SupplierModel(
+                                code="owner-supplier",
+                                name="Owner Supplier",
+                                owner_user_id="owner-1",
+                                is_system=False,
+                                is_active=True,
+                            ),
+                        ]
+                    )
+                    session.commit()
+
+                owner_list = client.get(
+                    "/catalog/suppliers",
+                    headers=self._auth_headers("owner-token"),
+                )
+                self.assertEqual(owner_list.status_code, 200)
+                owner_codes = {item["code"] for item in owner_list.json()["items"]}
+                self.assertIn("shared-viyar", owner_codes)
+                self.assertIn("owner-supplier", owner_codes)
+
+                stranger_list = client.get(
+                    "/catalog/suppliers",
+                    headers=self._auth_headers("stranger-token"),
+                )
+                self.assertEqual(stranger_list.status_code, 200)
+                stranger_codes = {item["code"] for item in stranger_list.json()["items"]}
+                self.assertIn("shared-viyar", stranger_codes)
+                self.assertNotIn("owner-supplier", stranger_codes)
+
+                created = client.post(
+                    "/catalog/suppliers",
+                    json={
+                        "name": "Owner Created Supplier",
+                        "code": "",
+                        "is_active": True,
+                        "is_system": False,
+                    },
+                    headers=self._auth_headers("pro-token"),
+                )
+                self.assertEqual(created.status_code, 200)
+                created_payload = created.json()
+                self.assertTrue(created_payload["success"])
+                self.assertEqual(created_payload["item"]["owner_user_id"], "pro-user")
+                self.assertFalse(created_payload["item"]["is_system"])
+                self.assertTrue(created_payload["item"]["code"])
+                created_supplier_id = created_payload["item"]["id"]
+
+                updated = client.patch(
+                    f"/catalog/suppliers/{created_supplier_id}",
+                    json={
+                        "name": "Owner Created Supplier Updated",
+                        "code": created_payload["item"]["code"],
+                        "is_active": False,
+                        "is_system": False,
+                    },
+                    headers=self._auth_headers("pro-token"),
+                )
+                self.assertEqual(updated.status_code, 200)
+                updated_payload = updated.json()
+                self.assertTrue(updated_payload["success"])
+                self.assertEqual(updated_payload["item"]["name"], "Owner Created Supplier Updated")
+                self.assertFalse(updated_payload["item"]["is_active"])
+
+                deleted = client.delete(
+                    f"/catalog/suppliers/{created_supplier_id}",
+                    headers=self._auth_headers("pro-token"),
+                )
+                self.assertEqual(deleted.status_code, 200)
+                self.assertTrue(deleted.json()["success"])
+
+                with session_factory() as session:
+                    self.assertIsNone(session.get(SupplierModel, int(created_supplier_id)))
+
+                with session_factory() as session:
+                    fitting = FittingModel(
+                        name="Offer-linked fitting",
+                        article="SUP-DEPENDENCY",
+                        fitting_type="drawer_slides",
+                        fitting_group="fittings",
+                        owner_user_id=None,
+                        is_system=True,
+                        is_active=True,
+                    )
+                    session.add(fitting)
+                    session.flush()
+                    supplier = session.query(SupplierModel).filter(SupplierModel.code == "shared-viyar").one()
+                    session.add(
+                        FittingSupplierOfferModel(
+                            fitting_id=fitting.id,
+                            supplier_id=supplier.id,
+                            article="SUP-DEPENDENCY",
+                            source_url=None,
+                            price=12.5,
+                            currency="UAH",
+                            unit="шт",
+                            stock="in stock",
+                            is_active=True,
+                            priority=100,
+                        )
+                    )
+                    session.commit()
+                    supplier_id = int(supplier.id)
+
+                blocked_delete = client.delete(
+                    f"/catalog/suppliers/{supplier_id}",
+                    headers=self._auth_headers("admin-token"),
+                )
+                self.assertEqual(blocked_delete.status_code, 200)
+                self.assertFalse(blocked_delete.json()["success"])
+                self.assertIn("used by fitting offers", blocked_delete.json()["error"])
+
     def test_pro_and_business_users_can_create_update_and_delete_own_fittings(self) -> None:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
@@ -2409,6 +3111,83 @@ class CatalogVisibilityTests(unittest.TestCase):
                 self.assertEqual(admin_private_response.status_code, 200)
                 self.assertTrue(admin_private_response.json()["success"])
                 self.assertEqual(admin_private_response.json()["item"]["id"], int(private_fitting_id))
+
+    def test_fitting_detail_reopens_mt_source_payload_with_base_fields(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
+                with session_factory() as session:
+                    mt_fitting = FittingModel(
+                        name="CLIP top BLUMOTION спеціальна завіса 110°",
+                        article="092799",
+                        fitting_type="connector",
+                        fitting_group="fittings",
+                        owner_user_id=None,
+                        is_system=True,
+                        is_active=True,
+                        source="mt",
+                        source_url="https://mt.ua/products/petlya-clip-top-blumotion-110-nakladnaya-specialnaya-chernyj-61148",
+                        unit="шт",
+                        currency="UAH",
+                        description=None,
+                        brand="BLUM",
+                        stock="in stock",
+                        price=138.8,
+                        parsed_at=datetime(2026, 8, 17, 10, 30, 0),
+                        price_updated_at=datetime(2026, 8, 17, 11, 15, 0),
+                        source_payload_json=json.dumps(
+                            {
+                                "parsed_item": {
+                                    "article": "092799",
+                                    "price": 138.8,
+                                    "currency": "UAH",
+                                    "unit": "шт",
+                                    "availability": "in stock",
+                                    "brand": "BLUM",
+                                    "characteristics": {
+                                        "Система завіс": "CLIP top BLUMOTION",
+                                        "Ø чашки завіси, мм": "35",
+                                        "Кут відкривання завіси, °": "110",
+                                        "Бренд": "BLUM",
+                                    },
+                                }
+                            },
+                            ensure_ascii=False,
+                        ),
+                    )
+                    session.add(mt_fitting)
+                    session.flush()
+                    session.add(
+                        FittingImageModel(
+                            fitting_id=mt_fitting.id,
+                            sort_order=0,
+                            is_primary=True,
+                            source_url="https://cdn.example.com/mt-image.png",
+                            image_cached_bytes=b"mt-image-bytes",
+                            image_cached_content_type="image/png",
+                            image_sha256=sha256(b"mt-image-bytes").hexdigest(),
+                        )
+                    )
+                    session.commit()
+                    mt_fitting_id = str(mt_fitting.id)
+
+                response = client.get(
+                    f"/catalog/fittings/{mt_fitting_id}",
+                    headers=self._auth_headers("admin-token"),
+                )
+
+                self.assertEqual(response.status_code, 200)
+                self.assertTrue(response.json()["success"])
+                item = response.json()["item"]
+                self.assertEqual(item["article"], "092799")
+                self.assertEqual(item["price"], 138.8)
+                self.assertEqual(item["currency"], "UAH")
+                self.assertEqual(item["unit"], "шт")
+                self.assertEqual(item["availability"], "in stock")
+                self.assertEqual(item["brand"], "BLUM")
+                self.assertTrue(item["characteristics"])
+                self.assertEqual(item["characteristics"]["Система завіс"], "CLIP top BLUMOTION")
+                self.assertEqual(len(item["images"]), 1)
+                self.assertEqual(item["images"][0]["content_type"], "image/png")
 
     def test_fitting_holes_use_false_blocks_non_admin_write_endpoints_and_keeps_admin_bypass(self) -> None:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:

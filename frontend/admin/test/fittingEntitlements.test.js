@@ -10,6 +10,7 @@ import {
   canViewFittings,
   canUseFittingHoles,
   createFittingFormDraft,
+  getFittingAvailabilityCheckedValue,
   getFittingOwnerDisplay,
   getFittingOwnershipScopeLabel,
   getFittingOwnershipTypeLabel,
@@ -269,6 +270,7 @@ test("fitting form drafts preserve editable fields and keep protected scope out 
     fitting_group: "fittings",
     fitting_type: "drawer_slides",
     image_url: "",
+    image_urls: [],
     is_active: true,
     is_system: false,
     name: "",
@@ -335,6 +337,8 @@ test("fitting form drafts preserve editable fields and keep protected scope out 
   assert.equal(draft.supplier_offer.offer_id, 41);
   assert.equal(draft.supplier_offer.supplier_id, 1);
   assert.equal(draft.supplier_offer.article, "190106");
+  assert.equal(draft.stock, "in stock");
+  assert.equal(draft.supplier_offer.stock, "in stock");
 
   const createPayload = buildFittingSubmissionPayload(
     {
@@ -378,6 +382,7 @@ test("fitting form drafts preserve editable fields and keep protected scope out 
     fitting_group: "fittings",
     fitting_type: "drawer_slides",
     image_url: "https://example.com/image.jpg",
+    image_urls: ["https://example.com/image.jpg"],
     is_system: false,
     source_url: "https://example.com/product",
     is_active: true,
@@ -439,4 +444,58 @@ test("fitting form drafts preserve editable fields and keep protected scope out 
     is_active: false,
     priority: 50,
   });
+});
+
+test("fitting availability helper keeps true false and null distinct", () => {
+  assert.equal(getFittingAvailabilityCheckedValue("in stock"), true);
+  assert.equal(getFittingAvailabilityCheckedValue("out of stock"), false);
+  assert.equal(getFittingAvailabilityCheckedValue(null), false);
+
+  const truePayload = buildFittingSubmissionPayload(
+    {
+      fitting_group: "fittings",
+      fitting_type: "drawer_slides",
+      name: "Availability true",
+      stock: "in stock",
+      supplier_offer: {
+        supplier_id: "",
+        stock: "in stock",
+      },
+    },
+    { mode: "create", canEditSystemFittings: false },
+  );
+  assert.equal(truePayload.payload.stock, "in stock");
+  assert.equal(truePayload.payload.supplier_offer, null);
+
+  const falsePayload = buildFittingSubmissionPayload(
+    {
+      fitting_group: "fittings",
+      fitting_type: "drawer_slides",
+      name: "Availability false",
+      stock: "out of stock",
+      supplier_offer: {
+        supplier_id: "",
+        stock: "out of stock",
+      },
+    },
+    { mode: "create", canEditSystemFittings: false },
+  );
+  assert.equal(falsePayload.payload.stock, "out of stock");
+  assert.equal(falsePayload.payload.supplier_offer, null);
+
+  const nullPayload = buildFittingSubmissionPayload(
+    {
+      fitting_group: "fittings",
+      fitting_type: "drawer_slides",
+      name: "Availability unknown",
+      stock: "",
+      supplier_offer: {
+        supplier_id: "",
+        stock: "",
+      },
+    },
+    { mode: "create", canEditSystemFittings: false },
+  );
+  assert.equal(nullPayload.payload.stock, null);
+  assert.equal(nullPayload.payload.supplier_offer, null);
 });

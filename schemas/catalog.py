@@ -459,6 +459,8 @@ class FittingCatalogItemSchema(BaseModel):
     owner_login: str | None = None
     owner_email: str | None = None
     technical_product_id: int | None = None
+    manufacturer_id: int | None = None
+    supplier_offers: List[FittingSupplierOfferSchema] = Field(default_factory=list)
     is_system: bool = True
     is_active: bool = True
     sort_order: int = 0
@@ -475,7 +477,18 @@ class FittingSupplierSchema(BaseModel):
     id: int
     code: str
     name: str
+    logo_url: str | None = None
+    owner_user_id: str | None = None
+    is_system: bool = True
     is_active: bool = True
+
+
+class FittingSupplierCreateUpdateSchema(BaseModel):
+    code: str | None = Field(default=None, max_length=128)
+    name: str = Field(min_length=1, max_length=255)
+    logo_url: str | None = Field(default=None, max_length=1000)
+    is_active: bool = True
+    is_system: bool = False
 
 
 class FittingSupplierOfferInputSchema(BaseModel):
@@ -497,6 +510,7 @@ class FittingSupplierOfferSchema(FittingSupplierOfferInputSchema):
     fitting_id: int
     supplier_code: str
     supplier_name: str
+    supplier_logo_url: str | None = None
 
 
 class FittingCatalogDetailItemSchema(FittingCatalogItemSchema):
@@ -629,6 +643,12 @@ class FittingCatalogOperationResponseSchema(BaseModel):
 class FittingSupplierListResponseSchema(BaseModel):
     success: bool
     items: List[FittingSupplierSchema] = Field(default_factory=list)
+    error: str | None = None
+
+
+class FittingSupplierOperationResponseSchema(BaseModel):
+    success: bool
+    item: FittingSupplierSchema | None = None
     error: str | None = None
 
 

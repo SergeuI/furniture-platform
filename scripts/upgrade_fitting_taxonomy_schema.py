@@ -396,6 +396,25 @@ def _build_manufacturer_seed_rows(products: list[dict[str, object]]) -> list[dic
     ]
 
 
+def _manufacturer_seed_row_matches_existing(
+    existing_row: dict[str, object] | None,
+    seed_row: dict[str, object],
+) -> bool:
+    if not existing_row:
+        return False
+
+    comparable_keys = (
+        "code",
+        "name",
+        "description",
+        "website_url",
+        "country_code",
+        "is_active",
+        "sort_order",
+    )
+    return all(existing_row.get(key) == seed_row.get(key) for key in comparable_keys)
+
+
 def _build_series_seed_rows() -> list[dict[str, object]]:
     return []
 
@@ -536,7 +555,7 @@ def _build_plan(connection) -> dict[str, object]:
     manufacturer_seed_rows = [
         row
         for row in manufacturer_seed_rows
-        if existing_manufacturer_rows.get(row["code"]) != row
+        if not _manufacturer_seed_row_matches_existing(existing_manufacturer_rows.get(row["code"]), row)
     ]
 
     category_code_to_row = {
@@ -745,6 +764,12 @@ def _upsert_code_row(
         for column in columns
         if column not in {"code", "created_at"}
     )
+
+    if table_name == "fitting_manufacturers":
+        updates = updates.replace(
+            "logo_url = excluded.logo_url",
+            "logo_url = COALESCE(excluded.logo_url, fitting_manufacturers.logo_url)",
+        )
 
     _driver_execute(
         connection,
