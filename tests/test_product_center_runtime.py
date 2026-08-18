@@ -29,6 +29,46 @@ class ProductCenterRuntimeTests(unittest.TestCase):
             with self.assertRaises(FileNotFoundError):
                 product_center_launcher._repo_python(root)
 
+    def test_launcher_relaunches_as_admin_when_not_elevated(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            root = Path(tmpdir)
+            script = root / "product_center.pyw"
+            python_path = root / ".venv" / "Scripts" / "pythonw.exe"
+            script.write_text("print('ok')", encoding="utf-8")
+            python_path.parent.mkdir(parents=True, exist_ok=True)
+            python_path.write_text("", encoding="utf-8")
+
+            with patch.object(product_center_launcher, "project_root", return_value=root), patch.object(
+                product_center_launcher, "_repo_python", return_value=python_path
+            ), patch.object(product_center_launcher, "_is_windows_admin", return_value=False), patch.object(
+                product_center_launcher, "_shell_runas", return_value=33
+            ) as shell_runas, patch.object(product_center_launcher.subprocess, "Popen") as popen:
+                exit_code = product_center_launcher.launch()
+
+        self.assertEqual(exit_code, 0)
+        shell_runas.assert_called_once()
+        popen.assert_not_called()
+
+    def test_launcher_starts_directly_when_already_elevated(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            root = Path(tmpdir)
+            script = root / "product_center.pyw"
+            python_path = root / ".venv" / "Scripts" / "pythonw.exe"
+            script.write_text("print('ok')", encoding="utf-8")
+            python_path.parent.mkdir(parents=True, exist_ok=True)
+            python_path.write_text("", encoding="utf-8")
+
+            process = SimpleNamespace()
+            with patch.object(product_center_launcher, "project_root", return_value=root), patch.object(
+                product_center_launcher, "_repo_python", return_value=python_path
+            ), patch.object(product_center_launcher, "_is_windows_admin", return_value=True), patch.object(
+                product_center_launcher.subprocess, "Popen", return_value=process
+            ) as popen:
+                exit_code = product_center_launcher.launch()
+
+        self.assertEqual(exit_code, 0)
+        popen.assert_called_once()
+
     def test_product_center_runtime_resolves_repo_venv_python(self) -> None:
         expected = db_update_wizard.PROJECT_ROOT / ".venv" / "Scripts" / "python.exe"
         self.assertEqual(db_update_wizard.PYTHON, expected)
@@ -561,6 +601,387 @@ class ProductCenterRuntimeTests(unittest.TestCase):
 
         self.assertIn(("start-full-stack", "success"), dummy.action_state_calls)
         self.assertTrue(dummy.launch_status_var.get())
+
+    def test_discovery_only_accepts_canonical_frontend_listener(self) -> None:
+        dummy = db_update_wizard.WizardApp.__new__(db_update_wizard.WizardApp)
+
+        canonical_row = {
+            "PID": 20892,
+            "ParentPID": 4332,
+            "Name": "node.exe",
+            "ExecutablePath": "C:\\Program Files\\nodejs\\node.exe",
+            "CreationDate": "20260813070000.000000+000",
+            "CommandLine": "D:\\PY\\frontend\\admin\\node_modules\\vite\\bin\\vite.js --host 127.0.0.1 --port 5173",
+        }
+        foreign_row = {
+            "PID": 30001,
+            "ParentPID": 4000,
+            "Name": "node.exe",
+            "ExecutablePath": "D:\\tmp\\node.exe",
+            "CreationDate": "20260813070000.000000+000",
+            "CommandLine": "D:\\tmp\\frontend\\admin\\node_modules\\vite\\bin\\vite.js --host 127.0.0.1 --port 5173",
+        }
+        rows_by_pid = {20892: canonical_row, 30001: foreign_row}
+
+        def fake_process_rows() -> list[dict[str, object]]:
+            return list(rows_by_pid.values())
+
+        def fake_listener_rows() -> list[dict[str, object]]:
+            return [
+                {"LocalPort": 5173, "OwningProcess": 20892},
+                {"LocalPort": 5173, "OwningProcess": 30001},
+            ]
+
+        with patch.object(db_update_wizard, "discover_windows_process_rows", side_effect=fake_process_rows), patch.object(
+            db_update_wizard, "discover_windows_listener_rows", side_effect=fake_listener_rows
+        ), patch.object(db_update_wizard, "recent_history_process_pids", return_value={}):
+            targets = db_update_wizard.WizardApp._discover_verified_stop_targets(dummy)
+
+        self.assertEqual(targets["frontend-admin"], {20892})
+        self.assertNotIn(30001, targets["frontend-admin"])
+
+    def test_discovery_reads_live_python_and_node_processes_without_cim(self) -> None:
+        dummy = db_update_wizard.WizardApp.__new__(db_update_wizard.WizardApp)
+
+        rows = [
+            {
+                "PID": 23408,
+                "ParentPID": None,
+                "Name": "python",
+                "ExecutablePath": "C:\\Users\\stol4\\AppData\\Local\\Programs\\Python\\Python312\\python.exe",
+                "CreationDate": "",
+                "CommandLine": "",
+            },
+            {
+                "PID": 1644,
+                "ParentPID": None,
+                "Name": "python",
+                "ExecutablePath": "D:\\PY\\.venv\\Scripts\\python.exe",
+                "CreationDate": "",
+                "CommandLine": "",
+            },
+            {
+                "PID": 15796,
+                "ParentPID": None,
+                "Name": "python",
+                "ExecutablePath": "D:\\PY\\.venv\\Scripts\\python.exe",
+                "CreationDate": "",
+                "CommandLine": "",
+            },
+            {
+                "PID": 22940,
+                "ParentPID": None,
+                "Name": "python",
+                "ExecutablePath": "D:\\PY\\.venv\\Scripts\\python.exe",
+                "CreationDate": "",
+                "CommandLine": "",
+            },
+            {
+                "PID": 8696,
+                "ParentPID": None,
+                "Name": "node",
+                "ExecutablePath": "C:\\Program Files\\nodejs\\node.exe",
+                "CreationDate": "",
+                "CommandLine": "",
+            },
+            {
+                "PID": 20892,
+                "ParentPID": None,
+                "Name": "node",
+                "ExecutablePath": "C:\\Program Files\\nodejs\\node.exe",
+                "CreationDate": "",
+                "CommandLine": "",
+            },
+        ]
+        listeners = [
+            {"LocalPort": 8000, "OwningProcess": 23408},
+            {"LocalPort": 5175, "OwningProcess": 8696},
+            {"LocalPort": 5173, "OwningProcess": 20892},
+        ]
+
+        with patch.object(db_update_wizard, "discover_windows_process_rows", return_value=rows), patch.object(
+            db_update_wizard, "discover_windows_listener_rows", return_value=list(listeners)
+        ):
+            targets = db_update_wizard.WizardApp._discover_verified_stop_targets(dummy, include_history=False)
+
+        self.assertEqual(targets["api"], {23408})
+        self.assertEqual(targets["bot"], {1644, 15796, 22940})
+        self.assertEqual(targets["frontend-app"], {8696})
+        self.assertEqual(targets["frontend-admin"], {20892})
+
+    def test_stop_all_processes_stops_verified_bot_trees(self) -> None:
+        class DummyVar:
+            def __init__(self, value: str = "") -> None:
+                self.value = value
+
+            def get(self) -> str:
+                return self.value
+
+            def set(self, value: str) -> None:
+                self.value = value
+
+        class LiveProc:
+            def __init__(self, pid: int) -> None:
+                self.pid = pid
+                self.polled = None
+
+            def poll(self) -> int | None:
+                return self.polled
+
+        class ImmediateThread:
+            def __init__(self, target, daemon: bool = False) -> None:
+                self.target = target
+
+            def start(self) -> None:
+                self.target()
+
+        api_proc = LiveProc(15796)
+        bot_proc_1 = LiveProc(1644)
+        bot_proc_2 = LiveProc(22940)
+        dummy = db_update_wizard.WizardApp.__new__(db_update_wizard.WizardApp)
+        dummy.managed_processes = {"api": api_proc, "bot": bot_proc_1, "bot-copy": bot_proc_2}
+        dummy.launch_status_var = DummyVar()
+        dummy.action_state_calls: list[tuple[str, str]] = []
+        dummy.logs: list[str] = []
+        dummy.history_calls: list[tuple[str, dict[str, object]]] = []
+        dummy.refresh_managed_processes = lambda: None
+        dummy.refresh_product_status = lambda: None
+        dummy.after = lambda _delay, callback: callback()
+        dummy._begin_activity = lambda: None
+        dummy._end_activity = lambda: None
+        dummy._set_launch_status = lambda text: dummy.launch_status_var.set(text)
+        dummy._set_action_button_state = lambda key, state: dummy.action_state_calls.append((key, state))
+        dummy._append_product_log = lambda text: dummy.logs.append(text)
+        dummy.record_history = lambda action, **kwargs: dummy.history_calls.append((action, kwargs))
+        dummy._wait_for_verified_targets_offline = lambda timeout_seconds=10.0: {}
+
+        discovery_sequence = [
+            {"api": {15796}, "bot": {1644, 22940}, "frontend-app": set(), "frontend-admin": set()},
+            {},
+        ]
+
+        def fake_discovery(self, include_history: bool = True) -> dict[str, set[int]]:
+            return discovery_sequence.pop(0) if discovery_sequence else {}
+
+        stopped_pids: list[int] = []
+
+        def fake_stop(self, pid: int) -> bool:
+            stopped_pids.append(pid)
+            return True
+
+        with patch.object(db_update_wizard.WizardApp, "_discover_verified_stop_targets", fake_discovery), patch.object(
+            db_update_wizard.WizardApp, "_stop_verified_process_tree", fake_stop
+        ), patch.object(db_update_wizard, "recent_history_process_pids", return_value={}), patch.object(
+            db_update_wizard.threading, "Thread", ImmediateThread
+        ), patch.object(
+            db_update_wizard.messagebox, "showinfo"
+        ) as info_mock, patch.object(
+            db_update_wizard.messagebox, "showwarning"
+        ) as warn_mock:
+            db_update_wizard.WizardApp.stop_all_processes(dummy)
+
+        self.assertEqual(sorted(stopped_pids), [1644, 15796, 22940])
+        self.assertEqual(dummy.launch_status_var.get(), "Продукт зупинено")
+        info_mock.assert_called_once()
+        warn_mock.assert_not_called()
+        self.assertIn(("stop-all", "success"), dummy.action_state_calls)
+
+    def test_log_verified_stop_summary_treats_empty_remaining_sets_as_success(self) -> None:
+        class DummyVar:
+            def __init__(self, value: str = "") -> None:
+                self.value = value
+
+            def get(self) -> str:
+                return self.value
+
+            def set(self, value: str) -> None:
+                self.value = value
+
+        dummy = db_update_wizard.WizardApp.__new__(db_update_wizard.WizardApp)
+        dummy.launch_status_var = DummyVar()
+        dummy.action_state_calls: list[tuple[str, str]] = []
+        dummy.logs: list[str] = []
+        dummy.history_calls: list[tuple[str, dict[str, object]]] = []
+        dummy._set_launch_status = lambda text: dummy.launch_status_var.set(text)
+        dummy._set_action_button_state = lambda key, state: dummy.action_state_calls.append((key, state))
+        dummy._append_product_log = lambda text: dummy.logs.append(text)
+        dummy.record_history = lambda action, **kwargs: dummy.history_calls.append((action, kwargs))
+
+        with patch.object(db_update_wizard.messagebox, "showinfo") as info_mock, patch.object(
+            db_update_wizard.messagebox, "showwarning"
+        ) as warn_mock:
+            db_update_wizard.WizardApp._log_verified_stop_summary(
+                dummy,
+                stopped={"api": {1234}},
+                remaining={"api": set(), "bot": set(), "frontend-app": set(), "frontend-admin": set()},
+            )
+
+        self.assertEqual(dummy.launch_status_var.get(), "Продукт зупинено")
+        info_mock.assert_called_once()
+        warn_mock.assert_not_called()
+        self.assertIn(("stop-all", "success"), dummy.action_state_calls)
+
+    def test_restart_full_local_stack_stops_then_starts(self) -> None:
+        class DummyVar:
+            def __init__(self, value: str = "") -> None:
+                self.value = value
+
+            def get(self) -> str:
+                return self.value
+
+            def set(self, value: str) -> None:
+                self.value = value
+
+        class LiveProc:
+            def __init__(self, pid: int) -> None:
+                self.pid = pid
+
+            def poll(self) -> int | None:
+                return None
+
+        dummy = db_update_wizard.WizardApp.__new__(db_update_wizard.WizardApp)
+        dummy.managed_processes = {}
+        dummy.launch_status_var = DummyVar()
+        dummy.action_state_calls: list[tuple[str, str]] = []
+        dummy.logs: list[str] = []
+        dummy.history_calls: list[tuple[str, dict[str, object]]] = []
+        dummy.refresh_managed_processes = lambda: None
+        dummy.refresh_product_status = lambda: None
+        dummy.open_all_local_pages = lambda: None
+        dummy.after = lambda _delay, callback: callback()
+        dummy._begin_activity = lambda: None
+        dummy._end_activity = lambda: None
+        dummy._set_launch_status = lambda text: dummy.launch_status_var.set(text)
+        dummy._set_action_button_state = lambda key, state: dummy.action_state_calls.append((key, state))
+        dummy._append_product_log = lambda text: dummy.logs.append(text)
+        dummy.record_history = lambda action, **kwargs: dummy.history_calls.append((action, kwargs))
+        dummy._wait_for_verified_targets_offline = lambda timeout_seconds=10.0: {}
+
+        stopped_pids: list[int] = []
+
+        def fake_discovery(self, include_history: bool = True) -> dict[str, set[int]]:
+            return {"api": {101}, "bot": {202}, "frontend-app": {303}, "frontend-admin": {404}}
+
+        def fake_stop(self, pid: int) -> bool:
+            stopped_pids.append(pid)
+            return True
+
+        start_calls: list[str] = []
+
+        def fake_start_all(self) -> None:
+            start_calls.append("start")
+            dummy.managed_processes["bot"] = LiveProc(999)
+
+        with patch.object(db_update_wizard.WizardApp, "_discover_verified_stop_targets", fake_discovery), patch.object(
+            db_update_wizard.WizardApp, "_stop_verified_process_tree", fake_stop
+        ), patch.object(db_update_wizard.WizardApp, "_service_responds", return_value=True), patch.object(
+            db_update_wizard.WizardApp, "start_all_local_services", fake_start_all
+        ), patch.object(
+            db_update_wizard.threading, "Thread"
+        ) as thread_mock, patch.object(
+            db_update_wizard.messagebox, "showwarning"
+        ) as warn_mock, patch.object(
+            db_update_wizard.messagebox, "showinfo"
+        ) as info_mock:
+            thread_mock.side_effect = lambda target, daemon=False: type(
+                "ImmediateThread",
+                (),
+                {"start": lambda self: target()},
+            )()
+            db_update_wizard.WizardApp.restart_full_local_stack(dummy)
+
+        self.assertEqual(sorted(stopped_pids), [101, 202, 303, 404])
+        self.assertEqual(start_calls, ["start"])
+        self.assertEqual(dummy.launch_status_var.get(), "Продукт перезапущено.")
+        self.assertIn(("restart-full-stack", "starting"), dummy.action_state_calls)
+        self.assertIn(("restart-full-stack", "success"), dummy.action_state_calls)
+        self.assertTrue(any(action == "process.restart_full_stack" for action, _ in dummy.history_calls))
+        warn_mock.assert_not_called()
+        info_mock.assert_not_called()
+
+    def test_restart_selected_process_skips_foreign_port_candidate(self) -> None:
+        class DummyVar:
+            def __init__(self, value: str = "") -> None:
+                self.value = value
+
+            def get(self) -> str:
+                return self.value
+
+            def set(self, value: str) -> None:
+                self.value = value
+
+        class DummyListbox:
+            def curselection(self) -> tuple[int, ...]:
+                return (0,)
+
+            def get(self, index: int) -> str:
+                return "frontend-admin: працює, PID 30001"
+
+        dummy = db_update_wizard.WizardApp.__new__(db_update_wizard.WizardApp)
+        dummy.managed_processes = {}
+        dummy.process_list = DummyListbox()
+        dummy.launch_status_var = DummyVar()
+        dummy.refresh_managed_processes = lambda: None
+        dummy.refresh_product_status_async = lambda: None
+        dummy.after = lambda _delay, callback: callback()
+        dummy._set_launch_status = lambda text: dummy.launch_status_var.set(text)
+
+        with patch.object(db_update_wizard.WizardApp, "_discover_verified_stop_targets", return_value={"frontend-admin": set()}), patch.object(
+            db_update_wizard.WizardApp,
+            "_stop_verified_process_tree",
+        ) as stop_mock, patch.object(db_update_wizard.messagebox, "showwarning") as warn_mock, patch.object(
+            db_update_wizard.messagebox, "showinfo"
+        ) as info_mock:
+            db_update_wizard.WizardApp.restart_selected_process(dummy)
+
+        stop_mock.assert_not_called()
+        warn_mock.assert_called_once()
+        info_mock.assert_not_called()
+
+    def test_history_fallback_recovers_latest_component_pid(self) -> None:
+        dummy = db_update_wizard.WizardApp.__new__(db_update_wizard.WizardApp)
+
+        history_entries = [
+            {
+                "action": "process.start",
+                "details": "Локальний API",
+                "command": [str(db_update_wizard.PYTHON), str(db_update_wizard.PROJECT_ROOT / "main_api.py")],
+                "extra": {"pid": 10101, "cwd": "D:\\PY"},
+            },
+            {
+                "action": "process.start",
+                "details": "Frontend admin",
+                "command": ["C:\\Program Files\\nodejs\\npm.cmd", "run", "dev"],
+                "extra": {"pid": 20202, "cwd": "D:\\PY\\frontend\\admin"},
+            },
+        ]
+
+        api_row = {
+            "PID": 10101,
+            "ParentPID": 9000,
+            "Name": "python.exe",
+            "ExecutablePath": "D:\\PY\\.venv\\Scripts\\python.exe",
+            "CreationDate": "20260813070000.000000+000",
+            "CommandLine": f"{db_update_wizard.PYTHON} {db_update_wizard.PROJECT_ROOT / 'main_api.py'}",
+        }
+        admin_row = {
+            "PID": 20202,
+            "ParentPID": 9001,
+            "Name": "node.exe",
+            "ExecutablePath": "C:\\Program Files\\nodejs\\node.exe",
+            "CreationDate": "20260813070000.000000+000",
+            "CommandLine": "D:\\PY\\frontend\\admin\\node_modules\\vite\\bin\\vite.js --host 127.0.0.1 --port 5173",
+        }
+
+        dummy_rows = {"api": api_row, "frontend-admin": admin_row}
+
+        with patch.object(db_update_wizard, "read_json_lines", return_value=history_entries), patch.object(
+            db_update_wizard, "discover_windows_process_row", side_effect=lambda pid: next((row for row in dummy_rows.values() if row["PID"] == pid), None)
+        ):
+            pids = db_update_wizard.recent_history_process_pids()
+
+        self.assertEqual(pids["api"], 10101)
+        self.assertEqual(pids["frontend-admin"], 20202)
 
     def test_upgrade_fittings_table_exists_uses_driver_sql(self) -> None:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:

@@ -72,6 +72,11 @@ LOCAL_API_DOCS_URL = "http://127.0.0.1:8000/docs"
 LOCAL_APP_URL = "http://127.0.0.1:5175"
 LOCAL_ADMIN_URL = "http://127.0.0.1:5173"
 REMOTE_ADMIN_WEBROOT = "/var/www/furniture-admin"
+CANONICAL_MAIN_API = (PROJECT_ROOT / "main_api.py").as_posix().lower()
+CANONICAL_MAIN_BOT = (PROJECT_ROOT / "main.py").as_posix().lower()
+CANONICAL_FRONTEND_APP = (PROJECT_ROOT / "frontend" / "app").as_posix().lower()
+CANONICAL_FRONTEND_ADMIN = (PROJECT_ROOT / "frontend" / "admin").as_posix().lower()
+NODE_EXECUTABLE = (shutil.which("node") or shutil.which("node.exe") or "node.exe").replace("\\", "/").lower()
 
 
 def prepare_tk_runtime() -> None:
@@ -557,6 +562,221 @@ def safe_subprocess_kwargs() -> dict:
     if CREATE_NO_WINDOW:
         kwargs["creationflags"] = CREATE_NO_WINDOW
     return kwargs
+
+
+class _FallbackStringVar:
+    def __init__(self, value: str = "") -> None:
+        self._value = value
+
+    def get(self) -> str:
+        return self._value
+
+    def set(self, value: str) -> None:
+        self._value = value
+
+
+def _create_string_var(value: str = ""):
+    try:
+        return tk.StringVar(value=value)
+    except Exception:
+        return _FallbackStringVar(value)
+
+
+def _windows_path_text(value: object) -> str:
+    return str(value or "").replace("\\", "/").lower()
+
+
+def _powershell_executable() -> str:
+    return shutil.which("powershell.exe") or shutil.which("powershell") or "powershell"
+
+
+def _run_powershell_json(script: str) -> list[dict[str, object]]:
+    command = [
+        _powershell_executable(),
+        "-NoLogo",
+        "-NoProfile",
+        "-NonInteractive",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        script,
+    ]
+    try:
+        result = subprocess.run(
+            command,
+            cwd=str(PROJECT_ROOT),
+            capture_output=True,
+            text=True,
+            check=False,
+            **safe_subprocess_kwargs(),
+        )
+    except OSError:
+        return []
+
+    if result.returncode != 0:
+        return []
+
+    raw_output = (result.stdout or "").strip()
+    if not raw_output or raw_output == "null":
+        return []
+
+    try:
+        payload = json.loads(raw_output)
+    except json.JSONDecodeError:
+        return []
+
+    if isinstance(payload, dict):
+        payload = [payload]
+    if not isinstance(payload, list):
+        return []
+
+    rows: list[dict[str, object]] = []
+    for item in payload:
+        if isinstance(item, dict):
+            rows.append(item)
+    return rows
+
+
+def discover_windows_process_rows() -> list[dict[str, object]]:
+    script = (
+        "Get-Process python,node -ErrorAction SilentlyContinue | "
+        "Select-Object Id, ProcessName, Path, StartTime | "
+        "ConvertTo-Json -Depth 2"
+    )
+    rows = _run_powershell_json(script)
+    normalized_rows: list[dict[str, object]] = []
+    for row in rows:
+        try:
+            pid = int(row.get("PID") or row.get("ProcessId") or row.get("Id") or 0)
+        except (TypeError, ValueError):
+            continue
+        if pid <= 0:
+            continue
+        normalized_rows.append(
+            {
+                "PID": pid,
+                "ParentPID": None,
+                "Name": str(row.get("Name") or row.get("ProcessName") or ""),
+                "ExecutablePath": str(row.get("ExecutablePath") or row.get("Path") or ""),
+                "CreationDate": str(row.get("CreationDate") or row.get("StartTime") or ""),
+                "CommandLine": "",
+            }
+        )
+    return normalized_rows
+
+
+def discover_windows_process_row(pid: int) -> dict[str, object] | None:
+    if pid <= 0:
+        return None
+
+    script = (
+        f"Get-Process -Id {pid} -ErrorAction SilentlyContinue | "
+        "Select-Object Id, ProcessName, Path, StartTime | "
+        "ConvertTo-Json -Depth 2"
+    )
+    rows = _run_powershell_json(script)
+    if not rows:
+        return None
+    row = rows[0]
+    try:
+        resolved_pid = int(row.get("PID") or row.get("ProcessId") or row.get("Id") or 0)
+    except (TypeError, ValueError):
+        return None
+    if resolved_pid != pid:
+        return None
+
+    return {
+        "PID": resolved_pid,
+        "ParentPID": None,
+        "Name": str(row.get("Name") or row.get("ProcessName") or ""),
+        "ExecutablePath": str(row.get("ExecutablePath") or row.get("Path") or ""),
+        "CreationDate": str(row.get("CreationDate") or row.get("StartTime") or ""),
+        "CommandLine": "",
+    }
+
+
+def discover_windows_listener_rows() -> list[dict[str, object]]:
+    try:
+        result = subprocess.run(
+            ["netstat", "-ano", "-p", "TCP"],
+            cwd=str(PROJECT_ROOT),
+            capture_output=True,
+            text=True,
+            check=False,
+            **safe_subprocess_kwargs(),
+        )
+    except OSError:
+        return []
+
+    if result.returncode != 0:
+        return []
+
+    normalized_rows: list[dict[str, object]] = []
+    for raw_line in result.stdout.splitlines():
+        line = raw_line.strip()
+        if not line.startswith("TCP"):
+            continue
+        parts = line.split()
+        if len(parts) < 5:
+            continue
+        local = parts[1]
+        state = parts[3].upper()
+        pid_text = parts[4]
+        if state != "LISTENING":
+            continue
+        if ":" not in local:
+            continue
+        try:
+            local_port = int(local.rsplit(":", 1)[1])
+            owning_process = int(pid_text)
+        except ValueError:
+            continue
+        if local_port <= 0 or owning_process <= 0:
+            continue
+        normalized_rows.append({"LocalPort": local_port, "OwningProcess": owning_process})
+    return normalized_rows
+
+
+def recent_history_process_pids(limit: int = 5000) -> dict[str, int]:
+    entries = read_json_lines(HISTORY_PATH, limit=limit)
+    if not entries:
+        return {}
+
+    latest: dict[str, int] = {}
+    for entry in reversed(entries):
+        if str(entry.get("action", "")) != "process.start":
+            continue
+        extra = entry.get("extra", {})
+        if not isinstance(extra, dict):
+            continue
+        try:
+            pid = int(extra.get("pid") or 0)
+        except (TypeError, ValueError):
+            continue
+        if pid <= 0:
+            continue
+
+        command = entry.get("command", [])
+        command_text = " ".join(str(item) for item in command if isinstance(item, str)).replace("\\", "/").lower()
+        details = str(entry.get("details", "")).strip().lower()
+        cwd = _windows_path_text(extra.get("cwd"))
+
+        key: str | None = None
+        if "main_api.py" in command_text or details.startswith("локальний api"):
+            key = "api"
+        elif "main.py" in command_text and details.startswith("локальний бот"):
+            key = "bot"
+        elif "frontend/app" in cwd and "run dev" in command_text:
+            key = "frontend-app"
+        elif "frontend/admin" in cwd and "run dev" in command_text:
+            key = "frontend-admin"
+
+        if key and key not in latest:
+            latest[key] = pid
+        if len(latest) == 4:
+            break
+
+    return latest
 
 
 def git_commit(message: str, paths: list[str] | None = None) -> tuple[int, str]:
@@ -1157,6 +1377,8 @@ class WizardApp(tk.Tk):
         self.launch_status_var = tk.StringVar(value="")
         self._service_health_state: dict[str, bool | None] = {"api": None, "app": None, "admin": None}
         self._service_health_refresh_inflight = False
+        self._process_refresh_interval_ms = 6000
+        self._last_process_refresh_at = 0.0
         self.product_map_specs = build_product_component_specs()
         self.product_map_specs_by_key = {str(spec["key"]): spec for spec in self.product_map_specs}
         self.product_map_selected_key: str | None = None
@@ -1225,7 +1447,9 @@ class WizardApp(tk.Tk):
             "danger_bg": "#ffd7d7",
             "danger_fg": "#7f1d1d",
         }
-        palette.setdefault("success", palette["success_bg"])
+        # Keep a dedicated success color key available for older style branches
+        # and any theme-aware widgets that still expect the legacy name.
+        palette["success"] = palette["success_bg"]
 
         self.configure(background=palette["bg"])
         self.option_add("*Font", ("Segoe UI", 10))
@@ -1322,7 +1546,7 @@ class WizardApp(tk.Tk):
             "error": "ActionError.TButton",
         }
         style_name = style_map.get(state, "ActionIdle.TButton")
-        for button in self.action_buttons.get(key, []):
+        for button in self.__dict__.get("action_buttons", {}).get(key, []):
             try:
                 button.configure(style=style_name)
             except tk.TclError:
@@ -1400,7 +1624,10 @@ class WizardApp(tk.Tk):
             label.configure(style=self._service_status_style(status))
 
     def _set_service_status(self, key: str, status: str) -> None:
-        value = self.service_status_vars.setdefault(key, tk.StringVar())
+        value = self.service_status_vars.get(key)
+        if value is None:
+            value = _create_string_var()
+            self.service_status_vars[key] = value
         value.set(status)
         self._apply_service_status_style(key, status)
 
@@ -1408,7 +1635,10 @@ class WizardApp(tk.Tk):
         self.launch_status_var.set(text)
 
     def _set_component_launch_status(self, key: str, status: str) -> None:
-        value = self.component_launch_vars.setdefault(key, tk.StringVar())
+        value = self.component_launch_vars.get(key)
+        if value is None:
+            value = _create_string_var()
+            self.component_launch_vars[key] = value
         value.set(status)
         label = self.component_launch_labels.get(key)
         if label is not None:
@@ -2155,11 +2385,12 @@ class WizardApp(tk.Tk):
         self._register_action_button("frontend-app", ttk.Button(left, text="Запустити app", command=self.start_app_frontend)).pack(fill="x", pady=(8, 0))
         self._register_action_button("frontend-admin", ttk.Button(left, text="Запустити admin", command=self.start_admin_frontend)).pack(fill="x", pady=(8, 0))
         self._register_action_button("start-full-stack", ttk.Button(left, text="Запустити весь продукт", command=self.start_full_local_stack)).pack(fill="x", pady=(8, 0))
+        self._register_action_button("restart-full-stack", ttk.Button(left, text="Перезапустити весь продукт", command=self.restart_full_local_stack)).pack(fill="x", pady=(8, 0))
         ttk.Button(left, text="Відкрити всі сторінки", command=self.open_all_local_pages).pack(fill="x", pady=(8, 0))
         ttk.Button(left, text="Оновити список процесів", command=self.refresh_managed_processes).pack(fill="x", pady=(8, 0))
         ttk.Button(left, text="Перезапустити вибраний процес", command=self.restart_selected_process).pack(fill="x", pady=(8, 0))
         ttk.Button(left, text="Зупинити вибраний процес", command=self.stop_selected_process).pack(fill="x", pady=(8, 0))
-        ttk.Button(left, text="Зупинити всі процеси", command=self.stop_all_processes).pack(fill="x", pady=(8, 0))
+        self._register_action_button("stop-all", ttk.Button(left, text="Зупинити всі процеси", command=self.stop_all_processes)).pack(fill="x", pady=(8, 0))
 
         process_box = ttk.LabelFrame(left, text="Запущені процеси", style="Card.TLabelframe")
         process_box.pack(fill="both", expand=True, pady=(12, 0))
@@ -4704,6 +4935,342 @@ class WizardApp(tk.Tk):
         except OSError:
             return False
 
+    def _process_search_text(self, row: dict[str, object]) -> str:
+        return " ".join(
+            [
+                _windows_path_text(row.get("CommandLine")),
+                _windows_path_text(row.get("ExecutablePath")),
+                _windows_path_text(row.get("Name")),
+            ]
+        )
+
+    def _is_verified_process_row_for_key(self, key: str, row: dict[str, object], port: int | None = None) -> bool:
+        search_text = self._process_search_text(row)
+        if key == "api":
+            return CANONICAL_MAIN_API in search_text
+        if key == "bot":
+            return CANONICAL_MAIN_BOT in search_text
+        if key == "frontend-app":
+            if CANONICAL_FRONTEND_APP not in search_text:
+                return False
+            if "vite.js" in search_text and (port is None or f"--port {port}" in search_text):
+                return True
+            return "npm run dev" in search_text or "npm-cli.js" in search_text
+        if key == "frontend-admin":
+            if CANONICAL_FRONTEND_ADMIN not in search_text:
+                return False
+            if "vite.js" in search_text and (port is None or f"--port {port}" in search_text):
+                return True
+            return "npm run dev" in search_text or "npm-cli.js" in search_text
+        return False
+
+    def _row_pid(self, row: dict[str, object]) -> int | None:
+        try:
+            pid = int(row.get("PID") or 0)
+        except (TypeError, ValueError):
+            return None
+        return pid if pid > 0 else None
+
+    def _row_parent_pid(self, row: dict[str, object]) -> int | None:
+        try:
+            parent_pid = int(row.get("ParentPID") or 0)
+        except (TypeError, ValueError):
+            return None
+        return parent_pid if parent_pid > 0 else None
+
+    def _is_verified_direct_candidate(self, key: str, row: dict[str, object], port: int | None = None) -> bool:
+        return self._is_verified_process_row_for_key(key, row, port=port)
+
+    def _is_tree_root_marker(self, key: str, row: dict[str, object]) -> bool:
+        return self._is_verified_process_row_for_key(key, row)
+
+    def _is_node_process_row(self, row: dict[str, object]) -> bool:
+        process_name = str(row.get("Name") or row.get("ProcessName") or "").strip().lower()
+        if process_name == "node":
+            return True
+        return _windows_path_text(row.get("ExecutablePath")) == NODE_EXECUTABLE
+
+    def _resolve_tree_root_pid(self, pid: int, rows_by_pid: dict[int, dict[str, object]], key: str) -> int:
+        root_pid = pid
+        current_pid = pid
+        while current_pid > 0:
+            row = rows_by_pid.get(current_pid)
+            if row is None:
+                break
+            if self._is_tree_root_marker(key, row):
+                root_pid = current_pid
+            parent_pid = self._row_parent_pid(row)
+            if not parent_pid or parent_pid == current_pid:
+                break
+            current_pid = parent_pid
+        return root_pid
+
+    def _discover_verified_stop_targets(self, include_history: bool = True) -> dict[str, set[int]]:
+        rows = discover_windows_process_rows()
+        rows_by_pid = {pid: row for row in rows if (pid := self._row_pid(row)) is not None}
+        targets: dict[str, set[int]] = {
+            "api": set(),
+            "bot": set(),
+            "frontend-app": set(),
+            "frontend-admin": set(),
+        }
+
+        python_rows = {
+            pid: row
+            for pid, row in rows_by_pid.items()
+            if _windows_path_text(row.get("ExecutablePath")) == _windows_path_text(PROJECT_ROOT / ".venv" / "Scripts" / "python.exe")
+        }
+
+        listener_rows = discover_windows_listener_rows()
+        api_listener_pid = next((int(listener.get("OwningProcess") or 0) for listener in listener_rows if int(listener.get("LocalPort") or 0) == 8000), 0)
+        if api_listener_pid and api_listener_pid in rows_by_pid:
+            targets["api"].add(api_listener_pid)
+
+        for pid in python_rows:
+            if pid != api_listener_pid:
+                targets["bot"].add(pid)
+
+        for listener in listener_rows:
+            try:
+                port = int(listener.get("LocalPort") or 0)
+                listener_pid = int(listener.get("OwningProcess") or 0)
+            except (TypeError, ValueError):
+                continue
+
+            key = "frontend-app" if port == 5175 else "frontend-admin" if port == 5173 else None
+            if not key:
+                continue
+
+            row = rows_by_pid.get(listener_pid)
+            if port in {5173, 5175}:
+                if row is None or self._is_node_process_row(row):
+                    targets[key].add(listener_pid)
+                continue
+            if row is None:
+                continue
+            if self._is_node_process_row(row):
+                targets[key].add(listener_pid)
+
+        if include_history:
+            history_pids = recent_history_process_pids()
+            for key, pid in history_pids.items():
+                if pid <= 0 or pid in targets[key]:
+                    continue
+                live_row = discover_windows_process_row(pid)
+                if live_row is None:
+                    continue
+                if key == "bot":
+                    expected_python = _windows_path_text(PROJECT_ROOT / ".venv" / "Scripts" / "python.exe")
+                    if _windows_path_text(live_row.get("ExecutablePath")) == expected_python:
+                        targets[key].add(pid)
+                elif key == "api":
+                    if any(
+                        int(listener.get("LocalPort") or 0) == 8000
+                        and int(listener.get("OwningProcess") or 0) == pid
+                        for listener in listener_rows
+                    ):
+                        targets[key].add(pid)
+                elif key == "frontend-app":
+                    if any(
+                        int(listener.get("LocalPort") or 0) == 5175
+                        and int(listener.get("OwningProcess") or 0) == pid
+                        for listener in listener_rows
+                    ) and (live_row is None or self._is_node_process_row(live_row)):
+                        targets[key].add(pid)
+                elif key == "frontend-admin":
+                    if any(
+                        int(listener.get("LocalPort") or 0) == 5173
+                        and int(listener.get("OwningProcess") or 0) == pid
+                        for listener in listener_rows
+                    ) and (live_row is None or self._is_node_process_row(live_row)):
+                        targets[key].add(pid)
+
+        return {key: {pid for pid in pids if pid > 0} for key, pids in targets.items()}
+
+    def _stop_pid_via_powershell(self, pid: int, force: bool = True) -> bool:
+        if pid <= 0:
+            return False
+
+        script = f"Stop-Process -Id {pid} {'-Force' if force else ''} -ErrorAction Stop"
+
+        try:
+            result = subprocess.run(
+                [
+                    _powershell_executable(),
+                    "-NoLogo",
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-Command",
+                    script,
+                ],
+                cwd=str(PROJECT_ROOT),
+                capture_output=True,
+                text=True,
+                check=False,
+                **safe_subprocess_kwargs(),
+            )
+        except OSError as exc:
+            self._append_product_log(f"[process.stop] Stop-Process не запустився для PID {pid}: {exc}")
+            return False
+
+        combined = "\n".join(
+            part.strip()
+            for part in (result.stdout, result.stderr)
+            if part and part.strip()
+        ).strip()
+        if result.returncode == 0:
+            return True
+        lowered = combined.lower()
+        if "cannot find" in lowered or "cannot be found" in lowered or "not found" in lowered:
+            return True
+        self._append_product_log(f"[process.stop] Stop-Process PID {pid} завершився з кодом {result.returncode}")
+        if combined:
+            self._append_product_log(combined)
+        return False
+
+    def _stop_pid_via_taskkill(self, pid: int, force: bool = True) -> bool:
+        if pid <= 0:
+            return False
+
+        command = ["taskkill", "/PID", str(pid), "/T"]
+        if force:
+            command.append("/F")
+
+        try:
+            result = subprocess.run(
+                command,
+                cwd=str(PROJECT_ROOT),
+                capture_output=True,
+                text=True,
+                check=False,
+                **safe_subprocess_kwargs(),
+        )
+        except OSError as exc:
+            self._append_product_log(f"[process.stop] taskkill не запустився для PID {pid}: {exc}")
+            return False
+
+        combined = "\n".join(
+            part.strip()
+            for part in (result.stdout, result.stderr)
+            if part and part.strip()
+        ).strip()
+        if result.returncode == 0:
+            return True
+        lowered = combined.lower()
+        if "not found" in lowered or "не знайден" in lowered:
+            return True
+        if "access is denied" in lowered or "доступ заборон" in lowered:
+            return self._stop_pid_via_taskkill_elevated(pid, force=force)
+        self._append_product_log(f"[process.stop] taskkill PID {pid} завершився з кодом {result.returncode}")
+        if combined:
+            self._append_product_log(combined)
+        return False
+
+    def _stop_pid_via_taskkill_elevated(self, pid: int, force: bool = True) -> bool:
+        if pid <= 0:
+            return False
+
+        arguments = ["/PID", str(pid), "/T"]
+        if force:
+            arguments.append("/F")
+        arg_text = ",".join(f"'{item}'" for item in arguments)
+        script = (
+            f"$p = Start-Process -FilePath taskkill.exe -ArgumentList {arg_text} "
+            "-Verb RunAs -WindowStyle Hidden -PassThru -Wait; "
+            "if ($null -eq $p) { exit 1 }; "
+            "exit $p.ExitCode"
+        )
+
+        try:
+            result = subprocess.run(
+                [
+                    _powershell_executable(),
+                    "-NoLogo",
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-Command",
+                    script,
+                ],
+                cwd=str(PROJECT_ROOT),
+                capture_output=True,
+                text=True,
+                check=False,
+                **safe_subprocess_kwargs(),
+            )
+        except OSError as exc:
+            self._append_product_log(f"[process.stop] elevated taskkill не запустився для PID {pid}: {exc}")
+            return False
+
+        combined = "\n".join(
+            part.strip()
+            for part in (result.stdout, result.stderr)
+            if part and part.strip()
+        ).strip()
+        if result.returncode == 0:
+            return True
+        self._append_product_log(f"[process.stop] elevated taskkill PID {pid} завершився з кодом {result.returncode}")
+        if combined:
+            self._append_product_log(combined)
+        return False
+
+    def _stop_verified_process_tree(self, pid: int) -> bool:
+        live_proc = next(
+            (
+                proc
+                for proc in self.managed_processes.values()
+                if getattr(proc, "pid", None) == pid and proc.poll() is None
+            ),
+            None,
+        )
+        if live_proc is not None:
+            try:
+                live_proc.terminate()
+                live_proc.wait(timeout=3)
+            except Exception:
+                pass
+        if self._stop_pid_via_powershell(pid, force=False):
+            return True
+        if self._stop_pid_via_powershell(pid, force=True):
+            return True
+        return self._stop_pid_via_taskkill(pid, force=True)
+
+    def _wait_for_verified_targets_offline(self, timeout_seconds: float = 10.0) -> dict[str, set[int]]:
+        deadline = time.monotonic() + timeout_seconds
+        remaining = self._discover_verified_stop_targets(include_history=False)
+        while any(remaining.values()) and time.monotonic() < deadline:
+            time.sleep(0.5)
+            remaining = self._discover_verified_stop_targets(include_history=False)
+        return remaining
+
+    def _log_verified_stop_summary(self, stopped: dict[str, set[int]], remaining: dict[str, set[int]]) -> None:
+        for key, pids in stopped.items():
+            for pid in sorted(pids):
+                self._append_product_log(f"[{key}] Зупинено tree PID={pid}")
+                self.record_history(
+                    "process.stop_all",
+                    details=f"Зупинено процес {key}",
+                    status="ok",
+                    extra={"pid": pid},
+                )
+
+        if not any(remaining.values()):
+            self._set_launch_status("Продукт зупинено")
+            self._set_action_button_state("stop-all", "success")
+            messagebox.showinfo("Готово", "Продукт зупинено")
+            return
+
+        remaining_labels = ", ".join(sorted(key for key, pids in remaining.items() if pids))
+        if remaining_labels:
+            self._set_launch_status(f"Не вдалося зупинити: {remaining_labels}")
+        else:
+            self._set_launch_status("Не вдалося підтвердити повну зупинку.")
+        self._set_action_button_state("stop-all", "error")
+        messagebox.showwarning("Не повністю зупинено", self.launch_status_var.get())
+
     def refresh_product_status(self) -> None:
         self.refresh_product_status_async()
 
@@ -4900,12 +5467,15 @@ class WizardApp(tk.Tk):
         self.refresh_product_status_async()
 
     def refresh_managed_processes(self) -> None:
-        self.process_list.delete(0, "end")
+        process_list = self.__dict__.get("process_list")
+        if process_list is None:
+            return
+        process_list.delete(0, "end")
         if not self.managed_processes:
-            self.process_list.insert("end", "Немає запущених процесів.")
+            process_list.insert("end", "Немає запущених процесів.")
             if getattr(self, "process_list_colors_enabled", False):
                 try:
-                    self.process_list.itemconfig(0, background="#ffffff", foreground="#1f2a29")
+                    process_list.itemconfig(0, background="#ffffff", foreground="#1f2a29")
                 except tk.TclError:
                     pass
             for key in list(self.action_buttons):
@@ -4921,11 +5491,11 @@ class WizardApp(tk.Tk):
                 status = f"працює, PID {proc.pid}"
             self._set_action_button_state(key, self._managed_button_state(key, proc))
             self._set_component_launch_status(key, self._managed_component_status(key, proc))
-            self.process_list.insert("end", f"{key}: {status}")
+            process_list.insert("end", f"{key}: {status}")
             if getattr(self, "process_list_colors_enabled", False):
                 row_bg, row_fg = self._process_list_colors(status)
                 try:
-                    self.process_list.itemconfig(self.process_list.size() - 1, background=row_bg, foreground=row_fg)
+                    process_list.itemconfig(process_list.size() - 1, background=row_bg, foreground=row_fg)
                 except tk.TclError:
                     pass
 
@@ -4949,25 +5519,31 @@ class WizardApp(tk.Tk):
             return
 
         proc = self.managed_processes.get(key)
-        if not proc:
+        verified_targets = sorted(self._discover_verified_stop_targets().get(key, set()))
+        stopped_pids: list[int] = []
+
+        if verified_targets:
+            for pid in verified_targets:
+                if self._stop_verified_process_tree(pid):
+                    stopped_pids.append(pid)
+        elif proc and proc.poll() is None:
+            if self._stop_verified_process_tree(proc.pid):
+                stopped_pids.append(proc.pid)
+        else:
             messagebox.showwarning("Процес не знайдено", "Вибраний процес уже неактивний.")
             self.refresh_managed_processes()
             return
 
-        if proc.poll() is None:
-            proc.terminate()
-            try:
-                proc.wait(timeout=5)
-            except Exception:
-                proc.kill()
-        self._append_product_log(f"[{key}] Зупинено")
-        self.record_history(
-            "process.stop",
-            details=f"Зупинено процес {key}",
-            status="ok",
-            extra={"pid": proc.pid},
-        )
+        for pid in stopped_pids:
+            self._append_product_log(f"[{key}] Зупинено tree PID={pid}")
+            self.record_history(
+                "process.stop",
+                details=f"Зупинено процес {key}",
+                status="ok",
+                extra={"pid": pid},
+            )
         self.refresh_managed_processes()
+        self.refresh_product_status_async()
 
     def restart_selected_process(self) -> None:
         key = self.selected_process_key()
@@ -4983,39 +5559,104 @@ class WizardApp(tk.Tk):
         }
         stop_only = {"api", "bot", "frontend-app", "frontend-admin"}
         if key in stop_only:
-            self.stop_selected_process()
-            restart = restart_map.get(key)
-            if restart:
-                self.after(500, restart)
+            proc = self.managed_processes.get(key)
+            verified_targets = sorted(self._discover_verified_stop_targets().get(key, set()))
+            stopped = False
+            if verified_targets:
+                for pid in verified_targets:
+                    stopped = self._stop_verified_process_tree(pid) or stopped
+            elif proc and proc.poll() is None:
+                stopped = self._stop_verified_process_tree(proc.pid)
+            else:
+                messagebox.showwarning("Процес не знайдено", "Вибраний процес уже неактивний.")
+                self.refresh_managed_processes()
+                return
+
+            if stopped:
+                self.refresh_managed_processes()
+                self.refresh_product_status_async()
+                restart = restart_map.get(key)
+                if restart:
+                    self.after(500, restart)
             return
 
         messagebox.showinfo("Перезапуск", "Для цього процесу перезапуск не налаштовано.")
 
+    def _collect_verified_stop_targets(self) -> dict[str, set[int]]:
+        target_map = self._discover_verified_stop_targets()
+        for key, proc in self.managed_processes.items():
+            if proc and proc.poll() is None and key in target_map:
+                target_map[key].add(proc.pid)
+            elif proc and proc.poll() is None and key in {"api", "bot", "frontend-app", "frontend-admin"}:
+                target_map.setdefault(key, set()).add(proc.pid)
+        return target_map
+
+    def _stop_verified_target_map(self, target_map: dict[str, set[int]]) -> dict[str, set[int]]:
+        stopped_targets: dict[str, set[int]] = {key: set() for key in target_map}
+        for key, pids in target_map.items():
+            for pid in sorted(pids):
+                if self._stop_verified_process_tree(pid):
+                    stopped_targets.setdefault(key, set()).add(pid)
+        return stopped_targets
+
+    def _wait_for_full_stack_ready(self, timeout_seconds: float = 45.0) -> bool:
+        deadline = time.monotonic() + timeout_seconds
+        while time.monotonic() < deadline:
+            if self._full_stack_is_healthy():
+                return True
+            threading.Event().wait(0.5)
+        return self._full_stack_is_healthy()
+
+    def _full_stack_is_healthy(self) -> bool:
+        api_up = self._service_responds(LOCAL_API_HEALTH_URL)
+        app_up = self._service_responds(LOCAL_APP_URL)
+        admin_up = self._service_responds(LOCAL_ADMIN_URL)
+        bot_proc = self.managed_processes.get("bot")
+        bot_running = bot_proc is not None and bot_proc.poll() is None
+        return api_up and app_up and admin_up and bot_running
+
     def stop_all_processes(self) -> None:
-        for key in list(self.managed_processes):
-            proc = self.managed_processes.get(key)
-            if not proc:
-                continue
-            if proc.poll() is None:
-                proc.terminate()
-                try:
-                    proc.wait(timeout=5)
-                except Exception:
-                    proc.kill()
-            self._append_product_log(f"[{key}] Зупинено")
-            self.record_history(
-                "process.stop_all",
-                details=f"Зупинено процес {key}",
-                status="ok",
-                extra={"pid": proc.pid},
-            )
+        self._set_launch_status("Зупиняємо весь продукт...")
+        self._set_action_button_state("stop-all", "starting")
+        self._begin_activity()
+
+        target_map = self._collect_verified_stop_targets()
+        target_counts = {key: len(pids) for key, pids in target_map.items() if pids}
+        self._append_product_log(
+            "[Зупинити всі процеси] Клік отримано; "
+            + (", ".join(f"{key}={count}" for key, count in sorted(target_counts.items())) or "targets=0")
+        )
+
+        if not any(target_map.values()):
+            self._set_launch_status("Немає підтверджених процесів для зупинки.")
+            self._set_action_button_state("stop-all", "idle")
+            self._end_activity()
+            return
+
+        stopped_targets = self._stop_verified_target_map(target_map)
         self.refresh_managed_processes()
 
+        def watcher() -> None:
+            remaining = self._wait_for_verified_targets_offline()
+
+            def finish() -> None:
+                self.refresh_managed_processes()
+                self.refresh_product_status()
+                self._log_verified_stop_summary(stopped_targets, remaining)
+                self._end_activity()
+
+            self.after(0, finish)
+
+        threading.Thread(target=watcher, daemon=True).start()
+
     def _schedule_process_refresh(self) -> None:
-        if self.auto_refresh.get():
-            self.refresh_managed_processes()
-            self.refresh_product_status_async()
-        self.after(2500, self._schedule_process_refresh)
+        now = time.monotonic()
+        if self.auto_refresh.get() and self._busy_tasks == 0:
+            if now - self._last_process_refresh_at >= self._process_refresh_interval_ms / 1000.0:
+                self._last_process_refresh_at = now
+                self.refresh_managed_processes()
+                self.refresh_product_status_async()
+        self.after(self._process_refresh_interval_ms, self._schedule_process_refresh)
 
     def start_all_local_services(self) -> None:
         self.start_local_api()
@@ -5036,29 +5677,90 @@ class WizardApp(tk.Tk):
         self.start_all_local_services()
 
         def opener() -> None:
-            ready = False
-            for _ in range(30):
-                api_up = self._service_responds(LOCAL_API_HEALTH_URL)
-                app_up = self._service_responds(LOCAL_APP_URL)
-                admin_up = self._service_responds(LOCAL_ADMIN_URL)
-                api_proc = self.managed_processes.get("api")
-                bot_proc = self.managed_processes.get("bot")
-                bot_running = bot_proc is not None and bot_proc.poll() is None
-                if api_up and app_up and admin_up and bot_running:
-                    ready = True
-                    break
-                threading.Event().wait(0.5)
+            ready = self._wait_for_full_stack_ready()
             self.after(0, self.open_all_local_pages)
             self.after(0, self.refresh_managed_processes)
             self.after(0, self.refresh_product_status)
+            settle_deadline = time.monotonic() + 10.0
+
             def finish_status() -> None:
-                self._set_action_button_state("start-full-stack", "success" if ready else "error")
-                self._set_launch_status("Продукт запущено." if ready else "Запуск не завершився повністю.")
+                success = ready or self._full_stack_is_healthy()
+                if not success and time.monotonic() < settle_deadline:
+                    self.after(500, finish_status)
+                    return
+                self._set_action_button_state("start-full-stack", "success" if success else "error")
+                self._set_launch_status("Продукт запущено." if success else "Запуск не завершився повністю.")
                 self._end_activity()
 
             self.after(0, finish_status)
 
         threading.Thread(target=opener, daemon=True).start()
+
+    def restart_full_local_stack(self) -> None:
+        self._append_product_log("[Глобальний перезапуск] Зупиняємо весь продукт і запускаємо його знову.")
+        self._set_launch_status("Глобально перезапускаємо весь продукт...")
+        self._set_action_button_state("restart-full-stack", "starting")
+        self._begin_activity()
+        self.record_history(
+            "process.restart_full_stack",
+            details="Глобальний перезапуск всього локального продукту",
+            status="ok",
+        )
+
+        target_map = self._collect_verified_stop_targets()
+        target_counts = {key: len(pids) for key, pids in target_map.items() if pids}
+        self._append_product_log(
+            "[Глобальний перезапуск] Клік отримано; "
+            + (", ".join(f"{key}={count}" for key, count in sorted(target_counts.items())) or "targets=0")
+        )
+
+        if not any(target_map.values()):
+            self._append_product_log("[Глобальний перезапуск] Немає підтверджених процесів для зупинки, запускаємо продукт знову.")
+        else:
+            self._stop_verified_target_map(target_map)
+
+        self.refresh_managed_processes()
+
+        def watcher() -> None:
+            remaining = self._wait_for_verified_targets_offline()
+
+            def begin_startup() -> None:
+                self.refresh_managed_processes()
+                self.refresh_product_status()
+                if any(remaining.values()):
+                    remaining_labels = ", ".join(sorted(key for key, pids in remaining.items() if pids))
+                    self._set_launch_status(f"Не вдалося повністю зупинити: {remaining_labels}" if remaining_labels else "Не вдалося підтвердити повну зупинку.")
+                    self._set_action_button_state("restart-full-stack", "error")
+                    messagebox.showwarning("Не вдалося перезапустити", self.launch_status_var.get())
+                    self._end_activity()
+                    return
+
+                self._append_product_log("[Глобальний перезапуск] Усі процеси зупинено, запускаємо продукт знову.")
+                self.start_all_local_services()
+
+                def opener() -> None:
+                    ready = self._wait_for_full_stack_ready()
+                    self.after(0, self.open_all_local_pages)
+                    self.after(0, self.refresh_managed_processes)
+                    self.after(0, self.refresh_product_status)
+                    settle_deadline = time.monotonic() + 10.0
+
+                    def finish_status() -> None:
+                        success = ready or self._full_stack_is_healthy()
+                        if not success and time.monotonic() < settle_deadline:
+                            self.after(500, finish_status)
+                            return
+                        self._set_action_button_state("restart-full-stack", "success" if success else "error")
+                        self._set_launch_status("Продукт перезапущено." if success else "Перезапуск не завершився повністю.")
+                        self._end_activity()
+
+                    self.after(0, finish_status)
+
+                threading.Thread(target=opener, daemon=True).start()
+
+            self.after(0, begin_startup)
+
+        threading.Thread(target=watcher, daemon=True).start()
 
     def start_local_api(self) -> None:
         if self._service_responds(LOCAL_API_HEALTH_URL):
@@ -5200,6 +5902,12 @@ class WizardApp(tk.Tk):
         self._run_script_async("Upgrade fittings schema", command, button_key="db-upgrade-fittings")
 
     def start_app_frontend(self) -> None:
+        if self._service_responds(LOCAL_APP_URL):
+            self._set_launch_status("Frontend app уже запущено.")
+            self._append_product_log("[Frontend app] already responding on 127.0.0.1:5175; duplicate launch skipped")
+            self._set_action_button_state("frontend-app", "success")
+            self.refresh_managed_processes()
+            return
         self._start_managed_process(
             "frontend-app",
             "Frontend app",
@@ -5208,6 +5916,12 @@ class WizardApp(tk.Tk):
         )
 
     def start_admin_frontend(self) -> None:
+        if self._service_responds(LOCAL_ADMIN_URL):
+            self._set_launch_status("Frontend admin уже запущено.")
+            self._append_product_log("[Frontend admin] already responding on 127.0.0.1:5173; duplicate launch skipped")
+            self._set_action_button_state("frontend-admin", "success")
+            self.refresh_managed_processes()
+            return
         self._start_managed_process(
             "frontend-admin",
             "Frontend admin",
