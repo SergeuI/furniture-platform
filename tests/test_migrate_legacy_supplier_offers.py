@@ -24,14 +24,14 @@ class MigrateLegacySupplierOffersTests(unittest.TestCase):
             self.assertEqual(plan["missing_indexes"], [])
             self.assertIsNotNone(plan["supplier"])
             self.assertEqual(len(plan["offer_rows"]), 7)
-            self.assertEqual(len(plan["planned_offers"]), 3)
-            self.assertEqual(len(plan["skipped_rows"]), 4)
+            self.assertEqual(len(plan["planned_offers"]), 4)
+            self.assertEqual(len(plan["skipped_rows"]), 3)
 
             statuses = {int(row["source_fitting_id"]): row["status"] for row in plan["offer_rows"]}
             self.assertEqual(statuses[41], "planned_offer")
-            self.assertEqual(statuses[44], "skipped_source_null")
-            self.assertEqual(statuses[45], "skipped_source_null")
-            self.assertEqual(statuses[46], "skipped_source_null")
+            self.assertEqual(statuses[44], "planned_offer")
+            self.assertEqual(statuses[45], "skipped_duplicate")
+            self.assertEqual(statuses[46], "skipped_duplicate")
             self.assertEqual(statuses[48], "planned_offer")
             self.assertEqual(statuses[49], "skipped_duplicate")
             self.assertEqual(statuses[59], "planned_offer")
@@ -70,15 +70,15 @@ class MigrateLegacySupplierOffersTests(unittest.TestCase):
                 self.assertEqual(len(fittings_before), len(fittings_after))
                 self.assertEqual(fittings_before, fittings_after)
 
-                self.assertEqual(len(offers), 3)
-                self.assertEqual([row["fitting_id"] for row in offers], [41, 45, 48])
-                self.assertEqual([row["supplier_code"] for row in offers], ["viyar", "viyar", "viyar"])
-                self.assertEqual(offers[1]["article"], "190106")
-                self.assertEqual(offers[1]["source_url"], "https://viyar.ua/ua/catalog/konfirmat-7x50/")
-                self.assertEqual(offers[1]["priority"], 100)
-                self.assertEqual(offers[1]["is_active"], 1)
-                self.assertEqual(offers[1]["external_product_id"], None)
-                self.assertEqual(offers[1]["payload"], "present")
+                self.assertEqual(len(offers), 4)
+                self.assertEqual([row["fitting_id"] for row in offers], [41, 44, 45, 48])
+                self.assertEqual([row["supplier_code"] for row in offers], ["viyar", "viyar", "viyar", "viyar"])
+                self.assertEqual(offers[2]["article"], "190106")
+                self.assertEqual(offers[2]["source_url"], "https://viyar.ua/ua/catalog/konfirmat-7x50/")
+                self.assertEqual(offers[2]["priority"], 100)
+                self.assertEqual(offers[2]["is_active"], 1)
+                self.assertEqual(offers[2]["external_product_id"], None)
+                self.assertEqual(offers[2]["payload"], "present")
                 self.assertEqual(len(supplier_rows), 1)
                 self.assertEqual(tuple(supplier_rows[0]), (1, "viyar", "VIYAR", 1))
 
@@ -87,11 +87,11 @@ class MigrateLegacySupplierOffersTests(unittest.TestCase):
 
             with sqlite3.connect(database_path) as connection:
                 connection.row_factory = sqlite3.Row
-                self.assertEqual(self._count(connection, "fitting_supplier_offers"), 3)
+                self.assertEqual(self._count(connection, "fitting_supplier_offers"), 4)
                 self.assertEqual(self._count(connection, "suppliers"), 1)
                 self.assertEqual(
                     [row["fitting_id"] for row in self._load_offers(connection)],
-                    [41, 45, 48],
+                    [41, 44, 45, 48],
                 )
                 self.assertEqual(self._count(connection, "fittings"), 7)
                 self.assertEqual(self._count(connection, "mounting_node_items"), 1)

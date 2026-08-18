@@ -19,6 +19,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from services.fitting_catalog_sync import infer_fitting_source_site, normalize_text
+
 
 DEFAULT_DATABASE_NAME = "furniture_platform.db"
 SUPPLIER_CODE = "viyar"
@@ -68,8 +70,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def _normalize_text(value: Any) -> str | None:
-    text = "" if value is None else str(value).strip()
-    return text or None
+    return normalize_text(value)
 
 
 def _table_exists(connection: sqlite3.Connection, table_name: str) -> bool:
@@ -255,14 +256,19 @@ def _build_plan(connection: sqlite3.Connection) -> dict[str, Any]:
         source = _normalize_text(row.get("source"))
         source_url = _normalize_text(row.get("source_url"))
         payload = _parse_source_payload_json(row.get("source_payload_json"))
-        has_supplier_data = bool(source or source_url or payload)
+        inferred_source = infer_fitting_source_site(
+            source,
+            source_url,
+            payload_source_site=_payload_source_site(payload),
+        )
+        has_supplier_data = bool(source or source_url or payload or inferred_source)
         if not has_supplier_data:
             continue
         candidate_rows.append(
             {
                 **row,
                 "_payload": payload,
-                "_source": source,
+                "_source": source or inferred_source,
             }
         )
 

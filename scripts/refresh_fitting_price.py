@@ -25,6 +25,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from database.repositories.inventory_repository import update_fitting_price_fields
+from services.fitting_catalog_sync import detect_fitting_source_site
 from services.fitting_source_parser import parse_fitting_source_metadata
 from services.legacy_db_config import DEFAULT_DB_PATH
 
@@ -219,20 +220,7 @@ def _normalize_float(value: object | None) -> float | None:
 
 
 def _detect_source_site(source_url: str | None) -> str:
-    normalized = _normalize_text(source_url)
-    if not normalized:
-        return "manual"
-
-    parsed = urlparse(normalized if "://" in normalized else f"https://{normalized}")
-    host = (parsed.netloc or parsed.path or "").lower()
-
-    if "viyar" in host:
-        return "viyar"
-    if "kronas" in host:
-        return "kronas"
-    if "mt.ua" in host:
-        return "mt"
-    return "generic"
+    return detect_fitting_source_site(source_url)
 
 
 def _normalize_stock(value: object | None) -> str | None:
