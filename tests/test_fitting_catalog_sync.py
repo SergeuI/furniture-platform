@@ -4,6 +4,7 @@ import base64
 import hashlib
 import json
 import sqlite3
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -123,6 +124,100 @@ class FittingCatalogSyncTests(unittest.TestCase):
             with sqlite3.connect(target_db) as connection:
                 self.assertEqual(connection.execute("SELECT COUNT(*) FROM suppliers").fetchone()[0], 2)
                 self.assertEqual(connection.execute("SELECT COUNT(*) FROM fitting_supplier_offers").fetchone()[0], 1)
+
+    def test_import_fitting_images_updates_existing_server_row_by_sha_identity(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            db_path = tmpdir_path / "source.db"
+            bundle_dir = tmpdir_path / "bundle"
+            uploads_root = tmpdir_path / "uploads"
+            self._create_catalog_database(db_path, uploads_root)
+
+            with patch("services.fitting_catalog_sync.LOCAL_UPLOADS_ROOT", uploads_root):
+                export_server_catalog.export_bundle(db_path, bundle_dir)
+
+            target_db = tmpdir_path / "target.db"
+            self._create_target_database_with_existing_fitting_image(target_db)
+
+            dry_run = import_server_catalog.import_bundle(target_db, bundle_dir, apply=False)
+            self.assertGreaterEqual(dry_run["summary"].get("updated", 0), 1)
+            self.assertEqual(dry_run["conflicts"], [])
+            with sqlite3.connect(target_db) as connection:
+                connection.row_factory = sqlite3.Row
+                self.assertEqual(connection.execute("SELECT COUNT(*) FROM fitting_images").fetchone()[0], 1)
+                self.assertEqual(
+                    connection.execute("SELECT sort_order FROM fitting_images WHERE fitting_id = 1").fetchone()[0],
+                    7,
+                )
+
+            apply_result = import_server_catalog.import_bundle(target_db, bundle_dir, apply=True)
+            self.assertEqual(apply_result["conflicts"], [])
+            with sqlite3.connect(target_db) as connection:
+                connection.row_factory = sqlite3.Row
+                self.assertEqual(connection.execute("SELECT COUNT(*) FROM fitting_images").fetchone()[0], 1)
+                image_row = connection.execute(
+                    "SELECT sort_order, is_primary, source_url, image_cached_bytes, image_sha256 FROM fitting_images WHERE fitting_id = 1",
+                ).fetchone()
+                self.assertEqual(image_row["sort_order"], 0)
+                self.assertEqual(image_row["is_primary"], 1)
+                self.assertEqual(image_row["source_url"], "https://example.com/a100.png")
+                self.assertEqual(hashlib.sha256(image_row["image_cached_bytes"]).hexdigest(), image_row["image_sha256"])
+                self.assertEqual(connection.execute("PRAGMA integrity_check").fetchone()[0], "ok")
+
+            second_apply = import_server_catalog.import_bundle(target_db, bundle_dir, apply=True)
+            self.assertGreaterEqual(second_apply["summary"].get("unchanged", 0), 1)
+            with sqlite3.connect(target_db) as connection:
+                self.assertEqual(connection.execute("SELECT COUNT(*) FROM fitting_images").fetchone()[0], 1)
+
+    def test_import_fitting_images_dedupes_bundle_rows_after_remap(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            db_path = tmpdir_path / "source.db"
+            bundle_dir = tmpdir_path / "bundle"
+            duplicate_bundle_dir = tmpdir_path / "bundle-duplicate"
+            uploads_root = tmpdir_path / "uploads"
+            self._create_catalog_database(db_path, uploads_root)
+
+            with patch("services.fitting_catalog_sync.LOCAL_UPLOADS_ROOT", uploads_root):
+                export_server_catalog.export_bundle(db_path, bundle_dir)
+
+            shutil.copytree(bundle_dir, duplicate_bundle_dir)
+            catalog_path = duplicate_bundle_dir / "catalog.json"
+            manifest_path = duplicate_bundle_dir / "manifest.json"
+            catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+            duplicate_row = dict(catalog["entities"]["fitting_images"][0])
+            duplicate_row["sort_order"] = 7
+            catalog["entities"]["fitting_images"].append(duplicate_row)
+            catalog_path.write_text(json.dumps(catalog, ensure_ascii=False, indent=2), encoding="utf-8")
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["catalog_sha256"] = hashlib.sha256(catalog_path.read_bytes()).hexdigest()
+            manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+
+            target_db = tmpdir_path / "target.db"
+            self._create_empty_target_database(target_db)
+
+            dry_run = import_server_catalog.import_bundle(target_db, duplicate_bundle_dir, apply=False)
+            self.assertEqual(dry_run["conflicts"], [])
+            self.assertGreaterEqual(dry_run["summary"].get("inserted", 0), 1)
+            with sqlite3.connect(target_db) as connection:
+                self.assertEqual(connection.execute("SELECT COUNT(*) FROM fitting_images").fetchone()[0], 0)
+
+            apply_result = import_server_catalog.import_bundle(target_db, duplicate_bundle_dir, apply=True)
+            self.assertEqual(apply_result["conflicts"], [])
+            with sqlite3.connect(target_db) as connection:
+                connection.row_factory = sqlite3.Row
+                self.assertEqual(connection.execute("SELECT COUNT(*) FROM fitting_images").fetchone()[0], 1)
+                image_row = connection.execute(
+                    "SELECT sort_order, source_url, image_sha256 FROM fitting_images WHERE fitting_id = 1",
+                ).fetchone()
+                self.assertEqual(image_row["sort_order"], 0)
+                self.assertEqual(image_row["source_url"], "https://example.com/a100.png")
+                self.assertEqual(image_row["image_sha256"], hashlib.sha256(PNG_1X1).hexdigest())
+
+            second_apply = import_server_catalog.import_bundle(target_db, duplicate_bundle_dir, apply=True)
+            self.assertGreaterEqual(second_apply["summary"].get("unchanged", 0), 1)
+            with sqlite3.connect(target_db) as connection:
+                self.assertEqual(connection.execute("SELECT COUNT(*) FROM fitting_images").fetchone()[0], 1)
 
     @staticmethod
     def _create_catalog_database(database_path: Path, uploads_root: Path) -> None:
@@ -647,6 +742,128 @@ class FittingCatalogSyncTests(unittest.TestCase):
                 "INSERT INTO suppliers (code, name, owner_user_id, is_system, is_active) VALUES (?, ?, ?, ?, ?)",
                 ("private-supplier", "Private", "user-1", 0, 1),
             )
+            connection.commit()
+
+    @staticmethod
+    def _create_target_database_with_existing_fitting_image(database_path: Path) -> None:
+        FittingCatalogSyncTests._create_empty_target_database(database_path)
+        with sqlite3.connect(database_path) as connection:
+            supplier_id = connection.execute(
+                "INSERT INTO suppliers (code, name, logo_url, owner_user_id, is_system, is_active) VALUES (?, ?, ?, ?, ?, ?)",
+                ("viyar", "VIYAR", "/uploads/supplier-logos/viyar.png", None, 1, 1),
+            ).lastrowid
+            manufacturer_id = connection.execute(
+                "INSERT INTO fitting_manufacturers (code, name, logo_url, is_active) VALUES (?, ?, ?, ?)",
+                ("hettich", "Hettich", "/uploads/fitting-manufacturer-logos/hettich.png", 1),
+            ).lastrowid
+            category_id = connection.execute(
+                "INSERT INTO fitting_categories (code, name, is_active) VALUES (?, ?, ?)",
+                ("hinges", "Hinges", 1),
+            ).lastrowid
+            product_id = connection.execute(
+                "INSERT INTO fitting_products (article, code, name, brand, manufacturer_id, category_id, is_active) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                ("A-100", "A-100", "Test product", "Hettich", manufacturer_id, category_id, 1),
+            ).lastrowid
+            fitting_id = connection.execute(
+                """
+                INSERT INTO fittings (
+                    catalog_key,
+                    article,
+                    name,
+                    price,
+                    stock,
+                    source_url,
+                    source,
+                    brand,
+                    description,
+                    unit,
+                    currency,
+                    technical_product_id,
+                    owner_user_id,
+                    is_system,
+                    is_active
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "catalog-key-a100",
+                    "A-100",
+                    "Test fitting",
+                    10.5,
+                    "in stock",
+                    "https://viyar.ua/ua/catalog/test-a100/",
+                    None,
+                    "Hettich",
+                    "Test fitting description",
+                    "шт",
+                    "UAH",
+                    product_id,
+                    None,
+                    1,
+                    1,
+                ),
+            ).lastrowid
+            connection.execute(
+                "INSERT INTO fitting_images (fitting_id, sort_order, is_primary, source_url, image_cached_bytes, image_cached_content_type, image_sha256) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (fitting_id, 7, 0, "https://example.com/existing-a100.png", PNG_1X1, "image/png", hashlib.sha256(PNG_1X1).hexdigest()),
+            )
+            connection.commit()
+
+    @staticmethod
+    def _create_staging_like_target_database(database_path: Path) -> None:
+        FittingCatalogSyncTests._create_target_database_with_existing_fitting_image(database_path)
+        with sqlite3.connect(database_path) as connection:
+            manufacturer_id = connection.execute(
+                "SELECT id FROM fitting_manufacturers WHERE code = ?",
+                ("hettich",),
+            ).fetchone()[0]
+            category_id = connection.execute(
+                "SELECT id FROM fitting_categories WHERE code = ?",
+                ("hinges",),
+            ).fetchone()[0]
+            for index in range(2, 14):
+                article = f"EXIST-{index:02d}"
+                product_id = connection.execute(
+                    "INSERT INTO fitting_products (article, code, name, brand, manufacturer_id, category_id, is_active) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (article, article, f"Existing product {index}", "Hettich", manufacturer_id, category_id, 1),
+                ).lastrowid
+                connection.execute(
+                    """
+                    INSERT INTO fittings (
+                        catalog_key,
+                        article,
+                        name,
+                        price,
+                        stock,
+                        source_url,
+                        source,
+                        brand,
+                        description,
+                        unit,
+                        currency,
+                        technical_product_id,
+                        owner_user_id,
+                        is_system,
+                        is_active
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        f"catalog-key-{article.lower()}",
+                        article,
+                        f"Existing fitting {index}",
+                        10.5 + index,
+                        "in stock",
+                        f"https://example.com/{article.lower()}",
+                        None,
+                        "Hettich",
+                        f"Existing fitting description {index}",
+                        "шт",
+                        "UAH",
+                        product_id,
+                        None,
+                        1,
+                        1,
+                    ),
+                )
             connection.commit()
 
 

@@ -219,6 +219,83 @@ def _service_item_key(row: dict[str, Any]) -> tuple[str, str]:
     return normalize_text(row.get("source")) or "", normalize_text(row.get("external_code")) or ""
 
 
+def _fitting_image_key(fitting_id: Any, image_sha256: Any) -> tuple[Any, str]:
+    return fitting_id, normalize_text(image_sha256) or ""
+
+
+def _merge_fitting_image_rows(
+    base_row: dict[str, Any],
+    incoming_row: dict[str, Any],
+    *,
+    conflicts: list[str],
+    bundle_key: tuple[Any, str],
+) -> dict[str, Any]:
+    merged = dict(base_row)
+    merged["is_primary"] = 1 if base_row.get("is_primary") in (True, 1) or incoming_row.get("is_primary") in (True, 1) else 0
+
+    base_sort_order = merged.get("sort_order")
+    incoming_sort_order = incoming_row.get("sort_order")
+    if base_sort_order is None:
+        merged["sort_order"] = incoming_sort_order
+    elif incoming_sort_order is not None and int(incoming_sort_order) < int(base_sort_order):
+        merged["sort_order"] = incoming_sort_order
+
+    for field in ("source_url", "image_cached_content_type"):
+        base_value = normalize_text(merged.get(field))
+        incoming_value = normalize_text(incoming_row.get(field))
+        if not base_value and incoming_value:
+            merged[field] = incoming_row.get(field)
+        elif base_value and incoming_value and base_value != incoming_value:
+            conflicts.append(
+                f"fitting_images duplicate key {bundle_key}: conflicting {field} values; kept {base_value!r}, saw {incoming_value!r}"
+            )
+
+    if merged.get("image_cached_bytes") != incoming_row.get("image_cached_bytes"):
+        conflicts.append(f"fitting_images duplicate key {bundle_key}: conflicting image bytes; kept first row")
+
+    return merged
+
+
+def _collect_fitting_image_rows(
+    entities: dict[str, list[dict[str, Any]]],
+    bundle_path: Path,
+    current_maps: dict[str, dict[Any, Any]],
+    *,
+    skipped: list[str],
+    conflicts: list[str],
+) -> list[dict[str, Any]]:
+    grouped_rows: dict[tuple[Any, str], dict[str, Any]] = {}
+    for row in entities.get("fitting_images", []):
+        fitting_id = current_maps["fitting_id_by_article"].get(normalize_text(row.get("fitting_article")))
+        if fitting_id is None:
+            skipped.append(f"fitting_images:{row.get('fitting_article')}")
+            continue
+        fitting_meta = current_maps["fitting_meta_by_id"].get(fitting_id, {})
+        if normalize_text(fitting_meta.get("owner_user_id")):
+            skipped.append(f"fitting_images:user-owned:{row.get('fitting_article')}")
+            continue
+        media_path = normalize_text(row.get("media_path"))
+        if not media_path:
+            skipped.append(f"fitting_images:missing-media:{row.get('fitting_article')}")
+            continue
+        image_bytes = (bundle_path / media_path).read_bytes()
+        desired = {
+            "fitting_id": fitting_id,
+            "sort_order": row.get("sort_order"),
+            "is_primary": 1 if row.get("is_primary") in (True, 1) else 0,
+            "source_url": row.get("source_url"),
+            "image_cached_bytes": image_bytes,
+            "image_cached_content_type": row.get("image_cached_content_type"),
+            "image_sha256": row.get("image_sha256") or hashlib.sha256(image_bytes).hexdigest(),
+        }
+        key = _fitting_image_key(fitting_id, desired["image_sha256"])
+        if key not in grouped_rows:
+            grouped_rows[key] = desired
+            continue
+        grouped_rows[key] = _merge_fitting_image_rows(grouped_rows[key], desired, conflicts=conflicts, bundle_key=key)
+    return list(grouped_rows.values())
+
+
 def _load_current_maps(connection: sqlite3.Connection) -> dict[str, dict[Any, Any]]:
     maps: dict[str, dict[Any, Any]] = defaultdict(dict)
     if _table_exists(connection, "suppliers"):
@@ -243,8 +320,12 @@ def _load_current_maps(connection: sqlite3.Connection) -> dict[str, dict[Any, An
         for row in connection.execute("SELECT id, article FROM fitting_products").fetchall():
             maps["product_id_by_article"][normalize_text(row["article"])] = row["id"]
     if _table_exists(connection, "fittings"):
-        for row in connection.execute("SELECT id, article FROM fittings").fetchall():
+        for row in connection.execute("SELECT id, article, owner_user_id, is_system FROM fittings").fetchall():
             maps["fitting_id_by_article"][normalize_text(row["article"])] = row["id"]
+            maps["fitting_meta_by_id"][row["id"]] = {
+                "owner_user_id": row["owner_user_id"],
+                "is_system": row["is_system"],
+            }
     if _table_exists(connection, "service_catalog_items"):
         for row in connection.execute("SELECT id, source, external_code FROM service_catalog_items").fetchall():
             maps["service_item_id_by_key"][_service_item_key(dict(row))] = row["id"]
@@ -471,82 +552,76 @@ def import_bundle(database_path: Path, bundle_path: Path, apply: bool) -> dict[s
                 summary[action] += 1
 
         if _table_exists(connection, "fitting_images"):
-            for row in entities.get("fitting_images", []):
-                fitting_id = current_maps["fitting_id_by_article"].get(normalize_text(row.get("fitting_article")))
-                if fitting_id is None:
-                    continue
-                media_path = normalize_text(row.get("media_path"))
-                if not media_path:
-                    continue
-                image_bytes = (bundle_path / media_path).read_bytes()
-                desired = {
-                    "fitting_id": fitting_id,
-                    "sort_order": row.get("sort_order"),
-                    "is_primary": 1 if row.get("is_primary") in (True, 1) else 0,
-                    "source_url": row.get("source_url"),
-                    "image_cached_bytes": image_bytes,
-                    "image_cached_content_type": row.get("image_cached_content_type"),
-                    "image_sha256": row.get("image_sha256"),
-                }
+            fitting_image_rows = _collect_fitting_image_rows(
+                entities,
+                bundle_path,
+                current_maps,
+                skipped=skipped,
+                conflicts=conflicts,
+            )
+            for desired in fitting_image_rows:
                 existing = _existing_row(
                     connection,
                     "fitting_images",
-                    "fitting_id = ? AND sort_order = ?",
-                    (fitting_id, row.get("sort_order")),
+                    "fitting_id = ? AND image_sha256 = ?",
+                    (desired["fitting_id"], desired["image_sha256"]),
                 )
-                if existing is not None and (
-                    existing["image_sha256"] == desired["image_sha256"]
-                    and existing["image_cached_content_type"] == desired["image_cached_content_type"]
-                    and existing["source_url"] == desired["source_url"]
-                ):
-                    summary["unchanged"] += 1
-                    continue
-                if existing is None:
+                if existing is not None:
+                    if (
+                        existing["sort_order"] == desired["sort_order"]
+                        and existing["is_primary"] == desired["is_primary"]
+                        and existing["source_url"] == desired["source_url"]
+                        and existing["image_cached_content_type"] == desired["image_cached_content_type"]
+                        and existing["image_cached_bytes"] == desired["image_cached_bytes"]
+                    ):
+                        summary["unchanged"] += 1
+                        continue
                     connection.execute(
                         """
-                        INSERT INTO fitting_images (
-                            fitting_id,
-                            sort_order,
-                            is_primary,
-                            source_url,
-                            image_cached_bytes,
-                            image_cached_content_type,
-                            image_sha256
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                        UPDATE fitting_images
+                        SET sort_order = ?,
+                            is_primary = ?,
+                            source_url = ?,
+                            image_cached_bytes = ?,
+                            image_cached_content_type = ?,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE fitting_id = ? AND image_sha256 = ?
                         """,
                         (
-                            desired["fitting_id"],
                             desired["sort_order"],
                             desired["is_primary"],
                             desired["source_url"],
                             desired["image_cached_bytes"],
                             desired["image_cached_content_type"],
+                            desired["fitting_id"],
                             desired["image_sha256"],
-                        ),
-                    )
-                    summary["inserted"] += 1
-                else:
-                    connection.execute(
-                        """
-                        UPDATE fitting_images
-                        SET is_primary = ?,
-                            source_url = ?,
-                            image_cached_bytes = ?,
-                            image_cached_content_type = ?,
-                            image_sha256 = ?
-                        WHERE fitting_id = ? AND sort_order = ?
-                        """,
-                        (
-                            desired["is_primary"],
-                            desired["source_url"],
-                            desired["image_cached_bytes"],
-                            desired["image_cached_content_type"],
-                            desired["image_sha256"],
-                            fitting_id,
-                            row.get("sort_order"),
                         ),
                     )
                     summary["updated"] += 1
+                    continue
+                connection.execute(
+                    """
+                    INSERT INTO fitting_images (
+                        fitting_id,
+                        sort_order,
+                        is_primary,
+                        source_url,
+                        image_cached_bytes,
+                        image_cached_content_type,
+                        image_sha256
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        desired["fitting_id"],
+                        desired["sort_order"],
+                        desired["is_primary"],
+                        desired["source_url"],
+                        desired["image_cached_bytes"],
+                        desired["image_cached_content_type"],
+                        desired["image_sha256"],
+                    ),
+                )
+                summary["inserted"] += 1
 
         if _table_exists(connection, "fitting_hole_service_rules"):
             for row in entities.get("fitting_hole_service_rules", []):
