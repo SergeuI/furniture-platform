@@ -223,6 +223,17 @@ def _fitting_image_key(fitting_id: Any, image_sha256: Any) -> tuple[Any, str]:
     return fitting_id, normalize_text(image_sha256) or ""
 
 
+def _fitting_image_row_signature(row: dict[str, Any] | sqlite3.Row) -> tuple[Any, ...]:
+    return (
+        row["sort_order"],
+        1 if row["is_primary"] in (True, 1) else 0,
+        row["source_url"],
+        row["image_cached_content_type"],
+        row["image_sha256"],
+        row["image_cached_bytes"],
+    )
+
+
 def _merge_fitting_image_rows(
     base_row: dict[str, Any],
     incoming_row: dict[str, Any],
@@ -256,7 +267,7 @@ def _merge_fitting_image_rows(
     return merged
 
 
-def _collect_fitting_image_rows(
+def _group_fitting_image_rows(
     entities: dict[str, list[dict[str, Any]]],
     bundle_path: Path,
     current_maps: dict[str, dict[Any, Any]],
@@ -265,7 +276,7 @@ def _collect_fitting_image_rows(
     conflicts: list[str],
 ) -> list[dict[str, Any]]:
     grouped_rows: dict[tuple[Any, str], dict[str, Any]] = {}
-    for row in entities.get("fitting_images", []):
+    for index, row in enumerate(entities.get("fitting_images", [])):
         fitting_id = current_maps["fitting_id_by_article"].get(normalize_text(row.get("fitting_article")))
         if fitting_id is None:
             skipped.append(f"fitting_images:{row.get('fitting_article')}")
@@ -287,13 +298,213 @@ def _collect_fitting_image_rows(
             "image_cached_bytes": image_bytes,
             "image_cached_content_type": row.get("image_cached_content_type"),
             "image_sha256": row.get("image_sha256") or hashlib.sha256(image_bytes).hexdigest(),
+            "_bundle_index": index,
         }
         key = _fitting_image_key(fitting_id, desired["image_sha256"])
         if key not in grouped_rows:
             grouped_rows[key] = desired
             continue
         grouped_rows[key] = _merge_fitting_image_rows(grouped_rows[key], desired, conflicts=conflicts, bundle_key=key)
-    return list(grouped_rows.values())
+    grouped_by_fitting_id: dict[int, list[dict[str, Any]]] = defaultdict(list)
+    for row in grouped_rows.values():
+        grouped_by_fitting_id[row["fitting_id"]].append(row)
+    return grouped_by_fitting_id
+
+
+def _sync_fitting_images_for_fitting(
+    connection: sqlite3.Connection,
+    fitting_id: int,
+    desired_rows: list[dict[str, Any]],
+    *,
+    current_maps: dict[str, dict[Any, Any]],
+    skipped: list[str],
+) -> tuple[int, int, int]:
+    fitting_meta = current_maps["fitting_meta_by_id"].get(fitting_id, {})
+    if normalize_text(fitting_meta.get("owner_user_id")):
+        skipped.append(f"fitting_images:user-owned:{current_maps['fitting_article_by_id'].get(fitting_id, fitting_id)}")
+        return 0, 0, 0
+
+    current_rows = connection.execute(
+        """
+        SELECT id, fitting_id, sort_order, is_primary, source_url, image_cached_bytes,
+               image_cached_content_type, image_sha256
+        FROM fitting_images
+        WHERE fitting_id = ?
+        ORDER BY sort_order, id
+        """,
+        (fitting_id,),
+    ).fetchall()
+    if not desired_rows:
+        return 0, 0, 0
+
+    def _sort_key(row: dict[str, Any]) -> tuple[int, int, str]:
+        sort_order = row.get("sort_order")
+        return (
+            1 if sort_order is None else 0,
+            int(sort_order or 0),
+            normalize_text(row.get("image_sha256")) or "",
+        )
+
+    normalized_desired_rows = []
+    seen_shas: dict[str, dict[str, Any]] = {}
+    for row in sorted(desired_rows, key=_sort_key):
+        desired = dict(row)
+        desired["is_primary"] = 1 if desired.get("is_primary") in (True, 1) else 0
+        desired["sort_order"] = int(desired.get("sort_order") or 0)
+        image_sha256 = normalize_text(desired.get("image_sha256")) or hashlib.sha256(desired["image_cached_bytes"]).hexdigest()
+        desired["image_sha256"] = image_sha256
+        key = _fitting_image_key(fitting_id, image_sha256)
+        if key in seen_shas:
+            existing = seen_shas[key]
+            existing["is_primary"] = 1 if existing.get("is_primary") or desired["is_primary"] else 0
+            if desired["sort_order"] < existing["sort_order"]:
+                existing["sort_order"] = desired["sort_order"]
+            for field in ("source_url", "image_cached_content_type"):
+                if not normalize_text(existing.get(field)) and desired.get(field) is not None:
+                    existing[field] = desired[field]
+            continue
+        seen_shas[key] = desired
+        normalized_desired_rows.append(desired)
+
+    if not normalized_desired_rows:
+        return 0, 0, 0
+
+    desired_by_sha = {
+        normalize_text(row["image_sha256"]): row for row in normalized_desired_rows
+    }
+    current_by_sha = {
+        normalize_text(row["image_sha256"]): row for row in current_rows
+    }
+
+    primary_sha = next(
+        (
+            normalize_text(row["image_sha256"])
+            for row in normalized_desired_rows
+            if row.get("is_primary") in (True, 1)
+        ),
+        normalize_text(normalized_desired_rows[0]["image_sha256"]),
+    )
+    for row in normalized_desired_rows:
+        row["is_primary"] = 1 if normalize_text(row["image_sha256"]) == primary_sha else 0
+
+    desired_sha_set = set(desired_by_sha.keys())
+    extras = [
+        row
+        for row in current_rows
+        if normalize_text(row["image_sha256"]) not in desired_sha_set
+    ]
+    extras.sort(key=lambda row: (int(row["sort_order"] or 0), int(row["id"])))
+
+    final_rows: list[dict[str, Any]] = []
+    for row in normalized_desired_rows:
+        existing_row = current_by_sha.get(normalize_text(row["image_sha256"]))
+        final_rows.append(
+            {
+                "id": existing_row["id"] if existing_row is not None else None,
+                "fitting_id": fitting_id,
+                "sort_order": row["sort_order"],
+                "is_primary": row["is_primary"],
+                "source_url": row.get("source_url"),
+                "image_cached_bytes": row["image_cached_bytes"],
+                "image_cached_content_type": row.get("image_cached_content_type"),
+                "image_sha256": row["image_sha256"],
+                "kind": "desired",
+            }
+        )
+
+    bundle_max_sort_order = max((row["sort_order"] for row in normalized_desired_rows), default=-1)
+    for index, row in enumerate(extras):
+        final_rows.append(
+            {
+                "id": row["id"],
+                "fitting_id": fitting_id,
+                "sort_order": bundle_max_sort_order + index + 1,
+                "is_primary": 0,
+                "source_url": row["source_url"],
+                "image_cached_bytes": row["image_cached_bytes"],
+                "image_cached_content_type": row["image_cached_content_type"],
+                "image_sha256": row["image_sha256"],
+                "kind": "extra",
+            }
+        )
+
+    current_signature = sorted(
+        (_fitting_image_row_signature(row) for row in current_rows),
+        key=lambda item: (item[0], item[4]),
+    )
+    final_signature = sorted(
+        (_fitting_image_row_signature(row) for row in final_rows),
+        key=lambda item: (item[0], item[4]),
+    )
+    if current_signature == final_signature:
+        return 0, 0, len(final_rows)
+
+    temp_base = max(
+        [int(row["sort_order"] or 0) for row in current_rows] + [int(row["sort_order"] or 0) for row in final_rows],
+        default=-1,
+    ) + 1000
+    for index, row in enumerate(current_rows):
+        connection.execute(
+            "UPDATE fitting_images SET sort_order = ? WHERE id = ?",
+            (temp_base + index, row["id"]),
+        )
+
+    inserted = 0
+    updated = 0
+    unchanged = 0
+    for row in final_rows:
+        existing = current_by_sha.get(normalize_text(row["image_sha256"]))
+        if existing is None:
+            connection.execute(
+                """
+                INSERT INTO fitting_images (
+                    fitting_id,
+                    sort_order,
+                    is_primary,
+                    source_url,
+                    image_cached_bytes,
+                    image_cached_content_type,
+                    image_sha256
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    row["fitting_id"],
+                    row["sort_order"],
+                    row["is_primary"],
+                    row["source_url"],
+                    row["image_cached_bytes"],
+                    row["image_cached_content_type"],
+                    row["image_sha256"],
+                ),
+            )
+            inserted += 1
+            continue
+        if _fitting_image_row_signature(existing) == _fitting_image_row_signature(row):
+            unchanged += 1
+        else:
+            updated += 1
+        connection.execute(
+            """
+            UPDATE fitting_images
+            SET sort_order = ?,
+                is_primary = ?,
+                source_url = ?,
+                image_cached_bytes = ?,
+                image_cached_content_type = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (
+                row["sort_order"],
+                row["is_primary"],
+                row["source_url"],
+                row["image_cached_bytes"],
+                row["image_cached_content_type"],
+                existing["id"],
+            ),
+        )
+
+    return inserted, updated, unchanged
 
 
 def _load_current_maps(connection: sqlite3.Connection) -> dict[str, dict[Any, Any]]:
@@ -322,6 +533,7 @@ def _load_current_maps(connection: sqlite3.Connection) -> dict[str, dict[Any, An
     if _table_exists(connection, "fittings"):
         for row in connection.execute("SELECT id, article, owner_user_id, is_system FROM fittings").fetchall():
             maps["fitting_id_by_article"][normalize_text(row["article"])] = row["id"]
+            maps["fitting_article_by_id"][row["id"]] = row["article"]
             maps["fitting_meta_by_id"][row["id"]] = {
                 "owner_user_id": row["owner_user_id"],
                 "is_system": row["is_system"],
@@ -373,9 +585,8 @@ def import_bundle(database_path: Path, bundle_path: Path, apply: bool) -> dict[s
     skipped: list[str] = []
     try:
         _integrity_check(connection)
-        if apply:
-            connection.execute("PRAGMA foreign_keys = ON")
-            connection.execute("BEGIN")
+        connection.execute("PRAGMA foreign_keys = ON")
+        connection.execute("BEGIN")
 
         entities = catalog["entities"]
         current_maps = _load_current_maps(connection)
@@ -552,76 +763,24 @@ def import_bundle(database_path: Path, bundle_path: Path, apply: bool) -> dict[s
                 summary[action] += 1
 
         if _table_exists(connection, "fitting_images"):
-            fitting_image_rows = _collect_fitting_image_rows(
+            grouped_fitting_images = _group_fitting_image_rows(
                 entities,
                 bundle_path,
                 current_maps,
                 skipped=skipped,
                 conflicts=conflicts,
             )
-            for desired in fitting_image_rows:
-                existing = _existing_row(
+            for fitting_id, fitting_rows in grouped_fitting_images.items():
+                inserted, updated, unchanged = _sync_fitting_images_for_fitting(
                     connection,
-                    "fitting_images",
-                    "fitting_id = ? AND image_sha256 = ?",
-                    (desired["fitting_id"], desired["image_sha256"]),
+                    fitting_id,
+                    fitting_rows,
+                    current_maps=current_maps,
+                    skipped=skipped,
                 )
-                if existing is not None:
-                    if (
-                        existing["sort_order"] == desired["sort_order"]
-                        and existing["is_primary"] == desired["is_primary"]
-                        and existing["source_url"] == desired["source_url"]
-                        and existing["image_cached_content_type"] == desired["image_cached_content_type"]
-                        and existing["image_cached_bytes"] == desired["image_cached_bytes"]
-                    ):
-                        summary["unchanged"] += 1
-                        continue
-                    connection.execute(
-                        """
-                        UPDATE fitting_images
-                        SET sort_order = ?,
-                            is_primary = ?,
-                            source_url = ?,
-                            image_cached_bytes = ?,
-                            image_cached_content_type = ?,
-                            updated_at = CURRENT_TIMESTAMP
-                        WHERE fitting_id = ? AND image_sha256 = ?
-                        """,
-                        (
-                            desired["sort_order"],
-                            desired["is_primary"],
-                            desired["source_url"],
-                            desired["image_cached_bytes"],
-                            desired["image_cached_content_type"],
-                            desired["fitting_id"],
-                            desired["image_sha256"],
-                        ),
-                    )
-                    summary["updated"] += 1
-                    continue
-                connection.execute(
-                    """
-                    INSERT INTO fitting_images (
-                        fitting_id,
-                        sort_order,
-                        is_primary,
-                        source_url,
-                        image_cached_bytes,
-                        image_cached_content_type,
-                        image_sha256
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        desired["fitting_id"],
-                        desired["sort_order"],
-                        desired["is_primary"],
-                        desired["source_url"],
-                        desired["image_cached_bytes"],
-                        desired["image_cached_content_type"],
-                        desired["image_sha256"],
-                    ),
-                )
-                summary["inserted"] += 1
+                summary["inserted"] += inserted
+                summary["updated"] += updated
+                summary["unchanged"] += unchanged
 
         if _table_exists(connection, "fitting_hole_service_rules"):
             for row in entities.get("fitting_hole_service_rules", []):
@@ -795,8 +954,7 @@ def import_bundle(database_path: Path, bundle_path: Path, apply: bool) -> dict[s
             "manifest": manifest,
         }
     except Exception:
-        if apply:
-            connection.rollback()
+        connection.rollback()
         raise
     finally:
         connection.close()
