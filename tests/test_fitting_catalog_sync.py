@@ -381,7 +381,7 @@ class FittingCatalogSyncTests(unittest.TestCase):
             dry_run = import_server_catalog.import_bundle(target_db, bundle_path, apply=False)
             self.assertEqual(dry_run["conflicts"], [])
             self.assertEqual(dry_run["skipped"], [])
-            self.assertEqual(dry_run["summary"].get("deleted", 0), 26)
+            self.assertEqual(dry_run["summary"].get("deleted", 0), 82)
             self.assertEqual(dry_run["stale_system"].get("fittings", 0), 13)
             self.assertEqual(dry_run["stale_system"].get("fitting_products", 0), 13)
             self.assertEqual(dry_run["referenced_upsert_breakdown"]["service_catalog_items"], {"included": 1, "untouched": 391})
@@ -406,14 +406,14 @@ class FittingCatalogSyncTests(unittest.TestCase):
 
             apply_result = import_server_catalog.import_bundle(target_db, bundle_path, apply=True)
             self.assertEqual(apply_result["conflicts"], [])
-            self.assertEqual(apply_result["summary"].get("deleted", 0), 26)
+            self.assertEqual(apply_result["summary"].get("deleted", 0), 82)
             self.assertEqual(apply_result["referenced_upsert_breakdown"]["service_catalog_items"], {"included": 1, "untouched": 391})
             self.assertTrue(any(item.get("natural_key") == "private-supplier" for item in apply_result["blocked_deletes"]))
             with sqlite3.connect(target_db) as connection:
                 self.assertEqual(connection.execute("PRAGMA integrity_check").fetchone()[0], "ok")
                 self.assertEqual(connection.execute("SELECT COUNT(*) FROM service_catalog_items").fetchone()[0], 392)
-                self.assertEqual(connection.execute("SELECT COUNT(*) FROM fitting_hole_templates").fetchone()[0], 7)
-                self.assertEqual(connection.execute("SELECT COUNT(*) FROM fitting_hole_points").fetchone()[0], 10)
+                self.assertEqual(connection.execute("SELECT COUNT(*) FROM fitting_hole_templates").fetchone()[0], 0)
+                self.assertEqual(connection.execute("SELECT COUNT(*) FROM fitting_hole_points").fetchone()[0], 0)
                 self.assertEqual(
                     connection.execute(
                         """
@@ -543,6 +543,62 @@ class FittingCatalogSyncTests(unittest.TestCase):
                 )
             )
             self.assertTrue(any(item.get("entity") == "fitting_products" and item.get("natural_key") == "EXIST-02" for item in dry_run["blocked_deletes"]))
+
+    def test_stale_fitting_technical_children_are_deleted_without_blocking_shared_tables(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            bundle_path = self._bundle_with_explicit_sync_policy(
+                Path(r"D:\PY\.server-catalog-sync\20260819-013308"),
+                tmpdir_path / "bundle-v2",
+            )
+            target_db = tmpdir_path / "cascade.db"
+            self._create_simple_stale_fitting_cascade_target_database(target_db)
+
+            dry_run = import_server_catalog.import_bundle(target_db, bundle_path, apply=False)
+            self.assertEqual(dry_run["conflicts"], [])
+            self.assertEqual(dry_run["summary"].get("deleted", 0), 22)
+            self.assertEqual(dry_run["stale_system"].get("fittings", 0), 5)
+            self.assertTrue(
+                any(
+                    item.get("entity") == "fittings" and item.get("natural_key") == "57839"
+                    for item in dry_run["blocked_deletes"]
+                )
+            )
+            self.assertTrue(
+                any(
+                    item.get("entity") == "fittings" and item.get("natural_key") == "07733"
+                    for item in dry_run["planned_deletes"]
+                )
+            )
+            cascade = {
+                item["natural_key"]: item["technical_children"]
+                for item in dry_run["technical_child_cascade_breakdown"]
+            }
+            self.assertEqual(len(cascade["07733"]["fitting_hole_templates"]), 1)
+            self.assertEqual(len(cascade["07733"]["fitting_hole_points"]), 1)
+            self.assertEqual(len(cascade["07928"]["fitting_hole_templates"]), 1)
+            self.assertEqual(len(cascade["190106"]["fitting_hole_templates"]), 1)
+            self.assertNotIn("57839", cascade)
+            with sqlite3.connect(target_db) as connection:
+                self.assertEqual(connection.execute("SELECT COUNT(*) FROM service_catalog_items").fetchone()[0], 392)
+                self.assertEqual(connection.execute("SELECT COUNT(*) FROM fitting_hole_templates WHERE fitting_id = (SELECT id FROM fittings WHERE article = ?)", ("U-100",)).fetchone()[0], 1)
+                self.assertEqual(connection.execute("SELECT COUNT(*) FROM fitting_hole_points WHERE template_id = (SELECT id FROM fitting_hole_templates WHERE fitting_id = (SELECT id FROM fittings WHERE article = ?))", ("U-100",)).fetchone()[0], 1)
+
+            apply_result = import_server_catalog.import_bundle(target_db, bundle_path, apply=True)
+            self.assertEqual(apply_result["conflicts"], [])
+            self.assertEqual(apply_result["summary"].get("deleted", 0), 22)
+            self.assertTrue(any(item.get("entity") == "fittings" and item.get("natural_key") == "57839" for item in apply_result["blocked_deletes"]))
+            with sqlite3.connect(target_db) as connection:
+                self.assertEqual(connection.execute("SELECT COUNT(*) FROM fittings WHERE article IN ('07733', '07928', '190106')").fetchone()[0], 0)
+                self.assertEqual(connection.execute("SELECT COUNT(*) FROM fitting_products WHERE article IN ('07733', '07928', '190106')").fetchone()[0], 0)
+                self.assertEqual(connection.execute("SELECT COUNT(*) FROM fitting_hole_templates WHERE fitting_id IN (SELECT id FROM fittings WHERE article IN ('07733', '07928', '190106'))").fetchone()[0], 0)
+                self.assertEqual(connection.execute("SELECT COUNT(*) FROM fitting_hole_points WHERE template_id IN (SELECT id FROM fitting_hole_templates WHERE fitting_id IN (SELECT id FROM fittings WHERE article IN ('07733', '07928', '190106')))").fetchone()[0], 0)
+                self.assertEqual(connection.execute("SELECT COUNT(*) FROM service_catalog_items").fetchone()[0], 392)
+                self.assertEqual(connection.execute("SELECT COUNT(*) FROM fitting_images WHERE fitting_id = (SELECT id FROM fittings WHERE article = 'U-100')").fetchone()[0], 0)
+                self.assertEqual(connection.execute("PRAGMA integrity_check").fetchone()[0], "ok")
+
+            second_apply = import_server_catalog.import_bundle(target_db, bundle_path, apply=True)
+            self.assertEqual(second_apply["summary"].get("deleted", 0), 0)
 
     @staticmethod
     def _rewrite_bundle_sort_orders(bundle_dir: Path, sort_orders: list[int]) -> None:
@@ -1752,6 +1808,428 @@ class FittingCatalogSyncTests(unittest.TestCase):
                             hashlib.sha256(image_bytes).hexdigest(),
                         ),
                     )
+            connection.commit()
+
+    @staticmethod
+    def _create_stale_fitting_cascade_target_database(database_path: Path) -> None:
+        FittingCatalogSyncTests._create_target_database_with_existing_fitting_image(database_path)
+        with sqlite3.connect(database_path) as connection:
+            connection.row_factory = sqlite3.Row
+            connection.execute(
+                "CREATE TABLE IF NOT EXISTS mounting_node_items (id INTEGER PRIMARY KEY AUTOINCREMENT, fitting_id INTEGER NOT NULL)"
+            )
+            category_id = connection.execute("SELECT id FROM fitting_categories WHERE code = ?", ("hinges",)).fetchone()[0]
+            supplier_id = connection.execute("SELECT id FROM suppliers WHERE code = ?", ("viyar",)).fetchone()[0]
+            hettich_id = connection.execute(
+                "INSERT OR IGNORE INTO fitting_manufacturers (code, name, is_active) VALUES (?, ?, ?)",
+                ("hettich", "Hettich", 1),
+            ).lastrowid
+            if hettich_id == 0:
+                hettich_id = connection.execute("SELECT id FROM fitting_manufacturers WHERE code = ?", ("hettich",)).fetchone()[0]
+            giff_id = connection.execute(
+                "INSERT OR IGNORE INTO fitting_manufacturers (code, name, is_active) VALUES (?, ?, ?)",
+                ("giff", "GIFF", 1),
+            ).lastrowid
+            if giff_id == 0:
+                giff_id = connection.execute("SELECT id FROM fitting_manufacturers WHERE code = ?", ("giff",)).fetchone()[0]
+            hafele_id = connection.execute(
+                "INSERT OR IGNORE INTO fitting_manufacturers (code, name, is_active) VALUES (?, ?, ?)",
+                ("hafele", "Hafele", 1),
+            ).lastrowid
+            if hafele_id == 0:
+                hafele_id = connection.execute("SELECT id FROM fitting_manufacturers WHERE code = ?", ("hafele",)).fetchone()[0]
+
+            connection.execute(
+                """
+                INSERT INTO service_catalog_items (
+                    id, source, external_code, owner_user_id, name, slug, item_type, folder_path,
+                    article, unit, base_price, currency, source_url, rules_source_url, is_calculable,
+                    sort_order, is_active
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "service-item-viyar-drilling-main-00011",
+                    "viyar",
+                    "viyar-service-drilling-main-00011",
+                    None,
+                    "Свердління отворів",
+                    "prisadka-service",
+                    "service",
+                    "viyar-services/prisadka",
+                    "00011",
+                    "service",
+                    8.82,
+                    "UAH",
+                    "https://viyar.ua/ua/catalog/sverlenie_otverstiy/",
+                    "https://viyar.ua/ua/catalog/sverlenie_otverstiy/",
+                    1,
+                    0,
+                    1,
+                ),
+            )
+            for index in range(1, 392):
+                connection.execute(
+                    """
+                    INSERT INTO service_catalog_items (
+                        id, source, external_code, owner_user_id, name, slug, item_type, folder_path,
+                        article, unit, base_price, currency, source_url, rules_source_url, is_calculable,
+                        sort_order, is_active
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        f"legacy-service-{index:03d}",
+                        "legacy",
+                        f"legacy-service-{index:03d}",
+                        None,
+                        f"Legacy service {index}",
+                        f"legacy-service-{index:03d}",
+                        "service",
+                        "legacy/services",
+                        f"L{index:03d}",
+                        "service",
+                        float(index),
+                        "UAH",
+                        f"https://example.com/services/{index}",
+                        f"https://example.com/services/{index}",
+                        0,
+                        index,
+                        1,
+                    ),
+                )
+
+            def add_fitting_tree(
+                *,
+                article: str,
+                manufacturer_id: int,
+                fitting_id: int,
+                product_id: int,
+                template_id: int,
+                point_id: int,
+                include_mounting_node_item: bool = False,
+                owner_user_id: str | None = None,
+                is_system: int = 1,
+            ) -> None:
+                connection.execute(
+                    "INSERT INTO fitting_products (id, article, code, name, brand, manufacturer_id, category_id, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (product_id, article, article, f"Product {article}", "Hettich", manufacturer_id, category_id, 1),
+                )
+                connection.execute(
+                    """
+                    INSERT INTO fittings (
+                        id, catalog_key, article, name, price, stock, source_url, source, brand, description,
+                        unit, currency, technical_product_id, owner_user_id, is_system, is_active
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        fitting_id,
+                        f"catalog-key-{article}",
+                        article,
+                        f"Fitting {article}",
+                        10.0,
+                        "in stock",
+                        f"https://example.com/{article.lower()}",
+                        None,
+                        "Hettich",
+                        f"Description {article}",
+                        "шт",
+                        "UAH",
+                        product_id,
+                        owner_user_id,
+                        is_system,
+                        1,
+                    ),
+                )
+                connection.execute(
+                    "INSERT INTO fitting_images (fitting_id, sort_order, is_primary, source_url, image_cached_bytes, image_cached_content_type, image_sha256) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (fitting_id, 0, 1, f"https://example.com/{article.lower()}.png", PNG_1X1, "image/png", hashlib.sha256(PNG_1X1).hexdigest()),
+                )
+                connection.execute(
+                    "INSERT INTO fitting_supplier_offers (fitting_id, supplier_id, article, source_url, price, currency, unit, stock, is_active, priority) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (fitting_id, supplier_id, article, f"https://example.com/{article.lower()}", 10.0, "UAH", "шт", "in stock", 1, 100),
+                )
+                connection.execute(
+                    """
+                    INSERT INTO fitting_hole_templates (
+                        id, fitting_id, name, template_type, side, coordinate_system, mounting_variant_key,
+                        is_default, notes, is_active, bundle_key, bundle_name, bundle_order_index
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        template_id,
+                        fitting_id,
+                        f"Template {article}",
+                        "drilling",
+                        "L",
+                        "cartesian",
+                        "surface_mount",
+                        1,
+                        None,
+                        1,
+                        f"bundle-{article}",
+                        f"Bundle {article}",
+                        0,
+                    ),
+                )
+                connection.execute(
+                    """
+                    INSERT INTO fitting_hole_points (
+                        id, template_id, label, x_mm, y_mm, z_mm, target_panel, target_surface, target_side,
+                        diameter_mm, depth_mm, side, operation, order_index, quantity, mirrored, notes,
+                        service_drilling_rule_id
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        point_id,
+                        template_id,
+                        f"P-{article}",
+                        1.0,
+                        2.0,
+                        0.0,
+                        "panel",
+                        "surface",
+                        "L",
+                        5.0,
+                        8.0,
+                        "L",
+                        "drill",
+                        0,
+                        1,
+                        0,
+                        None,
+                        None,
+                    ),
+                )
+                if include_mounting_node_item:
+                    connection.execute(
+                        "INSERT INTO mounting_node_items (fitting_id) VALUES (?)",
+                        (fitting_id,),
+                    )
+
+            add_fitting_tree(article="A-100", manufacturer_id=hettich_id, fitting_id=1, product_id=1, template_id=9001, point_id=9002)
+            connection.execute(
+                "INSERT INTO fitting_hole_templates (id, fitting_id, name, template_type, side, coordinate_system, mounting_variant_key, is_default, notes, is_active, bundle_key, bundle_name, bundle_order_index) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (9001, 1, "Template A-100", "drilling", "L", "cartesian", "surface_mount", 1, None, 1, "bundle-a100", "Bundle A100", 0),
+            )
+            connection.execute(
+                "INSERT INTO fitting_hole_points (id, template_id, label, x_mm, y_mm, z_mm, target_panel, target_surface, target_side, diameter_mm, depth_mm, side, operation, order_index, quantity, mirrored, notes, service_drilling_rule_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (9002, 9001, "P-A-100", 1.0, 2.0, 0.0, "panel", "surface", "L", 5.0, 8.0, "L", "drill", 0, 1, 0, None, None),
+            )
+            connection.execute("DELETE FROM fitting_hole_templates WHERE id = ?", (9001,))
+            connection.execute("DELETE FROM fitting_hole_points WHERE id = ?", (9002,))
+
+            add_fitting_tree(article="07733", manufacturer_id=giff_id, fitting_id=52, product_id=52, template_id=1, point_id=101)
+            add_fitting_tree(article="07928", manufacturer_id=giff_id, fitting_id=46, product_id=46, template_id=2, point_id=201)
+            add_fitting_tree(article="190106", manufacturer_id=giff_id, fitting_id=43, product_id=43, template_id=3, point_id=301)
+            add_fitting_tree(article="57839", manufacturer_id=hafele_id, fitting_id=53, product_id=53, template_id=4, point_id=401, include_mounting_node_item=True)
+
+            connection.execute(
+                "INSERT INTO fittings (id, catalog_key, article, name, source, unit, currency, technical_product_id, owner_user_id, is_system, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (999, "catalog-key-user", "U-100", "User fitting", None, "шт", "UAH", None, "user-1", 0, 1),
+            )
+            connection.execute(
+                "INSERT INTO fitting_hole_templates (id, fitting_id, name, template_type, side, coordinate_system, mounting_variant_key, is_default, notes, is_active, bundle_key, bundle_name, bundle_order_index) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (9101, 999, "User template", "drilling", "L", "cartesian", "surface_mount", 1, None, 1, "bundle-user", "Bundle User", 0),
+            )
+            connection.execute(
+                "INSERT INTO fitting_hole_points (id, template_id, label, x_mm, y_mm, z_mm, target_panel, target_surface, target_side, diameter_mm, depth_mm, side, operation, order_index, quantity, mirrored, notes, service_drilling_rule_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (9102, 9101, "User point", 1.0, 2.0, 0.0, "panel", "surface", "L", 5.0, 8.0, "L", "drill", 0, 1, 0, None, None),
+            )
+            connection.commit()
+
+    @staticmethod
+    def _create_simple_stale_fitting_cascade_target_database(database_path: Path) -> None:
+        FittingCatalogSyncTests._create_target_database_with_existing_fitting_image(database_path)
+        with sqlite3.connect(database_path) as connection:
+            connection.row_factory = sqlite3.Row
+            connection.execute(
+                "CREATE TABLE IF NOT EXISTS mounting_node_items (id INTEGER PRIMARY KEY AUTOINCREMENT, fitting_id INTEGER NOT NULL)"
+            )
+            category_id = connection.execute("SELECT id FROM fitting_categories WHERE code = ?", ("hinges",)).fetchone()[0]
+            supplier_id = connection.execute("SELECT id FROM suppliers WHERE code = ?", ("viyar",)).fetchone()[0]
+
+            def ensure_manufacturer(code: str, name: str) -> int:
+                row = connection.execute("SELECT id FROM fitting_manufacturers WHERE code = ?", (code,)).fetchone()
+                if row is not None:
+                    return int(row["id"])
+                return int(
+                    connection.execute(
+                        "INSERT INTO fitting_manufacturers (code, name, is_active) VALUES (?, ?, ?)",
+                        (code, name, 1),
+                    ).lastrowid
+                )
+
+            giff_id = ensure_manufacturer("giff", "GIFF")
+            hafele_id = ensure_manufacturer("hafele", "Hafele")
+
+            connection.execute(
+                """
+                INSERT INTO service_catalog_items (
+                    id, source, external_code, owner_user_id, name, slug, item_type, folder_path,
+                    article, unit, base_price, currency, source_url, rules_source_url, is_calculable,
+                    sort_order, is_active
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "service-item-viyar-drilling-main-00011",
+                    "viyar",
+                    "viyar-service-drilling-main-00011",
+                    None,
+                    "Свердління отворів",
+                    "prisadka-service",
+                    "service",
+                    "viyar-services/prisadka",
+                    "00011",
+                    "service",
+                    8.82,
+                    "UAH",
+                    "https://viyar.ua/ua/catalog/sverlenie_otverstiy/",
+                    "https://viyar.ua/ua/catalog/sverlenie_otverstiy/",
+                    1,
+                    0,
+                    1,
+                ),
+            )
+            for index in range(1, 392):
+                connection.execute(
+                    """
+                    INSERT INTO service_catalog_items (
+                        id, source, external_code, owner_user_id, name, slug, item_type, folder_path,
+                        article, unit, base_price, currency, source_url, rules_source_url, is_calculable,
+                        sort_order, is_active
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        f"legacy-service-{index:03d}",
+                        "legacy",
+                        f"legacy-service-{index:03d}",
+                        None,
+                        f"Legacy service {index}",
+                        f"legacy-service-{index:03d}",
+                        "service",
+                        "legacy/services",
+                        f"L{index:03d}",
+                        "service",
+                        float(index),
+                        "UAH",
+                        f"https://example.com/services/{index}",
+                        f"https://example.com/services/{index}",
+                        0,
+                        index,
+                        1,
+                    ),
+                )
+
+            def insert_tree(article: str, fitting_id: int, manufacturer_id: int, with_node_item: bool = False, owner_user_id: str | None = None, is_system: int = 1) -> None:
+                product_id = int(
+                    connection.execute(
+                        "INSERT INTO fitting_products (article, code, name, brand, manufacturer_id, category_id, is_active) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        (article, article, f"Product {article}", "Hettich", manufacturer_id, category_id, 1),
+                    ).lastrowid
+                )
+                connection.execute(
+                    """
+                    INSERT INTO fittings (
+                        id, catalog_key, article, name, source, brand, unit, currency, technical_product_id,
+                        owner_user_id, is_system, is_active
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        fitting_id,
+                        f"catalog-key-{article}",
+                        article,
+                        f"Fitting {article}",
+                        None,
+                        "Hettich",
+                        "шт",
+                        "UAH",
+                        product_id,
+                        owner_user_id,
+                        is_system,
+                        1,
+                    ),
+                )
+                connection.execute(
+                    "INSERT INTO fitting_images (fitting_id, sort_order, is_primary, source_url, image_cached_bytes, image_cached_content_type, image_sha256) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (fitting_id, 0, 1, f"https://example.com/{article.lower()}.png", PNG_1X1, "image/png", hashlib.sha256(PNG_1X1).hexdigest()),
+                )
+                connection.execute(
+                    "INSERT INTO fitting_supplier_offers (fitting_id, supplier_id, article, source_url, price, currency, unit, stock, is_active, priority) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (fitting_id, supplier_id, article, f"https://example.com/{article.lower()}", 10.0, "UAH", "шт", "in stock", 1, 100),
+                )
+                template_id = int(
+                    connection.execute(
+                        """
+                        INSERT INTO fitting_hole_templates (
+                            fitting_id, name, template_type, side, coordinate_system, mounting_variant_key,
+                            is_default, notes, is_active, bundle_key, bundle_name, bundle_order_index
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            fitting_id,
+                            f"Template {article}",
+                            "drilling",
+                            "L",
+                            "cartesian",
+                            "surface_mount",
+                            1,
+                            None,
+                            1,
+                            f"bundle-{article}",
+                            f"Bundle {article}",
+                            0,
+                        ),
+                    ).lastrowid
+                )
+                connection.execute(
+                    """
+                    INSERT INTO fitting_hole_points (
+                        template_id, label, x_mm, y_mm, z_mm, target_panel, target_surface, target_side,
+                        diameter_mm, depth_mm, side, operation, order_index, quantity, mirrored, notes,
+                        service_drilling_rule_id
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        template_id,
+                        f"P-{article}",
+                        1.0,
+                        2.0,
+                        0.0,
+                        "panel",
+                        "surface",
+                        "L",
+                        5.0,
+                        8.0,
+                        "L",
+                        "drill",
+                        0,
+                        1,
+                        0,
+                        None,
+                        None,
+                    ),
+                )
+                if with_node_item:
+                    connection.execute("INSERT INTO mounting_node_items (fitting_id) VALUES (?)", (fitting_id,))
+
+            insert_tree("07733", 52, giff_id)
+            insert_tree("07928", 46, giff_id)
+            insert_tree("190106", 43, giff_id)
+            insert_tree("57839", 53, hafele_id, with_node_item=True)
+
+            connection.execute(
+                "INSERT INTO fittings (id, catalog_key, article, name, owner_user_id, is_system, is_active) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (999, "catalog-key-user", "U-100", "User fitting", "user-1", 0, 1),
+            )
+            user_template_id = int(
+                connection.execute(
+                    "INSERT INTO fitting_hole_templates (fitting_id, name, template_type, side, coordinate_system, mounting_variant_key, is_default, notes, is_active, bundle_key, bundle_name, bundle_order_index) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (999, "User template", "drilling", "L", "cartesian", "surface_mount", 1, None, 1, "bundle-user", "Bundle User", 0),
+                ).lastrowid
+            )
+            connection.execute(
+                "INSERT INTO fitting_hole_points (template_id, label, x_mm, y_mm, z_mm, target_panel, target_surface, target_side, diameter_mm, depth_mm, side, operation, order_index, quantity, mirrored, notes, service_drilling_rule_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (user_template_id, "User point", 1.0, 2.0, 0.0, "panel", "surface", "L", 5.0, 8.0, "L", "drill", 0, 1, 0, None, None),
+            )
             connection.commit()
 
     @staticmethod

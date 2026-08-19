@@ -6,8 +6,7 @@ import json
 import shutil
 import sqlite3
 import sys
-from collections import defaultdict
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -645,10 +644,49 @@ def _delete_if_unblocked(
     apply: bool,
 ) -> bool:
     row_id = row["id"]
+    blockers = _collect_delete_blockers(
+        connection,
+        table_name=table_name,
+        row=row,
+        foreign_key_references=foreign_key_references,
+    )
+
+    if blockers:
+        blocked_deletes.append(
+            {
+                "entity": table_name,
+                "natural_key": natural_key,
+                "id": row_id,
+                "blockers": blockers,
+            }
+        )
+        return False
+
+    planned_deletes.append(
+        {
+            "entity": table_name,
+            "natural_key": natural_key,
+            "id": row_id,
+        }
+    )
+    connection.execute(f"DELETE FROM {table_name} WHERE id = ?", (row_id,))
+    return True
+
+
+def _collect_delete_blockers(
+    connection: sqlite3.Connection,
+    *,
+    table_name: str,
+    row: sqlite3.Row,
+    foreign_key_references: dict[str, list[tuple[str, str, str]]],
+    ignore_dependent_tables: set[str] | None = None,
+) -> list[dict[str, Any]]:
+    row_id = row["id"]
+    ignore_dependent_tables = ignore_dependent_tables or set()
     blockers: list[dict[str, Any]] = []
 
     for dependent_table, dependent_column, on_delete in foreign_key_references.get(table_name, []):
-        if on_delete == "CASCADE":
+        if on_delete == "CASCADE" or dependent_table in ignore_dependent_tables:
             continue
         dependent_rows = connection.execute(
             f"SELECT id FROM {dependent_table} WHERE {dependent_column} = ?",
@@ -759,25 +797,178 @@ def _delete_if_unblocked(
                     }
                 )
 
-    if blockers:
+    return blockers
+
+
+def _delete_stale_fitting_with_children(
+    connection: sqlite3.Connection,
+    *,
+    row: sqlite3.Row,
+    foreign_key_references: dict[str, list[tuple[str, str, str]]],
+    planned_deletes: list[dict[str, Any]],
+    blocked_deletes: list[dict[str, Any]],
+    technical_child_cascades: list[dict[str, Any]],
+) -> bool:
+    fitting_id = row["id"]
+    fitting_article = normalize_text(row["article"])
+    parent_blockers = _collect_delete_blockers(
+        connection,
+        table_name="fittings",
+        row=row,
+        foreign_key_references=foreign_key_references,
+    )
+
+    technical_children: dict[str, list[int]] = {
+        "fitting_images": [],
+        "fitting_supplier_offers": [],
+        "fitting_hole_templates": [],
+        "fitting_hole_points": [],
+    }
+
+    image_rows = connection.execute(
+        "SELECT * FROM fitting_images WHERE fitting_id = ? ORDER BY sort_order, id",
+        (fitting_id,),
+    ).fetchall()
+    offer_rows = connection.execute(
+        "SELECT * FROM fitting_supplier_offers WHERE fitting_id = ? ORDER BY id",
+        (fitting_id,),
+    ).fetchall()
+    template_rows = connection.execute(
+        "SELECT * FROM fitting_hole_templates WHERE fitting_id = ? ORDER BY id",
+        (fitting_id,),
+    ).fetchall()
+
+    template_points: dict[int, list[sqlite3.Row]] = {}
+    for template_row in template_rows:
+        template_points[template_row["id"]] = connection.execute(
+            "SELECT * FROM fitting_hole_points WHERE template_id = ? ORDER BY order_index, id",
+            (template_row["id"],),
+        ).fetchall()
+
+    template_blockers: list[dict[str, Any]] = []
+    point_blockers: list[dict[str, Any]] = []
+    for template_row in template_rows:
+        template_blockers.extend(
+            _collect_delete_blockers(
+                connection,
+                table_name="fitting_hole_templates",
+                row=template_row,
+                foreign_key_references=foreign_key_references,
+                ignore_dependent_tables={"fitting_hole_points"},
+            )
+        )
+        for point_row in template_points.get(template_row["id"], []):
+            point_blockers.extend(
+                _collect_delete_blockers(
+                    connection,
+                    table_name="fitting_hole_points",
+                    row=point_row,
+                    foreign_key_references=foreign_key_references,
+                )
+            )
+
+    if parent_blockers or template_blockers or point_blockers:
         blocked_deletes.append(
             {
-                "entity": table_name,
-                "natural_key": natural_key,
-                "id": row_id,
-                "blockers": blockers,
+                "entity": "fittings",
+                "natural_key": fitting_article,
+                "id": fitting_id,
+                "blockers": parent_blockers,
+                "technical_child_blockers": {
+                    "fitting_hole_templates": template_blockers,
+                    "fitting_hole_points": point_blockers,
+                },
             }
         )
         return False
 
+    for image_row in image_rows:
+        planned_deletes.append(
+            {
+                "entity": "fitting_images",
+                "natural_key": (
+                    fitting_article,
+                    image_row["sort_order"],
+                    image_row["image_sha256"],
+                ),
+                "id": image_row["id"],
+                "parent_entity": "fittings",
+                "parent_id": fitting_id,
+            }
+        )
+        connection.execute("DELETE FROM fitting_images WHERE id = ?", (image_row["id"],))
+        technical_children["fitting_images"].append(image_row["id"])
+
+    for offer_row in offer_rows:
+        planned_deletes.append(
+            {
+                "entity": "fitting_supplier_offers",
+                "natural_key": (
+                    fitting_id,
+                    offer_row["supplier_id"],
+                    offer_row["external_product_id"],
+                ),
+                "id": offer_row["id"],
+                "parent_entity": "fittings",
+                "parent_id": fitting_id,
+            }
+        )
+        connection.execute("DELETE FROM fitting_supplier_offers WHERE id = ?", (offer_row["id"],))
+        technical_children["fitting_supplier_offers"].append(offer_row["id"])
+
+    for template_row in template_rows:
+        for point_row in template_points.get(template_row["id"], []):
+            planned_deletes.append(
+                {
+                    "entity": "fitting_hole_points",
+                    "natural_key": (
+                        fitting_article,
+                        template_row["bundle_key"],
+                        template_row["template_type"],
+                        template_row["side"],
+                        int(point_row["order_index"] or 0),
+                        normalize_text(point_row["label"]),
+                    ),
+                    "id": point_row["id"],
+                    "parent_entity": "fittings",
+                    "parent_id": fitting_id,
+                }
+            )
+            connection.execute("DELETE FROM fitting_hole_points WHERE id = ?", (point_row["id"],))
+            technical_children["fitting_hole_points"].append(point_row["id"])
+
+        planned_deletes.append(
+            {
+                "entity": "fitting_hole_templates",
+                "natural_key": (
+                    fitting_article,
+                    normalize_text(template_row["bundle_key"]),
+                    normalize_text(template_row["template_type"]),
+                    normalize_text(template_row["side"]),
+                ),
+                "id": template_row["id"],
+                "parent_entity": "fittings",
+                "parent_id": fitting_id,
+            }
+        )
+        connection.execute("DELETE FROM fitting_hole_templates WHERE id = ?", (template_row["id"],))
+        technical_children["fitting_hole_templates"].append(template_row["id"])
+
     planned_deletes.append(
         {
-            "entity": table_name,
-            "natural_key": natural_key,
-            "id": row_id,
+            "entity": "fittings",
+            "natural_key": fitting_article,
+            "id": fitting_id,
         }
     )
-    connection.execute(f"DELETE FROM {table_name} WHERE id = ?", (row_id,))
+    connection.execute("DELETE FROM fittings WHERE id = ?", (fitting_id,))
+    technical_child_cascades.append(
+        {
+            "fitting_id": fitting_id,
+            "natural_key": fitting_article,
+            "technical_children": technical_children,
+        }
+    )
     return True
 
 
@@ -793,6 +984,7 @@ def _sync_stale_system_catalog(
     stale_system: dict[str, int] = defaultdict(int)
     planned_deletes: list[dict[str, Any]] = []
     blocked_deletes: list[dict[str, Any]] = []
+    technical_child_cascades: list[dict[str, Any]] = []
     deleted = 0
 
     def _record_skip(table_name: str, row: sqlite3.Row) -> None:
@@ -1006,24 +1198,40 @@ def _sync_stale_system_catalog(
                 continue
 
             stale_system[table_name] += 1
-            if _delete_if_unblocked(
-                connection,
-                table_name=table_name,
-                row=row,
-                natural_key=natural_key,
-                bundle_keys=bundle_keys,
-                foreign_key_references=foreign_key_references,
-                planned_deletes=planned_deletes,
-                blocked_deletes=blocked_deletes,
-                apply=apply,
-            ):
-                deleted += 1
+            if table_name == "fittings":
+                if _delete_stale_fitting_with_children(
+                    connection,
+                    row=row,
+                    foreign_key_references=foreign_key_references,
+                    planned_deletes=planned_deletes,
+                    blocked_deletes=blocked_deletes,
+                    technical_child_cascades=technical_child_cascades,
+                ):
+                    deleted += 1
+                    deleted += len(technical_child_cascades[-1]["technical_children"]["fitting_images"])
+                    deleted += len(technical_child_cascades[-1]["technical_children"]["fitting_supplier_offers"])
+                    deleted += len(technical_child_cascades[-1]["technical_children"]["fitting_hole_templates"])
+                    deleted += len(technical_child_cascades[-1]["technical_children"]["fitting_hole_points"])
+            else:
+                if _delete_if_unblocked(
+                    connection,
+                    table_name=table_name,
+                    row=row,
+                    natural_key=natural_key,
+                    bundle_keys=bundle_keys,
+                    foreign_key_references=foreign_key_references,
+                    planned_deletes=planned_deletes,
+                    blocked_deletes=blocked_deletes,
+                    apply=apply,
+                ):
+                    deleted += 1
 
     return {
         "deleted": deleted,
         "stale_system": dict(stale_system),
         "planned_deletes": planned_deletes,
         "blocked_deletes": blocked_deletes,
+        "technical_child_cascades": technical_child_cascades,
     }
 
 
@@ -1475,6 +1683,14 @@ def import_bundle(database_path: Path, bundle_path: Path, apply: bool) -> dict[s
         }
         planned_delete_breakdown = dict(Counter(item["entity"] for item in stale_result["planned_deletes"]))
         blocked_delete_breakdown = dict(Counter(item["entity"] for item in stale_result["blocked_deletes"]))
+        technical_child_cascade_breakdown = [
+            {
+                "fitting_id": item["fitting_id"],
+                "natural_key": item["natural_key"],
+                "technical_children": {name: list(ids) for name, ids in item["technical_children"].items()},
+            }
+            for item in stale_result["technical_child_cascades"]
+        ]
         referenced_upsert_breakdown = {
             table_name: {
                 "included": len(entities.get(table_name, [])),
@@ -1495,6 +1711,7 @@ def import_bundle(database_path: Path, bundle_path: Path, apply: bool) -> dict[s
             "blocked_deletes": stale_result["blocked_deletes"],
             "planned_delete_breakdown": planned_delete_breakdown,
             "blocked_delete_breakdown": blocked_delete_breakdown,
+            "technical_child_cascade_breakdown": technical_child_cascade_breakdown,
             "referenced_upsert_breakdown": referenced_upsert_breakdown,
             "counts_before": counts_before,
             "counts_after": counts_after,
@@ -1533,6 +1750,12 @@ def main() -> None:
         print("Blocked deletes:")
         for table_name, count in sorted(result["blocked_delete_breakdown"].items()):
             print(f"  - {table_name}: {count}")
+    if result.get("technical_child_cascade_breakdown"):
+        print("Technical child cascades:")
+        for item in result["technical_child_cascade_breakdown"]:
+            print(f"  - fitting {item['natural_key']} ({item['fitting_id']}):")
+            for table_name, ids in sorted(item["technical_children"].items()):
+                print(f"      {table_name}: {ids}")
     if result.get("referenced_upsert_breakdown"):
         print("Referenced-upsert entities:")
         for table_name, counts in sorted(result["referenced_upsert_breakdown"].items()):
