@@ -25,12 +25,26 @@ from services.fitting_catalog_sync import (
 )
 
 
-FORMAT_VERSION = 1
+FORMAT_VERSION = 2
 DEFAULT_DATABASE_NAME = "furniture_platform.db"
 MEDIA_ROOT_NAME = "media"
 LOGO_MEDIA_DIRS = {
     "suppliers": "supplier-logos",
     "fitting_manufacturers": "fitting-manufacturer-logos",
+}
+ENTITY_SYNC_POLICY = {
+    "suppliers": "authoritative_full",
+    "fitting_manufacturers": "authoritative_full",
+    "fitting_series": "authoritative_full",
+    "fitting_categories": "authoritative_full",
+    "fitting_products": "authoritative_full",
+    "fittings": "authoritative_full",
+    "fitting_images": "child_of_authoritative_parent",
+    "fitting_supplier_offers": "child_of_authoritative_parent",
+    "fitting_hole_templates": "referenced_upsert",
+    "fitting_hole_points": "referenced_upsert",
+    "fitting_hole_service_rules": "referenced_upsert",
+    "service_catalog_items": "referenced_upsert",
 }
 
 
@@ -382,6 +396,7 @@ def export_bundle(database_path: Path, output_dir: Path) -> dict[str, Any]:
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "source_database": str(database_path.resolve()),
             "entity_counts": counts,
+            "entity_sync_policy": ENTITY_SYNC_POLICY,
             "entities": entities,
             "missing_media": missing_media,
         }
@@ -430,6 +445,7 @@ def export_bundle(database_path: Path, output_dir: Path) -> dict[str, Any]:
             "source_database": export_payload["source_database"],
             "catalog_sha256": catalog_sha256,
             "entity_counts": counts,
+            "entity_sync_policy": ENTITY_SYNC_POLICY,
             "media_files": media_entries,
             "missing_media": missing_media,
             "missing_media_count": len(missing_media),

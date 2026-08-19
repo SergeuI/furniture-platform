@@ -65,6 +65,10 @@ class FittingCatalogSyncTests(unittest.TestCase):
             self.assertEqual(export_result["counts"]["fitting_hole_service_rules"], 1)
             self.assertEqual(export_result["counts"]["service_catalog_items"], 1)
             self.assertEqual(export_result["missing_media"], [])
+            self.assertEqual(export_result["manifest"]["format_version"], 2)
+            self.assertEqual(export_result["manifest"]["entity_sync_policy"]["service_catalog_items"], "referenced_upsert")
+            self.assertEqual(export_result["manifest"]["entity_sync_policy"]["fitting_hole_templates"], "referenced_upsert")
+            self.assertEqual(export_result["manifest"]["entity_sync_policy"]["fittings"], "authoritative_full")
 
             catalog = export_result["catalog"]
             self.assertEqual([row["code"] for row in catalog["entities"]["suppliers"]], ["viyar"])
@@ -354,10 +358,12 @@ class FittingCatalogSyncTests(unittest.TestCase):
                 self.assertEqual(connection.execute("SELECT sort_order FROM fitting_images WHERE fitting_id = ?", (fitting_id,)).fetchone()[0], 4)
 
     def test_import_real_bundle_on_staging_like_copy_is_idempotent(self) -> None:
-        bundle_path = Path(r"D:\PY\.server-catalog-sync\20260819-013308")
-        self.assertTrue(bundle_path.exists())
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             tmpdir_path = Path(tmpdir)
+            bundle_path = self._bundle_with_explicit_sync_policy(
+                Path(r"D:\PY\.server-catalog-sync\20260819-013308"),
+                tmpdir_path / "bundle-v2",
+            )
             target_db = tmpdir_path / "staging-like.db"
             self._create_staging_like_target_database_with_gallery(target_db)
 
@@ -378,6 +384,9 @@ class FittingCatalogSyncTests(unittest.TestCase):
             self.assertEqual(dry_run["summary"].get("deleted", 0), 26)
             self.assertEqual(dry_run["stale_system"].get("fittings", 0), 13)
             self.assertEqual(dry_run["stale_system"].get("fitting_products", 0), 13)
+            self.assertEqual(dry_run["referenced_upsert_breakdown"]["service_catalog_items"], {"included": 1, "untouched": 391})
+            self.assertEqual(dry_run["referenced_upsert_breakdown"]["fitting_hole_templates"], {"included": 0, "untouched": 7})
+            self.assertEqual(dry_run["referenced_upsert_breakdown"]["fitting_hole_points"], {"included": 0, "untouched": 10})
             self.assertTrue(any(item.get("reason") == "user-owned-or-non-system" for item in dry_run["blocked_deletes"]))
             with sqlite3.connect(target_db) as connection:
                 after_rows = connection.execute(
@@ -390,14 +399,21 @@ class FittingCatalogSyncTests(unittest.TestCase):
                     """
                 ).fetchall()
                 self.assertEqual(before_rows, after_rows)
+                self.assertEqual(connection.execute("SELECT COUNT(*) FROM service_catalog_items").fetchone()[0], 392)
+                self.assertEqual(connection.execute("SELECT COUNT(*) FROM fitting_hole_templates").fetchone()[0], 7)
+                self.assertEqual(connection.execute("SELECT COUNT(*) FROM fitting_hole_points").fetchone()[0], 10)
                 self.assertEqual(connection.execute("PRAGMA integrity_check").fetchone()[0], "ok")
 
             apply_result = import_server_catalog.import_bundle(target_db, bundle_path, apply=True)
             self.assertEqual(apply_result["conflicts"], [])
             self.assertEqual(apply_result["summary"].get("deleted", 0), 26)
+            self.assertEqual(apply_result["referenced_upsert_breakdown"]["service_catalog_items"], {"included": 1, "untouched": 391})
             self.assertTrue(any(item.get("natural_key") == "private-supplier" for item in apply_result["blocked_deletes"]))
             with sqlite3.connect(target_db) as connection:
                 self.assertEqual(connection.execute("PRAGMA integrity_check").fetchone()[0], "ok")
+                self.assertEqual(connection.execute("SELECT COUNT(*) FROM service_catalog_items").fetchone()[0], 392)
+                self.assertEqual(connection.execute("SELECT COUNT(*) FROM fitting_hole_templates").fetchone()[0], 7)
+                self.assertEqual(connection.execute("SELECT COUNT(*) FROM fitting_hole_points").fetchone()[0], 10)
                 self.assertEqual(
                     connection.execute(
                         """
@@ -436,10 +452,12 @@ class FittingCatalogSyncTests(unittest.TestCase):
                 self.assertEqual(connection.execute("PRAGMA integrity_check").fetchone()[0], "ok")
 
     def test_import_bundle_dry_run_does_not_touch_upload_filesystem(self) -> None:
-        bundle_path = Path(r"D:\PY\.server-catalog-sync\20260819-013308")
-        self.assertTrue(bundle_path.exists())
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             tmpdir_path = Path(tmpdir)
+            bundle_path = self._bundle_with_explicit_sync_policy(
+                Path(r"D:\PY\.server-catalog-sync\20260819-013308"),
+                tmpdir_path / "bundle-v2",
+            )
             source_db = tmpdir_path / "source.db"
             target_db = tmpdir_path / "target.db"
             uploads_root = tmpdir_path / "uploads"
@@ -447,30 +465,55 @@ class FittingCatalogSyncTests(unittest.TestCase):
             self._create_empty_target_database(target_db)
 
             upload_dir = target_db.parent / "data" / "uploads"
-            before_exists = upload_dir.exists()
+            sentinel_path = upload_dir / "supplier-logos" / "sentinel.txt"
+            sentinel_path.parent.mkdir(parents=True, exist_ok=True)
+            sentinel_path.write_bytes(b"sentinel")
             before_snapshot = sorted(
                 str(path.relative_to(upload_dir))
                 for path in upload_dir.rglob("*")
                 if path.is_file()
-            ) if before_exists else []
+            )
+            before_hashes = {
+                str(path.relative_to(upload_dir)): hashlib.sha256(path.read_bytes()).hexdigest()
+                for path in upload_dir.rglob("*")
+                if path.is_file()
+            }
+            before_mtimes = {
+                str(path.relative_to(upload_dir)): path.stat().st_mtime_ns
+                for path in upload_dir.rglob("*")
+                if path.is_file()
+            }
 
             dry_run = import_server_catalog.import_bundle(target_db, bundle_path, apply=False)
             self.assertGreater(dry_run["media_copy_count"], 0)
-            self.assertFalse(upload_dir.exists())
+            self.assertTrue(upload_dir.exists())
 
-            after_exists = upload_dir.exists()
             after_snapshot = sorted(
                 str(path.relative_to(upload_dir))
                 for path in upload_dir.rglob("*")
                 if path.is_file()
-            ) if after_exists else []
+            )
+            after_hashes = {
+                str(path.relative_to(upload_dir)): hashlib.sha256(path.read_bytes()).hexdigest()
+                for path in upload_dir.rglob("*")
+                if path.is_file()
+            }
+            after_mtimes = {
+                str(path.relative_to(upload_dir)): path.stat().st_mtime_ns
+                for path in upload_dir.rglob("*")
+                if path.is_file()
+            }
             self.assertEqual(before_snapshot, after_snapshot)
+            self.assertEqual(before_hashes, after_hashes)
+            self.assertEqual(before_mtimes, after_mtimes)
 
     def test_stale_fitting_delete_is_blocked_by_mounting_node_items(self) -> None:
-        bundle_path = Path(r"D:\PY\.server-catalog-sync\20260819-013308")
-        self.assertTrue(bundle_path.exists())
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             tmpdir_path = Path(tmpdir)
+            bundle_path = self._bundle_with_explicit_sync_policy(
+                Path(r"D:\PY\.server-catalog-sync\20260819-013308"),
+                tmpdir_path / "bundle-v2",
+            )
             target_db = tmpdir_path / "blocked.db"
             self._create_staging_like_target_database(target_db)
             with sqlite3.connect(target_db) as connection:
@@ -499,9 +542,7 @@ class FittingCatalogSyncTests(unittest.TestCase):
                     for blocker in blocked_fittings[0].get("blockers", [])
                 )
             )
-            self.assertTrue(
-                any(item.get("entity") == "fitting_products" and item.get("natural_key") == "EXIST-02" for item in dry_run["blocked_deletes"])
-            )
+            self.assertTrue(any(item.get("entity") == "fitting_products" and item.get("natural_key") == "EXIST-02" for item in dry_run["blocked_deletes"]))
 
     @staticmethod
     def _rewrite_bundle_sort_orders(bundle_dir: Path, sort_orders: list[int]) -> None:
@@ -1573,6 +1614,119 @@ class FittingCatalogSyncTests(unittest.TestCase):
                         1,
                     ),
                 )
+            connection.execute(
+                """
+                INSERT INTO service_catalog_items (
+                    id, source, external_code, owner_user_id, name, slug, item_type, folder_path,
+                    article, unit, base_price, currency, source_url, rules_source_url,
+                    is_calculable, sort_order, is_active
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "service-item-viyar-drilling-main-00011",
+                    "viyar",
+                    "viyar-service-drilling-main-00011",
+                    None,
+                    "Свердління отворів",
+                    "prisadka-service",
+                    "service",
+                    "viyar-services/prisadka",
+                    "00011",
+                    "service",
+                    8.82,
+                    "UAH",
+                    "https://viyar.ua/ua/catalog/sverlenie_otverstiy/",
+                    "https://viyar.ua/ua/catalog/sverlenie_otverstiy/",
+                    1,
+                    0,
+                    1,
+                ),
+            ).lastrowid
+            for index in range(1, 392):
+                connection.execute(
+                    """
+                    INSERT INTO service_catalog_items (
+                        id, source, external_code, owner_user_id, name, slug, item_type, folder_path,
+                        article, unit, base_price, currency, source_url, rules_source_url,
+                        is_calculable, sort_order, is_active
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        f"service-item-legacy-{index:03d}",
+                        "legacy",
+                        f"legacy-service-{index:03d}",
+                        None,
+                        f"Legacy service {index}",
+                        f"legacy-service-{index:03d}",
+                        "service",
+                        "legacy/services",
+                        f"L{index:03d}",
+                        "service",
+                        float(index),
+                        "UAH",
+                        f"https://example.com/services/{index}",
+                        f"https://example.com/services/{index}",
+                        0,
+                        index,
+                        1,
+                    ),
+                )
+            fitting_ids = [row[0] for row in connection.execute("SELECT id FROM fittings ORDER BY id").fetchall()]
+            template_ids: list[int] = []
+            for index, fitting_id in enumerate(fitting_ids[:7], start=1):
+                template_id = connection.execute(
+                    """
+                    INSERT INTO fitting_hole_templates (
+                        fitting_id, name, template_type, side, coordinate_system, mounting_variant_key,
+                        is_default, notes, is_active, bundle_key, bundle_name, bundle_order_index
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        fitting_id,
+                        f"Template {index}",
+                        "drilling",
+                        "L" if index % 2 else "R",
+                        "cartesian",
+                        "surface_mount",
+                        1,
+                        None,
+                        1,
+                        f"bundle-{index:02d}",
+                        f"Bundle {index}",
+                        index,
+                    ),
+                ).lastrowid
+                template_ids.append(template_id)
+            for index, template_id in enumerate(template_ids, start=1):
+                for point_index in range(2 if index <= 3 else 1):
+                    connection.execute(
+                        """
+                        INSERT INTO fitting_hole_points (
+                            template_id, label, x_mm, y_mm, z_mm, target_panel, target_surface, target_side,
+                            diameter_mm, depth_mm, side, operation, order_index, quantity, mirrored, notes,
+                            service_drilling_rule_id
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            template_id,
+                            f"P{index}-{point_index + 1}",
+                            float(index * 10 + point_index),
+                            float(index * 20 + point_index),
+                            0.0,
+                            "panel",
+                            "surface",
+                            "L" if index % 2 else "R",
+                            5.0,
+                            8.0,
+                            "L" if index % 2 else "R",
+                            "drill",
+                            point_index,
+                            1,
+                            0,
+                            None,
+                            None,
+                        ),
+                    )
             connection.commit()
 
     @staticmethod
@@ -1599,6 +1753,23 @@ class FittingCatalogSyncTests(unittest.TestCase):
                         ),
                     )
             connection.commit()
+
+    @staticmethod
+    def _bundle_with_explicit_sync_policy(source_bundle: Path, target_bundle: Path) -> Path:
+        shutil.copytree(source_bundle, target_bundle)
+        catalog_path = target_bundle / "catalog.json"
+        manifest_path = target_bundle / "manifest.json"
+        catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        sync_policy = export_server_catalog.ENTITY_SYNC_POLICY
+        catalog["format_version"] = export_server_catalog.FORMAT_VERSION
+        catalog["entity_sync_policy"] = sync_policy
+        catalog_path.write_text(json.dumps(catalog, ensure_ascii=False, indent=2, sort_keys=True, default=str), encoding="utf-8")
+        manifest["format_version"] = export_server_catalog.FORMAT_VERSION
+        manifest["entity_sync_policy"] = sync_policy
+        manifest["catalog_sha256"] = hashlib.sha256(catalog_path.read_bytes()).hexdigest()
+        manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True, default=str), encoding="utf-8")
+        return target_bundle
 
 
 if __name__ == "__main__":

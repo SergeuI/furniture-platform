@@ -7,6 +7,7 @@ import shutil
 import sqlite3
 import sys
 from collections import defaultdict
+from collections import Counter
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -18,7 +19,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from services.fitting_catalog_sync import normalize_text, sha256_file
 
 
-FORMAT_VERSION = 1
+FORMAT_VERSION = 2
 DEFAULT_DATABASE_NAME = "furniture_platform.db"
 MEDIA_ROOT_NAME = "media"
 
@@ -85,6 +86,16 @@ def _validate_bundle(bundle_path: Path) -> tuple[dict[str, Any], dict[str, Any]]
     catalog = _read_json(bundle_path / "catalog.json")
     if manifest.get("format_version") != FORMAT_VERSION or catalog.get("format_version") != FORMAT_VERSION:
         raise SystemExit("Unsupported catalog bundle format.")
+    entity_sync_policy = manifest.get("entity_sync_policy")
+    if not isinstance(entity_sync_policy, dict) or not entity_sync_policy:
+        raise SystemExit("Bundle is missing explicit entity sync policy metadata.")
+    if catalog.get("entity_sync_policy") != entity_sync_policy:
+        raise SystemExit("catalog.json entity sync policy mismatch.")
+    catalog_entities = catalog.get("entities")
+    if not isinstance(catalog_entities, dict):
+        raise SystemExit("catalog.json entities payload is invalid.")
+    if not set(catalog_entities.keys()).issubset(set(entity_sync_policy.keys())):
+        raise SystemExit("Bundle entity sync policy does not cover the exported entities.")
     catalog_sha256 = hashlib.sha256((bundle_path / "catalog.json").read_bytes()).hexdigest()
     if catalog_sha256 != manifest.get("catalog_sha256"):
         raise SystemExit("catalog.json checksum mismatch.")
@@ -774,6 +785,7 @@ def _sync_stale_system_catalog(
     connection: sqlite3.Connection,
     entities: dict[str, list[dict[str, Any]]],
     *,
+    sync_policy: dict[str, str],
     apply: bool,
 ) -> dict[str, Any]:
     bundle_keys = _bundle_key_sets(entities)
@@ -840,16 +852,14 @@ def _sync_stale_system_catalog(
     delete_order = [
         "fitting_hole_points",
         "fitting_hole_templates",
-        "fitting_hole_service_rules",
-        "fitting_supplier_offers",
         "fittings",
         "fitting_products",
         "fitting_series",
         "fitting_categories",
         "fitting_manufacturers",
-        "service_catalog_items",
         "suppliers",
     ]
+    delete_order = [table_name for table_name in delete_order if sync_policy.get(table_name) == "authoritative_full"]
 
     for table_name in delete_order:
         if not _table_exists(connection, table_name):
@@ -1087,6 +1097,7 @@ def _maybe_backup(database_path: Path, apply: bool) -> Path | None:
 
 def import_bundle(database_path: Path, bundle_path: Path, apply: bool) -> dict[str, Any]:
     manifest, catalog = _validate_bundle(bundle_path)
+    sync_policy = manifest["entity_sync_policy"]
     backup_path = _maybe_backup(database_path, apply)
     connection = _open_sqlite(database_path, readonly=False)
     summary = defaultdict(int)
@@ -1100,6 +1111,7 @@ def import_bundle(database_path: Path, bundle_path: Path, apply: bool) -> dict[s
 
         entities = catalog["entities"]
         current_maps = _load_current_maps(connection)
+        counts_before = {table_name: _count_table(connection, table_name) for table_name in entities.keys()}
 
         # service_catalog_items first, because hole rules depend on them
         if _table_exists(connection, "service_catalog_items"):
@@ -1434,6 +1446,7 @@ def import_bundle(database_path: Path, bundle_path: Path, apply: bool) -> dict[s
         stale_result = _sync_stale_system_catalog(
             connection,
             entities,
+            sync_policy=sync_policy,
             apply=apply,
         )
         summary["deleted"] += stale_result["deleted"]
@@ -1460,6 +1473,16 @@ def import_bundle(database_path: Path, bundle_path: Path, apply: bool) -> dict[s
                 "fitting_supplier_offers",
             )
         }
+        planned_delete_breakdown = dict(Counter(item["entity"] for item in stale_result["planned_deletes"]))
+        blocked_delete_breakdown = dict(Counter(item["entity"] for item in stale_result["blocked_deletes"]))
+        referenced_upsert_breakdown = {
+            table_name: {
+                "included": len(entities.get(table_name, [])),
+                "untouched": max(counts_before.get(table_name, 0) - len(entities.get(table_name, [])), 0),
+            }
+            for table_name, policy in sync_policy.items()
+            if policy == "referenced_upsert"
+        }
         return {
             "apply": apply,
             "backup_path": backup_path,
@@ -1470,7 +1493,12 @@ def import_bundle(database_path: Path, bundle_path: Path, apply: bool) -> dict[s
             "stale_system": stale_result["stale_system"],
             "planned_deletes": stale_result["planned_deletes"],
             "blocked_deletes": stale_result["blocked_deletes"],
+            "planned_delete_breakdown": planned_delete_breakdown,
+            "blocked_delete_breakdown": blocked_delete_breakdown,
+            "referenced_upsert_breakdown": referenced_upsert_breakdown,
+            "counts_before": counts_before,
             "counts_after": counts_after,
+            "sync_policy": sync_policy,
             "manifest": manifest,
         }
     except Exception:
@@ -1496,7 +1524,19 @@ def main() -> None:
     if result.get("backup_path"):
         print(f"Backup: {result['backup_path']}")
     print("Summary: " + ", ".join(f"{k}={v}" for k, v in sorted(result["summary"].items())))
-    print(f"Media copies: {result['media_copy_count']}")
+    print(f"Planned media copies: {result['media_copy_count']}")
+    if result.get("planned_delete_breakdown"):
+        print("Planned deletes:")
+        for table_name, count in sorted(result["planned_delete_breakdown"].items()):
+            print(f"  - {table_name}: {count}")
+    if result.get("blocked_delete_breakdown"):
+        print("Blocked deletes:")
+        for table_name, count in sorted(result["blocked_delete_breakdown"].items()):
+            print(f"  - {table_name}: {count}")
+    if result.get("referenced_upsert_breakdown"):
+        print("Referenced-upsert entities:")
+        for table_name, counts in sorted(result["referenced_upsert_breakdown"].items()):
+            print(f"  - {table_name}: {counts['included']} included / {counts['untouched']} untouched")
     print("Counts after: " + ", ".join(f"{k}={v}" for k, v in sorted(result["counts_after"].items())))
     if result["skipped"]:
         print("Skipped:")
