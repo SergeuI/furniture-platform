@@ -216,7 +216,48 @@ def _upsert_row(
 
 
 def _service_item_key(row: dict[str, Any]) -> tuple[str, str]:
-    return normalize_text(row.get("source")) or "", normalize_text(row.get("external_code")) or ""
+    return (
+        normalize_text(_row_field_value(row, "source")) or "",
+        normalize_text(_row_field_value(row, "external_code")) or "",
+    )
+
+
+def _row_field_value(row: dict[str, Any] | sqlite3.Row, key: str) -> Any:
+    if isinstance(row, sqlite3.Row):
+        return row[key] if key in row.keys() else None
+    return row.get(key)
+
+
+def _service_rule_key(
+    row: dict[str, Any] | sqlite3.Row,
+    connection: sqlite3.Connection | None = None,
+) -> tuple[Any, ...]:
+    source = normalize_text(_row_field_value(row, "source"))
+    operation = normalize_text(_row_field_value(row, "operation"))
+    service_source = _row_field_value(row, "service_source")
+    service_external_code = _row_field_value(row, "service_external_code")
+    if (service_source is None and service_external_code is None) and connection is not None:
+        service_item_id = _row_field_value(row, "service_catalog_item_id")
+        if service_item_id is not None:
+            service_row = connection.execute(
+                "SELECT source, external_code FROM service_catalog_items WHERE id = ?",
+                (service_item_id,),
+            ).fetchone()
+            if service_row is not None:
+                service_source = service_row["source"]
+                service_external_code = service_row["external_code"]
+    return (
+        source or "",
+        operation or "",
+        _row_field_value(row, "diameter_min_mm"),
+        _row_field_value(row, "diameter_max_mm"),
+        _row_field_value(row, "depth_min_mm"),
+        _row_field_value(row, "depth_max_mm"),
+        normalize_text(service_source) or "",
+        normalize_text(service_external_code) or "",
+        _row_field_value(row, "priority"),
+        normalize_text(_row_field_value(row, "city")) or "",
+    )
 
 
 def _fitting_image_key(fitting_id: Any, image_sha256: Any) -> tuple[Any, str]:
@@ -505,6 +546,475 @@ def _sync_fitting_images_for_fitting(
         )
 
     return inserted, updated, unchanged
+
+
+def _load_foreign_key_references(connection: sqlite3.Connection) -> dict[str, list[tuple[str, str, str]]]:
+    references: dict[str, list[tuple[str, str, str]]] = defaultdict(list)
+    tables = [row["name"] for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'").fetchall()]
+    for table_name in tables:
+        for fk in connection.execute(f"PRAGMA foreign_key_list({table_name})").fetchall():
+            references[str(fk["table"])].append((table_name, str(fk["from"]), str(fk["on_delete"]).upper()))
+    return references
+
+
+def _row_is_sync_managed(table_name: str, row: sqlite3.Row) -> bool:
+    if "owner_user_id" in row.keys() and normalize_text(row["owner_user_id"]):
+        return False
+    if "is_system" in row.keys() and row["is_system"] in (0, False):
+        return False
+    return True
+
+
+def _bundle_key_sets(entities: dict[str, list[dict[str, Any]]]) -> dict[str, set[Any]]:
+    return {
+        "suppliers": {normalize_text(row.get("code")) for row in entities.get("suppliers", []) if normalize_text(row.get("code"))},
+        "fitting_manufacturers": {normalize_text(row.get("code")) for row in entities.get("fitting_manufacturers", []) if normalize_text(row.get("code"))},
+        "fitting_categories": {normalize_text(row.get("code")) for row in entities.get("fitting_categories", []) if normalize_text(row.get("code"))},
+        "fitting_series": {
+            (normalize_text(row.get("manufacturer_code")), normalize_text(row.get("code")))
+            for row in entities.get("fitting_series", [])
+            if normalize_text(row.get("manufacturer_code")) and normalize_text(row.get("code"))
+        },
+        "fitting_products": {normalize_text(row.get("article")) for row in entities.get("fitting_products", []) if normalize_text(row.get("article"))},
+        "fittings": {normalize_text(row.get("article")) for row in entities.get("fittings", []) if normalize_text(row.get("article"))},
+        "fitting_hole_templates": {
+            (
+                normalize_text(row.get("fitting_article")),
+                normalize_text(row.get("bundle_key")),
+                normalize_text(row.get("template_type")),
+                normalize_text(row.get("side")),
+            )
+            for row in entities.get("fitting_hole_templates", [])
+            if normalize_text(row.get("fitting_article"))
+        },
+        "fitting_hole_points": {
+            (
+                normalize_text(row.get("fitting_article")),
+                normalize_text(row.get("template_bundle_key")),
+                normalize_text(row.get("template_type")),
+                normalize_text(row.get("side")),
+                int(row.get("order_index") or 0),
+                normalize_text(row.get("label")),
+            )
+            for row in entities.get("fitting_hole_points", [])
+            if normalize_text(row.get("fitting_article"))
+        },
+        "fitting_supplier_offers": {
+            (
+                normalize_text(row.get("supplier_code")),
+                normalize_text(row.get("fitting_article")),
+                normalize_text(row.get("external_product_id")),
+            )
+            for row in entities.get("fitting_supplier_offers", [])
+            if normalize_text(row.get("supplier_code")) and normalize_text(row.get("fitting_article"))
+        },
+        "fitting_hole_service_rules": {
+            _service_rule_key(row)
+            for row in entities.get("fitting_hole_service_rules", [])
+            if _service_rule_key(row) != ("", "", None, None, None, None, "", "", None, "")
+        },
+        "service_catalog_items": {
+            _service_item_key(row)
+            for row in entities.get("service_catalog_items", [])
+            if _service_item_key(row) != ("", "")
+        },
+    }
+
+
+def _delete_if_unblocked(
+    connection: sqlite3.Connection,
+    *,
+    table_name: str,
+    row: sqlite3.Row,
+    natural_key: Any,
+    bundle_keys: dict[str, set[Any]],
+    foreign_key_references: dict[str, list[tuple[str, str, str]]],
+    planned_deletes: list[dict[str, Any]],
+    blocked_deletes: list[dict[str, Any]],
+    apply: bool,
+) -> bool:
+    row_id = row["id"]
+    blockers: list[dict[str, Any]] = []
+
+    for dependent_table, dependent_column, on_delete in foreign_key_references.get(table_name, []):
+        if on_delete == "CASCADE":
+            continue
+        dependent_rows = connection.execute(
+            f"SELECT id FROM {dependent_table} WHERE {dependent_column} = ?",
+            (row_id,),
+        ).fetchall()
+        if dependent_rows:
+            blockers.append(
+                {
+                    "dependent_table": dependent_table,
+                    "dependent_ids": [dep_row["id"] for dep_row in dependent_rows],
+                }
+            )
+
+    if table_name == "fitting_products":
+        dependent_rows = connection.execute(
+            "SELECT id FROM fittings WHERE technical_product_id = ?",
+            (row_id,),
+        ).fetchall()
+        if dependent_rows:
+            blockers.append(
+                {
+                    "dependent_table": "fittings",
+                    "dependent_ids": [dep_row["id"] for dep_row in dependent_rows],
+                }
+            )
+    elif table_name == "fitting_series":
+        dependent_rows = connection.execute(
+            "SELECT id FROM fitting_products WHERE series_id = ?",
+            (row_id,),
+        ).fetchall()
+        if dependent_rows:
+            blockers.append(
+                {
+                    "dependent_table": "fitting_products",
+                    "dependent_ids": [dep_row["id"] for dep_row in dependent_rows],
+                }
+            )
+    elif table_name == "fitting_categories":
+        dependent_rows = connection.execute(
+            "SELECT id FROM fitting_products WHERE category_id = ?",
+            (row_id,),
+        ).fetchall()
+        if dependent_rows:
+            blockers.append(
+                {
+                    "dependent_table": "fitting_products",
+                    "dependent_ids": [dep_row["id"] for dep_row in dependent_rows],
+                }
+            )
+    elif table_name == "fitting_manufacturers":
+        series_rows = connection.execute(
+            "SELECT id FROM fitting_series WHERE manufacturer_id = ?",
+            (row_id,),
+        ).fetchall()
+        product_rows = connection.execute(
+            "SELECT id FROM fitting_products WHERE manufacturer_id = ?",
+            (row_id,),
+        ).fetchall()
+        if series_rows:
+            blockers.append(
+                {
+                    "dependent_table": "fitting_series",
+                    "dependent_ids": [dep_row["id"] for dep_row in series_rows],
+                }
+            )
+        if product_rows:
+            blockers.append(
+                {
+                    "dependent_table": "fitting_products",
+                    "dependent_ids": [dep_row["id"] for dep_row in product_rows],
+                }
+            )
+    elif table_name == "suppliers":
+        dependent_rows = connection.execute(
+            "SELECT id FROM fitting_supplier_offers WHERE supplier_id = ?",
+            (row_id,),
+        ).fetchall()
+        if dependent_rows:
+            blockers.append(
+                {
+                    "dependent_table": "fitting_supplier_offers",
+                    "dependent_ids": [dep_row["id"] for dep_row in dependent_rows],
+                }
+            )
+    elif table_name == "service_catalog_items":
+        dependent_rows = connection.execute(
+            "SELECT id FROM fitting_hole_service_rules WHERE service_catalog_item_id = ?",
+            (row_id,),
+        ).fetchall()
+        if dependent_rows:
+            blockers.append(
+                {
+                    "dependent_table": "fitting_hole_service_rules",
+                    "dependent_ids": [dep_row["id"] for dep_row in dependent_rows],
+                }
+            )
+    elif table_name == "fittings":
+        if _table_exists(connection, "mounting_node_items"):
+            dependent_rows = connection.execute(
+                "SELECT id FROM mounting_node_items WHERE fitting_id = ?",
+                (row_id,),
+            ).fetchall()
+            if dependent_rows:
+                blockers.append(
+                    {
+                        "dependent_table": "mounting_node_items",
+                        "dependent_ids": [dep_row["id"] for dep_row in dependent_rows],
+                    }
+                )
+
+    if blockers:
+        blocked_deletes.append(
+            {
+                "entity": table_name,
+                "natural_key": natural_key,
+                "id": row_id,
+                "blockers": blockers,
+            }
+        )
+        return False
+
+    planned_deletes.append(
+        {
+            "entity": table_name,
+            "natural_key": natural_key,
+            "id": row_id,
+        }
+    )
+    connection.execute(f"DELETE FROM {table_name} WHERE id = ?", (row_id,))
+    return True
+
+
+def _sync_stale_system_catalog(
+    connection: sqlite3.Connection,
+    entities: dict[str, list[dict[str, Any]]],
+    *,
+    apply: bool,
+) -> dict[str, Any]:
+    bundle_keys = _bundle_key_sets(entities)
+    foreign_key_references = _load_foreign_key_references(connection)
+    stale_system: dict[str, int] = defaultdict(int)
+    planned_deletes: list[dict[str, Any]] = []
+    blocked_deletes: list[dict[str, Any]] = []
+    deleted = 0
+
+    def _record_skip(table_name: str, row: sqlite3.Row) -> None:
+        if table_name == "suppliers":
+            natural_key = row["code"]
+        elif table_name == "fitting_manufacturers":
+            natural_key = row["code"]
+        elif table_name == "fitting_categories":
+            natural_key = row["code"]
+        elif table_name == "fitting_series":
+            manufacturer_code = connection.execute(
+                "SELECT code FROM fitting_manufacturers WHERE id = ?",
+                (row["manufacturer_id"],),
+            ).fetchone()
+            natural_key = (
+                manufacturer_code[0] if manufacturer_code else None,
+                row["code"],
+            )
+        elif table_name == "fitting_products":
+            natural_key = row["article"]
+        elif table_name == "fittings":
+            natural_key = row["article"]
+        elif table_name == "fitting_hole_templates":
+            natural_key = (
+                row["fitting_id"],
+                row["bundle_key"],
+                row["template_type"],
+                row["side"],
+            )
+        elif table_name == "fitting_hole_points":
+            natural_key = (
+                row["template_id"],
+                row["order_index"],
+                row["label"],
+            )
+        elif table_name == "fitting_supplier_offers":
+            natural_key = (
+                row["fitting_id"],
+                row["supplier_id"],
+                row["external_product_id"],
+            )
+        elif table_name == "fitting_hole_service_rules":
+            natural_key = _service_rule_key(row, connection)
+        elif table_name == "service_catalog_items":
+            natural_key = _service_item_key(row)
+        else:
+            natural_key = row["id"]
+        blocked_deletes.append(
+            {
+                "entity": table_name,
+                "natural_key": natural_key,
+                "id": row["id"],
+                "reason": "user-owned-or-non-system",
+            }
+        )
+
+    delete_order = [
+        "fitting_hole_points",
+        "fitting_hole_templates",
+        "fitting_hole_service_rules",
+        "fitting_supplier_offers",
+        "fittings",
+        "fitting_products",
+        "fitting_series",
+        "fitting_categories",
+        "fitting_manufacturers",
+        "service_catalog_items",
+        "suppliers",
+    ]
+
+    for table_name in delete_order:
+        if not _table_exists(connection, table_name):
+            continue
+        rows = connection.execute(f"SELECT * FROM {table_name}").fetchall()
+        bundle_keys_for_table = bundle_keys.get(table_name, set())
+        for row in rows:
+            if not _row_is_sync_managed(table_name, row):
+                _record_skip(table_name, row)
+                continue
+            if table_name == "fitting_series":
+                manufacturer_code = connection.execute(
+                    "SELECT code FROM fitting_manufacturers WHERE id = ?",
+                    (row["manufacturer_id"],),
+                ).fetchone()
+                natural_key = (
+                    normalize_text(manufacturer_code[0]) if manufacturer_code else None,
+                    normalize_text(row["code"]),
+                )
+            elif table_name == "fitting_products":
+                natural_key = normalize_text(row["article"])
+            elif table_name == "fittings":
+                natural_key = normalize_text(row["article"])
+            elif table_name == "fitting_hole_templates":
+                fitting_article = connection.execute(
+                    "SELECT article FROM fittings WHERE id = ?",
+                    (row["fitting_id"],),
+                ).fetchone()
+                natural_key = (
+                    normalize_text(fitting_article[0]) if fitting_article else None,
+                    normalize_text(row["bundle_key"]),
+                    normalize_text(row["template_type"]),
+                    normalize_text(row["side"]),
+                )
+            elif table_name == "fitting_hole_points":
+                template_row = connection.execute(
+                    """
+                    SELECT fittings.article, fitting_hole_templates.bundle_key, fitting_hole_templates.template_type, fitting_hole_templates.side
+                    FROM fitting_hole_points
+                    JOIN fitting_hole_templates ON fitting_hole_templates.id = fitting_hole_points.template_id
+                    JOIN fittings ON fittings.id = fitting_hole_templates.fitting_id
+                    WHERE fitting_hole_points.id = ?
+                    """,
+                    (row["id"],),
+                ).fetchone()
+                natural_key = (
+                    normalize_text(template_row["article"]) if template_row else None,
+                    normalize_text(template_row["bundle_key"]) if template_row else None,
+                    normalize_text(template_row["template_type"]) if template_row else None,
+                    normalize_text(template_row["side"]) if template_row else None,
+                    int(row["order_index"] or 0),
+                    normalize_text(row["label"]),
+                )
+            elif table_name == "fitting_supplier_offers":
+                fitting_row = connection.execute(
+                    "SELECT article FROM fittings WHERE id = ?",
+                    (row["fitting_id"],),
+                ).fetchone()
+                supplier_row = connection.execute(
+                    "SELECT code FROM suppliers WHERE id = ?",
+                    (row["supplier_id"],),
+                ).fetchone()
+                natural_key = (
+                    normalize_text(supplier_row[0]) if supplier_row else None,
+                    normalize_text(fitting_row[0]) if fitting_row else None,
+                    normalize_text(row["external_product_id"]),
+                )
+            elif table_name == "fitting_hole_service_rules":
+                natural_key = _service_rule_key(row)
+            elif table_name == "service_catalog_items":
+                natural_key = _service_item_key(row)
+            else:
+                natural_key = row["id"]
+
+            bundle_key_present = False
+            if table_name == "suppliers":
+                bundle_key_present = normalize_text(row["code"]) in bundle_keys_for_table
+            elif table_name == "fitting_manufacturers":
+                bundle_key_present = normalize_text(row["code"]) in bundle_keys_for_table
+            elif table_name == "fitting_categories":
+                bundle_key_present = normalize_text(row["code"]) in bundle_keys_for_table
+            elif table_name == "fitting_series":
+                manufacturer_code = connection.execute(
+                    "SELECT code FROM fitting_manufacturers WHERE id = ?",
+                    (row["manufacturer_id"],),
+                ).fetchone()
+                bundle_key_present = (
+                    normalize_text(manufacturer_code[0]) if manufacturer_code else None,
+                    normalize_text(row["code"]),
+                ) in bundle_keys_for_table
+            elif table_name == "fitting_products":
+                bundle_key_present = normalize_text(row["article"]) in bundle_keys_for_table
+            elif table_name == "fittings":
+                bundle_key_present = normalize_text(row["article"]) in bundle_keys_for_table
+            elif table_name == "fitting_hole_templates":
+                fitting_article = connection.execute(
+                    "SELECT article FROM fittings WHERE id = ?",
+                    (row["fitting_id"],),
+                ).fetchone()
+                bundle_key_present = (
+                    normalize_text(fitting_article[0]) if fitting_article else None,
+                    normalize_text(row["bundle_key"]),
+                    normalize_text(row["template_type"]),
+                    normalize_text(row["side"]),
+                ) in bundle_keys_for_table
+            elif table_name == "fitting_hole_points":
+                template_row = connection.execute(
+                    """
+                    SELECT fittings.article, fitting_hole_templates.bundle_key, fitting_hole_templates.template_type, fitting_hole_templates.side
+                    FROM fitting_hole_points
+                    JOIN fitting_hole_templates ON fitting_hole_templates.id = fitting_hole_points.template_id
+                    JOIN fittings ON fittings.id = fitting_hole_templates.fitting_id
+                    WHERE fitting_hole_points.id = ?
+                    """,
+                    (row["id"],),
+                ).fetchone()
+                bundle_key_present = (
+                    normalize_text(template_row["article"]) if template_row else None,
+                    normalize_text(template_row["bundle_key"]) if template_row else None,
+                    normalize_text(template_row["template_type"]) if template_row else None,
+                    normalize_text(template_row["side"]) if template_row else None,
+                    int(row["order_index"] or 0),
+                    normalize_text(row["label"]),
+                ) in bundle_keys_for_table
+            elif table_name == "fitting_supplier_offers":
+                fitting_row = connection.execute(
+                    "SELECT article FROM fittings WHERE id = ?",
+                    (row["fitting_id"],),
+                ).fetchone()
+                supplier_row = connection.execute(
+                    "SELECT code FROM suppliers WHERE id = ?",
+                    (row["supplier_id"],),
+                ).fetchone()
+                bundle_key_present = (
+                    normalize_text(supplier_row[0]) if supplier_row else None,
+                    normalize_text(fitting_row[0]) if fitting_row else None,
+                    normalize_text(row["external_product_id"]),
+                ) in bundle_keys_for_table
+            elif table_name == "fitting_hole_service_rules":
+                bundle_key_present = _service_rule_key(row, connection) in bundle_keys_for_table
+            elif table_name == "service_catalog_items":
+                bundle_key_present = _service_item_key(row) in bundle_keys_for_table
+            if bundle_key_present:
+                continue
+
+            stale_system[table_name] += 1
+            if _delete_if_unblocked(
+                connection,
+                table_name=table_name,
+                row=row,
+                natural_key=natural_key,
+                bundle_keys=bundle_keys,
+                foreign_key_references=foreign_key_references,
+                planned_deletes=planned_deletes,
+                blocked_deletes=blocked_deletes,
+                apply=apply,
+            ):
+                deleted += 1
+
+    return {
+        "deleted": deleted,
+        "stale_system": dict(stale_system),
+        "planned_deletes": planned_deletes,
+        "blocked_deletes": blocked_deletes,
+    }
 
 
 def _load_current_maps(connection: sqlite3.Connection) -> dict[str, dict[Any, Any]]:
@@ -921,6 +1431,13 @@ def import_bundle(database_path: Path, bundle_path: Path, apply: bool) -> dict[s
                 else:
                     summary["unchanged"] += 1
 
+        stale_result = _sync_stale_system_catalog(
+            connection,
+            entities,
+            apply=apply,
+        )
+        summary["deleted"] += stale_result["deleted"]
+
         if apply:
             connection.commit()
         else:
@@ -950,6 +1467,9 @@ def import_bundle(database_path: Path, bundle_path: Path, apply: bool) -> dict[s
             "media_copy_count": media_copy_count,
             "skipped": skipped,
             "conflicts": conflicts,
+            "stale_system": stale_result["stale_system"],
+            "planned_deletes": stale_result["planned_deletes"],
+            "blocked_deletes": stale_result["blocked_deletes"],
             "counts_after": counts_after,
             "manifest": manifest,
         }

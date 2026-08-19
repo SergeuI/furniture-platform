@@ -375,6 +375,10 @@ class FittingCatalogSyncTests(unittest.TestCase):
             dry_run = import_server_catalog.import_bundle(target_db, bundle_path, apply=False)
             self.assertEqual(dry_run["conflicts"], [])
             self.assertEqual(dry_run["skipped"], [])
+            self.assertEqual(dry_run["summary"].get("deleted", 0), 26)
+            self.assertEqual(dry_run["stale_system"].get("fittings", 0), 13)
+            self.assertEqual(dry_run["stale_system"].get("fitting_products", 0), 13)
+            self.assertTrue(any(item.get("reason") == "user-owned-or-non-system" for item in dry_run["blocked_deletes"]))
             with sqlite3.connect(target_db) as connection:
                 after_rows = connection.execute(
                     """
@@ -390,6 +394,8 @@ class FittingCatalogSyncTests(unittest.TestCase):
 
             apply_result = import_server_catalog.import_bundle(target_db, bundle_path, apply=True)
             self.assertEqual(apply_result["conflicts"], [])
+            self.assertEqual(apply_result["summary"].get("deleted", 0), 26)
+            self.assertTrue(any(item.get("natural_key") == "private-supplier" for item in apply_result["blocked_deletes"]))
             with sqlite3.connect(target_db) as connection:
                 self.assertEqual(connection.execute("PRAGMA integrity_check").fetchone()[0], "ok")
                 self.assertEqual(
@@ -425,8 +431,77 @@ class FittingCatalogSyncTests(unittest.TestCase):
             self.assertEqual(second_apply["conflicts"], [])
             self.assertEqual(second_apply["summary"].get("inserted", 0), 0)
             self.assertEqual(second_apply["summary"].get("updated", 0), 0)
+            self.assertEqual(second_apply["summary"].get("deleted", 0), 0)
             with sqlite3.connect(target_db) as connection:
                 self.assertEqual(connection.execute("PRAGMA integrity_check").fetchone()[0], "ok")
+
+    def test_import_bundle_dry_run_does_not_touch_upload_filesystem(self) -> None:
+        bundle_path = Path(r"D:\PY\.server-catalog-sync\20260819-013308")
+        self.assertTrue(bundle_path.exists())
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            source_db = tmpdir_path / "source.db"
+            target_db = tmpdir_path / "target.db"
+            uploads_root = tmpdir_path / "uploads"
+            self._create_catalog_database(source_db, uploads_root)
+            self._create_empty_target_database(target_db)
+
+            upload_dir = target_db.parent / "data" / "uploads"
+            before_exists = upload_dir.exists()
+            before_snapshot = sorted(
+                str(path.relative_to(upload_dir))
+                for path in upload_dir.rglob("*")
+                if path.is_file()
+            ) if before_exists else []
+
+            dry_run = import_server_catalog.import_bundle(target_db, bundle_path, apply=False)
+            self.assertGreater(dry_run["media_copy_count"], 0)
+            self.assertFalse(upload_dir.exists())
+
+            after_exists = upload_dir.exists()
+            after_snapshot = sorted(
+                str(path.relative_to(upload_dir))
+                for path in upload_dir.rglob("*")
+                if path.is_file()
+            ) if after_exists else []
+            self.assertEqual(before_snapshot, after_snapshot)
+
+    def test_stale_fitting_delete_is_blocked_by_mounting_node_items(self) -> None:
+        bundle_path = Path(r"D:\PY\.server-catalog-sync\20260819-013308")
+        self.assertTrue(bundle_path.exists())
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            target_db = tmpdir_path / "blocked.db"
+            self._create_staging_like_target_database(target_db)
+            with sqlite3.connect(target_db) as connection:
+                connection.execute(
+                    "CREATE TABLE mounting_node_items (id INTEGER PRIMARY KEY AUTOINCREMENT, fitting_id INTEGER NOT NULL)"
+                )
+                blocked_fitting_id = connection.execute(
+                    "SELECT id FROM fittings WHERE article = ?",
+                    ("EXIST-02",),
+                ).fetchone()[0]
+                connection.execute(
+                    "INSERT INTO mounting_node_items (fitting_id) VALUES (?)",
+                    (blocked_fitting_id,),
+                )
+                connection.commit()
+
+            dry_run = import_server_catalog.import_bundle(target_db, bundle_path, apply=False)
+            blocked_fittings = [
+                item for item in dry_run["blocked_deletes"]
+                if item.get("entity") == "fittings" and item.get("natural_key") == "EXIST-02"
+            ]
+            self.assertTrue(blocked_fittings)
+            self.assertTrue(
+                any(
+                    blocker.get("dependent_table") == "mounting_node_items"
+                    for blocker in blocked_fittings[0].get("blockers", [])
+                )
+            )
+            self.assertTrue(
+                any(item.get("entity") == "fitting_products" and item.get("natural_key") == "EXIST-02" for item in dry_run["blocked_deletes"])
+            )
 
     @staticmethod
     def _rewrite_bundle_sort_orders(bundle_dir: Path, sort_orders: list[int]) -> None:
