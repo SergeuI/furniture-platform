@@ -297,17 +297,80 @@ tbody tr.selected {
 .sidebar-flyout {
   background: linear-gradient(180deg, #111a20 0%, #0d141a 100%);
   border: 1px solid rgba(185, 244, 194, 0.14);
-  border-radius: 14px;
+  border-radius: 16px;
   box-shadow: 0 24px 64px rgba(13, 20, 26, 0.32);
   display: grid;
   gap: 10px;
   max-height: calc(100vh - 24px);
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 14px;
   position: fixed;
   left: 86px;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.55) rgba(15, 23, 42, 0.1);
   width: min(320px, calc(100vw - 102px));
   z-index: 28;
+}
+
+.sidebar-flyout-submenu {
+  left: 410px;
+  width: min(340px, calc(100vw - 420px));
+  z-index: 29;
+}
+
+.sidebar-flyout-materials-submenu {
+  background: linear-gradient(180deg, #111a20 0%, #0d141a 100%);
+  border-color: rgba(185, 244, 194, 0.14);
+  box-shadow: 0 24px 64px rgba(13, 20, 26, 0.32);
+  color: #d8e5e8;
+  left: 766px;
+  min-width: 220px;
+  width: fit-content;
+  border-radius: 16px;
+  z-index: 30;
+}
+
+.sidebar-flyout-fittings-submenu {
+  background: linear-gradient(180deg, #111a20 0%, #0d141a 100%);
+  border-color: rgba(185, 244, 194, 0.14);
+  box-shadow: 0 24px 64px rgba(13, 20, 26, 0.32);
+  color: #d8e5e8;
+  left: 766px;
+  min-width: 220px;
+  width: fit-content;
+  border-radius: 16px;
+  z-index: 30;
+}
+
+.sidebar-flyout-submenu {
+  max-height: calc(100vh - 24px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.55) rgba(15, 23, 42, 0.1);
+}
+
+.sidebar-flyout::-webkit-scrollbar,
+.sidebar-flyout-submenu::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar-flyout::-webkit-scrollbar-track,
+.sidebar-flyout-submenu::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.08);
+  border-radius: 999px;
+}
+
+.sidebar-flyout::-webkit-scrollbar-thumb,
+.sidebar-flyout-submenu::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.55);
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  border-radius: 999px;
 }
 
 .sidebar-flyout-title {
@@ -332,12 +395,124 @@ tbody tr.selected {
   padding: 0 12px;
 }
 
+.sidebar-flyout-catalog-card {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(185, 244, 194, 0.08);
+  border-radius: 12px;
+  color: #d8e5e8;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 32px minmax(0, 1fr) auto auto;
+  min-height: 44px;
+  padding: 7px 12px 7px 7px;
+}
+
+.sidebar-flyout-materials-submenu .sidebar-flyout-title,
+.sidebar-flyout-fittings-submenu .sidebar-flyout-title {
+  color: #ffffff;
+}
+
+.sidebar-flyout-catalog-card:hover,
+.sidebar-flyout-catalog-card.active {
+  background: rgba(49, 165, 80, 0.18);
+  border-color: rgba(64, 196, 96, 0.45);
+  color: #ffffff;
+}
+
+.sidebar-flyout-catalog-thumb {
+  align-items: center;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.03));
+  border: 1px solid color-mix(in srgb, var(--catalog-accent, #dbe1e7) 22%, #dbe1e7);
+  border-radius: 10px;
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 30px;
+  justify-content: center;
+  overflow: hidden;
+  width: 30px;
+}
+
+.sidebar-flyout-catalog-thumb-image {
+  display: block;
+  height: 100%;
+  object-fit: contain;
+  width: 100%;
+}
+
+.sidebar-flyout-catalog-label {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.15;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-flyout-catalog-count {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  color: inherit;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 700;
+  justify-content: center;
+  min-width: 28px;
+  padding: 0 8px;
+}
+
+.sidebar-flyout-catalog-arrow {
+  color: #8ea3aa;
+  flex: 0 0 auto;
+  margin-left: 2px;
+}
+
+.sidebar-flyout-materials-submenu .sidebar-flyout-items button,
+.sidebar-flyout-fittings-submenu .sidebar-flyout-items button {
+  white-space: nowrap;
+}
+
+.sidebar-flyout-materials-submenu .sidebar-flyout-item-label,
+.sidebar-flyout-fittings-submenu .sidebar-flyout-item-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-flyout-catalog-card .sidebar-flyout-item-count {
+  display: none;
+}
+
+.sidebar-flyout-submenu-indicator {
+  color: #8ea3aa;
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
 .sidebar-flyout-item-icon {
   align-items: center;
   display: inline-flex;
   flex: 0 0 auto;
   justify-content: center;
   width: 22px;
+}
+
+.sidebar-flyout-item-count {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  color: inherit;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 700;
+  justify-content: center;
+  margin-left: auto;
+  min-width: 24px;
+  padding: 0 8px;
 }
 
 .sidebar-flyout-icon {
@@ -1044,6 +1219,178 @@ tbody tr.selected {
   padding: 24px;
   align-content: start;
   scrollbar-gutter: stable;
+}
+
+.workspace.materials-workspace {
+  padding-top: 12px;
+  grid-template-rows: auto auto auto;
+}
+
+/* Materials workspace standard: content panels grow with content; do not reintroduce fixed viewport-height or nested scroll on taxonomy/list screens. */
+.workspace.materials-workspace .table-panel.full-panel {
+  overflow: visible;
+}
+
+.workspace.materials-workspace > .table-panel.full-panel.materials-root-panel {
+  display: block;
+  flex: none;
+  height: auto;
+  min-height: auto;
+}
+
+.workspace.materials-workspace > .table-panel.full-panel.materials-root-panel > .catalog-card.service-catalog-card.service-catalog-card-full {
+  min-height: auto;
+}
+
+.workspace.materials-workspace > .table-panel.full-panel {
+  display: block;
+  flex: none;
+  height: auto;
+  min-height: auto;
+}
+
+.workspace.materials-workspace > .table-panel.full-panel > .catalog-card.service-catalog-card.service-catalog-card-full {
+  min-height: auto;
+}
+
+.materials-toolbar-inline {
+  align-items: center;
+  flex: 1 1 auto;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.workspace.materials-workspace .catalog-category-groups {
+  display: grid;
+  gap: 18px;
+}
+
+.workspace.materials-workspace .catalog-category-group {
+  display: grid;
+  gap: 10px;
+}
+
+.workspace.materials-workspace .material-category-group-panel {
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.96), rgba(255, 255, 255, 0.98));
+  border: 1px solid #dbe1e7;
+  border-radius: 14px;
+  gap: 14px;
+  padding: 14px;
+}
+
+.workspace.materials-workspace .material-category-group-label {
+  margin-bottom: 0;
+}
+
+/* Materials taxonomy header standard: title block and actions are vertically centered on desktop. */
+.material-taxonomy-page-header {
+  align-items: center;
+}
+
+.material-taxonomy-page-actions {
+  align-items: center;
+  flex: 0 1 auto;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  margin-left: auto;
+  max-width: min(100%, 760px);
+}
+
+.material-taxonomy-page-actions > * {
+  flex: 0 0 auto;
+}
+
+.material-taxonomy-page-actions .toggle-label {
+  min-height: 18px;
+  white-space: nowrap;
+}
+
+.material-taxonomy-page-actions .toggle-label select,
+.material-taxonomy-page-actions button {
+  white-space: nowrap;
+}
+
+.material-taxonomy-table > * {
+  min-width: 0;
+}
+
+.material-taxonomy-table--admin {
+  grid-template-columns:
+    minmax(180px, 1.2fr)
+    72px
+    72px
+    minmax(120px, 0.88fr)
+    minmax(140px, 0.92fr)
+    88px
+    minmax(88px, 0.64fr);
+}
+
+.material-taxonomy-table--user {
+  grid-template-columns:
+    minmax(180px, 1.35fr)
+    72px
+    minmax(120px, 0.9fr)
+    88px
+    minmax(88px, 0.64fr);
+}
+
+.material-taxonomy-table--manufacturers {
+  grid-template-columns:
+    minmax(220px, 1.5fr)
+    minmax(118px, 0.95fr)
+    minmax(160px, 1.05fr)
+    minmax(180px, 1.15fr)
+    92px
+    minmax(120px, 0.85fr);
+}
+
+.material-taxonomy-table--manufacturers .manufacturer-logo-cell {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+}
+
+.material-taxonomy-name-cell,
+.material-taxonomy-owner-cell {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.material-taxonomy-manufacturer-scope-cell {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.material-taxonomy-table .catalog-actions {
+  gap: 8px;
+  min-width: 0;
+}
+
+.material-taxonomy-manufacturer-scope-cell strong,
+.material-taxonomy-manufacturer-scope-cell span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.material-taxonomy-manufacturer-scope-cell strong {
+  color: #24343d;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.material-taxonomy-manufacturer-scope-cell span {
+  color: #607182;
+  font-size: 12px;
+}
+
+@media (max-width: 1200px) {
+  .material-taxonomy-page-actions {
+    flex-wrap: wrap;
+  }
 }
 
 .toolbar {
@@ -1939,6 +2286,126 @@ tbody tr.selected {
   margin: 0;
 }
 
+.fitting-taxonomy-page-shell {
+  display: block;
+  flex: none;
+  height: auto;
+  min-height: auto;
+  overflow: visible;
+}
+
+.fitting-taxonomy-page-shell > .catalog-card.service-catalog-card.service-catalog-card-full {
+  min-height: auto;
+}
+
+.fitting-taxonomy-page-shell > .catalog-card.service-catalog-card.service-catalog-card-full > .table-panel.full-panel {
+  overflow: visible;
+}
+
+.fitting-taxonomy-page-header {
+  align-items: center;
+}
+
+.fitting-taxonomy-page-title {
+  display: grid;
+  gap: 4px;
+}
+
+.fitting-taxonomy-page-actions {
+  align-items: center;
+  flex: 0 1 auto;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  margin-left: auto;
+  max-width: min(100%, 760px);
+}
+
+.fitting-taxonomy-page-actions > * {
+  flex: 0 0 auto;
+}
+
+.fitting-taxonomy-page-actions .materials-filter {
+  min-width: 180px;
+}
+
+.fitting-taxonomy-page-actions .toggle-label {
+  min-height: 18px;
+  white-space: nowrap;
+}
+
+.fitting-taxonomy-page-actions .toggle-label select,
+.fitting-taxonomy-page-actions button {
+  white-space: nowrap;
+}
+
+.material-taxonomy-page-title {
+  gap: 4px;
+}
+
+.material-category-detail-title {
+  gap: 4px;
+}
+
+.material-category-detail-header {
+  align-items: center;
+  gap: 10px;
+}
+
+.material-category-detail-title .fitting-category-breadcrumb {
+  gap: 6px;
+}
+
+.material-category-detail-title .fitting-breadcrumb-link,
+.material-category-detail-title .fitting-category-breadcrumb strong {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.material-category-detail-title .fitting-breadcrumb-separator {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.material-category-detail-title p {
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.material-category-detail-actions {
+  margin-left: auto;
+  align-self: center;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 8px;
+  max-width: min(100%, 760px);
+}
+
+.material-category-detail-actions > * {
+  flex: 0 0 auto;
+}
+
+.material-category-detail-actions .service-tree-badge {
+  white-space: nowrap;
+}
+
+.material-category-detail-actions .materials-toolbar-inline {
+  gap: 8px;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.material-category-detail-actions .service-catalog-search {
+  min-width: 260px;
+}
+
+.material-category-detail-actions .materials-filter {
+  min-width: 160px;
+}
+
+.material-category-detail-actions .ghost-button {
+  white-space: nowrap;
+}
+
 .service-catalog-header-actions {
   align-items: center;
   display: flex;
@@ -2074,6 +2541,14 @@ tbody tr.selected {
   gap: 12px;
 }
 
+.materials-import-form-fieldset {
+  border: 0;
+  display: contents;
+  margin: 0;
+  min-inline-size: 0;
+  padding: 0;
+}
+
 .materials-mode-switch {
   display: inline-flex;
   gap: 8px;
@@ -2205,6 +2680,88 @@ tbody tr.selected {
   display: inline-block;
   height: 8px;
   width: 8px;
+}
+
+.material-import-processing-button-content {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+}
+
+.material-import-processing-button-spinner {
+  animation: material-import-spin 0.85s linear infinite;
+  border: 2px solid rgba(255, 255, 255, 0.42);
+  border-radius: 50%;
+  border-top-color: #ffffff;
+  box-sizing: border-box;
+  display: inline-block;
+  height: 12px;
+  width: 12px;
+}
+
+.material-import-processing-backdrop {
+  align-items: center;
+  background: rgba(8, 14, 22, 0.78);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 20px;
+  position: fixed;
+  z-index: 11000;
+}
+
+.material-import-processing-panel {
+  background: #0f1720;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 18px;
+  box-shadow: 0 28px 72px rgba(6, 11, 18, 0.42);
+  color: #f8fafc;
+  display: grid;
+  gap: 16px;
+  max-width: min(640px, calc(100vw - 24px));
+  padding: 22px;
+  width: 100%;
+}
+
+.material-import-processing-spinner {
+  animation: material-import-spin 0.85s linear infinite;
+  border: 4px solid rgba(255, 255, 255, 0.12);
+  border-radius: 50%;
+  border-top-color: #ffffff;
+  height: 32px;
+  width: 32px;
+}
+
+.material-import-processing-copy {
+  display: grid;
+  gap: 8px;
+}
+
+.material-import-processing-copy h2 {
+  font-size: 20px;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.material-import-processing-copy p {
+  color: #d5dee8;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.material-import-processing-note {
+  color: #aab7c6;
+  font-size: 13px;
+}
+
+@keyframes material-import-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .material-import-state-badge-queued .material-import-state-dot,
@@ -2653,6 +3210,46 @@ tbody tr.selected {
   width: 132px;
 }
 
+.material-category-preview-placeholder {
+  align-items: center;
+  background: linear-gradient(135deg, #f4f7fa 0%, #ffffff 72%);
+  border: 1px solid #dbe1e7;
+  border-radius: 8px;
+  color: #6b7b88;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: 100%;
+  justify-content: center;
+  min-height: 100%;
+  padding: 12px;
+  width: 100%;
+}
+
+.material-category-media img {
+  border-radius: 8px;
+  display: block;
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.material-category-preview-placeholder-mark {
+  background: linear-gradient(180deg, #dbe1e7 0%, #eef2f6 100%);
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.72);
+  height: 54px;
+  width: 84px;
+}
+
+.material-category-preview-placeholder-text {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+
 .fitting-category-content {
   align-content: space-between;
   display: grid;
@@ -2778,6 +3375,62 @@ tbody tr.selected {
   margin: 0;
 }
 
+.catalog-page-header.supplier-page-header {
+  display: flex;
+  gap: 12px;
+  margin: 0 0 16px;
+}
+
+.catalog-page-header.supplier-page-header .service-catalog-title {
+  display: grid;
+  gap: 4px;
+}
+
+.catalog-page-header.supplier-page-header .service-catalog-header-actions {
+  align-items: center;
+  flex: 0 1 auto;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  margin-left: auto;
+  max-width: min(100%, 760px);
+}
+
+.catalog-page-header.supplier-page-header .service-catalog-header-actions > * {
+  flex: 0 0 auto;
+}
+
+.catalog-page-header.supplier-page-header .materials-filter {
+  min-width: 180px;
+}
+
+.catalog-page-header.fitting-page-header {
+  display: flex;
+  gap: 12px;
+  margin: 0 0 16px;
+}
+
+.catalog-page-header.fitting-page-header .service-catalog-title {
+  display: grid;
+  gap: 4px;
+}
+
+.catalog-page-header.fitting-page-header .service-catalog-header-actions {
+  align-items: center;
+  flex: 0 1 auto;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  margin-left: auto;
+  max-width: min(100%, 760px);
+}
+
+.catalog-page-header.fitting-page-header .service-catalog-header-actions > * {
+  flex: 0 0 auto;
+}
+
+.catalog-page-header.fitting-page-header .materials-filter {
+  min-width: 180px;
+}
+
 .supplier-toolbar-header {
   align-items: center;
 }
@@ -2785,43 +3438,18 @@ tbody tr.selected {
 .suppliers-table .fittings-table-header,
 .suppliers-table .fittings-table-row {
   grid-template-columns:
-    minmax(220px, 1.9fr)
-    minmax(140px, 1fr)
-    minmax(120px, 0.9fr)
-    minmax(100px, 0.7fr)
-    minmax(110px, 0.8fr);
+    minmax(220px, 1.5fr)
+    minmax(118px, 0.95fr)
+    minmax(160px, 1.05fr)
+    minmax(92px, 0.7fr)
+    minmax(240px, 1.1fr);
 }
 
-.supplier-name-cell {
-  min-width: 0;
-}
-
-.supplier-logo-cell {
+.suppliers-table .manufacturer-logo-cell {
   align-items: center;
   display: flex;
   justify-content: center;
   min-width: 0;
-}
-
-.supplier-logo-mark {
-  align-items: center;
-  background: #f4f7f9;
-  border: 1px solid #dbe1e7;
-  border-radius: 10px;
-  color: #24343d;
-  display: flex;
-  height: 48px;
-  justify-content: center;
-  overflow: hidden;
-  padding: 6px 8px;
-  width: 100%;
-}
-
-.supplier-logo-image {
-  display: block;
-  height: 100%;
-  object-fit: contain;
-  width: 100%;
 }
 
 .supplier-logo-fallback {
@@ -2870,6 +3498,16 @@ tbody tr.selected {
 
 .supplier-form-field > input {
   min-width: 0;
+}
+
+.supplier-form-field > textarea {
+  min-height: 92px;
+  min-width: 0;
+  resize: vertical;
+}
+
+.supplier-form-field-wide {
+  grid-column: 1 / -1;
 }
 
 .supplier-form-options {
@@ -2929,10 +3567,15 @@ tbody tr.selected {
   padding: 10px 12px;
 }
 
+.supplier-logo-preview--contain {
+  justify-content: center;
+}
+
 .supplier-logo-preview-mark {
   flex: 0 0 auto;
   height: 96px;
   max-width: 120px;
+  object-fit: contain;
   width: 120px;
 }
 
@@ -3040,6 +3683,31 @@ tbody tr.selected {
   border-top: 0;
 }
 
+.fitting-manufacturers-table {
+  grid-template-columns:
+    minmax(220px, 1.5fr)
+    minmax(118px, 0.95fr)
+    minmax(160px, 1.05fr)
+    92px
+    minmax(120px, 0.85fr);
+}
+
+.fitting-manufacturers-table > * {
+  min-width: 0;
+}
+
+.fitting-manufacturers-table .manufacturer-logo-cell {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+}
+
+.fitting-manufacturers-table .catalog-actions {
+  gap: 8px;
+  min-width: 0;
+}
+
 .fittings-table-name {
   align-items: start;
   display: flex;
@@ -3073,6 +3741,52 @@ tbody tr.selected {
   display: block;
   height: 100%;
   object-fit: contain;
+  width: 100%;
+}
+
+.material-taxonomy-thumbnail-cell {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+}
+
+.material-taxonomy-thumbnail {
+  align-items: center;
+  background: #f4f7f9;
+  border: 1px solid #dbe1e7;
+  border-radius: 10px;
+  display: flex;
+  height: 60px;
+  justify-content: center;
+  overflow: hidden;
+  width: 60px;
+}
+
+.material-taxonomy-thumbnail-image {
+  display: block;
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.material-taxonomy-thumbnail-placeholder {
+  background: linear-gradient(135deg, #f4f7fa 0%, #ffffff 72%);
+  color: #6b7b88;
+}
+
+.material-taxonomy-manufacturer-logo {
+  max-width: 100%;
+}
+
+.material-taxonomy-thumbnail-placeholder-mark {
+  align-items: center;
+  display: flex;
+  font-size: 18px;
+  font-weight: 700;
+  height: 100%;
+  justify-content: center;
+  line-height: 1;
   width: 100%;
 }
 
@@ -10175,8 +10889,10 @@ tbody tr.selected {
 }
 
 .material-details-modal {
+  align-self: start;
   max-width: min(1040px, calc(100vw - 48px));
   max-height: calc(100vh - 32px);
+  scrollbar-gutter: stable;
   overflow: auto;
   width: 100%;
 }
@@ -11130,6 +11846,363 @@ tbody tr.selected {
 .material-details-description p {
   color: #334155;
   line-height: 1.5;
+  margin: 0;
+}
+
+.material-supplier-offers-toolbar {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.material-supplier-offers-empty {
+  display: grid;
+  gap: 12px;
+}
+
+.material-supplier-offers-empty-top {
+  align-items: start;
+  justify-items: start;
+}
+
+.material-supplier-offers-topbar {
+  display: grid;
+  gap: 6px;
+}
+
+.material-supplier-offers-tabs {
+  align-items: flex-end;
+  border-bottom: 1px solid #d7e0e8;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding-bottom: 1px;
+}
+
+.material-supplier-offer-tab {
+  align-items: center;
+  background: #eef3f7;
+  border: 1px solid #cdd8e1;
+  border-bottom-color: #d7e0e8;
+  border-radius: 9px 9px 0 0;
+  color: #24343d;
+  display: inline-flex;
+  gap: 7px;
+  min-height: 38px;
+  margin-bottom: -1px;
+  padding: 5px 10px 6px;
+  text-align: left;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
+}
+
+.material-supplier-offer-tab:hover {
+  border-color: #9fb2c2;
+  box-shadow: none;
+  transform: translateY(-1px);
+}
+
+.material-supplier-offer-tab-logo {
+  align-items: center;
+  justify-content: center;
+  min-width: 96px;
+  overflow: hidden;
+  padding: 4px 12px 3px;
+}
+
+.material-supplier-offer-tab-logo .material-supplier-offer-logo {
+  height: 24px;
+  width: auto;
+  max-width: 80px;
+}
+
+.material-supplier-offer-tab-logo .fitting-manufacturer-logo-image {
+  object-fit: contain;
+}
+
+.material-supplier-offer-tab.is-active {
+  background: #fff;
+  border-color: #cdd8e1;
+  border-bottom-color: #fff;
+  box-shadow: none;
+  position: relative;
+  z-index: 1;
+}
+
+.material-supplier-offer-tab-add {
+  justify-content: center;
+  min-width: 36px;
+  padding: 5px;
+}
+
+.material-supplier-offer-tab-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.material-supplier-offer-tab-copy strong,
+.material-supplier-offer-tab-copy span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.material-supplier-offer-tab-copy strong {
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.material-supplier-offer-tab-copy span {
+  color: #607182;
+  font-size: 11px;
+  line-height: 1.15;
+}
+
+.material-supplier-offer-selected-supplier {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.material-supplier-offer-selected-panel {
+  display: none;
+}
+
+.material-supplier-offer-selected-header {
+  align-items: flex-start;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.material-supplier-offer-selected-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.material-supplier-offer-selected-grid .fitting-details-characteristic {
+  min-width: 0;
+}
+
+.material-supplier-offer-selected-grid .fitting-details-characteristic dd {
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+.material-supplier-offer-card-header-main {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  min-width: 0;
+}
+
+.material-supplier-offer-card-header-main strong {
+  color: #24343d;
+  font-size: 15px;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.material-supplier-offer-logo {
+  flex: 0 0 auto;
+  height: 20px;
+  min-width: 40px;
+}
+
+.material-supplier-offer-logo .fitting-manufacturer-logo-image {
+  height: 20px;
+  max-width: 82px;
+}
+
+.material-supplier-offer-form-note {
+  color: #607182;
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.material-supplier-offer-selected-supplier {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+  min-width: 0;
+}
+
+.material-supplier-offer-selected-supplier strong {
+  color: #24343d;
+  font-size: 13px;
+  line-height: 1.35;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.material-details-meta-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  justify-content: space-between;
+}
+
+.material-details-meta-left {
+  align-items: center;
+  display: flex;
+  flex: 1 1 320px;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  min-width: 0;
+}
+
+.material-details-owner-inline {
+  align-items: center;
+  display: flex;
+  margin-top: 0;
+}
+
+.material-details-badges .service-tree-badge,
+.material-owners-trigger.service-tree-badge {
+  align-items: center;
+  display: inline-flex;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  min-height: 30px;
+  padding: 4px 10px;
+}
+
+.material-details-meta-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  margin-left: auto;
+}
+
+.material-details-meta-actions > button {
+  align-items: center;
+  border-radius: 999px;
+  display: inline-flex;
+  gap: 6px;
+  min-height: 30px;
+  padding: 4px 10px;
+}
+
+.material-details-meta-actions > button.icon-button {
+  min-width: 30px;
+}
+
+.material-details-meta-actions > button.icon-button svg {
+  flex: 0 0 auto;
+}
+
+.material-details-meta-error {
+  margin: -2px 0 0;
+}
+
+.material-details-supplier-card-link-row {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #e1e8ee;
+  border-radius: 10px;
+  display: flex;
+  grid-column: 1 / -1;
+  justify-content: flex-start;
+  min-width: 0;
+  padding: 12px 14px;
+}
+
+.material-details-supplier-card-field {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #e1e8ee;
+  border-radius: 10px;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  min-height: 42px;
+  min-width: 0;
+  padding: 12px 14px;
+}
+
+.material-details-supplier-card-field,
+.material-details-supplier-card-link-row {
+  grid-column: 1 / -1;
+}
+
+.material-details-supplier-card-field span {
+  color: #607182;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.material-details-supplier-card-field strong {
+  color: #24343d;
+  font-size: 15px;
+  line-height: 1.35;
+  text-align: right;
+  word-break: break-word;
+  justify-self: start;
+}
+
+.material-details-supplier-card-meta a {
+  align-self: start;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.material-details-supplier-badge {
+  justify-self: start;
+  margin-top: 6px;
+}
+
+.material-details-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.material-details-grid > div:not(.material-details-supplier-card),
+.material-details-description {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #e1e8ee;
+  border-radius: 10px;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  padding: 12px 14px;
+}
+
+.material-details-grid > div:not(.material-details-supplier-card) > span,
+.material-details-description > span {
+  flex: 0 0 120px;
+  font-size: 14px;
+  font-weight: 600;
+  min-width: 0;
+}
+
+.material-details-grid > div:not(.material-details-supplier-card) > strong,
+.material-details-description > p {
+  flex: 1 1 auto;
+  margin: 0;
+  text-align: right;
+}
+
+.material-details-description {
+  align-items: flex-start;
+}
+
+.material-details-description > p {
+  line-height: 1.5;
+}
+
+.material-details-description p {
   margin: 0;
 }
 

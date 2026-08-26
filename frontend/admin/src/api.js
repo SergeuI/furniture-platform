@@ -10,6 +10,14 @@ function extractErrorMessage(payload) {
     return payload.detail.error;
   }
 
+  if (typeof payload?.detail === "string" && payload.detail.trim()) {
+    return payload.detail.trim();
+  }
+
+  if (payload?.message) {
+    return String(payload.message).trim() || "Request failed";
+  }
+
   if (Array.isArray(payload?.detail)) {
     return payload.detail
       .map((item) => item?.msg || item?.message || item?.error)
@@ -18,6 +26,26 @@ function extractErrorMessage(payload) {
   }
 
   return payload?.error || "Request failed";
+}
+
+function isMaterialSourceImportTimingEnabled(diagnosticLabel) {
+  if (diagnosticLabel !== "material-source-import") {
+    return false;
+  }
+
+  const env = typeof import.meta !== "undefined" && import.meta && import.meta.env ? import.meta.env : {};
+  return Boolean(env.DEV || globalThis.__FURNITURE_ADMIN_DEV_TIMING__ === true);
+}
+
+function logMaterialSourceImportTiming(phase, fields = {}) {
+  const parts = [phase];
+  for (const [key, value] of Object.entries(fields)) {
+    if (value === undefined || value === null || value === "") {
+      continue;
+    }
+    parts.push(`${key}=${value}`);
+  }
+  console.info(`material-source-import ${parts.join(" ")}`);
 }
 
 async function request(path, options = {}) {
@@ -31,6 +59,14 @@ async function request(path, options = {}) {
   const controller = new AbortController();
   const timeoutMs = options.timeoutMs || 30000;
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  const diagnosticLabel = options.diagnosticLabel || "";
+  const diagnosticEnabled = isMaterialSourceImportTimingEnabled(diagnosticLabel);
+  const startedAt = diagnosticEnabled && typeof performance !== "undefined" && performance.now ? performance.now() : Date.now();
+  const logElapsed = () => Math.max(0, Math.round(((typeof performance !== "undefined" && performance.now ? performance.now() : Date.now()) - startedAt)));
+
+  if (diagnosticEnabled) {
+    logMaterialSourceImportTiming("request started", { path });
+  }
 
   let response;
   let payload = {};
@@ -40,6 +76,7 @@ async function request(path, options = {}) {
       ...options,
       headers,
       signal: controller.signal,
+      cache: "no-store",
     });
 
     const responseText = await response.text();
@@ -56,8 +93,22 @@ async function request(path, options = {}) {
         };
       }
     }
+
+    if (diagnosticEnabled) {
+      logMaterialSourceImportTiming("request resolved", {
+        elapsed_ms: logElapsed(),
+        status: response.status,
+        success: payload?.success ?? response.ok,
+      });
+    }
   } catch (error) {
     clearTimeout(timeoutId);
+    if (diagnosticEnabled) {
+      logMaterialSourceImportTiming("request rejected", {
+        elapsed_ms: logElapsed(),
+        error: error?.name || error?.message || "Network request failed",
+      });
+    }
     return {
       success: false,
       error:
@@ -281,6 +332,82 @@ export async function getFittingImageBlob(token, itemId, imageId, timeoutMs = 30
   }
 }
 
+export async function getMaterialImageBlobById(token, article, imageId, timeoutMs = 30000) {
+  const normalizedArticle = String(article || "").trim();
+  const normalizedImageId = String(imageId || "").trim();
+
+  if (!normalizedArticle || !normalizedImageId) {
+    return {
+      success: false,
+      status: 0,
+      error: "Article and image ID are required",
+    };
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  const imagePath = `/catalog/materials/${encodeURIComponent(normalizedArticle)}/images/${encodeURIComponent(normalizedImageId)}`;
+
+  try {
+    const response = await fetch(`${API_BASE_URL}${imagePath}`, {
+      headers: authHeaders(token),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        const authHeader = String(authHeaders(token).Authorization || "");
+        const authToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
+        if (authToken) {
+          window.dispatchEvent(
+            new CustomEvent("furniture-admin-unauthorized", {
+              detail: {
+                token: authToken,
+                path: imagePath,
+                status: response.status,
+              },
+            }),
+          );
+        }
+      }
+
+      return {
+        success: false,
+        status: response.status,
+        error: `HTTP ${response.status}`,
+      };
+    }
+
+    const blob = await response.blob();
+
+    if (!blob || !blob.size) {
+      return {
+        success: false,
+        status: response.status,
+        error: "Empty image response",
+      };
+    }
+
+    return {
+      success: true,
+      status: response.status,
+      blob,
+      contentType: response.headers.get("Content-Type") || blob.type || "",
+    };
+  } catch (error) {
+    return {
+      success: false,
+      status: 0,
+      error:
+        error?.name === "AbortError"
+          ? `Request timed out after ${Math.round(timeoutMs / 1000)} seconds`
+          : error?.message || "Network request failed",
+    };
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 export async function uploadSupplierLogo(token, file, timeoutMs = 30000) {
   if (!file) {
     return {
@@ -413,6 +540,138 @@ export async function uploadFittingManufacturerLogo(token, file, timeoutMs = 300
   }
 }
 
+export async function uploadMaterialManufacturerLogo(token, file, timeoutMs = 30000) {
+  if (!file) {
+    return {
+      success: false,
+      status: 0,
+      error: "File is required",
+    };
+  }
+
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/catalog/material-manufacturers/logo`, {
+      method: "POST",
+      headers: authHeaders(token),
+      body: formData,
+      signal: controller.signal,
+    });
+
+    const responseText = await response.text();
+    let payload = {};
+
+    if (responseText) {
+      try {
+        payload = JSON.parse(responseText);
+      } catch {
+        payload = {
+          success: false,
+          error: responseText.trim().startsWith("<")
+            ? `Server returned an HTML error page (HTTP ${response.status})`
+            : `Server returned an invalid response (HTTP ${response.status})`,
+        };
+      }
+    }
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        dispatchUnauthorized(token, "/catalog/material-manufacturers/logo", response.status);
+      }
+
+      return {
+        success: false,
+        error: extractErrorMessage(payload),
+        status: response.status,
+      };
+    }
+
+    return payload;
+  } catch (error) {
+    return {
+      success: false,
+      error:
+        error?.name === "AbortError"
+          ? `Request timed out after ${Math.round(timeoutMs / 1000)} seconds`
+          : error?.message || "Network request failed",
+      status: 0,
+    };
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+export async function uploadMaterialCategoryImage(token, file, timeoutMs = 30000) {
+  if (!file) {
+    return {
+      success: false,
+      status: 0,
+      error: "File is required",
+    };
+  }
+
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/catalog/material-categories/image`, {
+      method: "POST",
+      headers: authHeaders(token),
+      body: formData,
+      signal: controller.signal,
+    });
+
+    const responseText = await response.text();
+    let payload = {};
+
+    if (responseText) {
+      try {
+        payload = JSON.parse(responseText);
+      } catch {
+        payload = {
+          success: false,
+          error: responseText.trim().startsWith("<")
+            ? `Server returned an HTML error page (HTTP ${response.status})`
+            : `Server returned an invalid response (HTTP ${response.status})`,
+        };
+      }
+    }
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        dispatchUnauthorized(token, "/catalog/material-categories/image", response.status);
+      }
+
+      return {
+        success: false,
+        error: extractErrorMessage(payload),
+        status: response.status,
+      };
+    }
+
+    return payload;
+  } catch (error) {
+    return {
+      success: false,
+      error:
+        error?.name === "AbortError"
+          ? `Request timed out after ${Math.round(timeoutMs / 1000)} seconds`
+          : error?.message || "Network request failed",
+      status: 0,
+    };
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 export async function login(email, password) {
   return request("/auth/login", {
     method: "POST",
@@ -450,6 +709,10 @@ export async function getMaterialsCatalog(token, params = {}) {
 
   if (params.ownership_scope) {
     searchParams.set("ownership_scope", params.ownership_scope);
+  }
+
+  if (params.include_private_categories) {
+    searchParams.set("include_private_categories", "true");
   }
 
   const query = searchParams.toString();
@@ -738,6 +1001,89 @@ export async function updateFittingCategory(token, itemId, payload) {
 
 export async function deleteFittingCategory(token, itemId) {
   return request(`/catalog/fitting-categories/${encodeURIComponent(String(itemId || ""))}`, {
+    method: "DELETE",
+    headers: authHeaders(token),
+  });
+}
+
+export async function listMaterialCategories(token, includeInactive = false, includePrivateCategories = false) {
+  const searchParams = new URLSearchParams();
+  if (includeInactive) {
+    searchParams.set("active_only", "false");
+  }
+  if (includePrivateCategories) {
+    searchParams.set("include_private_categories", "true");
+  }
+  const query = searchParams.toString();
+  return request(`/catalog/material-categories${query ? `?${query}` : ""}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function getMaterialCategory(token, itemId) {
+  return request(`/catalog/material-categories/${encodeURIComponent(String(itemId || ""))}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function createMaterialCategory(token, payload) {
+  return request("/catalog/material-categories", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateMaterialCategory(token, itemId, payload) {
+  return request(`/catalog/material-categories/${encodeURIComponent(String(itemId || ""))}`, {
+    method: "PATCH",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteMaterialCategory(token, itemId) {
+  return request(`/catalog/material-categories/${encodeURIComponent(String(itemId || ""))}`, {
+    method: "DELETE",
+    headers: authHeaders(token),
+  });
+}
+
+export async function listMaterialManufacturers(token, includeInactive = false) {
+  const searchParams = new URLSearchParams();
+  if (includeInactive) {
+    searchParams.set("active_only", "false");
+  }
+  const query = searchParams.toString();
+  return request(`/catalog/material-manufacturers${query ? `?${query}` : ""}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function getMaterialManufacturer(token, itemId) {
+  return request(`/catalog/material-manufacturers/${encodeURIComponent(String(itemId || ""))}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function createMaterialManufacturer(token, payload) {
+  return request("/catalog/material-manufacturers", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateMaterialManufacturer(token, itemId, payload) {
+  return request(`/catalog/material-manufacturers/${encodeURIComponent(String(itemId || ""))}`, {
+    method: "PATCH",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteMaterialManufacturer(token, itemId) {
+  return request(`/catalog/material-manufacturers/${encodeURIComponent(String(itemId || ""))}`, {
     method: "DELETE",
     headers: authHeaders(token),
   });
@@ -1289,6 +1635,43 @@ export async function importMaterialFromViyar(
       force_refresh: Boolean(forceRefresh),
     }),
     timeoutMs: 120000,
+    diagnosticLabel: "material-source-import",
+  });
+}
+
+export async function refreshMaterialGallery(token, materialId) {
+  const normalizedMaterialId = String(materialId || "").trim();
+
+  if (!normalizedMaterialId) {
+    return {
+      success: false,
+      status: 0,
+      error: "Material ID is required",
+    };
+  }
+
+  return request(`/catalog/materials/${encodeURIComponent(normalizedMaterialId)}/images/refresh`, {
+    method: "POST",
+    headers: authHeaders(token),
+    timeoutMs: 120000,
+  });
+}
+
+export async function refreshMaterialRecommendedEdges(token, materialId) {
+  const normalizedMaterialId = String(materialId || "").trim();
+
+  if (!normalizedMaterialId) {
+    return {
+      success: false,
+      status: 0,
+      error: "Material ID is required",
+    };
+  }
+
+  return request(`/catalog/materials/${encodeURIComponent(normalizedMaterialId)}/recommended-edges/refresh`, {
+    method: "POST",
+    headers: authHeaders(token),
+    timeoutMs: 120000,
   });
 }
 
@@ -1298,6 +1681,7 @@ export async function createMaterial(token, payload) {
     headers: authHeaders(token),
     body: JSON.stringify(payload),
     timeoutMs: 120000,
+    diagnosticLabel: "material-source-import",
   });
 }
 
@@ -1328,6 +1712,109 @@ export async function getMaterialDetails(token, article, city = "") {
   return request(`/catalog/materials/${encodeURIComponent(article)}${query ? `?${query}` : ""}`, {
     headers: authHeaders(token),
     timeoutMs: 60000,
+  });
+}
+
+export async function listMaterialSupplierOffers(token, article) {
+  const normalizedArticle = String(article || "").trim();
+
+  if (!normalizedArticle) {
+    return {
+      success: false,
+      error: "Material article is required",
+      status: 0,
+    };
+  }
+
+  return request(`/catalog/materials/${encodeURIComponent(normalizedArticle)}/supplier-offers`, {
+    headers: authHeaders(token),
+    timeoutMs: 30000,
+  });
+}
+
+export async function createMaterialSupplierOffer(token, article, payload) {
+  const normalizedArticle = String(article || "").trim();
+
+  if (!normalizedArticle) {
+    return {
+      success: false,
+      error: "Material article is required",
+      status: 0,
+    };
+  }
+
+  return request(`/catalog/materials/${encodeURIComponent(normalizedArticle)}/supplier-offers`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+    timeoutMs: 30000,
+  });
+}
+
+export async function attachMaterialSupplierOfferFromSource(token, article, sourceUrl) {
+  const normalizedArticle = String(article || "").trim();
+  const normalizedSourceUrl = String(sourceUrl || "").trim();
+
+  if (!normalizedArticle) {
+    return {
+      success: false,
+      error: "Material article is required",
+      status: 0,
+    };
+  }
+
+  if (!normalizedSourceUrl) {
+    return {
+      success: false,
+      error: "Source URL is required",
+      status: 0,
+    };
+  }
+
+  return request(`/catalog/materials/${encodeURIComponent(normalizedArticle)}/supplier-offers/from-source`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({
+      source_url: normalizedSourceUrl,
+    }),
+    timeoutMs: 30000,
+  });
+}
+
+export async function updateMaterialSupplierOffer(token, offerId, payload) {
+  const normalizedOfferId = String(offerId || "").trim();
+
+  if (!normalizedOfferId) {
+    return {
+      success: false,
+      error: "Offer ID is required",
+      status: 0,
+    };
+  }
+
+  return request(`/catalog/material-supplier-offers/${encodeURIComponent(normalizedOfferId)}`, {
+    method: "PATCH",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+    timeoutMs: 30000,
+  });
+}
+
+export async function deleteMaterialSupplierOffer(token, offerId) {
+  const normalizedOfferId = String(offerId || "").trim();
+
+  if (!normalizedOfferId) {
+    return {
+      success: false,
+      error: "Offer ID is required",
+      status: 0,
+    };
+  }
+
+  return request(`/catalog/material-supplier-offers/${encodeURIComponent(normalizedOfferId)}`, {
+    method: "DELETE",
+    headers: authHeaders(token),
+    timeoutMs: 30000,
   });
 }
 

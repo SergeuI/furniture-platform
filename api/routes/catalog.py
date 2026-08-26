@@ -68,13 +68,34 @@ from schemas.catalog import (
     FittingTaxonomyCategoryOperationResponseSchema,
     FittingTaxonomyCategoryUpdateSchema,
     MaterialCatalogCreateSchema,
+    MaterialCatalogCategoryCreateSchema,
+    MaterialCatalogCategoryListResponseSchema,
+    MaterialCatalogCategoryOperationResponseSchema,
+    MaterialCatalogCategorySchema,
+    MaterialCatalogCategoryUpdateSchema,
+    MaterialCatalogManufacturerCreateSchema,
+    MaterialCatalogManufacturerListResponseSchema,
+    MaterialCatalogManufacturerOperationResponseSchema,
+    MaterialCatalogManufacturerSchema,
+    MaterialCatalogManufacturerUpdateSchema,
     MaterialCatalogUpdateSchema,
+    MaterialCatalogImageSchema,
     MaterialEdgeAttachSchema,
     MaterialEdgeOperationResponseSchema,
     MaterialCatalogOperationResponseSchema,
     MaterialCatalogListResponseSchema,
+    MaterialGalleryRefreshResponseSchema,
+    MaterialGalleryRefreshSummarySchema,
     MaterialImportFromViyarSchema,
     MaterialOwnersResponseSchema,
+    MaterialSupplierOfferCreateSchema,
+    MaterialSupplierOfferAttachFromSourceSchema,
+    MaterialSupplierOfferListResponseSchema,
+    MaterialSupplierOfferOperationResponseSchema,
+    MaterialSupplierOfferUpdateSchema,
+    MaterialRecommendedEdgesSummarySchema,
+    MaterialRecommendedEdgeReviewItemSchema,
+    MaterialRecommendedEdgesRefreshResponseSchema,
     ServiceCatalogItemUpdateSchema,
     ServiceCatalogOperationResponseSchema,
     ServiceCatalogPriceSyncResponseSchema,
@@ -90,6 +111,9 @@ from database.models.fitting import (
     FittingSeriesModel,
     FittingSupplierOfferModel,
     SupplierModel,
+)
+from database.models.material import (
+    MaterialModel,
 )
 from database.repositories.catalog_repository import (
     ALLOWED_CATALOG_CATEGORIES,
@@ -119,12 +143,31 @@ from database.repositories.fitting_taxonomy_repository import (
     update_fitting_product_taxonomy,
     update_fitting_series,
 )
+from database.repositories.material_taxonomy_repository import (
+    create_material_category,
+    create_material_manufacturer,
+    count_materials_by_manufacturer,
+    delete_material_manufacturer,
+    get_material_category_by_id,
+    get_material_category_row_by_id,
+    get_material_manufacturer_by_id,
+    count_materials_in_category,
+    delete_material_category,
+    list_material_categories as list_material_taxonomy_categories,
+    list_material_manufacturers,
+    update_material_category,
+    update_material_manufacturer,
+)
 from database.repositories.inventory_repository import (
     delete_fittings_exact,
     create_supplier,
+    count_supplier_offer_usage,
+    count_material_supplier_offer_usage,
     delete_supplier,
     list_fitting_delete_dependencies,
     update_supplier,
+    get_supplier_by_code,
+    upsert_material_supplier_offer_for_import,
 )
 from database.repositories.service_catalog_repository import (
     create_manual_service_catalog_item,
@@ -149,7 +192,12 @@ from database.repositories.inventory_repository import (
     get_material_by_import_identity,
     get_material_edge_image,
     get_material_by_article,
+    get_material_image_by_id,
     get_material_owners,
+    get_supplier_by_id,
+    create_material_supplier_offer,
+    delete_material_supplier_offer,
+    get_material_supplier_offer,
     list_fitting_images,
     list_fitting_supplier_offers,
     list_fittings,
@@ -160,6 +208,8 @@ from database.repositories.inventory_repository import (
     list_materials,
     _serialize_fitting,
     _serialize_fitting_supplier_offer,
+    list_material_supplier_offers,
+    _UNSET,
     upsert_material,
     upsert_material_edge_option,
     upsert_material_edge_price,
@@ -168,6 +218,7 @@ from database.repositories.inventory_repository import (
     update_fitting,
     update_fitting_image_cache,
     update_material,
+    update_material_supplier_offer,
     update_material_edge_image_cache,
     update_material_image_cache,
 )
@@ -212,22 +263,34 @@ from services.material_import_queue_service import (
     enqueue_material_import_job,
     get_material_import_job_result,
 )
+from services.material_identity_validation_service import (
+    validate_material_supplier_offer_identity,
+)
 from services.material_catalog_service import (
     CITY_COOKIES as MATERIAL_CITY_COOKIES,
     detect_material_source_site,
     fetch_material_by_source_live_traced,
+    fetch_material_by_source_url_live_traced,
     fetch_viyar_product_details_by_url_traced,
     fetch_remote_image_payload,
+    is_material_gallery_candidate_url,
+    normalize_material_gallery_image_url,
     prefetch_material_image_cache,
     warm_material_image_cache_for_item,
+    resolve_material_gallery_image_payload,
     resolve_material_image_payload,
 )
 from services.catalog_auto_refresh_service import (
     get_catalog_auto_refresh_status,
 )
+from services.edge_foundation_persistence_service import (
+    persist_viyar_recommended_edges_for_material_import,
+)
 from services.upload_service import (
     save_supplier_logo_file,
     save_manufacturer_logo_file,
+    save_material_manufacturer_logo_file,
+    save_material_category_image_file,
 )
 
 router = APIRouter()
@@ -296,6 +359,63 @@ def _find_material_import_match(
     )
 
 
+def _format_material_identity_validation_error(identity_validation: dict | None) -> str:
+    if not identity_validation:
+        return "Material identity could not be confirmed for supplier offer attachment."
+
+    status = str(identity_validation.get("status") or "").strip()
+    conflicts = identity_validation.get("conflicts") or []
+    missing_fields = identity_validation.get("missing_fields") or []
+
+    if status == "conflict" and conflicts:
+        fields = ", ".join(
+            str(conflict.get("field") or "").strip()
+            for conflict in conflicts
+            if str(conflict.get("field") or "").strip()
+        )
+        if fields:
+            return f"Incoming material conflicts with the existing canonical material: {fields}."
+        return "Incoming material conflicts with the existing canonical material."
+
+    if status == "needs_review":
+        if missing_fields:
+            fields = ", ".join(str(field) for field in missing_fields if str(field).strip())
+            if fields:
+                return f"Incoming material needs review before it can be attached: missing {fields}."
+        return "Incoming material needs review before it can be attached."
+
+    return "Material identity could not be confirmed for supplier offer attachment."
+
+
+def _is_retryable_source_url_import_error(error: Exception, source_site: str) -> bool:
+    if source_site != "viyar":
+        return False
+
+    trace = getattr(error, "trace", None) or []
+    for trace_entry in trace:
+        if isinstance(trace_entry, dict) and trace_entry.get("stage") == "direct.error":
+            return True
+
+    error_text = str(error).lower()
+    retryable_markers = (
+        "timeout",
+        "timed out",
+        "network",
+        "connection",
+        "err_network",
+    )
+    return any(marker in error_text for marker in retryable_markers)
+
+
+def _format_source_url_import_error(error: Exception, source_site: str) -> str:
+    if _is_retryable_source_url_import_error(error, source_site):
+        if source_site == "viyar":
+            return "Не вдалося отримати дані товару від VIYAR. Спробуйте повторити імпорт пізніше."
+        return "Не вдалося отримати дані товару. Спробуйте повторити імпорт пізніше."
+
+    return str(error).strip() or "Не вдалося імпортувати товар за посиланням."
+
+
 def _link_material_for_user(
     *,
     material: dict,
@@ -314,6 +434,66 @@ def _link_material_for_user(
         viewer_user_id=str(current_user.id),
         viewer_role=current_user.role,
     ) or material
+
+
+def _prepare_material_gallery_images(
+    *,
+    material: dict,
+    selected_city: str | None,
+    source_url: str | None,
+    cookie_override: str | None,
+) -> tuple[PreparedFittingGalleryImage, ...] | None:
+    gallery_image_urls = list(material.get("image_urls") or [])
+    if not gallery_image_urls and material.get("image"):
+        gallery_image_urls = [material.get("image")]
+
+    if not gallery_image_urls:
+        return None
+
+    return _prepare_remote_material_gallery_images(
+        gallery_image_urls,
+        article=str(material.get("article") or "").strip() or None,
+        source_url=source_url or material.get("source_url"),
+        selected_city=selected_city,
+        cookie_override=cookie_override,
+    )
+
+
+async def _hydrate_material_supplier_offer_display_flags(
+    supplier_offers: list[dict],
+    *,
+    city: str | None = None,
+) -> list[dict]:
+
+    if not supplier_offers:
+        return supplier_offers
+
+    viyar_support_cache: dict[str, bool] = {}
+    hydrated_offers: list[dict] = []
+
+    for offer in supplier_offers:
+        hydrated_offer = dict(offer)
+        support_flag = hydrated_offer.get("supports_square_meter_sale")
+
+        if support_flag is None:
+            source_url = _normalize_fitting_detail_text(hydrated_offer.get("source_url"))
+            if source_url and detect_material_source_site(source_url) == "viyar":
+                if source_url not in viyar_support_cache:
+                    try:
+                        parsed_material, _debug_payload = await fetch_viyar_product_details_by_url_traced(
+                            source_url,
+                            city=city,
+                        )
+                        viyar_support_cache[source_url] = bool(parsed_material.get("supports_square_meter_sale"))
+                    except Exception:
+                        viyar_support_cache[source_url] = False
+
+                if source_url in viyar_support_cache:
+                    hydrated_offer["supports_square_meter_sale"] = viyar_support_cache[source_url]
+
+        hydrated_offers.append(hydrated_offer)
+
+    return hydrated_offers
 
 
 def _claim_fitting_image_warm(item_id: str | None) -> bool:
@@ -525,6 +705,278 @@ def _prepare_remote_fitting_gallery_images(
             city=selected_city,
         ),
     )
+
+
+def _prepare_remote_material_gallery_images(
+    image_urls: Sequence[object] | None,
+    *,
+    article: str | None = None,
+    source_url: str | None = None,
+    selected_city: str | None = None,
+    cookie_override: str | None = None,
+    existing_primary_bytes: bytes | None = None,
+    existing_primary_content_type: str | None = None,
+) -> tuple[PreparedFittingGalleryImage, ...] | None:
+    raw_image_urls = list(image_urls or [])
+    filtered_image_urls = [
+        image_url
+        for image_url in raw_image_urls
+        if is_material_gallery_candidate_url(image_url)
+    ]
+    normalized_image_urls = normalize_fitting_gallery_image_urls(filtered_image_urls)
+    deduped_image_urls: list[tuple[str, str]] = []
+    seen_urls: set[str] = set()
+    for image_url in normalized_image_urls:
+        canonical_image_url = normalize_material_gallery_image_url(image_url) or image_url
+        if canonical_image_url in seen_urls:
+            continue
+        deduped_image_urls.append((canonical_image_url, image_url))
+        seen_urls.add(canonical_image_url)
+    if not deduped_image_urls:
+        return None
+
+    prepared_images: list[PreparedFittingGalleryImage] = []
+    seen_hashes: set[str] = set()
+    next_sort_order = 0
+    urls_to_process = list(deduped_image_urls)
+
+    if existing_primary_bytes is not None and urls_to_process:
+        primary_source_url = urls_to_process[0][0]
+        try:
+            primary_image = prepare_fitting_gallery_image_from_bytes(
+                source_url=primary_source_url,
+                image_bytes=existing_primary_bytes,
+                content_type=existing_primary_content_type,
+                sort_order=0,
+                is_primary=True,
+            )
+            prepared_images.append(primary_image)
+            seen_hashes.add(primary_image.sha256)
+            next_sort_order = 1
+            urls_to_process = urls_to_process[1:]
+        except Exception as error:
+            logger.warning(
+                "Material gallery cached primary preparation failed for article=%s source_url=%s error=%s",
+                article,
+                primary_source_url,
+                error,
+            )
+
+    for image_index, (canonical_image_url, original_image_url) in enumerate(urls_to_process, start=next_sort_order + 1):
+        fetch_candidates = [canonical_image_url]
+        if original_image_url != canonical_image_url:
+            fetch_candidates.append(original_image_url)
+
+        payload = None
+        try:
+            for fetch_url in fetch_candidates:
+                payload = fetch_remote_image_payload(
+                    fetch_url,
+                    city=selected_city,
+                    cookie_override=cookie_override,
+                )
+                if payload:
+                    break
+        except Exception as error:
+            logger.warning(
+                "Material gallery image preparation failed for article=%s source_url=%s error=%s",
+                article,
+                canonical_image_url,
+                error,
+            )
+            continue
+
+        if not payload:
+            logger.warning(
+                "Material gallery image skipped for article=%s source_url=%s error=%s",
+                article,
+                canonical_image_url,
+                "Unable to validate gallery image",
+            )
+            continue
+
+        try:
+            prepared_image = prepare_fitting_gallery_image_from_bytes(
+                source_url=payload.get("resolved_url") or canonical_image_url,
+                image_bytes=payload["bytes"],
+                content_type=payload.get("content_type"),
+                sort_order=next_sort_order,
+                is_primary=not prepared_images,
+            )
+        except Exception as error:
+            logger.warning(
+                "Material gallery image preparation failed for article=%s source_url=%s error=%s",
+                article,
+                canonical_image_url,
+                error,
+            )
+            continue
+
+        if prepared_image.sha256 in seen_hashes:
+            continue
+
+        prepared_images.append(prepared_image)
+        seen_hashes.add(prepared_image.sha256)
+        next_sort_order += 1
+    if not prepared_images:
+        return None
+    return tuple(prepared_images)
+
+
+def _summarize_material_gallery_refresh(
+    *,
+    discovered: int,
+    persisted: int,
+) -> MaterialGalleryRefreshSummarySchema:
+    return MaterialGalleryRefreshSummarySchema(
+        discovered=max(0, int(discovered or 0)),
+        persisted=max(0, int(persisted or 0)),
+        failed=max(0, int(discovered or 0) - int(persisted or 0)),
+    )
+
+
+async def _refresh_material_gallery_for_item(
+    *,
+    material: dict,
+    current_user,
+) -> tuple[dict, MaterialGalleryRefreshSummarySchema, str | None]:
+    source_url = str(material.get("source_url") or "").strip()
+    article = str(material.get("article") or "").strip()
+
+    if not source_url or not article:
+        return material, _summarize_material_gallery_refresh(discovered=0, persisted=0), None
+
+    cookie_override = await _resolve_viyar_cookie_for_user(current_user)
+    selected_city = (current_user.city or "").strip() or None
+
+    try:
+        parsed_material, _debug_payload = await fetch_material_by_source_url_live_traced(
+            source_url,
+            city=selected_city,
+            cookie_override=cookie_override,
+            article_hint=article,
+        )
+    except Exception as error:
+        return material, _summarize_material_gallery_refresh(discovered=0, persisted=0), str(error) or "Unable to refresh material gallery"
+
+    gallery_image_urls = list(parsed_material.get("image_urls") or [])
+    image_payload = prefetch_material_image_cache(
+        article=article,
+        stored_image=parsed_material.get("image"),
+        source_url=source_url,
+        city=selected_city,
+        cookie_override=cookie_override,
+    )
+    prepared_gallery_images = None
+    if gallery_image_urls:
+        try:
+            prepared_gallery_images = _prepare_remote_material_gallery_images(
+                gallery_image_urls,
+                article=article,
+                source_url=source_url,
+                selected_city=selected_city,
+                existing_primary_bytes=(
+                    image_payload.get("bytes")
+                    if image_payload and image_payload.get("bytes")
+                    else None
+                ),
+                existing_primary_content_type=(
+                    image_payload.get("content_type")
+                    if image_payload and image_payload.get("content_type")
+                    else None
+                ),
+            )
+        except Exception as error:
+            logger.warning(
+                "Material gallery refresh failed for article=%s source_url=%s error=%s",
+                article,
+                source_url,
+                error,
+            )
+            prepared_gallery_images = None
+
+    refreshed_item = upsert_material(
+        article=article,
+        name=parsed_material.get("name") or material.get("name") or article,
+        description=parsed_material.get("description") or material.get("description"),
+        color=parsed_material.get("color") or material.get("color"),
+        dimensions=parsed_material.get("dimensions") or material.get("dimensions"),
+        thickness=parsed_material.get("thickness") or material.get("thickness"),
+        category=material.get("category") or parsed_material.get("category") or parsed_material.get("product_type"),
+        image=parsed_material.get("image") or material.get("image"),
+        source_url=source_url,
+        owner_user_id=material.get("owner_user_id"),
+        is_default=bool(material.get("is_default")),
+        source=material.get("source") or detect_material_source_site(source_url),
+        product_type=material.get("product_type") or parsed_material.get("product_type") or material.get("category"),
+        image_source_url=(
+            image_payload.get("resolved_url")
+            if image_payload and image_payload.get("resolved_url")
+            else parsed_material.get("image")
+            or material.get("image_source_url")
+            or material.get("image")
+            or source_url
+        ),
+        imported_at=material.get("imported_at"),
+        static_updated_at=datetime.utcnow(),
+        prepared_gallery_images=prepared_gallery_images,
+    )
+
+    if image_payload and image_payload.get("bytes"):
+        update_material_image_cache(
+            article=article,
+            image_bytes=image_payload["bytes"],
+            content_type=image_payload["content_type"],
+        )
+
+    ensure_material_user_link(
+        article=article,
+        user_id=str(current_user.id),
+        source=material.get("source") or detect_material_source_site(source_url),
+        product_type=material.get("product_type") or material.get("category"),
+        source_url=source_url,
+    )
+
+    summary = _summarize_material_gallery_refresh(
+        discovered=len(gallery_image_urls),
+        persisted=len(prepared_gallery_images or ()),
+    )
+    return refreshed_item, summary, None
+
+
+async def _refresh_material_recommended_edges_for_item(
+    *,
+    material: dict,
+    material_id: int,
+    current_user,
+) -> tuple[MaterialRecommendedEdgesSummarySchema, str | None, list[dict[str, object]]]:
+    source_site = detect_material_source_site(material.get("source_url"))
+    summary = MaterialRecommendedEdgesSummarySchema()
+    warning = None
+    review_items: list[dict[str, object]] = []
+
+    if source_site == "viyar" and material.get("source_url"):
+        try:
+            result = await persist_viyar_recommended_edges_for_material_import(
+                material_id=int(material_id),
+                material_source_url=material.get("source_url"),
+                selected_city=(current_user.city or "").strip() or None,
+                cookie_override=await _resolve_viyar_cookie_for_user(current_user),
+                relation_source_url=material.get("source_url"),
+            )
+            summary = MaterialRecommendedEdgesSummarySchema(**(result.get("summary") or {}))
+            warning = result.get("error")
+            review_items = list(result.get("review_items") or [])
+        except Exception as error:  # pragma: no cover - defensive isolation
+            warning = str(error) or "Unable to persist recommended edges"
+            summary = MaterialRecommendedEdgesSummarySchema(
+                discovered=0,
+                persisted=0,
+                needs_review=0,
+                failed=1,
+            )
+
+    return summary, warning, review_items
 
 
 @router.post(
@@ -806,6 +1258,44 @@ def _can_manage_material_item(current_user, item: dict | None) -> bool:
     return item.get("owner_user_id") == str(current_user.id)
 
 
+def _can_manage_material_category(current_user, item) -> bool:
+
+    if not item:
+        return False
+
+    if current_user.role == "admin":
+        return True
+
+    if bool(getattr(item, "is_system", False)):
+        return False
+
+    return str(getattr(item, "owner_user_id", "") or "").strip() == str(current_user.id)
+
+
+def _can_delete_material_category(current_user, item) -> bool:
+    if not _can_manage_material_category(current_user, item):
+        return False
+
+    if current_user.role == "admin":
+        return not bool(getattr(item, "is_system", False))
+
+    return not bool(getattr(item, "is_system", False))
+
+
+def _can_manage_material_manufacturer(current_user, item) -> bool:
+
+    if not item:
+        return False
+
+    if current_user.role == "admin":
+        return True
+
+    if bool(item.get("is_system", False)):
+        return False
+
+    return str(item.get("owner_user_id") or "").strip() == str(current_user.id)
+
+
 def _get_material_ownership_quota(current_user) -> dict:
 
     owned_count = count_owned_private_materials(str(current_user.id))
@@ -900,11 +1390,43 @@ def _ensure_fitting_supplier_logo_upload_access(current_user) -> None:
     )
 
 
+def _ensure_material_category_image_upload_access(current_user) -> None:
+
+    with EntitlementService() as service:
+        if service.has_feature(current_user, "materials.create") or service.has_feature(current_user, "materials.edit"):
+            return
+
+    raise HTTPException(
+        status_code=403,
+        detail={
+            "success": False,
+            "error": "Insufficient permissions",
+        },
+    )
+
+
+def _ensure_material_manufacturer_logo_upload_access(current_user) -> None:
+
+    with EntitlementService() as service:
+        if service.has_feature(current_user, "materials.create") or service.has_feature(current_user, "materials.edit"):
+            return
+
+    raise HTTPException(
+        status_code=403,
+        detail={
+            "success": False,
+            "error": "Insufficient permissions",
+        },
+    )
+
+
 def _resolve_material_with_city_context(
     article: str,
     city: str | None,
     current_user,
     category: str | None = None,
+    *,
+    base_item: dict | None = None,
 ) -> dict | None:
 
     normalized_article = (article or "").strip()
@@ -920,7 +1442,7 @@ def _resolve_material_with_city_context(
         viewer_role=current_user.role,
     )
 
-    return next(
+    resolved_item = next(
         (
             item
             for item in items
@@ -932,6 +1454,24 @@ def _resolve_material_with_city_context(
             viewer_role=current_user.role,
         ),
     )
+
+    if not resolved_item:
+        return None
+
+    if not base_item:
+        return resolved_item
+
+    merged_item = dict(base_item)
+    merged_item.update(
+        {
+            key: value
+            for key, value in resolved_item.items()
+            if value is not None or key not in merged_item
+        }
+    )
+    if base_item.get("images") and not merged_item.get("images"):
+        merged_item["images"] = base_item["images"]
+    return merged_item
 
 
 async def _collect_material_prices_for_all_cities(
@@ -966,7 +1506,6 @@ async def _collect_material_prices_for_all_cities(
             city_code: material.get("price")
             for city_code in ordered_cities
         }
-
     for city_code in ordered_cities:
         try:
             material, _debug_payload = await fetch_material_by_source_live_traced(
@@ -982,7 +1521,6 @@ async def _collect_material_prices_for_all_cities(
             primary_material = material
 
         prices_by_city[city_code] = material.get("price")
-
     return primary_material, prices_by_city
 
 
@@ -1114,10 +1652,17 @@ async def list_materials_route(
     category: str | None = Query(default=None),
     city: str | None = Query(default=None),
     ownership_scope: str | None = Query(default=None),
+    include_private_categories: bool | None = Query(default=None),
     current_user = Depends(require_catalog_reader)
 ):
 
     _ensure_material_feature_access(current_user, "materials.view")
+
+    resolved_include_private_categories = (
+        current_user.role != "admin"
+        if include_private_categories is None
+        else include_private_categories
+    )
 
     selected_city = city or current_user.city
     items = list_materials(
@@ -1133,7 +1678,11 @@ async def list_materials_route(
 
     return {
         "success": True,
-        "categories": list_material_categories(),
+        "categories": list_material_taxonomy_categories(
+            viewer_user_id=current_user.id,
+            viewer_role=current_user.role,
+            include_private_categories=resolved_include_private_categories,
+        ),
         "city_options": list_inventory_cities(),
         "selected_city": selected_city,
         "material_quota": _get_material_ownership_quota(current_user),
@@ -1197,6 +1746,37 @@ async def get_material_image_route(
     return Response(status_code=404)
 
 
+@router.get("/materials/{article}/images/{image_id}")
+async def get_material_gallery_image_route(
+    article: str,
+    image_id: str,
+    access_token: str | None = Query(default=None),
+    if_none_match: str | None = Header(default=None, alias="If-None-Match"),
+    current_user = Depends(optional_current_user),
+):
+
+    authorized_user = current_user
+
+    if not authorized_user and access_token:
+        authorized_user = get_user_from_token(access_token)
+
+    material = get_material_by_article(
+        article.strip(),
+        viewer_user_id=getattr(authorized_user, "id", None),
+        viewer_role=getattr(authorized_user, "role", "free") if authorized_user else "free",
+    )
+    image = get_material_image_by_id(article.strip(), image_id.strip())
+
+    if not material or not image:
+        return Response(status_code=404)
+
+    return _image_response(
+        image["image_cached_bytes"],
+        image.get("image_cached_content_type"),
+        if_none_match,
+    )
+
+
 @router.get("/materials/{article}/edges/{edge_key}/image")
 async def get_material_edge_image_route(
     article: str,
@@ -1242,6 +1822,26 @@ async def create_material_route(
 ):
 
     selected_city = (payload.city or current_user.city or "").strip()
+    manufacturer_id_in_payload = "manufacturer_id" in payload.model_fields_set
+    selected_manufacturer_id = None
+    if manufacturer_id_in_payload:
+        if payload.manufacturer_id is None:
+            selected_manufacturer_id = None
+        else:
+            manufacturer_row = get_material_manufacturer_by_id(
+                payload.manufacturer_id,
+                viewer_user_id=current_user.id,
+                viewer_role=current_user.role,
+            )
+            if not manufacturer_row:
+                return {
+                    "success": False,
+                    "error": "Material manufacturer not found",
+                }
+            selected_manufacturer_id = int(manufacturer_row["id"])
+    manufacturer_write_kwargs = {}
+    if manufacturer_id_in_payload:
+        manufacturer_write_kwargs["manufacturer_id"] = selected_manufacturer_id
 
     if not selected_city:
         return {
@@ -1259,9 +1859,11 @@ async def create_material_route(
 
     effective_category = (payload.category or "dsp").strip() or "dsp"
     effective_source_url = (payload.source_url or "").strip() or None
+    requested_source_site = detect_material_source_site(effective_source_url) if effective_source_url else None
     effective_article = (payload.article or "").strip() or None
     effective_name = (payload.name or "").strip() or None
     effective_owner_user_id = None if is_default else str(current_user.id)
+    effective_is_default = is_default
 
     existing_item = _find_material_import_match(
         source_url=effective_source_url,
@@ -1272,143 +1874,149 @@ async def create_material_route(
     )
 
     if existing_item and not _can_manage_material_item(current_user, existing_item):
+        has_explicit_supported_source_url = bool(
+            effective_source_url and requested_source_site and requested_source_site != "generic"
+        )
+
         if existing_item.get("is_default"):
-            _ensure_material_feature_access(current_user, "materials.view")
-            resolved_existing_item = _resolve_material_with_city_context(
-                effective_article,
-                selected_city,
-                current_user,
-                effective_category,
-            ) or existing_item
+            if not has_explicit_supported_source_url:
+                _ensure_material_feature_access(current_user, "materials.view")
+                resolved_existing_item = _resolve_material_with_city_context(
+                    effective_article,
+                    selected_city,
+                    current_user,
+                    effective_category,
+                    base_item=existing_item,
+                ) or existing_item
+                return {
+                    "success": True,
+                    "item": resolved_existing_item,
+                    "selected_city": selected_city,
+                    "error": "Material already exists in the shared catalog",
+                }
+        else:
             return {
-                "success": True,
-                "item": resolved_existing_item,
-                "selected_city": selected_city,
-                "error": "Material already exists in the shared catalog",
+                "success": False,
+                "error": "Material with this article already exists",
             }
-        return {
-            "success": False,
-            "error": "Material with this article already exists",
-        }
 
     if existing_item:
         _ensure_material_feature_access(current_user, "materials.edit")
+        effective_owner_user_id = existing_item.get("owner_user_id")
+        effective_is_default = bool(existing_item.get("is_default"))
     else:
         _ensure_material_feature_access(current_user, "materials.create")
 
     if effective_source_url:
-        if not effective_article:
-            return {
-                "success": False,
-                "error": "Article is required when adding material from a link",
-            }
-
         if not existing_item and not is_default:
             _ensure_material_ownership_capacity(current_user)
 
-        source_site = detect_material_source_site(effective_source_url)
-
-        if existing_item and not material_needs_full_sync(existing_item):
-            item = _link_material_for_user(
-                material=existing_item,
-                current_user=current_user,
-                source_url=effective_source_url,
-            )
-            return {
-                "success": True,
-                "item": item,
-                "selected_city": selected_city,
-                "error": None,
-            }
-
-        if source_site != "viyar":
-            item = upsert_material(
-                article=effective_article,
-                name=effective_name or effective_article,
-                category=effective_category,
-                image=payload.image_url,
-                source_url=effective_source_url,
-                owner_user_id=effective_owner_user_id,
-                is_default=is_default,
-                source=source_site,
-                product_type=effective_category,
-                image_source_url=payload.image_url,
-            )
-            primary_job = await enqueue_material_import_job(
-                article=effective_article,
-                category=effective_category,
-                city=selected_city,
-                owner_user_id=str(current_user.id),
-                preferred_url=effective_source_url,
-            )
-
-            create_audit_log(
-                actor_user_id=current_user.id,
-                actor_email=current_user.email,
-                action="catalog.material_import_queued",
-                entity_type="material_import_job",
-                entity_id=primary_job["id"],
-                details={
-                    "article": effective_article,
-                    "category": effective_category,
-                    "city": selected_city,
-                    "source_site": source_site,
-                    "source_url": effective_source_url,
-                    "is_default": is_default,
-                },
-            )
-
-            return {
-                "success": True,
-                "item": item,
-                "job": primary_job,
-                "selected_city": selected_city,
-                "error": "Material import queued. The system will update it in the background.",
-            }
-
         cookie_override = await _resolve_viyar_cookie_for_user(current_user)
+        source_site = detect_material_source_site(effective_source_url)
+        unresolved_article_error = "Не вдалося визначити артикул товару за посиланням. Вкажіть артикул вручну."
 
         try:
-            material, prices_by_city = await _collect_material_prices_for_all_cities(
-                article=effective_article,
-                preferred_url=effective_source_url,
-                cookie_override=cookie_override,
-                selected_city=selected_city,
-            )
-
-            if not material:
-                raise RuntimeError("Material details were not resolved")
-
-            image_payload = prefetch_material_image_cache(
-                article=material["article"],
-                stored_image=material.get("image"),
-                source_url=material.get("source_url") or effective_source_url,
+            parsed_material = None
+            parsed_material, _parsed_debug_payload = await fetch_material_by_source_url_live_traced(
+                effective_source_url,
                 city=selected_city,
                 cookie_override=cookie_override,
+                article_hint=effective_article,
+            )
+            if not parsed_material:
+                logger.warning(
+                    "Explicit source-url import returned no parsed material; source_site=%s article=%s source_url=%s stage=direct_source_parse",
+                    source_site,
+                    effective_article or "",
+                    effective_source_url,
+                )
+                return {
+                    "success": False,
+                    "error": (
+                        "Не вдалося отримати дані товару від VIYAR. Спробуйте повторити імпорт пізніше."
+                        if source_site == "viyar"
+                        else "Не вдалося отримати дані товару. Спробуйте повторити імпорт пізніше."
+                    ),
+                }
+            effective_article = (parsed_material.get("article") or effective_article or "").strip()
+            if not effective_article:
+                raise RuntimeError(unresolved_article_error)
+
+            if not existing_item:
+                existing_item = get_material_by_article(
+                    effective_article,
+                    viewer_user_id=str(current_user.id),
+                    viewer_role=current_user.role,
+                )
+
+            material = parsed_material
+            prices_by_city = {
+                selected_city: material.get("price"),
+            }
+
+            if not material.get("source_url"):
+                material["source_url"] = effective_source_url
+
+            prepared_gallery_images = _prepare_material_gallery_images(
+                material=material,
+                selected_city=selected_city,
+                source_url=material.get("source_url") or effective_source_url,
+                cookie_override=cookie_override,
             )
 
-            if not image_payload or not image_payload.get("bytes"):
-                raise RuntimeError("Material image BLOB was not resolved")
+            if not existing_item:
+                existing_item = _find_material_import_match(
+                    source_url=effective_source_url,
+                    article=effective_article,
+                    category=effective_category,
+                )
+
+            identity_validation = None
+            if existing_item:
+                identity_validation = validate_material_supplier_offer_identity(
+                    existing_item,
+                    material,
+                    expected_category=effective_category,
+                )
+                if identity_validation["status"] != "compatible":
+                    return {
+                        "success": False,
+                        "item": existing_item,
+                        "selected_city": selected_city,
+                        "error": _format_material_identity_validation_error(identity_validation),
+                        "material_identity_validation": identity_validation,
+                    }
 
             now = datetime.utcnow()
-            item = upsert_material(
-                article=material["article"],
-                name=material["name"],
-                description=material.get("description"),
-                color=material.get("color"),
-                dimensions=material.get("dimensions"),
-                thickness=material.get("thickness"),
-                category=effective_category,
-                image=material.get("image"),
-                source_url=material.get("source_url") or effective_source_url,
-                owner_user_id=effective_owner_user_id,
-                is_default=is_default,
-                source=source_site,
-                product_type=effective_category,
-                image_source_url=image_payload.get("resolved_url") or material.get("image") or effective_source_url,
-                imported_at=now,
-                static_updated_at=now,
+            preserve_existing_canonical = bool(
+                existing_item
+                and existing_item.get("source")
+                and source_site != existing_item.get("source")
             )
+
+            if preserve_existing_canonical:
+                item = existing_item
+            else:
+                item = upsert_material(
+                    article=material["article"],
+                    name=material["name"],
+                    description=material.get("description"),
+                    color=material.get("color"),
+                    dimensions=material.get("dimensions"),
+                    thickness=material.get("thickness"),
+                    category=effective_category,
+                    image=material.get("image"),
+                    source_url=material.get("source_url") or effective_source_url,
+                    owner_user_id=effective_owner_user_id,
+                    is_default=effective_is_default,
+                    source=source_site,
+                    product_type=effective_category,
+                    image_source_url=material.get("image") or effective_source_url,
+                    imported_at=now,
+                    static_updated_at=now,
+                    prepared_gallery_images=prepared_gallery_images,
+                    **manufacturer_write_kwargs,
+                )
 
             for city_code, price_value in prices_by_city.items():
                 upsert_material_price(
@@ -1417,11 +2025,6 @@ async def create_material_route(
                     price=price_value,
                 )
 
-            update_material_image_cache(
-                article=material["article"],
-                image_bytes=image_payload["bytes"],
-                content_type=image_payload["content_type"],
-            )
             ensure_material_user_link(
                 article=material["article"],
                 user_id=str(current_user.id),
@@ -1429,17 +2032,34 @@ async def create_material_route(
                 product_type=effective_category,
                 source_url=material.get("source_url") or effective_source_url,
             )
-            item = get_material_by_article(material["article"]) or item
+            supplier = get_supplier_by_code(source_site)
+            if supplier and supplier.get("is_active"):
+                upsert_material_supplier_offer_for_import(
+                    material_id=item["id"],
+                    supplier_id=supplier["id"],
+                    article=material["article"],
+                    external_product_id=material.get("external_product_id"),
+                    source_url=material.get("source_url") or effective_source_url,
+                    price=material.get("price"),
+                    currency=material.get("currency"),
+                    unit=material.get("unit"),
+                    stock=material.get("stock"),
+                    city=selected_city,
+                    region=material.get("region"),
+                    is_active=True,
+                    priority=0,
+                    parsed_at=now,
+                    price_updated_at=now,
+                )
 
+            item = get_material_by_article(material["article"]) or item
             item = _resolve_material_with_city_context(
                 material["article"],
                 selected_city,
                 current_user,
                 effective_category,
+                base_item=item,
             ) or item
-
-            if is_default:
-                pass
 
             create_audit_log(
                 actor_user_id=current_user.id,
@@ -1452,8 +2072,9 @@ async def create_material_route(
                     "category": effective_category,
                     "city": selected_city,
                     "source_url": item.get("source_url"),
-                    "is_default": is_default,
+                    "is_default": effective_is_default,
                     "prices_cities_count": len(prices_by_city),
+                    "recommended_edges": None,
                 },
             )
 
@@ -1461,57 +2082,32 @@ async def create_material_route(
                 "success": True,
                 "item": item,
                 "selected_city": selected_city,
+                "material_identity_validation": identity_validation,
                 "error": None,
+                "recommended_edges": None,
             }
-        except Exception:
-            item = upsert_material(
-                article=effective_article,
-                name=effective_name or effective_article,
-                category=effective_category,
-                image=payload.image_url,
-                source_url=effective_source_url,
-                owner_user_id=effective_owner_user_id,
-                is_default=is_default,
-                source=source_site,
-                product_type=effective_category,
-                image_source_url=payload.image_url,
-            )
-            item = _resolve_material_with_city_context(
-                effective_article,
-                selected_city,
-                current_user,
-                effective_category,
-            ) or item
-
-            primary_job = await enqueue_material_import_job(
-                article=effective_article,
-                category=effective_category,
-                city=selected_city,
-                owner_user_id=str(current_user.id),
-                preferred_url=effective_source_url,
-            )
-
-            if is_default:
-                for city_code in MATERIAL_CITY_COOKIES.keys():
-                    if city_code == selected_city:
-                        continue
-                    try:
-                        await enqueue_material_import_job(
-                            article=effective_article,
-                            category=effective_category,
-                            city=city_code,
-                            owner_user_id=str(current_user.id),
-                            preferred_url=effective_source_url,
-                        )
-                    except Exception:
-                        pass
+        except Exception as error:
+            error_message = _format_source_url_import_error(error, source_site)
+            if _is_retryable_source_url_import_error(error, source_site):
+                logger.warning(
+                    "Explicit source-url import failed before persistence; source_site=%s article=%s error_type=%s error=%s",
+                    source_site,
+                    effective_article or "",
+                    type(error).__name__,
+                    error_message,
+                    exc_info=True,
+                )
+            else:
+                logger.exception(
+                    "Explicit source-url import failed before persistence; source_site=%s article=%s error_type=%s",
+                    source_site,
+                    effective_article or "",
+                    type(error).__name__,
+                )
 
             return {
-                "success": True,
-                "item": item,
-                "job": primary_job,
-                "selected_city": selected_city,
-                "error": "Material import queued. The system will retry automatically.",
+                "success": False,
+                "error": error_message,
             }
 
     if is_default:
@@ -1559,6 +2155,7 @@ async def create_material_route(
         source="manual",
         product_type=effective_category,
         image_source_url=payload.image_url,
+        **manufacturer_write_kwargs,
     )
     upsert_material_price(
         article=manual_article,
@@ -1577,6 +2174,7 @@ async def create_material_route(
         selected_city,
         current_user,
         effective_category,
+        base_item=item,
     ) or item
 
     create_audit_log(
@@ -1674,26 +2272,26 @@ async def import_material_from_viyar_route(
 
     cookie_override = await _resolve_viyar_cookie_for_user(current_user)
     try:
-        material, prices_by_city = await _collect_material_prices_for_all_cities(
+        material, _debug_payload = await fetch_material_by_source_live_traced(
             article=normalized_article,
             preferred_url=(payload.source_url or "").strip() or None,
             cookie_override=cookie_override,
-            selected_city=selected_city,
+            city=selected_city,
         )
 
         if not material:
             raise RuntimeError("Material details were not resolved")
 
-        image_payload = prefetch_material_image_cache(
-            article=material["article"],
-            stored_image=material.get("image"),
+        prices_by_city = {
+            selected_city: material.get("price"),
+        }
+
+        prepared_gallery_images = _prepare_material_gallery_images(
+            material=material,
+            selected_city=selected_city,
             source_url=material.get("source_url") or payload.source_url,
-            city=selected_city,
             cookie_override=cookie_override,
         )
-
-        if not image_payload or not image_payload.get("bytes"):
-            raise RuntimeError("Material image BLOB was not resolved")
 
         now = datetime.utcnow()
         is_default = current_user.role == "admin"
@@ -1711,23 +2309,17 @@ async def import_material_from_viyar_route(
             is_default=is_default,
             source=detect_material_source_site(material.get("source_url") or payload.source_url),
             product_type=payload.category,
-            image_source_url=image_payload.get("resolved_url") or material.get("image") or payload.source_url,
+            image_source_url=material.get("image") or payload.source_url,
             imported_at=now,
             static_updated_at=now,
+            prepared_gallery_images=prepared_gallery_images,
         )
-
         for city_code, price_value in prices_by_city.items():
             upsert_material_price(
                 article=material["article"],
                 city=city_code,
                 price=price_value,
             )
-
-        update_material_image_cache(
-            article=material["article"],
-            image_bytes=image_payload["bytes"],
-            content_type=image_payload["content_type"],
-        )
 
         ensure_material_user_link(
             article=material["article"],
@@ -1736,6 +2328,26 @@ async def import_material_from_viyar_route(
             product_type=payload.category,
             source_url=material.get("source_url") or payload.source_url,
         )
+        source_site = detect_material_source_site(material.get("source_url") or payload.source_url)
+        supplier = get_supplier_by_code(source_site)
+        if supplier and supplier.get("is_active"):
+            upsert_material_supplier_offer_for_import(
+                material_id=item["id"],
+                supplier_id=supplier["id"],
+                article=material["article"],
+                external_product_id=material.get("external_product_id"),
+                source_url=material.get("source_url") or payload.source_url,
+                price=material.get("price"),
+                currency=material.get("currency"),
+                unit=material.get("unit"),
+                stock=material.get("stock"),
+                city=selected_city,
+                region=material.get("region"),
+                is_active=True,
+                priority=0,
+                parsed_at=now,
+                price_updated_at=now,
+            )
 
         item = get_material_by_article(
             material["article"],
@@ -1754,7 +2366,8 @@ async def import_material_from_viyar_route(
                 "city": selected_city,
                 "source": item.get("source"),
                 "prices_cities_count": len(prices_by_city),
-            }
+                "recommended_edges": None,
+            },
         )
 
         return {
@@ -1762,6 +2375,7 @@ async def import_material_from_viyar_route(
             "item": item,
             "selected_city": selected_city,
             "error": None,
+            "recommended_edges": None,
         }
     except Exception as error:
         return {
@@ -1769,6 +2383,188 @@ async def import_material_from_viyar_route(
             "error": str(error),
             "selected_city": selected_city,
         }
+
+
+@router.post(
+    "/materials/{material_id}/images/refresh",
+    response_model=MaterialGalleryRefreshResponseSchema,
+)
+async def refresh_material_gallery_route(
+    material_id: int,
+    current_user = Depends(require_material_editor),
+):
+
+    _ensure_material_feature_access(current_user, "materials.edit")
+
+    db = SessionLocal()
+    try:
+        material_row = (
+            db.query(MaterialModel)
+            .filter(MaterialModel.id == int(material_id))
+            .first()
+        )
+    finally:
+        db.close()
+    if not material_row:
+        return {
+            "success": False,
+            "material_id": int(material_id),
+            "error": "Material not found",
+        }
+
+    material = get_material_by_article(
+        material_row.article,
+        viewer_user_id=str(current_user.id),
+        viewer_role=current_user.role,
+    )
+    if not material:
+        return {
+            "success": False,
+            "material_id": int(material_id),
+            "error": "Material not found",
+        }
+
+    if not _can_manage_material_item(current_user, material):
+        return {
+            "success": False,
+            "material_id": int(material_id),
+            "error": "You do not have permission to edit this material",
+        }
+
+    refreshed_item, summary, warning = await _refresh_material_gallery_for_item(
+        material=material,
+        current_user=current_user,
+    )
+    refreshed_item = _resolve_material_with_city_context(
+        material["article"],
+        current_user.city,
+        current_user,
+        material.get("category"),
+        base_item=refreshed_item,
+    ) or refreshed_item
+
+    create_audit_log(
+        actor_user_id=current_user.id,
+        actor_email=current_user.email,
+        action="catalog.material_gallery_refreshed",
+        entity_type="material",
+        entity_id=material["article"],
+        details={
+            "article": material["article"],
+            "material_id": int(material_id),
+            "summary": summary.model_dump(),
+        },
+    )
+
+    return {
+        "success": True,
+        "material_id": int(material_id),
+        "item": refreshed_item,
+        "summary": summary,
+        "error": warning,
+    }
+
+
+@router.post(
+    "/materials/{material_id}/recommended-edges/refresh",
+    response_model=MaterialRecommendedEdgesRefreshResponseSchema,
+)
+async def refresh_material_recommended_edges_route(
+    material_id: int,
+    current_user = Depends(require_material_editor),
+):
+
+    _ensure_material_feature_access(current_user, "materials.edit")
+
+    db = SessionLocal()
+    try:
+        material_row = (
+            db.query(MaterialModel)
+            .filter(MaterialModel.id == int(material_id))
+            .first()
+        )
+    finally:
+        db.close()
+    if not material_row:
+        return {
+            "success": False,
+            "material_id": int(material_id),
+            "error": "Material not found",
+        }
+
+    material = get_material_by_article(
+        material_row.article,
+        viewer_user_id=str(current_user.id),
+        viewer_role=current_user.role,
+    )
+    if not material:
+        return {
+            "success": False,
+            "material_id": int(material_id),
+            "error": "Material not found",
+        }
+
+    if not _can_manage_material_item(current_user, material):
+        return {
+            "success": False,
+            "material_id": int(material_id),
+            "error": "You do not have permission to edit this material",
+        }
+
+    source_site = detect_material_source_site(material.get("source_url"))
+    summary = MaterialRecommendedEdgesSummarySchema()
+    warning = None
+    review_items: list[dict[str, object]] = []
+
+    if source_site == "viyar" and material.get("source_url"):
+        try:
+            result = await persist_viyar_recommended_edges_for_material_import(
+                material_id=int(material_id),
+                material_source_url=material.get("source_url"),
+                selected_city=(current_user.city or "").strip() or None,
+                cookie_override=await _resolve_viyar_cookie_for_user(current_user),
+                relation_source_url=material.get("source_url"),
+            )
+            summary = MaterialRecommendedEdgesSummarySchema(**(result.get("summary") or {}))
+            warning = result.get("error")
+            review_items = list(result.get("review_items") or [])
+        except Exception as error:  # pragma: no cover - defensive isolation
+            warning = str(error) or "Unable to persist recommended edges"
+            summary = MaterialRecommendedEdgesSummarySchema(
+                discovered=0,
+                persisted=0,
+                needs_review=0,
+                failed=1,
+            )
+
+    refreshed_item = _resolve_material_with_city_context(
+        material["article"],
+        current_user.city,
+        current_user,
+        material.get("category"),
+    ) or material
+
+    create_audit_log(
+        actor_user_id=current_user.id,
+        actor_email=current_user.email,
+        action="catalog.material_recommended_edges_refreshed",
+        entity_type="material",
+        entity_id=material["article"],
+        details={
+            "article": material["article"],
+            "material_id": int(material_id),
+            "summary": summary.model_dump(),
+        },
+    )
+
+    return {
+        "success": True,
+        "material_id": int(material_id),
+        "item": refreshed_item,
+        "summary": summary,
+        "review_items": review_items,
+        "error": warning,
+    }
 
 
 @router.get(
@@ -1838,6 +2634,36 @@ async def get_material_route(
         current_user,
     )
 
+    detail_item = get_material_by_article(
+        article.strip(),
+        viewer_user_id=str(current_user.id),
+        viewer_role=current_user.role,
+        city=selected_city,
+    )
+
+    if not item and detail_item:
+        item = detail_item
+
+    if item and detail_item and "supplier_offers" not in item:
+        item["supplier_offers"] = detail_item.get("supplier_offers", [])
+    if item and detail_item and "images" not in item:
+        item["images"] = detail_item.get("images", [])
+    if item and detail_item and "edge_options" not in item:
+        item["edge_options"] = detail_item.get("edge_options", [])
+    elif item and detail_item and detail_item.get("edge_options"):
+        existing_edge_keys = {
+            str(edge.get("edge_key") or "").strip()
+            for edge in (item.get("edge_options") or [])
+            if str(edge.get("edge_key") or "").strip()
+        }
+        merged_edge_options = list(item.get("edge_options") or [])
+        for edge in detail_item.get("edge_options") or []:
+            edge_key = str(edge.get("edge_key") or "").strip()
+            if edge_key and edge_key in existing_edge_keys:
+                continue
+            merged_edge_options.append(edge)
+        item["edge_options"] = merged_edge_options
+
     if not item:
         return {
             "success": False,
@@ -1848,6 +2674,500 @@ async def get_material_route(
         "success": True,
         "item": item,
         "selected_city": selected_city,
+    }
+
+
+@router.get(
+    "/materials/{article}/supplier-offers",
+    response_model=MaterialSupplierOfferListResponseSchema,
+)
+async def list_material_supplier_offers_route(
+    article: str,
+    current_user = Depends(require_catalog_reader),
+):
+
+    _ensure_material_feature_access(current_user, "materials.view")
+
+    material = get_material_by_article(
+        article.strip(),
+        viewer_user_id=str(current_user.id),
+        viewer_role=current_user.role,
+    )
+    if not material:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "success": False,
+                "error": "Material not found",
+            },
+        )
+
+    return {
+        "success": True,
+        "items": list_material_supplier_offers(material["id"]),
+    }
+
+
+@router.post(
+    "/materials/{article}/supplier-offers",
+    response_model=MaterialSupplierOfferOperationResponseSchema,
+)
+async def create_material_supplier_offer_route(
+    article: str,
+    payload: MaterialSupplierOfferCreateSchema,
+    current_user = Depends(require_material_editor),
+):
+
+    _ensure_material_feature_access(current_user, "materials.edit")
+
+    material = get_material_by_article(
+        article.strip(),
+        viewer_user_id=str(current_user.id),
+        viewer_role=current_user.role,
+    )
+    if not material:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "success": False,
+                "error": "Material not found",
+            },
+        )
+
+    if not _can_manage_material_item(current_user, material):
+        if material.get("is_default"):
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "success": False,
+                    "error": "You do not have permission to edit this material",
+                },
+            )
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "success": False,
+                "error": "Material not found",
+            },
+        )
+
+    supplier = get_supplier_by_id(payload.supplier_id)
+    if not supplier:
+        return {
+            "success": False,
+            "error": "Supplier not found",
+        }
+    if not supplier.get("is_active"):
+        return {
+            "success": False,
+            "error": "Supplier not found or inactive",
+        }
+    if current_user.role != "admin" and not (
+        bool(supplier.get("is_system"))
+        or str(supplier.get("owner_user_id") or "").strip() == str(current_user.id)
+    ):
+        return {
+            "success": False,
+            "error": "You do not have permission to use this supplier",
+        }
+
+    try:
+        item = create_material_supplier_offer(
+            material_id=material["id"],
+            supplier_id=payload.supplier_id,
+            article=payload.article,
+            external_product_id=payload.external_product_id,
+            source_url=payload.source_url,
+            price=payload.price,
+            currency=payload.currency,
+            unit=payload.unit,
+            stock=payload.stock,
+            city=payload.city,
+            region=payload.region,
+            is_active=payload.is_active,
+            priority=payload.priority,
+            parsed_at=payload.parsed_at,
+            price_updated_at=payload.price_updated_at,
+        )
+    except ValueError as error:
+        return {
+            "success": False,
+            "error": str(error) or "Unable to create supplier offer",
+        }
+
+    if not item:
+        return {
+            "success": False,
+            "error": "Unable to create supplier offer",
+        }
+
+    return {
+        "success": True,
+        "item": item,
+    }
+
+
+@router.post(
+    "/materials/{article}/supplier-offers/from-source",
+    response_model=MaterialSupplierOfferOperationResponseSchema,
+)
+async def attach_material_supplier_offer_from_source_route(
+    article: str,
+    payload: MaterialSupplierOfferAttachFromSourceSchema,
+    current_user = Depends(require_material_editor),
+):
+
+    _ensure_material_feature_access(current_user, "materials.edit")
+
+    material = get_material_by_article(
+        article.strip(),
+        viewer_user_id=str(current_user.id),
+        viewer_role=current_user.role,
+    )
+    if not material:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "success": False,
+                "error": "Material not found",
+            },
+        )
+
+    if not _can_manage_material_item(current_user, material):
+        if material.get("is_default"):
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "success": False,
+                    "error": "You do not have permission to edit this material",
+                },
+            )
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "success": False,
+                "error": "Material not found",
+            },
+        )
+
+    source_url = (payload.source_url or "").strip()
+    if not source_url:
+        return {
+            "success": False,
+            "error": "Source URL is required",
+        }
+
+    selected_city = (current_user.city or "").strip() or None
+    cookie_override = await _resolve_viyar_cookie_for_user(current_user)
+    source_site = detect_material_source_site(source_url)
+
+    try:
+        parsed_material, parsed_debug_payload = await fetch_material_by_source_url_live_traced(
+            source_url,
+            city=selected_city,
+            cookie_override=cookie_override,
+        )
+    except Exception as error:
+        return {
+            "success": False,
+            "error": str(error) or "Unable to parse supplier source URL",
+        }
+
+    identity_validation = validate_material_supplier_offer_identity(
+        material,
+        parsed_material,
+        expected_category=material.get("category"),
+    )
+    if identity_validation["status"] != "compatible":
+        return {
+            "success": False,
+            "item": material,
+            "source_site": source_site,
+            "parsed_material": parsed_material,
+            "material_identity_validation": identity_validation,
+            "error": _format_material_identity_validation_error(identity_validation),
+        }
+
+    supplier = get_supplier_by_code(source_site)
+    if not supplier:
+        return {
+            "success": False,
+            "item": material,
+            "source_site": source_site,
+            "parsed_material": parsed_material,
+            "material_identity_validation": identity_validation,
+            "error": "Supplier not found",
+        }
+
+    now = datetime.utcnow()
+    source_payload_json = json.dumps(
+        {
+            "source_url": source_url,
+            "source_site": source_site,
+            "parsed_material": parsed_material,
+            "debug": parsed_debug_payload,
+        },
+        ensure_ascii=False,
+        default=str,
+    )
+
+    item = upsert_material_supplier_offer_for_import(
+        material_id=material["id"],
+        supplier_id=supplier["id"],
+        article=parsed_material["article"],
+        external_product_id=parsed_material.get("external_product_id"),
+        source_url=parsed_material.get("source_url") or source_url,
+        price=parsed_material.get("price"),
+        currency=parsed_material.get("currency"),
+        unit=parsed_material.get("unit"),
+        stock=parsed_material.get("availability") or parsed_material.get("stock"),
+        city=selected_city,
+        region=parsed_material.get("region"),
+        is_active=True,
+        priority=0,
+        parsed_at=now,
+        price_updated_at=now,
+        source_payload_json=source_payload_json,
+    )
+
+    if not item:
+        return {
+            "success": False,
+            "item": material,
+            "source_site": source_site,
+            "parsed_material": parsed_material,
+            "material_identity_validation": identity_validation,
+            "error": "Unable to create supplier offer",
+        }
+
+    create_audit_log(
+        actor_user_id=current_user.id,
+        actor_email=current_user.email,
+        action="catalog.material_supplier_offer_attached_from_source",
+        entity_type="material_supplier_offer",
+        entity_id=str(item["id"]),
+        details={
+            "material_article": material["article"],
+            "supplier_code": source_site,
+            "source_url": item.get("source_url"),
+            "parsed_article": item.get("article"),
+        },
+    )
+
+    return {
+        "success": True,
+        "item": item,
+        "source_site": source_site,
+        "parsed_material": parsed_material,
+        "material_identity_validation": identity_validation,
+    }
+
+
+@router.patch(
+    "/material-supplier-offers/{offer_id}",
+    response_model=MaterialSupplierOfferOperationResponseSchema,
+)
+async def update_material_supplier_offer_route(
+    offer_id: str,
+    payload: MaterialSupplierOfferUpdateSchema,
+    current_user = Depends(require_material_editor),
+):
+
+    _ensure_material_feature_access(current_user, "materials.edit")
+
+    offer = get_material_supplier_offer(offer_id)
+    if not offer:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "success": False,
+                "error": "Supplier offer not found",
+            },
+        )
+
+    material = get_material_by_article(
+        str(payload.article).strip() if False else None or "",
+        viewer_user_id=str(current_user.id),
+        viewer_role=current_user.role,
+    )
+    db = SessionLocal()
+    try:
+        material_row = db.get(MaterialModel, int(offer["material_id"]))
+        if not material_row:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "success": False,
+                    "error": "Material not found",
+                },
+            )
+        material_payload = get_material_by_article(
+            material_row.article,
+            viewer_user_id=str(current_user.id),
+            viewer_role=current_user.role,
+        )
+    finally:
+        db.close()
+
+    if not material_payload:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "success": False,
+                "error": "Material not found",
+            },
+        )
+
+    if not _can_manage_material_item(current_user, material_payload):
+        if material_payload.get("is_default"):
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "success": False,
+                    "error": "You do not have permission to edit this material",
+                },
+            )
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "success": False,
+                "error": "Material not found",
+            },
+        )
+
+    if payload.supplier_id is not None:
+        supplier = get_supplier_by_id(payload.supplier_id)
+        if not supplier:
+            return {
+                "success": False,
+                "error": "Supplier not found",
+            }
+        if not supplier.get("is_active"):
+            return {
+                "success": False,
+                "error": "Supplier not found or inactive",
+            }
+        if current_user.role != "admin" and not (
+            bool(supplier.get("is_system"))
+            or str(supplier.get("owner_user_id") or "").strip() == str(current_user.id)
+        ):
+            return {
+                "success": False,
+                "error": "You do not have permission to use this supplier",
+            }
+
+    try:
+        item = update_material_supplier_offer(
+            offer_id,
+            supplier_id=payload.supplier_id if "supplier_id" in payload.model_fields_set else _UNSET,
+            article=payload.article if "article" in payload.model_fields_set else _UNSET,
+            external_product_id=payload.external_product_id if "external_product_id" in payload.model_fields_set else _UNSET,
+            source_url=payload.source_url if "source_url" in payload.model_fields_set else _UNSET,
+            price=payload.price if "price" in payload.model_fields_set else _UNSET,
+            currency=payload.currency if "currency" in payload.model_fields_set else _UNSET,
+            unit=payload.unit if "unit" in payload.model_fields_set else _UNSET,
+            stock=payload.stock if "stock" in payload.model_fields_set else _UNSET,
+            city=payload.city if "city" in payload.model_fields_set else _UNSET,
+            region=payload.region if "region" in payload.model_fields_set else _UNSET,
+            is_active=payload.is_active if "is_active" in payload.model_fields_set else _UNSET,
+            priority=payload.priority if "priority" in payload.model_fields_set else _UNSET,
+            parsed_at=payload.parsed_at if "parsed_at" in payload.model_fields_set else _UNSET,
+            price_updated_at=payload.price_updated_at if "price_updated_at" in payload.model_fields_set else _UNSET,
+        )
+    except ValueError as error:
+        return {
+            "success": False,
+            "error": str(error) or "Unable to update supplier offer",
+        }
+
+    if not item:
+        return {
+            "success": False,
+            "error": "Unable to update supplier offer",
+        }
+
+    return {
+        "success": True,
+        "item": item,
+    }
+
+
+@router.delete(
+    "/material-supplier-offers/{offer_id}",
+    response_model=MaterialSupplierOfferOperationResponseSchema,
+)
+async def delete_material_supplier_offer_route(
+    offer_id: str,
+    current_user = Depends(require_material_editor),
+):
+
+    _ensure_material_feature_access(current_user, "materials.edit")
+
+    offer = get_material_supplier_offer(offer_id)
+    if not offer:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "success": False,
+                "error": "Supplier offer not found",
+            },
+        )
+
+    db = SessionLocal()
+    try:
+        material_row = db.get(MaterialModel, int(offer["material_id"]))
+        if not material_row:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "success": False,
+                    "error": "Material not found",
+                },
+            )
+        material_payload = get_material_by_article(
+            material_row.article,
+            viewer_user_id=str(current_user.id),
+            viewer_role=current_user.role,
+        )
+    finally:
+        db.close()
+
+    if not material_payload:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "success": False,
+                "error": "Material not found",
+            },
+        )
+
+    if not _can_manage_material_item(current_user, material_payload):
+        if material_payload.get("is_default"):
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "success": False,
+                    "error": "You do not have permission to edit this material",
+                },
+            )
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "success": False,
+                "error": "Material not found",
+            },
+        )
+
+    item = delete_material_supplier_offer(offer_id)
+    if not item:
+        return {
+            "success": False,
+            "error": "Unable to delete supplier offer",
+        }
+
+    return {
+        "success": True,
+        "item": item,
     }
 
 
@@ -1862,6 +3182,26 @@ async def update_material_route(
 ):
 
     _ensure_material_feature_access(current_user, "materials.edit")
+    manufacturer_id_in_payload = "manufacturer_id" in payload.model_fields_set
+    selected_manufacturer_id = None
+    if manufacturer_id_in_payload:
+        if payload.manufacturer_id is None:
+            selected_manufacturer_id = None
+        else:
+            manufacturer_row = get_material_manufacturer_by_id(
+                payload.manufacturer_id,
+                viewer_user_id=current_user.id,
+                viewer_role=current_user.role,
+            )
+            if not manufacturer_row:
+                raise HTTPException(
+                    status_code=404,
+                    detail={
+                        "success": False,
+                        "error": "Material manufacturer not found",
+                    },
+                )
+            selected_manufacturer_id = int(manufacturer_row["id"])
 
     normalized_article = article.strip()
     selected_city = (current_user.city or "").strip() or None
@@ -1924,6 +3264,9 @@ async def update_material_route(
 
     if "thickness" in provided_fields:
         update_fields["thickness"] = (payload.thickness or "").strip() or None
+
+    if manufacturer_id_in_payload:
+        update_fields["manufacturer_id"] = selected_manufacturer_id
 
     if "price" in provided_fields:
         if payload.price is None:
@@ -2449,6 +3792,41 @@ async def upload_fitting_manufacturer_logo_route(
     }
 
 
+@router.post(
+    "/material-categories/image",
+)
+async def upload_material_category_image_route(
+    file: UploadFile = File(...),
+    current_user = Depends(require_catalog_reader),
+):
+    _ensure_material_category_image_upload_access(current_user)
+
+    if not file.filename:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "success": False,
+                "error": "File name is required",
+            },
+        )
+
+    try:
+        image_url = await save_material_category_image_file(file)
+    except ValueError as error:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "success": False,
+                "error": str(error),
+            },
+        ) from error
+
+    return {
+        "success": True,
+        "image_url": image_url,
+    }
+
+
 @router.delete(
     "/suppliers/{supplier_id}",
     response_model=FittingSupplierOperationResponseSchema,
@@ -2482,12 +3860,13 @@ async def delete_fitting_supplier_route(
                 "error": "You do not have permission to delete this supplier",
             }
 
-        has_offers = (
-            db.query(FittingSupplierOfferModel.id)
-            .filter(FittingSupplierOfferModel.supplier_id == int(supplier_id))
-            .first()
-            is not None
-        )
+        if bool(item.is_active):
+            return {
+                "success": False,
+                "error": "Спочатку деактивуйте постачальника",
+            }
+
+        has_offers = count_supplier_offer_usage(supplier_id) + count_material_supplier_offer_usage(supplier_id)
         if has_offers:
             return {
                 "success": False,
@@ -3225,6 +4604,424 @@ async def delete_fitting_category_route(
         return {"success": False, "error": "Не вдалося видалити категорію"}
 
     return {"success": True, "item": deleted}
+
+
+@router.get(
+    "/material-categories",
+    response_model=MaterialCatalogCategoryListResponseSchema,
+)
+async def list_material_catalog_categories_route(
+    active_only: bool = Query(default=True),
+    include_private_categories: bool | None = Query(default=None),
+    current_user = Depends(require_catalog_reader),
+):
+    _ensure_material_feature_access(current_user, "materials.view")
+
+    resolved_include_private_categories = (
+        current_user.role != "admin"
+        if include_private_categories is None
+        else include_private_categories
+    )
+
+    return {
+        "success": True,
+        "items": list_material_taxonomy_categories(
+            active_only=active_only,
+            viewer_user_id=current_user.id,
+            viewer_role=current_user.role,
+            include_private_categories=resolved_include_private_categories,
+        ),
+    }
+
+
+@router.get(
+    "/material-categories/{item_id}",
+    response_model=MaterialCatalogCategoryOperationResponseSchema,
+)
+async def get_material_catalog_category_route(
+    item_id: str,
+    current_user = Depends(require_catalog_reader),
+):
+    _ensure_material_feature_access(current_user, "materials.view")
+
+    item = get_material_category_by_id(
+        item_id,
+        viewer_user_id=current_user.id,
+        viewer_role=current_user.role,
+    )
+    if not item:
+        raise HTTPException(status_code=404, detail="Material category not found")
+
+    return {"success": True, "item": item}
+
+
+@router.post(
+    "/material-categories",
+    response_model=MaterialCatalogCategoryOperationResponseSchema,
+)
+async def create_material_catalog_category_route(
+    payload: MaterialCatalogCategoryCreateSchema,
+    current_user = Depends(require_catalog_reader),
+):
+    _ensure_material_feature_access(current_user, "materials.create")
+
+    requested_is_system = bool(payload.is_system) if payload.is_system is not None else current_user.role == "admin"
+    is_system = bool(requested_is_system) if current_user.role == "admin" else False
+
+    if requested_is_system and current_user.role != "admin":
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "success": False,
+                "error": "Only admin can create system categories",
+            },
+        )
+
+    code = _normalize_admin_text(payload.code) if current_user.role == "admin" else None
+    name = _normalize_admin_text(payload.name)
+
+    if not name:
+        return {"success": False, "error": "Назва категорії є обов'язковою"}
+
+    if payload.parent_id is not None:
+        parent = get_material_category_by_id(
+            payload.parent_id,
+            viewer_user_id=current_user.id,
+            viewer_role=current_user.role,
+        )
+        if not parent:
+            return {"success": False, "error": "Батьківську категорію не знайдено"}
+
+    item = create_material_category(
+        code=code,
+        name=name,
+        description=(_normalize_admin_text(payload.description) or None) if payload.description is not None else None,
+        image_url=(_normalize_admin_text(payload.image_url) or None) if payload.image_url is not None else None,
+        owner_user_id=None if is_system else str(current_user.id),
+        parent_id=payload.parent_id,
+        sort_order=payload.sort_order,
+        is_active=payload.is_active,
+        is_system=is_system,
+    )
+
+    if not item:
+        return {"success": False, "error": "Не вдалося створити категорію"}
+
+    return {"success": True, "item": item}
+
+
+@router.patch(
+    "/material-categories/{item_id}",
+    response_model=MaterialCatalogCategoryOperationResponseSchema,
+)
+async def update_material_catalog_category_route(
+    item_id: str,
+    payload: MaterialCatalogCategoryUpdateSchema,
+    current_user = Depends(require_catalog_reader),
+):
+    _ensure_material_feature_access(current_user, "materials.edit")
+
+    existing_row = get_material_category_row_by_id(item_id)
+    if not existing_row:
+        return {"success": False, "error": "Категорію не знайдено"}
+
+    if not _can_manage_material_category(current_user, existing_row):
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "success": False,
+                "error": "You do not have permission to edit this category",
+            },
+        )
+
+    name = _normalize_admin_text(payload.name) if payload.name is not None else None
+
+    if payload.parent_id is not None:
+        if int(payload.parent_id) == int(item_id):
+            return {"success": False, "error": "Категорія не може бути власним батьком"}
+        parent = get_material_category_by_id(
+            payload.parent_id,
+            viewer_user_id=current_user.id,
+            viewer_role=current_user.role,
+        )
+        if not parent:
+            return {"success": False, "error": "Батьківську категорію не знайдено"}
+
+    item = update_material_category(
+        item_id,
+        name=name,
+        description=(_normalize_admin_text(payload.description) or None) if payload.description is not None else None,
+        image_url=(_normalize_admin_text(payload.image_url) or None) if payload.image_url is not None else None,
+        parent_id=payload.parent_id,
+        sort_order=payload.sort_order,
+        is_active=payload.is_active if current_user.role == "admin" or not bool(existing_row.is_system) else existing_row.is_active,
+        is_system=payload.is_system if current_user.role == "admin" and payload.is_system is not None else existing_row.is_system,
+    )
+
+    if not item:
+        return {"success": False, "error": "Не вдалося оновити категорію"}
+
+    return {"success": True, "item": item}
+
+
+@router.delete(
+    "/material-categories/{item_id}",
+    response_model=MaterialCatalogCategoryOperationResponseSchema,
+)
+async def delete_material_catalog_category_route(
+    item_id: str,
+    current_user = Depends(require_catalog_reader),
+):
+    _ensure_material_feature_access(current_user, "materials.delete")
+
+    existing_row = get_material_category_row_by_id(item_id)
+    if not existing_row:
+        raise HTTPException(status_code=404, detail="Material category not found")
+
+    if not _can_delete_material_category(current_user, existing_row):
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "success": False,
+                "error": "You do not have permission to delete this category",
+            },
+        )
+
+    used_materials_count = count_materials_in_category(existing_row.code)
+    if used_materials_count > 0:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "success": False,
+                "error": (
+                    f'У категорії "{existing_row.name}" є {used_materials_count} '
+                    "матеріали. Спочатку перенесіть їх до іншої категорії."
+                ),
+            },
+        )
+
+    deleted = delete_material_category(item_id)
+    if not deleted:
+        return {"success": False, "error": "Не вдалося видалити категорію"}
+
+    return {"success": True, "item": deleted}
+
+
+@router.get(
+    "/material-manufacturers",
+    response_model=MaterialCatalogManufacturerListResponseSchema,
+)
+async def list_material_catalog_manufacturers_route(
+    active_only: bool = Query(default=True),
+    current_user = Depends(require_catalog_reader),
+):
+    _ensure_material_feature_access(current_user, "materials.view")
+
+    return {
+        "success": True,
+        "items": list_material_manufacturers(
+            active_only=active_only,
+            viewer_user_id=current_user.id,
+            viewer_role=current_user.role,
+            include_private_manufacturers=True,
+        ),
+    }
+
+
+@router.get(
+    "/material-manufacturers/{item_id}",
+    response_model=MaterialCatalogManufacturerOperationResponseSchema,
+)
+async def get_material_catalog_manufacturer_route(
+    item_id: str,
+    current_user = Depends(require_catalog_reader),
+):
+    _ensure_material_feature_access(current_user, "materials.view")
+
+    item = get_material_manufacturer_by_id(
+        item_id,
+        viewer_user_id=current_user.id,
+        viewer_role=current_user.role,
+    )
+    if not item:
+        raise HTTPException(status_code=404, detail="Material manufacturer not found")
+
+    return {"success": True, "item": item}
+
+
+@router.post(
+    "/material-manufacturers",
+    response_model=MaterialCatalogManufacturerOperationResponseSchema,
+)
+async def create_material_catalog_manufacturer_route(
+    payload: MaterialCatalogManufacturerCreateSchema,
+    current_user = Depends(require_catalog_reader),
+):
+    _ensure_material_feature_access(current_user, "materials.edit")
+
+    name = _normalize_admin_text(payload.name)
+    if not name:
+        return {"success": False, "error": "Назва виробника є обов'язковою"}
+
+    requested_is_system = bool(payload.is_system) if payload.is_system is not None else current_user.role == "admin"
+    is_system = bool(requested_is_system) if current_user.role == "admin" else False
+
+    if requested_is_system and current_user.role != "admin":
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "success": False,
+                "error": "Only admin can create system manufacturers",
+            },
+        )
+
+    item = create_material_manufacturer(
+        name=name,
+        code=_normalize_admin_text(payload.code) if payload.code is not None else None,
+        website_url=payload.website_url,
+        logo_url=payload.logo_url,
+        owner_user_id=None if is_system else str(current_user.id),
+        is_active=payload.is_active,
+        is_system=is_system,
+    )
+
+    if not item:
+        return {"success": False, "error": "Не вдалося створити виробника"}
+
+    return {"success": True, "item": item}
+
+
+@router.patch(
+    "/material-manufacturers/{item_id}",
+    response_model=MaterialCatalogManufacturerOperationResponseSchema,
+)
+async def update_material_catalog_manufacturer_route(
+    item_id: str,
+    payload: MaterialCatalogManufacturerUpdateSchema,
+    current_user = Depends(require_catalog_reader),
+):
+    _ensure_material_feature_access(current_user, "materials.edit")
+
+    existing = get_material_manufacturer_by_id(
+        item_id,
+        viewer_user_id=current_user.id,
+        viewer_role=current_user.role,
+    )
+    if not existing:
+        return {"success": False, "error": "Виробника не знайдено"}
+
+    if not _can_manage_material_manufacturer(current_user, existing):
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "success": False,
+                "error": "You do not have permission to edit this manufacturer",
+            },
+        )
+
+    name = _normalize_admin_text(payload.name) if payload.name is not None else None
+    code = _normalize_admin_text(payload.code) if payload.code is not None else None
+    requested_is_system = payload.is_system if payload.is_system is not None else existing["is_system"]
+    is_system = bool(requested_is_system) if current_user.role == "admin" else bool(existing["is_system"])
+    owner_user_id = None if is_system else str(existing.get("owner_user_id") or current_user.id)
+
+    item = update_material_manufacturer(
+        item_id,
+        name=name,
+        code=code,
+        website_url=payload.website_url,
+        logo_url=payload.logo_url,
+        owner_user_id=owner_user_id,
+        is_active=payload.is_active,
+        is_system=is_system,
+    )
+
+    if not item:
+        return {"success": False, "error": "Не вдалося оновити виробника"}
+
+    return {"success": True, "item": item}
+
+
+@router.delete(
+    "/material-manufacturers/{item_id}",
+    response_model=MaterialCatalogManufacturerOperationResponseSchema,
+)
+async def delete_material_catalog_manufacturer_route(
+    item_id: str,
+    current_user = Depends(require_catalog_reader),
+):
+    _ensure_material_feature_access(current_user, "materials.edit")
+
+    existing = get_material_manufacturer_by_id(
+        item_id,
+        viewer_user_id=current_user.id,
+        viewer_role=current_user.role,
+    )
+    if not existing:
+        return {"success": False, "error": "Виробника не знайдено"}
+
+    if not _can_manage_material_manufacturer(current_user, existing):
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "success": False,
+                "error": "You do not have permission to delete this manufacturer",
+            },
+        )
+
+    if bool(existing.get("is_active")):
+        return {"success": False, "error": "Спочатку деактивуйте виробника"}
+
+    used_materials_count = count_materials_by_manufacturer(item_id)
+    if used_materials_count:
+        return {
+            "success": False,
+            "error": (
+                f'Виробник "{existing["name"]}" використовується у {used_materials_count} '
+                "матеріалах. Спочатку приберіть прив'язку."
+            ),
+        }
+
+    deleted = delete_material_manufacturer(item_id)
+    if not deleted:
+        return {"success": False, "error": "Не вдалося видалити виробника"}
+
+    return {"success": True, "item": deleted}
+
+
+@router.post(
+    "/material-manufacturers/logo",
+)
+async def upload_material_manufacturer_logo_route(
+    file: UploadFile = File(...),
+    current_user = Depends(require_catalog_reader),
+):
+    _ensure_material_manufacturer_logo_upload_access(current_user)
+
+    if not file.filename:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "success": False,
+                "error": "File name is required",
+            },
+        )
+
+    try:
+        logo_url = await save_material_manufacturer_logo_file(file)
+    except ValueError as error:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "success": False,
+                "error": str(error),
+            },
+        ) from error
+
+    return {
+        "success": True,
+        "logo_url": logo_url,
+    }
 
 
 @router.patch(

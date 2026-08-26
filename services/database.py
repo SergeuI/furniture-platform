@@ -13,11 +13,11 @@ DB_NAME = DEFAULT_DB_PATH
 # INIT DATABASE
 # =====================================================
 
-async def init_db():
+async def init_db(*, run_legacy_migration: bool = False):
 
     ensure_unified_legacy_schema(DB_NAME)
-    # Normal bot startup must not repopulate legacy fittings.
-    migrate_legacy_sqlite_to_unified_db(DB_NAME, copy_fittings=False)
+    if run_legacy_migration:
+        migrate_legacy_sqlite_to_unified_db(DB_NAME, copy_fittings=False)
 
     async with aiosqlite.connect(DB_NAME) as db:
 

@@ -9,6 +9,7 @@ import {
   updateFittingSupplier,
   uploadSupplierLogo,
 } from "../api.js";
+import DeleteConfirmModal from "./DeleteConfirmModal.jsx";
 
 function normalizeSupplierText(value) {
   return String(value || "").trim();
@@ -46,7 +47,8 @@ function SupplierLogo({ name = "", logoUrl = "", className = "" }) {
   }, [normalizedLogoUrl]);
 
   const rootClassName = [
-    "supplier-logo-mark",
+    "fitting-manufacturer-logo",
+    "material-taxonomy-manufacturer-logo",
     className,
   ]
     .filter(Boolean)
@@ -54,22 +56,22 @@ function SupplierLogo({ name = "", logoUrl = "", className = "" }) {
 
   if (!normalizedLogoUrl || hasBrokenImage) {
     return (
-      <div className={rootClassName}>
-        <span className="supplier-logo-fallback">{fallbackLabel}</span>
-      </div>
+      <span className={rootClassName} title={fallbackLabel}>
+        <span className="fitting-source-logo-text">{fallbackLabel}</span>
+      </span>
     );
   }
 
   return (
-    <div className={rootClassName}>
+    <span className={rootClassName} title={fallbackLabel}>
       <img
         alt={fallbackLabel}
-        className="supplier-logo-image"
+        className="fitting-manufacturer-logo-image"
         loading="lazy"
         onError={() => setHasBrokenImage(true)}
         src={resolvedLogoUrl}
       />
-    </div>
+    </span>
   );
 }
 
@@ -78,6 +80,13 @@ export default function FittingSuppliersAdminWorkspace({
   token = "",
   currentUserId = "",
   currentUserRole = "admin",
+  breadcrumbRootLabel = "",
+  breadcrumbCurrentLabel = "",
+  onBreadcrumbRootClick = null,
+  title = language === "uk" ? "Постачальники" : "Suppliers",
+  description = language === "uk"
+    ? "Керування системними та власними постачальниками фурнітури."
+    : "Manage system and personal fitting suppliers.",
 }) {
   const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -93,6 +102,7 @@ export default function FittingSuppliersAdminWorkspace({
   const [editorLogoFile, setEditorLogoFile] = useState(null);
   const [editorLogoPreviewUrl, setEditorLogoPreviewUrl] = useState("");
   const [editorLogoRemoved, setEditorLogoRemoved] = useState(false);
+  const [deleteConfirmItem, setDeleteConfirmItem] = useState(null);
   const logoFileInputRef = useRef(null);
 
   const visibleSuppliers = useMemo(() => {
@@ -294,28 +304,30 @@ export default function FittingSuppliersAdminWorkspace({
     }
   }
 
-  async function handleDelete(item) {
+  function openDeleteConfirm(item) {
+    if (!item) {
+      return;
+    }
+
+    setPageError("");
+    setDeleteConfirmItem(item);
+  }
+
+  function closeDeleteConfirm() {
+    setDeleteConfirmItem(null);
+  }
+
+  async function performDelete(item) {
     if (!token || !item?.id) {
       return;
     }
 
-    if (!window.confirm(language === "uk" ? "Видалити постачальника?" : "Delete this supplier?")) {
-      return;
+    const result = await deleteFittingSupplier(token, item.id);
+    if (!result?.success) {
+      throw new Error(result?.error || (language === "uk" ? "Не вдалося видалити" : "Unable to delete"));
     }
 
-    setLoading(true);
-    setPageError("");
-    try {
-      const result = await deleteFittingSupplier(token, item.id);
-      if (!result?.success) {
-        setPageError(result?.error || (language === "uk" ? "Не вдалося видалити" : "Unable to delete"));
-        return;
-      }
-
-      await loadSuppliers();
-    } finally {
-      setLoading(false);
-    }
+    await loadSuppliers();
   }
 
   async function toggleActive(item) {
@@ -349,21 +361,26 @@ export default function FittingSuppliersAdminWorkspace({
   const editorLogoFileName = editorLogoFile?.name || "";
 
   return (
-    <section className="dashboard-layout">
-      <header className="supplier-page-header">
-        <h1>{language === "uk" ? "Постачальники" : "Suppliers"}</h1>
-        <p>
-          {language === "uk"
-            ? "Керування системними та власними постачальниками фурнітури."
-            : "Manage system and personal fitting suppliers."}
-        </p>
-      </header>
-
-      <article className="catalog-card service-catalog-card service-catalog-card-full">
-        <div className="service-catalog-header supplier-toolbar-header">
-          <div className="service-catalog-header-actions">
-            <label className="materials-filter">
-              <span>{language === "uk" ? "Пошук" : "Search"}</span>
+    <section className="table-panel full-panel">
+      {breadcrumbRootLabel && breadcrumbCurrentLabel ? (
+        <header className="catalog-page-header material-taxonomy-page-header supplier-page-header">
+          <div className="service-catalog-title material-taxonomy-page-title">
+            <div className="fitting-category-breadcrumb fitting-category-breadcrumb-top">
+              <button
+                className="fitting-breadcrumb-link"
+                onClick={onBreadcrumbRootClick}
+                type="button"
+              >
+                {breadcrumbRootLabel}
+              </button>
+              <span className="fitting-breadcrumb-separator">/</span>
+              <strong>{breadcrumbCurrentLabel}</strong>
+            </div>
+            <p>{description}</p>
+          </div>
+          <div className="service-catalog-header-actions material-taxonomy-page-actions supplier-page-actions">
+            <span className="service-tree-badge subtle">{pageLabel}</span>
+            <label className="materials-filter supplier-search">
               <input
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder={language === "uk" ? "Фільтр..." : "Filter..."}
@@ -388,8 +405,15 @@ export default function FittingSuppliersAdminWorkspace({
               {language === "uk" ? "Додати" : "Add"}
             </button>
           </div>
-        </div>
+        </header>
+      ) : (
+        <header className="supplier-page-header">
+          <h1>{title}</h1>
+          <p>{description}</p>
+        </header>
+      )}
 
+      <article className="catalog-card service-catalog-card service-catalog-card-full">
         {pageError ? <p className="status-message error">{pageError}</p> : null}
 
         <div className="table-panel full-panel suppliers-table">
@@ -412,13 +436,11 @@ export default function FittingSuppliersAdminWorkspace({
 
               return (
                 <article className="fittings-table-row" key={item.id}>
-                  <div className="supplier-name-cell">
-                    <strong>{item.name}</strong>
-                  </div>
-                  <div className="supplier-logo-cell">
+                  <div className="material-taxonomy-name-cell">{item.name}</div>
+                  <div className="manufacturer-logo-cell">
                     <SupplierLogo name={item.name} logoUrl={item.logo_url} />
                   </div>
-                  <div>{scopeLabel}</div>
+                  <div className="material-taxonomy-manufacturer-scope-cell">{scopeLabel}</div>
                   <div>{item.is_active ? (language === "uk" ? "Так" : "Yes") : (language === "uk" ? "Ні" : "No")}</div>
                   <div className="catalog-actions">
                     <button
@@ -430,21 +452,26 @@ export default function FittingSuppliersAdminWorkspace({
                       <Pencil size={14} />
                     </button>
                     <button
-                      className="icon-button"
+                      className="ghost-button compact-button"
                       disabled={!canManageItem || (item.is_system && !canEditSystemSupplier)}
                       onClick={() => toggleActive(item)}
                       type="button"
                     >
-                      {item.is_active ? "↘" : "↗"}
+                      {item.is_active
+                        ? (language === "uk" ? "Деактивувати" : "Deactivate")
+                        : (language === "uk" ? "Активувати" : "Activate")}
                     </button>
-                    <button
-                      className="icon-button danger"
-                      disabled={!canManageItem || (item.is_system && !canEditSystemSupplier)}
-                      onClick={() => handleDelete(item)}
-                      type="button"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    {!item.is_active ? (
+                      <button
+                        className="ghost-button compact-button danger-button"
+                        disabled={!canManageItem || (item.is_system && !canEditSystemSupplier)}
+                        onClick={() => openDeleteConfirm(item)}
+                        type="button"
+                      >
+                        <Trash2 size={14} />
+                        {language === "uk" ? "Видалити" : "Delete"}
+                      </button>
+                    ) : null}
                   </div>
                 </article>
               );
@@ -452,10 +479,26 @@ export default function FittingSuppliersAdminWorkspace({
           </div>
         </div>
 
-        <div className="fitting-form-note">
-          {pageLabel}
-        </div>
       </article>
+
+      <DeleteConfirmModal
+        cancelLabel={language === "uk" ? "Скасувати" : "Cancel"}
+        confirmLabel={language === "uk" ? "Видалити" : "Delete"}
+        loadingLabel={language === "uk" ? "Видалення..." : "Deleting..."}
+        message={language === "uk"
+          ? `Видалити постачальника «${deleteConfirmItem?.name || ""}»?`
+          : `Delete supplier "${deleteConfirmItem?.name || ""}"?`}
+        open={Boolean(deleteConfirmItem)}
+        onCancel={closeDeleteConfirm}
+        onConfirm={async () => {
+          if (!deleteConfirmItem) {
+            return;
+          }
+
+          await performDelete(deleteConfirmItem);
+        }}
+        title={language === "uk" ? "Видалити постачальника" : "Delete supplier"}
+      />
 
       {editorOpen ? (
         <div aria-modal="true" className="modal-backdrop" onClick={closeEditor} role="dialog">

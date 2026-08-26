@@ -77,7 +77,7 @@ def main() -> int:
 
     from database.init_db import init_database
 
-    init_database()
+    init_database(run_legacy_migration=False)
 
     print("Database initialization and additive migrations completed.")
     return 0

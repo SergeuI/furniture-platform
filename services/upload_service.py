@@ -10,6 +10,8 @@ from PIL import Image
 UPLOAD_ROOT = Path("data/uploads/ai_scans")
 SUPPLIER_LOGO_UPLOAD_ROOT = Path("data/uploads/supplier-logos")
 MANUFACTURER_LOGO_UPLOAD_ROOT = Path("data/uploads/fitting-manufacturer-logos")
+MATERIAL_MANUFACTURER_LOGO_UPLOAD_ROOT = Path("data/uploads/material-manufacturer-logos")
+MATERIAL_CATEGORY_IMAGE_UPLOAD_ROOT = Path("data/uploads/material-category-images")
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".pdf"}
 ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 ALLOWED_IMAGE_MIME_TYPES = {"image/jpeg", "image/png", "image/webp"}
@@ -119,6 +121,35 @@ async def save_supplier_logo_file(file: UploadFile) -> str:
 
 
 async def save_manufacturer_logo_file(file: UploadFile) -> str:
+    return await _save_uploaded_image_file(
+        file,
+        upload_root=MANUFACTURER_LOGO_UPLOAD_ROOT,
+        url_prefix="/uploads/fitting-manufacturer-logos",
+    )
+
+
+async def save_material_manufacturer_logo_file(file: UploadFile) -> str:
+    return await _save_uploaded_image_file(
+        file,
+        upload_root=MATERIAL_MANUFACTURER_LOGO_UPLOAD_ROOT,
+        url_prefix="/uploads/material-manufacturer-logos",
+    )
+
+
+async def save_material_category_image_file(file: UploadFile) -> str:
+    return await _save_uploaded_image_file(
+        file,
+        upload_root=MATERIAL_CATEGORY_IMAGE_UPLOAD_ROOT,
+        url_prefix="/uploads/material-category-images",
+    )
+
+
+async def _save_uploaded_image_file(
+    file: UploadFile,
+    *,
+    upload_root: Path,
+    url_prefix: str,
+) -> str:
     suffix = Path(file.filename or "").suffix.lower()
     content = await file.read()
     detected_content_type = _validate_image_payload(
@@ -132,8 +163,8 @@ async def save_manufacturer_logo_file(file: UploadFile) -> str:
         raise ValueError("Unsupported file type. Use PNG, JPG, JPEG, or WEBP.")
 
     safe_name = f"{_safe_filename_stem(file.filename or '')}_{uuid4().hex}{suffix}"
-    MANUFACTURER_LOGO_UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
-    target_path = MANUFACTURER_LOGO_UPLOAD_ROOT / safe_name
+    upload_root.mkdir(parents=True, exist_ok=True)
+    target_path = upload_root / safe_name
     target_path.write_bytes(content)
     await file.seek(0)
-    return f"/uploads/fitting-manufacturer-logos/{safe_name}"
+    return f"{url_prefix}/{safe_name}"

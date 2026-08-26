@@ -11,7 +11,6 @@ load_dotenv()
 
 from handlers.router import (
     router,
-    seed_materials,
 )
 from services.database import init_db
 from services.mt_kits_parser import (
@@ -91,7 +90,6 @@ async def main():
     await init_db()
     init_production_db()
     init_auth_tables()
-    await seed_materials()
     await init_mt_db()
     logging.info("Database init complete")
 

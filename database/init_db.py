@@ -49,6 +49,9 @@ from database.models.service_drilling_rule import (
 from database.models.material import (
     MaterialModel
 )
+from database.models.material_image import (
+    MaterialImageModel,
+)
 from database.models.material_price import (
     MaterialPriceModel
 )
@@ -57,6 +60,20 @@ from database.models.material_edge import (
 )
 from database.models.material_edge_price import (
     MaterialEdgePriceModel
+)
+from database.models.canonical_edge import (
+    CanonicalEdgeModel,
+    EdgeSupplierOfferModel,
+    EdgeSupplierOfferPriceModel,
+    MaterialEdgeRelationModel,
+)
+from database.models.material_supplier_offer import (
+    MaterialSupplierOfferModel
+)
+from database.models.material_taxonomy import (
+    MaterialCategoryModel,
+    MaterialManufacturerAliasModel,
+    MaterialManufacturerModel,
 )
 from database.models.material_user_link import (
     MaterialUserLinkModel
@@ -118,6 +135,15 @@ from scripts.upgrade_fitting_products_schema import (
 )
 from scripts.upgrade_fitting_taxonomy_schema import (
     ensure_fitting_taxonomy_schema,
+)
+from scripts.upgrade_material_catalog_v2_schema import (
+    ensure_material_catalog_v2_schema,
+)
+from scripts.upgrade_material_supplier_offers_schema import (
+    ensure_material_supplier_offers_schema,
+)
+from scripts.upgrade_edge_foundation_schema import (
+    ensure_edge_foundation_schema,
 )
 
 
@@ -688,6 +714,7 @@ def upgrade_sqlite_schema():
             "color": "VARCHAR",
             "dimensions": "VARCHAR",
             "thickness": "VARCHAR",
+            "manufacturer_id": "INTEGER",
             "source_url": "VARCHAR",
             "owner_user_id": "VARCHAR",
             "is_default": "BOOLEAN NOT NULL DEFAULT 0",
@@ -920,14 +947,15 @@ def seed_demo_access_users():
         )
 
 
-def init_database():
+def init_database(*, run_legacy_migration: bool = False):
 
     Base.metadata.create_all(
         bind=engine
     )
 
     ensure_unified_legacy_schema()
-    migrate_legacy_sqlite_to_unified_db(copy_fittings=False)
+    if run_legacy_migration:
+        migrate_legacy_sqlite_to_unified_db(copy_fittings=False)
 
     upgrade_sqlite_schema()
     with engine.begin() as connection:
@@ -935,6 +963,9 @@ def init_database():
         ensure_suppliers_ownership_schema(connection)
         ensure_fitting_products_schema(connection)
         ensure_fitting_taxonomy_schema(connection)
+        ensure_material_catalog_v2_schema(connection)
+        ensure_material_supplier_offers_schema(connection)
+        ensure_edge_foundation_schema(connection)
         ensure_mounting_schemes_schema(connection)
     _backfill_mounting_node_versions()
     seed_demo_access_users()
@@ -945,7 +976,7 @@ def init_database():
 
 if __name__ == "__main__":
 
-    init_database()
+    init_database(run_legacy_migration=False)
 
     print(
         "Database initialized"

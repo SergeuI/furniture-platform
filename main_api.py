@@ -1,5 +1,7 @@
 import os
+import logging
 from pathlib import Path
+from time import perf_counter
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import (
@@ -49,12 +51,17 @@ from services.material_import_queue_service import (
     start_material_import_queue_loop,
     stop_material_import_queue_loop,
 )
-init_database()
+from services.request_trace import (
+    start_request_trace,
+)
+init_database(run_legacy_migration=False)
 
 app = FastAPI(
 
     title="Furniture Platform API"
 )
+
+request_trace_logger = logging.getLogger("api.request_trace")
 
 uploads_root = Path("data/uploads")
 uploads_root.mkdir(parents=True, exist_ok=True)
@@ -79,6 +86,35 @@ async def startup_background_services():
 async def shutdown_background_services():
 
     stop_material_import_queue_loop()
+
+
+@app.middleware("http")
+async def request_trace_middleware(request, call_next):
+    request_id = start_request_trace(request.headers.get("X-Request-ID"))
+    started_at = perf_counter()
+
+    try:
+        response = await call_next(request)
+    except Exception:
+        request_trace_logger.exception(
+            "REQUEST_COMPLETE request_id=%s method=%s path=%s status=500 elapsed_ms=%s",
+            request_id,
+            request.method,
+            request.url.path,
+            int((perf_counter() - started_at) * 1000),
+        )
+        raise
+
+    response.headers["X-Request-ID"] = request_id
+    request_trace_logger.info(
+        "REQUEST_COMPLETE request_id=%s method=%s path=%s status=%s elapsed_ms=%s",
+        request_id,
+        request.method,
+        request.url.path,
+        response.status_code,
+        int((perf_counter() - started_at) * 1000),
+    )
+    return response
 
 
 default_frontend_origins = {

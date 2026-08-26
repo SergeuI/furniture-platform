@@ -5,12 +5,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from services.db_service import (
-
     cache_image,
-
     save_calculation,
-
-    seed_materials
 )
 import os
 from handlers.materials import (

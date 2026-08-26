@@ -96,26 +96,28 @@ function ManufacturerLogo({ name = "", logoUrl = "", className = "" }) {
     setHasBrokenImage(false);
   }, [normalizedLogoUrl]);
 
-  const rootClassName = ["supplier-logo-mark", className].filter(Boolean).join(" ");
+  const rootClassName = ["fitting-manufacturer-logo", "material-taxonomy-manufacturer-logo", className]
+    .filter(Boolean)
+    .join(" ");
 
   if (!normalizedLogoUrl || hasBrokenImage) {
     return (
-      <div className={rootClassName}>
-        <span className="supplier-logo-fallback">{fallbackLabel}</span>
-      </div>
+      <span className={rootClassName} title={fallbackLabel}>
+        <span className="fitting-source-logo-text">{fallbackLabel}</span>
+      </span>
     );
   }
 
   return (
-    <div className={rootClassName}>
+    <span className={rootClassName} title={fallbackLabel}>
       <img
         alt={fallbackLabel}
-        className="supplier-logo-image"
+        className="fitting-manufacturer-logo-image"
         loading="lazy"
         onError={() => setHasBrokenImage(true)}
         src={resolvedLogoUrl}
       />
-    </div>
+    </span>
   );
 }
 
@@ -635,79 +637,141 @@ export default function FittingTaxonomyAdminWorkspace({
   const editorLogoPreviewSource = editorLogoPreviewUrl || (!editorLogoRemoved ? resolveAdminAssetUrl(editorForm.logo_url) : "");
   const editorHasLogo = Boolean(editorLogoPreviewSource);
   const editorLogoFileName = editorLogoFile?.name || "";
+  const visibleCountLabel = language === "uk"
+    ? `${visibleManufacturers.length} записів`
+    : `${visibleManufacturers.length} records`;
 
   return (
-    <section className="dashboard-layout">
-      <article className="catalog-card service-catalog-card service-catalog-card-full">
-        <div className="service-catalog-header">
-          <div className="service-catalog-header-actions">
-            <label className="materials-filter">
-              <span>{language === "uk" ? "Пошук" : "Search"}</span>
-              <input
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder={language === "uk" ? "Фільтр..." : "Filter..."}
-                type="search"
-                value={search}
-              />
-            </label>
-            <label className="toggle-label">
-              <input
-                checked={showInactive}
-                onChange={(event) => setShowInactive(event.target.checked)}
-                type="checkbox"
-              />
-              {language === "uk" ? "Показати неактивні" : "Show inactive"}
-            </label>
-            <button className="ghost-button" disabled={loading} onClick={loadAllData} type="button">
-              <RefreshCw size={16} />
-              {language === "uk" ? "Оновити" : "Refresh"}
-            </button>
-            <button
-              className="primary-button"
-              onClick={() => openEditor(activeTab)}
-              type="button"
-            >
-              <Plus size={16} />
-              {language === "uk" ? "Додати" : "Add"}
-            </button>
-          </div>
-        </div>
-
-        {pageError ? <p className="status-message error">{pageError}</p> : null}
-
-        {activeTab === "manufacturers" ? (
-          <div className="table-panel full-panel">
-            <div className="fittings-table-header">
-              <span>{language === "uk" ? "Назва" : "Name"}</span>
-              <span>{language === "uk" ? "Логотип" : "Logo"}</span>
-              <span>{language === "uk" ? "Країна" : "Country"}</span>
-              <span>{language === "uk" ? "Активна" : "Active"}</span>
+    <section className={activeTab === "manufacturers" ? "table-panel full-panel fitting-taxonomy-page-shell" : "dashboard-layout"}>
+      {activeTab === "manufacturers" ? (
+        <>
+          <div className="catalog-page-header fitting-taxonomy-page-header">
+            <div className="service-catalog-title fitting-taxonomy-page-title">
+              {typeof onNavigate === "function" ? (
+                <div className="fitting-category-breadcrumb fitting-category-breadcrumb-top">
+                  <button className="fitting-breadcrumb-link" onClick={() => onNavigate("catalogFittings")} type="button">
+                    {language === "uk" ? "Фурнітура" : "Fittings"}
+                  </button>
+                  <span className="fitting-breadcrumb-separator">/</span>
+                  <strong>{language === "uk" ? "Виробники" : "Manufacturers"}</strong>
+                </div>
+              ) : null}
+              <p>{language === "uk" ? "Керування виробниками фурнітури." : "Manage fitting manufacturers."}</p>
             </div>
-            <div className="fittings-table-list">
-              {visibleManufacturers.map((item) => (
-                <article className="fittings-table-row" key={item.id}>
-                  <div>{item.name}</div>
-                  <div className="manufacturer-logo-cell">
-                    <ManufacturerLogo name={item.name} logoUrl={item.logo_url} />
-                  </div>
-                  <div>{item.country_code || "—"}</div>
-                  <div>{item.is_active ? (language === "uk" ? "Так" : "Yes") : (language === "uk" ? "Ні" : "No")}</div>
-                  <div className="catalog-actions">
-                    <button className="icon-button" onClick={() => openEditor("manufacturers", item)} type="button">
-                      <Pencil size={14} />
-                    </button>
-                    <button className="icon-button" onClick={() => toggleActive("manufacturers", item)} type="button">
-                      {item.is_active ? "↘" : "↗"}
-                    </button>
-                    <button className="icon-button danger" onClick={() => handleDelete("manufacturers", item)} type="button">
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                </article>
-              ))}
+            <div className="service-catalog-header-actions fitting-taxonomy-page-actions">
+              <span className="service-tree-badge subtle">{visibleCountLabel}</span>
+              <label className="materials-filter">
+                <span>{language === "uk" ? "Пошук" : "Search"}</span>
+                <input
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder={language === "uk" ? "Фільтр..." : "Filter..."}
+                  type="search"
+                  value={search}
+                />
+              </label>
+              <label className="toggle-label">
+                <input
+                  checked={showInactive}
+                  onChange={(event) => setShowInactive(event.target.checked)}
+                  type="checkbox"
+                />
+                {language === "uk" ? "Показати неактивні" : "Show inactive"}
+              </label>
+              <button className="ghost-button" disabled={loading} onClick={loadAllData} type="button">
+                <RefreshCw size={16} />
+                {language === "uk" ? "Оновити" : "Refresh"}
+              </button>
+              <button
+                className="primary-button"
+                onClick={() => openEditor(activeTab)}
+                type="button"
+              >
+                <Plus size={16} />
+                {language === "uk" ? "Додати" : "Add"}
+              </button>
             </div>
           </div>
-        ) : activeTab === "series" ? (
+
+          {pageError ? <p className="status-message error">{pageError}</p> : null}
+
+          <article className="catalog-card service-catalog-card service-catalog-card-full fitting-taxonomy-page-content">
+            <div className="table-panel full-panel">
+              <div className="fittings-table-header fitting-manufacturers-table">
+                <span>{language === "uk" ? "Назва" : "Name"}</span>
+                <span>{language === "uk" ? "Логотип" : "Logo"}</span>
+                <span>{language === "uk" ? "Країна" : "Country"}</span>
+                <span>{language === "uk" ? "Активна" : "Active"}</span>
+              </div>
+              <div className="fittings-table-list">
+                {visibleManufacturers.map((item) => (
+                  <article className="fittings-table-row fitting-manufacturers-table" key={item.id}>
+                    <div>{item.name}</div>
+                    <div className="manufacturer-logo-cell">
+                      <ManufacturerLogo name={item.name} logoUrl={item.logo_url} />
+                    </div>
+                    <div>{item.country_code || "—"}</div>
+                    <div>{item.is_active ? (language === "uk" ? "Так" : "Yes") : (language === "uk" ? "Ні" : "No")}</div>
+                    <div className="catalog-actions">
+                      <button className="icon-button" onClick={() => openEditor("manufacturers", item)} type="button">
+                        <Pencil size={14} />
+                      </button>
+                      <button className="ghost-button compact-button" onClick={() => toggleActive("manufacturers", item)} type="button">
+                        {item.is_active
+                          ? (language === "uk" ? "Деактивувати" : "Deactivate")
+                          : (language === "uk" ? "Активувати" : "Activate")}
+                      </button>
+                      {!item.is_active ? (
+                        <button className="ghost-button compact-button danger-button" onClick={() => handleDelete("manufacturers", item)} type="button">
+                          <Trash2 size={14} />
+                          {language === "uk" ? "Видалити" : "Delete"}
+                        </button>
+                      ) : null}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </div>
+          </article>
+        </>
+      ) : (
+        <article className="catalog-card service-catalog-card service-catalog-card-full">
+          <div className="service-catalog-header">
+            <div className="service-catalog-header-actions">
+              <label className="materials-filter">
+                <span>{language === "uk" ? "Пошук" : "Search"}</span>
+                <input
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder={language === "uk" ? "Фільтр..." : "Filter..."}
+                  type="search"
+                  value={search}
+                />
+              </label>
+              <label className="toggle-label">
+                <input
+                  checked={showInactive}
+                  onChange={(event) => setShowInactive(event.target.checked)}
+                  type="checkbox"
+                />
+                {language === "uk" ? "Показати неактивні" : "Show inactive"}
+              </label>
+              <button className="ghost-button" disabled={loading} onClick={loadAllData} type="button">
+                <RefreshCw size={16} />
+                {language === "uk" ? "Оновити" : "Refresh"}
+              </button>
+              <button
+                className="primary-button"
+                onClick={() => openEditor(activeTab)}
+                type="button"
+              >
+                <Plus size={16} />
+                {language === "uk" ? "Додати" : "Add"}
+              </button>
+            </div>
+          </div>
+
+          {pageError ? <p className="status-message error">{pageError}</p> : null}
+
+          {activeTab === "series" ? (
           <div className="table-panel full-panel">
             <div className="fittings-table-header">
               <span>{language === "uk" ? "Назва" : "Name"}</span>
@@ -767,7 +831,7 @@ export default function FittingTaxonomyAdminWorkspace({
               ))}
             </div>
           </div>
-        ) : (
+          ) : (
           <div className="table-panel full-panel">
             <div className="fittings-table-header">
               <span>{language === "uk" ? "Назва" : "Name"}</span>
@@ -803,8 +867,9 @@ export default function FittingTaxonomyAdminWorkspace({
               ))}
             </div>
           </div>
-        )}
-      </article>
+          )}
+        </article>
+      )}
 
       {editorOpen ? (
         <div aria-modal="true" className="modal-backdrop" onClick={closeEditor} role="dialog">

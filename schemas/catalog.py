@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from typing import List
+from typing import Literal
 
 from pydantic import (
     BaseModel,
@@ -230,10 +231,58 @@ class MaterialEdgePriceSchema(BaseModel):
     price: float | None = None
 
 
+class MaterialEdgeSupplierOfferPriceSchema(BaseModel):
+    city: str | None = None
+    price: float | None = None
+    currency: str | None = None
+    availability: str | None = None
+    checked_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class MaterialEdgeSupplierOfferSchema(BaseModel):
+    id: int
+    edge_id: int
+    supplier_id: int
+    supplier_name: str | None = None
+    supplier_logo_url: str | None = None
+    article: str | None = None
+    external_product_id: str | None = None
+    source_url: str | None = None
+    price: float | None = None
+    currency: str | None = None
+    unit: str | None = None
+    stock: str | None = None
+    city: str | None = None
+    region: str | None = None
+    availability: str | None = None
+    is_active: bool = True
+    priority: int = 0
+    parsed_at: datetime | None = None
+    price_updated_at: datetime | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    prices: List[MaterialEdgeSupplierOfferPriceSchema] = Field(default_factory=list)
+
+
+class MaterialCatalogImageSchema(BaseModel):
+    id: int
+    sort_order: int
+    is_primary: bool
+    content_type: str
+
+
 class MaterialEdgeOptionSchema(BaseModel):
     id: str
     edge_key: str
     label: str | None = None
+    relation_type: str | None = None
+    manufacturer_id: int | None = None
+    manufacturer_name: str | None = None
+    manufacturer_article: str | None = None
+    material_type: str | None = None
+    width_mm: float | None = None
+    thickness_mm: float | None = None
     article: str | None = None
     name: str | None = None
     thickness: str | None = None
@@ -241,9 +290,88 @@ class MaterialEdgeOptionSchema(BaseModel):
     has_cached_image: bool = False
     source_url: str | None = None
     source_site: str | None = None
+    source_supplier_id: int | None = None
     current_price: float | None = None
     current_price_city: str | None = None
     prices: List[MaterialEdgePriceSchema] = Field(default_factory=list)
+    supplier_offers: List[MaterialEdgeSupplierOfferSchema] = Field(default_factory=list)
+
+
+class MaterialSupplierOfferSchema(BaseModel):
+    id: int
+    material_id: int
+    supplier_id: int
+    supplier_name: str | None = None
+    supplier_logo_url: str | None = None
+    article: str | None = None
+    external_product_id: str | None = None
+    source_url: str | None = None
+    price: float | None = None
+    currency: str | None = None
+    unit: str | None = None
+    stock: str | None = None
+    city: str | None = None
+    region: str | None = None
+    supports_square_meter_sale: bool | None = None
+    is_active: bool = True
+    priority: int = 0
+    parsed_at: datetime | None = None
+    price_updated_at: datetime | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class MaterialSupplierOfferCreateSchema(BaseModel):
+    supplier_id: int = Field(ge=1)
+    article: str = Field(min_length=1, max_length=128)
+    external_product_id: str | None = Field(default=None, max_length=128)
+    source_url: str | None = Field(default=None, max_length=1000)
+    price: float | None = None
+    currency: str | None = Field(default=None, max_length=16)
+    unit: str | None = Field(default=None, max_length=32)
+    stock: str | None = Field(default=None, max_length=255)
+    city: str | None = Field(default=None, max_length=128)
+    region: str | None = Field(default=None, max_length=128)
+    is_active: bool = True
+    priority: int = 0
+    parsed_at: datetime | None = None
+    price_updated_at: datetime | None = None
+
+
+class MaterialSupplierOfferAttachFromSourceSchema(BaseModel):
+    source_url: str = Field(min_length=8, max_length=1000)
+
+
+class MaterialSupplierOfferUpdateSchema(BaseModel):
+    supplier_id: int | None = Field(default=None, ge=1)
+    article: str | None = Field(default=None, max_length=128)
+    external_product_id: str | None = Field(default=None, max_length=128)
+    source_url: str | None = Field(default=None, max_length=1000)
+    price: float | None = None
+    currency: str | None = Field(default=None, max_length=16)
+    unit: str | None = Field(default=None, max_length=32)
+    stock: str | None = Field(default=None, max_length=255)
+    city: str | None = Field(default=None, max_length=128)
+    region: str | None = Field(default=None, max_length=128)
+    is_active: bool | None = None
+    priority: int | None = None
+    parsed_at: datetime | None = None
+    price_updated_at: datetime | None = None
+
+
+class MaterialSupplierOfferListResponseSchema(BaseModel):
+    success: bool
+    items: List[MaterialSupplierOfferSchema] = Field(default_factory=list)
+    error: str | None = None
+
+
+class MaterialSupplierOfferOperationResponseSchema(BaseModel):
+    success: bool
+    item: MaterialSupplierOfferSchema | MaterialCatalogDetailItemSchema | None = None
+    parsed_material: dict | None = None
+    source_site: str | None = None
+    material_identity_validation: dict | None = None
+    error: str | None = None
 
 
 class MaterialCatalogItemSchema(BaseModel):
@@ -256,6 +384,9 @@ class MaterialCatalogItemSchema(BaseModel):
     dimensions: str | None = None
     thickness: str | None = None
     category: str | None = None
+    manufacturer_id: int | None = None
+    manufacturer_name: str | None = None
+    manufacturer_logo_url: str | None = None
     image: str | None = None
     source_url: str | None = None
     source_site: str | None = None
@@ -271,9 +402,22 @@ class MaterialCatalogItemSchema(BaseModel):
     edge_options: List[MaterialEdgeOptionSchema] = Field(default_factory=list)
 
 
+class MaterialCatalogDetailItemSchema(MaterialCatalogItemSchema):
+    parsed_at: datetime | None = None
+    price_updated_at: datetime | None = None
+    image_source_url: str | None = None
+    image_cached_hash: str | None = None
+    imported_at: datetime | None = None
+    static_updated_at: datetime | None = None
+    images: List[MaterialCatalogImageSchema] = Field(default_factory=list)
+    supplier_offers: List[MaterialSupplierOfferSchema] = Field(default_factory=list)
+
+
 class MaterialCategorySchema(BaseModel):
     code: str
     name: str
+    description: str | None = None
+    image_url: str | None = None
 
 
 class MaterialOwnershipQuotaSchema(BaseModel):
@@ -295,6 +439,106 @@ class MaterialOwnersResponseSchema(BaseModel):
     material_article: str | None = None
     owners_count: int = 0
     owners: List[MaterialOwnerSchema] = Field(default_factory=list)
+    error: str | None = None
+
+
+class MaterialCatalogCategorySchema(BaseModel):
+    id: int
+    code: str
+    name: str
+    description: str | None = None
+    image_url: str | None = None
+    owner_user_id: str | None = None
+    owner_display_name: str | None = None
+    owner_login: str | None = None
+    owner_email: str | None = None
+    parent_id: int | None = None
+    sort_order: int = 0
+    is_active: bool = True
+    is_system: bool = True
+    item_count: int = 0
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class MaterialCatalogCategoryCreateSchema(BaseModel):
+    code: str | None = Field(default=None, max_length=64)
+    name: str = Field(min_length=1, max_length=160)
+    description: str | None = Field(default=None, max_length=1000)
+    image_url: str | None = Field(default=None, max_length=1000)
+    parent_id: int | None = None
+    sort_order: int = 0
+    is_active: bool = True
+    is_system: bool | None = None
+
+
+class MaterialCatalogCategoryUpdateSchema(BaseModel):
+    code: str | None = Field(default=None, max_length=64)
+    name: str | None = Field(default=None, max_length=160)
+    description: str | None = Field(default=None, max_length=1000)
+    image_url: str | None = Field(default=None, max_length=1000)
+    parent_id: int | None = None
+    sort_order: int | None = None
+    is_active: bool | None = None
+    is_system: bool | None = None
+
+
+class MaterialCatalogCategoryListResponseSchema(BaseModel):
+    success: bool
+    items: List[MaterialCatalogCategorySchema] = Field(default_factory=list)
+    error: str | None = None
+
+
+class MaterialCatalogCategoryOperationResponseSchema(BaseModel):
+    success: bool
+    item: MaterialCatalogCategorySchema | None = None
+    error: str | None = None
+
+
+class MaterialCatalogManufacturerSchema(BaseModel):
+    id: int
+    name: str
+    normalized_name: str
+    code: str | None = None
+    website_url: str | None = None
+    logo_url: str | None = None
+    owner_user_id: str | None = None
+    owner_display_name: str | None = None
+    owner_login: str | None = None
+    owner_email: str | None = None
+    is_active: bool = True
+    is_system: bool = True
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class MaterialCatalogManufacturerCreateSchema(BaseModel):
+    name: str = Field(min_length=1, max_length=160)
+    code: str | None = Field(default=None, max_length=64)
+    website_url: str | None = Field(default=None, max_length=1000)
+    logo_url: str | None = Field(default=None, max_length=1000)
+    is_active: bool = True
+    is_system: bool = True
+
+
+class MaterialCatalogManufacturerUpdateSchema(BaseModel):
+    name: str | None = Field(default=None, max_length=160)
+    code: str | None = Field(default=None, max_length=64)
+    website_url: str | None = Field(default=None, max_length=1000)
+    logo_url: str | None = Field(default=None, max_length=1000)
+    is_active: bool | None = None
+    is_system: bool | None = None
+
+
+class MaterialCatalogManufacturerListResponseSchema(BaseModel):
+    success: bool
+    items: List[MaterialCatalogManufacturerSchema] = Field(default_factory=list)
+    error: str | None = None
+
+
+class MaterialCatalogManufacturerOperationResponseSchema(BaseModel):
+    success: bool
+    item: MaterialCatalogManufacturerSchema | None = None
     error: str | None = None
 
 
@@ -340,6 +584,7 @@ class MaterialCatalogCreateSchema(BaseModel):
         min_length=2,
         max_length=64,
     )
+    manufacturer_id: int | None = None
     city: str | None = Field(
         default=None,
         max_length=128,
@@ -385,6 +630,7 @@ class MaterialCatalogUpdateSchema(BaseModel):
         default=None,
         ge=0,
     )
+    manufacturer_id: int | None = None
 
 
 class MaterialImportJobSchema(BaseModel):
@@ -407,11 +653,63 @@ class MaterialImportJobSchema(BaseModel):
     completed_at: datetime | None = None
 
 
+class MaterialIdentityValidationConflictSchema(BaseModel):
+    field: str
+    existing: str | None = None
+    incoming: str | None = None
+
+
+class MaterialIdentityValidationSchema(BaseModel):
+    status: Literal["compatible", "conflict", "needs_review"]
+    conflicts: List[MaterialIdentityValidationConflictSchema] = Field(default_factory=list)
+    missing_fields: List[str] = Field(default_factory=list)
+    matched_fields: List[str] = Field(default_factory=list)
+
+
+class MaterialRecommendedEdgesSummarySchema(BaseModel):
+    discovered: int = 0
+    persisted: int = 0
+    needs_review: int = 0
+    failed: int = 0
+
+
+class MaterialRecommendedEdgeReviewItemSchema(BaseModel):
+    article: str | None = None
+    source_url: str | None = None
+    reason: str | None = None
+    missing_fields: List[str] = Field(default_factory=list)
+
+
+class MaterialGalleryRefreshSummarySchema(BaseModel):
+    discovered: int = 0
+    persisted: int = 0
+    failed: int = 0
+
+
 class MaterialCatalogOperationResponseSchema(BaseModel):
     success: bool
-    item: MaterialCatalogItemSchema | None = None
+    item: MaterialCatalogDetailItemSchema | None = None
     job: MaterialImportJobSchema | None = None
     selected_city: str | None = None
+    error: str | None = None
+    material_identity_validation: MaterialIdentityValidationSchema | None = None
+    recommended_edges: MaterialRecommendedEdgesSummarySchema | None = None
+
+
+class MaterialGalleryRefreshResponseSchema(BaseModel):
+    success: bool
+    material_id: int | None = None
+    item: MaterialCatalogDetailItemSchema | None = None
+    summary: MaterialGalleryRefreshSummarySchema | None = None
+    error: str | None = None
+
+
+class MaterialRecommendedEdgesRefreshResponseSchema(BaseModel):
+    success: bool
+    material_id: int | None = None
+    item: MaterialCatalogDetailItemSchema | None = None
+    summary: MaterialRecommendedEdgesSummarySchema | None = None
+    review_items: List[MaterialRecommendedEdgeReviewItemSchema] = Field(default_factory=list)
     error: str | None = None
 
 

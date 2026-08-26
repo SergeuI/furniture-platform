@@ -1,9 +1,10 @@
 from sqlalchemy import (
     Boolean,
-    DateTime,
-    LargeBinary,
     Column,
+    DateTime,
+    ForeignKey,
     Integer,
+    LargeBinary,
     String,
 )
 
@@ -49,6 +50,12 @@ class MaterialModel(Base):
 
     thickness = Column(
         String,
+        nullable=True,
+    )
+
+    manufacturer_id = Column(
+        Integer,
+        ForeignKey("material_manufacturers.id"),
         nullable=True,
     )
 

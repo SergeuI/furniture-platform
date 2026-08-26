@@ -168,6 +168,9 @@ class SchedulerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(job["kwargs"]["trigger"].kwargs["hour"], 5)
         self.assertEqual(job["kwargs"]["trigger"].kwargs["minute"], 17)
 
+    def test_normal_startup_does_not_export_demo_material_seed(self) -> None:
+        self.assertFalse(hasattr(main, "seed_materials"))
+
     async def test_real_scheduler_populates_next_run_time(self) -> None:
         with (
             patch.dict(

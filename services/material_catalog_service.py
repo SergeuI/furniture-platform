@@ -179,6 +179,130 @@ def _normalize_asset_url(value: str | None) -> str | None:
     return f"{VIYAR_BASE_URL}/{asset.lstrip('/')}"
 
 
+def _append_unique_asset_candidate(candidates: list[str], value: str | None) -> None:
+
+    normalized_value = _normalize_asset_url(value)
+
+    if normalized_value and normalized_value not in candidates:
+        candidates.append(normalized_value)
+
+
+def _normalize_gallery_asset_url(value: str | None) -> str | None:
+    asset = _normalize_asset_url(value)
+    if not asset:
+        return None
+
+    parsed = urlparse(asset)
+    query_items = [
+        (key, item_value)
+        for key, item_value in parse_qsl(parsed.query, keep_blank_values=True)
+        if key.lower() != "size"
+    ]
+    return parsed._replace(query=urlencode(query_items, doseq=True), fragment="").geturl()
+
+
+def is_material_gallery_candidate_url(value: str | None) -> bool:
+    normalized_url = _normalize_text(value)
+    if not normalized_url:
+        return False
+
+    lower_url = normalized_url.lower()
+    if lower_url.startswith(("data:", "blob:")):
+        return False
+
+    if any(
+        marker in lower_url
+        for marker in (
+            "youtube",
+            "youtu.be",
+            "vimeo",
+            "video",
+            "player",
+            "embed",
+            "preview",
+            "media-player",
+            "icon",
+            "sprite",
+            "logo",
+            "placeholder",
+            "thumb",
+            "thumbnail",
+            "lazy",
+            "loader",
+            "banner",
+            "recommend",
+            "related",
+            "review",
+            "avatar",
+            "share",
+            "social",
+            "favicon",
+        )
+    ):
+        return False
+
+    parsed = urlparse(normalized_url)
+    path = (parsed.path or "").lower()
+    if path.endswith((".svg", ".ico")):
+        return False
+
+    return True
+
+
+def _material_gallery_candidate_score(url: str) -> int:
+    parsed = urlparse(url)
+    path = (parsed.path or "").lower()
+
+    if "/store/items/photos/" in path:
+        return 1000
+
+    if "/upload/resize_cache/photos/" in path:
+        match = re.search(r"/upload/resize_cache/photos/(\d+)_(\d+)_(\d+)/", path)
+        if match:
+            return 100 + int(match.group(1))
+        return 100
+
+    return 50
+
+
+def normalize_material_gallery_image_url(value: str | None) -> str | None:
+    normalized_url = _normalize_gallery_asset_url(value)
+    if not normalized_url:
+        return None
+
+    parsed = urlparse(normalized_url)
+    host = (parsed.netloc or "").lower()
+    if host in {"www.viyar.ua", "viyar.ua"}:
+        return urlunparse(parsed._replace(netloc="viyar.ua", query="", fragment=""))
+
+    return normalized_url
+
+
+def _extract_unique_asset_urls_from_nodes(
+    soup: BeautifulSoup,
+    selectors: list[str],
+) -> list[str]:
+    candidates: dict[str, tuple[int, str]] = {}
+
+    for selector in selectors:
+        for node in soup.select(selector):
+            for attr in ("src", "data-src", "srcset", "data-srcset", "content"):
+                normalized_value = _normalize_gallery_asset_url(node.get(attr))
+                if not normalized_value or not is_material_gallery_candidate_url(normalized_value):
+                    continue
+
+                candidate_key = Path(urlparse(normalized_value).path or "").name.lower()
+                if not candidate_key:
+                    continue
+
+                candidate_score = _material_gallery_candidate_score(normalized_value)
+                current = candidates.get(candidate_key)
+                if current is None or candidate_score > current[0]:
+                    candidates[candidate_key] = (candidate_score, normalized_value)
+
+    return [value for _, value in candidates.values()]
+
+
 def _normalize_article(value: str | None) -> str:
 
     return "".join(re.findall(r"\d+", str(value or "")))
@@ -385,9 +509,10 @@ def _build_request_headers(
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/126.0 Safari/537.36"
+            "Chrome/151.0.0.0 Safari/537.36"
         ),
-        "Accept-Language": "uk-UA,uk;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "uk-UA,uk;q=0.9,en;q=0.8",
         "Referer": f"{VIYAR_BASE_URL}/ua/",
     }
 
@@ -567,24 +692,24 @@ def resolve_material_image_payload(
         else None
     )
 
-    source_candidates = [stored_image]
+    _append_unique_asset_candidate(candidates, stored_image)
 
     if source_site == "kronas":
-        source_candidates.append(kronas_image)
+        _append_unique_asset_candidate(candidates, kronas_image)
     elif source_site == "viyar":
-        source_candidates.extend(
-            [
-                f"https://www.viyar.ua/store/Items/photos/ph{normalized_article}.jpg" if normalized_article else None,
-                f"https://viyar.ua/store/Items/photos/ph{normalized_article}.jpg" if normalized_article else None,
-                f"https://viyar.ua/upload/resize_cache/photos/512_512_1/ph{normalized_article}.jpg" if normalized_article else None,
-                f"https://www.viyar.ua/upload/resize_cache/photos/512_512_1/ph{normalized_article}.jpg" if normalized_article else None,
-            ]
-        )
+        exact_image_url = _normalize_asset_url(stored_image)
+        if exact_image_url:
+            parsed_exact_image_url = urlparse(exact_image_url)
+            bare_host_image_url = urlunparse(parsed_exact_image_url._replace(netloc="viyar.ua"))
+            _append_unique_asset_candidate(candidates, bare_host_image_url)
 
-    for value in source_candidates:
-        normalized_value = _normalize_asset_url(value)
-        if normalized_value and normalized_value not in candidates:
-            candidates.append(normalized_value)
+        for value in (
+            f"https://www.viyar.ua/store/Items/photos/ph{normalized_article}.jpg" if normalized_article else None,
+            f"https://viyar.ua/store/Items/photos/ph{normalized_article}.jpg" if normalized_article else None,
+            f"https://viyar.ua/upload/resize_cache/photos/512_512_1/ph{normalized_article}.jpg" if normalized_article else None,
+            f"https://www.viyar.ua/upload/resize_cache/photos/512_512_1/ph{normalized_article}.jpg" if normalized_article else None,
+        ):
+            _append_unique_asset_candidate(candidates, value)
 
     for candidate in candidates:
         try:
@@ -638,6 +763,121 @@ def resolve_material_image_payload(
                     }
         except Exception:
             pass
+
+    return None
+
+
+def _build_viyar_gallery_image_candidates(
+    article: str,
+    stored_image: str | None,
+    source_url: str | None,
+) -> list[str]:
+
+    normalized_article = _normalize_article(article)
+    normalized_stored_image = _normalize_gallery_asset_url(stored_image)
+    candidates: list[str] = []
+
+    def add_candidate(value: str | None) -> None:
+        _append_unique_asset_candidate(candidates, value)
+
+    if normalized_stored_image:
+        parsed_stored_image = urlparse(normalized_stored_image)
+        stored_path = parsed_stored_image.path or ""
+        is_resize_cache_thumbnail = "/upload/resize_cache/" in stored_path
+
+        if is_resize_cache_thumbnail:
+            # Prefer the original/full-size asset when the parser only surfaced a thumbnail.
+            original_path = f"/store/Items/photos/{Path(stored_path).name}"
+            add_candidate(urlunparse(parsed_stored_image._replace(path=original_path, query="", fragment="")))
+            add_candidate(
+                urlunparse(
+                    parsed_stored_image._replace(
+                        netloc="viyar.ua",
+                        path=original_path,
+                        query="",
+                        fragment="",
+                    )
+                )
+            )
+
+        if normalized_article:
+            for value in (
+                f"https://www.viyar.ua/store/Items/photos/ph{normalized_article}.jpg",
+                f"https://viyar.ua/store/Items/photos/ph{normalized_article}.jpg",
+                f"https://viyar.ua/upload/resize_cache/photos/512_512_1/ph{normalized_article}.jpg",
+                f"https://www.viyar.ua/upload/resize_cache/photos/512_512_1/ph{normalized_article}.jpg",
+            ):
+                add_candidate(value)
+
+        add_candidate(normalized_stored_image)
+        add_candidate(
+            urlunparse(
+                parsed_stored_image._replace(
+                    netloc="viyar.ua",
+                    query="",
+                    fragment="",
+                )
+            )
+        )
+    elif normalized_article:
+        for value in (
+            f"https://www.viyar.ua/store/Items/photos/ph{normalized_article}.jpg",
+            f"https://viyar.ua/store/Items/photos/ph{normalized_article}.jpg",
+            f"https://viyar.ua/upload/resize_cache/photos/512_512_1/ph{normalized_article}.jpg",
+            f"https://www.viyar.ua/upload/resize_cache/photos/512_512_1/ph{normalized_article}.jpg",
+        ):
+            add_candidate(value)
+
+    if not candidates and source_url:
+        add_candidate(source_url)
+
+    return candidates
+
+
+def resolve_material_gallery_image_payload(
+    article: str,
+    stored_image: str | None = None,
+    source_url: str | None = None,
+    city: str | None = None,
+    cookie_override: str | None = None,
+) -> dict | None:
+
+    source_site = detect_material_source_site(source_url)
+
+    if source_site != "viyar":
+        return resolve_material_image_payload(
+            article=article,
+            stored_image=stored_image,
+            source_url=source_url,
+            city=city,
+            cookie_override=cookie_override,
+        )
+
+    candidates = _build_viyar_gallery_image_candidates(
+        article=article,
+        stored_image=stored_image,
+        source_url=source_url,
+    )
+
+    for candidate in candidates:
+        try:
+            image_bytes, content_type, resolved_url = _fetch_binary(
+                candidate,
+                city=city,
+                cookie_override=cookie_override,
+            )
+        except Exception:
+            continue
+
+        normalized_content_type = _validate_image_payload(image_bytes, content_type)
+        if not normalized_content_type:
+            continue
+
+        return {
+            "bytes": image_bytes,
+            "content_type": normalized_content_type,
+            "resolved_url": resolved_url,
+        }
 
     return None
 
@@ -765,64 +1005,19 @@ def _extract_material_from_product_html(
     if article_text and any(symbol.isdigit() for symbol in article_text):
         article = article_text
 
-    image = (
-        _first_attr(
-            soup,
-            [
-                ".vr-about-product img",
-                ".vr-card-slider img",
-                "img.main-image",
-                "[itemprop='image']",
-                "picture img",
-                "meta[property='og:image']",
-            ],
-            "src",
-        )
-        or _first_attr(
-            soup,
-            [
-                ".vr-about-product img",
-                ".vr-card-slider img",
-                "img.main-image",
-                "[itemprop='image']",
-                "picture img",
-            ],
-            "data-src",
-        )
-        or _first_attr(
-            soup,
-            [
-                ".vr-about-product img",
-                ".vr-card-slider img",
-                "img.main-image",
-                "[itemprop='image']",
-                "picture img",
-                "picture source",
-            ],
-            "srcset",
-        )
-        or _first_attr(
-            soup,
-            [
-                ".vr-about-product img",
-                ".vr-card-slider img",
-                "img.main-image",
-                "[itemprop='image']",
-                "picture img",
-                "picture source",
-            ],
-            "data-srcset",
-        )
-        or _first_attr(
-            soup,
-            [
-                "meta[property='og:image']",
-            ],
-            "content",
-        )
+    image_urls = _extract_unique_asset_urls_from_nodes(
+        soup,
+        [
+            ".vr-about-product img",
+            ".vr-card-slider img",
+            "img.main-image",
+            "[itemprop='image']",
+            "picture img",
+            "picture source",
+            "meta[property='og:image']",
+        ],
     )
-
-    image = _normalize_asset_url(image)
+    image = image_urls[0] if image_urls else None
 
     price_text = _first_text(
         soup,
@@ -867,6 +1062,7 @@ def _extract_material_from_product_html(
         or _extract_thickness_from_text(html)
     )
     color = _extract_color_from_name(name)
+    supports_square_meter_sale = _extract_viyar_square_meter_support_from_product_html(soup)
 
     return {
         "article": article,
@@ -876,9 +1072,11 @@ def _extract_material_from_product_html(
         "dimensions": dimensions,
         "thickness": thickness,
         "image": image,
+        "image_urls": image_urls,
         "price": price,
         "price_raw": price_text or None,
         "unit": unit_text or None,
+        "supports_square_meter_sale": supports_square_meter_sale,
         "source_url": source_url,
     }
 
@@ -995,9 +1193,15 @@ def _extract_viyar_promo_metadata_from_product_html(
     }
 
 
+def _extract_viyar_square_meter_support_from_product_html(soup: BeautifulSoup) -> bool:
+
+    normalized_text = _normalize_text(soup.get_text(" ", strip=True)).casefold()
+    return "чистий розмір" in normalized_text
+
+
 def _extract_viyar_current_price_from_product_html(
     html: str,
-) -> tuple[float, float | None, str | None, str | None, str | None, dict[str, object | None]]:
+) -> tuple[float, float | None, str | None, str | None, str | None, bool, dict[str, object | None]]:
 
     soup = BeautifulSoup(html, "html.parser")
 
@@ -1021,9 +1225,10 @@ def _extract_viyar_current_price_from_product_html(
 
     availability = "В наявності" if "В наявності" in _normalize_text(soup.get_text(" ", strip=True)) else None
     currency = "UAH" if "₴" in _normalize_text(price_text or "") or "₴" in _normalize_text(unit or "") or "₴" in _normalize_text(html) else None
+    supports_square_meter_sale = _extract_viyar_square_meter_support_from_product_html(soup)
     promo = _extract_viyar_promo_metadata_from_product_html(soup, price, price_text)
 
-    return price, promo["old_price"], currency, availability, unit, promo
+    return price, promo["old_price"], currency, availability, unit, supports_square_meter_sale, promo
 
 
 def fetch_material_price_by_url(source_url: str, cookie_override: str | None = None) -> dict:
@@ -1034,7 +1239,7 @@ def fetch_material_price_by_url(source_url: str, cookie_override: str | None = N
         cookie_override=cookie_override,
         return_final_url=True,
     )
-    price, old_price, currency, availability, unit, promo = _extract_viyar_current_price_from_product_html(html)
+    price, old_price, currency, availability, unit, supports_square_meter_sale, promo = _extract_viyar_current_price_from_product_html(html)
 
     return {
         "price": price,
@@ -1042,6 +1247,7 @@ def fetch_material_price_by_url(source_url: str, cookie_override: str | None = N
         "currency": currency,
         "availability": availability,
         "unit": unit,
+        "supports_square_meter_sale": supports_square_meter_sale,
         "is_promo": promo["is_promo"],
         "discount_percent": promo["discount_percent"],
         "promo_label": promo["promo_label"],
@@ -1962,10 +2168,25 @@ def _material_from_source_metadata(
         "color": _extract_color_from_name(name),
         "dimensions": _extract_dimensions_from_text(name),
         "thickness": _extract_thickness_from_text(name),
-        "image": metadata.get("image_url"),
+        "image": _normalize_gallery_asset_url(metadata.get("image_url")),
+        "image_urls": [
+            normalized_url
+            for normalized_url in [
+                _normalize_gallery_asset_url(metadata.get("image_url")),
+                *[
+                    _normalize_gallery_asset_url(image_url)
+                    for image_url in list(metadata.get("image_urls") or [])
+                ],
+            ]
+            if normalized_url
+        ],
         "price": metadata.get("price"),
         "price_raw": metadata.get("price_raw"),
         "unit": metadata.get("unit"),
+        "brand": metadata.get("brand"),
+        "currency": metadata.get("currency"),
+        "availability": metadata.get("availability"),
+        "characteristics": metadata.get("characteristics") or {},
         "source_url": final_url,
         "source_site": metadata.get("source_site") or "generic",
     }
@@ -2028,6 +2249,89 @@ async def fetch_material_by_source_live_traced(
     }
 
 
+async def fetch_material_by_source_url_live_traced(
+    source_url: str,
+    city: str | None = None,
+    cookie_override: str | None = None,
+    article_hint: str | None = None,
+) -> tuple[dict, dict]:
+
+    normalized_url = _normalize_text(source_url)
+    if not normalized_url:
+        raise ValueError("Source URL is required")
+
+    source_site = detect_material_source_site(normalized_url)
+    if source_site == "viyar":
+        material, debug_payload = await fetch_viyar_product_details_by_url_traced(
+            normalized_url,
+            city=city,
+            cookie_override=cookie_override,
+            article_hint=article_hint,
+        )
+        if not _normalize_text(article_hint) and _normalize_text(material.get("article")) == normalized_url:
+            raise MaterialImportError(
+                "Не вдалося визначити артикул товару за посиланням. Вкажіть артикул вручну.",
+                trace=debug_payload.get("trace") or [],
+                strategy=debug_payload.get("strategy") or "direct_url_html",
+                source_url=normalized_url,
+            )
+        return material, debug_payload
+
+    metadata = await parse_fitting_source_metadata(normalized_url)
+    if not metadata.get("success"):
+        error_message = metadata.get("error") or "Unable to parse material source page"
+        raise MaterialImportError(
+            error_message,
+            trace=[
+                {
+                    "stage": "source.error",
+                    "source_site": source_site,
+                    "message": error_message,
+                }
+            ],
+            strategy=f"{source_site}_product_page",
+            source_url=normalized_url,
+        )
+
+    resolved_article = _normalize_text(article_hint) or _normalize_text(metadata.get("article"))
+    if not resolved_article:
+        raise MaterialImportError(
+            "Не вдалося визначити артикул товару за посиланням. Вкажіть артикул вручну.",
+            trace=[
+                {
+                    "stage": "source.article_missing",
+                    "source_site": source_site,
+                    "source_url": normalized_url,
+                }
+            ],
+            strategy=f"{source_site}_product_page",
+            source_url=normalized_url,
+        )
+
+    material = _material_from_source_metadata(
+        metadata,
+        article=resolved_article,
+        source_url=normalized_url,
+    )
+
+    trace = [
+        {
+            "stage": "source.extract",
+            "source_site": source_site,
+            "article": material["article"],
+            "name": material["name"],
+            "price": material.get("price"),
+            "has_image": bool(material.get("image")),
+        }
+    ]
+
+    return material, {
+        "strategy": f"{source_site}_product_page",
+        "source_url": material["source_url"],
+        "trace": trace,
+    }
+
+
 async def fetch_viyar_product_details_by_url_traced(
     source_url: str,
     city: str | None = None,
@@ -2041,17 +2345,66 @@ async def fetch_viyar_product_details_by_url_traced(
     if not normalized_url:
         raise ValueError("Source URL is required")
 
+    article_context = _normalize_text(article_hint)
     try:
-        _push_trace(trace, "direct.product_url", product_url=normalized_url, city=city)
-        html = await asyncio.to_thread(
+        _push_trace(
+            trace,
+            "direct.product_url",
+            product_url=normalized_url,
+            city=city,
+            article_hint=article_context or None,
+        )
+        html, final_url = await asyncio.to_thread(
             _fetch_html,
             normalized_url,
             city,
             cookie_override,
+            return_final_url=True,
         )
+        _push_trace(
+            trace,
+            "direct.fetch.result",
+            product_url=normalized_url,
+            final_url=final_url,
+            loaded=bool(html),
+            html_length=len(html or ""),
+            redirected=bool(final_url and final_url != normalized_url),
+        )
+    except Exception as error:
+        error_type = type(error).__name__
+        error_message = _normalize_material_error_message(error)
+        _push_trace(
+            trace,
+            "direct.fetch.error",
+            product_url=normalized_url,
+            city=city,
+            article_hint=article_context or None,
+            error_type=error_type,
+            message=error_message,
+            error_text=str(error),
+        )
+        _push_trace(
+            trace,
+            "direct.error",
+            product_url=normalized_url,
+            city=city,
+            article_hint=article_context or None,
+            error_type=error_type,
+            message=error_message,
+            error_text=str(error),
+            phase="fetch",
+        )
+        raise MaterialImportError(
+            "Material details were not found by URL",
+            trace=trace,
+            strategy="direct_url_html",
+            source_url=normalized_url,
+        ) from error
+
+    try:
         material = _extract_material_from_product_html(
             html=html,
-            article=article_hint or normalized_url,
+            article=article_context or normalized_url,
             source_url=normalized_url,
         )
         is_error_page = _looks_like_error_page(html, material)
@@ -2065,20 +2418,63 @@ async def fetch_viyar_product_details_by_url_traced(
             has_image=bool(material.get("image")) if material else False,
             error_page=is_error_page,
         )
-        if material and material.get("name") and not is_error_page:
-            return material, {
-                "strategy": "direct_url_html",
-                "source_url": normalized_url,
-                "trace": trace,
-            }
     except Exception as error:
+        error_type = type(error).__name__
+        error_message = _normalize_material_error_message(error)
+        _push_trace(
+            trace,
+            "direct.extract.error",
+            product_url=normalized_url,
+            error_type=error_type,
+            message=error_message,
+            error_text=str(error),
+        )
         _push_trace(
             trace,
             "direct.error",
-            error=type(error).__name__,
-            message=_normalize_material_error_message(error),
+            product_url=normalized_url,
+            error_type=error_type,
+            message=error_message,
+            error_text=str(error),
+            phase="extract",
         )
+        raise MaterialImportError(
+            "Material details were not found by URL",
+            trace=trace,
+            strategy="direct_url_html",
+            source_url=normalized_url,
+        ) from error
 
+    if material and material.get("name") and not is_error_page:
+        _push_trace(
+            trace,
+            "direct.success",
+            product_url=normalized_url,
+            final_url=final_url,
+            name=material.get("name"),
+            article=material.get("article"),
+            has_image=bool(material.get("image")),
+        )
+        return material, {
+            "strategy": "direct_url_html",
+            "source_url": normalized_url,
+            "trace": trace,
+        }
+
+    failure_reason = "material_not_found"
+    if material:
+        failure_reason = "error_page" if is_error_page else "missing_name"
+
+    _push_trace(
+        trace,
+        "direct.extract.failed",
+        product_url=normalized_url,
+        final_url=final_url,
+        reason=failure_reason,
+        has_material=bool(material),
+        has_name=bool(material and material.get("name")),
+        error_page=is_error_page,
+    )
     raise MaterialImportError(
         "Material details were not found by URL",
         trace=trace,

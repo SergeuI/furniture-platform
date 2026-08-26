@@ -3,9 +3,11 @@ import asyncio
 from database.repositories.audit_log_repository import create_audit_log
 from database.repositories.inventory_repository import (
     get_material_by_article,
+    get_supplier_by_code,
     list_materials,
     upsert_material,
     upsert_material_price,
+    upsert_material_supplier_offer_for_import,
     update_material_image_cache,
 )
 from database.repositories.material_import_job_repository import (
@@ -27,6 +29,9 @@ from services.material_catalog_service import (
     detect_material_source_site,
     fetch_material_by_source_live_traced,
     prefetch_material_image_cache,
+)
+from services.material_identity_validation_service import (
+    validate_material_supplier_offer_identity,
 )
 from services.viyar_auth_service import login_viyar_and_get_cookie
 
@@ -137,6 +142,7 @@ async def process_material_import_job(job_id: int, cookie_override: str | None =
                 get_material_by_article,
                 running_job["article"],
             )
+            had_existing_material = existing_material is not None
             source_site = detect_material_source_site(
                 running_job.get("preferred_url") or (existing_material or {}).get("source_url")
             )
@@ -147,21 +153,74 @@ async def process_material_import_job(job_id: int, cookie_override: str | None =
                 preferred_url=running_job.get("preferred_url") or (existing_material or {}).get("source_url"),
             )
 
-            await asyncio.to_thread(
-                upsert_material,
-                article=material["article"],
-                name=material["name"],
-                category=running_job["category"],
-                description=material.get("description"),
-                color=material.get("color"),
-                dimensions=material.get("dimensions"),
-                thickness=material.get("thickness"),
-                image=material.get("image"),
-                source_url=material.get("source_url"),
-            )
+            identity_validation = None
+            if had_existing_material and existing_material:
+                identity_validation = validate_material_supplier_offer_identity(
+                    existing_material,
+                    material,
+                    expected_category=running_job["category"],
+                )
+                if identity_validation["status"] != "compatible":
+                    await asyncio.to_thread(
+                        mark_material_import_job_success,
+                        job_id,
+                        strategy=debug_payload.get("strategy"),
+                        source_url=debug_payload.get("source_url"),
+                        debug_trace=[
+                            *list(debug_payload.get("trace") or []),
+                            {
+                                "stage": "identity.validation",
+                                "status": identity_validation["status"],
+                                "conflicts": identity_validation["conflicts"],
+                                "missing_fields": identity_validation["missing_fields"],
+                                "matched_fields": identity_validation["matched_fields"],
+                            },
+                        ],
+                    )
+                    await asyncio.to_thread(
+                        create_audit_log,
+                        actor_user_id=running_job["owner_user_id"],
+                        actor_email="",
+                        action="catalog.material_import_needs_review",
+                        entity_type="material",
+                        entity_id=material["article"],
+                        details={
+                            "article": material["article"],
+                            "city": running_job["city"],
+                            "source_site": source_site,
+                            "job_id": str(job_id),
+                            "identity_validation": identity_validation,
+                        },
+                    )
+                    return await asyncio.to_thread(
+                        get_material_import_job,
+                        job_id,
+                    )
+
             source_site = detect_material_source_site(
                 material.get("source_url") or running_job.get("preferred_url")
             )
+            preserve_existing_canonical = bool(
+                existing_material
+                and existing_material.get("source")
+                and source_site != existing_material.get("source")
+            )
+
+            if preserve_existing_canonical:
+                item = existing_material
+            else:
+                item = await asyncio.to_thread(
+                    upsert_material,
+                    article=material["article"],
+                    name=material["name"],
+                    category=running_job["category"],
+                    description=material.get("description"),
+                    color=material.get("color"),
+                    dimensions=material.get("dimensions"),
+                    thickness=material.get("thickness"),
+                    image=material.get("image"),
+                    source_url=material.get("source_url"),
+                )
             price_cities = (
                 CITY_COOKIES.keys()
                 if source_site != "viyar"
@@ -176,28 +235,53 @@ async def process_material_import_job(job_id: int, cookie_override: str | None =
                     price=material.get("price"),
                 )
 
-            try:
-                image_payload = await asyncio.to_thread(
-                    prefetch_material_image_cache,
+            supplier = await asyncio.to_thread(
+                get_supplier_by_code,
+                source_site,
+            )
+            if supplier and supplier.get("is_active"):
+                await asyncio.to_thread(
+                    upsert_material_supplier_offer_for_import,
+                    material_id=item["id"],
+                    supplier_id=supplier["id"],
                     article=material["article"],
-                    stored_image=material.get("image"),
-                    source_url=material.get("source_url"),
+                    external_product_id=material.get("external_product_id"),
+                    source_url=material.get("source_url") or running_job.get("preferred_url"),
+                    price=material.get("price"),
+                    currency=material.get("currency"),
+                    unit=material.get("unit"),
+                    stock=material.get("stock"),
                     city=running_job["city"],
-                    cookie_override=effective_cookie,
+                    region=material.get("region"),
+                    is_active=True,
+                    priority=0,
+                    parsed_at=material.get("parsed_at"),
+                    price_updated_at=material.get("price_updated_at"),
                 )
-                if not image_payload:
-                    if source_site == "kronas":
-                        raise RuntimeError("Kronas image payload did not pass validation")
-                else:
-                    await asyncio.to_thread(
-                        update_material_image_cache,
+
+            if not preserve_existing_canonical:
+                try:
+                    image_payload = await asyncio.to_thread(
+                        prefetch_material_image_cache,
                         article=material["article"],
-                        image_bytes=image_payload["bytes"],
-                        content_type=image_payload["content_type"],
+                        stored_image=material.get("image"),
+                        source_url=material.get("source_url"),
+                        city=running_job["city"],
+                        cookie_override=effective_cookie,
                     )
-            except Exception:
-                if source_site == "kronas":
-                    raise
+                    if not image_payload:
+                        if source_site == "kronas":
+                            raise RuntimeError("Kronas image payload did not pass validation")
+                    else:
+                        await asyncio.to_thread(
+                            update_material_image_cache,
+                            article=material["article"],
+                            image_bytes=image_payload["bytes"],
+                            content_type=image_payload["content_type"],
+                        )
+                except Exception:
+                    if source_site == "kronas":
+                        raise
 
             await asyncio.to_thread(
                 mark_material_import_job_success,

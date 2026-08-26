@@ -299,6 +299,9 @@ export function shouldAutoOpenCatalogMenu(activeView) {
   return [
     "catalogHub",
     "catalogMaterials",
+    "catalogMaterialCategories",
+    "catalogMaterialManufacturers",
+    "catalogMaterialSuppliers",
     "catalogFittings",
     "catalogFasteners",
     "catalogFittingManufacturers",

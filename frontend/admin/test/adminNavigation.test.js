@@ -32,11 +32,23 @@ test("admin app uses canonical section-based navigation helpers", () => {
   );
   assert.match(
     source,
-    /sidebarFlyout\?\.groupKey === "catalog"[\s\S]*key: "catalogFittings"[\s\S]*onClick: \(\) => \{[\s\S]*openFittingCatalogRoot\(\);[\s\S]*closeSidebarOnMobile\(\);[\s\S]*closeSidebarFlyout\(\);[\s\S]*\}/,
+    /const \[sidebarCatalogSubmenuKey, setSidebarCatalogSubmenuKey\] = useState\(""\);/,
   );
   assert.match(
     source,
-    /isCatalogMenuOpen \? \(\r?\n\s*<div className="nav-subtabs">[\s\S]*openFittingCatalogRoot\(\);[\s\S]*closeSidebarOnMobile\(\);[\s\S]*closeSidebarFlyout\(\);[\s\S]*\}/,
+    /sidebarFlyout\?\.groupKey === "catalog"[\s\S]*key: "catalogMaterials"[\s\S]*submenuKey: "materials"/,
+  );
+  assert.match(
+    source,
+    /sidebarFlyout\?\.groupKey === "catalog"[\s\S]*key: "catalogFittings"[\s\S]*submenuKey: "fittings"/,
+  );
+  assert.match(
+    source,
+    /setSidebarCatalogSubmenuKey\("fittings"\);[\s\S]*openFittingCatalogRoot\(\);[\s\S]*closeSidebarOnMobile\(\);/,
+  );
+  assert.match(
+    source,
+    /className="sidebar-flyout sidebar-flyout-submenu"/,
   );
   assert.match(source, /onClick=\{\(\) => \{[\s\S]*setSelectedFittingCategory\(category\.code\);[\s\S]*\}\}/);
 });

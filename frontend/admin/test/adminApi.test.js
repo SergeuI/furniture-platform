@@ -1,19 +1,241 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
 
 import {
   API_BASE_URL,
   applyEntitlementRegistrySync,
+  createMaterial,
+  refreshMaterialGallery,
+  refreshMaterialRecommendedEdges,
   deleteMountingNode,
   createMountingNode,
   getMountingNode,
   getMountingNodes,
+  importMaterialFromViyar,
   previewEntitlementRegistrySync,
   listProjects,
   getProjectQuota,
   updateMountingNode,
   updateMaterial,
 } from "../src/api.js";
+
+test("material create and source import wrappers keep the 120 second timeout semantics", () => {
+  const source = readFileSync(new URL("../src/api.js", import.meta.url), "utf8");
+
+  assert.match(source, /export async function importMaterialFromViyar[\s\S]*timeoutMs: 120000,/);
+  assert.match(source, /export async function createMaterial[\s\S]*timeoutMs: 120000,/);
+});
+
+test("material import wrappers resolve immediately when the backend returns a fast failure payload", async () => {
+  const calls = [];
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url, options });
+    return new Response(JSON.stringify({ success: false, error: "Не вдалося отримати дані товару від VIYAR..." }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+
+  try {
+    const result = await createMaterial("token-1", {
+      article: "K533",
+      category: "dsp",
+      city: "kyiv",
+      source_url: "https://viyar.ua/ua/catalog/example/",
+    });
+
+    assert.equal(result.success, false);
+    assert.equal(result.error, "Не вдалося отримати дані товару від VIYAR...");
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].url, "/api/catalog/materials");
+    assert.equal(calls[0].options.method, "POST");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("material import wrappers surface immediate network rejection without waiting for a timeout", async () => {
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = async () => {
+    throw new TypeError("fetch failed");
+  };
+
+  try {
+    const result = await importMaterialFromViyar(
+      "token-1",
+      "K533",
+      "dsp",
+      "https://viyar.ua/ua/catalog/example/",
+      false,
+    );
+
+    assert.equal(result.success, false);
+    assert.equal(result.status, 0);
+    assert.match(result.error, /fetch failed/i);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("material source import dev timing logs request lifecycle", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalTimingFlag = globalThis.__FURNITURE_ADMIN_DEV_TIMING__;
+  const originalConsoleInfo = console.info;
+  const logs = [];
+
+  globalThis.__FURNITURE_ADMIN_DEV_TIMING__ = true;
+  console.info = (...args) => {
+    logs.push(args.join(" "));
+  };
+
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({ success: false, error: "Material not found or unavailable." }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+
+  try {
+    const result = await createMaterial("token-1", {
+      article: "K533",
+      category: "dsp",
+      city: "kyiv",
+      source_url: "https://viyar.ua/ua/catalog/example/",
+    });
+
+    assert.equal(result.success, false);
+    assert.ok(logs.some((line) => line.includes("material-source-import request started")));
+    assert.ok(logs.some((line) => line.includes("material-source-import request resolved")));
+    assert.ok(logs.some((line) => line.includes("elapsed_ms=")));
+    assert.ok(logs.some((line) => line.includes("status=200")));
+    assert.ok(logs.some((line) => line.includes("success=false")));
+  } finally {
+    globalThis.fetch = originalFetch;
+    console.info = originalConsoleInfo;
+    globalThis.__FURNITURE_ADMIN_DEV_TIMING__ = originalTimingFlag;
+  }
+});
+
+test("material import submit handler stops after gallery for source imports", () => {
+  const source = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
+  const handlerStart = source.indexOf("async function handleImportMaterial(event) {");
+  assert.ok(handlerStart >= 0, "handleImportMaterial not found");
+
+  const handlerSnippet = source.slice(handlerStart, handlerStart + 12000);
+  assert.match(handlerSnippet, /await createMaterial\(token, payload\);/);
+  assert.match(handlerSnippet, /await refreshMaterialGallery\(token, refreshedMaterialId\);/);
+  assert.match(handlerSnippet, /Отримуємо дані матеріалу/);
+  assert.match(handlerSnippet, /Завантажуємо фотографії/);
+  assert.match(handlerSnippet, /Матеріал готовий/);
+  assert.match(handlerSnippet, /Матеріал додано, але не всі фотографії вдалося завантажити\./);
+  assert.doesNotMatch(handlerSnippet, /refreshMaterialRecommendedEdges/);
+  assert.doesNotMatch(handlerSnippet, /Шукаємо рекомендовані крайки/);
+  assert.ok(
+    handlerSnippet.indexOf("setMaterialImportWorking(false);") < handlerSnippet.indexOf("await loadMaterialsCatalog(token);"),
+    "material import overlay should close before catalog reload",
+  );
+  assert.match(handlerSnippet, /finally \{[\s\S]*setLoading\(false\);[\s\S]*setMaterialImportWorking\(false\);[\s\S]*resetMaterialImportProgress\(\);/);
+});
+
+test("material import handler no longer references recommended-edge warnings", () => {
+  const source = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
+  const handlerStart = source.indexOf("async function handleImportMaterial(event) {");
+  assert.ok(handlerStart >= 0, "handleImportMaterial not found");
+
+  const handlerSnippet = source.slice(handlerStart, handlerStart + 12000);
+  assert.doesNotMatch(handlerSnippet, /edgesSummary\.needs_review/);
+  assert.doesNotMatch(handlerSnippet, /edgesHasIssues/);
+  assert.doesNotMatch(handlerSnippet, /рекомендована крайка потребує перевірки/);
+  assert.doesNotMatch(handlerSnippet, /Recommended edges could not be updated yet/);
+});
+
+test("material refresh handler stops after gallery for existing materials", () => {
+  const source = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
+  const handlerStart = source.indexOf("async function handleRefreshMaterial(item) {");
+  assert.ok(handlerStart >= 0, "handleRefreshMaterial not found");
+
+  const handlerSnippet = source.slice(handlerStart, handlerStart + 12000);
+  assert.match(handlerSnippet, /await refreshMaterialGallery\(token, refreshedMaterialId\);/);
+  assert.match(handlerSnippet, /Фотографії збережено/);
+  assert.match(handlerSnippet, /Матеріал готовий/);
+  assert.match(handlerSnippet, /Матеріал додано, але не всі фотографії вдалося завантажити\./);
+  assert.doesNotMatch(handlerSnippet, /refreshMaterialRecommendedEdges/);
+  assert.doesNotMatch(handlerSnippet, /Шукаємо рекомендовані крайки/);
+  assert.ok(
+    handlerSnippet.indexOf("setMaterialImportWorking(false);") < handlerSnippet.indexOf("await loadMaterialsCatalog(token);"),
+    "material refresh overlay should close before catalog reload",
+  );
+});
+
+test("material refresh handler no longer references recommended-edge warnings", () => {
+  const source = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
+  const handlerStart = source.indexOf("async function handleRefreshMaterial(item) {");
+  assert.ok(handlerStart >= 0, "handleRefreshMaterial not found");
+
+  const handlerSnippet = source.slice(handlerStart, handlerStart + 12000);
+  assert.doesNotMatch(handlerSnippet, /edgesSummary\.needs_review/);
+  assert.doesNotMatch(handlerSnippet, /edgesHasIssues/);
+  assert.doesNotMatch(handlerSnippet, /рекомендована крайка потребує перевірки/);
+  assert.doesNotMatch(handlerSnippet, /Recommended edges could not be updated yet/);
+});
+
+test("background material catalog refresh keeps already visible data intact", () => {
+  const source = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
+  const loaderStart = source.indexOf("async function loadMaterialsCatalog(");
+  assert.ok(loaderStart >= 0, "loadMaterialsCatalog not found");
+
+  const loaderSnippet = source.slice(loaderStart, loaderStart + 7000);
+  assert.doesNotMatch(loaderSnippet, /setMaterialItems\(\[\]\)/);
+  assert.doesNotMatch(loaderSnippet, /setSelectedMaterialDetail\(null\)/);
+  assert.doesNotMatch(loaderSnippet, /setSelectedMaterialSupplierOffers\(\[\]\)/);
+  assert.match(loaderSnippet, /setMaterialItems\(result\.items \|\| \[\]\);/);
+});
+
+test("material detail releases core loading before supplier and owners hydration finishes", () => {
+  const source = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
+  const detailStart = source.indexOf("async function openMaterialDetails(item, options = {}) {");
+  assert.ok(detailStart >= 0, "openMaterialDetails not found");
+
+  const detailSnippet = source.slice(detailStart, detailStart + 11000);
+  assert.ok(
+    detailSnippet.indexOf("setMaterialDetailLoading(false);") < detailSnippet.indexOf("await listMaterialSupplierOffers"),
+    "core material detail should stop loading before supplier offers hydration",
+  );
+  assert.ok(
+    detailSnippet.indexOf("setMaterialDetailLoading(false);") < detailSnippet.indexOf("await loadMaterialOwners"),
+    "core material detail should stop loading before owners hydration",
+  );
+});
+
+test("material phase refresh wrappers hit the explicit gallery and edge refresh endpoints", async () => {
+  const calls = [];
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url, options });
+    return new Response(JSON.stringify({ success: true, material_id: 2126, summary: { discovered: 3, persisted: 3, failed: 0 } }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+
+  try {
+    const gallery = await refreshMaterialGallery("token-1", 2126);
+    const edges = await refreshMaterialRecommendedEdges("token-1", 2126);
+
+    assert.equal(gallery.success, true);
+    assert.equal(edges.success, true);
+    assert.deepEqual(calls.map((call) => call.url), [
+      "/api/catalog/materials/2126/images/refresh",
+      "/api/catalog/materials/2126/recommended-edges/refresh",
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
 
 test("admin entitlement sync wrappers use the shared API base URL", async () => {
   const calls = [];

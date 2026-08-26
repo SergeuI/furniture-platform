@@ -38,7 +38,12 @@ import {
   formatTrialCountdown,
   getSubscriptionLabel,
 } from "../../shared/trialStatus.js";
-import { resolveAdminAssetUrl } from "./api.js";
+import {
+  listMaterialCategories,
+  listMaterialManufacturers,
+  listMaterialSupplierOffers,
+  resolveAdminAssetUrl,
+} from "./api.js";
 import EntitlementsAdminPage from "./components/EntitlementsAdminPage.jsx";
 import FittingHolesWorkspace from "./components/processing/FittingHolesWorkspace.jsx";
 import MountingNodesCreatePanel from "./components/processing/MountingNodesCreatePanel.jsx";
@@ -48,6 +53,8 @@ import MountingNodesPanel from "./components/processing/MountingNodesPanelRefine
 import ProcessingWorkspace from "./components/processing/ProcessingWorkspace.jsx";
 import ConnectionsWorkspace from "./components/connections/ConnectionsWorkspace.jsx";
 import FittingSuppliersAdminWorkspace from "./components/FittingSuppliersAdminWorkspace.jsx";
+import MaterialSupplierOffersSection from "./components/MaterialSupplierOffersSection.jsx";
+import MaterialTaxonomyAdminWorkspace from "./components/MaterialTaxonomyAdminWorkspace.jsx";
 import {
   getProcessingWorkspaceSidebarTabs,
   getProcessingWorkspaceTabTargetView,
@@ -57,6 +64,11 @@ import {
   shouldAutoOpenCatalogMenu,
 } from "./processingWorkspace.js";
 import FittingTaxonomyAdminWorkspace from "./components/FittingTaxonomyAdminWorkspace.jsx";
+import {
+  shouldShowOwnersCount,
+  shouldShowOwnersEmptyState,
+  shouldShowOwnersLoadingState,
+} from "./components/materialDetailState.js";
 import { FITTING_TAXONOMY_VIEWS } from "./fittingTaxonomyAdmin.js";
 import {
   buildCanonicalFittingCatalogView,
@@ -255,6 +267,7 @@ import {
   getMaterialDetails,
   getMaterialImportJob,
   getMaterialImageBlob,
+  getMaterialImageBlobById,
   getMaterialsCatalog,
   getMaterialOwners,
   getMountingNodes,
@@ -308,6 +321,7 @@ import {
   updateProjectPartMachining,
   updateViyarService,
   updateMaterial,
+  refreshMaterialGallery,
   syncViyarServicePrices,
   updateMyProfile,
   updateUserActive,
@@ -327,6 +341,7 @@ const ACTIVE_PROJECT_ID_STORAGE_KEY = "furniture_admin_active_project_id";
 const ACTIVE_PROJECT_TAB_STORAGE_KEY = "furniture_admin_active_project_tab";
 const FITTING_CATEGORY_STORAGE_KEY = "furniture_admin_fitting_category";
 const FITTING_VIEW_MODE_STORAGE_KEY = "furniture_admin_fitting_view_mode";
+const MATERIAL_CATEGORY_STORAGE_KEY = "furniture_admin_material_category";
 const ADMIN_TOKEN_HASH_KEY = "mproject_token";
 const ADMIN_LOGOUT_HASH_KEY = "mproject_logout";
 const VIYAR_SERVICES_CACHE_PREFIX = "furniture_admin_viyar_services_cache";
@@ -376,6 +391,9 @@ const ADMIN_SECTION_BY_VIEW = {
   catalogFittingSeries: "catalog-fitting-series",
   catalogFittingCategories: "catalog-fitting-categories",
   catalogFittingProducts: "catalog-fitting-products",
+  catalogMaterialCategories: "catalog-material-categories",
+  catalogMaterialManufacturers: "catalog-material-manufacturers",
+  catalogMaterialSuppliers: "catalog-material-suppliers",
   catalogSuppliers: "catalog-suppliers",
   catalogHub: "catalog-hub",
   catalogHoles: "mounting-nodes",
@@ -562,6 +580,7 @@ function consumeAdminTokenHandoff() {
     localStorage.setItem(ACTIVE_VIEW_STORAGE_KEY, "home");
     localStorage.removeItem(ACTIVE_PROJECT_ID_STORAGE_KEY);
     localStorage.removeItem(ACTIVE_PROJECT_TAB_STORAGE_KEY);
+    localStorage.removeItem(MATERIAL_CATEGORY_STORAGE_KEY);
   }
 
   if (!handoffToken) {
@@ -583,6 +602,7 @@ function consumeAdminTokenHandoff() {
     localStorage.setItem(ACTIVE_VIEW_STORAGE_KEY, "home");
     localStorage.removeItem(ACTIVE_PROJECT_ID_STORAGE_KEY);
     localStorage.removeItem(ACTIVE_PROJECT_TAB_STORAGE_KEY);
+    localStorage.removeItem(MATERIAL_CATEGORY_STORAGE_KEY);
   }
 
   hashParams.delete(ADMIN_TOKEN_HASH_KEY);
@@ -946,6 +966,9 @@ const CATALOG_SERVICE_VIEWS = new Set([
   "catalogViyar",
   "catalogManual",
   "catalogMaterials",
+  "catalogMaterialCategories",
+  "catalogMaterialManufacturers",
+  "catalogMaterialSuppliers",
   "catalogFittings",
   "catalogHoles",
   "catalogBundles",
@@ -4287,6 +4310,7 @@ Object.assign(TRANSLATIONS.en, {
   fittingAvailabilityPreOrder: "Pre-order",
   materialCardOpen: "Open material",
   materialDetails: "Material details",
+  materialManufacturer: "Manufacturer",
   materialDescription: "Description",
   materialColor: "Color",
   materialDimensions: "Dimensions",
@@ -4308,6 +4332,7 @@ Object.assign(TRANSLATIONS.en, {
   materialEditNameRequired: "Material name is required.",
   materialEditPriceRequired: "Price is required.",
   materialEditInvalidPrice: "Enter a valid non-negative price.",
+  materialEditInvalidManufacturer: "Select a valid manufacturer or leave it empty.",
   materialEditCityRequired: "Select your city in profile settings.",
   materialEditForbidden: "Editing material is not available in your plan.",
   materialEditNotFound: "Material not found or unavailable.",
@@ -4385,6 +4410,7 @@ Object.assign(TRANSLATIONS.uk, {
   fittingAvailabilityPreOrder: "\u041f\u0456\u0434 \u0437\u0430\u043c\u043e\u0432\u043b\u0435\u043d\u043d\u044f",
   materialCardOpen: "\u0412\u0456\u0434\u043a\u0440\u0438\u0442\u0438 \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b",
   materialDetails: "\u0414\u0435\u0442\u0430\u043b\u0456 \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b\u0443",
+  materialManufacturer: "\u0412\u0438\u0440\u043e\u0431\u043d\u0438\u043a",
   materialDescription: "\u041e\u043f\u0438\u0441",
   materialColor: "\u041a\u043e\u043b\u0456\u0440",
   materialDimensions: "\u0413\u0430\u0431\u0430\u0440\u0438\u0442",
@@ -4406,6 +4432,7 @@ Object.assign(TRANSLATIONS.uk, {
   materialEditNameRequired: "\u041d\u0430\u0437\u0432\u0430 \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b\u0443 \u043f\u043e\u0442\u0440\u0456\u0431\u043d\u0430.",
   materialEditPriceRequired: "\u0426\u0456\u043d\u0430 \u043f\u043e\u0442\u0440\u0456\u0431\u043d\u0430.",
   materialEditInvalidPrice: "\u0412\u0432\u0435\u0434\u0456\u0442\u044c \u0434\u0456\u0439\u0441\u043d\u0443 \u043d\u0435\u0432\u0456\u0434'\u0454\u043c\u043d\u0443 \u0446\u0456\u043d\u0443.",
+  materialEditInvalidManufacturer: "\u041e\u0431\u0435\u0440\u0456\u0442\u044c \u0434\u0456\u0439\u0441\u043d\u043e\u0433\u043e \u0432\u0438\u0440\u043e\u0431\u043d\u0438\u043a\u0430 \u0430\u0431\u043e \u0437\u0430\u043b\u0438\u0448\u0442\u0435 \u043f\u043e\u043b\u0435 \u043f\u043e\u0440\u043e\u0436\u043d\u0456\u043c.",
   materialEditCityRequired: "\u041e\u0431\u0435\u0440\u0456\u0442\u044c \u043c\u0456\u0441\u0442\u043e \u0443 \u043d\u0430\u043b\u0430\u0448\u0442\u0443\u0432\u0430\u043d\u043d\u044f\u0445 \u043f\u0440\u043e\u0444\u0456\u043b\u044e.",
   materialEditForbidden: "\u0420\u0435\u0434\u0430\u0433\u0443\u0432\u0430\u043d\u043d\u044f \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b\u0443 \u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u043d\u0435 \u0443 \u0432\u0430\u0448\u043e\u043c\u0443 \u0442\u0430\u0440\u0438\u0444\u0456.",
   materialEditNotFound: "\u041c\u0430\u0442\u0435\u0440\u0456\u0430\u043b \u043d\u0435 \u0437\u043d\u0430\u0439\u0434\u0435\u043d\u043e \u0430\u0431\u043e \u0432\u0456\u043d \u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u043d\u0438\u0439.",
@@ -5139,6 +5166,32 @@ function formatCatalogLabel(value, t) {
   return t[value] || value;
 }
 
+function formatCatalogCityLabel(value, t) {
+  const normalized = String(value || "").trim().toLowerCase();
+
+  if (!normalized) {
+    return t.notSet;
+  }
+
+  return t[normalized] || String(value || "").trim();
+}
+
+function normalizeMaterialCategoryCode(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function getMaterialCategoryAccent(code) {
+  const palette = ["#2f8ecb", "#56a36c", "#d97706", "#7c3aed", "#0f766e", "#c2410c", "#4f46e5"];
+  const normalized = normalizeMaterialCategoryCode(code);
+  let hash = 0;
+
+  for (let index = 0; index < normalized.length; index += 1) {
+    hash = (hash * 31 + normalized.charCodeAt(index)) >>> 0;
+  }
+
+  return palette[hash % palette.length];
+}
+
 function formatReadableCatalogValue(value, t) {
   const normalized = String(value || "").replace(/\s+/g, " ").trim();
 
@@ -5370,6 +5423,326 @@ function MaterialImage({ item, token, alt, loading = "lazy", placeholderLabel })
   }
 
   return <div className="material-card-placeholder">{placeholderLabel}</div>;
+}
+
+function MaterialDetailGallery({ item, token, alt, loading = "eager", placeholderLabel, t }) {
+  const [galleryEntries, setGalleryEntries] = useState([]);
+  const [galleryLoading, setGalleryLoading] = useState(false);
+  const [galleryError, setGalleryError] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const objectUrlsRef = useRef([]);
+  const article = String(item?.article || "").trim();
+  const galleryImages = useMemo(() => {
+    if (!Array.isArray(item?.images)) {
+      return [];
+    }
+
+    return [...item.images]
+      .filter((image) => String(image?.id || "").trim())
+      .sort((left, right) => {
+        const leftSort = Number(left?.sort_order ?? 0);
+        const rightSort = Number(right?.sort_order ?? 0);
+
+        if (leftSort !== rightSort) {
+          return leftSort - rightSort;
+        }
+
+        return Number(left?.id ?? 0) - Number(right?.id ?? 0);
+      });
+  }, [item?.images]);
+
+  useEffect(() => {
+    let active = true;
+
+    const revokeObjectUrls = () => {
+      for (const objectUrl of objectUrlsRef.current) {
+        try {
+          URL.revokeObjectURL(objectUrl);
+        } catch {
+          // Ignore cleanup errors.
+        }
+      }
+      objectUrlsRef.current = [];
+    };
+
+    revokeObjectUrls();
+    setGalleryEntries([]);
+    setGalleryError(false);
+    setActiveIndex(0);
+    setIsPreviewOpen(false);
+
+    if (!article || !token || !galleryImages.length) {
+      setGalleryLoading(false);
+      return () => {
+        active = false;
+        revokeObjectUrls();
+      };
+    }
+
+    setGalleryLoading(true);
+
+    (async () => {
+      try {
+        const nextEntries = [];
+
+        for (const image of galleryImages) {
+          const imageId = String(image?.id || "").trim();
+          if (!imageId) {
+            continue;
+          }
+
+          const result = await getMaterialImageBlobById(token, article, imageId);
+          if (!active || !result?.success || !result?.blob) {
+            continue;
+          }
+
+          const objectUrl = URL.createObjectURL(result.blob);
+          objectUrlsRef.current.push(objectUrl);
+          nextEntries.push({
+            ...image,
+            objectUrl,
+            contentType: result.contentType || image?.content_type || "",
+          });
+        }
+
+        if (!active) {
+          return;
+        }
+
+        setGalleryEntries(nextEntries);
+        setGalleryError(nextEntries.length === 0);
+      } catch {
+        if (active) {
+          setGalleryError(true);
+          setGalleryEntries([]);
+        }
+      } finally {
+        if (active) {
+          setGalleryLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      active = false;
+      revokeObjectUrls();
+    };
+  }, [article, galleryImages, token]);
+
+  useEffect(() => {
+    if (!isPreviewOpen) {
+      return undefined;
+    }
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setIsPreviewOpen(false);
+        return;
+      }
+
+      if (galleryEntries.length <= 1) {
+        return;
+      }
+
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        setActiveIndex((current) => (current - 1 + galleryEntries.length) % galleryEntries.length);
+        return;
+      }
+
+      if (event.key === "ArrowRight") {
+        event.preventDefault();
+        setActiveIndex((current) => (current + 1) % galleryEntries.length);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [galleryEntries.length, isPreviewOpen]);
+
+  if (galleryLoading && !galleryEntries.length && !galleryError) {
+    return (
+      <div className="fitting-details-gallery fitting-details-gallery-loading">
+        <div className="material-card-placeholder">{t?.fittingImagesLoading || "Loading images..."}</div>
+      </div>
+    );
+  }
+
+  if (galleryError && !galleryEntries.length) {
+    return (
+      <MaterialImage
+        alt={alt}
+        item={item}
+        loading={loading}
+        placeholderLabel={placeholderLabel}
+        token={token}
+      />
+    );
+  }
+
+  if (!galleryEntries.length) {
+    return (
+      <MaterialImage
+        alt={alt}
+        item={item}
+        loading={loading}
+        placeholderLabel={placeholderLabel}
+        token={token}
+      />
+    );
+  }
+
+  const activeEntry = galleryEntries[activeIndex] || galleryEntries[0] || null;
+  const previewLightbox =
+    isPreviewOpen && activeEntry && typeof document !== "undefined"
+      ? createPortal(
+          <div
+            aria-modal="true"
+            className="fitting-details-preview-backdrop"
+            onClick={() => setIsPreviewOpen(false)}
+            role="dialog"
+          >
+            <section
+              className="fitting-details-preview-panel"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <header className="fitting-details-preview-header">
+                <strong>{item?.name || item?.article || alt}</strong>
+                <div className="fitting-details-preview-actions">
+                  {galleryEntries.length > 1 ? (
+                    <span className="fitting-details-preview-count">
+                      {activeIndex + 1} / {galleryEntries.length}
+                    </span>
+                  ) : null}
+                  <button
+                    aria-label={t?.cancel || "Close"}
+                    className="ghost-button compact-button fitting-details-preview-control fitting-details-preview-close"
+                    onClick={() => setIsPreviewOpen(false)}
+                    type="button"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              </header>
+
+              <div className="fitting-details-preview-stage-shell">
+                {galleryEntries.length > 1 ? (
+                  <button
+                    aria-label="Previous image"
+                    className="fitting-details-gallery-nav fitting-details-gallery-nav-prev fitting-details-preview-nav"
+                    onClick={() =>
+                      setActiveIndex((current) => (current - 1 + galleryEntries.length) % galleryEntries.length)
+                    }
+                    type="button"
+                  >
+                    <ChevronLeft size={20} />
+                  </button>
+                ) : null}
+                {galleryEntries.length > 1 ? (
+                  <button
+                    aria-label="Next image"
+                    className="fitting-details-gallery-nav fitting-details-gallery-nav-next fitting-details-preview-nav"
+                    onClick={() => setActiveIndex((current) => (current + 1) % galleryEntries.length)}
+                    type="button"
+                  >
+                    <ChevronRight size={20} />
+                  </button>
+                ) : null}
+
+                <div className="fitting-details-preview-stage" role="presentation">
+                  <img
+                    alt={alt}
+                    className="fitting-details-preview-image"
+                    decoding="async"
+                    draggable="false"
+                    loading="eager"
+                    src={activeEntry.objectUrl || ""}
+                  />
+                </div>
+              </div>
+
+              <div className="fitting-details-preview-footer">
+                <p className="fitting-details-preview-hint">
+                  {galleryEntries.length > 1
+                    ? "Arrow keys, Esc, and backdrop click work here."
+                    : "Esc or backdrop click closes the preview."}
+                </p>
+              </div>
+            </section>
+          </div>,
+          document.body,
+        )
+      : null;
+
+  return (
+    <>
+      <div className="fitting-details-gallery material-details-gallery">
+        <div className="fitting-details-gallery-stage">
+          <button
+            className="fitting-details-gallery-open-preview"
+            title={t?.materialCardOpen || alt}
+            type="button"
+            onClick={() => setIsPreviewOpen(true)}
+          >
+            <img
+              alt={alt}
+              className="fitting-details-gallery-image"
+              decoding="async"
+              loading={loading}
+              src={activeEntry?.objectUrl || ""}
+            />
+          </button>
+          {galleryEntries.length > 1 ? (
+            <button
+              aria-label="Previous image"
+              className="fitting-details-gallery-nav fitting-details-gallery-nav-prev"
+              onClick={() => setActiveIndex((current) => (current - 1 + galleryEntries.length) % galleryEntries.length)}
+              type="button"
+            >
+              ‹
+            </button>
+          ) : null}
+          {galleryEntries.length > 1 ? (
+            <button
+              aria-label="Next image"
+              className="fitting-details-gallery-nav fitting-details-gallery-nav-next"
+              onClick={() => setActiveIndex((current) => (current + 1) % galleryEntries.length)}
+              type="button"
+            >
+              ›
+            </button>
+          ) : null}
+          <span className="fitting-details-gallery-count">
+            {activeIndex + 1} / {galleryEntries.length}
+          </span>
+        </div>
+
+        {galleryEntries.length > 1 ? (
+          <div className="fitting-details-gallery-thumbs" role="list">
+            {galleryEntries.map((entry, index) => (
+              <button
+                key={entry.id}
+                aria-pressed={index === activeIndex}
+                className={`fitting-details-gallery-thumb${index === activeIndex ? " active" : ""}`}
+                onClick={() => setActiveIndex(index)}
+                type="button"
+              >
+                <img
+                  alt={`${alt} ${index + 1}`}
+                  decoding="async"
+                  loading="lazy"
+                  src={entry.objectUrl}
+                />
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+      {previewLightbox}
+    </>
+  );
 }
 
 function useFittingPrimaryImageObjectUrl(item, token, enabled = true, reloadNonce = 0) {
@@ -6119,6 +6492,11 @@ function buildMaterialEdgeImageCandidates(materialItem, edgeItem, token = "") {
     candidates.push(cachedImage);
   }
 
+  const directImageUrl = String(edgeItem?.image_url || edgeItem?.image || "").trim();
+  if (directImageUrl) {
+    candidates.push(directImageUrl);
+  }
+
   return [...new Set(candidates.filter(Boolean))];
 }
 
@@ -6264,6 +6642,7 @@ function buildMaterialEditForm(item) {
     color: String(item?.color || ""),
     dimensions: String(item?.dimensions || ""),
     thickness: String(item?.thickness || ""),
+    manufacturer_id: String(item?.manufacturer_id || ""),
     description: String(item?.description || ""),
   };
 }
@@ -6352,6 +6731,59 @@ function getPrimaryFittingSupplierOffer(item) {
   return null;
 }
 
+function sortMaterialSupplierOffers(left, right) {
+  const leftActive = Boolean(left?.is_active);
+  const rightActive = Boolean(right?.is_active);
+
+  if (leftActive !== rightActive) {
+    return leftActive ? -1 : 1;
+  }
+
+  const leftPriority = Number(left?.priority ?? 0);
+  const rightPriority = Number(right?.priority ?? 0);
+
+  if (leftPriority !== rightPriority) {
+    return leftPriority - rightPriority;
+  }
+
+  return Number(left?.id ?? 0) - Number(right?.id ?? 0);
+}
+
+function pickDefaultOfferId(offers) {
+  const [firstOffer] = [...(Array.isArray(offers) ? offers : [])].sort(sortMaterialSupplierOffers);
+  return firstOffer?.id ? String(firstOffer.id) : "";
+}
+
+function MaterialSupplierLogo({ name = "", logoUrl = "" }) {
+  const [hasBrokenLogo, setHasBrokenLogo] = useState(false);
+  const normalizedLogoUrl = String(logoUrl || "").trim();
+  const fallbackLabel = String(name || "").trim() || "—";
+
+  useEffect(() => {
+    setHasBrokenLogo(false);
+  }, [normalizedLogoUrl]);
+
+  if (!normalizedLogoUrl || hasBrokenLogo) {
+    return (
+      <span className="fitting-source-logo material-supplier-offer-logo" title={fallbackLabel}>
+        <span className="fitting-source-logo-text">{fallbackLabel.slice(0, 2).toUpperCase() || "—"}</span>
+      </span>
+    );
+  }
+
+  return (
+    <span className="fitting-manufacturer-logo material-supplier-offer-logo" title={fallbackLabel}>
+      <img
+        alt={fallbackLabel}
+        className="fitting-manufacturer-logo-image"
+        loading="lazy"
+        onError={() => setHasBrokenLogo(true)}
+        src={resolveAdminAssetUrl(normalizedLogoUrl)}
+      />
+    </span>
+  );
+}
+
 function getFittingSupplierMeta(item) {
   const offer = getPrimaryFittingSupplierOffer(item);
 
@@ -6387,6 +6819,31 @@ function getMaterialSourceMeta(item, t) {
   }
 
   return { code: "manual", label: t.fittingManualSource, logo: buildAdminAssetUrl("brand/source-logos/manual.svg") };
+}
+
+function getMaterialManufacturerMeta(item, manufacturerLookupById) {
+  const manufacturerId = String(item?.manufacturer_id || "").trim();
+  const manufacturer = manufacturerId ? manufacturerLookupById.get(manufacturerId) || null : null;
+  const manufacturerName = String(
+    manufacturer?.name ||
+      item?.manufacturer_name ||
+      "",
+  ).replace(/\s+/g, " ").trim();
+  const manufacturerLogoUrl = String(
+    manufacturer?.logo_url ||
+      item?.manufacturer_logo_url ||
+      "",
+  ).replace(/\s+/g, " ").trim();
+
+  if (!manufacturerName) {
+    return null;
+  }
+
+  return {
+    code: String(manufacturer?.code || manufacturerId || "manufacturer").trim().toLowerCase() || "manufacturer",
+    label: manufacturerName,
+    logo: manufacturerLogoUrl ? resolveAdminAssetUrl(manufacturerLogoUrl) : "",
+  };
 }
 
 function stripMaterialSizeSuffix(value) {
@@ -6443,6 +6900,48 @@ function getMaterialColorText(item, t) {
     return t.notSet;
   }
   return stripMaterialSizeSuffix(color) || color;
+}
+
+function getMaterialDecorText(item) {
+  const sourceText = stripMaterialSizeSuffix(item?.name || "");
+  if (!sourceText) {
+    return "";
+  }
+
+  let text = sourceText.replace(/^(?:лам\.?|лдсп|дсп|mdf|hdf|ламінат|ламінована|ламінований)\s+/iu, "");
+  const manufacturerName = String(item?.manufacturer_name || "").replace(/\s+/g, " ").trim();
+
+  if (manufacturerName) {
+    const escapedManufacturerName = manufacturerName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    text = text.replace(new RegExp(`^${escapedManufacturerName}\\s+`, "iu"), "");
+  }
+
+  return text.replace(/\s+/g, " ").trim();
+}
+
+function shouldRenderDecorInsteadOfColor(item) {
+  const color = String(item?.color || "").replace(/\s+/g, " ").trim();
+  if (!color) {
+    return false;
+  }
+
+  if (color.length > 40) {
+    return true;
+  }
+
+  if (/\d{2,4}\s*[xх×]\s*\d{2,4}/i.test(color)) {
+    return true;
+  }
+
+  if (/\b(?:PD|SU|K\d{3,4})\b/i.test(color)) {
+    return true;
+  }
+
+  if (/^(?:лам\.?|лдсп|дсп)\b/i.test(color)) {
+    return true;
+  }
+
+  return false;
 }
 
 function SourceBadgeLogo({ sourceMeta, showLabel = false, className = "" }) {
@@ -7561,18 +8060,23 @@ export default function App() {
   const [manualServiceItems, setManualServiceItems] = useState([]);
   const [materialItems, setMaterialItems] = useState([]);
   const [materialCategories, setMaterialCategories] = useState([]);
+  const [materialCategoryStatsByCode, setMaterialCategoryStatsByCode] = useState({});
+  const [materialManufacturers, setMaterialManufacturers] = useState([]);
   const [materialCityOptions, setMaterialCityOptions] = useState(DEFAULT_CITY_OPTIONS);
   const [materialOwnershipQuota, setMaterialOwnershipQuota] = useState(null);
   const [materialCreateMode, setMaterialCreateMode] = useState("source");
   const [materialSearch, setMaterialSearch] = useState("");
   const [materialsCatalogLoading, setMaterialsCatalogLoading] = useState(false);
-  const [materialCategoryFilter, setMaterialCategoryFilter] = useState("dsp");
+  const [materialCategoryFilter, setMaterialCategoryFilter] = useState(
+    () => localStorage.getItem(MATERIAL_CATEGORY_STORAGE_KEY) || "",
+  );
   const [materialOwnershipScope, setMaterialOwnershipScope] = useState("system");
   const [newMaterialArticle, setNewMaterialArticle] = useState("");
   const [newMaterialSourceUrl, setNewMaterialSourceUrl] = useState("");
   const [newMaterialName, setNewMaterialName] = useState("");
   const [newMaterialPrice, setNewMaterialPrice] = useState("");
   const [newMaterialImageUrl, setNewMaterialImageUrl] = useState("");
+  const [newMaterialManufacturerId, setNewMaterialManufacturerId] = useState("");
   const [newMaterialIsDefault, setNewMaterialIsDefault] = useState(false);
   const [activeMaterialImportJobId, setActiveMaterialImportJobId] = useState("");
   const [activeMaterialImportJob, setActiveMaterialImportJob] = useState(null);
@@ -7583,7 +8087,13 @@ export default function App() {
   const [materialEditItem, setMaterialEditItem] = useState(null);
   const [materialEditForm, setMaterialEditForm] = useState(() => buildMaterialEditForm(null));
   const [selectedMaterialDetail, setSelectedMaterialDetail] = useState(null);
+  const [selectedMaterialSupplierOffers, setSelectedMaterialSupplierOffers] = useState([]);
+  const [selectedMaterialSupplierOfferId, setSelectedMaterialSupplierOfferId] = useState("");
+  const [selectedMaterialSupplierOfferActions, setSelectedMaterialSupplierOfferActions] = useState(null);
   const [materialDetailLoading, setMaterialDetailLoading] = useState(false);
+  const [materialDetailModalOpen, setMaterialDetailModalOpen] = useState(false);
+  const [materialSupplierOffersStatus, setMaterialSupplierOffersStatus] = useState("idle");
+  const [materialOwnersStatus, setMaterialOwnersStatus] = useState("idle");
   const [materialOwners, setMaterialOwners] = useState([]);
   const [materialOwnersLoading, setMaterialOwnersLoading] = useState(false);
   const [materialOwnersError, setMaterialOwnersError] = useState("");
@@ -7595,6 +8105,10 @@ export default function App() {
     source_url: "",
   });
   const materialEditCloseButtonRef = useRef(null);
+  const materialManufacturersById = useMemo(
+    () => new Map(materialManufacturers.map((item) => [String(item.id), item])),
+    [materialManufacturers],
+  );
   const [openFittingMenuId, setOpenFittingMenuId] = useState("");
   const [openFittingMenuPosition, setOpenFittingMenuPosition] = useState(null);
   const openFittingMenuTriggerRef = useRef(null);
@@ -7644,6 +8158,12 @@ export default function App() {
   const [form, setForm] = useState(projectToForm(null));
   const [status, setStatusState] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [materialImportWorking, setMaterialImportWorking] = useState(false);
+  const [materialImportWorkingLongWait, setMaterialImportWorkingLongWait] = useState(false);
+  const [materialImportProgress, setMaterialImportProgress] = useState({
+    source: "idle",
+    gallery: "idle",
+  });
   const [profileSaving, setProfileSaving] = useState(false);
   const [entitlementsHasUnsavedChanges, setEntitlementsHasUnsavedChanges] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(
@@ -7656,8 +8176,14 @@ export default function App() {
     readPersistedSidebarCollapsedState(),
   );
   const [sidebarFlyout, setSidebarFlyout] = useState(null);
+  const [sidebarFlyoutHoveredItemKey, setSidebarFlyoutHoveredItemKey] = useState("");
+  const [sidebarCatalogSubmenuKey, setSidebarCatalogSubmenuKey] = useState("");
+  const [sidebarCatalogMaterialsCategorySubmenuOpen, setSidebarCatalogMaterialsCategorySubmenuOpen] = useState(false);
+  const [sidebarCatalogFittingCategoriesSubmenuOpen, setSidebarCatalogFittingCategoriesSubmenuOpen] = useState(false);
   const sidebarFlyoutPreserveRouteChangeRef = useRef(false);
   const sidebarFlyoutCloseTimerRef = useRef(null);
+  const sidebarCatalogMaterialsCategoriesLoadRef = useRef(false);
+  const sidebarCatalogFittingCategoriesLoadRef = useRef(false);
   const sidebarTouchState = useRef({
     active: false,
     startX: 0,
@@ -9934,6 +10460,12 @@ export default function App() {
     : "";
   const isHomeView = activeView === "home";
   const isCatalogMaterialsView = activeView === "catalogMaterials";
+  const isCatalogMaterialCategoriesView = activeView === "catalogMaterialCategories";
+  const isCatalogMaterialManufacturersView = activeView === "catalogMaterialManufacturers";
+  const isCatalogMaterialSuppliersView = activeView === "catalogMaterialSuppliers";
+  const isMaterialTaxonomyManagementView = isCatalogMaterialCategoriesView || isCatalogMaterialManufacturersView;
+  const isMaterialCleanupView = isCatalogMaterialsView || isMaterialTaxonomyManagementView || isCatalogMaterialSuppliersView;
+  const isCatalogMaterialRootView = isCatalogMaterialsView && !materialCategoryFilter;
   const isCatalogFittingsView = activeView === "catalogFittings";
   const isCatalogFastenersView = activeView === "catalogFasteners";
   const isCatalogFittingManufacturersView = activeView === FITTING_TAXONOMY_VIEWS.manufacturers;
@@ -9958,6 +10490,101 @@ export default function App() {
     isConnectionTypesView ||
     isMountingCompatibilityView ||
     isConnectionsTestingView;
+  const currentMaterialCategoryMeta = useMemo(() => {
+    const normalizedCategoryCode = normalizeMaterialCategoryCode(materialCategoryFilter);
+    if (!normalizedCategoryCode) {
+      return null;
+    }
+
+    return (
+      materialCategories.find(
+        (category) => normalizeMaterialCategoryCode(category?.code) === normalizedCategoryCode,
+      ) || null
+    );
+  }, [materialCategories, materialCategoryFilter]);
+  const materialRootCategoryGroups = useMemo(() => {
+    const currentUserId = String(user?.id || "");
+    const systemCategories = [];
+    const ownCategories = [];
+
+    for (const category of materialCategories) {
+      if (!category) {
+        continue;
+      }
+
+      if (Boolean(category.is_system)) {
+        systemCategories.push(category);
+      } else if (String(category.owner_user_id || "") === currentUserId) {
+        ownCategories.push(category);
+      }
+    }
+
+    systemCategories.sort((left, right) => {
+      const leftSort = Number(left?.sort_order ?? 0);
+      const rightSort = Number(right?.sort_order ?? 0);
+      if (leftSort !== rightSort) {
+        return leftSort - rightSort;
+      }
+
+      const leftName = String(left?.name || "").trim();
+      const rightName = String(right?.name || "").trim();
+      if (leftName !== rightName) {
+        return leftName.localeCompare(rightName, "uk");
+      }
+
+      return Number(left?.id ?? 0) - Number(right?.id ?? 0);
+    });
+
+    ownCategories.sort((left, right) => {
+      const leftCreatedAt = new Date(left?.created_at || 0).getTime();
+      const rightCreatedAt = new Date(right?.created_at || 0).getTime();
+      if (leftCreatedAt !== rightCreatedAt) {
+        return leftCreatedAt - rightCreatedAt;
+      }
+
+      const leftName = String(left?.name || "").trim();
+      const rightName = String(right?.name || "").trim();
+      if (leftName !== rightName) {
+        return leftName.localeCompare(rightName, "uk");
+      }
+
+      return Number(left?.id ?? 0) - Number(right?.id ?? 0);
+    });
+
+    return {
+      own: ownCategories,
+      system: systemCategories,
+    };
+  }, [materialCategories, user?.id]);
+  const materialCategoryItemCountByCode = useMemo(() => {
+    return materialItems.reduce((accumulator, item) => {
+      const categoryCode = normalizeMaterialCategoryCode(item?.category);
+      if (!categoryCode) {
+        return accumulator;
+      }
+
+      accumulator[categoryCode] = (accumulator[categoryCode] || 0) + 1;
+      return accumulator;
+    }, {});
+  }, [materialItems]);
+  const materialCategoryCountByCode = useMemo(() => {
+    return materialCategories.reduce((accumulator, category) => {
+      const categoryCode = normalizeMaterialCategoryCode(category?.code);
+      if (!categoryCode) {
+        return accumulator;
+      }
+
+      const visibleItemCount = Number(materialCategoryStatsByCode[categoryCode] || 0);
+      const loadedItemCount = Number(materialCategoryItemCountByCode[categoryCode] || 0);
+      const taxonomyItemCount = Number(category?.item_count || 0);
+      accumulator[categoryCode] = visibleItemCount > 0
+        ? visibleItemCount
+        : (loadedItemCount > 0
+            ? loadedItemCount
+            : taxonomyItemCount);
+      return accumulator;
+    }, {});
+  }, [materialCategories, materialCategoryItemCountByCode, materialCategoryStatsByCode]);
   const isConnectionsNavigationView = shouldAutoOpenConnectionsMenu(activeView) || isConnectionsWorkspaceView;
   const isProcessingView = activeView === "processing";
   const activeCity = (user?.city || "").trim();
@@ -9978,6 +10605,8 @@ export default function App() {
         sidebarFlyoutCloseTimerRef.current = null;
       }
       setSidebarFlyout(null);
+      setSidebarFlyoutHoveredItemKey("");
+      setSidebarCatalogSubmenuKey("");
     }
   }, [isDesktopSidebarCollapsed]);
 
@@ -9988,6 +10617,8 @@ export default function App() {
     }
 
     setSidebarFlyout(null);
+    setSidebarFlyoutHoveredItemKey("");
+    setSidebarCatalogSubmenuKey("");
   }, [activeView]);
   useEffect(() => () => {
     if (sidebarFlyoutCloseTimerRef.current) {
@@ -10068,15 +10699,21 @@ export default function App() {
     isDesktopSidebarCollapsed ? sidebarVisualActiveKey === key : Boolean(routeActive);
   const processingGroupState = getSidebarGroupVisualState({
     flyoutOpen: isDesktopSidebarCollapsed && isProcessingFlyoutOpen,
-    routeActive: isProcessingSectionView,
+    routeActive:
+      isProcessingSectionView &&
+      (!isDesktopSidebarCollapsed || !sidebarFlyoutGroupKey || sidebarFlyoutGroupKey === "processing"),
   });
   const connectionsGroupState = getSidebarGroupVisualState({
     flyoutOpen: isDesktopSidebarCollapsed && isConnectionsFlyoutOpen,
-    routeActive: isConnectionsNavigationView,
+    routeActive:
+      isConnectionsNavigationView &&
+      (!isDesktopSidebarCollapsed || !sidebarFlyoutGroupKey || sidebarFlyoutGroupKey === "connections"),
   });
   const catalogGroupState = getSidebarGroupVisualState({
     flyoutOpen: isDesktopSidebarCollapsed && isCatalogFlyoutOpen,
-    routeActive: isCatalogView,
+    routeActive:
+      isCatalogView &&
+      (!isDesktopSidebarCollapsed || !sidebarFlyoutGroupKey || sidebarFlyoutGroupKey === "catalog"),
   });
 
   const clearSidebarFlyoutCloseTimer = () => {
@@ -10092,6 +10729,8 @@ export default function App() {
     }
 
     const targetTop = Math.max(12, Number(event?.currentTarget?.getBoundingClientRect?.().top || 12));
+    setSidebarFlyoutHoveredItemKey("");
+    setSidebarCatalogSubmenuKey("");
     setSidebarFlyout((currentFlyout) =>
       getNextCollapsedSidebarFlyoutState({
         currentFlyoutGroupKey: currentFlyout?.groupKey || "",
@@ -10109,6 +10748,10 @@ export default function App() {
     clearSidebarFlyoutCloseTimer();
 
     const targetTop = Math.max(12, Number(event?.currentTarget?.getBoundingClientRect?.().top || 12));
+    setSidebarFlyoutHoveredItemKey("");
+    setSidebarCatalogSubmenuKey("");
+    setSidebarCatalogMaterialsCategorySubmenuOpen(false);
+    setSidebarCatalogFittingCategoriesSubmenuOpen(false);
     setSidebarFlyout({
       groupKey,
       top: targetTop,
@@ -10125,16 +10768,51 @@ export default function App() {
     sidebarFlyoutCloseTimerRef.current = window.setTimeout(() => {
       sidebarFlyoutCloseTimerRef.current = null;
       setSidebarFlyout(null);
-    }, 200);
+      setSidebarFlyoutHoveredItemKey("");
+      setSidebarCatalogSubmenuKey("");
+      setSidebarCatalogMaterialsCategorySubmenuOpen(false);
+      setSidebarCatalogFittingCategoriesSubmenuOpen(false);
+    }, 500);
   };
 
   const closeSidebarFlyout = () => {
     clearSidebarFlyoutCloseTimer();
     setSidebarFlyout(null);
+    setSidebarFlyoutHoveredItemKey("");
+    setSidebarCatalogSubmenuKey("");
+    setSidebarCatalogMaterialsCategorySubmenuOpen(false);
+    setSidebarCatalogFittingCategoriesSubmenuOpen(false);
   };
 
   const keepSidebarFlyoutOpen = () => {
     clearSidebarFlyoutCloseTimer();
+  };
+
+  const keepSidebarCatalogMaterialsNestedOpen = () => {
+    clearSidebarFlyoutCloseTimer();
+    setSidebarCatalogSubmenuKey("materials");
+    setSidebarCatalogMaterialsCategorySubmenuOpen(true);
+    setSidebarCatalogFittingCategoriesSubmenuOpen(false);
+  };
+
+  const keepSidebarCatalogFittingsNestedOpen = () => {
+    clearSidebarFlyoutCloseTimer();
+    setSidebarCatalogSubmenuKey("fittings");
+    setSidebarCatalogMaterialsCategorySubmenuOpen(false);
+    setSidebarCatalogFittingCategoriesSubmenuOpen(true);
+  };
+
+  const handleSidebarFlyoutPointerLeave = (event) => {
+    if (!isDesktopSidebarCollapsed) {
+      return;
+    }
+
+    const nextTarget = event?.relatedTarget;
+    if (nextTarget && typeof nextTarget.closest === "function" && nextTarget.closest(".sidebar-flyout")) {
+      return;
+    }
+
+    scheduleSidebarFlyoutClose();
   };
 
   const sidebarFlyoutTitle = sidebarFlyout?.groupKey === "processing"
@@ -10144,6 +10822,278 @@ export default function App() {
       : sidebarFlyout?.groupKey === "catalog"
         ? (language === "uk" ? "\u0414\u043e\u0432\u0456\u0434\u043d\u0438\u043a\u0438" : "Catalog")
         : "";
+
+  const sidebarCatalogMaterialsItems = sidebarFlyout?.groupKey === "catalog"
+    ? [
+        {
+          active: isCatalogMaterialsView,
+          key: "catalogMaterials",
+          label: t.catalogMaterials,
+          onClick: () => {
+            switchView("catalogMaterials");
+            closeSidebarOnMobile();
+            closeSidebarFlyout();
+          },
+        },
+        ...(canViewMaterialCatalog
+          ? [{
+              active: isCatalogMaterialCategoriesView,
+              key: "catalogMaterialCategories",
+              label: language === "uk" ? "Матеріали → Категорії" : "Materials → Categories",
+              onClick: () => {
+                switchView("catalogMaterialCategories");
+                closeSidebarOnMobile();
+                closeSidebarFlyout();
+              },
+            }]
+          : []),
+        ...(user.role === "admin"
+          ? [{
+              active: isCatalogMaterialManufacturersView,
+              key: "catalogMaterialManufacturers",
+              label: language === "uk" ? "Матеріали → Виробники" : "Materials → Manufacturers",
+              onClick: () => {
+                switchView("catalogMaterialManufacturers");
+                closeSidebarOnMobile();
+                closeSidebarFlyout();
+              },
+            }]
+          : []),
+        ...(user.role === "admin"
+          ? [{
+              active: isCatalogMaterialSuppliersView,
+              key: "catalogMaterialSuppliers",
+              label: language === "uk" ? "Матеріали → Постачальники" : "Materials → Suppliers",
+              onClick: () => {
+                switchView("catalogMaterialSuppliers");
+                closeSidebarOnMobile();
+                closeSidebarFlyout();
+              },
+            }]
+          : []),
+      ]
+    : [];
+
+  const sidebarCatalogFittingsItems = sidebarFlyout?.groupKey === "catalog"
+    ? [
+        {
+          active: isCatalogFittingsView,
+          key: "catalogFittings",
+          label: t.catalogFittings,
+          onClick: () => {
+            openFittingCatalogRoot();
+            closeSidebarOnMobile();
+            closeSidebarFlyout();
+          },
+        },
+        ...(user.role === "admin"
+          ? [{
+              active: isCatalogFittingManufacturersView,
+              key: FITTING_TAXONOMY_VIEWS.manufacturers,
+              label: language === "uk" ? "Виробники фурнітури" : "Fitting manufacturers",
+              onClick: () => {
+                switchView(FITTING_TAXONOMY_VIEWS.manufacturers);
+                closeSidebarOnMobile();
+                closeSidebarFlyout();
+              },
+            }, {
+              active: isCatalogFittingSeriesView,
+              key: FITTING_TAXONOMY_VIEWS.series,
+              label: language === "uk" ? "Серії фурнітури" : "Fitting series",
+              onClick: () => {
+                switchView(FITTING_TAXONOMY_VIEWS.series);
+                closeSidebarOnMobile();
+                closeSidebarFlyout();
+              },
+            }, {
+              active: isCatalogFittingCategoriesView,
+              key: FITTING_TAXONOMY_VIEWS.categories,
+              label: language === "uk" ? "Категорії фурнітури" : "Fitting categories",
+              onClick: () => {
+                switchView(FITTING_TAXONOMY_VIEWS.categories);
+                closeSidebarOnMobile();
+                closeSidebarFlyout();
+              },
+            }, {
+              active: isCatalogFittingProductsView,
+              key: FITTING_TAXONOMY_VIEWS.products,
+              label: language === "uk" ? "Технічні товари" : "Technical products",
+              onClick: () => {
+                switchView(FITTING_TAXONOMY_VIEWS.products);
+                closeSidebarOnMobile();
+                closeSidebarFlyout();
+              },
+            }, {
+              active: isCatalogSuppliersView,
+              key: "catalogSuppliers",
+              label: language === "uk" ? "Постачальники" : "Suppliers",
+              onClick: () => {
+                switchView("catalogSuppliers");
+                closeSidebarOnMobile();
+                closeSidebarFlyout();
+              },
+            }]
+          : []),
+        ...(canViewFittingHoles
+          ? [{
+              active: isCatalogBundlesView,
+              key: "catalogBundles",
+              label: t.fittingBundlesTitle,
+              onClick: () => {
+                switchView("catalogBundles");
+                closeSidebarOnMobile();
+                closeSidebarFlyout();
+              },
+            }]
+          : []),
+        ...(user.role === "admin"
+          ? [{
+              active: isCatalogDrillingRulesView,
+              key: "catalogDrillingRules",
+              label: t.drillingServiceRulesTitle,
+              onClick: () => {
+                switchView("catalogDrillingRules");
+                closeSidebarOnMobile();
+                closeSidebarFlyout();
+              },
+            }, {
+              active: isCatalogViyarView,
+              key: "catalogViyar",
+              label: t.catalogViyar,
+              onClick: () => {
+                switchView("catalogViyar");
+                closeSidebarOnMobile();
+                closeSidebarFlyout();
+              },
+            }, {
+              active: isCatalogManualView,
+              key: "catalogManual",
+              label: t.catalogManual,
+              onClick: () => {
+                switchView("catalogManual");
+                closeSidebarOnMobile();
+                closeSidebarFlyout();
+              },
+            }, {
+              active: isCatalogValuesView,
+              key: "catalogValues",
+              label: t.catalogValues,
+              onClick: () => {
+                switchView("catalogValues");
+                closeSidebarOnMobile();
+                closeSidebarFlyout();
+              },
+            }]
+          : []),
+      ]
+    : [];
+
+  const sidebarCatalogSubmenuItems = sidebarCatalogSubmenuKey === "materials"
+    ? sidebarCatalogMaterialsItems
+    : sidebarCatalogSubmenuKey === "fittings"
+      ? sidebarCatalogFittingsItems
+      : [];
+
+  const sidebarCatalogSubmenuTitle = sidebarCatalogSubmenuKey === "materials"
+    ? (language === "uk" ? "Матеріали" : "Materials")
+    : sidebarCatalogSubmenuKey === "fittings"
+      ? t.catalogFittings
+      : "";
+
+  const sidebarCatalogMaterialsCategoryItems = sidebarFlyout?.groupKey === "catalog" && sidebarCatalogSubmenuKey === "materials" && sidebarCatalogMaterialsCategorySubmenuOpen
+    ? [
+        ...materialRootCategoryGroups.system,
+        ...materialRootCategoryGroups.own,
+      ]
+        .map((category) => {
+          const categoryCode = normalizeMaterialCategoryCode(category?.code);
+          if (!categoryCode) {
+            return null;
+          }
+
+          const categoryImageUrl = String(category?.image_url || "").trim();
+          const accent = getMaterialCategoryAccent(categoryCode || category?.name);
+          const resolvedCategoryImageUrl = categoryImageUrl ? resolveAdminAssetUrl(categoryImageUrl) : "";
+
+          return {
+            active: normalizeMaterialCategoryCode(materialCategoryFilter) === categoryCode,
+            count: materialCategoryCountByCode[categoryCode] || 0,
+            thumbnailUrl: resolvedCategoryImageUrl,
+            thumbnailIcon: MoreHorizontal,
+            accent,
+            key: categoryCode,
+            label: category?.name || formatCatalogLabel(categoryCode, t),
+            onClick: () => {
+              openMaterialCategoryCatalog(categoryCode);
+              closeSidebarOnMobile();
+              closeSidebarFlyout();
+            },
+          };
+        })
+        .filter(Boolean)
+    : [];
+
+  const sidebarCatalogMaterialsCategoryTitle = language === "uk" ? "Категорії матеріалів" : "Material categories";
+
+  const sidebarCatalogFittingCategorySource = fittingCategories;
+  const sidebarCatalogFittingCategoryItems = sidebarFlyout?.groupKey === "catalog" && sidebarCatalogSubmenuKey === "fittings" && sidebarCatalogFittingCategoriesSubmenuOpen
+    ? sidebarCatalogFittingCategorySource
+        .map((category) => {
+          const categoryCode = String(category?.code || "").trim();
+          if (!categoryCode) {
+            return null;
+          }
+
+          const visual = FITTING_CATEGORY_VISUALS[categoryCode] || {
+            accent: "#64748b",
+            icon: Package,
+            image: "",
+          };
+
+          return {
+            active: categoryCode === selectedFittingCategory,
+            count: Number(category?.item_count || 0),
+            thumbnailUrl: visual.image || "",
+            thumbnailIcon: visual.icon || Package,
+            accent: visual.accent,
+            key: categoryCode,
+            label: category?.name || categoryCode,
+            onClick: () => {
+              setSelectedFittingCategory(categoryCode);
+              switchView("catalogFittings");
+              closeSidebarOnMobile();
+              closeSidebarFlyout();
+            },
+          };
+        })
+        .filter(Boolean)
+    : [];
+
+  const sidebarCatalogFittingCategoriesTitle = language === "uk" ? "Категорії фурнітури" : "Fitting categories";
+  const sidebarCatalogSubmenuHasNestedItems = (itemKey) =>
+    (itemKey === "catalogMaterials" && sidebarCatalogSubmenuKey === "materials") ||
+    (itemKey === "catalogFittings" && sidebarCatalogSubmenuKey === "fittings");
+  const sidebarFlyoutPaneStyle = sidebarFlyout
+    ? {
+        maxHeight: `calc(100vh - ${sidebarFlyout.top + 24}px)`,
+        top: `${sidebarFlyout.top}px`,
+      }
+    : undefined;
+
+  const sidebarFlyoutNestedPaneStyle = sidebarFlyout
+    ? (() => {
+        const viewportWidth = typeof window !== "undefined" ? window.innerWidth : 1280;
+        const width = Math.max(220, Math.min(360, viewportWidth - 778));
+        const left = Math.max(12, Math.min(754, viewportWidth - width - 6));
+
+        return {
+          left: `${left}px`,
+          maxHeight: `calc(100vh - ${sidebarFlyout.top + 24}px)`,
+          top: `${sidebarFlyout.top}px`,
+          width: `${width}px`,
+        };
+      })()
+    : undefined;
 
   const sidebarFlyoutItems = sidebarFlyout?.groupKey === "processing"
     ? processingWorkspaceTabs.map((tab) => ({
@@ -10163,7 +11113,7 @@ export default function App() {
           closeSidebarFlyout();
         },
       }))
-    : sidebarFlyout?.groupKey === "connections"
+      : sidebarFlyout?.groupKey === "connections"
       ? connectionsWorkspaceTabs.map((tab) => ({
           active: tab.key === activeConnectionsNavigationKey,
           key: tab.key,
@@ -10177,72 +11127,32 @@ export default function App() {
       : sidebarFlyout?.groupKey === "catalog"
         ? [
             {
-              active: isCatalogMaterialsView,
+              active: isCatalogMaterialsView || isMaterialTaxonomyManagementView || isCatalogMaterialSuppliersView,
               key: "catalogMaterials",
               label: t.catalogMaterials,
+              submenuKey: "materials",
               onClick: () => {
+                setSidebarCatalogSubmenuKey("materials");
                 switchView("catalogMaterials");
                 closeSidebarOnMobile();
-                closeSidebarFlyout();
               },
             },
             ...(canViewFittingCatalog
-                ? [{
-                  active: isCatalogFittingsView,
+              ? [{
+                  active:
+                    isCatalogFittingsView ||
+                    isCatalogFittingManufacturersView ||
+                    isCatalogFittingSeriesView ||
+                    isCatalogFittingCategoriesView ||
+                    isCatalogFittingProductsView ||
+                    isCatalogSuppliersView,
                   key: "catalogFittings",
                   label: t.catalogFittings,
+                  submenuKey: "fittings",
                   onClick: () => {
+                    setSidebarCatalogSubmenuKey("fittings");
                     openFittingCatalogRoot();
                     closeSidebarOnMobile();
-                    closeSidebarFlyout();
-                  },
-                }]
-              : []),
-            ...(user.role === "admin"
-              ? [{
-                  active: isCatalogFittingManufacturersView,
-                  key: FITTING_TAXONOMY_VIEWS.manufacturers,
-                  label: language === "uk" ? "Виробники фурнітури" : "Fitting manufacturers",
-                  onClick: () => {
-                    switchView(FITTING_TAXONOMY_VIEWS.manufacturers);
-                    closeSidebarOnMobile();
-                    closeSidebarFlyout();
-                  },
-                }, {
-                  active: isCatalogFittingSeriesView,
-                  key: FITTING_TAXONOMY_VIEWS.series,
-                  label: language === "uk" ? "Серії фурнітури" : "Fitting series",
-                  onClick: () => {
-                    switchView(FITTING_TAXONOMY_VIEWS.series);
-                    closeSidebarOnMobile();
-                    closeSidebarFlyout();
-                  },
-                }, {
-                  active: isCatalogFittingCategoriesView,
-                  key: FITTING_TAXONOMY_VIEWS.categories,
-                  label: language === "uk" ? "Категорії фурнітури" : "Fitting categories",
-                  onClick: () => {
-                    switchView(FITTING_TAXONOMY_VIEWS.categories);
-                    closeSidebarOnMobile();
-                    closeSidebarFlyout();
-                  },
-                }, {
-                  active: isCatalogFittingProductsView,
-                  key: FITTING_TAXONOMY_VIEWS.products,
-                  label: language === "uk" ? "Технічні товари" : "Technical products",
-                  onClick: () => {
-                    switchView(FITTING_TAXONOMY_VIEWS.products);
-                    closeSidebarOnMobile();
-                    closeSidebarFlyout();
-                  },
-                }, {
-                  active: isCatalogSuppliersView,
-                  key: "catalogSuppliers",
-                  label: language === "uk" ? "Постачальники" : "Suppliers",
-                  onClick: () => {
-                    switchView("catalogSuppliers");
-                    closeSidebarOnMobile();
-                    closeSidebarFlyout();
                   },
                 }]
               : []),
@@ -10252,6 +11162,7 @@ export default function App() {
                   key: "catalogBundles",
                   label: t.fittingBundlesTitle,
                   onClick: () => {
+                    setSidebarCatalogSubmenuKey("");
                     switchView("catalogBundles");
                     closeSidebarOnMobile();
                     closeSidebarFlyout();
@@ -10264,6 +11175,7 @@ export default function App() {
                   key: "catalogDrillingRules",
                   label: t.drillingServiceRulesTitle,
                   onClick: () => {
+                    setSidebarCatalogSubmenuKey("");
                     switchView("catalogDrillingRules");
                     closeSidebarOnMobile();
                     closeSidebarFlyout();
@@ -10273,6 +11185,7 @@ export default function App() {
                   key: "catalogViyar",
                   label: t.catalogViyar,
                   onClick: () => {
+                    setSidebarCatalogSubmenuKey("");
                     switchView("catalogViyar");
                     closeSidebarOnMobile();
                     closeSidebarFlyout();
@@ -10282,6 +11195,7 @@ export default function App() {
                   key: "catalogManual",
                   label: t.catalogManual,
                   onClick: () => {
+                    setSidebarCatalogSubmenuKey("");
                     switchView("catalogManual");
                     closeSidebarOnMobile();
                     closeSidebarFlyout();
@@ -10291,6 +11205,7 @@ export default function App() {
                   key: "catalogValues",
                   label: t.catalogValues,
                   onClick: () => {
+                    setSidebarCatalogSubmenuKey("");
                     switchView("catalogValues");
                     closeSidebarOnMobile();
                     closeSidebarFlyout();
@@ -11332,7 +12247,15 @@ export default function App() {
     }
 
     if (isCatalogMaterialsView) {
-      return `${materialItems.length} ${t.of} ${materialItems.length}`;
+      return "";
+    }
+
+    if (isCatalogMaterialCategoriesView) {
+      return "";
+    }
+
+    if (isCatalogMaterialManufacturersView) {
+      return "";
     }
 
     if (isCatalogFittingsView) {
@@ -11418,6 +12341,8 @@ export default function App() {
     fittingItems.length,
     isHomeView,
     isCatalogHubView,
+    isCatalogMaterialCategoriesView,
+    isCatalogMaterialManufacturersView,
     isCatalogMaterialsView,
     isCatalogFittingsView,
     isCatalogFastenersView,
@@ -11430,7 +12355,9 @@ export default function App() {
     isConnectionsWorkspaceView,
     isProcessingView,
     fittingCanonicalCatalogView.allCards,
+    currentMaterialCategoryMeta,
     materialItems.length,
+    materialCategoryFilter,
     manualServiceItems.length,
     pageLabel,
     selectedProject,
@@ -13026,9 +13953,15 @@ export default function App() {
 
     try {
       const result = await getMaterialsCatalog(activeToken, {
-        category: options.category ?? materialCategoryFilter ?? "dsp",
+        category: Object.prototype.hasOwnProperty.call(options, "category")
+          ? options.category
+          : materialCategoryFilter,
         city: options.city ?? activeCity ?? "",
         search: options.search ?? materialSearch,
+        include_private_categories:
+          user?.role === "admin"
+            ? false
+            : (options.includePrivateCategories ?? true),
         ownership_scope:
           user?.role === "admin"
             ? (options.ownershipScope ?? materialOwnershipScope ?? "all")
@@ -13048,8 +13981,35 @@ export default function App() {
         return [];
       }
       
+      const catalogCategories = Array.isArray(result.categories) ? result.categories : [];
+      const hasCategoryOwnershipMeta = catalogCategories.some(
+        (category) =>
+          category &&
+          (
+            Object.prototype.hasOwnProperty.call(category, "is_system") ||
+            Object.prototype.hasOwnProperty.call(category, "owner_user_id")
+          ),
+      );
+      const rootCategories = hasCategoryOwnershipMeta
+        ? catalogCategories
+        : (
+            (await listMaterialCategories(
+              activeToken,
+              false,
+              user?.role !== "admin",
+            ))?.items || catalogCategories
+          );
+
       setMaterialItems(result.items || []);
-      setMaterialCategories(result.categories || []);
+      setMaterialCategories(rootCategories);
+      try {
+        const manufacturersResult = await listMaterialManufacturers(activeToken, false);
+        if (manufacturersResult.success) {
+          setMaterialManufacturers(Array.isArray(manufacturersResult.items) ? manufacturersResult.items : []);
+        }
+      } catch {
+        // Keep the current list if the taxonomy request fails.
+      }
       setMaterialCityOptions(result.city_options?.length ? result.city_options : DEFAULT_CITY_OPTIONS);
       setMaterialOwnershipQuota(result.material_quota || null);
       setStatus((current) =>
@@ -13064,20 +14024,32 @@ export default function App() {
     }
   }
 
-  async function openMaterialDetails(item) {
+  async function openMaterialDetails(item, options = {}) {
     if (!token || !item?.article) {
       return;
     }
 
+    const keepVisible = Boolean(options.keepVisible);
     const requestId = materialDetailsRequestRef.current.id + 1;
     const article = String(item.article || "").trim();
     materialDetailsRequestRef.current = { id: requestId, article, open: true };
 
     setMaterialDetailLoading(true);
+    setSelectedMaterialDetail(item);
+    setSelectedMaterialSupplierOffers(Array.isArray(item?.supplier_offers) ? item.supplier_offers : []);
+    setMaterialDetailModalOpen(true);
+    setMaterialSupplierOffersStatus(Array.isArray(item?.supplier_offers) && item.supplier_offers.length ? "loaded" : "loading");
+    setMaterialOwnersStatus(user?.role === "admin" && article ? "loading" : "idle");
     setMaterialOwnersModalOpen(false);
     setMaterialOwners([]);
     setMaterialOwnersError("");
-    setSelectedMaterialDetail((current) => current || item);
+    setMaterialOwnersLoading(false);
+    setSelectedMaterialSupplierOfferId(
+      keepVisible
+        ? String(selectedMaterialSupplierOfferId || "").trim()
+        : pickDefaultOfferId(Array.isArray(item?.supplier_offers) ? item.supplier_offers : []),
+    );
+    setSelectedMaterialSupplierOfferActions(null);
 
     try {
       const result = await getMaterialDetails(
@@ -13097,20 +14069,75 @@ export default function App() {
 
       if (!result.success) {
         setStatus({ message: result.error || t.unableToLoadCatalog, tone: "error" });
-        setSelectedMaterialDetail(item);
+        closeMaterialDetails();
+        setMaterialSupplierOffersStatus("error");
+        setMaterialOwnersStatus("idle");
         return;
       }
 
-      setSelectedMaterialDetail(result.item || item);
+      const nextMaterialDetail = result.item || item;
+      const nextSupplierOffers = Array.isArray(nextMaterialDetail?.supplier_offers) ? nextMaterialDetail.supplier_offers : [];
+      const currentSelectedId = keepVisible ? String(selectedMaterialSupplierOfferId || "").trim() : "";
+      let resolvedSupplierOffers = nextSupplierOffers;
+      let resolvedSupplierOffersLoaded = nextSupplierOffers.length > 0;
+
+      setMaterialDetailLoading(false);
+
+      if (!resolvedSupplierOffers.length) {
+        const offersResult = await listMaterialSupplierOffers(token, article);
+        if (
+          offersResult.success &&
+          Array.isArray(offersResult.items)
+        ) {
+          resolvedSupplierOffers = offersResult.items;
+          resolvedSupplierOffersLoaded = true;
+        }
+      }
+
+      const nextSelectedOfferId = currentSelectedId && resolvedSupplierOffers.some((offer) => String(offer?.id || "") === currentSelectedId)
+        ? currentSelectedId
+        : pickDefaultOfferId(resolvedSupplierOffers);
+
+      setSelectedMaterialDetail((current) => {
+        const currentOffers = Array.isArray(current?.supplier_offers) ? current.supplier_offers : [];
+        const mergedOffers = resolvedSupplierOffers.length ? resolvedSupplierOffers : currentOffers;
+
+        return {
+          ...(nextMaterialDetail || item),
+          supplier_offers: mergedOffers,
+        };
+      });
+      setSelectedMaterialSupplierOffers(resolvedSupplierOffers.length ? resolvedSupplierOffers : Array.isArray(item?.supplier_offers) ? item.supplier_offers : []);
+      setMaterialSupplierOffersStatus(resolvedSupplierOffersLoaded ? "loaded" : "error");
+      setSelectedMaterialSupplierOfferId(nextSelectedOfferId);
+      setMaterialDetailModalOpen(true);
+
       if (user?.role === "admin" && (result.item || item)?.article) {
         await loadMaterialOwners(String((result.item || item).article || "").trim(), false);
+      } else {
+        setMaterialOwners([]);
+        setMaterialOwnersError("");
+        setMaterialOwnersStatus("loaded");
       }
+
       if (result.job?.id) {
         setActiveMaterialImportJobId(result.job.id);
         setActiveMaterialImportJob(result.job);
       }
       setMaterialEdgeForms({});
       setMaterialEdgeCreateForm({ open: false, edge_key: getDefaultMaterialEdgeKey(result.item || item), source_url: "" });
+    } catch (error) {
+      if (
+        materialDetailsRequestRef.current.id === requestId &&
+        materialDetailsRequestRef.current.article === article &&
+        materialDetailsRequestRef.current.open &&
+        activeViewRef.current === "catalogMaterials"
+      ) {
+        setStatus({ message: error?.message || t.unableToLoadCatalog, tone: "error" });
+        setMaterialSupplierOffersStatus("error");
+        setMaterialOwnersStatus(user?.role === "admin" && article ? "error" : "idle");
+        setMaterialDetailLoading(false);
+      }
     } finally {
       if (materialDetailsRequestRef.current.id === requestId) {
         setMaterialDetailLoading(false);
@@ -13118,11 +14145,53 @@ export default function App() {
     }
   }
 
+  async function loadMaterialCategoryStats(activeToken = token, viewer = user) {
+    if (!activeToken || !canViewMaterialCatalog) {
+      return;
+    }
+
+    const result = await getMaterialsCatalog(activeToken, {
+      search: "",
+      city: activeCity || "",
+      include_private_categories:
+        viewer?.role === "admin"
+          ? false
+          : true,
+      ownership_scope:
+        viewer?.role === "admin"
+          ? (materialOwnershipScope || "all")
+          : undefined,
+    });
+
+    if (!result.success) {
+      return;
+    }
+
+    const items = Array.isArray(result.items) ? result.items : [];
+    const counts = items.reduce((accumulator, item) => {
+      const categoryCode = normalizeMaterialCategoryCode(item?.category);
+      if (!categoryCode) {
+        return accumulator;
+      }
+
+      accumulator[categoryCode] = (accumulator[categoryCode] || 0) + 1;
+      return accumulator;
+    }, {});
+
+    setMaterialCategoryStatsByCode(counts);
+  }
+
   function closeMaterialDetails() {
     materialDetailsRequestRef.current.open = false;
     materialOwnersRequestRef.current = { id: 0, article: "", open: false };
+    setMaterialDetailModalOpen(false);
     setSelectedMaterialDetail(null);
+    setSelectedMaterialSupplierOffers([]);
+    setSelectedMaterialSupplierOfferId("");
+    setSelectedMaterialSupplierOfferActions(null);
     setMaterialDetailLoading(false);
+    setMaterialSupplierOffersStatus("idle");
+    setMaterialOwnersStatus("idle");
     setMaterialOwners([]);
     setMaterialOwnersError("");
     setMaterialOwnersLoading(false);
@@ -13146,6 +14215,7 @@ export default function App() {
     };
 
     setMaterialOwnersLoading(true);
+    setMaterialOwnersStatus("loading");
     setMaterialOwnersError("");
 
     try {
@@ -13162,11 +14232,19 @@ export default function App() {
       if (!result.success) {
         setMaterialOwners([]);
         setMaterialOwnersError(result.error || t.unableToLoadCatalog);
+        setMaterialOwnersStatus("error");
         return;
       }
 
       setMaterialOwners(Array.isArray(result.owners) ? result.owners : []);
       setMaterialOwnersError("");
+      setMaterialOwnersStatus("loaded");
+    } catch (error) {
+      if (materialOwnersRequestRef.current.id === requestId) {
+        setMaterialOwners([]);
+        setMaterialOwnersError(error?.message || t.unableToLoadCatalog);
+        setMaterialOwnersStatus("error");
+      }
     } finally {
       if (materialOwnersRequestRef.current.id === requestId) {
         setMaterialOwnersLoading(false);
@@ -13191,7 +14269,7 @@ export default function App() {
   }
 
   useEffect(() => {
-    if (!selectedMaterialDetail) {
+    if (!materialDetailModalOpen) {
       return undefined;
     }
 
@@ -13223,7 +14301,7 @@ export default function App() {
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [materialEditModalOpen, materialOwnersModalOpen, selectedMaterialDetail]);
+  }, [materialDetailModalOpen, materialEditModalOpen, materialOwnersModalOpen]);
 
   useEffect(() => {
     if (!materialEditModalOpen) {
@@ -16812,6 +17890,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
     localStorage.removeItem(USER_STORAGE_KEY);
     localStorage.removeItem(ACTIVE_VIEW_STORAGE_KEY);
     localStorage.removeItem(FITTING_CATEGORY_STORAGE_KEY);
+    localStorage.removeItem(MATERIAL_CATEGORY_STORAGE_KEY);
     localStorage.removeItem(ACTIVE_PROJECT_ID_STORAGE_KEY);
     localStorage.removeItem(ACTIVE_PROJECT_TAB_STORAGE_KEY);
     setToken("");
@@ -17085,6 +18164,33 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
     switchView("catalogFittings");
   }
 
+  function openMaterialCatalogRoot() {
+    closeMaterialDetails();
+    setMaterialSearch("");
+    setMaterialCategoryFilter("");
+    localStorage.removeItem(MATERIAL_CATEGORY_STORAGE_KEY);
+    updateAdminHistory({
+      view: "catalogMaterials",
+    });
+  }
+
+  function openMaterialCategoryCatalog(categoryCode) {
+    const normalizedCategoryCode = normalizeMaterialCategoryCode(categoryCode);
+    if (!normalizedCategoryCode) {
+      return;
+    }
+
+    closeMaterialDetails();
+    setMaterialCategoryFilter(normalizedCategoryCode);
+    localStorage.setItem(MATERIAL_CATEGORY_STORAGE_KEY, normalizedCategoryCode);
+    setActiveView("catalogMaterials");
+    activeViewRef.current = "catalogMaterials";
+    localStorage.setItem(ACTIVE_VIEW_STORAGE_KEY, "catalogMaterials");
+    updateAdminHistory({
+      view: "catalogMaterials",
+    });
+  }
+
   async function switchView(view, viewer = user, openContext = null) {
     const nextView = normalizeCatalogView(view === "catalog" ? "catalogViyar" : view);
     const skipHistoryUpdate = Boolean(openContext?.skipHistoryUpdate);
@@ -17095,12 +18201,24 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
       return;
     }
 
-    if ((CATALOG_FITTING_TAXONOMY_VIEWS.has(nextView) || nextView === "catalogSuppliers") && viewer?.role !== "admin") {
-      const fallbackView = canViewMaterialCatalog ? "catalogMaterials" : "home";
-      setActiveView(fallbackView);
-      activeViewRef.current = fallbackView;
-      localStorage.setItem(ACTIVE_VIEW_STORAGE_KEY, fallbackView);
-      return;
+    if (nextView === "catalogMaterials") {
+      openMaterialCatalogRoot();
+    }
+
+      if (
+        (
+          CATALOG_FITTING_TAXONOMY_VIEWS.has(nextView) ||
+          nextView === "catalogSuppliers" ||
+          nextView === "catalogMaterialSuppliers" ||
+          nextView === "catalogMaterialManufacturers"
+        ) &&
+        viewer?.role !== "admin"
+      ) {
+        const fallbackView = canViewMaterialCatalog ? "catalogMaterials" : "home";
+        setActiveView(fallbackView);
+        activeViewRef.current = fallbackView;
+        localStorage.setItem(ACTIVE_VIEW_STORAGE_KEY, fallbackView);
+        return;
     }
 
     if ((nextView === "catalogHoles" || nextView === "catalogBundles") && !canViewFittingHoles) {
@@ -17261,8 +18379,12 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
 
     if (nextView !== "catalogMaterials") {
       materialDetailsRequestRef.current.open = false;
+      setMaterialDetailModalOpen(false);
       setSelectedMaterialDetail(null);
+      setSelectedMaterialSupplierOfferActions(null);
       setMaterialDetailLoading(false);
+      setMaterialSupplierOffersStatus("idle");
+      setMaterialOwnersStatus("idle");
     }
 
     if (nextView !== "catalogFittings" && nextView !== "catalogFasteners") {
@@ -17999,6 +19121,36 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
     setStatus(t.manualServiceUpdated);
   }
 
+  function resetMaterialImportProgress() {
+    setMaterialImportProgress({
+      source: "idle",
+      gallery: "idle",
+    });
+  }
+
+  function updateMaterialImportProgress(phase, value) {
+    setMaterialImportProgress((current) => ({
+      ...current,
+      [phase]: value,
+    }));
+  }
+
+  function getMaterialImportStageIndicator(state) {
+    if (state === "done") {
+      return "✓";
+    }
+
+    if (state === "warning") {
+      return "!";
+    }
+
+    if (state === "active") {
+      return "…";
+    }
+
+    return "•";
+  }
+
   async function handleImportMaterial(event) {
     event.preventDefault();
 
@@ -18013,52 +19165,208 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
     const payload = {
       category: materialCategoryFilter || "dsp",
       city: effectiveCity,
-      article: newMaterialArticle.trim() || null,
+      article: isSourceMode ? null : newMaterialArticle.trim() || null,
       source_url: isSourceMode ? newMaterialSourceUrl.trim() || null : null,
       name: isSourceMode ? null : newMaterialName.trim() || null,
       price: isSourceMode ? null : (newMaterialPrice === "" ? null : Number(newMaterialPrice)),
       image_url: isSourceMode ? null : newMaterialImageUrl || null,
       is_default: isSourceMode ? Boolean(newMaterialIsDefault && canManageSystemMaterials(user)) : false,
     };
-
-    setLoading(true);
-    const result = await createMaterial(token, payload);
-    setLoading(false);
-
-    if (!result.success) {
-      setStatus({ message: result.error || t.unableToLoadCatalog, tone: "error" });
-      return;
+    if (materialCreateMode === "manual" && String(newMaterialManufacturerId || "").trim()) {
+      payload.manufacturer_id = Number(newMaterialManufacturerId);
     }
 
-    setNewMaterialArticle("");
-    setNewMaterialSourceUrl("");
-    setNewMaterialName("");
-    setNewMaterialPrice("");
-    setNewMaterialImageUrl("");
-    setNewMaterialIsDefault(false);
+    if (!isSourceMode) {
+      setMaterialImportWorking(true);
+      setLoading(true);
+      let result;
 
-    if (result.item) {
-      if (result.job) {
+      try {
+        result = await createMaterial(token, payload);
+      } catch (error) {
+        setStatus({
+          message: error?.message || t.unableToLoadCatalog,
+          tone: "error",
+        });
+        return;
+      } finally {
+        setLoading(false);
+        setMaterialImportWorking(false);
+      }
+
+      if (!result.success) {
+        setStatus({ message: result.error || t.unableToLoadCatalog, tone: "error" });
+        return;
+      }
+
+      setNewMaterialArticle("");
+      setNewMaterialSourceUrl("");
+      setNewMaterialName("");
+      setNewMaterialPrice("");
+      setNewMaterialImageUrl("");
+      setNewMaterialManufacturerId("");
+      setNewMaterialIsDefault(false);
+
+      if (result.item) {
+        if (result.job) {
+          setActiveMaterialImportJobId(result.job.id);
+          setActiveMaterialImportJob(result.job);
+          setStatus({ message: t.materialImportQueued, tone: "info" });
+        } else {
+          setStatus({ message: result.error || t.materialImportSuccess, tone: "success" });
+        }
+        if (canViewMaterialCatalog) {
+          await loadMaterialsCatalog(token);
+        }
+        return;
+      }
+
+      if (result.job?.id) {
         setActiveMaterialImportJobId(result.job.id);
         setActiveMaterialImportJob(result.job);
         setStatus({ message: t.materialImportQueued, tone: "info" });
-      } else {
-        setStatus({ message: result.error || t.materialImportSuccess, tone: "success" });
+        return;
       }
+
+      setStatus({ message: result.error || t.materialImportQueued, tone: "info" });
+      return;
+    }
+
+    setMaterialImportWorking(true);
+    setLoading(true);
+    resetMaterialImportProgress();
+    updateMaterialImportProgress("source", "active");
+    setStatus({
+      message: language === "uk" ? "Отримуємо дані матеріалу" : "Fetching material data",
+      tone: "info",
+    });
+
+    let sourceResult;
+    let galleryResult = null;
+    let galleryWarning = false;
+
+    try {
+      sourceResult = await createMaterial(token, payload);
+
+      if (!sourceResult.success) {
+        setStatus({
+          message: sourceResult.error || t.unableToLoadCatalog,
+          tone: "error",
+        });
+        return;
+      }
+
+      const refreshedMaterial = sourceResult.item || null;
+      const refreshedMaterialId = refreshedMaterial?.id || null;
+      if (!refreshedMaterialId) {
+        setStatus({
+          message: sourceResult.error || t.unableToLoadCatalog,
+          tone: "error",
+        });
+        return;
+      }
+
+      setNewMaterialArticle("");
+      setNewMaterialSourceUrl("");
+      setNewMaterialName("");
+      setNewMaterialPrice("");
+      setNewMaterialImageUrl("");
+      setNewMaterialManufacturerId("");
+      setNewMaterialIsDefault(false);
+
+      updateMaterialImportProgress("source", "done");
+      setStatus({
+        message: language === "uk"
+          ? "Матеріал знайдено та збережено"
+          : "Material found and saved",
+        tone: "success",
+      });
+
+      const preloadedGalleryImages = Array.isArray(refreshedMaterial?.images)
+        ? refreshedMaterial.images
+        : [];
+      if (preloadedGalleryImages.length) {
+        updateMaterialImportProgress("gallery", "done");
+        setStatus({
+          message: language === "uk"
+            ? "Матеріал готовий"
+            : "Material ready",
+          tone: "success",
+        });
+
+        if (canViewMaterialCatalog) {
+          await loadMaterialsCatalog(token);
+        }
+        return;
+      }
+
+      updateMaterialImportProgress("gallery", "active");
+      setStatus({
+        message: language === "uk"
+          ? "Завантажуємо фотографії"
+          : "Loading photos",
+        tone: "info",
+      });
+
+      galleryResult = await refreshMaterialGallery(token, refreshedMaterialId);
+      if (!galleryResult.success || galleryResult.error) {
+        galleryWarning = true;
+      }
+      const gallerySummary = galleryResult?.summary || { discovered: 0, persisted: 0, failed: 0 };
+      updateMaterialImportProgress("gallery", gallerySummary.failed > 0 ? "warning" : "done");
+      if (gallerySummary.failed > 0) {
+        setStatus({
+          message: language === "uk"
+            ? "Матеріал додано, але не всі фотографії вдалося завантажити."
+            : "Material saved, but not all photos could be loaded.",
+          tone: "warning",
+        });
+      } else {
+        setStatus({
+          message: language === "uk"
+            ? "Фотографії збережено"
+            : "Photos saved",
+          tone: "success",
+        });
+      }
+
+      updateMaterialImportProgress("source", "done");
+      updateMaterialImportProgress("gallery", gallerySummary.failed > 0 ? "warning" : "done");
+
+      if (!galleryWarning) {
+        setStatus({
+          message: language === "uk"
+            ? "Матеріал готовий"
+            : "Material ready",
+          tone: "success",
+        });
+      } else {
+        setStatus({
+          message: language === "uk"
+            ? "Матеріал додано, але не всі фотографії вдалося завантажити."
+            : "Material saved, but not all photos could be loaded.",
+          tone: "warning",
+        });
+      }
+
+      setLoading(false);
+      setMaterialImportWorking(false);
+      resetMaterialImportProgress();
+
       if (canViewMaterialCatalog) {
         await loadMaterialsCatalog(token);
       }
+    } catch (error) {
+      setStatus({
+        message: error?.message || t.unableToLoadCatalog,
+        tone: "error",
+      });
       return;
+    } finally {
+      setLoading(false);
+      setMaterialImportWorking(false);
+      resetMaterialImportProgress();
     }
-
-    if (result.job?.id) {
-      setActiveMaterialImportJobId(result.job.id);
-      setActiveMaterialImportJob(result.job);
-      setStatus({ message: t.materialImportQueued, tone: "info" });
-      return;
-    }
-
-    setStatus({ message: result.error || t.materialImportQueued, tone: "info" });
   }
 
   async function handleMaterialImageUpload(event) {
@@ -18132,6 +19440,8 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
     const normalizedColor = String(materialEditForm.color || "").trim();
     const normalizedDimensions = String(materialEditForm.dimensions || "").trim();
     const normalizedThickness = String(materialEditForm.thickness || "").trim();
+    const normalizedManufacturerId = String(materialEditForm.manufacturer_id || "").trim();
+    const originalManufacturerId = String(originalItem.manufacturer_id || "").trim();
     const normalizedPriceText = String(materialEditForm.price || "").trim();
     const originalPriceText = getMaterialEditPriceValue(originalItem);
     const originalPriceNumber = originalPriceText === "" ? null : Number(originalPriceText);
@@ -18161,6 +19471,15 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
 
     if (normalizedThickness !== String(originalItem.thickness || "").trim()) {
       payload.thickness = normalizedThickness;
+    }
+
+    if (normalizedManufacturerId !== originalManufacturerId) {
+      if (normalizedManufacturerId && !Number.isFinite(Number(normalizedManufacturerId))) {
+        setMaterialEditError(t.materialEditInvalidManufacturer);
+        return;
+      }
+
+      payload.manufacturer_id = normalizedManufacturerId ? Number(normalizedManufacturerId) : null;
     }
 
     if (normalizedPriceText !== "") {
@@ -18269,33 +19588,139 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
 
     setOpenMaterialMenuId("");
     setStatus({ message: t.materialRefreshStarted, tone: "info" });
+    setMaterialImportWorking(true);
     setLoading(true);
-    const result = await importMaterialFromViyar(
-      token,
-      item.article,
-      item.category || materialCategoryFilter || "dsp",
-      item.source_url || "",
-      true,
-    );
-    setLoading(false);
+    resetMaterialImportProgress();
+    updateMaterialImportProgress("source", "active");
+    setStatus({
+      message: language === "uk" ? "Отримуємо дані матеріалу" : "Fetching material data",
+      tone: "info",
+    });
 
-    if (!result.success) {
-      setStatus({ message: result.error || t.unableToLoadCatalog, tone: "error" });
-      return;
-    }
+    let sourceResult;
+    let galleryResult = null;
+    let galleryWarning = false;
 
-    if (result.job?.id) {
-      setActiveMaterialImportJobId(result.job.id);
-      setActiveMaterialImportJob(result.job);
-      setStatus({ message: t.materialRefreshQueued, tone: "info" });
-      return;
-    }
+    try {
+      sourceResult = await importMaterialFromViyar(
+        token,
+        item.article,
+        item.category || materialCategoryFilter || "dsp",
+        item.source_url || "",
+        true,
+      );
 
-    if (result.item) {
-      setStatus({ message: t.materialImportSuccess, tone: "success" });
+      if (!sourceResult.success) {
+        setStatus({
+          message: sourceResult.error || t.unableToLoadCatalog,
+          tone: "error",
+        });
+        return;
+      }
+
+      const refreshedMaterial = sourceResult.item || null;
+      const refreshedMaterialId = refreshedMaterial?.id || null;
+      if (!refreshedMaterialId) {
+        setStatus({
+          message: sourceResult.error || t.unableToLoadCatalog,
+          tone: "error",
+        });
+        return;
+      }
+
+      updateMaterialImportProgress("source", "done");
+      setStatus({
+        message: language === "uk"
+          ? "Матеріал знайдено та збережено"
+          : "Material found and saved",
+        tone: "success",
+      });
+
+      const preloadedGalleryImages = Array.isArray(refreshedMaterial?.images)
+        ? refreshedMaterial.images
+        : [];
+      if (preloadedGalleryImages.length) {
+        updateMaterialImportProgress("gallery", "done");
+        setStatus({
+          message: language === "uk"
+            ? "Матеріал готовий"
+            : "Material ready",
+          tone: "success",
+        });
+
+        setLoading(false);
+        setMaterialImportWorking(false);
+        resetMaterialImportProgress();
+
+        if (canViewMaterialCatalog) {
+          await loadMaterialsCatalog(token);
+        }
+        return;
+      }
+
+      updateMaterialImportProgress("gallery", "active");
+      setStatus({
+        message: language === "uk"
+          ? "Завантажуємо фотографії"
+          : "Loading photos",
+        tone: "info",
+      });
+
+      galleryResult = await refreshMaterialGallery(token, refreshedMaterialId);
+      if (!galleryResult.success || galleryResult.error) {
+        galleryWarning = true;
+      }
+      const gallerySummary = galleryResult?.summary || { discovered: 0, persisted: 0, failed: 0 };
+      updateMaterialImportProgress("gallery", gallerySummary.failed > 0 ? "warning" : "done");
+      if (gallerySummary.failed > 0) {
+        setStatus({
+          message: language === "uk"
+            ? "Матеріал додано, але не всі фотографії вдалося завантажити."
+            : "Material saved, but not all photos could be loaded.",
+          tone: "warning",
+        });
+      } else {
+        setStatus({
+          message: language === "uk"
+            ? "Фотографії збережено"
+            : "Photos saved",
+          tone: "success",
+        });
+      }
+
+      updateMaterialImportProgress("source", "done");
+      updateMaterialImportProgress("gallery", gallerySummary.failed > 0 ? "warning" : "done");
+
+      if (!galleryWarning) {
+        setStatus({
+          message: language === "uk"
+            ? "Матеріал готовий"
+            : "Material ready",
+          tone: "success",
+        });
+      } else {
+        setStatus({
+          message: language === "uk"
+            ? "Матеріал додано, але не всі фотографії вдалося завантажити."
+            : "Material saved, but not all photos could be loaded.",
+          tone: "warning",
+        });
+      }
+
+      setLoading(false);
+      setMaterialImportWorking(false);
+      resetMaterialImportProgress();
+
       if (canViewMaterialCatalog) {
         await loadMaterialsCatalog(token);
       }
+    } catch (error) {
+      setStatus({ message: error?.message || t.unableToLoadCatalog, tone: "error" });
+      return;
+    } finally {
+      setLoading(false);
+      setMaterialImportWorking(false);
+      resetMaterialImportProgress();
     }
   }
 
@@ -19390,6 +20815,33 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
   }, [entitlementsHasUnsavedChanges]);
 
   useEffect(() => {
+    if (!materialImportWorking) {
+      setMaterialImportWorkingLongWait(false);
+      return undefined;
+    }
+
+    const timerId = window.setTimeout(() => {
+      setMaterialImportWorkingLongWait(true);
+    }, 12000);
+
+    return () => window.clearTimeout(timerId);
+  }, [materialImportWorking]);
+
+  useEffect(() => {
+    if (!materialImportWorking) {
+      return undefined;
+    }
+
+    const handleBeforeUnload = (event) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [materialImportWorking]);
+
+  useEffect(() => {
     if (selectedFittingCategory) {
       localStorage.setItem(FITTING_CATEGORY_STORAGE_KEY, selectedFittingCategory);
       return;
@@ -19526,12 +20978,126 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
   }, [token, user, isCatalogValuesView]);
 
   useEffect(() => {
+    if (!token || !canViewMaterialCatalog) {
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      await loadMaterialCategoryStats(token, user);
+      if (cancelled) {
+        return;
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeCity, canViewMaterialCatalog, materialOwnershipScope, token, user]);
+
+  useEffect(() => {
     if (!token || !isCatalogMaterialsView || !canViewMaterialCatalog) {
       return;
     }
 
     loadMaterialsCatalog(token);
   }, [token, canViewMaterialCatalog, isCatalogMaterialsView, materialCategoryFilter, materialSearch, materialOwnershipScope]);
+
+  useEffect(() => {
+    if (
+      !token ||
+      sidebarFlyout?.groupKey !== "catalog" ||
+      sidebarCatalogSubmenuKey !== "materials" ||
+      !sidebarCatalogMaterialsCategorySubmenuOpen ||
+      materialCategories.length ||
+      sidebarCatalogMaterialsCategoriesLoadRef.current
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+    sidebarCatalogMaterialsCategoriesLoadRef.current = true;
+
+    (async () => {
+      try {
+        const result = await listMaterialCategories(token, false, user?.role !== "admin");
+        if (cancelled || !result?.success) {
+          return;
+        }
+
+        const categories = Array.isArray(result.items) ? result.items : [];
+        if (categories.length) {
+          setMaterialCategories(categories);
+        }
+      } finally {
+        sidebarCatalogMaterialsCategoriesLoadRef.current = false;
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    materialCategories.length,
+    sidebarCatalogMaterialsCategorySubmenuOpen,
+    sidebarCatalogSubmenuKey,
+    sidebarFlyout?.groupKey,
+    token,
+    user?.role,
+  ]);
+
+  useEffect(() => {
+    if (
+      !token ||
+      sidebarFlyout?.groupKey !== "catalog" ||
+      sidebarCatalogSubmenuKey !== "fittings" ||
+      !sidebarCatalogFittingCategoriesSubmenuOpen ||
+      fittingCategories.length ||
+      sidebarCatalogFittingCategoriesLoadRef.current
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+    sidebarCatalogFittingCategoriesLoadRef.current = true;
+
+    (async () => {
+      try {
+        const result = await listFittingCategories(token, false, user?.role !== "admin");
+        if (cancelled || !result?.success) {
+          return;
+        }
+
+        const categories = Array.isArray(result.items) ? result.items : [];
+        if (categories.length) {
+          setFittingCategories(categories);
+        }
+      } finally {
+        sidebarCatalogFittingCategoriesLoadRef.current = false;
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    fittingCategories.length,
+    sidebarCatalogFittingCategoriesSubmenuOpen,
+    sidebarCatalogSubmenuKey,
+    sidebarFlyout?.groupKey,
+    token,
+    user?.role,
+  ]);
+
+  useEffect(() => {
+    if (materialCategoryFilter) {
+      localStorage.setItem(MATERIAL_CATEGORY_STORAGE_KEY, materialCategoryFilter);
+      return;
+    }
+
+    localStorage.removeItem(MATERIAL_CATEGORY_STORAGE_KEY);
+  }, [materialCategoryFilter]);
 
   useEffect(() => {
     if (!token || (!isCatalogFittingsView && !isCatalogFastenersView)) {
@@ -20083,9 +21649,45 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                       closeSidebarOnMobile();
                     }}
                     type="button"
-                  >
+                    >
                     {t.catalogMaterials}
                   </button>
+                  {canViewMaterialCatalog ? (
+                    <button
+                      className={isCatalogMaterialCategoriesView ? "active" : ""}
+                      onClick={() => {
+                        switchView("catalogMaterialCategories");
+                        closeSidebarOnMobile();
+                      }}
+                      type="button"
+                    >
+                      {language === "uk" ? "Матеріали → Категорії" : "Materials → Categories"}
+                    </button>
+                  ) : null}
+                  {user.role === "admin" ? (
+                    <button
+                      className={isCatalogMaterialManufacturersView ? "active" : ""}
+                      onClick={() => {
+                        switchView("catalogMaterialManufacturers");
+                        closeSidebarOnMobile();
+                      }}
+                      type="button"
+                    >
+                      {language === "uk" ? "Матеріали → Виробники" : "Materials → Manufacturers"}
+                    </button>
+                  ) : null}
+                  {user.role === "admin" ? (
+                    <button
+                      className={isCatalogMaterialSuppliersView ? "active" : ""}
+                      onClick={() => {
+                        switchView("catalogMaterialSuppliers");
+                        closeSidebarOnMobile();
+                      }}
+                      type="button"
+                    >
+                      {language === "uk" ? "Матеріали → Постачальники" : "Materials → Suppliers"}
+                    </button>
+                  ) : null}
                   {canViewFittingCatalog ? (
                     <button
                       className={isCatalogFittingsView ? "active" : ""}
@@ -20265,16 +21867,41 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
               <div
                 className="sidebar-flyout"
                 onPointerEnter={keepSidebarFlyoutOpen}
-                onPointerLeave={scheduleSidebarFlyoutClose}
-                style={{ top: `${sidebarFlyout.top}px` }}
+                onPointerLeave={handleSidebarFlyoutPointerLeave}
+                onMouseMove={keepSidebarFlyoutOpen}
+                style={sidebarFlyoutPaneStyle}
               >
                 <strong className="sidebar-flyout-title">{sidebarFlyoutTitle}</strong>
                 <div className="sidebar-flyout-items" role="menu">
                   {sidebarFlyoutItems.map((item) => (
                     <button
-                      className={item.active ? "active" : ""}
+                      className={(() => {
+                        const isHovered = item.key === sidebarFlyoutHoveredItemKey;
+                        const isCatalogSubmenuActive =
+                          sidebarFlyout.groupKey === "catalog" &&
+                          item.submenuKey &&
+                          item.submenuKey === sidebarCatalogSubmenuKey;
+                        const isRouteActive = !sidebarFlyoutHoveredItemKey && item.active;
+                        return isHovered || isCatalogSubmenuActive || isRouteActive ? "active" : "";
+                      })()}
                       key={item.key}
                       onClick={item.onClick}
+                      onMouseMove={() => {
+                        setSidebarFlyoutHoveredItemKey(item.key);
+                        if (sidebarFlyout.groupKey === "catalog") {
+                          setSidebarCatalogSubmenuKey(item.submenuKey || "");
+                          setSidebarCatalogMaterialsCategorySubmenuOpen(false);
+                          setSidebarCatalogFittingCategoriesSubmenuOpen(false);
+                        }
+                      }}
+                      onPointerEnter={() => {
+                        setSidebarFlyoutHoveredItemKey(item.key);
+                        if (sidebarFlyout.groupKey === "catalog") {
+                          setSidebarCatalogSubmenuKey(item.submenuKey || "");
+                          setSidebarCatalogMaterialsCategorySubmenuOpen(false);
+                          setSidebarCatalogFittingCategoriesSubmenuOpen(false);
+                        }
+                      }}
                       type="button"
                     >
                       <span className="sidebar-flyout-item-icon" aria-hidden="true">
@@ -20285,16 +21912,149 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                         )}
                       </span>
                       <span className="sidebar-flyout-item-label">{item.label}</span>
+                      {item.submenuKey ? (
+                        <ChevronRight className="sidebar-flyout-submenu-indicator" size={16} />
+                      ) : null}
                     </button>
                   ))}
                 </div>
               </div>
+              {sidebarFlyout.groupKey === "catalog" && sidebarCatalogSubmenuItems.length ? (
+                <div
+                  className="sidebar-flyout sidebar-flyout-submenu"
+                  onPointerEnter={keepSidebarFlyoutOpen}
+                  onPointerLeave={handleSidebarFlyoutPointerLeave}
+                  onMouseMove={keepSidebarFlyoutOpen}
+                  style={sidebarFlyoutPaneStyle}
+                >
+                  <strong className="sidebar-flyout-title">{sidebarCatalogSubmenuTitle}</strong>
+                  <div className="sidebar-flyout-items" role="menu">
+                    {sidebarCatalogSubmenuItems.map((item) => (
+                      <button
+                        className={(() => {
+                        const isHovered = item.key === sidebarFlyoutHoveredItemKey;
+                        const isRouteActive = !sidebarFlyoutHoveredItemKey && item.active;
+                        const isMaterialsCategoryOpen =
+                          item.key === "catalogMaterials" && sidebarCatalogMaterialsCategorySubmenuOpen;
+                        const isFittingsCategoryOpen =
+                          item.key === "catalogFittings" && sidebarCatalogFittingCategoriesSubmenuOpen;
+                        return isHovered || (isRouteActive && !isMaterialsCategoryOpen && !isFittingsCategoryOpen) ? "active" : "";
+                      })()}
+                      key={item.key}
+                      onClick={item.onClick}
+                      onMouseMove={() => {
+                        setSidebarFlyoutHoveredItemKey(item.key);
+                        setSidebarCatalogMaterialsCategorySubmenuOpen(item.key === "catalogMaterials");
+                        setSidebarCatalogFittingCategoriesSubmenuOpen(item.key === "catalogFittings");
+                        }}
+                        onPointerEnter={() => {
+                          setSidebarFlyoutHoveredItemKey(item.key);
+                          setSidebarCatalogMaterialsCategorySubmenuOpen(item.key === "catalogMaterials");
+                          setSidebarCatalogFittingCategoriesSubmenuOpen(item.key === "catalogFittings");
+                        }}
+                        type="button"
+                      >
+                        <span className="sidebar-flyout-item-icon" aria-hidden="true">
+                          {renderSidebarIcon(
+                            getSidebarFlyoutIconAsset("catalog", item.key),
+                            MoreHorizontal,
+                            "sidebar-flyout-icon",
+                          )}
+                      </span>
+                        <span className="sidebar-flyout-item-label">{item.label}</span>
+                        {sidebarCatalogSubmenuHasNestedItems(item.key) ? (
+                          <ChevronRight className="sidebar-flyout-submenu-indicator" size={16} />
+                        ) : null}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              {sidebarFlyout.groupKey === "catalog" && sidebarCatalogMaterialsCategoryItems.length ? (
+                <div
+                  className="sidebar-flyout sidebar-flyout-submenu sidebar-flyout-materials-submenu"
+                  onPointerEnter={keepSidebarCatalogMaterialsNestedOpen}
+                  onPointerLeave={handleSidebarFlyoutPointerLeave}
+                  onMouseMove={keepSidebarCatalogMaterialsNestedOpen}
+                  style={sidebarFlyoutNestedPaneStyle}
+                >
+                  <strong className="sidebar-flyout-title">{sidebarCatalogMaterialsCategoryTitle}</strong>
+                  <div className="sidebar-flyout-items" role="menu">
+                    {sidebarCatalogMaterialsCategoryItems.map((item) => (
+                      <button
+                        className={`sidebar-flyout-catalog-card${item.active ? " active" : ""}`}
+                        key={item.key}
+                        onClick={item.onClick}
+                        onMouseMove={() => {
+                          setSidebarFlyoutHoveredItemKey(item.key);
+                        }}
+                        onPointerEnter={() => {
+                          setSidebarFlyoutHoveredItemKey(item.key);
+                        }}
+                        type="button"
+                      >
+                        <span className="sidebar-flyout-catalog-thumb" aria-hidden="true" style={{ "--catalog-accent": item.accent }}>
+                          <SidebarAssetIcon
+                            asset={item.thumbnailUrl}
+                            className="sidebar-flyout-catalog-thumb-image"
+                            fallback={item.thumbnailIcon || MoreHorizontal}
+                            fallbackSize={16}
+                          />
+                        </span>
+                        <span className="sidebar-flyout-catalog-label">{item.label}</span>
+                        <span className="sidebar-flyout-catalog-count">{item.count}</span>
+                        <ChevronRight className="sidebar-flyout-catalog-arrow" size={16} />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              {sidebarFlyout.groupKey === "catalog" && sidebarCatalogFittingCategoryItems.length ? (
+                <div
+                  className="sidebar-flyout sidebar-flyout-submenu sidebar-flyout-fittings-submenu"
+                  onPointerEnter={keepSidebarCatalogFittingsNestedOpen}
+                  onPointerLeave={handleSidebarFlyoutPointerLeave}
+                  onMouseMove={keepSidebarCatalogFittingsNestedOpen}
+                  style={sidebarFlyoutNestedPaneStyle}
+                >
+                  <strong className="sidebar-flyout-title">{sidebarCatalogFittingCategoriesTitle}</strong>
+                  <div className="sidebar-flyout-items" role="menu">
+                    {sidebarCatalogFittingCategoryItems.map((item) => (
+                      <button
+                        className={`sidebar-flyout-catalog-card${item.active ? " active" : ""}`}
+                        key={item.key}
+                        onClick={item.onClick}
+                        onMouseMove={() => {
+                          setSidebarFlyoutHoveredItemKey(item.key);
+                        }}
+                        onPointerEnter={() => {
+                          setSidebarFlyoutHoveredItemKey(item.key);
+                        }}
+                        type="button"
+                      >
+                        <span className="sidebar-flyout-catalog-thumb" aria-hidden="true" style={{ "--catalog-accent": item.accent }}>
+                          <SidebarAssetIcon
+                            asset={item.thumbnailUrl}
+                            className="sidebar-flyout-catalog-thumb-image"
+                            fallback={item.thumbnailIcon || MoreHorizontal}
+                            fallbackSize={16}
+                          />
+                        </span>
+                        <span className="sidebar-flyout-catalog-label">{item.label}</span>
+                        <span className="sidebar-flyout-catalog-count">{item.count}</span>
+                        <ChevronRight className="sidebar-flyout-catalog-arrow" size={16} />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </>,
             document.body,
           )
         : null}
 
-      <section className="workspace">
+      <section className={`workspace${isMaterialCleanupView ? " materials-workspace" : ""}`}>
+        {!isMaterialCleanupView && !isCatalogFittingManufacturersView ? (
         <header
           className={`toolbar${activeView === "projectDetails" ? " project-toolbar" : ""}`}
         >
@@ -20325,8 +22085,8 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                       ? t.users
                     : isCatalogHubView
                       ? t.catalog
-                    : isCatalogMaterialsView
-                      ? t.catalogMaterials
+                    : isMaterialCleanupView
+                      ? ""
                     : isCatalogFittingsView
                       ? t.catalogFittings
                     : isCatalogFastenersView
@@ -20362,7 +22122,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                       : t.audit}
                 </h2>
               )}
-            {isMountingSchemesView ? null : activeView === "projectDetails" && selectedProject ? (
+            {isMountingSchemesView || isMaterialCleanupView ? null : activeView === "projectDetails" && selectedProject ? (
               <div className="toolbar-project-meta">
                 <span>{selectedProject.project_name || t.newProjectDefault}</span>
                 <button
@@ -20376,9 +22136,9 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   <Info size={16} />
                 </button>
               </div>
-            ) : (
+            ) : activePageLabel ? (
               <p>{activePageLabel}</p>
-            )}
+            ) : null}
           </div>
 
           <div className="toolbar-actions">
@@ -20511,7 +22271,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
               >
                 <RefreshCw size={18} />
               </button>
-            ) : isCatalogView ? (
+            ) : isCatalogView && !isCatalogFittingManufacturersView ? (
               <button
                 aria-label="Refresh catalog"
                 className="icon-button"
@@ -20585,6 +22345,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
             ) : null}
           </div>
         </header>
+        ) : null}
 
         {isHomeView ? (
           <section className="dashboard-layout">
@@ -22244,15 +24005,63 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
               </article>
             </div>
           </section>
+        ) : isCatalogMaterialCategoriesView ? (
+          <MaterialTaxonomyAdminWorkspace
+            entity="categories"
+            key="catalogMaterialCategories"
+            language={language}
+            currentUser={user}
+            canCreate={canCreateMaterialCatalog}
+            onNavigate={switchView}
+            token={token}
+          />
+        ) : isCatalogMaterialManufacturersView ? (
+          <MaterialTaxonomyAdminWorkspace
+            entity="manufacturers"
+            key="catalogMaterialManufacturers"
+            language={language}
+            currentUser={user}
+            canCreate={canCreateMaterialCatalog}
+            onNavigate={switchView}
+            token={token}
+          />
+        ) : isCatalogMaterialSuppliersView ? (
+          <FittingSuppliersAdminWorkspace
+            currentUserId={user?.id || ""}
+            currentUserRole={user?.role || "free"}
+            breadcrumbCurrentLabel={language === "uk" ? "Постачальники" : "Suppliers"}
+            breadcrumbRootLabel={language === "uk" ? "Матеріали" : "Materials"}
+            onBreadcrumbRootClick={() => switchView("catalogMaterials")}
+            description={language === "uk"
+              ? "Керування системними та власними постачальниками матеріалів."
+              : "Manage system and personal material suppliers."}
+            language={language}
+            token={token}
+          />
         ) : isCatalogMaterialsView ? (
-          <section className="table-panel full-panel" key="catalogMaterials">
-            <article className="catalog-card service-catalog-card service-catalog-card-full">
-              <div className="service-catalog-header">
-                <div className="service-catalog-title">
-                  <h3>{t.catalogMaterials}</h3>
-                  <p>{t.catalogMaterialsDescription}</p>
-                </div>
-                <div className="service-catalog-header-actions">
+          <section className={`table-panel full-panel${isCatalogMaterialRootView ? " materials-root-panel" : ""}`} key="catalogMaterials">
+            <div className={`catalog-page-header${isCatalogMaterialRootView ? "" : " material-category-detail-header"}`}>
+              <div className="service-catalog-title material-category-detail-title">
+                {isCatalogMaterialRootView ? (
+                  <>
+                    <h3>{language === "uk" ? "Матеріали" : "Materials"}</h3>
+                    <p>{language === "uk" ? "Оберіть категорію, щоб відкрити матеріали всередині неї." : "Choose a category to open its materials."}</p>
+                  </>
+                ) : (
+                  <>
+                    <div className="fitting-category-breadcrumb fitting-category-breadcrumb-top">
+                      <button className="fitting-breadcrumb-link" onClick={openMaterialCatalogRoot} type="button">
+                        {t.catalogMaterials}
+                      </button>
+                      <span className="fitting-breadcrumb-separator">/</span>
+                      <strong>{currentMaterialCategoryMeta?.name || formatCatalogLabel(materialCategoryFilter, t)}</strong>
+                    </div>
+                    <p>{t.catalogMaterialsDescription}</p>
+                  </>
+                )}
+              </div>
+              {!isCatalogMaterialRootView ? (
+                <div className="service-catalog-header-actions material-category-detail-actions">
                   <span className="service-tree-badge subtle">
                     {t.currentCity}: {formatCatalogLabel(activeCity, t)}
                   </span>
@@ -22261,59 +24070,187 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                       ? t.loading
                       : `${materialItems.length} ${t.materialsCount}`}
                   </span>
-                </div>
-              </div>
-
-              {canViewMaterialCatalog ? (
-                <>
-              <div className="materials-toolbar">
-                <label className="service-catalog-search">
-                  <Search size={16} />
-                  <input
-                    onChange={(event) => setMaterialSearch(event.target.value)}
-                    placeholder={t.viyarSearch}
-                    type="search"
-                    value={materialSearch}
-                  />
-                </label>
-                <label className="materials-filter">
-                  <span>{t.materialCategory}</span>
-                  <select
-                    onChange={(event) => setMaterialCategoryFilter(event.target.value)}
-                    value={materialCategoryFilter}
-                  >
-                    {materialCategories.map((category) => (
-                      <option key={category.code} value={category.code}>
-                        {formatCatalogLabel(category.code, t)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                {user?.role === "admin" ? (
-                  <label className="materials-filter">
-                    <span>{language === "en" ? "Ownership" : "Власність"}</span>
-                    <select
-                      onChange={(event) => setMaterialOwnershipScope(event.target.value)}
-                      value={materialOwnershipScope}
+                  <div className="materials-toolbar materials-toolbar-inline">
+                    <label className="service-catalog-search">
+                      <Search size={16} />
+                      <input
+                        onChange={(event) => setMaterialSearch(event.target.value)}
+                        placeholder={t.viyarSearch}
+                        type="search"
+                        value={materialSearch}
+                      />
+                    </label>
+                    <label className="materials-filter">
+                      <span>{t.materialCategory}</span>
+                      <select
+                        onChange={(event) => setMaterialCategoryFilter(event.target.value)}
+                        value={materialCategoryFilter}
+                      >
+                        {materialCategories.map((category) => (
+                          <option key={category.code} value={category.code}>
+                            {category?.name || formatCatalogLabel(category.code, t)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    {user?.role === "admin" ? (
+                      <label className="materials-filter">
+                        <span>{language === "en" ? "Ownership" : "Власність"}</span>
+                        <select
+                          onChange={(event) => setMaterialOwnershipScope(event.target.value)}
+                          value={materialOwnershipScope}
+                        >
+                          <option value="system">{getMaterialOwnershipScopeLabel("system", language)}</option>
+                          <option value="mine">{getMaterialOwnershipScopeLabel("mine", language)}</option>
+                          <option value="users">{getMaterialOwnershipScopeLabel("users", language)}</option>
+                          <option value="all">{getMaterialOwnershipScopeLabel("all", language)}</option>
+                        </select>
+                      </label>
+                    ) : null}
+                    <button
+                      className="ghost-button"
+                      disabled={loading}
+                      onClick={() => loadMaterialsCatalog(token)}
+                      type="button"
                     >
-                      <option value="system">{getMaterialOwnershipScopeLabel("system", language)}</option>
-                      <option value="mine">{getMaterialOwnershipScopeLabel("mine", language)}</option>
-                      <option value="users">{getMaterialOwnershipScopeLabel("users", language)}</option>
-                      <option value="all">{getMaterialOwnershipScopeLabel("all", language)}</option>
-                    </select>
-                  </label>
-                ) : null}
-                <button
-                  className="ghost-button"
-                  disabled={loading}
-                  onClick={() => loadMaterialsCatalog(token)}
-                  type="button"
-                >
-                  <RefreshCw size={16} />
-                  {t.refresh}
-                </button>
-              </div>
+                      <RefreshCw size={16} />
+                      {t.refresh}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+              {isCatalogMaterialRootView ? (
+                <div className="service-catalog-header-actions catalog-page-header-actions">
+                  <span className="service-tree-badge subtle">
+                    {materialsCatalogLoading && !materialCategories.length
+                      ? t.loading
+                      : `${materialCategories.length} ${language === "uk" ? "категорій" : "categories"}`}
+                  </span>
+                </div>
+              ) : null}
+            </div>
 
+            <article className="catalog-card service-catalog-card service-catalog-card-full">
+              {canViewMaterialCatalog ? (
+                isCatalogMaterialRootView ? (
+                  <div className="catalog-category-groups material-category-groups">
+                    <section className="catalog-category-group material-category-group material-category-group-panel">
+                      <span className="service-tree-badge subtle material-category-group-label">
+                        {language === "uk" ? "Системні категорії" : "System categories"}
+                      </span>
+                      <div className="catalog-category-grid">
+                        {materialRootCategoryGroups.system.map((category) => {
+                          const categoryCode = normalizeMaterialCategoryCode(category?.code);
+                          const categoryName = category?.name || (language === "uk" ? "Без назви" : "Untitled");
+                          const categoryDescription = String(category?.description || "").trim();
+                          const categoryImageUrl = String(category?.image_url || "").trim();
+                          const categoryCount = materialCategoryCountByCode[categoryCode] || 0;
+                          const accent = getMaterialCategoryAccent(categoryCode || category?.name);
+                          const resolvedCategoryImageUrl = categoryImageUrl ? resolveAdminAssetUrl(categoryImageUrl) : "";
+
+                          return (
+                            <button
+                              className="catalog-choice-card fitting-category-card material-category-card"
+                              key={category.code}
+                              onClick={() => openMaterialCategoryCatalog(category.code)}
+                              type="button"
+                            >
+                              <span
+                                className="catalog-choice-media material-category-media"
+                                style={{ "--catalog-accent": accent }}
+                              >
+                                {resolvedCategoryImageUrl ? (
+                                  <img
+                                    alt=""
+                                    aria-hidden="true"
+                                    loading="lazy"
+                                    src={resolvedCategoryImageUrl}
+                                  />
+                                ) : (
+                                  <span className="material-category-preview-placeholder" aria-hidden="true">
+                                    <span className="material-category-preview-placeholder-mark" />
+                                    <span className="material-category-preview-placeholder-text">
+                                      {language === "uk" ? "Матеріали" : "Materials"}
+                                    </span>
+                                  </span>
+                                )}
+                              </span>
+                              <div className="fitting-category-content material-category-content">
+                                <div className="catalog-choice-copy">
+                                  <strong>{categoryName}</strong>
+                                  <span>{categoryDescription}</span>
+                                </div>
+                                <div className="catalog-choice-meta">
+                                  <span className="service-tree-badge subtle">{categoryCount}</span>
+                                  <span>{t.catalogMaterials}</span>
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </section>
+                    {materialRootCategoryGroups.own.length ? (
+                      <section className="catalog-category-group material-category-group material-category-group-panel">
+                        <span className="service-tree-badge subtle material-category-group-label">
+                          {language === "uk" ? "Мої категорії" : "My categories"}
+                        </span>
+                        <div className="catalog-category-grid">
+                          {materialRootCategoryGroups.own.map((category) => {
+                            const categoryCode = normalizeMaterialCategoryCode(category?.code);
+                            const categoryName = category?.name || (language === "uk" ? "Без назви" : "Untitled");
+                            const categoryDescription = String(category?.description || "").trim();
+                            const categoryImageUrl = String(category?.image_url || "").trim();
+                            const categoryCount = materialCategoryCountByCode[categoryCode] || 0;
+                            const accent = getMaterialCategoryAccent(categoryCode || category?.name);
+                            const resolvedCategoryImageUrl = categoryImageUrl ? resolveAdminAssetUrl(categoryImageUrl) : "";
+
+                            return (
+                              <button
+                                className="catalog-choice-card fitting-category-card material-category-card"
+                                key={category.code}
+                                onClick={() => openMaterialCategoryCatalog(category.code)}
+                                type="button"
+                              >
+                                <span
+                                  className="catalog-choice-media material-category-media"
+                                  style={{ "--catalog-accent": accent }}
+                                >
+                                  {resolvedCategoryImageUrl ? (
+                                    <img
+                                      alt=""
+                                      aria-hidden="true"
+                                      loading="lazy"
+                                      src={resolvedCategoryImageUrl}
+                                    />
+                                  ) : (
+                                    <span className="material-category-preview-placeholder" aria-hidden="true">
+                                      <span className="material-category-preview-placeholder-mark" />
+                                      <span className="material-category-preview-placeholder-text">
+                                        {language === "uk" ? "Матеріали" : "Materials"}
+                                      </span>
+                                    </span>
+                                  )}
+                                </span>
+                                <div className="fitting-category-content material-category-content">
+                                  <div className="catalog-choice-copy">
+                                    <strong>{categoryName}</strong>
+                                    <span>{categoryDescription}</span>
+                                  </div>
+                                  <div className="catalog-choice-meta">
+                                    <span className="service-tree-badge subtle">{categoryCount}</span>
+                                    <span>{t.catalogMaterials}</span>
+                                  </div>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </section>
+                    ) : null}
+                  </div>
+                ) : (
+                  <>
               {canEditMaterialCatalog ? (
                 <>
                   <div className="materials-quota-hint">
@@ -22322,106 +24259,145 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                     </span>
                   </div>
                   <form className="materials-import-form" onSubmit={handleImportMaterial}>
-                    <div className="materials-mode-switch" role="tablist" aria-label={t.catalogMaterials}>
-                      <button
-                        className={`ghost-button${materialCreateMode === "source" ? " active" : ""}`}
-                        onClick={() => setMaterialCreateMode("source")}
-                        type="button"
-                      >
-                        {t.materialModeLinked}
-                      </button>
-                      <button
-                        className={`ghost-button${materialCreateMode === "manual" ? " active" : ""}`}
-                        onClick={() => setMaterialCreateMode("manual")}
-                        type="button"
-                      >
-                        {t.materialModeManual}
-                      </button>
-                    </div>
-                    {materialCreateMode === "source" ? (
-                      <>
-                        <label>
-                          {t.materialAddArticle}
-                          <input
-                            onChange={(event) => setNewMaterialArticle(event.target.value)}
-                            placeholder={t.materialAddArticlePlaceholder}
-                            type="text"
-                            value={newMaterialArticle}
-                          />
-                        </label>
-                        <label>
-                          {t.materialAddUrl}
-                          <input
-                            onChange={(event) => setNewMaterialSourceUrl(event.target.value)}
-                            placeholder={t.materialAddUrlPlaceholder}
-                            type="url"
-                            value={newMaterialSourceUrl}
-                          />
-                        </label>
-                        {canManageSystemMaterials(user) ? (
-                          <label className="material-inline-check">
+                    <fieldset className="materials-import-form-fieldset" disabled={materialImportWorking}>
+                      <div className="materials-mode-switch" role="tablist" aria-label={t.catalogMaterials}>
+                        <button
+                          className={`ghost-button${materialCreateMode === "source" ? " active" : ""}`}
+                          onClick={() => {
+                            setMaterialCreateMode("source");
+                            setNewMaterialManufacturerId("");
+                          }}
+                          type="button"
+                        >
+                          {t.materialModeLinked}
+                        </button>
+                        <button
+                          className={`ghost-button${materialCreateMode === "manual" ? " active" : ""}`}
+                          onClick={() => setMaterialCreateMode("manual")}
+                          type="button"
+                        >
+                          {t.materialModeManual}
+                        </button>
+                      </div>
+                      {materialCreateMode === "source" ? (
+                        <>
+                          <label>
+                            {language === "uk" ? "Артикул, якщо немає прямого URL" : "Article if the URL is not enough"}
                             <input
-                              checked={newMaterialIsDefault}
-                              onChange={(event) => setNewMaterialIsDefault(event.target.checked)}
-                              type="checkbox"
+                              onChange={(event) => setNewMaterialArticle(event.target.value)}
+                              placeholder={language === "uk" ? "Необов'язково" : "Optional fallback"}
+                              type="text"
+                              value={newMaterialArticle}
                             />
-                            {t.materialDefaultForAll}
                           </label>
-                        ) : null}
-                      </>
-                    ) : (
-                      <>
+                          <label>
+                            {language === "uk" ? "Посилання на товар" : "Product URL"}
+                            <input
+                              onChange={(event) => setNewMaterialSourceUrl(event.target.value)}
+                              placeholder="https://..."
+                              type="url"
+                              value={newMaterialSourceUrl}
+                            />
+                          </label>
+                          <label>
+                            {language === "uk" ? "Місто для ціни / наявності" : "City for price / availability"}
+                            <input disabled readOnly type="text" value={formatCatalogLabel(activeCity, t)} />
+                          </label>
+                          {canManageSystemMaterials(user) ? (
+                            <label className="material-inline-check">
+                              <input
+                                checked={newMaterialIsDefault}
+                                onChange={(event) => setNewMaterialIsDefault(event.target.checked)}
+                                type="checkbox"
+                              />
+                              {t.materialDefaultForAll}
+                            </label>
+                          ) : null}
+                          <div className="settings-hint">
+                            {language === "uk"
+                              ? "Система сама визначить постачальника, виробника та інші поля після збереження."
+                              : "The system will resolve supplier, manufacturer, and other fields after saving."}
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <label>
+                            {t.materialManualName}
+                            <input
+                              onChange={(event) => setNewMaterialName(event.target.value)}
+                              placeholder={t.materialManualNamePlaceholder}
+                              type="text"
+                              value={newMaterialName}
+                            />
+                          </label>
+                          <label>
+                            {t.materialManualPrice}
+                            <input
+                              min="0"
+                              onChange={(event) => setNewMaterialPrice(event.target.value)}
+                              placeholder="0"
+                              step="0.01"
+                              type="number"
+                              value={newMaterialPrice}
+                            />
+                          </label>
+                          <label>
+                            {t.materialManualImage}
+                            <input
+                              accept="image/*"
+                              onChange={handleMaterialImageUpload}
+                              type="file"
+                            />
+                            <small className="settings-hint">
+                              {newMaterialImageUrl ? t.fittingImageSelected : t.materialManualImageHint}
+                            </small>
+                          </label>
+                          <label>
+                            {t.materialManufacturer}
+                            <select
+                              onChange={(event) => setNewMaterialManufacturerId(event.target.value)}
+                              value={newMaterialManufacturerId}
+                            >
+                              <option value="">{t.notSet}</option>
+                              {materialManufacturers.map((manufacturer) => (
+                                <option key={manufacturer.id} value={manufacturer.id}>
+                                  {manufacturer.name}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        </>
+                      )}
+                      {materialCreateMode === "manual" ? (
                         <label>
-                          {t.materialManualName}
-                          <input
-                            onChange={(event) => setNewMaterialName(event.target.value)}
-                            placeholder={t.materialManualNamePlaceholder}
-                            type="text"
-                            value={newMaterialName}
-                          />
+                          {t.city}
+                          <input disabled readOnly type="text" value={formatCatalogLabel(activeCity, t)} />
                         </label>
-                        <label>
-                          {t.materialManualPrice}
-                          <input
-                            min="0"
-                            onChange={(event) => setNewMaterialPrice(event.target.value)}
-                            placeholder="0"
-                            step="0.01"
-                            type="number"
-                            value={newMaterialPrice}
-                          />
-                        </label>
-                        <label>
-                          {t.materialManualImage}
-                          <input
-                            accept="image/*"
-                            onChange={handleMaterialImageUpload}
-                            type="file"
-                          />
-                          <small className="settings-hint">
-                            {newMaterialImageUrl ? t.fittingImageSelected : t.materialManualImageHint}
-                          </small>
-                        </label>
-                      </>
-                    )}
-                    <label>
-                      {t.city}
-                      <input disabled readOnly type="text" value={formatCatalogLabel(activeCity, t)} />
-                    </label>
-                    <button
-                      className="primary-button"
-                      disabled={
-                        loading || (
-                          materialCreateMode === "source"
-                            ? (!newMaterialArticle.trim() || !newMaterialSourceUrl.trim() || isMaterialCreationBlockedByQuota)
-                            : (!newMaterialName.trim() || newMaterialPrice === "" || isMaterialCreationBlockedByQuota)
-                        )
-                      }
-                      type="submit"
-                    >
-                      <Plus size={16} />
-                      {materialCreateMode === "source" ? t.materialAdd : t.materialManualAdd}
-                    </button>
+                      ) : null}
+                      <button
+                        className="primary-button"
+                        disabled={
+                          loading || materialImportWorking || (
+                            materialCreateMode === "source"
+                              ? (!newMaterialSourceUrl.trim() || isMaterialCreationBlockedByQuota)
+                              : (!newMaterialName.trim() || newMaterialPrice === "" || isMaterialCreationBlockedByQuota)
+                          )
+                        }
+                        type="submit"
+                      >
+                        {materialImportWorking ? (
+                          <span className="material-import-processing-button-content">
+                            <span aria-hidden="true" className="material-import-processing-button-spinner" />
+                            {language === "uk" ? "Обробка..." : "Processing..."}
+                          </span>
+                        ) : (
+                          <>
+                            <Plus size={16} />
+                            {materialCreateMode === "source" ? t.materialAdd : t.materialManualAdd}
+                          </>
+                        )}
+                      </button>
+                    </fieldset>
                   </form>
                   {activeMaterialImportJob ? (
                     <div className={`material-import-status material-import-status-${activeMaterialImportJob.status || "queued"}`}>
@@ -22498,6 +24474,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                     const sourceMeta = getMaterialSourceMeta(item, t);
                     const promoViewModel = getMaterialPromoViewModel(item, t, language);
                     const promoRibbonViewModel = getMaterialPromoRibbonViewModel(item, language);
+                    const manufacturerMeta = getMaterialManufacturerMeta(item, materialManufacturersById);
                     const canManageItem = canEditMaterialItem(user, item);
 
                     return (
@@ -22599,6 +24576,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                           <span className="service-tree-badge subtle">
                             {formatCatalogLabel(item.category, t)}
                           </span>
+                          {manufacturerMeta ? renderManufacturerBadge(manufacturerMeta, { className: "fitting-manufacturer-badge" }) : null}
                           {user?.role === "admin" ? (
                             <span className="service-tree-badge subtle">
                               {getMaterialOwnershipTypeLabel(item, user, language)}
@@ -22649,7 +24627,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                 </div>
               )}
                 </>
-              ) : (
+              )) : (
                 <div className="materials-quota-hint">
                   <span className="service-tree-badge subtle">
                     Додавання матеріалів недоступне у вашому тарифі.
@@ -27977,7 +29955,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
         </div>
       ) : null}
 
-      {activeView === "catalogMaterials" && selectedMaterialDetail ? (
+      {activeView === "catalogMaterials" && materialDetailModalOpen && selectedMaterialDetail ? (
         <div
           aria-modal="true"
           className="modal-backdrop"
@@ -28003,13 +29981,31 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
               </button>
             </header>
 
+            <MaterialSupplierOffersSection
+              canEdit={canEditMaterialItem(user, selectedMaterialDetail)}
+              language={language}
+              materialDetail={selectedMaterialDetail}
+              onRefreshMaterialDetail={() =>
+                selectedMaterialDetail?.article
+                    ? openMaterialDetails(selectedMaterialDetail, { keepVisible: true })
+                  : Promise.resolve()
+              }
+              onSelectedOfferActionsChange={setSelectedMaterialSupplierOfferActions}
+              onSelectedOfferChange={setSelectedMaterialSupplierOfferId}
+              selectedOfferId={selectedMaterialSupplierOfferId}
+              supplierOffers={selectedMaterialSupplierOffers}
+              status={materialSupplierOffersStatus}
+              token={token}
+            />
+
             <div className="material-details-layout">
               <div className="material-details-media">
-                <MaterialImage
+                <MaterialDetailGallery
                   alt={selectedMaterialDetail.name || selectedMaterialDetail.article}
                   item={selectedMaterialDetail}
                   loading="eager"
                   placeholderLabel={formatCatalogLabel(selectedMaterialDetail.category, t)}
+                  t={t}
                   token={token}
                 />
                 {(() => {
@@ -28036,84 +30032,167 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
 
               <div className="material-details-content">
                 {(() => {
-                  const selectedMaterialPromo = getMaterialPromoViewModel(selectedMaterialDetail, t, language);
+                  const materialSupplierOffers = [...(Array.isArray(selectedMaterialSupplierOffers) ? selectedMaterialSupplierOffers : [])].sort(sortMaterialSupplierOffers);
+                  const selectedMaterialSupplierOffer = materialSupplierOffers.find(
+                    (offer) => String(offer?.id || "") === String(selectedMaterialSupplierOfferId),
+                  ) || materialSupplierOffers[0] || null;
+                  const selectedMaterialManufacturerMeta = getMaterialManufacturerMeta(
+                    selectedMaterialDetail,
+                    materialManufacturersById,
+                  );
+                  const materialColorText = getMaterialColorText(selectedMaterialDetail, t);
+                  const materialDecorText = getMaterialDecorText(selectedMaterialDetail);
+                  const showDecorInsteadOfColor = shouldRenderDecorInsteadOfColor(selectedMaterialDetail) && Boolean(materialDecorText);
+                  const selectedSupplierOfferActions = selectedMaterialSupplierOfferActions &&
+                    String(selectedMaterialSupplierOfferActions.offerId || "") === String(selectedMaterialSupplierOffer?.id || "")
+                    ? selectedMaterialSupplierOfferActions
+                    : null;
 
                   return (
                     <>
-                <div className="material-details-badges">
-                  <span className="service-tree-badge subtle">
-                    {formatCatalogLabel(selectedMaterialDetail.category, t)}
-                  </span>
-                  {user?.role === "admin" ? (
-                    <span className="service-tree-badge subtle">
-                      {getMaterialOwnershipTypeLabel(selectedMaterialDetail, user, language)}
-                    </span>
-                  ) : null}
-                  {selectedMaterialDetail.display_article ? (
-                    <span className="service-tree-badge subtle">
-                      {selectedMaterialDetail.display_article}
-                    </span>
-                  ) : null}
-                  {renderSourceBadge(getMaterialSourceMeta(selectedMaterialDetail, t))}
-                </div>
-                {user?.role === "admin" ? (
-                  <div className="material-details-owner">
-                    {materialOwnersLoading &&
-                    materialOwnersRequestRef.current.article === String(selectedMaterialDetail.article || "").trim() ? (
-                      <strong>{t.loading}</strong>
-                    ) : materialOwnersError &&
-                      materialOwnersRequestRef.current.article === String(selectedMaterialDetail.article || "").trim() ? (
-                      <button
-                        className="text-button material-owners-trigger"
-                        onClick={openMaterialOwners}
-                        type="button"
-                      >
-                        {language === "en" ? "Owners" : "Власники"}
-                      </button>
-                    ) : materialOwners.length > 0 ? (
-                      <button
-                        className="text-button material-owners-trigger"
-                        onClick={openMaterialOwners}
-                        type="button"
-                      >
-                        {getMaterialOwnersLabel(materialOwners.length, language)}
-                      </button>
-                    ) : (
-                      <strong>{getMaterialOwnersLabel(0, language)}</strong>
-                    )}
-                  </div>
-                ) : null}
+                      <div className="material-details-meta-row">
+                        <div className="material-details-meta-left">
+                          <div className="material-details-badges">
+                            <span className="service-tree-badge subtle">
+                              {formatCatalogLabel(selectedMaterialDetail.category, t)}
+                            </span>
+                            {user?.role === "admin" ? (
+                              <span className="service-tree-badge subtle">
+                                {getMaterialOwnershipTypeLabel(selectedMaterialDetail, user, language)}
+                              </span>
+                            ) : null}
+                          </div>
+                          {user?.role === "admin" ? (
+                            <div className="material-details-owner material-details-owner-inline">
+                              {shouldShowOwnersLoadingState(materialOwnersStatus) ||
+                              (materialOwnersLoading &&
+                                materialOwnersRequestRef.current.article === String(selectedMaterialDetail.article || "").trim()) ? (
+                                <strong>{t.loading}</strong>
+                              ) : materialOwnersError &&
+                                materialOwnersRequestRef.current.article === String(selectedMaterialDetail.article || "").trim() ? (
+                                <button
+                                  className="text-button material-owners-trigger"
+                                  onClick={openMaterialOwners}
+                                  type="button"
+                                >
+                                  {language === "en" ? "Owners" : "Власники"}
+                                </button>
+                              ) : shouldShowOwnersCount(materialOwnersStatus, materialOwners) ? (
+                                <button
+                                  className="service-tree-badge subtle material-owners-trigger"
+                                  onClick={openMaterialOwners}
+                                  type="button"
+                                >
+                                  {getMaterialOwnersLabel(materialOwners.length, language)}
+                                </button>
+                              ) : shouldShowOwnersEmptyState(materialOwnersStatus, materialOwners) ? (
+                                <strong>{getMaterialOwnersLabel(0, language)}</strong>
+                              ) : (
+                                <strong>{t.loading}</strong>
+                              )}
+                            </div>
+                          ) : null}
+                        </div>
+                        {selectedSupplierOfferActions ? (
+                          <div className="catalog-actions material-details-meta-actions">
+                            <button
+                              aria-label={language === "en" ? "Edit supplier offer" : "Редагувати пропозицію"}
+                              className="icon-button"
+                              disabled={!selectedSupplierOfferActions.canEdit || Boolean(selectedSupplierOfferActions.busy)}
+                              onClick={selectedSupplierOfferActions.onEdit}
+                              type="button"
+                            >
+                              <Pencil size={14} />
+                            </button>
+                            <button
+                              aria-label={selectedMaterialSupplierOffer?.is_active
+                                ? (language === "en" ? "Deactivate supplier offer" : "Деактивувати пропозицію")
+                                : (language === "en" ? "Activate supplier offer" : "Активувати пропозицію")}
+                              className="icon-button"
+                              disabled={!selectedSupplierOfferActions.canEdit || Boolean(selectedSupplierOfferActions.busy)}
+                              onClick={selectedSupplierOfferActions.onToggleActive}
+                              type="button"
+                            >
+                              {selectedMaterialSupplierOffer?.is_active ? <EyeOff size={14} /> : <Eye size={14} />}
+                            </button>
+                            <button
+                              aria-label={language === "en" ? "Delete supplier offer" : "Видалити пропозицію"}
+                              className="icon-button danger-button"
+                              disabled={!selectedSupplierOfferActions.canEdit || Boolean(selectedSupplierOfferActions.busy)}
+                              onClick={selectedSupplierOfferActions.onDelete}
+                              type="button"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
 
-                <div className="material-details-grid">
-                  <div>
-                    {selectedMaterialPromo ? (
-                      <>
-                        <div className="material-promo-prices material-promo-prices-inline">
-                          <del className="material-promo-old-price">
-                            {formatMoneyValue(selectedMaterialPromo.oldPrice)} {selectedMaterialPromo.details.currency || "UAH"}
-                          </del>
+                      {selectedSupplierOfferActions?.error ? (
+                        <p className="status-message error material-details-meta-error">
+                          {selectedSupplierOfferActions.error}
+                        </p>
+                      ) : null}
+
+                      <div className="material-details-grid">
+                        {selectedMaterialSupplierOffer ? (
+                          <>
+                            <div className="material-details-supplier-card-field">
+                              <span>{language === "en" ? "Article" : "Артикул"}</span>
+                              <strong>{selectedMaterialSupplierOffer.article || t.notSet}</strong>
+                            </div>
+                            <div className="material-details-supplier-card-field">
+                              <span>{language === "en" ? "Price" : "Ціна"}</span>
+                              <strong>
+                                {selectedMaterialSupplierOffer?.price !== null && selectedMaterialSupplierOffer?.price !== undefined
+                                  ? `${selectedMaterialSupplierOffer.price} ${selectedMaterialSupplierOffer.currency || "UAH"}`
+                                  : t.notSet}
+                              </strong>
+                            </div>
+                            <div className="material-details-supplier-card-field">
+                              <span>{language === "en" ? "Unit" : "Одиниця"}</span>
+                              <strong>{selectedMaterialSupplierOffer.unit || t.notSet}</strong>
+                            </div>
+                            <div className="material-details-supplier-card-field">
+                              <span>{language === "en" ? "Availability" : "Наявність"}</span>
+                              <strong>{selectedMaterialSupplierOffer.stock || t.notSet}</strong>
+                            </div>
+                            <div className="material-details-supplier-card-field">
+                              <span>{language === "en" ? "City" : "Місто"}</span>
+                              <strong>{formatCatalogCityLabel(selectedMaterialSupplierOffer.city, t)}</strong>
+                            </div>
+                            {selectedMaterialSupplierOffer.region ? (
+                              <div className="material-details-supplier-card-field">
+                                <span>{language === "en" ? "Region" : "Регіон"}</span>
+                                <strong>{selectedMaterialSupplierOffer.region}</strong>
+                              </div>
+                            ) : null}
+                            {selectedMaterialSupplierOffer.supports_square_meter_sale ? (
+                              <span className="service-tree-badge subtle material-details-supplier-badge">
+                                {language === "en" ? "Clean size / m²" : "Чистий розмір / m²"}
+                              </span>
+                            ) : null}
+                            {selectedMaterialSupplierOffer.source_url ? (
+                              <div className="material-details-supplier-card-link-row">
+                                <a
+                                  href={selectedMaterialSupplierOffer.source_url}
+                                  rel="noreferrer"
+                                  target="_blank"
+                                >
+                                  {language === "en" ? "Open product" : "Відкрити товар"}
+                                </a>
+                              </div>
+                            ) : null}
+                          </>
+                        ) : null}
+                        <div>
+                          <span>{showDecorInsteadOfColor ? (language === "en" ? "Decor" : "Декор") : t.materialColor}</span>
                           <strong>
-                            {formatMoneyValue(selectedMaterialPromo.currentPrice)} {selectedMaterialPromo.details.currency || "UAH"}
+                            {showDecorInsteadOfColor
+                              ? (materialDecorText || materialColorText || t.notSet)
+                              : (materialColorText || t.notSet)}
                           </strong>
                         </div>
-                        {selectedMaterialPromo.availability ? (
-                          <span className="material-promo-availability">
-                            {selectedMaterialPromo.availability}
-                          </span>
-                        ) : null}
-                      </>
-                    ) : (
-                      <strong>
-                        {selectedMaterialDetail.current_price !== null && selectedMaterialDetail.current_price !== undefined
-                          ? `${selectedMaterialDetail.current_price} UAH`
-                          : t.notSet}
-                      </strong>
-                    )}
-                  </div>
-                  <div>
-                    <span>{t.materialColor}</span>
-                    <strong>{getMaterialColorText(selectedMaterialDetail, t)}</strong>
-                  </div>
                   <div>
                     <span>{t.materialDimensions}</span>
                     <strong>{selectedMaterialDetail.dimensions || t.notSet}</strong>
@@ -28122,12 +30201,22 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                     <span>{t.materialThickness}</span>
                     <strong>{selectedMaterialDetail.thickness || t.notSet}</strong>
                   </div>
-                </div>
+                  {selectedMaterialManufacturerMeta ? (
+                    <div>
+                      <span>{t.materialManufacturer}</span>
+                      <strong>
+                        {renderManufacturerBadge(selectedMaterialManufacturerMeta, {
+                          className: "fitting-manufacturer-badge",
+                        })}
+                      </strong>
+                    </div>
+                  ) : null}
+                      </div>
 
-                <div className="material-details-description">
-                  <span>{t.materialDescription}</span>
-                  <p>{getMaterialDescriptionText(selectedMaterialDetail, t)}</p>
-                </div>
+                      <div className="material-details-description">
+                        <span>{t.materialDescription}</span>
+                        <p>{getMaterialDescriptionText(selectedMaterialDetail, t)}</p>
+                      </div>
                     </>
                   );
                 })()}
@@ -28192,7 +30281,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                     label: edgeItem.thickness || t.materialEdgeBands,
                   };
                   const edgeForm = materialEdgeForms[slot.key] || { open: false, source_url: "" };
-                  const canEditEdge = canEditMaterialItem(user, selectedMaterialDetail);
+                  const canEditEdge = canEditMaterialItem(user, selectedMaterialDetail) && Boolean(getMaterialEdgeSlot(edgeItem.edge_key));
 
                   return (
                     <article className="material-edge-card" key={slot.key}>
@@ -28296,6 +30385,57 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
         </div>
       ) : null}
 
+      {materialImportWorking && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              aria-modal="true"
+              className="material-import-processing-backdrop"
+              role="dialog"
+            >
+              <section className="material-import-processing-panel" role="status">
+                <div className="material-import-processing-spinner" aria-hidden="true" />
+                <div className="material-import-processing-copy">
+                  <h2>{language === "uk" ? "Обробляємо матеріал" : "Processing material"}</h2>
+                  <div className="material-import-processing-steps">
+                    <div className={`material-import-processing-step is-${materialImportProgress.source}`}>
+                      <strong>
+                        {getMaterialImportStageIndicator(materialImportProgress.source)}{" "}
+                        {language === "uk" ? "Отримуємо дані матеріалу" : "Fetching material data"}
+                      </strong>
+                      <p>
+                        {language === "uk"
+                          ? "Завантажуємо назву, характеристики, ціну та дані постачальника."
+                          : "Loading the name, characteristics, price, and supplier data."}
+                      </p>
+                    </div>
+                    <div className={`material-import-processing-step is-${materialImportProgress.gallery}`}>
+                      <strong>
+                        {getMaterialImportStageIndicator(materialImportProgress.gallery)}{" "}
+                        {language === "uk" ? "Завантажуємо фотографії" : "Loading photos"}
+                      </strong>
+                      <p>
+                        {language === "uk"
+                          ? "Отримуємо основні зображення та текстуру матеріалу."
+                          : "Downloading the primary images and material texture."}
+                      </p>
+                    </div>
+                  </div>
+                  <p className="material-import-processing-note">
+                    {materialImportWorkingLongWait
+                      ? (language === "uk"
+                        ? "Обробка триває. Сайт постачальника може відповідати повільно."
+                        : "Processing is still running. The supplier site may be slow to respond.")
+                      : (language === "uk"
+                        ? "Це може зайняти до хвилини. Не оновлюйте сторінку."
+                        : "This can take up to a minute. Please do not refresh the page.")}
+                  </p>
+                </div>
+              </section>
+            </div>,
+            document.body,
+          )
+        : null}
+
       {activeView === "catalogMaterials" && materialEditModalOpen && materialEditItem ? (
         <div
           aria-modal="true"
@@ -28351,6 +30491,20 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                     type="number"
                     value={materialEditForm.price}
                   />
+                </label>
+                <label>
+                  {t.materialManufacturer}
+                  <select
+                    onChange={(event) => updateMaterialEditForm("manufacturer_id", event.target.value)}
+                    value={materialEditForm.manufacturer_id}
+                  >
+                    <option value="">{t.notSet}</option>
+                    {materialManufacturers.map((manufacturer) => (
+                      <option key={manufacturer.id} value={manufacturer.id}>
+                        {manufacturer.name}
+                      </option>
+                    ))}
+                  </select>
                 </label>
                 <label>
                   {t.materialColor}
@@ -28439,7 +30593,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
             </header>
 
             <div className="material-owners-panel">
-              {materialOwnersLoading ? (
+              {shouldShowOwnersLoadingState(materialOwnersStatus) || materialOwnersLoading ? (
                 <div className="material-owners-state">
                   <span className="service-tree-badge subtle">{t.loading}</span>
                 </div>
@@ -28447,7 +30601,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                 <div className="material-owners-state">
                   <span>{materialOwnersError}</span>
                 </div>
-              ) : materialOwners.length ? (
+              ) : shouldShowOwnersCount(materialOwnersStatus, materialOwners) ? (
                 <div className="material-owners-list" role="list">
                   {materialOwners.map((owner) => (
                     <article className="material-owners-item" key={owner.id} role="listitem">
@@ -28456,9 +30610,13 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                     </article>
                   ))}
                 </div>
-              ) : (
+              ) : shouldShowOwnersEmptyState(materialOwnersStatus, materialOwners) ? (
                 <div className="empty-state compact-empty-state">
                   <span>{language === "en" ? "No owners" : "Власників немає"}</span>
+                </div>
+              ) : (
+                <div className="material-owners-state">
+                  <span className="service-tree-badge subtle">{t.loading}</span>
                 </div>
               )}
             </div>

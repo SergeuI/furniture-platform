@@ -1,4 +1,5 @@
 from collections import defaultdict
+import json
 from hashlib import sha256
 from datetime import date, datetime, timedelta
 import re
@@ -29,14 +30,29 @@ from database.models.mounting_node import (
 from database.models.material import (
     MaterialModel,
 )
+from database.models.material_image import (
+    MaterialImageModel,
+)
 from database.models.material_edge import (
     MaterialEdgeModel,
 )
 from database.models.material_edge_price import (
     MaterialEdgePriceModel,
 )
+from database.models.canonical_edge import (
+    CanonicalEdgeModel,
+    EdgeSupplierOfferModel,
+    EdgeSupplierOfferPriceModel,
+    MaterialEdgeRelationModel,
+)
 from database.models.material_price import (
     MaterialPriceModel,
+)
+from database.models.material_supplier_offer import (
+    MaterialSupplierOfferModel,
+)
+from database.models.material_taxonomy import (
+    MaterialManufacturerModel,
 )
 from database.models.material_user_link import (
     MaterialUserLinkModel,
@@ -84,6 +100,45 @@ def _normalize_source(value: str | None) -> str | None:
     return normalized or None
 
 
+def _safe_parse_supplier_offer_payload_json(value: object | None) -> dict[str, object]:
+
+    if value is None:
+        return {}
+
+    if isinstance(value, dict):
+        return value
+
+    raw_text = _normalize_source(value)
+    if not raw_text:
+        return {}
+
+    try:
+        parsed = json.loads(raw_text)
+    except Exception:
+        return {}
+
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _extract_supplier_offer_square_meter_support(offer: MaterialSupplierOfferModel) -> bool | None:
+
+    payload = _safe_parse_supplier_offer_payload_json(getattr(offer, "source_payload_json", None))
+    if not payload:
+        return None
+
+    parsed_material = payload.get("parsed_material")
+    if isinstance(parsed_material, dict):
+        parsed_flag = parsed_material.get("supports_square_meter_sale")
+        if parsed_flag is not None:
+            return bool(parsed_flag)
+
+    direct_flag = payload.get("supports_square_meter_sale")
+    if direct_flag is not None:
+        return bool(direct_flag)
+
+    return None
+
+
 def _serialize_material_price_row(price: MaterialPriceModel) -> dict:
 
     return {
@@ -99,6 +154,570 @@ def _serialize_material_price_row(price: MaterialPriceModel) -> dict:
         "source_checked_at": price.source_checked_at,
         "updated_at": price.updated_at,
     }
+
+
+def _serialize_material_image_metadata(item: MaterialImageModel) -> dict:
+    return {
+        "id": int(item.id),
+        "sort_order": int(item.sort_order or 0),
+        "is_primary": bool(item.is_primary),
+        "content_type": item.image_cached_content_type,
+    }
+
+
+def _serialize_material_image_blob(item: MaterialImageModel) -> dict:
+    return {
+        "id": int(item.id),
+        "material_id": int(item.material_id),
+        "image_cached_bytes": item.image_cached_bytes,
+        "image_cached_content_type": item.image_cached_content_type,
+    }
+
+
+def _list_material_images_for_db(db, material_id: int) -> list[dict]:
+    rows = (
+        db.query(MaterialImageModel)
+        .options(
+            load_only(
+                MaterialImageModel.id,
+                MaterialImageModel.material_id,
+                MaterialImageModel.sort_order,
+                MaterialImageModel.is_primary,
+                MaterialImageModel.image_cached_content_type,
+            )
+        )
+        .filter(MaterialImageModel.material_id == int(material_id))
+        .order_by(
+            MaterialImageModel.sort_order.asc(),
+            MaterialImageModel.id.asc(),
+        )
+        .all()
+    )
+
+    return [
+        _serialize_material_image_metadata(row)
+        for row in rows
+    ]
+
+
+def _add_prepared_material_gallery_images(
+    db,
+    *,
+    material_id: int,
+    prepared_gallery_images: Sequence[PreparedFittingGalleryImage],
+) -> None:
+    db.add_all(
+        [
+            MaterialImageModel(
+                material_id=material_id,
+                sort_order=image.sort_order,
+                is_primary=image.is_primary,
+                source_url=image.source_url,
+                image_cached_bytes=image.image_bytes,
+                image_cached_content_type=image.content_type,
+                image_sha256=image.sha256,
+            )
+            for image in prepared_gallery_images
+        ]
+    )
+
+
+def _serialize_material_manufacturer_row(manufacturer: MaterialManufacturerModel | None) -> dict | None:
+
+    if not manufacturer:
+        return None
+
+    return {
+        "id": int(manufacturer.id),
+        "name": manufacturer.name,
+        "code": manufacturer.code,
+        "logo_url": manufacturer.logo_url,
+    }
+
+
+def _load_material_manufacturer_profiles(db, manufacturer_ids: list[int | None]) -> dict[int, dict]:
+
+    normalized_ids = sorted(
+        {
+            int(manufacturer_id)
+            for manufacturer_id in manufacturer_ids
+            if manufacturer_id is not None and str(manufacturer_id).strip()
+        }
+    )
+
+    if not normalized_ids:
+        return {}
+
+    manufacturers = (
+        db.query(MaterialManufacturerModel)
+        .filter(MaterialManufacturerModel.id.in_(normalized_ids))
+        .all()
+    )
+
+    return {
+        int(item.id): _serialize_material_manufacturer_row(item)
+        for item in manufacturers
+    }
+
+
+def _serialize_material_supplier_offer_row(
+    offer: MaterialSupplierOfferModel,
+    *,
+    supplier: SupplierModel | None = None,
+) -> dict:
+
+    offer_supplier = supplier or getattr(offer, "supplier", None)
+
+    return {
+        "id": int(offer.id),
+        "material_id": int(offer.material_id),
+        "supplier_id": int(offer.supplier_id),
+        "supplier_name": getattr(offer_supplier, "name", None),
+        "supplier_logo_url": getattr(offer_supplier, "logo_url", None),
+        "article": _normalize_source(offer.article),
+        "external_product_id": _normalize_source(offer.external_product_id),
+        "source_url": _normalize_source(offer.source_url),
+        "price": _normalize_price_value(offer.price),
+        "currency": _normalize_source(offer.currency),
+        "unit": _normalize_source(offer.unit),
+        "stock": _normalize_source(offer.stock),
+        "city": _normalize_source(offer.city),
+        "region": _normalize_source(offer.region),
+        "supports_square_meter_sale": _extract_supplier_offer_square_meter_support(offer),
+        "is_active": bool(offer.is_active),
+        "priority": int(offer.priority or 0),
+        "parsed_at": offer.parsed_at,
+        "price_updated_at": offer.price_updated_at,
+        "created_at": offer.created_at,
+        "updated_at": offer.updated_at,
+    }
+
+
+def _load_material_supplier_profiles(db, supplier_ids: list[int | None]) -> dict[int, SupplierModel]:
+
+    normalized_ids = sorted(
+        {
+            int(supplier_id)
+            for supplier_id in supplier_ids
+            if supplier_id is not None and str(supplier_id).strip()
+        }
+    )
+
+    if not normalized_ids:
+        return {}
+
+    suppliers = (
+        db.query(SupplierModel)
+        .filter(SupplierModel.id.in_(normalized_ids))
+        .all()
+    )
+
+    return {
+        int(item.id): item
+        for item in suppliers
+    }
+
+
+def _normalize_material_supplier_offer_currency(value: str | None) -> str | None:
+
+    normalized = _normalize_source(value)
+    if normalized is None:
+        return None
+
+    normalized = normalized.upper()
+    if not re.fullmatch(r"[A-Z0-9]{2,16}", normalized):
+        raise ValueError("Invalid currency")
+
+    return normalized
+
+
+def _normalize_material_supplier_offer_source_url(value: str | None) -> str | None:
+
+    normalized = _normalize_import_source_url(value)
+    if normalized is None:
+        return None
+
+    parsed = urlparse(normalized)
+    if not parsed.scheme or not parsed.netloc:
+        raise ValueError("Invalid source URL")
+
+    return normalized
+
+
+def _list_material_supplier_offers(db, material_id: str | int) -> list[dict]:
+
+    rows = (
+        db.query(MaterialSupplierOfferModel)
+        .options(
+            load_only(
+                MaterialSupplierOfferModel.id,
+                MaterialSupplierOfferModel.material_id,
+                MaterialSupplierOfferModel.supplier_id,
+                MaterialSupplierOfferModel.article,
+                MaterialSupplierOfferModel.external_product_id,
+                MaterialSupplierOfferModel.source_url,
+                MaterialSupplierOfferModel.price,
+                MaterialSupplierOfferModel.currency,
+                MaterialSupplierOfferModel.unit,
+                MaterialSupplierOfferModel.stock,
+                MaterialSupplierOfferModel.city,
+                MaterialSupplierOfferModel.region,
+                MaterialSupplierOfferModel.source_payload_json,
+                MaterialSupplierOfferModel.is_active,
+                MaterialSupplierOfferModel.priority,
+                MaterialSupplierOfferModel.parsed_at,
+                MaterialSupplierOfferModel.price_updated_at,
+                MaterialSupplierOfferModel.created_at,
+                MaterialSupplierOfferModel.updated_at,
+            )
+        )
+        .filter(MaterialSupplierOfferModel.material_id == int(material_id))
+        .order_by(
+            MaterialSupplierOfferModel.priority.asc(),
+            MaterialSupplierOfferModel.id.asc(),
+        )
+        .all()
+    )
+
+    supplier_profiles = _load_material_supplier_profiles(
+        db,
+        [row.supplier_id for row in rows],
+    )
+
+    return [
+        _serialize_material_supplier_offer_row(
+            row,
+            supplier=supplier_profiles.get(int(row.supplier_id)),
+        )
+        for row in rows
+    ]
+
+
+def list_material_supplier_offers(material_id: str | int) -> list[dict]:
+
+    db = SessionLocal()
+
+    try:
+        return _list_material_supplier_offers(db, material_id)
+    finally:
+        db.close()
+
+
+def create_material_supplier_offer(
+    *,
+    material_id: str | int,
+    supplier_id: str | int,
+    article: str,
+    external_product_id: str | None = None,
+    source_url: str | None = None,
+    price: float | None = None,
+    currency: str | None = None,
+    unit: str | None = None,
+    stock: str | None = None,
+    city: str | None = None,
+    region: str | None = None,
+    is_active: bool = True,
+    priority: int = 0,
+    parsed_at: datetime | None = None,
+    price_updated_at: datetime | None = None,
+    source_payload_json: str | None = None,
+) -> dict | None:
+
+    db = SessionLocal()
+
+    try:
+        material = db.get(MaterialModel, int(material_id))
+        supplier = db.get(SupplierModel, int(supplier_id))
+        if not material or not supplier:
+            return None
+
+        if _normalize_price_value(price) is not None and _normalize_price_value(price) < 0:
+            raise ValueError("Price must be non-negative")
+
+        offer = MaterialSupplierOfferModel(
+            material_id=int(material.id),
+            supplier_id=int(supplier.id),
+            article=_normalize_source(article),
+            external_product_id=_normalize_source(external_product_id),
+            source_url=_normalize_material_supplier_offer_source_url(source_url),
+            price=_normalize_price_value(price),
+            currency=_normalize_material_supplier_offer_currency(currency),
+            unit=_normalize_source(unit),
+            stock=_normalize_source(stock),
+            city=_normalize_source(city),
+            region=_normalize_source(region),
+            is_active=bool(is_active),
+            priority=int(priority or 0),
+            parsed_at=parsed_at,
+            price_updated_at=price_updated_at,
+            source_payload_json=source_payload_json,
+        )
+        db.add(offer)
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            return None
+        db.refresh(offer)
+        offer.supplier = supplier
+        return _serialize_material_supplier_offer_row(offer, supplier=supplier)
+    finally:
+        db.close()
+
+
+def upsert_material_supplier_offer_for_import(
+    *,
+    material_id: str | int,
+    supplier_id: str | int,
+    article: str,
+    external_product_id: str | None = None,
+    source_url: str | None = None,
+    price: float | None = None,
+    currency: str | None = None,
+    unit: str | None = None,
+    stock: str | None = None,
+    city: str | None = None,
+    region: str | None = None,
+    is_active: bool = True,
+    priority: int = 0,
+    parsed_at: datetime | None = None,
+    price_updated_at: datetime | None = None,
+    source_payload_json: str | None = None,
+) -> dict | None:
+
+    db = SessionLocal()
+
+    try:
+        material = db.get(MaterialModel, int(material_id))
+        supplier = db.get(SupplierModel, int(supplier_id))
+        if not material or not supplier:
+            return None
+
+        normalized_external_product_id = _normalize_source(external_product_id)
+        query = (
+            db.query(MaterialSupplierOfferModel)
+            .filter(
+                MaterialSupplierOfferModel.material_id == int(material.id),
+                MaterialSupplierOfferModel.supplier_id == int(supplier.id),
+            )
+            .order_by(
+                MaterialSupplierOfferModel.updated_at.desc(),
+                MaterialSupplierOfferModel.id.desc(),
+            )
+        )
+
+        if normalized_external_product_id is not None:
+            offer = query.filter(
+                MaterialSupplierOfferModel.external_product_id == normalized_external_product_id,
+            ).first()
+        else:
+            offer = None
+
+        if not offer:
+            offer = query.first()
+
+        if not offer:
+            offer = MaterialSupplierOfferModel(
+                material_id=int(material.id),
+                supplier_id=int(supplier.id),
+            )
+            db.add(offer)
+
+        offer.article = _normalize_source(article)
+        offer.external_product_id = normalized_external_product_id
+        offer.source_url = _normalize_material_supplier_offer_source_url(source_url)
+        offer.price = _normalize_price_value(price)
+        offer.currency = _normalize_material_supplier_offer_currency(currency)
+        offer.unit = _normalize_source(unit)
+        offer.stock = _normalize_source(stock)
+        offer.city = _normalize_source(city)
+        offer.region = _normalize_source(region)
+        offer.is_active = bool(is_active)
+        offer.priority = int(priority or 0)
+        offer.parsed_at = parsed_at
+        offer.price_updated_at = price_updated_at
+        offer.source_payload_json = source_payload_json
+
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            offer = (
+                db.query(MaterialSupplierOfferModel)
+                .filter(
+                    MaterialSupplierOfferModel.material_id == int(material.id),
+                    MaterialSupplierOfferModel.supplier_id == int(supplier.id),
+                )
+                .order_by(
+                    MaterialSupplierOfferModel.updated_at.desc(),
+                    MaterialSupplierOfferModel.id.desc(),
+                )
+                .filter(
+                    MaterialSupplierOfferModel.external_product_id == normalized_external_product_id
+                    if normalized_external_product_id is not None
+                    else MaterialSupplierOfferModel.external_product_id.is_(None)
+                )
+                .first()
+            )
+            if not offer:
+                return None
+
+        db.refresh(offer)
+        offer.supplier = supplier
+        return _serialize_material_supplier_offer_row(offer, supplier=supplier)
+    finally:
+        db.close()
+
+
+def update_material_supplier_offer(
+    offer_id: str | int,
+    *,
+    supplier_id: str | int | None | object = _UNSET,
+    article: str | None | object = _UNSET,
+    external_product_id: str | None | object = _UNSET,
+    source_url: str | None | object = _UNSET,
+    price: float | None | object = _UNSET,
+    currency: str | None | object = _UNSET,
+    unit: str | None | object = _UNSET,
+    stock: str | None | object = _UNSET,
+    city: str | None | object = _UNSET,
+    region: str | None | object = _UNSET,
+    is_active: bool | object = _UNSET,
+    priority: int | object = _UNSET,
+    parsed_at: datetime | None | object = _UNSET,
+    price_updated_at: datetime | None | object = _UNSET,
+    source_payload_json: str | None | object = _UNSET,
+) -> dict | None:
+
+    db = SessionLocal()
+
+    try:
+        offer = (
+            db.query(MaterialSupplierOfferModel)
+            .filter(MaterialSupplierOfferModel.id == int(offer_id))
+            .first()
+        )
+        if not offer:
+            return None
+
+        supplier = None
+        if supplier_id is not _UNSET:
+            if supplier_id is None:
+                raise ValueError("Supplier is required")
+            supplier = db.get(SupplierModel, int(supplier_id))
+            if not supplier:
+                return None
+            offer.supplier_id = int(supplier.id)
+        else:
+            supplier = db.get(SupplierModel, int(offer.supplier_id))
+
+        if article is not _UNSET:
+            offer.article = _normalize_source(article)
+        if external_product_id is not _UNSET:
+            offer.external_product_id = _normalize_source(external_product_id)
+        if source_url is not _UNSET:
+            offer.source_url = _normalize_material_supplier_offer_source_url(source_url)
+        if price is not _UNSET:
+            normalized_price = _normalize_price_value(price)
+            if normalized_price is not None and normalized_price < 0:
+                raise ValueError("Price must be non-negative")
+            offer.price = normalized_price
+        if currency is not _UNSET:
+            offer.currency = _normalize_material_supplier_offer_currency(currency)
+        if unit is not _UNSET:
+            offer.unit = _normalize_source(unit)
+        if stock is not _UNSET:
+            offer.stock = _normalize_source(stock)
+        if city is not _UNSET:
+            offer.city = _normalize_source(city)
+        if region is not _UNSET:
+            offer.region = _normalize_source(region)
+        if is_active is not _UNSET:
+            offer.is_active = bool(is_active)
+        if priority is not _UNSET:
+            offer.priority = int(priority or 0)
+        if parsed_at is not _UNSET:
+            offer.parsed_at = parsed_at
+        if price_updated_at is not _UNSET:
+            offer.price_updated_at = price_updated_at
+        if source_payload_json is not _UNSET:
+            offer.source_payload_json = source_payload_json
+
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            return None
+        db.refresh(offer)
+        if supplier is not None:
+            offer.supplier = supplier
+        return _serialize_material_supplier_offer_row(offer, supplier=supplier)
+    finally:
+        db.close()
+
+
+def delete_material_supplier_offer(offer_id: str | int) -> dict | None:
+
+    db = SessionLocal()
+
+    try:
+        offer = (
+            db.query(MaterialSupplierOfferModel)
+            .filter(MaterialSupplierOfferModel.id == int(offer_id))
+            .first()
+        )
+        if not offer:
+            return None
+
+        supplier = db.get(SupplierModel, int(offer.supplier_id))
+        serialized = _serialize_material_supplier_offer_row(offer, supplier=supplier)
+        db.delete(offer)
+        db.commit()
+        return serialized
+    finally:
+        db.close()
+
+
+def get_material_supplier_offer(offer_id: str | int) -> dict | None:
+
+    db = SessionLocal()
+
+    try:
+        offer = (
+            db.query(MaterialSupplierOfferModel)
+            .options(
+                load_only(
+                    MaterialSupplierOfferModel.id,
+                    MaterialSupplierOfferModel.material_id,
+                    MaterialSupplierOfferModel.supplier_id,
+                    MaterialSupplierOfferModel.article,
+                    MaterialSupplierOfferModel.external_product_id,
+                    MaterialSupplierOfferModel.source_url,
+                    MaterialSupplierOfferModel.price,
+                    MaterialSupplierOfferModel.currency,
+                    MaterialSupplierOfferModel.unit,
+                    MaterialSupplierOfferModel.stock,
+                    MaterialSupplierOfferModel.city,
+                    MaterialSupplierOfferModel.region,
+                    MaterialSupplierOfferModel.is_active,
+                    MaterialSupplierOfferModel.priority,
+                    MaterialSupplierOfferModel.parsed_at,
+                    MaterialSupplierOfferModel.price_updated_at,
+                    MaterialSupplierOfferModel.created_at,
+                    MaterialSupplierOfferModel.updated_at,
+                )
+            )
+            .filter(MaterialSupplierOfferModel.id == int(offer_id))
+            .first()
+        )
+
+        if not offer:
+            return None
+
+        supplier = db.get(SupplierModel, int(offer.supplier_id))
+        return _serialize_material_supplier_offer_row(offer, supplier=supplier)
+    finally:
+        db.close()
 
 
 def _normalize_import_source_url(value: str | None) -> str | None:
@@ -611,6 +1230,45 @@ def get_supplier_by_id(item_id: str | int) -> dict | None:
         db.close()
 
 
+def get_supplier_by_code(code: str) -> dict | None:
+
+    normalized_code = str(code or "").strip()
+    if not normalized_code:
+        return None
+
+    db = SessionLocal()
+
+    try:
+        item = db.query(SupplierModel).filter(SupplierModel.code == normalized_code).first()
+        if item:
+            return _serialize_supplier(item)
+
+        normalized_code_key = normalized_code.casefold()
+        supplier_aliases = {
+            "viyar": {"viyar", "VIYAR", "Viyar", "віяр", "ВІЯР", "Віяр"},
+            "kronas": {"kronas", "KRONAS", "Kronas", "кронас", "Кронас", "КРОНАС"},
+        }.get(normalized_code_key)
+
+        if not supplier_aliases:
+            return None
+
+        normalized_aliases = {str(alias).strip() for alias in supplier_aliases if str(alias).strip()}
+        if not normalized_aliases:
+            return None
+
+        item = (
+            db.query(SupplierModel)
+            .filter(
+                SupplierModel.code.in_(normalized_aliases)
+                | SupplierModel.name.in_(normalized_aliases)
+            )
+            .first()
+        )
+        return _serialize_supplier(item) if item else None
+    finally:
+        db.close()
+
+
 def _generate_supplier_code(name: str | None, code: str | None = None) -> str:
 
     normalized_code = _normalize_fitting_value(code)
@@ -726,6 +1384,36 @@ def delete_supplier(item_id: str | int) -> dict | None:
     except IntegrityError:
         db.rollback()
         return None
+    finally:
+        db.close()
+
+
+def count_supplier_offer_usage(supplier_id: str | int) -> int:
+
+    db = SessionLocal()
+
+    try:
+        return int(
+            db.query(func.count(FittingSupplierOfferModel.id))
+            .filter(FittingSupplierOfferModel.supplier_id == int(supplier_id))
+            .scalar()
+            or 0,
+        )
+    finally:
+        db.close()
+
+
+def count_material_supplier_offer_usage(supplier_id: str | int) -> int:
+
+    db = SessionLocal()
+
+    try:
+        return int(
+            db.query(func.count(MaterialSupplierOfferModel.id))
+            .filter(MaterialSupplierOfferModel.supplier_id == int(supplier_id))
+            .scalar()
+            or 0,
+        )
     finally:
         db.close()
 
@@ -1239,6 +1927,229 @@ def _load_material_edges_payload(
                 "current_price_city": active_price_row["city"] if active_price_row else None,
                 "current_price_exact": bool(exact_price_row),
                 "prices": normalized_prices,
+            }
+        )
+
+    return payload
+
+
+def _load_material_canonical_edges_payload(
+    db,
+    material_ids: list[int],
+    *,
+    material_articles: list[str] | None = None,
+    city: str | None = None,
+) -> dict[str, list[dict]]:
+
+    if not material_ids:
+        return {}
+
+    article_rows = (
+        db.query(MaterialModel.id, MaterialModel.article)
+        .filter(MaterialModel.id.in_(material_ids))
+        .all()
+    )
+    article_by_material_id = {
+        int(row.id): str(row.article)
+        for row in article_rows
+        if row.id is not None and row.article
+    }
+
+    if material_articles:
+        allowed_articles = {str(article) for article in material_articles if article}
+        article_by_material_id = {
+            material_id: article
+            for material_id, article in article_by_material_id.items()
+            if article in allowed_articles
+        }
+
+    if not article_by_material_id:
+        return {}
+
+    material_rows = (
+        db.query(
+            MaterialEdgeRelationModel,
+            CanonicalEdgeModel,
+        )
+        .join(CanonicalEdgeModel, CanonicalEdgeModel.id == MaterialEdgeRelationModel.edge_id)
+        .filter(MaterialEdgeRelationModel.material_id.in_(article_by_material_id.keys()))
+        .order_by(
+            MaterialEdgeRelationModel.material_id.asc(),
+            MaterialEdgeRelationModel.relation_type.asc(),
+            MaterialEdgeRelationModel.id.asc(),
+        )
+        .all()
+    )
+
+    if not material_rows:
+        return {}
+
+    edge_ids = [int(edge.id) for _, edge in material_rows if edge and edge.id is not None]
+    manufacturer_profiles = _load_material_manufacturer_profiles(
+        db,
+        [
+            int(edge.manufacturer_id)
+            for _, edge in material_rows
+            if edge and edge.manufacturer_id is not None
+        ],
+    )
+    offer_rows = (
+        db.query(EdgeSupplierOfferModel, SupplierModel)
+        .outerjoin(SupplierModel, SupplierModel.id == EdgeSupplierOfferModel.supplier_id)
+        .filter(EdgeSupplierOfferModel.edge_id.in_(edge_ids))
+        .order_by(
+            EdgeSupplierOfferModel.edge_id.asc(),
+            EdgeSupplierOfferModel.priority.asc(),
+            EdgeSupplierOfferModel.id.asc(),
+        )
+        .all()
+    )
+    offer_ids = [int(offer.id) for offer, _ in offer_rows if offer and offer.id is not None]
+    price_rows = (
+        db.query(EdgeSupplierOfferPriceModel)
+        .filter(EdgeSupplierOfferPriceModel.offer_id.in_(offer_ids))
+        .order_by(
+            EdgeSupplierOfferPriceModel.offer_id.asc(),
+            EdgeSupplierOfferPriceModel.city.asc(),
+            EdgeSupplierOfferPriceModel.id.asc(),
+        )
+        .all()
+    )
+
+    prices_by_offer_id: dict[int, list[EdgeSupplierOfferPriceModel]] = defaultdict(list)
+    for row in price_rows:
+        prices_by_offer_id[int(row.offer_id)].append(row)
+
+    offers_by_edge_id: dict[int, list[dict]] = defaultdict(list)
+    for offer_row, supplier_row in offer_rows:
+        if not offer_row or offer_row.edge_id is None:
+            continue
+
+        sorted_prices = sorted(
+            prices_by_offer_id.get(int(offer_row.id), []),
+            key=lambda price_row: ((price_row.city or ""), price_row.id),
+        )
+        normalized_prices = [
+            {
+                "city": price.city,
+                "price": _normalize_price_value(price.price),
+                "currency": price.currency,
+                "availability": price.availability,
+            }
+            for price in sorted_prices
+        ]
+        exact_price_row = next(
+            (
+                price
+                for price in normalized_prices
+                if city and price["city"] == city and price["price"] is not None
+            ),
+            None,
+        )
+        fallback_price_row = next(
+            (
+                price
+                for price in normalized_prices
+                if price["price"] is not None
+            ),
+            None,
+        )
+        active_price_row = exact_price_row if city else fallback_price_row
+        supplier_name = getattr(supplier_row, "name", None) if supplier_row else None
+        supplier_logo_url = getattr(supplier_row, "logo_url", None) if supplier_row else None
+
+        offers_by_edge_id[int(offer_row.edge_id)].append(
+            {
+                "id": int(offer_row.id),
+                "edge_id": int(offer_row.edge_id),
+                "supplier_id": int(offer_row.supplier_id),
+                "supplier_name": supplier_name,
+                "supplier_logo_url": supplier_logo_url,
+                "article": offer_row.article,
+                "external_product_id": offer_row.external_product_id,
+                "source_url": offer_row.source_url,
+                "unit": offer_row.unit,
+                "stock": offer_row.stock,
+                "availability": active_price_row["availability"] if active_price_row else None,
+                "is_active": bool(offer_row.is_active),
+                "priority": int(offer_row.priority or 0),
+                "parsed_at": offer_row.parsed_at,
+                "price_updated_at": offer_row.price_updated_at,
+                "created_at": offer_row.created_at,
+                "updated_at": offer_row.updated_at,
+                "prices": normalized_prices,
+                "_active_price": active_price_row,
+            }
+        )
+
+    payload: dict[str, list[dict]] = defaultdict(list)
+    for relation_row, edge_row in material_rows:
+        if not relation_row or not edge_row:
+            continue
+        article = article_by_material_id.get(int(relation_row.material_id))
+        if not article:
+            continue
+
+        offer_candidates = offers_by_edge_id.get(int(edge_row.id), [])
+        primary_offer = offer_candidates[0] if offer_candidates else None
+        active_price_row = (primary_offer or {}).get("_active_price") if primary_offer else None
+        edge_current_price = active_price_row["price"] if active_price_row else None
+        edge_current_price_city = active_price_row["city"] if active_price_row else None
+        edge_prices = (primary_offer or {}).get("prices", []) if primary_offer else []
+        if not edge_prices and offer_candidates:
+            edge_prices = offer_candidates[0].get("prices", [])
+
+        payload[article].append(
+            {
+                "id": str(edge_row.id),
+                "edge_key": f"recommended:{edge_row.id}",
+                "label": None,
+                "relation_type": relation_row.relation_type,
+                "manufacturer_id": int(edge_row.manufacturer_id) if edge_row.manufacturer_id is not None else None,
+                "manufacturer_name": None,
+                "manufacturer_article": edge_row.manufacturer_article,
+                "material_type": edge_row.material_type,
+                "width_mm": edge_row.width_mm,
+                "thickness_mm": edge_row.thickness_mm,
+                "article": primary_offer["article"] if primary_offer else None,
+                "name": edge_row.name,
+                "thickness": (
+                    f"{edge_row.thickness_mm:g} мм"
+                    if edge_row.thickness_mm is not None
+                    else None
+                ),
+                "image": edge_row.image_url,
+                "has_cached_image": False,
+                "source_url": primary_offer["source_url"] if primary_offer else relation_row.source_url,
+                "source_site": _detect_source_site((primary_offer or {}).get("source_url") or relation_row.source_url),
+                "current_price": edge_current_price,
+                "current_price_city": edge_current_price_city,
+                "prices": [
+                    {
+                        "city": price.get("city"),
+                        "price": price.get("price"),
+                    }
+                    for price in edge_prices
+                ],
+                "supplier_offers": [
+                    {
+                        **{key: value for key, value in offer.items() if not key.startswith("_")},
+                        "prices": [
+                            {
+                                "city": price.get("city"),
+                                "price": price.get("price"),
+                                "currency": price.get("currency"),
+                                "availability": price.get("availability"),
+                            }
+                            for price in offer.get("prices", [])
+                        ],
+                    }
+                    for offer in offer_candidates
+                ],
+                "source_supplier_id": relation_row.source_supplier_id,
+                "manufacturer_name": manufacturer_profiles.get(int(edge_row.manufacturer_id), {}).get("name")
+                if edge_row.manufacturer_id is not None
+                else None,
             }
         )
 
@@ -1785,6 +2696,7 @@ def list_materials(
                 MaterialModel.product_type,
                 MaterialModel.owner_user_id,
                 MaterialModel.category,
+                MaterialModel.manufacturer_id,
                 MaterialModel.tg_file_id,
                 MaterialModel.is_default,
             )
@@ -1845,6 +2757,10 @@ def list_materials(
 
         material_prices = db.query(MaterialPriceModel).all()
         prices_by_article: dict[str, list[MaterialPriceModel]] = defaultdict(list)
+        manufacturer_profiles = _load_material_manufacturer_profiles(
+            db,
+            [item.manufacturer_id for item in materials],
+        )
         cached_material_articles = {
             row[0]
             for row in (
@@ -1912,6 +2828,17 @@ def list_materials(
                     "dimensions": item.dimensions,
                     "thickness": item.thickness,
                     "category": item.category,
+                    "manufacturer_id": int(item.manufacturer_id) if item.manufacturer_id is not None else None,
+                    "manufacturer_name": (
+                        manufacturer_profiles.get(int(item.manufacturer_id), {}).get("name")
+                        if item.manufacturer_id is not None
+                        else None
+                    ),
+                    "manufacturer_logo_url": (
+                        manufacturer_profiles.get(int(item.manufacturer_id), {}).get("logo_url")
+                        if item.manufacturer_id is not None
+                        else None
+                    ),
                     "image": item.image,
                     "source_url": item.source_url,
                     "source_site": _detect_source_site(item.source_url),
@@ -2908,6 +3835,7 @@ def get_material_by_article(
     article: str,
     viewer_user_id: str | None = None,
     viewer_role: str | None = None,
+    city: str | None = None,
 ) -> dict | None:
 
     db = SessionLocal()
@@ -2922,6 +3850,13 @@ def get_material_by_article(
 
         if not item:
             return None
+
+        manufacturer_profile = None
+        if item.manufacturer_id is not None:
+            manufacturer_profile = _load_material_manufacturer_profiles(
+                db,
+                [item.manufacturer_id],
+            ).get(int(item.manufacturer_id))
 
         if (viewer_user_id is not None or viewer_role is not None) and not _material_visible_to_viewer(
             item,
@@ -2945,6 +3880,9 @@ def get_material_by_article(
             "dimensions": item.dimensions,
             "thickness": item.thickness,
             "category": item.category,
+            "manufacturer_id": int(item.manufacturer_id) if item.manufacturer_id is not None else None,
+            "manufacturer_name": (manufacturer_profile or {}).get("name"),
+            "manufacturer_logo_url": (manufacturer_profile or {}).get("logo_url"),
             "image": item.image,
             "source_url": item.source_url,
             "source": item.source,
@@ -2958,6 +3896,7 @@ def get_material_by_article(
             "image_cached_content_type": item.image_cached_content_type,
             "image_source_url": item.image_source_url or item.image,
             "image_cached_hash": item.image_cached_hash,
+            "images": _list_material_images_for_db(db, int(item.id)),
             "imported_at": item.imported_at,
             "static_updated_at": item.static_updated_at,
             "prices": [
@@ -2972,15 +3911,74 @@ def get_material_by_article(
                 )
             ],
             "current_price_details": None,
-            "edge_options": _load_material_edges_payload(
-                db,
-                [item.article],
-                city=None,
-            ).get(item.article, []),
+            "supplier_offers": _list_material_supplier_offers(db, item.id),
+            "edge_options": [
+                *(
+                    _load_material_edges_payload(
+                        db,
+                        [item.article],
+                        city=city,
+                    ).get(item.article, [])
+                ),
+                *(
+                    _load_material_canonical_edges_payload(
+                        db,
+                        [int(item.id)],
+                        material_articles=[item.article],
+                        city=city,
+                    ).get(item.article, [])
+                ),
+            ],
         }
 
     finally:
 
+        db.close()
+
+
+def list_material_images(material_id: str | int) -> list[dict]:
+
+    db = SessionLocal()
+
+    try:
+        return _list_material_images_for_db(db, int(material_id))
+    finally:
+        db.close()
+
+
+def get_material_image_by_id(article: str, image_id: str | int) -> dict | None:
+
+    db = SessionLocal()
+
+    try:
+        material = (
+            db.query(MaterialModel)
+            .filter(MaterialModel.article == article)
+            .first()
+        )
+        if not material:
+            return None
+
+        row = (
+            db.query(MaterialImageModel)
+            .options(
+                load_only(
+                    MaterialImageModel.id,
+                    MaterialImageModel.material_id,
+                    MaterialImageModel.image_cached_bytes,
+                    MaterialImageModel.image_cached_content_type,
+                )
+            )
+            .filter(MaterialImageModel.material_id == int(material.id))
+            .filter(MaterialImageModel.id == int(image_id))
+            .first()
+        )
+
+        if not row or not row.image_cached_bytes or not row.image_cached_content_type:
+            return None
+
+        return _serialize_material_image_blob(row)
+    finally:
         db.close()
 
 
@@ -2992,6 +3990,7 @@ def update_material(
     color: str | None | object = _UNSET,
     dimensions: str | None | object = _UNSET,
     thickness: str | None | object = _UNSET,
+    manufacturer_id: int | None | object = _UNSET,
     price: float | None | object = _UNSET,
     price_city: str | None = None,
 ) -> dict | None:
@@ -3018,6 +4017,8 @@ def update_material(
             item.dimensions = _normalize_source(dimensions)
         if thickness is not _UNSET:
             item.thickness = _normalize_source(thickness)
+        if manufacturer_id is not _UNSET:
+            item.manufacturer_id = int(manufacturer_id) if manufacturer_id is not None else None
 
         if price is not _UNSET:
             normalized_city = _normalize_source(price_city)
@@ -3078,6 +4079,8 @@ def upsert_material(
     image_cached_hash: str | None = None,
     imported_at: datetime | None = None,
     static_updated_at: datetime | None = None,
+    manufacturer_id: int | None | object = _UNSET,
+    prepared_gallery_images: Sequence[PreparedFittingGalleryImage] | None = None,
 ) -> dict:
 
     db = SessionLocal()
@@ -3104,6 +4107,8 @@ def upsert_material(
         item.category = category
         item.source = _normalize_source(source) or _detect_source_site(source_url)
         item.product_type = _normalize_source(product_type) or category
+        if manufacturer_id is not _UNSET:
+            item.manufacturer_id = int(manufacturer_id) if manufacturer_id is not None else None
         normalized_new_image = str(image or "").strip() or None
         normalized_old_image = str(item.image or "").strip() or None
 
@@ -3130,6 +4135,18 @@ def upsert_material(
             item.imported_at = imported_at
         if static_updated_at is not None:
             item.static_updated_at = static_updated_at
+        if prepared_gallery_images is not None:
+            if item.id is None:
+                db.flush()
+            db.query(MaterialImageModel).filter(
+                MaterialImageModel.material_id == int(item.id)
+            ).delete(synchronize_session=False)
+            if prepared_gallery_images:
+                _add_prepared_material_gallery_images(
+                    db,
+                    material_id=int(item.id),
+                    prepared_gallery_images=prepared_gallery_images,
+                )
 
         db.commit()
         db.refresh(item)
@@ -3148,6 +4165,17 @@ def upsert_material(
             "dimensions": item.dimensions,
             "thickness": item.thickness,
             "category": item.category,
+            "manufacturer_id": int(item.manufacturer_id) if item.manufacturer_id is not None else None,
+            "manufacturer_name": (
+                _load_material_manufacturer_profiles(db, [item.manufacturer_id]).get(int(item.manufacturer_id), {}).get("name")
+                if item.manufacturer_id is not None
+                else None
+            ),
+            "manufacturer_logo_url": (
+                _load_material_manufacturer_profiles(db, [item.manufacturer_id]).get(int(item.manufacturer_id), {}).get("logo_url")
+                if item.manufacturer_id is not None
+                else None
+            ),
             "image": item.image,
             "source_url": item.source_url,
             "source": item.source,
@@ -3161,6 +4189,7 @@ def upsert_material(
             "image_cached_content_type": item.image_cached_content_type,
             "image_source_url": item.image_source_url,
             "image_cached_hash": item.image_cached_hash,
+            "images": _list_material_images_for_db(db, int(item.id)),
             "imported_at": item.imported_at,
             "static_updated_at": item.static_updated_at,
         }
@@ -3195,6 +4224,9 @@ def delete_material(article: str) -> dict | None:
             .filter(MaterialUserLinkModel.material_article == article)
             .delete(synchronize_session=False)
         )
+        db.query(MaterialImageModel).filter(
+            MaterialImageModel.material_id == int(item.id)
+        ).delete(synchronize_session=False)
         db.delete(item)
         db.commit()
 
