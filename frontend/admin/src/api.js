@@ -672,6 +672,72 @@ export async function uploadMaterialCategoryImage(token, file, timeoutMs = 30000
   }
 }
 
+export async function uploadEdgeImage(token, file, timeoutMs = 30000) {
+  if (!file) {
+    return {
+      success: false,
+      status: 0,
+      error: "File is required",
+    };
+  }
+
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/catalog/edges/image`, {
+      method: "POST",
+      headers: authHeaders(token),
+      body: formData,
+      signal: controller.signal,
+    });
+
+    const responseText = await response.text();
+    let payload = {};
+
+    if (responseText) {
+      try {
+        payload = JSON.parse(responseText);
+      } catch {
+        payload = {
+          success: false,
+          error: responseText.trim().startsWith("<")
+            ? `Server returned an HTML error page (HTTP ${response.status})`
+            : `Server returned an invalid response (HTTP ${response.status})`,
+        };
+      }
+    }
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        dispatchUnauthorized(token, "/catalog/edges/image", response.status);
+      }
+
+      return {
+        success: false,
+        error: extractErrorMessage(payload),
+        status: response.status,
+      };
+    }
+
+    return payload;
+  } catch (error) {
+    return {
+      success: false,
+      error:
+        error?.name === "AbortError"
+          ? `Request timed out after ${Math.round(timeoutMs / 1000)} seconds`
+          : error?.message || "Network request failed",
+      status: 0,
+    };
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 export async function login(email, password) {
   return request("/auth/login", {
     method: "POST",
@@ -720,6 +786,105 @@ export async function getMaterialsCatalog(token, params = {}) {
   return request(`/catalog/materials${query ? `?${query}` : ""}`, {
     headers: authHeaders(token),
     timeoutMs: 60000,
+  });
+}
+
+export async function getEdgesCatalog(token, params = {}) {
+  const searchParams = new URLSearchParams();
+
+  if (params.search) {
+    searchParams.set("search", params.search);
+  }
+
+  if (params.manufacturer_id) {
+    searchParams.set("manufacturer_id", params.manufacturer_id);
+  }
+
+  if (params.supplier_id) {
+    searchParams.set("supplier_id", params.supplier_id);
+  }
+
+  const query = searchParams.toString();
+
+  return request(`/catalog/edges${query ? `?${query}` : ""}`, {
+    headers: authHeaders(token),
+    timeoutMs: 30000,
+  });
+}
+
+export async function createEdgeCatalog(token, payload) {
+  return request("/catalog/edges", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function previewEdgeCatalogSource(token, payload) {
+  return request("/catalog/edges/source-preview", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function createEdgeCatalogFromSource(token, payload) {
+  return request("/catalog/edges/source-create", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getEdgeCatalogDetail(token, edgeId) {
+  const normalizedEdgeId = String(edgeId || "").trim();
+
+  if (!normalizedEdgeId) {
+    return {
+      success: false,
+      status: 0,
+      error: "Edge ID is required",
+    };
+  }
+
+  return request(`/catalog/edges/${encodeURIComponent(normalizedEdgeId)}`, {
+    headers: authHeaders(token),
+    timeoutMs: 30000,
+  });
+}
+
+export async function updateEdgeCatalog(token, edgeId, payload) {
+  const normalizedEdgeId = String(edgeId || "").trim();
+
+  if (!normalizedEdgeId) {
+    return {
+      success: false,
+      status: 0,
+      error: "Edge ID is required",
+    };
+  }
+
+  return request(`/catalog/edges/${encodeURIComponent(normalizedEdgeId)}`, {
+    method: "PATCH",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteEdgeCatalog(token, edgeId) {
+  const normalizedEdgeId = String(edgeId || "").trim();
+
+  if (!normalizedEdgeId) {
+    return {
+      success: false,
+      status: 0,
+      error: "Edge ID is required",
+    };
+  }
+
+  return request(`/catalog/edges/${encodeURIComponent(normalizedEdgeId)}`, {
+    method: "DELETE",
+    headers: authHeaders(token),
   });
 }
 
@@ -1841,6 +2006,80 @@ export async function attachMaterialEdge(token, article, payload) {
     headers: authHeaders(token),
     body: JSON.stringify(payload),
     timeoutMs: 120000,
+  });
+}
+
+export async function listMaterialCanonicalEdges(token, article) {
+  const normalizedArticle = String(article || "").trim();
+
+  if (!normalizedArticle) {
+    return {
+      success: false,
+      error: "Material article is required",
+      status: 0,
+    };
+  }
+
+  return request(`/catalog/materials/${encodeURIComponent(normalizedArticle)}/canonical-edges`, {
+    headers: authHeaders(token),
+    timeoutMs: 30000,
+  });
+}
+
+export async function attachMaterialCanonicalEdge(token, article, edgeId) {
+  const normalizedArticle = String(article || "").trim();
+  const normalizedEdgeId = String(edgeId || "").trim();
+
+  if (!normalizedArticle) {
+    return {
+      success: false,
+      error: "Material article is required",
+      status: 0,
+    };
+  }
+
+  if (!normalizedEdgeId) {
+    return {
+      success: false,
+      error: "Edge ID is required",
+      status: 0,
+    };
+  }
+
+  return request(`/catalog/materials/${encodeURIComponent(normalizedArticle)}/canonical-edges`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({
+      edge_id: Number(normalizedEdgeId),
+    }),
+    timeoutMs: 30000,
+  });
+}
+
+export async function deleteMaterialCanonicalEdge(token, article, edgeId) {
+  const normalizedArticle = String(article || "").trim();
+  const normalizedEdgeId = String(edgeId || "").trim();
+
+  if (!normalizedArticle) {
+    return {
+      success: false,
+      error: "Material article is required",
+      status: 0,
+    };
+  }
+
+  if (!normalizedEdgeId) {
+    return {
+      success: false,
+      error: "Edge ID is required",
+      status: 0,
+    };
+  }
+
+  return request(`/catalog/materials/${encodeURIComponent(normalizedArticle)}/canonical-edges/${encodeURIComponent(normalizedEdgeId)}`, {
+    method: "DELETE",
+    headers: authHeaders(token),
+    timeoutMs: 30000,
   });
 }
 

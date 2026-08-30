@@ -276,6 +276,28 @@ VIYAR_EDGE_SECTION_SELECTOR = (
 )
 
 
+def _find_viyar_edge_section(soup):
+
+    section = soup.select_one(VIYAR_EDGE_SECTION_SELECTOR)
+    if section:
+        return section
+
+    for candidate in soup.select("[data-section_name]"):
+
+        section_name = _normalize_viyar_edge_text(candidate.get("data-section_name"))
+        if not section_name or "крайк" not in section_name.casefold():
+            continue
+
+        list_name = _normalize_viyar_edge_text(candidate.get("data-list_name"))
+        if list_name and "пластик" not in list_name.casefold():
+            continue
+
+        if candidate.select_one("a.vr-card__link[href]"):
+            return candidate
+
+    return None
+
+
 def _extract_viyar_edge_article(value):
 
     if not value:
@@ -481,7 +503,7 @@ def _extract_viyar_edge_dimensions_from_text(value):
 def extract_recommended_edge_cards(html):
 
     soup = BeautifulSoup(html, "html.parser")
-    section = soup.select_one(VIYAR_EDGE_SECTION_SELECTOR)
+    section = _find_viyar_edge_section(soup)
 
     if not section:
         return []
@@ -869,6 +891,64 @@ def _classify_viyar_edge_preview_status(parsed):
         "status": "parsed",
         "reason": None,
         "missing_fields": [],
+    }
+
+
+async def preview_viyar_edge_product(
+    product_url,
+    page,
+    *,
+    fetcher=None,
+):
+
+    if fetcher is None:
+        fetcher = fetch_with_retry
+
+    normalized_product_url = _normalize_viyar_edge_url(product_url)
+    product_html = await fetcher(page, normalized_product_url)
+
+    if not product_html:
+        return {
+            "success": False,
+            "error": "Edge page could not be fetched",
+            "source_url": normalized_product_url,
+            "items": [],
+            "preview_count": 0,
+        }
+
+    parsed = parse_viyar_edge_detail(product_html, source_url=normalized_product_url)
+    classification = _classify_viyar_edge_preview_status(parsed)
+
+    if classification["status"] != "parsed":
+        return {
+            "success": False,
+            "error": "Edge candidate could not be parsed",
+            "source_url": normalized_product_url,
+            "items": [],
+            "preview_count": 0,
+        }
+
+    canonical = parsed.get("canonical_candidate") or {}
+    supplier = parsed.get("supplier_offer_candidate") or {}
+    discovered_card = {
+        "article": canonical.get("manufacturer_article") or supplier.get("article"),
+        "name": canonical.get("name"),
+        "source_url": normalized_product_url,
+        "image_url": canonical.get("image_url"),
+        "source": "viyar",
+    }
+
+    return {
+        "success": True,
+        "source_url": normalized_product_url,
+        "items": [
+            _build_viyar_edge_preview_entry(
+                discovered_card,
+                parsed,
+                "parsed",
+            )
+        ],
+        "preview_count": 1,
     }
 
 
@@ -1401,4 +1481,3 @@ async def run_parser():
             )
 
         await browser.close()
-

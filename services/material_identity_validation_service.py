@@ -175,29 +175,6 @@ def _extract_manufacturer(material: dict[str, Any]) -> str:
                 if candidate:
                     return candidate
 
-    name = _clean_text(material.get("name"))
-    if name:
-        tokens = name.split()
-        decor_code = _extract_decor_code(material)
-        if decor_code:
-            normalized_decor_code = _normalize_code(decor_code)
-            for index, token in enumerate(tokens):
-                if _normalize_code(token) == normalized_decor_code:
-                    for previous_token in reversed(tokens[:index]):
-                        candidate = _clean_text(previous_token)
-                        normalized_candidate = _normalize_for_compare(candidate)
-                        if candidate and normalized_candidate not in _MANUFACTURER_DESCRIPTOR_WORDS:
-                            return candidate
-                    break
-
-        for token in tokens:
-            candidate = _clean_text(token)
-            normalized_candidate = _normalize_for_compare(candidate)
-            if not candidate or normalized_candidate in _MANUFACTURER_DESCRIPTOR_WORDS:
-              continue
-            if re.search(r"[A-Za-zА-Яа-яІЇЄҐ]", candidate) and not re.search(r"\d", candidate):
-                return candidate
-
     return ""
 
 
@@ -351,7 +328,7 @@ def validate_material_supplier_offer_identity(
         "dimensions": "dimensions",
     }
 
-    evidence_fields = {"manufacturer", "decor_code", "structure", "thickness", "dimensions"}
+    evidence_fields = {"manufacturer", "category", "decor_code", "structure", "thickness", "dimensions"}
 
     for field in field_labels:
         existing_value = existing.get(field, "")
@@ -374,10 +351,10 @@ def validate_material_supplier_offer_identity(
 
     if conflicts:
         status = "conflict"
-    elif missing_fields:
-        status = "needs_review"
     elif evidence_score >= 3:
         status = "compatible"
+    elif missing_fields:
+        status = "needs_review"
     else:
         status = "needs_review"
 

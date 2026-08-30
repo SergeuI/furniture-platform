@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from database.repositories.edge_foundation_repository import EdgeFoundationRepository
 from database.session import SessionLocal
-from services.viyar_parser import preview_viyar_recommended_edges
+from services.viyar_parser import preview_viyar_edge_product, preview_viyar_recommended_edges
 
 
 class EdgeFoundationPersistenceService:
@@ -79,10 +79,11 @@ class EdgeFoundationPersistenceService:
     def persist_preview_item(
         self,
         *,
-        material_id: int,
+        material_id: int | None,
         preview_item: dict[str, Any],
         city: str | None = None,
         relation_source_url: str | None = None,
+        create_relation: bool = True,
     ) -> dict[str, Any]:
         preview_status = str(preview_item.get("status") or "").strip().lower()
         if preview_status == "failed":
@@ -188,15 +189,17 @@ class EdgeFoundationPersistenceService:
                 checked_at=datetime.utcnow(),
             )
 
-        relation = self.repository.create_relation(
-            material_id=int(material_id),
-            edge_id=int(edge.id),
-            relation_type="recommended",
-            source_supplier_id=int(supplier_id),
-            source_url=relation_source_url
-            or (preview_item.get("discovered_card") or {}).get("source_url")
-            or supplier.get("source_url"),
-        )
+        relation = None
+        if create_relation and material_id is not None:
+            relation = self.repository.create_relation(
+                material_id=int(material_id),
+                edge_id=int(edge.id),
+                relation_type="recommended",
+                source_supplier_id=int(supplier_id),
+                source_url=relation_source_url
+                or (preview_item.get("discovered_card") or {}).get("source_url")
+                or supplier.get("source_url"),
+            )
 
         return {
             "status": (
@@ -205,7 +208,7 @@ class EdgeFoundationPersistenceService:
                 else "reused"
             ),
             "reason": None,
-            "material_id": int(material_id),
+            "material_id": int(material_id) if material_id is not None else None,
             "manufacturer_id": int(manufacturer.id),
             "edge_id": int(edge.id),
             "edge_created": edge_created,
@@ -216,6 +219,51 @@ class EdgeFoundationPersistenceService:
             "price_id": int(price.id) if price is not None else None,
             "price_created": existing_price is None if city is not None else False,
             "preview_item": preview_item,
+        }
+
+    def persist_preview_result_for_catalog(
+        self,
+        *,
+        preview_result: dict[str, Any],
+        city: str | None = None,
+    ) -> dict[str, Any]:
+        items = preview_result.get("items") or []
+        results: list[dict[str, Any]] = []
+
+        transaction = nullcontext() if self.session.in_transaction() else self.session.begin()
+        with transaction:
+            for preview_item in items:
+                try:
+                    with self.session.begin_nested():
+                        results.append(
+                            self.persist_preview_item(
+                                material_id=None,
+                                preview_item=preview_item,
+                                city=city,
+                                relation_source_url=None,
+                                create_relation=False,
+                            )
+                        )
+                except Exception as exc:  # pragma: no cover - defensive fallback
+                    results.append(
+                        {
+                            "status": "failed",
+                            "reason": str(exc) or "persistence_failed",
+                            "preview_item": preview_item,
+                        }
+                    )
+
+        return {
+            "success": True,
+            "city": city,
+            "items": results,
+            "counts": {
+                "items": len(results),
+                "persisted": sum(1 for item in results if item.get("status") == "persisted"),
+                "reused": sum(1 for item in results if item.get("status") == "reused"),
+                "needs_review": sum(1 for item in results if item.get("status") == "needs_review"),
+                "failed": sum(1 for item in results if item.get("status") == "failed"),
+            },
         }
 
     @staticmethod
@@ -305,6 +353,95 @@ async def _fetch_viyar_recommended_edges_preview_live(
         finally:
             await context.close()
             await browser.close()
+
+
+async def _fetch_viyar_edge_product_preview_live(
+    *,
+    product_url: str,
+    selected_city: str | None = None,
+    cookie_override: str | None = None,
+) -> dict[str, Any]:
+    normalized_product_url = str(product_url or "").strip()
+    if not normalized_product_url:
+        return {
+            "success": False,
+            "error": "product_url is required",
+            "source_url": None,
+            "items": [],
+            "preview_count": 0,
+        }
+
+    async with async_playwright() as playwright:
+        browser = await playwright.chromium.launch(headless=True)
+        context = await browser.new_context(
+            locale="uk-UA",
+            user_agent=(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/137.0.0.0 Safari/537.36"
+            ),
+        )
+
+        cookies = []
+        if selected_city:
+            cookies.append(
+                {
+                    "name": "filial",
+                    "value": str(selected_city).strip().upper(),
+                    "domain": ".viyar.ua",
+                    "path": "/",
+                }
+            )
+
+        for chunk in str(cookie_override or "").split(";"):
+            part = chunk.strip()
+            if not part or "=" not in part:
+                continue
+            name, value = part.split("=", 1)
+            cookies.append(
+                {
+                    "name": name.strip(),
+                    "value": value.strip(),
+                    "domain": ".viyar.ua",
+                    "path": "/",
+                }
+            )
+
+        if cookies:
+            await context.add_cookies(cookies)
+
+        page = await context.new_page()
+        try:
+            return await preview_viyar_edge_product(normalized_product_url, page)
+        finally:
+            await context.close()
+            await browser.close()
+
+
+async def preview_viyar_edge_product_for_catalog(
+    *,
+    product_url: str,
+    selected_city: str | None = None,
+    cookie_override: str | None = None,
+) -> dict[str, Any]:
+    return await _fetch_viyar_edge_product_preview_live(
+        product_url=product_url,
+        selected_city=selected_city,
+        cookie_override=cookie_override,
+    )
+
+
+async def preview_viyar_recommended_edges_for_catalog(
+    *,
+    source_url: str,
+    selected_city: str | None = None,
+    cookie_override: str | None = None,
+) -> dict[str, Any]:
+    return await _fetch_viyar_recommended_edges_preview_live(
+        material_source_url=source_url,
+        selected_city=selected_city,
+        cookie_override=cookie_override,
+    )
 
 
 async def persist_viyar_recommended_edges_for_material_import(

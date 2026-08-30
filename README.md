@@ -1,6 +1,10 @@
 # furniture-platform
 Furniture calculation platform with Telegram bot, FastAPI backend, BOM engine and CNC generation
 
+## Documentation
+
+- [Admin UI standards for catalog and taxonomy screens](docs/admin-ui-standards.md)
+
 ## Database safety
 
 The app now reads the SQLite file path from environment variables instead of a hardcoded filename.

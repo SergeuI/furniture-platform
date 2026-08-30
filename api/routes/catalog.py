@@ -34,6 +34,15 @@ from schemas.catalog import (
     CatalogItemActiveSchema,
     CatalogItemCreateSchema,
     CatalogItemListResponseSchema,
+    EdgeCatalogCreateSchema,
+    EdgeCatalogDetailResponseSchema,
+    EdgeCatalogListResponseSchema,
+    EdgeCatalogOperationResponseSchema,
+    EdgeCatalogSourceCreateResponseSchema,
+    EdgeCatalogSourceCreateSchema,
+    EdgeCatalogSourcePreviewRequestSchema,
+    EdgeCatalogSourcePreviewResponseSchema,
+    EdgeCatalogUpdateSchema,
     CatalogItemOperationResponseSchema,
     FittingCatalogCreateSchema,
     FittingCatalogDetailResponseSchema,
@@ -80,6 +89,9 @@ from schemas.catalog import (
     MaterialCatalogManufacturerUpdateSchema,
     MaterialCatalogUpdateSchema,
     MaterialCatalogImageSchema,
+    MaterialCanonicalEdgeAttachSchema,
+    MaterialCanonicalEdgeListResponseSchema,
+    MaterialCanonicalEdgeOperationResponseSchema,
     MaterialEdgeAttachSchema,
     MaterialEdgeOperationResponseSchema,
     MaterialCatalogOperationResponseSchema,
@@ -112,8 +124,14 @@ from database.models.fitting import (
     FittingSupplierOfferModel,
     SupplierModel,
 )
+from database.models.material_taxonomy import (
+    MaterialManufacturerModel,
+)
 from database.models.material import (
     MaterialModel,
+)
+from database.repositories.edge_foundation_repository import (
+    EdgeFoundationRepository,
 )
 from database.repositories.catalog_repository import (
     ALLOWED_CATALOG_CATEGORIES,
@@ -284,6 +302,9 @@ from services.catalog_auto_refresh_service import (
     get_catalog_auto_refresh_status,
 )
 from services.edge_foundation_persistence_service import (
+    EdgeFoundationPersistenceService,
+    preview_viyar_edge_product_for_catalog,
+    preview_viyar_recommended_edges_for_catalog,
     persist_viyar_recommended_edges_for_material_import,
 )
 from services.upload_service import (
@@ -291,6 +312,7 @@ from services.upload_service import (
     save_manufacturer_logo_file,
     save_material_manufacturer_logo_file,
     save_material_category_image_file,
+    save_edge_image_file,
 )
 
 router = APIRouter()
@@ -543,7 +565,23 @@ async def _parse_fitting_source_or_error(source_url: str) -> tuple[dict | None, 
             "error": metadata.get("error"),
         },
     )
-    error_message = str(metadata.get("error") or "").strip() or "?? ??????? ???????? ???? ?? ??????????. ????????? ????????? ??? ????????? ???????."
+    error_message = str(metadata.get("error") or "").strip()
+    if error_message:
+        normalized_error = error_message.lower()
+        if any(
+            marker in normalized_error
+            for marker in (
+                "page.goto",
+                "net::err_",
+                "playwright",
+                "browser",
+                "protocol error",
+                "target closed",
+            )
+        ):
+            error_message = ""
+    if not error_message:
+        error_message = "Не вдалося отримати дані за посиланням. Перевірте посилання або спробуйте пізніше."
     return None, {
         "success": False,
         "error": error_message,
@@ -1405,6 +1443,21 @@ def _ensure_material_category_image_upload_access(current_user) -> None:
     )
 
 
+def _ensure_edge_image_upload_access(current_user) -> None:
+
+    with EntitlementService() as service:
+        if service.has_feature(current_user, "materials.create") or service.has_feature(current_user, "materials.edit"):
+            return
+
+    raise HTTPException(
+        status_code=403,
+        detail={
+            "success": False,
+            "error": "Insufficient permissions",
+        },
+    )
+
+
 def _ensure_material_manufacturer_logo_upload_access(current_user) -> None:
 
     with EntitlementService() as service:
@@ -1535,6 +1588,171 @@ def _serialize_catalog_item(
         "value": item.value,
         "sort_order": item.sort_order,
         "is_active": item.is_active
+    }
+
+
+def _serialize_edge_catalog_offer_price(
+    price,
+) -> dict:
+    return {
+        "city": price.city,
+        "price": price.price,
+        "currency": price.currency,
+        "availability": price.availability,
+        "checked_at": price.checked_at,
+        "updated_at": price.updated_at,
+    }
+
+
+def _serialize_edge_catalog_offer(
+    offer,
+    supplier_lookup: dict[int, SupplierModel],
+    price_rows_by_offer_id: dict[int, list],
+) -> dict:
+    supplier = supplier_lookup.get(int(offer.supplier_id)) if offer.supplier_id is not None else None
+    return {
+        "id": offer.id,
+        "edge_id": offer.edge_id,
+        "supplier_id": offer.supplier_id,
+        "supplier_name": getattr(supplier, "name", None),
+        "supplier_logo_url": getattr(supplier, "logo_url", None),
+        "article": offer.article,
+        "external_product_id": offer.external_product_id,
+        "source_url": offer.source_url,
+        "unit": offer.unit,
+        "stock": offer.stock,
+        "is_active": offer.is_active,
+        "priority": offer.priority,
+        "parsed_at": offer.parsed_at,
+        "price_updated_at": offer.price_updated_at,
+        "prices": [
+            _serialize_edge_catalog_offer_price(price)
+            for price in price_rows_by_offer_id.get(int(offer.id), [])
+        ],
+    }
+
+
+def _serialize_edge_catalog_relation(
+    relation,
+    material_lookup: dict[int, MaterialModel],
+    manufacturer_lookup: dict[int, MaterialManufacturerModel],
+) -> dict:
+    material = material_lookup.get(int(relation.material_id)) if relation.material_id is not None else None
+    manufacturer = (
+        manufacturer_lookup.get(int(material.manufacturer_id))
+        if material and material.manufacturer_id is not None
+        else None
+    )
+    return {
+        "id": relation.id,
+        "material_id": relation.material_id,
+        "material_article": getattr(material, "article", None),
+        "material_name": getattr(material, "name", None),
+        "material_image": getattr(material, "image", None),
+        "material_category": getattr(material, "category", None),
+        "material_product_type": getattr(material, "product_type", None),
+        "material_dimensions": getattr(material, "dimensions", None),
+        "material_thickness": getattr(material, "thickness", None),
+        "material_manufacturer_id": getattr(material, "manufacturer_id", None),
+        "material_manufacturer_name": getattr(manufacturer, "name", None),
+        "material_manufacturer_logo_url": getattr(manufacturer, "logo_url", None),
+        "material_is_default": bool(getattr(material, "is_default", False)) if material else False,
+        "material_owner_user_id": getattr(material, "owner_user_id", None),
+        "relation_type": relation.relation_type,
+        "source_supplier_id": relation.source_supplier_id,
+        "source_url": relation.source_url,
+        "created_at": relation.created_at,
+    }
+
+
+def _is_canonical_material_edge_option(edge: dict) -> bool:
+    edge_key = str(edge.get("edge_key") or "").strip()
+    relation_type = str(edge.get("relation_type") or "").strip()
+    return bool(relation_type) and ":" in edge_key
+
+
+def _extract_canonical_material_edge_options(item: dict | None) -> list[dict]:
+    return [
+        edge
+        for edge in (item or {}).get("edge_options") or []
+        if _is_canonical_material_edge_option(edge)
+    ]
+
+
+def _serialize_edge_catalog_item(
+    edge,
+    manufacturer_lookup: dict[int, MaterialManufacturerModel],
+    supplier_lookup: dict[int, SupplierModel],
+    price_rows_by_offer_id: dict[int, list],
+    *,
+    material_relations: list | None = None,
+    material_lookup: dict[int, MaterialModel] | None = None,
+) -> dict:
+    offers = list(edge.supplier_offers or [])
+    price_summary_rows: dict[tuple[str, str], dict[str, object]] = {}
+    supplier_summary_rows: dict[int, dict[str, object]] = {}
+
+    for offer in offers:
+        supplier = supplier_lookup.get(int(offer.supplier_id)) if offer.supplier_id is not None else None
+        supplier_id = int(offer.supplier_id) if offer.supplier_id is not None else None
+        if supplier_id is not None and supplier_id not in supplier_summary_rows:
+            supplier_summary_rows[supplier_id] = {
+                "supplier_id": supplier_id,
+                "supplier_name": getattr(supplier, "name", None),
+                "supplier_logo_url": getattr(supplier, "logo_url", None),
+            }
+
+        for price in price_rows_by_offer_id.get(int(offer.id), []):
+            if price.price is None:
+              continue
+
+            currency = str(price.currency or "UAH").strip() or "UAH"
+            unit = str(offer.unit or "").strip()
+            summary_key = (currency, unit)
+            summary_row = price_summary_rows.get(summary_key)
+            if summary_row is None:
+                summary_row = {
+                    "unit": unit or None,
+                    "currency": currency,
+                    "min_price": price.price,
+                    "max_price": price.price,
+                    "offer_count": 1,
+                }
+                price_summary_rows[summary_key] = summary_row
+            else:
+                summary_row["min_price"] = min(float(summary_row["min_price"]), float(price.price)) if summary_row["min_price"] is not None else price.price
+                summary_row["max_price"] = max(float(summary_row["max_price"]), float(price.price)) if summary_row["max_price"] is not None else price.price
+                summary_row["offer_count"] = int(summary_row["offer_count"]) + 1
+
+    manufacturer = manufacturer_lookup.get(int(edge.manufacturer_id)) if edge.manufacturer_id is not None else None
+
+    return {
+        "id": edge.id,
+        "name": edge.name,
+        "manufacturer_id": edge.manufacturer_id,
+        "manufacturer_name": getattr(manufacturer, "name", None),
+        "manufacturer_logo_url": getattr(manufacturer, "logo_url", None),
+        "manufacturer_article": edge.manufacturer_article,
+        "decor_code": edge.decor_code,
+        "color": edge.color,
+        "material_type": edge.material_type,
+        "width_mm": edge.width_mm,
+        "thickness_mm": edge.thickness_mm,
+        "finish": edge.finish,
+        "image_url": edge.image_url,
+        "is_active": edge.is_active,
+        "created_at": edge.created_at,
+        "updated_at": edge.updated_at,
+        "price_summary": list(price_summary_rows.values()),
+        "supplier_summary": list(supplier_summary_rows.values()),
+        "supplier_offers": [
+            _serialize_edge_catalog_offer(offer, supplier_lookup, price_rows_by_offer_id)
+            for offer in offers
+        ],
+        "material_relations": [
+            _serialize_edge_catalog_relation(relation, material_lookup or {}, manufacturer_lookup)
+            for relation in (material_relations or [])
+        ],
     }
 
 
@@ -1688,6 +1906,473 @@ async def list_materials_route(
         "material_quota": _get_material_ownership_quota(current_user),
         "items": items,
     }
+
+
+@router.get(
+    "/edges",
+    response_model=EdgeCatalogListResponseSchema,
+)
+async def list_edges_route(
+    search: str | None = Query(default=None),
+    manufacturer_id: int | None = Query(default=None),
+    supplier_id: int | None = Query(default=None),
+    current_user = Depends(require_catalog_reader),
+):
+
+    _ensure_material_feature_access(current_user, "materials.view")
+
+    db = SessionLocal()
+    try:
+        repository = EdgeFoundationRepository(db)
+        edges = repository.list_edges_for_catalog(
+            search=search,
+            manufacturer_id=manufacturer_id,
+            supplier_id=supplier_id,
+            include_inactive=False,
+        )
+        manufacturer_lookup = {
+            manufacturer.id: manufacturer
+            for manufacturer in db.query(MaterialManufacturerModel).all()
+        }
+        supplier_lookup = {
+            supplier.id: supplier
+            for supplier in db.query(SupplierModel).all()
+        }
+        price_rows_by_offer_id = {
+            int(offer.id): repository.list_offer_prices(int(offer.id))
+            for edge in edges
+            for offer in (edge.supplier_offers or [])
+        }
+
+        return {
+            "success": True,
+        "items": [
+                _serialize_edge_catalog_item(
+                    edge,
+                    manufacturer_lookup,
+                    supplier_lookup,
+                    price_rows_by_offer_id,
+                )
+                for edge in edges
+            ],
+        }
+    finally:
+        db.close()
+
+
+@router.post(
+    "/edges/source-preview",
+    response_model=EdgeCatalogSourcePreviewResponseSchema,
+)
+async def preview_edge_source_route(
+    payload: EdgeCatalogSourcePreviewRequestSchema,
+    current_user = Depends(require_catalog_reader),
+):
+    _ensure_material_feature_access(current_user, "materials.create")
+
+    source_url = (payload.source_url or "").strip()
+    if not source_url:
+        return {
+            "success": False,
+            "error": "Source URL is required",
+        }
+
+    source_site = detect_material_source_site(source_url)
+    if source_site != "viyar":
+        return {
+            "success": False,
+            "error": "Unsupported edge source URL",
+        }
+
+    preview_result = await preview_viyar_edge_product_for_catalog(
+        product_url=source_url,
+        selected_city=(current_user.city or "").strip() or None,
+        cookie_override=await _resolve_viyar_cookie_for_user(current_user),
+    )
+    if not preview_result.get("success"):
+        return {
+            "success": False,
+            "source_url": source_url,
+            "source_site": source_site,
+            "error": preview_result.get("error") or "Unable to preview edge source",
+        }
+
+    preview_items = list(preview_result.get("items") or [])
+    if not preview_items:
+        return {
+            "success": False,
+            "source_url": source_url,
+            "source_site": source_site,
+            "error": "No edge candidate could be parsed from this URL",
+        }
+
+    return {
+        "success": True,
+        "source_url": preview_result.get("source_url") or source_url,
+        "source_site": source_site,
+        "recommended_edges_count": int(preview_result.get("preview_count") or len(preview_items)),
+        "preview_count": int(preview_result.get("preview_count") or len(preview_items)),
+        "items": preview_items,
+    }
+
+
+@router.post(
+    "/edges/source-create",
+    response_model=EdgeCatalogSourceCreateResponseSchema,
+)
+async def create_edge_from_source_route(
+    payload: EdgeCatalogSourceCreateSchema,
+    current_user = Depends(require_catalog_reader),
+):
+    _ensure_material_feature_access(current_user, "materials.create")
+
+    preview_result = payload.preview_result if isinstance(payload.preview_result, dict) else {}
+    if not preview_result.get("success"):
+        return {
+            "success": False,
+            "error": "Preview result is required",
+        }
+
+    db = SessionLocal()
+    try:
+        service = EdgeFoundationPersistenceService(session=db)
+        persistence_result = service.persist_preview_result_for_catalog(
+            preview_result=preview_result,
+            city=(payload.city or current_user.city or "").strip() or None,
+        )
+
+        counts = persistence_result.get("counts") or {}
+        persisted = int(counts.get("persisted") or 0)
+        reused = int(counts.get("reused") or 0)
+        if persisted + reused <= 0:
+            return {
+                "success": False,
+                "error": "Preview payload did not produce a canonical edge",
+                "preview_result": preview_result,
+                "persistence_result": persistence_result,
+                "summary": counts,
+            }
+
+        return {
+            "success": True,
+            "summary": persistence_result.get("counts") or {},
+            "preview_result": preview_result,
+            "persistence_result": persistence_result,
+        }
+    finally:
+        db.close()
+
+
+@router.post(
+    "/edges",
+    response_model=EdgeCatalogOperationResponseSchema,
+)
+async def create_edge_route(
+    payload: EdgeCatalogCreateSchema,
+    current_user = Depends(require_catalog_reader),
+):
+    _ensure_material_feature_access(current_user, "materials.create")
+
+    manufacturer_row = get_material_manufacturer_by_id(
+        payload.manufacturer_id,
+        viewer_user_id=current_user.id,
+        viewer_role=current_user.role,
+    )
+    if not manufacturer_row:
+        return {
+            "success": False,
+            "error": "Material manufacturer not found",
+        }
+
+    name = _normalize_admin_text(payload.name)
+    if not name:
+        return {
+            "success": False,
+            "error": "Edge name is required",
+        }
+
+    db = SessionLocal()
+    try:
+        repository = EdgeFoundationRepository(db)
+        edge = repository.create_edge(
+            manufacturer_id=int(manufacturer_row["id"]),
+            name=name,
+            manufacturer_article=_normalize_admin_text(payload.manufacturer_article) or None,
+            decor_code=_normalize_admin_text(payload.decor_code) or None,
+            color=_normalize_admin_text(payload.color) or None,
+            material_type=_normalize_admin_text(payload.material_type) or None,
+            width_mm=float(payload.width_mm),
+            thickness_mm=float(payload.thickness_mm),
+            finish=_normalize_admin_text(payload.finish) or None,
+            image_url=_normalize_admin_text(payload.image_url) or None,
+            is_active=bool(payload.is_active),
+        )
+        if edge is None:
+            return {
+                "success": False,
+                "error": "Unable to create edge",
+            }
+
+        db.commit()
+        db.refresh(edge)
+        manufacturer_lookup = {
+            manufacturer.id: manufacturer
+            for manufacturer in db.query(MaterialManufacturerModel).all()
+        }
+
+        return {
+            "success": True,
+            "item": _serialize_edge_catalog_item(
+                edge,
+                manufacturer_lookup,
+                {},
+                {},
+            ),
+        }
+    finally:
+        db.close()
+
+
+@router.get(
+    "/edges/{edge_id}",
+    response_model=EdgeCatalogDetailResponseSchema,
+)
+async def get_edge_detail_route(
+    edge_id: int,
+    current_user = Depends(require_catalog_reader),
+):
+    _ensure_material_feature_access(current_user, "materials.view")
+
+    db = SessionLocal()
+    try:
+        repository = EdgeFoundationRepository(db)
+        edge = repository.get_edge_by_id(edge_id)
+        if not edge:
+            raise HTTPException(status_code=404, detail="Edge not found")
+
+        manufacturer_lookup = {
+            manufacturer.id: manufacturer
+            for manufacturer in db.query(MaterialManufacturerModel).all()
+        }
+        supplier_lookup = {
+            supplier.id: supplier
+            for supplier in db.query(SupplierModel).all()
+        }
+        material_lookup = {
+            material.id: material
+            for material in db.query(MaterialModel).all()
+        }
+        offers = list(edge.supplier_offers or [])
+        price_rows_by_offer_id = {
+            int(offer.id): repository.list_offer_prices(int(offer.id))
+            for offer in offers
+        }
+        relations = repository.list_materials_by_edge(edge.id)
+
+        return {
+            "success": True,
+            "item": _serialize_edge_catalog_item(
+                edge,
+                manufacturer_lookup,
+                supplier_lookup,
+                price_rows_by_offer_id,
+                material_relations=relations,
+                material_lookup=material_lookup,
+            ),
+        }
+    finally:
+        db.close()
+
+
+@router.patch(
+    "/edges/{edge_id}",
+    response_model=EdgeCatalogOperationResponseSchema,
+)
+async def update_edge_route(
+    edge_id: int,
+    payload: EdgeCatalogUpdateSchema,
+    current_user = Depends(require_catalog_reader),
+):
+    _ensure_material_feature_access(current_user, "materials.edit")
+
+    db = SessionLocal()
+    try:
+        repository = EdgeFoundationRepository(db)
+        edge = repository.get_edge_by_id(edge_id)
+        if not edge:
+            return {
+                "success": False,
+                "error": "Edge not found",
+            }
+
+        update_data: dict[str, object] = {}
+
+        if payload.manufacturer_id is not None:
+            manufacturer_row = get_material_manufacturer_by_id(
+                payload.manufacturer_id,
+                viewer_user_id=current_user.id,
+                viewer_role=current_user.role,
+            )
+            if not manufacturer_row:
+                return {
+                    "success": False,
+                    "error": "Material manufacturer not found",
+                }
+            update_data["manufacturer_id"] = int(manufacturer_row["id"])
+
+        if payload.name is not None:
+            name = _normalize_admin_text(payload.name)
+            if not name:
+                return {
+                    "success": False,
+                    "error": "Edge name is required",
+                }
+            update_data["name"] = name
+
+        for field in ("manufacturer_article", "decor_code", "color", "material_type", "finish"):
+            value = getattr(payload, field)
+            if value is not None:
+                update_data[field] = _normalize_admin_text(value) or None
+
+        if payload.width_mm is not None:
+            update_data["width_mm"] = float(payload.width_mm)
+        if payload.thickness_mm is not None:
+            update_data["thickness_mm"] = float(payload.thickness_mm)
+        if payload.image_url is not None:
+            update_data["image_url"] = _normalize_admin_text(payload.image_url) or None
+        if payload.is_active is not None:
+            update_data["is_active"] = bool(payload.is_active)
+
+        if update_data:
+            repository.update_edge(edge, **update_data)
+            db.commit()
+            db.refresh(edge)
+
+        manufacturer_lookup = {
+            manufacturer.id: manufacturer
+            for manufacturer in db.query(MaterialManufacturerModel).all()
+        }
+        supplier_lookup = {
+            supplier.id: supplier
+            for supplier in db.query(SupplierModel).all()
+        }
+        material_lookup = {
+            material.id: material
+            for material in db.query(MaterialModel).all()
+        }
+        offers = list(edge.supplier_offers or [])
+        price_rows_by_offer_id = {
+            int(offer.id): repository.list_offer_prices(int(offer.id))
+            for offer in offers
+        }
+        relations = repository.list_materials_by_edge(edge.id)
+
+        return {
+            "success": True,
+            "item": _serialize_edge_catalog_item(
+                edge,
+                manufacturer_lookup,
+                supplier_lookup,
+                price_rows_by_offer_id,
+                material_relations=relations,
+                material_lookup=material_lookup,
+            ),
+        }
+    finally:
+        db.close()
+
+
+@router.delete(
+    "/edges/{edge_id}",
+    response_model=EdgeCatalogOperationResponseSchema,
+)
+async def delete_edge_route(
+    edge_id: int,
+    current_user = Depends(require_catalog_reader),
+):
+    _ensure_material_feature_access(current_user, "materials.delete")
+
+    db = SessionLocal()
+    try:
+        repository = EdgeFoundationRepository(db)
+        edge = repository.get_edge_by_id(edge_id)
+        if not edge:
+            raise HTTPException(status_code=404, detail="Edge not found")
+
+        dependent_materials = repository.list_materials_by_edge(edge.id)
+        if dependent_materials:
+            material_lookup = {
+                material.id: material
+                for material in db.query(MaterialModel).all()
+            }
+            dependent_labels = []
+            for relation in dependent_materials:
+                material = material_lookup.get(int(relation.material_id))
+                material_label = str(getattr(material, "name", "") or getattr(material, "article", "") or "").strip()
+                material_id_label = str(relation.material_id)
+                if material_label:
+                    dependent_labels.append(f"{material_label} (ID {material_id_label})")
+                else:
+                    dependent_labels.append(f"ID {material_id_label}")
+
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "success": False,
+                    "error": (
+                        "Неможливо видалити крайку, оскільки вона використовується "
+                        "в матеріалах: " + "; ".join(dependent_labels)
+                    ),
+                    "dependent_materials": [
+                        {
+                            "material_id": relation.material_id,
+                            "material_article": getattr(material_lookup.get(int(relation.material_id)), "article", None),
+                            "material_name": getattr(material_lookup.get(int(relation.material_id)), "name", None),
+                            "relation_type": relation.relation_type,
+                            "source_supplier_id": relation.source_supplier_id,
+                            "source_url": relation.source_url,
+                        }
+                        for relation in dependent_materials
+                    ],
+                },
+            )
+
+        manufacturer_lookup = {
+            manufacturer.id: manufacturer
+            for manufacturer in db.query(MaterialManufacturerModel).all()
+        }
+        supplier_lookup = {
+            supplier.id: supplier
+            for supplier in db.query(SupplierModel).all()
+        }
+        material_lookup = {
+            material.id: material
+            for material in db.query(MaterialModel).all()
+        }
+        offers = list(edge.supplier_offers or [])
+        price_rows_by_offer_id = {
+            int(offer.id): repository.list_offer_prices(int(offer.id))
+            for offer in offers
+        }
+        relations = repository.list_materials_by_edge(edge.id)
+        deleted_item = _serialize_edge_catalog_item(
+            edge,
+            manufacturer_lookup,
+            supplier_lookup,
+            price_rows_by_offer_id,
+            material_relations=relations,
+            material_lookup=material_lookup,
+        )
+
+        repository.delete_edge(edge)
+        db.commit()
+
+        return {
+            "success": True,
+            "item": deleted_item,
+        }
+    finally:
+        db.close()
 
 
 @router.get(
@@ -1860,6 +2545,10 @@ async def create_material_route(
     effective_category = (payload.category or "dsp").strip() or "dsp"
     effective_source_url = (payload.source_url or "").strip() or None
     requested_source_site = detect_material_source_site(effective_source_url) if effective_source_url else None
+    should_import_from_source = bool(
+        effective_source_url and requested_source_site and requested_source_site != "generic"
+    )
+    manual_source_url = effective_source_url if effective_source_url and not should_import_from_source else None
     effective_article = (payload.article or "").strip() or None
     effective_name = (payload.name or "").strip() or None
     effective_owner_user_id = None if is_default else str(current_user.id)
@@ -1907,7 +2596,7 @@ async def create_material_route(
     else:
         _ensure_material_feature_access(current_user, "materials.create")
 
-    if effective_source_url:
+    if should_import_from_source:
         if not existing_item and not is_default:
             _ensure_material_ownership_capacity(current_user)
 
@@ -2110,7 +2799,7 @@ async def create_material_route(
                 "error": error_message,
             }
 
-    if is_default:
+    if is_default and not manual_source_url:
         return {
             "success": False,
             "error": "Default material must be added from a source link",
@@ -2149,12 +2838,12 @@ async def create_material_route(
         name=effective_name,
         category=effective_category,
         image=payload.image_url,
-        source_url=None,
-        owner_user_id=str(current_user.id),
-        is_default=False,
-        source="manual",
+        source_url=manual_source_url,
+        owner_user_id=effective_owner_user_id,
+        is_default=effective_is_default,
+        source=detect_material_source_site(manual_source_url) if manual_source_url else "manual",
         product_type=effective_category,
-        image_source_url=payload.image_url,
+        image_source_url=payload.image_url or manual_source_url,
         **manufacturer_write_kwargs,
     )
     upsert_material_price(
@@ -2167,7 +2856,7 @@ async def create_material_route(
         user_id=str(current_user.id),
         source="manual",
         product_type=effective_category,
-        source_url=None,
+        source_url=manual_source_url,
     )
     item = _resolve_material_with_city_context(
         manual_article,
@@ -2646,6 +3335,8 @@ async def get_material_route(
 
     if item and detail_item and "supplier_offers" not in item:
         item["supplier_offers"] = detail_item.get("supplier_offers", [])
+    if item and detail_item and "supplier_summary" not in item:
+        item["supplier_summary"] = detail_item.get("supplier_summary", [])
     if item and detail_item and "images" not in item:
         item["images"] = detail_item.get("images", [])
     if item and detail_item and "edge_options" not in item:
@@ -3324,6 +4015,264 @@ async def update_material_route(
     }
 
 
+@router.get(
+    "/materials/{article}/canonical-edges",
+    response_model=MaterialCanonicalEdgeListResponseSchema,
+)
+async def list_material_canonical_edges_route(
+    article: str,
+    current_user = Depends(require_catalog_reader),
+):
+
+    _ensure_material_feature_access(current_user, "materials.view")
+
+    normalized_article = article.strip()
+    selected_city = (current_user.city or "").strip() or None
+    material_item = get_material_by_article(
+        normalized_article,
+        viewer_user_id=str(current_user.id),
+        viewer_role=current_user.role,
+        city=selected_city,
+    )
+
+    if not material_item:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "success": False,
+                "error": "Material not found",
+            },
+        )
+
+    return {
+        "success": True,
+        "items": _extract_canonical_material_edge_options(material_item),
+    }
+
+
+@router.post(
+    "/materials/{article}/canonical-edges",
+    response_model=MaterialCanonicalEdgeOperationResponseSchema,
+)
+async def attach_material_canonical_edge_route(
+    article: str,
+    payload: MaterialCanonicalEdgeAttachSchema,
+    current_user = Depends(require_material_editor),
+):
+
+    _ensure_material_feature_access(current_user, "materials.edit")
+
+    normalized_article = article.strip()
+    selected_city = (current_user.city or "").strip() or None
+    material_item = get_material_by_article(
+        normalized_article,
+        viewer_user_id=str(current_user.id),
+        viewer_role=current_user.role,
+        city=selected_city,
+    )
+
+    if not material_item:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "success": False,
+                "error": "Material not found",
+            },
+        )
+
+    if not _can_manage_material_item(current_user, material_item):
+        if material_item.get("is_default"):
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "success": False,
+                    "error": "You do not have permission to edit this material",
+                },
+            )
+
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "success": False,
+                "error": "Material not found",
+            },
+        )
+
+    db = SessionLocal()
+    try:
+        repository = EdgeFoundationRepository(db)
+        edge = repository.get_edge_by_id(int(payload.edge_id))
+        if not edge:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "success": False,
+                    "error": "Edge not found",
+                },
+            )
+
+        material_db_row = db.get(MaterialModel, int(material_item["id"]))
+        if not material_db_row:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "success": False,
+                    "error": "Material not found",
+                },
+            )
+
+        existing_relation = next(
+            (
+                relation
+                for relation in repository.list_relations_by_material(int(material_db_row.id))
+                if int(relation.edge_id) == int(edge.id)
+            ),
+            None,
+        )
+        if existing_relation is not None:
+            return {
+                "success": False,
+                "error": "Крайка вже додана",
+            }
+
+        relation = repository.create_relation(
+            material_id=int(material_db_row.id),
+            edge_id=int(edge.id),
+            relation_type="manual",
+            source_supplier_id=None,
+            source_url=None,
+        )
+        if relation is None:
+            return {
+                "success": False,
+                "error": "Крайка вже додана",
+            }
+
+        db.commit()
+        refreshed_item = get_material_by_article(
+            normalized_article,
+            viewer_user_id=str(current_user.id),
+            viewer_role=current_user.role,
+            city=selected_city,
+        )
+        return {
+            "success": True,
+            "item": refreshed_item or material_item,
+        }
+    finally:
+        db.close()
+
+
+@router.delete(
+    "/materials/{article}/canonical-edges/{edge_id}",
+    response_model=MaterialCanonicalEdgeOperationResponseSchema,
+)
+async def delete_material_canonical_edge_route(
+    article: str,
+    edge_id: int,
+    current_user = Depends(require_material_editor),
+):
+
+    _ensure_material_feature_access(current_user, "materials.edit")
+
+    normalized_article = article.strip()
+    selected_city = (current_user.city or "").strip() or None
+    material_item = get_material_by_article(
+        normalized_article,
+        viewer_user_id=str(current_user.id),
+        viewer_role=current_user.role,
+        city=selected_city,
+    )
+
+    if not material_item:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "success": False,
+                "error": "Material not found",
+            },
+        )
+
+    if not _can_manage_material_item(current_user, material_item):
+        if material_item.get("is_default"):
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "success": False,
+                    "error": "You do not have permission to edit this material",
+                },
+            )
+
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "success": False,
+                "error": "Material not found",
+            },
+        )
+
+    db = SessionLocal()
+    try:
+        repository = EdgeFoundationRepository(db)
+        edge = repository.get_edge_by_id(int(edge_id))
+        if not edge:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "success": False,
+                    "error": "Edge not found",
+                },
+            )
+
+        material_db_row = db.get(MaterialModel, int(material_item["id"]))
+        if not material_db_row:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "success": False,
+                    "error": "Material not found",
+                },
+            )
+
+        relation = repository.get_relation_by_identity(
+            material_id=int(material_db_row.id),
+            edge_id=int(edge.id),
+            relation_type="manual",
+        )
+        if relation is None:
+            relation = next(
+                (
+                    row
+                    for row in repository.list_relations_by_material(int(material_db_row.id))
+                    if int(row.edge_id) == int(edge.id)
+                ),
+                None,
+            )
+        if relation is None:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "success": False,
+                    "error": "Edge relation not found",
+                },
+            )
+
+        db.delete(relation)
+        db.commit()
+        refreshed_item = get_material_by_article(
+            normalized_article,
+            viewer_user_id=str(current_user.id),
+            viewer_role=current_user.role,
+            city=selected_city,
+        )
+        return {
+            "success": True,
+            "item": refreshed_item or material_item,
+        }
+    finally:
+        db.close()
+
+
 @router.post(
     "/materials/{article}/edges",
     response_model=MaterialEdgeOperationResponseSchema,
@@ -3812,6 +4761,41 @@ async def upload_material_category_image_route(
 
     try:
         image_url = await save_material_category_image_file(file)
+    except ValueError as error:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "success": False,
+                "error": str(error),
+            },
+        ) from error
+
+    return {
+        "success": True,
+        "image_url": image_url,
+    }
+
+
+@router.post(
+    "/edges/image",
+)
+async def upload_edge_image_route(
+    file: UploadFile = File(...),
+    current_user = Depends(require_catalog_reader),
+):
+    _ensure_edge_image_upload_access(current_user)
+
+    if not file.filename:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "success": False,
+                "error": "File name is required",
+            },
+        )
+
+    try:
+        image_url = await save_edge_image_file(file)
     except ValueError as error:
         raise HTTPException(
             status_code=400,
@@ -5494,7 +6478,7 @@ async def create_fitting_route(
                 )
                 return {
                     "success": False,
-                    "error": "Не вдалося додати фурнітуру. Перевірте дані та спробуйте ще раз.",
+                    "error": "Не вдалося отримати дані за посиланням. Перевірте посилання або спробуйте пізніше.",
                 }
 
             try:
@@ -5513,7 +6497,7 @@ async def create_fitting_route(
                 )
                 return {
                     "success": False,
-                    "error": "Не вдалося додати фурнітуру. Перевірте дані та спробуйте ще раз.",
+                    "error": "Не вдалося отримати дані за посиланням. Перевірте посилання або спробуйте пізніше.",
                 }
 
             effective_image_url = prepared_gallery_images[0].source_url

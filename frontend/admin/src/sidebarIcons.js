@@ -42,6 +42,7 @@ export const SIDEBAR_FLYOUT_ICON_ASSETS = {
   },
   catalog: {
     catalogMaterials: iconUrl("materials.png"),
+    catalogEdges: iconUrl("materials.png"),
     catalogMaterialCategories: iconUrl("materials.png"),
     catalogMaterialManufacturers: iconUrl("materials.png"),
     catalogMaterialSuppliers: iconUrl("materials.png"),

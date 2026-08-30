@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import List
+from typing import Any, List
 from typing import Literal
 
 from pydantic import (
@@ -226,6 +226,20 @@ class MaterialPriceSchema(BaseModel):
     updated_at: datetime | None = None
 
 
+class MaterialPriceSummarySchema(BaseModel):
+    unit: str | None = None
+    currency: str | None = None
+    min_price: float | None = None
+    max_price: float | None = None
+    offer_count: int = 0
+
+
+class MaterialSupplierSummarySchema(BaseModel):
+    supplier_id: int
+    supplier_name: str | None = None
+    supplier_logo_url: str | None = None
+
+
 class MaterialEdgePriceSchema(BaseModel):
     city: str | None = None
     price: float | None = None
@@ -295,6 +309,153 @@ class MaterialEdgeOptionSchema(BaseModel):
     current_price_city: str | None = None
     prices: List[MaterialEdgePriceSchema] = Field(default_factory=list)
     supplier_offers: List[MaterialEdgeSupplierOfferSchema] = Field(default_factory=list)
+
+
+class EdgeCatalogSupplierOfferPriceSchema(BaseModel):
+    city: str | None = None
+    price: float | None = None
+    currency: str | None = None
+    availability: str | None = None
+    checked_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class EdgeCatalogSupplierOfferSchema(BaseModel):
+    id: int
+    edge_id: int
+    supplier_id: int
+    supplier_name: str | None = None
+    supplier_logo_url: str | None = None
+    article: str | None = None
+    external_product_id: str | None = None
+    source_url: str | None = None
+    unit: str | None = None
+    stock: str | None = None
+    is_active: bool = True
+    priority: int = 0
+    parsed_at: datetime | None = None
+    price_updated_at: datetime | None = None
+    prices: List[EdgeCatalogSupplierOfferPriceSchema] = Field(default_factory=list)
+
+
+class EdgeCatalogMaterialRelationSchema(BaseModel):
+    id: int
+    material_id: int
+    material_article: str | None = None
+    material_name: str | None = None
+    material_image: str | None = None
+    material_category: str | None = None
+    material_product_type: str | None = None
+    material_dimensions: str | None = None
+    material_thickness: str | None = None
+    material_manufacturer_id: int | None = None
+    material_manufacturer_name: str | None = None
+    material_manufacturer_logo_url: str | None = None
+    material_is_default: bool = False
+    material_owner_user_id: str | None = None
+    relation_type: str | None = None
+    source_supplier_id: int | None = None
+    source_url: str | None = None
+    created_at: datetime | None = None
+
+
+class EdgeCatalogItemSchema(BaseModel):
+    id: int
+    name: str
+    manufacturer_id: int | None = None
+    manufacturer_name: str | None = None
+    manufacturer_logo_url: str | None = None
+    manufacturer_article: str | None = None
+    decor_code: str | None = None
+    color: str | None = None
+    material_type: str | None = None
+    width_mm: float | None = None
+    thickness_mm: float | None = None
+    finish: str | None = None
+    image_url: str | None = None
+    is_active: bool = True
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    price_summary: List[MaterialPriceSummarySchema] = Field(default_factory=list)
+    supplier_summary: List[MaterialSupplierSummarySchema] = Field(default_factory=list)
+    supplier_offers: List[EdgeCatalogSupplierOfferSchema] = Field(default_factory=list)
+    material_relations: List[EdgeCatalogMaterialRelationSchema] = Field(default_factory=list)
+
+
+class EdgeCatalogListResponseSchema(BaseModel):
+    success: bool
+    items: List[EdgeCatalogItemSchema] = Field(default_factory=list)
+    error: str | None = None
+
+
+class EdgeCatalogCreateSchema(BaseModel):
+    manufacturer_id: int = Field(ge=1)
+    name: str = Field(min_length=1, max_length=255)
+    manufacturer_article: str | None = Field(default=None, max_length=128)
+    decor_code: str | None = Field(default=None, max_length=64)
+    color: str | None = Field(default=None, max_length=128)
+    material_type: str | None = Field(default=None, max_length=64)
+    width_mm: float = Field(gt=0)
+    thickness_mm: float = Field(gt=0)
+    finish: str | None = Field(default=None, max_length=128)
+    image_url: str | None = Field(default=None, max_length=1000)
+    is_active: bool = True
+
+
+class EdgeCatalogUpdateSchema(BaseModel):
+    manufacturer_id: int | None = Field(default=None, ge=1)
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    manufacturer_article: str | None = Field(default=None, max_length=128)
+    decor_code: str | None = Field(default=None, max_length=64)
+    color: str | None = Field(default=None, max_length=128)
+    material_type: str | None = Field(default=None, max_length=64)
+    width_mm: float | None = Field(default=None, gt=0)
+    thickness_mm: float | None = Field(default=None, gt=0)
+    finish: str | None = Field(default=None, max_length=128)
+    image_url: str | None = Field(default=None, max_length=1000)
+    is_active: bool | None = None
+
+
+class EdgeCatalogOperationResponseSchema(BaseModel):
+    success: bool
+    item: EdgeCatalogItemSchema | None = None
+    error: str | None = None
+
+
+class EdgeCatalogDetailResponseSchema(BaseModel):
+    success: bool
+    item: EdgeCatalogItemSchema | None = None
+    error: str | None = None
+
+
+class EdgeCatalogSourcePreviewRequestSchema(BaseModel):
+    source_url: str = Field(
+        min_length=1,
+        max_length=1000,
+    )
+
+
+class EdgeCatalogSourcePreviewResponseSchema(BaseModel):
+    success: bool
+    source_url: str | None = None
+    source_site: str | None = None
+    recommended_edges_count: int = 0
+    preview_count: int = 0
+    items: list[dict[str, Any]] = Field(default_factory=list)
+    error: str | None = None
+
+
+class EdgeCatalogSourceCreateSchema(BaseModel):
+    preview_result: dict[str, Any]
+    city: str | None = Field(default=None, max_length=64)
+
+
+class EdgeCatalogSourceCreateResponseSchema(BaseModel):
+    success: bool
+    summary: dict[str, int] = Field(default_factory=dict)
+    preview_result: dict[str, Any] | None = None
+    persistence_result: dict[str, Any] | None = None
+    error: str | None = None
 
 
 class MaterialSupplierOfferSchema(BaseModel):
@@ -399,6 +560,8 @@ class MaterialCatalogItemSchema(BaseModel):
     current_price_exact: bool = True
     current_price_details: MaterialPriceSchema | None = None
     prices: List[MaterialPriceSchema] = Field(default_factory=list)
+    price_summary: List[MaterialPriceSummarySchema] = Field(default_factory=list)
+    supplier_summary: List[MaterialSupplierSummarySchema] = Field(default_factory=list)
     edge_options: List[MaterialEdgeOptionSchema] = Field(default_factory=list)
 
 
@@ -726,6 +889,22 @@ class MaterialEdgeAttachSchema(BaseModel):
         default=None,
         max_length=128,
     )
+
+
+class MaterialCanonicalEdgeAttachSchema(BaseModel):
+    edge_id: int = Field(ge=1)
+
+
+class MaterialCanonicalEdgeListResponseSchema(BaseModel):
+    success: bool
+    items: List[MaterialEdgeOptionSchema] = Field(default_factory=list)
+    error: str | None = None
+
+
+class MaterialCanonicalEdgeOperationResponseSchema(BaseModel):
+    success: bool
+    item: MaterialCatalogDetailItemSchema | None = None
+    error: str | None = None
 
 
 class MaterialEdgeOperationResponseSchema(BaseModel):

@@ -12,7 +12,7 @@ from database.models.canonical_edge import (
     MaterialEdgeRelationModel,
 )
 from database.models.material_taxonomy import MaterialManufacturerModel
-from sqlalchemy import func, text
+from sqlalchemy import func, or_, text
 
 
 def _normalize_lookup_text(value: Any) -> str:
@@ -76,6 +76,47 @@ class EdgeFoundationRepository:
         if manufacturer_id is not None:
             query = query.filter(CanonicalEdgeModel.manufacturer_id == manufacturer_id)
         return query.order_by(
+            CanonicalEdgeModel.name.asc(),
+            CanonicalEdgeModel.id.asc(),
+        ).all()
+
+    def list_edges_for_catalog(
+        self,
+        *,
+        search: str | None = None,
+        manufacturer_id: int | None = None,
+        supplier_id: int | None = None,
+        include_inactive: bool = False,
+    ) -> list[CanonicalEdgeModel]:
+        query = self.session.query(CanonicalEdgeModel)
+
+        if not include_inactive:
+            query = query.filter(CanonicalEdgeModel.is_active.is_(True))
+
+        if manufacturer_id is not None:
+            query = query.filter(CanonicalEdgeModel.manufacturer_id == manufacturer_id)
+
+        if supplier_id is not None:
+            query = query.join(
+                EdgeSupplierOfferModel,
+                EdgeSupplierOfferModel.edge_id == CanonicalEdgeModel.id,
+            ).filter(EdgeSupplierOfferModel.supplier_id == supplier_id)
+
+        normalized_search = _normalize_lookup_text(search)
+        if normalized_search:
+            like_pattern = f"%{normalized_search}%"
+            query = query.filter(
+                or_(
+                    func.lower(func.coalesce(CanonicalEdgeModel.name, "")).like(like_pattern),
+                    func.lower(func.coalesce(CanonicalEdgeModel.manufacturer_article, "")).like(like_pattern),
+                    func.lower(func.coalesce(CanonicalEdgeModel.decor_code, "")).like(like_pattern),
+                    func.lower(func.coalesce(CanonicalEdgeModel.color, "")).like(like_pattern),
+                    func.lower(func.coalesce(CanonicalEdgeModel.material_type, "")).like(like_pattern),
+                    func.lower(func.coalesce(CanonicalEdgeModel.finish, "")).like(like_pattern),
+                )
+            )
+
+        return query.distinct().order_by(
             CanonicalEdgeModel.name.asc(),
             CanonicalEdgeModel.id.asc(),
         ).all()
@@ -245,6 +286,10 @@ class EdgeFoundationRepository:
             EdgeSupplierOfferModel.priority.asc(),
             EdgeSupplierOfferModel.id.asc(),
         ).all()
+
+    def delete_edge(self, edge: CanonicalEdgeModel) -> None:
+        self.session.delete(edge)
+        self.session.flush()
 
     def create_offer(self, **data: Any) -> EdgeSupplierOfferModel | None:
         offer = EdgeSupplierOfferModel(**data)

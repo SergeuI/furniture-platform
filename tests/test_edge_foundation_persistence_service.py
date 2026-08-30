@@ -10,6 +10,7 @@ from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import sessionmaker
 
 from database.repositories.edge_foundation_repository import EdgeFoundationRepository
+from database.models.fitting import SupplierModel  # noqa: F401
 from scripts import upgrade_edge_foundation_schema as migration
 from services.edge_foundation_persistence_service import EdgeFoundationPersistenceService
 
@@ -319,6 +320,40 @@ class EdgeFoundationPersistenceServiceTests(unittest.TestCase):
                 "edge_supplier_offers": 1,
                 "material_edge_relations": 1,
                 "edge_supplier_offer_prices": 0,
+            })
+        finally:
+            session.close()
+
+    def test_persists_catalog_edges_without_material_relations(self) -> None:
+        session = self.session_maker()
+        try:
+            service = EdgeFoundationPersistenceService(session=session)
+            preview_result = {
+                "success": True,
+                "items": [
+                    _edge_preview_item(
+                        source_url="https://viyar.ua/ua/catalog/141342-krayka-abs-smaragd-zeleniy-22x0-4mm-300-m-p-rehau/",
+                        manufacturer_article="141342",
+                        supplier_code="viyar",
+                        supplier_article="185187",
+                        name="141342 Крайка ABS Смарагд зелений 22x0,4мм (300 м.п.) REHAU",
+                        width_mm=22.0,
+                        thickness_mm=0.4,
+                        price=19.26,
+                        availability="Скоро у продажу",
+                        image_url="https://viyar.ua/store/Items/photos/ph185187.jpg",
+                    )
+                ],
+            }
+
+            result = service.persist_preview_result_for_catalog(preview_result=preview_result, city="kyiv")
+
+            self.assertEqual(result["counts"], {"items": 1, "persisted": 1, "reused": 0, "needs_review": 0, "failed": 0})
+            self.assertEqual(self._counts(session), {
+                "canonical_edges": 1,
+                "edge_supplier_offers": 1,
+                "material_edge_relations": 0,
+                "edge_supplier_offer_prices": 1,
             })
         finally:
             session.close()

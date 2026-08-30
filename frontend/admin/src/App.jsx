@@ -3,6 +3,8 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  ClipboardList,
+  Circle,
   Drill,
   FileSliders,
   FolderTree,
@@ -10,6 +12,7 @@ import {
   House,
   Info,
   LayoutGrid,
+  Layers,
   MoreHorizontal,
   Menu,
   Package,
@@ -41,6 +44,7 @@ import {
 import {
   listMaterialCategories,
   listMaterialManufacturers,
+  getEdgesCatalog,
   listMaterialSupplierOffers,
   resolveAdminAssetUrl,
 } from "./api.js";
@@ -221,16 +225,31 @@ import angledTwoPlanesIcon from "./assets/hole-mounting/angled_two_planes.png";
 import faceToEdgeIcon from "./assets/hole-mounting/face_to_edge.png";
 import edgeToEdgeIcon from "./assets/hole-mounting/edge_to_edge.png";
 import drawerSlidesIcon from "./assets/hole-mounting/drawer_slides.png";
+import catalogMaterialsImage from "./assets/catalog-hub/catalog-materials.png";
+import catalogEdgesImage from "./assets/catalog-hub/catalog-edges.png";
+import catalogFittingsImage from "./assets/catalog-hub/catalog-fittings.png";
+import catalogViyarImage from "./assets/catalog-hub/catalog-viyar.png";
+import catalogDrillingRulesImage from "./assets/catalog-hub/catalog-drilling-rules.png";
+import catalogManualServicesImage from "./assets/catalog-hub/catalog-manual-services.png";
+import catalogValuesImage from "./assets/catalog-hub/catalog-values.png";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import { BoxGeometry, CanvasTexture, DoubleSide, EdgesGeometry, Float32BufferAttribute, LinearFilter, MOUSE, Quaternion, Vector3 } from "three";
 
 import {
   attachMaterialEdge,
+  attachMaterialCanonicalEdge,
   changeOwnPassword,
   createMountingNode,
+  createEdgeCatalog,
+  createEdgeCatalogFromSource,
+  deleteEdgeCatalog,
   createMaterial,
   createFitting,
+  getEdgeCatalogDetail,
+  deleteMaterialCanonicalEdge,
+  uploadEdgeImage,
+  previewEdgeCatalogSource,
   previewFittingSource,
   createFittingHoleTemplate,
   createFittingHoleBundle,
@@ -321,6 +340,7 @@ import {
   updateProjectPartMachining,
   updateViyarService,
   updateMaterial,
+  updateEdgeCatalog,
   refreshMaterialGallery,
   syncViyarServicePrices,
   updateMyProfile,
@@ -329,6 +349,7 @@ import {
   refreshMyViyarSession,
   scanProjectFile,
 } from "./api";
+import DeleteConfirmModal from "./components/DeleteConfirmModal.jsx";
 const PartThreeViewer = lazy(() => import("./components/PartThreeViewer"));
 const ProjectThreeViewer = lazy(() => import("./components/ProjectThreeViewer"));
 
@@ -342,6 +363,11 @@ const ACTIVE_PROJECT_TAB_STORAGE_KEY = "furniture_admin_active_project_tab";
 const FITTING_CATEGORY_STORAGE_KEY = "furniture_admin_fitting_category";
 const FITTING_VIEW_MODE_STORAGE_KEY = "furniture_admin_fitting_view_mode";
 const MATERIAL_CATEGORY_STORAGE_KEY = "furniture_admin_material_category";
+const MATERIAL_CATALOG_VIEW_MODE_STORAGE_KEY = "furniture_admin_material_catalog_view_mode";
+const EDGE_CATALOG_VIEW_MODE_STORAGE_KEY = "furniture_admin_edge_catalog_view_mode";
+const EDGE_CATALOG_SEARCH_STORAGE_KEY = "furniture_admin_edge_catalog_search";
+const EDGE_CATALOG_MANUFACTURER_STORAGE_KEY = "furniture_admin_edge_catalog_manufacturer";
+const EDGE_CATALOG_SUPPLIER_STORAGE_KEY = "furniture_admin_edge_catalog_supplier";
 const ADMIN_TOKEN_HASH_KEY = "mproject_token";
 const ADMIN_LOGOUT_HASH_KEY = "mproject_logout";
 const VIYAR_SERVICES_CACHE_PREFIX = "furniture_admin_viyar_services_cache";
@@ -394,6 +420,7 @@ const ADMIN_SECTION_BY_VIEW = {
   catalogMaterialCategories: "catalog-material-categories",
   catalogMaterialManufacturers: "catalog-material-manufacturers",
   catalogMaterialSuppliers: "catalog-material-suppliers",
+  catalogEdges: "catalog-edges",
   catalogSuppliers: "catalog-suppliers",
   catalogHub: "catalog-hub",
   catalogHoles: "mounting-nodes",
@@ -427,6 +454,7 @@ function readAdminRouteFromLocation() {
   if (typeof window === "undefined") {
     return {
       hasSection: false,
+      category: null,
       mountingNodesRoute: null,
       processingTab: null,
       view: null,
@@ -439,17 +467,21 @@ function readAdminRouteFromLocation() {
   if (!section) {
     return {
       hasSection: false,
+      category: null,
       mountingNodesRoute: null,
       processingTab: null,
       view: null,
     };
   }
 
+  const category = String(searchParams.get("category") || "").trim() || null;
+
   if (section === ADMIN_MOUNTING_NODES_SECTION) {
     const mountingNodesRoute = parseMountingNodesRoute(window.location.search);
 
     return {
       hasSection: true,
+      category: null,
       mountingNodesRoute: mountingNodesRoute || normalizeMountingNodesRoute({ mode: "list", nodeId: null }),
       processingTab: null,
       view: "catalogHoles",
@@ -463,10 +495,11 @@ function readAdminRouteFromLocation() {
       "connection-types",
       "mounting-compatibility",
       "connections-testing",
-    ].includes(section)
+  ].includes(section)
   ) {
     return {
       hasSection: true,
+      category: null,
       mountingNodesRoute: null,
       processingTab: null,
       view: ADMIN_VIEW_BY_SECTION[section],
@@ -476,9 +509,30 @@ function readAdminRouteFromLocation() {
   if (section.startsWith(ADMIN_PROCESSING_SECTION_PREFIX)) {
     return {
       hasSection: true,
+      category: null,
       mountingNodesRoute: null,
       processingTab: section.slice(ADMIN_PROCESSING_SECTION_PREFIX.length) || "overview",
       view: "processing",
+    };
+  }
+
+  if (section === "catalog-materials" || section === "catalog-fittings" || section === "catalog-fasteners") {
+    return {
+      hasSection: true,
+      category,
+      mountingNodesRoute: null,
+      processingTab: null,
+      view: ADMIN_VIEW_BY_SECTION[section],
+    };
+  }
+
+  if (section === "catalog-edges") {
+    return {
+      hasSection: true,
+      category: null,
+      mountingNodesRoute: null,
+      processingTab: null,
+      view: "catalogEdges",
     };
   }
 
@@ -487,6 +541,7 @@ function readAdminRouteFromLocation() {
   if (mappedView) {
     return {
       hasSection: true,
+      category: null,
       mountingNodesRoute: null,
       processingTab: null,
       view: mappedView,
@@ -495,6 +550,7 @@ function readAdminRouteFromLocation() {
 
   return {
     hasSection: true,
+    category: null,
     mountingNodesRoute: null,
     processingTab: null,
     view: "home",
@@ -503,6 +559,7 @@ function readAdminRouteFromLocation() {
 
 function buildAdminHistoryUrl(
   {
+    category = null,
     mountingNodesRoute = null,
     processingTab = "overview",
     view = "home",
@@ -539,6 +596,13 @@ function buildAdminHistoryUrl(
     });
 
     params.set("section", `${ADMIN_PROCESSING_SECTION_PREFIX}${normalizedProcessingTab}`);
+  } else if (normalizedView === "catalogMaterials" || normalizedView === "catalogFittings" || normalizedView === "catalogFasteners") {
+    params.set("section", ADMIN_SECTION_BY_VIEW[normalizedView] || "home");
+    const normalizedCategory = String(category || "").trim();
+
+    if (normalizedCategory) {
+      params.set("category", normalizedCategory);
+    }
   } else {
     params.set("section", ADMIN_SECTION_BY_VIEW[normalizedView] || "home");
   }
@@ -1995,6 +2059,75 @@ function getMaterialPromoViewModel(item, t, language) {
   };
 }
 
+function getMaterialPriceSummaryViewModel(item) {
+  const summaryRows = Array.isArray(item?.price_summary) ? item.price_summary : [];
+  const normalizedRows = summaryRows
+    .map((row, index) => {
+      const minPrice = parseCatalogNumberValue(row?.min_price);
+      const maxPrice = parseCatalogNumberValue(row?.max_price);
+      const priceValue = minPrice ?? maxPrice;
+      const currency = String(row?.currency || "UAH").trim() || "UAH";
+      const unit = String(row?.unit || "").trim();
+
+      if (priceValue === null || priceValue === undefined) {
+        return null;
+      }
+
+      const priceText =
+        minPrice !== null &&
+        maxPrice !== null &&
+        Number.isFinite(minPrice) &&
+        Number.isFinite(maxPrice) &&
+        minPrice !== maxPrice
+          ? `${formatMoneyValue(minPrice)} - ${formatMoneyValue(maxPrice)}`
+          : formatMoneyValue(priceValue);
+
+      return {
+        key: `${currency}:${unit || "_"}:${index}`,
+        priceText,
+        currency,
+        unit,
+        offerCount: Number(row?.offer_count ?? 0),
+      };
+    })
+    .filter(Boolean);
+
+  return normalizedRows.length ? normalizedRows : null;
+}
+
+function getMaterialSupplierSummaryViewModel(item) {
+  const summaryRows = Array.isArray(item?.supplier_summary) && item.supplier_summary.length
+    ? item.supplier_summary
+    : Array.isArray(item?.supplier_offers)
+      ? item.supplier_offers
+      : [];
+
+  const normalizedRows = [];
+  const seenSupplierKeys = new Set();
+
+  for (const row of summaryRows) {
+    const supplierId = row?.supplier_id !== null && row?.supplier_id !== undefined
+      ? String(row.supplier_id).trim()
+      : "";
+    const supplierName = String(row?.supplier_name || "").trim();
+    const supplierLogoUrl = String(row?.supplier_logo_url || "").trim();
+    const supplierKey = supplierId || `${supplierName || "supplier"}:${supplierLogoUrl || "no-logo"}`;
+
+    if (!supplierKey || seenSupplierKeys.has(supplierKey)) {
+      continue;
+    }
+
+    seenSupplierKeys.add(supplierKey);
+    normalizedRows.push({
+      key: supplierKey,
+      name: supplierName || (supplierId ? `Supplier ${supplierId}` : "Supplier"),
+      logoUrl: supplierLogoUrl,
+    });
+  }
+
+  return normalizedRows;
+}
+
 function getMaterialPromoRibbonViewModel(item, language) {
   const details = item?.current_price_details || null;
 
@@ -2051,9 +2184,12 @@ function isFastenerFitting(item) {
     haystack,
   );
 }
-
 function normalizeCatalogView(view) {
   return view === "catalogFasteners" ? "catalogFittings" : view;
+}
+
+function normalizeMaterialCatalogViewMode(viewMode) {
+  return viewMode === "list" ? "list" : "grid";
 }
 
 function normalizeFittingViewMode(viewMode) {
@@ -2232,6 +2368,10 @@ const CATALOG_TILE_VISUALS = {
     accent: "#2563eb",
     icon: LayoutGrid,
   },
+  edges: {
+    accent: "#7c3aed",
+    icon: Package,
+  },
   fittings: {
     accent: "#0f766e",
     icon: Wrench,
@@ -2256,6 +2396,16 @@ const CATALOG_TILE_VISUALS = {
     accent: "#1f6b34",
     icon: FolderTree,
   },
+};
+
+const CATALOG_HUB_CARD_VISUALS = {
+  materials: { accent: "#2563eb", icon: Layers, image: catalogMaterialsImage },
+  edges: { accent: "#7c3aed", icon: Circle, image: catalogEdgesImage },
+  fittings: { accent: "#0f766e", icon: Package, image: catalogFittingsImage },
+  viyar: { accent: "#1f6b34", icon: FolderTree, image: catalogViyarImage },
+  drilling_rules: { accent: "#b45309", icon: Drill, image: catalogDrillingRulesImage },
+  manual: { accent: "var(--brand-green)", icon: Wrench, image: catalogManualServicesImage },
+  values: { accent: "#2f8ecb", icon: ClipboardList, image: catalogValuesImage },
 };
 
 const MOUNTING_NODE_CATEGORY_VISUALS = {
@@ -2328,6 +2478,10 @@ const HOME_QUICK_TILE_VISUALS = {
   materials: {
     accent: "#2563eb",
     icon: LayoutGrid,
+  },
+  edges: {
+    accent: "#7c3aed",
+    icon: Package,
   },
   fittings: {
     accent: "#0f766e",
@@ -2417,6 +2571,69 @@ function getViyarServiceDescriptionStatus(node, t) {
   }
 
   return { className: "muted", label: t.viyarDescriptionStatusEmpty };
+}
+
+function useDismissableCatalogItemMenu({
+  isOpen,
+  onClose,
+  panelSelector,
+  resetKey,
+  triggerSelector,
+}) {
+  const menuResetKeyRef = useRef(resetKey);
+  const menuWasOpenRef = useRef(false);
+
+  useEffect(() => {
+    if (!isOpen) {
+      menuWasOpenRef.current = false;
+      menuResetKeyRef.current = resetKey;
+      return undefined;
+    }
+
+    function handleDocumentPointerDown(event) {
+      const target = event.target;
+      if (!(target instanceof Element)) {
+        return;
+      }
+
+      if (!target.closest(triggerSelector) && !target.closest(panelSelector)) {
+        onClose();
+      }
+    }
+
+    function handleDocumentKeyDown(event) {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    }
+
+    document.addEventListener("pointerdown", handleDocumentPointerDown);
+    document.addEventListener("keydown", handleDocumentKeyDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", handleDocumentPointerDown);
+      document.removeEventListener("keydown", handleDocumentKeyDown);
+    };
+  }, [isOpen, onClose, panelSelector, triggerSelector]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      menuWasOpenRef.current = false;
+      menuResetKeyRef.current = resetKey;
+      return;
+    }
+
+    if (!menuWasOpenRef.current) {
+      menuWasOpenRef.current = true;
+      menuResetKeyRef.current = resetKey;
+      return;
+    }
+
+    if (menuResetKeyRef.current !== resetKey) {
+      menuResetKeyRef.current = resetKey;
+      onClose();
+    }
+  }, [isOpen, onClose, resetKey]);
 }
 
 function ServiceCatalogTreeNode({
@@ -2858,7 +3075,7 @@ const TRANSLATIONS = {
     drillingServiceRulesTitle: "Drilling service rules",
     drillingServiceRulesNavTitle: "Drilling rules",
     drillingServiceRulesDescription:
-      "Manual MVP rules for Viyar drilling services. Rules are linked to the main service record ID, not article.",
+    "Rules link to the main service record, not the article.",
     drillingServiceRulesCountOne: "rule",
     drillingServiceRulesCountFew: "rules",
     drillingServiceRulesCountMany: "rules",
@@ -4052,13 +4269,15 @@ Object.assign(TRANSLATIONS.en, {
   backToFittingCategories: "Back to categories",
   fittingCategoriesCount: "categories",
   catalogHubDescription:
-    "Quick access to service directories and reference catalogs in a visual category view.",
+    "A single source of truth for design, production, and projects.",
   catalogHubTitle: "Directories overview",
   openDirectory: "Open directory",
+  catalogViyarDescription:
+    "Service tree prepared for future costing and project cost linking.",
   catalogManualDescription:
-    "Create and maintain your own services that do not depend on Viyar pricing.",
+    "Create and maintain your own services that do not depend on Viyar prices.",
   catalogValuesDescription:
-    "Edit shared reference values used across projects, forms, and calculations.",
+    "Edit shared reference values for projects, forms, and calculations.",
   catalogValuesGroups: "Groups",
   catalogManual: "Manual services",
   catalogValues: "Value catalog",
@@ -4094,7 +4313,7 @@ Object.assign(TRANSLATIONS.uk, {
   catalog: "Довідники",
   catalogMaterials: "Матеріали",
   catalogMaterialsDescription: "Матеріали для виробництва, фільтри та пов’язана довідкова інформація.",
-  catalogViyarDescription: "Каталог матеріалів та послуг Viyar із синхронізацією.",
+  catalogViyarDescription: "Дерево послуг, підготовлене для майбутнього прорахунку і прив'язки до собівартості проєкту.",
   clearSelection: "Очистити вибір",
   create: "Створити",
   createProject: "Створити проєкт",
@@ -4231,7 +4450,7 @@ Object.assign(TRANSLATIONS.uk, {
     "\u041d\u0430\u0437\u0430\u0434 \u0434\u043e \u043a\u0430\u0442\u0435\u0433\u043e\u0440\u0456\u0439",
   fittingCategoriesCount: "\u043a\u0430\u0442\u0435\u0433\u043e\u0440\u0456\u0439",
   catalogHubDescription:
-    "\u0428\u0432\u0438\u0434\u043a\u0438\u0439 \u0434\u043e\u0441\u0442\u0443\u043f \u0434\u043e \u0434\u043e\u0432\u0456\u0434\u043d\u0438\u043a\u0456\u0432 \u043f\u043e\u0441\u043b\u0443\u0433 \u0442\u0430 \u0434\u043e\u0432\u0456\u0434\u043a\u043e\u0432\u0438\u0445 \u0437\u043d\u0430\u0447\u0435\u043d\u044c \u0443 \u0432\u0438\u0433\u043b\u044f\u0434\u0456 \u043a\u0430\u0442\u0435\u0433\u043e\u0440\u0456\u0439.",
+    "\u0404\u0434\u0438\u043d\u0435 \u0434\u0436\u0435\u0440\u0435\u043b\u043e \u0434\u0430\u043d\u0438\u0445 \u0434\u043b\u044f \u043a\u043e\u043d\u0441\u0442\u0440\u0443\u043a\u0442\u043e\u0440\u0430, \u0432\u0438\u0440\u043e\u0431\u043d\u0438\u0446\u0442\u0432\u0430 \u0442\u0430 \u043f\u0440\u043e\u0454\u043a\u0442\u0456\u0432.",
   catalogHubTitle:
     "\u041e\u0433\u043b\u044f\u0434 \u0434\u043e\u0432\u0456\u0434\u043d\u0438\u043a\u0456\u0432",
   openDirectory:
@@ -4858,7 +5077,7 @@ Object.assign(TRANSLATIONS.uk, {
   drillingServiceRulesTitle: "Правила послуг присадки",
   drillingServiceRulesNavTitle: "Правила свердління",
   drillingServiceRulesDescription:
-    "Ручний MVP для Viyar-послуг свердління. Правила зв’язуємо з основним записом послуги, а не з артикулом.",
+    "Правила зв'язуємо з основним записом послуги, а не з артикулом.",
   drillingServiceRulesCountOne: "правило",
   drillingServiceRulesCountFew: "правила",
   drillingServiceRulesCountMany: "правил",
@@ -6647,6 +6866,54 @@ function buildMaterialEditForm(item) {
   };
 }
 
+function buildEdgeCreateForm() {
+  return {
+    manufacturer_id: "",
+    name: "",
+    manufacturer_article: "",
+    decor_code: "",
+    color: "",
+    material_type: "",
+    width_mm: "",
+    thickness_mm: "",
+    finish: "",
+    image_url: "",
+    is_active: true,
+  };
+}
+
+function buildEdgeEditForm(item) {
+  return {
+    manufacturer_id: String(item?.manufacturer_id || ""),
+    name: String(item?.name || ""),
+    manufacturer_article: String(item?.manufacturer_article || ""),
+    decor_code: String(item?.decor_code || ""),
+    color: String(item?.color || ""),
+    material_type: String(item?.material_type || ""),
+    width_mm: item?.width_mm === null || item?.width_mm === undefined ? "" : String(item.width_mm),
+    thickness_mm: item?.thickness_mm === null || item?.thickness_mm === undefined ? "" : String(item.thickness_mm),
+    finish: String(item?.finish || ""),
+    image_url: String(item?.image_url || ""),
+    is_active: Boolean(item?.is_active),
+  };
+}
+
+const EDGE_IMAGE_ACCEPT = "image/png,image/jpeg,image/webp";
+const EDGE_IMAGE_ALLOWED_TYPES = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+]);
+const EDGE_IMAGE_MAX_SIZE_BYTES = 12 * 1024 * 1024;
+
+function normalizeEdgeImageUrl(value) {
+  return String(value || "").trim();
+}
+
+function isAllowedEdgeImageType(type) {
+  return EDGE_IMAGE_ALLOWED_TYPES.has(String(type || "").toLowerCase());
+}
+
 function getMaterialOwnershipScopeLabel(scope, language) {
   const labels = language === "en"
     ? {
@@ -7078,6 +7345,19 @@ function getSortedMaterialEdgeItems(item) {
   return [...(item?.edge_options || [])]
     .filter(Boolean)
     .sort((left, right) => getMaterialEdgeSlotIndex(left.edge_key) - getMaterialEdgeSlotIndex(right.edge_key));
+}
+
+function getCanonicalMaterialEdgeItems(item) {
+  return [...(item?.edge_options || [])]
+    .filter((edge) => Boolean(edge?.relation_type) && String(edge?.edge_key || "").includes(":"))
+    .sort((left, right) => {
+      const leftName = String(left?.name || left?.manufacturer_article || left?.edge_key || "").toLowerCase();
+      const rightName = String(right?.name || right?.manufacturer_article || right?.edge_key || "").toLowerCase();
+      if (leftName !== rightName) {
+        return leftName.localeCompare(rightName);
+      }
+      return String(left?.id || "").localeCompare(String(right?.id || ""));
+    });
 }
 
 function getDefaultMaterialEdgeKey(item) {
@@ -8066,10 +8346,59 @@ export default function App() {
   const [materialOwnershipQuota, setMaterialOwnershipQuota] = useState(null);
   const [materialCreateMode, setMaterialCreateMode] = useState("source");
   const [materialSearch, setMaterialSearch] = useState("");
-  const [materialsCatalogLoading, setMaterialsCatalogLoading] = useState(false);
-  const [materialCategoryFilter, setMaterialCategoryFilter] = useState(
-    () => localStorage.getItem(MATERIAL_CATEGORY_STORAGE_KEY) || "",
+  const [materialCatalogViewMode, setMaterialCatalogViewMode] = useState(
+    () => normalizeMaterialCatalogViewMode(localStorage.getItem(MATERIAL_CATALOG_VIEW_MODE_STORAGE_KEY) || "grid"),
   );
+  const [materialsCatalogLoading, setMaterialsCatalogLoading] = useState(false);
+  const [materialCategoryValidationReady, setMaterialCategoryValidationReady] = useState(false);
+  const [materialCategoryFilter, setMaterialCategoryFilter] = useState(
+    () =>
+      initialAdminRoute.view === "catalogMaterials"
+        ? initialAdminRoute.category || ""
+        : localStorage.getItem(MATERIAL_CATEGORY_STORAGE_KEY) || "",
+  );
+  const selectedMaterialCategory = materialCategoryFilter;
+  const setSelectedMaterialCategory = setMaterialCategoryFilter;
+  const materialCategoryFilters = materialCategories;
+  const materialsSearch = materialSearch;
+  const setMaterialsSearch = setMaterialSearch;
+  const [edgeItems, setEdgeItems] = useState([]);
+  const [edgeSearch, setEdgeSearch] = useState(() => localStorage.getItem(EDGE_CATALOG_SEARCH_STORAGE_KEY) || "");
+  const [edgeManufacturerFilter, setEdgeManufacturerFilter] = useState(
+    () => localStorage.getItem(EDGE_CATALOG_MANUFACTURER_STORAGE_KEY) || "",
+  );
+  const [edgeSupplierFilter, setEdgeSupplierFilter] = useState(
+    () => localStorage.getItem(EDGE_CATALOG_SUPPLIER_STORAGE_KEY) || "",
+  );
+  const [edgeCatalogViewMode, setEdgeCatalogViewMode] = useState(
+    () => normalizeMaterialCatalogViewMode(localStorage.getItem(EDGE_CATALOG_VIEW_MODE_STORAGE_KEY) || "grid"),
+  );
+  const [edgeCatalogLoading, setEdgeCatalogLoading] = useState(false);
+  const [selectedEdgeDetail, setSelectedEdgeDetail] = useState(null);
+  const [selectedEdgeSupplierOfferId, setSelectedEdgeSupplierOfferId] = useState("");
+  const [edgeDetailLoading, setEdgeDetailLoading] = useState(false);
+  const [edgeDetailModalOpen, setEdgeDetailModalOpen] = useState(false);
+  const [edgeDetailError, setEdgeDetailError] = useState("");
+  const [edgeEditModalOpen, setEdgeEditModalOpen] = useState(false);
+  const [edgeEditSaving, setEdgeEditSaving] = useState(false);
+  const [edgeEditError, setEdgeEditError] = useState("");
+  const [edgeEditItem, setEdgeEditItem] = useState(null);
+  const [edgeEditForm, setEdgeEditForm] = useState(() => buildEdgeEditForm(null));
+  const [edgeEditImageUploading, setEdgeEditImageUploading] = useState(false);
+  const [edgeEditUploadedImageUrl, setEdgeEditUploadedImageUrl] = useState("");
+  const [edgeDeleteTarget, setEdgeDeleteTarget] = useState(null);
+  const [edgeDeleteBusy, setEdgeDeleteBusy] = useState(false);
+  const [edgeCreateModalOpen, setEdgeCreateModalOpen] = useState(false);
+  const [edgeCreateMode, setEdgeCreateMode] = useState("source");
+  const [edgeCreateSaving, setEdgeCreateSaving] = useState(false);
+  const [edgeCreateError, setEdgeCreateError] = useState("");
+  const [edgeCreateForm, setEdgeCreateForm] = useState(() => buildEdgeCreateForm());
+  const [edgeCreateSourceUrl, setEdgeCreateSourceUrl] = useState("");
+  const [edgeCreateSourcePreview, setEdgeCreateSourcePreview] = useState(null);
+  const [edgeCreateSourcePreviewLoading, setEdgeCreateSourcePreviewLoading] = useState(false);
+  const [edgeCreateSourcePreviewError, setEdgeCreateSourcePreviewError] = useState("");
+  const [edgeCreateImageUploading, setEdgeCreateImageUploading] = useState(false);
+  const [edgeCreateUploadedImageUrl, setEdgeCreateUploadedImageUrl] = useState("");
   const [materialOwnershipScope, setMaterialOwnershipScope] = useState("system");
   const [newMaterialArticle, setNewMaterialArticle] = useState("");
   const [newMaterialSourceUrl, setNewMaterialSourceUrl] = useState("");
@@ -8086,6 +8415,7 @@ export default function App() {
   const [materialEditError, setMaterialEditError] = useState("");
   const [materialEditItem, setMaterialEditItem] = useState(null);
   const [materialEditForm, setMaterialEditForm] = useState(() => buildMaterialEditForm(null));
+  const [materialCreateModalOpen, setMaterialCreateModalOpen] = useState(false);
   const [selectedMaterialDetail, setSelectedMaterialDetail] = useState(null);
   const [selectedMaterialSupplierOffers, setSelectedMaterialSupplierOffers] = useState([]);
   const [selectedMaterialSupplierOfferId, setSelectedMaterialSupplierOfferId] = useState("");
@@ -8104,15 +8434,64 @@ export default function App() {
     edge_key: "edge_08",
     source_url: "",
   });
+  const [materialCanonicalEdgeSelectorOpen, setMaterialCanonicalEdgeSelectorOpen] = useState(false);
+  const [materialCanonicalEdgeSelectorSearch, setMaterialCanonicalEdgeSelectorSearch] = useState("");
+  const [materialCanonicalEdgeSelectorManufacturerId, setMaterialCanonicalEdgeSelectorManufacturerId] = useState("");
+  const [materialCanonicalEdgeSelectorSupplierId, setMaterialCanonicalEdgeSelectorSupplierId] = useState("");
+  const [materialCanonicalEdgeSelectorItems, setMaterialCanonicalEdgeSelectorItems] = useState([]);
+  const [materialCanonicalEdgeSelectorLoading, setMaterialCanonicalEdgeSelectorLoading] = useState(false);
+  const [materialCanonicalEdgeSelectorSaving, setMaterialCanonicalEdgeSelectorSaving] = useState(false);
+  const [materialCanonicalEdgeSelectorError, setMaterialCanonicalEdgeSelectorError] = useState("");
+  const [materialCanonicalEdgeSelectorSelectedEdgeId, setMaterialCanonicalEdgeSelectorSelectedEdgeId] = useState("");
+  const edgeCatalogRequestRef = useRef({ id: 0, pending: false });
+  const materialCanonicalEdgeSelectorRequestRef = useRef({ id: 0, open: false });
+  const edgeDetailRequestRef = useRef({ id: 0, edgeId: "", open: false });
+  const edgeCreateCloseButtonRef = useRef(null);
+  const edgeDetailCloseButtonRef = useRef(null);
+  const edgeEditCloseButtonRef = useRef(null);
+  const edgeCreateImageFileInputRef = useRef(null);
   const materialEditCloseButtonRef = useRef(null);
+  const materialCreateCloseButtonRef = useRef(null);
+  const edgeEditImageFileInputRef = useRef(null);
   const materialManufacturersById = useMemo(
     () => new Map(materialManufacturers.map((item) => [String(item.id), item])),
     [materialManufacturers],
   );
+  const materialCanonicalEdgeSupplierOptions = useMemo(() => {
+    const suppliersById = new Map();
+
+    for (const edgeItem of materialCanonicalEdgeSelectorItems) {
+      for (const summary of Array.isArray(edgeItem?.supplier_summary) ? edgeItem.supplier_summary : []) {
+        const supplierId = String(summary?.supplier_id || "").trim();
+        if (!supplierId) {
+          continue;
+        }
+        if (!suppliersById.has(supplierId)) {
+          suppliersById.set(supplierId, {
+            id: supplierId,
+            name: String(summary?.supplier_name || `Supplier ${supplierId}`).trim(),
+          });
+        }
+      }
+    }
+
+    return [...suppliersById.values()].sort((left, right) => String(left.name || "").localeCompare(String(right.name || "")));
+  }, [materialCanonicalEdgeSelectorItems]);
+  const closeMaterialMenu = useCallback(() => {
+    setOpenMaterialMenuId("");
+    setOpenMaterialMenuPosition(null);
+  }, []);
+  const openMaterialMenuTriggerRef = useRef(null);
+  const openMaterialMenuActionCountRef = useRef(3);
+  const [openMaterialMenuPosition, setOpenMaterialMenuPosition] = useState(null);
   const [openFittingMenuId, setOpenFittingMenuId] = useState("");
   const [openFittingMenuPosition, setOpenFittingMenuPosition] = useState(null);
   const openFittingMenuTriggerRef = useRef(null);
   const openFittingMenuActionCountRef = useRef(2);
+  const closeFittingMenu = useCallback(() => {
+    setOpenFittingMenuId("");
+    setOpenFittingMenuPosition(null);
+  }, []);
   const [projectOptionPicker, setProjectOptionPicker] = useState({
     open: false,
     target: "create",
@@ -8250,7 +8629,10 @@ export default function App() {
   const [fittingsCatalogLoading, setFittingsCatalogLoading] = useState(false);
   const [fittingCanonicalCatalogLoading, setFittingCanonicalCatalogLoading] = useState(false);
   const [selectedFittingCategory, setSelectedFittingCategory] = useState(
-    () => localStorage.getItem(FITTING_CATEGORY_STORAGE_KEY) || "",
+    () =>
+      initialAdminRoute.view === "catalogFittings" || initialAdminRoute.view === "catalogFasteners"
+        ? initialAdminRoute.category || ""
+        : localStorage.getItem(FITTING_CATEGORY_STORAGE_KEY) || "",
   );
   const [fittingViewMode, setFittingViewMode] = useState(
     () => normalizeFittingViewMode(localStorage.getItem(FITTING_VIEW_MODE_STORAGE_KEY) || "rows"),
@@ -8502,9 +8884,16 @@ export default function App() {
 
     const handlePopState = () => {
       const nextRoute = readAdminRouteFromLocation();
+      const nextMaterialCategoryFilter = nextRoute.view === "catalogMaterials" ? nextRoute.category || "" : "";
+      const nextFittingCategory =
+        nextRoute.view === "catalogFittings" || nextRoute.view === "catalogFasteners"
+          ? nextRoute.category || ""
+          : "";
 
       setActiveView(nextRoute.view || normalizeCatalogView(localStorage.getItem(ACTIVE_VIEW_STORAGE_KEY) || "home"));
       activeViewRef.current = nextRoute.view || normalizeCatalogView(localStorage.getItem(ACTIVE_VIEW_STORAGE_KEY) || "home");
+      setMaterialCategoryFilter(nextMaterialCategoryFilter);
+      setSelectedFittingCategory(nextFittingCategory);
       setActiveProcessingTab(
         nextRoute.view === "processing"
           ? nextRoute.processingTab || "overview"
@@ -9755,37 +10144,43 @@ export default function App() {
       );
     }
 
-    function handleFittingMenuDocumentPointerDown(event) {
-      const target = event.target;
-      if (!(target instanceof Element)) {
-        return;
-      }
-
-      if (!target.closest(".fitting-action-menu-trigger") && !target.closest(".fitting-action-menu-panel")) {
-        setOpenFittingMenuId("");
-        setOpenFittingMenuPosition(null);
-      }
-    }
-
-    function handleFittingMenuDocumentKeyDown(event) {
-      if (event.key === "Escape") {
-        setOpenFittingMenuId("");
-        setOpenFittingMenuPosition(null);
-      }
-    }
-
     updateFittingMenuPosition();
-    document.addEventListener("pointerdown", handleFittingMenuDocumentPointerDown);
-    document.addEventListener("keydown", handleFittingMenuDocumentKeyDown);
     window.addEventListener("scroll", updateFittingMenuPosition, true);
     window.addEventListener("resize", updateFittingMenuPosition);
     return () => {
-      document.removeEventListener("pointerdown", handleFittingMenuDocumentPointerDown);
-      document.removeEventListener("keydown", handleFittingMenuDocumentKeyDown);
       window.removeEventListener("scroll", updateFittingMenuPosition, true);
-      window.removeEventListener("resize", updateFittingMenuPosition);
+    window.removeEventListener("resize", updateFittingMenuPosition);
     };
   }, [openFittingMenuId]);
+
+  useEffect(() => {
+    if (!openMaterialMenuId || materialCatalogViewMode !== "list") {
+      openMaterialMenuTriggerRef.current = null;
+      setOpenMaterialMenuPosition(null);
+      return undefined;
+    }
+
+    function updateMaterialMenuPosition() {
+      const triggerElement = openMaterialMenuTriggerRef.current;
+      if (!triggerElement) {
+        setOpenMaterialMenuId("");
+        setOpenMaterialMenuPosition(null);
+        return;
+      }
+
+      setOpenMaterialMenuPosition(
+        getFittingMenuPosition(triggerElement, openMaterialMenuActionCountRef.current),
+      );
+    }
+
+    updateMaterialMenuPosition();
+    window.addEventListener("scroll", updateMaterialMenuPosition, true);
+    window.addEventListener("resize", updateMaterialMenuPosition);
+    return () => {
+      window.removeEventListener("scroll", updateMaterialMenuPosition, true);
+      window.removeEventListener("resize", updateMaterialMenuPosition);
+    };
+  }, [openMaterialMenuId, materialCatalogViewMode]);
 
   const viyarServicesCache = user?.id ? readViyarServicesCache(user.id) : null;
   const normalizedViyarEmail = viyarAuthForm.email.trim();
@@ -9892,6 +10287,80 @@ export default function App() {
       </div>,
       document.body,
     );
+  };
+  const renderMaterialActionMenu = (item) => {
+    if (openMaterialMenuId !== item.id || typeof document === "undefined") {
+      return null;
+    }
+
+    const menuContent = (
+      <div
+        className="material-card-menu-dropdown"
+        onClick={(event) => event.stopPropagation()}
+        onPointerDown={(event) => event.stopPropagation()}
+        style={
+          materialCatalogViewMode === "list" && openMaterialMenuPosition
+            ? {
+                left: `${openMaterialMenuPosition.left}px`,
+                maxHeight: "calc(100vh - 16px)",
+                minWidth: `${openMaterialMenuPosition.width}px`,
+                overflow: "auto",
+                position: "fixed",
+                top: `${openMaterialMenuPosition.top}px`,
+                zIndex: 120,
+              }
+            : undefined
+        }
+      >
+        {materialEntitlementFlags.edit ? (
+          <button
+            className="material-card-menu-action"
+            onClick={(event) => {
+              event.stopPropagation();
+              openMaterialEditModal(item);
+            }}
+            type="button"
+          >
+            <Pencil size={14} />
+            {t.editMaterial}
+          </button>
+        ) : null}
+        {item.source_url ? (
+          <button
+            className="material-card-menu-action"
+            onClick={(event) => {
+              event.stopPropagation();
+              handleRefreshMaterial(item);
+            }}
+            type="button"
+          >
+            <RefreshCw size={14} />
+            {t.refreshFromViyar}
+          </button>
+        ) : null}
+        <button
+          className="material-card-menu-action danger"
+          onClick={(event) => {
+            event.stopPropagation();
+            openDeleteMaterialConfirm(item);
+          }}
+          type="button"
+        >
+          <Trash2 size={14} />
+          {t.deleteMaterial}
+        </button>
+      </div>
+    );
+
+    if (materialCatalogViewMode === "list") {
+      if (!openMaterialMenuPosition) {
+        return null;
+      }
+
+      return createPortal(menuContent, document.body);
+    }
+
+    return menuContent;
   };
   const statusNotice = statusMessage ? (
     <div className="status-overlay" role="presentation">
@@ -10458,8 +10927,10 @@ export default function App() {
         ? "Власні матеріали: без обмежень"
         : `Власні матеріали: ${materialOwnershipQuota.owned_count || 0} з ${materialOwnershipQuota.limit || 0}`)
     : "";
+  const materialsQuota = materialOwnershipQuota;
   const isHomeView = activeView === "home";
   const isCatalogMaterialsView = activeView === "catalogMaterials";
+  const isCatalogEdgesView = activeView === "catalogEdges";
   const isCatalogMaterialCategoriesView = activeView === "catalogMaterialCategories";
   const isCatalogMaterialManufacturersView = activeView === "catalogMaterialManufacturers";
   const isCatalogMaterialSuppliersView = activeView === "catalogMaterialSuppliers";
@@ -10472,6 +10943,7 @@ export default function App() {
   const isCatalogFittingSeriesView = activeView === FITTING_TAXONOMY_VIEWS.series;
   const isCatalogFittingCategoriesView = activeView === FITTING_TAXONOMY_VIEWS.categories;
   const isCatalogFittingProductsView = activeView === FITTING_TAXONOMY_VIEWS.products;
+  const shouldHideFittingsCatalogOuterToolbar = isCatalogFittingsView || isCatalogFastenersView;
   const isCatalogSuppliersView = activeView === "catalogSuppliers";
   const isCatalogServiceRulesView = activeView === "catalogServiceRules";
   const isCatalogDrillingRulesView = activeView === "catalogDrillingRules";
@@ -11059,8 +11531,7 @@ export default function App() {
             key: categoryCode,
             label: category?.name || categoryCode,
             onClick: () => {
-              setSelectedFittingCategory(categoryCode);
-              switchView("catalogFittings");
+              openFittingCategoryCatalog(categoryCode);
               closeSidebarOnMobile();
               closeSidebarFlyout();
             },
@@ -11135,6 +11606,17 @@ export default function App() {
                 setSidebarCatalogSubmenuKey("materials");
                 switchView("catalogMaterials");
                 closeSidebarOnMobile();
+              },
+            },
+            {
+              active: isCatalogEdgesView,
+              key: "catalogEdges",
+              label: language === "uk" ? "Крайки" : "Edges",
+              onClick: () => {
+                setSidebarCatalogSubmenuKey("");
+                switchView("catalogEdges");
+                closeSidebarOnMobile();
+                closeSidebarFlyout();
               },
             },
             ...(canViewFittingCatalog
@@ -12235,7 +12717,7 @@ export default function App() {
     }
 
     if (isCatalogHubView) {
-      return t.catalogHubTitle;
+      return "";
     }
 
     if (isCatalogServiceRulesView) {
@@ -12247,6 +12729,10 @@ export default function App() {
     }
 
     if (isCatalogMaterialsView) {
+      return "";
+    }
+
+    if (isCatalogEdgesView) {
       return "";
     }
 
@@ -12311,6 +12797,10 @@ export default function App() {
       return "";
     }
 
+    if (isCatalogHubView) {
+      return "";
+    }
+
     if (isProcessingView) {
       return language === "uk" ? "Обробка деталей" : "Processing";
     }
@@ -12344,6 +12834,7 @@ export default function App() {
     isCatalogMaterialCategoriesView,
     isCatalogMaterialManufacturersView,
     isCatalogMaterialsView,
+    isCatalogEdgesView,
     isCatalogFittingsView,
     isCatalogFastenersView,
     isCatalogHolesView,
@@ -12366,6 +12857,145 @@ export default function App() {
     usersPageLabel,
     viyarServiceCounts.services,
   ]);
+
+  const catalogHubCards = [
+    {
+      key: "materials",
+      accent: CATALOG_HUB_CARD_VISUALS.materials.accent,
+      chips: [
+        {
+          label: t.materialsCount,
+          value: materialItems.length,
+        },
+        {
+          label: language === "uk" ? "Категорії" : "Categories",
+          value: materialCategories.length,
+        },
+      ],
+      description: t.catalogMaterialsDescription,
+      icon: CATALOG_HUB_CARD_VISUALS.materials.icon,
+      image: CATALOG_HUB_CARD_VISUALS.materials.image,
+      label: t.catalogMaterials,
+      onClick: () => switchView("catalogMaterials"),
+    },
+    {
+      key: "edges",
+      accent: CATALOG_HUB_CARD_VISUALS.edges.accent,
+      chips: [
+        {
+          label: language === "uk" ? "Позицій" : "Items",
+          value: edgeItems.length,
+        },
+      ],
+      description: language === "uk"
+        ? "Крайки з фільтрами по виробнику та постачальнику."
+        : "Edge bands with manufacturer and supplier filters.",
+      icon: CATALOG_HUB_CARD_VISUALS.edges.icon,
+      image: CATALOG_HUB_CARD_VISUALS.edges.image,
+      label: language === "uk" ? "Крайки" : "Edges",
+      onClick: () => switchView("catalogEdges"),
+    },
+    {
+      key: "fittings",
+      accent: CATALOG_HUB_CARD_VISUALS.fittings.accent,
+      chips: [
+        {
+          label: t.fittingsCount,
+          value: fittingItems.length,
+        },
+        {
+          label: language === "uk" ? "Категорії" : "Categories",
+          value: fittingCategories.length,
+        },
+      ],
+      description: t.catalogFittingsDescription,
+      icon: CATALOG_HUB_CARD_VISUALS.fittings.icon,
+      image: CATALOG_HUB_CARD_VISUALS.fittings.image,
+      label: t.catalogFittings,
+      onClick: () => switchView("catalogFittings"),
+    },
+    {
+      key: "viyar",
+      accent: CATALOG_HUB_CARD_VISUALS.viyar.accent,
+      chips: [
+        {
+          label: language === "uk" ? "Послуг" : "Services",
+          value: viyarServiceCounts.services,
+        },
+        {
+          label: language === "uk" ? "Папок" : "Folders",
+          value: viyarServiceCounts.folders,
+        },
+      ],
+      description: t.catalogViyarDescription,
+      icon: CATALOG_HUB_CARD_VISUALS.viyar.icon,
+      image: CATALOG_HUB_CARD_VISUALS.viyar.image,
+      label: t.catalogViyar,
+      onClick: () => switchView("catalogViyar"),
+    },
+    {
+      key: "drilling_rules",
+      accent: CATALOG_HUB_CARD_VISUALS.drilling_rules.accent,
+      chips: [
+        {
+          label: language === "uk" ? "Правил" : "Rules",
+          value: drillingRuleItems.length,
+        },
+      ],
+      description: t.drillingServiceRulesDescription,
+      icon: CATALOG_HUB_CARD_VISUALS.drilling_rules.icon,
+      image: CATALOG_HUB_CARD_VISUALS.drilling_rules.image,
+      label: t.drillingServiceRulesTitle,
+      onClick: () => switchView("catalogDrillingRules"),
+    },
+    {
+      key: "manual",
+      accent: CATALOG_HUB_CARD_VISUALS.manual.accent,
+      chips: [
+        {
+          label: language === "uk" ? "Послуг" : "Services",
+          value: manualServiceItems.length,
+        },
+      ],
+      description: t.catalogManualDescription,
+      icon: CATALOG_HUB_CARD_VISUALS.manual.icon,
+      image: CATALOG_HUB_CARD_VISUALS.manual.image,
+      label: t.catalogManual,
+      onClick: () => switchView("catalogManual"),
+    },
+    {
+      key: "values",
+      accent: CATALOG_HUB_CARD_VISUALS.values.accent,
+      chips: [
+        {
+          label: language === "uk" ? "Значень" : "Values",
+          value: catalogItems.length,
+        },
+      ],
+      description: t.catalogValuesDescription,
+      icon: CATALOG_HUB_CARD_VISUALS.values.icon,
+      image: CATALOG_HUB_CARD_VISUALS.values.image,
+      label: t.catalogValues,
+      wide: true,
+      onClick: () => switchView("catalogValues"),
+    },
+  ];
+
+  useDismissableCatalogItemMenu({
+    isOpen: Boolean(openMaterialMenuId),
+    onClose: closeMaterialMenu,
+    panelSelector: ".material-card-menu-dropdown",
+    resetKey: `${activeView}|${materialCategoryFilter}|${materialCatalogViewMode}`,
+    triggerSelector: ".material-card-menu-trigger",
+  });
+
+  useDismissableCatalogItemMenu({
+    isOpen: Boolean(openFittingMenuId),
+    onClose: closeFittingMenu,
+    panelSelector: ".fitting-action-menu-panel",
+    resetKey: `${activeView}|${activeFittingCategory}|${fittingViewMode}`,
+    triggerSelector: ".fitting-action-menu-trigger",
+  });
 
   function changeLanguage(nextLanguage) {
     localStorage.setItem(LANGUAGE_STORAGE_KEY, nextLanguage);
@@ -14002,6 +14632,7 @@ export default function App() {
 
       setMaterialItems(result.items || []);
       setMaterialCategories(rootCategories);
+      setMaterialCategoryValidationReady(true);
       try {
         const manufacturersResult = await listMaterialManufacturers(activeToken, false);
         if (manufacturersResult.success) {
@@ -14022,6 +14653,543 @@ export default function App() {
         setMaterialsCatalogLoading(false);
       }
     }
+  }
+
+  async function loadEdgesCatalog(
+    activeToken = token,
+    options = {},
+  ) {
+    if (!activeToken || !canViewMaterialCatalog) {
+      setEdgeItems([]);
+      return [];
+    }
+
+    if (edgeCatalogRequestRef.current.pending) {
+      return edgeItems;
+    }
+
+    const requestId = edgeCatalogRequestRef.current.id + 1;
+    const viewAtStart = activeViewRef.current;
+    edgeCatalogRequestRef.current = { id: requestId, pending: true };
+    setEdgeCatalogLoading(true);
+
+    try {
+      const result = await getEdgesCatalog(activeToken, {
+        search: options.search ?? edgeSearch,
+        manufacturer_id: options.manufacturerId ?? (edgeManufacturerFilter || undefined),
+        supplier_id: options.supplierId ?? (edgeSupplierFilter || undefined),
+      });
+
+      if (edgeCatalogRequestRef.current.id !== requestId || activeViewRef.current !== viewAtStart) {
+        return edgeItems;
+      }
+
+      if (!result.success) {
+        const timeoutError = String(result.error || "").includes("Request timed out after");
+        if (timeoutError && edgeItems.length) {
+          return edgeItems;
+        }
+
+        setStatus({ message: result.error || t.unableToLoadCatalog, tone: "error" });
+        return [];
+      }
+
+      const items = Array.isArray(result.items) ? result.items : [];
+      setEdgeItems(items);
+      return items;
+    } finally {
+      if (edgeCatalogRequestRef.current.id === requestId) {
+        edgeCatalogRequestRef.current.pending = false;
+        setEdgeCatalogLoading(false);
+      }
+    }
+  }
+
+  async function loadMaterialCanonicalEdgeSelectorItems(
+    activeToken = token,
+    options = {},
+  ) {
+    if (!activeToken || !materialCanonicalEdgeSelectorRequestRef.current.open || !selectedMaterialDetail?.article) {
+      setMaterialCanonicalEdgeSelectorItems([]);
+      return [];
+    }
+
+    const requestId = materialCanonicalEdgeSelectorRequestRef.current.id + 1;
+    materialCanonicalEdgeSelectorRequestRef.current = { id: requestId, open: true };
+    setMaterialCanonicalEdgeSelectorLoading(true);
+
+    try {
+      const result = await getEdgesCatalog(activeToken, {
+        search: options.search ?? materialCanonicalEdgeSelectorSearch,
+        manufacturer_id: options.manufacturerId ?? (materialCanonicalEdgeSelectorManufacturerId || undefined),
+        supplier_id: options.supplierId ?? (materialCanonicalEdgeSelectorSupplierId || undefined),
+      });
+
+      if (
+        materialCanonicalEdgeSelectorRequestRef.current.id !== requestId ||
+        !materialCanonicalEdgeSelectorRequestRef.current.open
+      ) {
+        return materialCanonicalEdgeSelectorItems;
+      }
+
+      if (!result.success) {
+        setMaterialCanonicalEdgeSelectorError(result.error || t.unableToLoadCatalog);
+        return [];
+      }
+
+      const items = Array.isArray(result.items) ? result.items : [];
+      setMaterialCanonicalEdgeSelectorItems(items);
+      setMaterialCanonicalEdgeSelectorError("");
+      return items;
+    } finally {
+      if (materialCanonicalEdgeSelectorRequestRef.current.id === requestId) {
+        setMaterialCanonicalEdgeSelectorLoading(false);
+      }
+    }
+  }
+
+  function openMaterialCanonicalEdgeSelector() {
+    if (!selectedMaterialDetail?.article) {
+      return;
+    }
+
+    materialCanonicalEdgeSelectorRequestRef.current.open = true;
+    setMaterialCanonicalEdgeSelectorOpen(true);
+    setMaterialCanonicalEdgeSelectorError("");
+    setMaterialCanonicalEdgeSelectorSelectedEdgeId("");
+  }
+
+  function closeMaterialCanonicalEdgeSelector() {
+    materialCanonicalEdgeSelectorRequestRef.current.open = false;
+    setMaterialCanonicalEdgeSelectorOpen(false);
+    setMaterialCanonicalEdgeSelectorItems([]);
+    setMaterialCanonicalEdgeSelectorLoading(false);
+    setMaterialCanonicalEdgeSelectorSaving(false);
+    setMaterialCanonicalEdgeSelectorError("");
+    setMaterialCanonicalEdgeSelectorSearch("");
+    setMaterialCanonicalEdgeSelectorManufacturerId("");
+    setMaterialCanonicalEdgeSelectorSupplierId("");
+    setMaterialCanonicalEdgeSelectorSelectedEdgeId("");
+  }
+
+  async function handleAttachMaterialCanonicalEdge(edgeItem = null) {
+    if (!token || !selectedMaterialDetail?.article) {
+      return;
+    }
+
+    const edgeId = edgeItem?.id ?? materialCanonicalEdgeSelectorSelectedEdgeId;
+    if (!edgeId) {
+      setMaterialCanonicalEdgeSelectorError(language === "uk" ? "Оберіть крайку" : "Select an edge");
+      return;
+    }
+
+    setMaterialCanonicalEdgeSelectorSaving(true);
+    setMaterialCanonicalEdgeSelectorError("");
+
+    const result = await attachMaterialCanonicalEdge(token, selectedMaterialDetail.article, edgeId);
+    setMaterialCanonicalEdgeSelectorSaving(false);
+
+    if (!result.success) {
+      const errorMessage = result.error || (language === "uk" ? "Не вдалося прив'язати крайку" : "Unable to attach edge");
+      setMaterialCanonicalEdgeSelectorError(errorMessage);
+      if (String(errorMessage).includes("вже додана")) {
+        setStatus({ message: errorMessage, tone: "info" });
+      }
+      return;
+    }
+
+    const updatedItem = result.item || selectedMaterialDetail;
+    setSelectedMaterialDetail(updatedItem);
+    setMaterialItems((current) =>
+      current.map((item) =>
+        item.article === selectedMaterialDetail.article
+          ? { ...item, ...(updatedItem || {}) }
+          : item,
+      ),
+    );
+    closeMaterialCanonicalEdgeSelector();
+    setStatus({ message: language === "uk" ? "Крайку прив'язано" : "Edge attached", tone: "success" });
+  }
+
+  function openUnlinkMaterialCanonicalEdgeConfirm(edgeItem) {
+    if (!canEditMaterialItem(user, selectedMaterialDetail) || !edgeItem?.id) {
+      return;
+    }
+
+    setConfirmAction({
+      type: "unlinkCanonicalEdge",
+      title: language === "uk" ? "Відв'язати крайку?" : "Unlink edge?",
+      message: `${language === "uk" ? "Відв'язати крайку від матеріалу" : "Unlink this edge from the material"}: ${edgeItem.name || edgeItem.manufacturer_article || edgeItem.edge_key || t.notSet}?`,
+      confirmLabel: language === "uk" ? "Відв'язати" : "Unlink",
+      targetId: edgeItem.id,
+    });
+  }
+
+  async function handleUnlinkMaterialCanonicalEdge(edgeId) {
+    if (!token || !selectedMaterialDetail?.article || !edgeId) {
+      return;
+    }
+
+    setLoading(true);
+    const result = await deleteMaterialCanonicalEdge(token, selectedMaterialDetail.article, edgeId);
+    setLoading(false);
+
+    if (!result.success) {
+      throw new Error(result.error || (language === "uk" ? "Не вдалося відв'язати крайку" : "Unable to unlink edge"));
+    }
+
+    const updatedItem = result.item || selectedMaterialDetail;
+    setSelectedMaterialDetail(updatedItem);
+    setMaterialItems((current) =>
+      current.map((item) =>
+        item.article === selectedMaterialDetail.article
+          ? { ...item, ...(updatedItem || {}) }
+          : item,
+      ),
+    );
+    setStatus({ message: language === "uk" ? "Крайку відв'язано" : "Edge unlinked", tone: "success" });
+  }
+
+  function closeEdgeDetails() {
+    edgeDetailRequestRef.current.open = false;
+    setEdgeDetailModalOpen(false);
+    setSelectedEdgeDetail(null);
+    setSelectedEdgeSupplierOfferId("");
+    setEdgeDetailError("");
+    setEdgeDetailLoading(false);
+    setEdgeDeleteTarget(null);
+    closeEdgeEditModal();
+  }
+
+  async function openEdgeDetails(item) {
+    if (!token || !item?.id) {
+      return;
+    }
+
+    const requestId = edgeDetailRequestRef.current.id + 1;
+    const edgeId = String(item.id || "").trim();
+    edgeDetailRequestRef.current = { id: requestId, edgeId, open: true };
+
+    setSelectedEdgeDetail(item);
+    setSelectedEdgeSupplierOfferId(
+      pickDefaultOfferId(Array.isArray(item?.supplier_offers) ? item.supplier_offers : []),
+    );
+    setEdgeDetailError("");
+    setEdgeDetailLoading(true);
+    setEdgeDetailModalOpen(true);
+
+    try {
+      const result = await getEdgeCatalogDetail(token, item.id);
+
+      if (
+        edgeDetailRequestRef.current.id !== requestId ||
+        edgeDetailRequestRef.current.edgeId !== edgeId ||
+        !edgeDetailRequestRef.current.open ||
+        activeViewRef.current !== "catalogEdges"
+      ) {
+        return;
+      }
+
+      if (!result.success) {
+        setEdgeDetailError(result.error || t.unableToLoadCatalog);
+        setEdgeDetailLoading(false);
+        return;
+      }
+
+      const nextEdgeDetail = result.item || item;
+      const nextOffers = Array.isArray(nextEdgeDetail?.supplier_offers) ? nextEdgeDetail.supplier_offers : [];
+
+      setSelectedEdgeDetail(nextEdgeDetail);
+      setSelectedEdgeSupplierOfferId((current) => {
+        const currentId = String(current || "").trim();
+        if (currentId && nextOffers.some((offer) => String(offer?.id || "") === currentId)) {
+          return currentId;
+        }
+        return pickDefaultOfferId(nextOffers);
+      });
+      setEdgeDetailError("");
+    } catch (error) {
+      if (
+        edgeDetailRequestRef.current.id === requestId &&
+        edgeDetailRequestRef.current.edgeId === edgeId &&
+        edgeDetailRequestRef.current.open &&
+        activeViewRef.current === "catalogEdges"
+      ) {
+        setEdgeDetailError(error?.message || t.unableToLoadCatalog);
+      }
+    } finally {
+      if (edgeDetailRequestRef.current.id === requestId) {
+        setEdgeDetailLoading(false);
+      }
+    }
+  }
+
+  async function openMaterialEdgeDetails(edgeItem) {
+    if (!edgeItem?.id) {
+      return;
+    }
+
+    closeMaterialDetails();
+    setMaterialCategoryFilter("");
+    localStorage.removeItem(MATERIAL_CATEGORY_STORAGE_KEY);
+    await switchView("catalogEdges");
+    await openEdgeDetails(edgeItem);
+  }
+
+  async function openEdgeMaterialDetails(edgeItem) {
+    const article = String(edgeItem?.material_article || "").trim();
+    if (!article) {
+      return;
+    }
+
+    closeEdgeDetails();
+    const linkedCategoryCode = normalizeMaterialCategoryCode(edgeItem?.material_category);
+
+    if (linkedCategoryCode) {
+      openMaterialCategoryCatalog(linkedCategoryCode);
+    } else {
+      openMaterialCatalogRoot();
+    }
+
+    await openMaterialDetails({
+      ...edgeItem,
+      article,
+      category: linkedCategoryCode || null,
+      name: edgeItem.material_name || edgeItem.name || article,
+      image: edgeItem.material_image || edgeItem.image_url || edgeItem.image,
+    });
+  }
+
+  function openEdgeEditModal() {
+    if (!selectedEdgeDetail) {
+      return;
+    }
+
+    setEdgeEditItem(selectedEdgeDetail);
+    setEdgeEditForm(buildEdgeEditForm(selectedEdgeDetail));
+    setEdgeEditError("");
+    setEdgeEditUploadedImageUrl("");
+    setEdgeEditModalOpen(true);
+  }
+
+  function closeEdgeEditModal() {
+    setEdgeEditModalOpen(false);
+    setEdgeEditItem(null);
+    setEdgeEditError("");
+    setEdgeEditSaving(false);
+    setEdgeEditImageUploading(false);
+    setEdgeEditUploadedImageUrl("");
+    if (edgeEditImageFileInputRef.current) {
+      edgeEditImageFileInputRef.current.value = "";
+    }
+  }
+
+  function updateEdgeEditForm(field, value) {
+    setEdgeEditForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  }
+
+  function clearEdgeEditImageSelection() {
+    setEdgeEditImageUploading(false);
+    setEdgeEditUploadedImageUrl("");
+    updateEdgeEditForm("image_url", "");
+    if (edgeEditImageFileInputRef.current) {
+      edgeEditImageFileInputRef.current.value = "";
+    }
+  }
+
+  function openEdgeEditImageFilePicker() {
+    edgeEditImageFileInputRef.current?.click?.();
+  }
+
+  async function handleEdgeEditImageFileChange(event) {
+    const file = event.target.files?.[0] || null;
+    if (!file || !token || !canEditMaterialCatalog) {
+      if (event.target) {
+        event.target.value = "";
+      }
+      return;
+    }
+
+    const normalizedType = String(file.type || "").toLowerCase();
+    if (!isAllowedEdgeImageType(normalizedType)) {
+      setEdgeEditError(language === "uk" ? "Дозволені тільки PNG, JPG, JPEG або WEBP" : "Only PNG, JPG, JPEG, or WEBP files are allowed");
+      event.target.value = "";
+      return;
+    }
+
+    if (file.size > EDGE_IMAGE_MAX_SIZE_BYTES) {
+      setEdgeEditError(language === "uk" ? "Файл занадто великий" : "File is too large");
+      event.target.value = "";
+      return;
+    }
+
+    setEdgeEditImageUploading(true);
+    setEdgeEditError("");
+
+    try {
+      const result = await uploadEdgeImage(token, file);
+      if (!result?.success || !result?.image_url) {
+        throw new Error(result?.error || (language === "uk" ? "Не вдалося завантажити зображення" : "Unable to upload image"));
+      }
+
+      setEdgeEditUploadedImageUrl(normalizeEdgeImageUrl(result.image_url));
+      updateEdgeEditForm("image_url", normalizeEdgeImageUrl(result.image_url));
+    } catch (error) {
+      setEdgeEditError(error?.message || (language === "uk" ? "Не вдалося завантажити зображення" : "Unable to upload image"));
+    } finally {
+      setEdgeEditImageUploading(false);
+      event.target.value = "";
+    }
+  }
+
+  async function handleEdgeEditSubmit(event) {
+    event.preventDefault();
+
+    if (!token || !edgeEditItem?.id) {
+      return;
+    }
+
+    const originalItem = edgeEditItem;
+    const payload = {};
+    const normalizedName = String(edgeEditForm.name || "").trim();
+    const normalizedManufacturerId = String(edgeEditForm.manufacturer_id || "").trim();
+    const normalizedManufacturerArticle = String(edgeEditForm.manufacturer_article || "").trim();
+    const normalizedDecorCode = String(edgeEditForm.decor_code || "").trim();
+    const normalizedColor = String(edgeEditForm.color || "").trim();
+    const normalizedMaterialType = String(edgeEditForm.material_type || "").trim();
+    const normalizedFinish = String(edgeEditForm.finish || "").trim();
+    const normalizedImageUrl = normalizeEdgeImageUrl(edgeEditForm.image_url);
+    const normalizedWidth = String(edgeEditForm.width_mm || "").trim().replace(",", ".");
+    const normalizedThickness = String(edgeEditForm.thickness_mm || "").trim().replace(",", ".");
+
+    if (!normalizedName) {
+      setEdgeEditError(language === "uk" ? "Назва крайки є обов'язковою" : "Edge name is required");
+      return;
+    }
+
+    if (normalizedName !== String(originalItem.name || "").trim()) {
+      payload.name = normalizedName;
+    }
+
+    if (normalizedManufacturerId !== String(originalItem.manufacturer_id || "").trim()) {
+      if (normalizedManufacturerId && !Number.isFinite(Number(normalizedManufacturerId))) {
+        setEdgeEditError(language === "uk" ? "Оберіть коректного виробника" : "Select a valid manufacturer");
+        return;
+      }
+      payload.manufacturer_id = normalizedManufacturerId ? Number(normalizedManufacturerId) : null;
+    }
+
+    if (normalizedManufacturerArticle !== String(originalItem.manufacturer_article || "").trim()) {
+      payload.manufacturer_article = normalizedManufacturerArticle || null;
+    }
+
+    if (normalizedDecorCode !== String(originalItem.decor_code || "").trim()) {
+      payload.decor_code = normalizedDecorCode || null;
+    }
+
+    if (normalizedColor !== String(originalItem.color || "").trim()) {
+      payload.color = normalizedColor || null;
+    }
+
+    if (normalizedMaterialType !== String(originalItem.material_type || "").trim()) {
+      payload.material_type = normalizedMaterialType || null;
+    }
+
+    if (normalizedWidth !== String(originalItem.width_mm ?? "").trim()) {
+      const nextWidth = normalizedWidth === "" ? null : Number(normalizedWidth);
+      if (nextWidth !== null && (!Number.isFinite(nextWidth) || nextWidth <= 0)) {
+        setEdgeEditError(language === "uk" ? "Вкажіть коректну ширину" : "Enter a valid width");
+        return;
+      }
+      payload.width_mm = nextWidth;
+    }
+
+    if (normalizedThickness !== String(originalItem.thickness_mm ?? "").trim()) {
+      const nextThickness = normalizedThickness === "" ? null : Number(normalizedThickness);
+      if (nextThickness !== null && (!Number.isFinite(nextThickness) || nextThickness <= 0)) {
+        setEdgeEditError(language === "uk" ? "Вкажіть коректну товщину" : "Enter a valid thickness");
+        return;
+      }
+      payload.thickness_mm = nextThickness;
+    }
+
+    if (normalizedFinish !== String(originalItem.finish || "").trim()) {
+      payload.finish = normalizedFinish || null;
+    }
+
+    if (normalizedImageUrl !== String(originalItem.image_url || "").trim()) {
+      payload.image_url = normalizedImageUrl || null;
+    }
+
+    if (Boolean(edgeEditForm.is_active) !== Boolean(originalItem.is_active)) {
+      payload.is_active = Boolean(edgeEditForm.is_active);
+    }
+
+    setEdgeEditSaving(true);
+    setEdgeEditError("");
+
+    const result = await updateEdgeCatalog(token, originalItem.id, payload);
+    setEdgeEditSaving(false);
+
+    if (!result.success) {
+      setEdgeEditError(result.error || (language === "uk" ? "Не вдалося оновити крайку" : "Unable to update edge"));
+      return;
+    }
+
+    const updatedItem = result.item || {
+      ...originalItem,
+      ...payload,
+    };
+
+    setEdgeItems((current) =>
+      current.map((item) =>
+        String(item.id || "") === String(originalItem.id || "")
+          ? { ...item, ...updatedItem }
+          : item,
+      ),
+    );
+    setSelectedEdgeDetail((current) =>
+      current && String(current.id || "") === String(originalItem.id || "")
+        ? { ...current, ...updatedItem }
+        : current,
+    );
+    setEdgeDetailModalOpen(true);
+    closeEdgeEditModal();
+    setStatus({ message: language === "uk" ? "Крайку оновлено" : "Edge updated", tone: "success" });
+  }
+
+  async function handleDeleteEdgeConfirm() {
+    if (!token || !edgeDeleteTarget?.id) {
+      return;
+    }
+
+    setEdgeDeleteBusy(true);
+    const result = await deleteEdgeCatalog(token, edgeDeleteTarget.id);
+    setEdgeDeleteBusy(false);
+
+    if (!result.success) {
+      throw new Error(result.error || (language === "uk" ? "Не вдалося видалити крайку" : "Unable to delete edge"));
+    }
+
+    const deletedId = String(edgeDeleteTarget.id || "");
+    setEdgeItems((current) => current.filter((item) => String(item.id || "") !== deletedId));
+    if (selectedEdgeDetail && String(selectedEdgeDetail.id || "") === deletedId) {
+      closeEdgeDetails();
+    }
+    setEdgeDeleteTarget(null);
+    setStatus({ message: language === "uk" ? "Крайку видалено" : "Edge deleted", tone: "success" });
+    await loadEdgesCatalog(token);
+  }
+
+  function closeEdgeDeleteConfirm() {
+    if (edgeDeleteBusy) {
+      return;
+    }
+
+    setEdgeDeleteTarget(null);
   }
 
   async function openMaterialDetails(item, options = {}) {
@@ -14198,6 +15366,16 @@ export default function App() {
     setMaterialOwnersModalOpen(false);
     setMaterialEdgeForms({});
     setMaterialEdgeCreateForm({ open: false, edge_key: "edge_08", source_url: "" });
+    setMaterialCanonicalEdgeSelectorOpen(false);
+    setMaterialCanonicalEdgeSelectorItems([]);
+    setMaterialCanonicalEdgeSelectorLoading(false);
+    setMaterialCanonicalEdgeSelectorSaving(false);
+    setMaterialCanonicalEdgeSelectorError("");
+    setMaterialCanonicalEdgeSelectorSearch("");
+    setMaterialCanonicalEdgeSelectorManufacturerId("");
+    setMaterialCanonicalEdgeSelectorSupplierId("");
+    setMaterialCanonicalEdgeSelectorSelectedEdgeId("");
+    materialCanonicalEdgeSelectorRequestRef.current = { id: 0, open: false };
   }
 
   async function loadMaterialOwners(article, openModal = false) {
@@ -14304,6 +15482,28 @@ export default function App() {
   }, [materialDetailModalOpen, materialEditModalOpen, materialOwnersModalOpen]);
 
   useEffect(() => {
+    if (!materialCanonicalEdgeSelectorOpen) {
+      return undefined;
+    }
+
+    const timerId = window.setTimeout(() => {
+      void loadMaterialCanonicalEdgeSelectorItems(token, {
+        search: materialCanonicalEdgeSelectorSearch,
+        manufacturerId: materialCanonicalEdgeSelectorManufacturerId || undefined,
+        supplierId: materialCanonicalEdgeSelectorSupplierId || undefined,
+      });
+    }, 180);
+
+    return () => window.clearTimeout(timerId);
+  }, [
+    materialCanonicalEdgeSelectorManufacturerId,
+    materialCanonicalEdgeSelectorOpen,
+    materialCanonicalEdgeSelectorSearch,
+    materialCanonicalEdgeSelectorSupplierId,
+    token,
+  ]);
+
+  useEffect(() => {
     if (!materialEditModalOpen) {
       return undefined;
     }
@@ -14332,6 +15532,66 @@ export default function App() {
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [materialEditModalOpen]);
+
+  useEffect(() => {
+    if (!materialCreateModalOpen) {
+      return undefined;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const handleKeyDown = (event) => {
+      if (event.key !== "Escape") {
+        return;
+      }
+
+      event.preventDefault();
+      closeMaterialCreateModal();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    const focusTimer = window.setTimeout(() => {
+      materialCreateCloseButtonRef.current?.focus?.();
+    }, 0);
+
+    return () => {
+      window.clearTimeout(focusTimer);
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [materialCreateModalOpen]);
+
+  useEffect(() => {
+    if (!edgeCreateModalOpen) {
+      return undefined;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const handleKeyDown = (event) => {
+      if (event.key !== "Escape") {
+        return;
+      }
+
+      event.preventDefault();
+      closeEdgeCreateModal();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    const focusTimer = window.setTimeout(() => {
+      edgeCreateCloseButtonRef.current?.focus?.();
+    }, 0);
+
+    return () => {
+      window.clearTimeout(focusTimer);
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [edgeCreateModalOpen]);
 
   async function openFittingDetails(item, returnFocusTarget = null, options = {}) {
     if (!token || !item?.id || !canViewFittingCatalog) {
@@ -14508,7 +15768,7 @@ export default function App() {
       if (fittingsCatalogRequestRef.current.id !== requestId || activeViewRef.current !== viewAtStart) {
         return fittingItems;
       }
-      
+
       if (!result.success) {
         const timeoutError = String(result.error || "").includes("Request timed out after");
         if (timeoutError && fittingItems.length) {
@@ -17679,6 +18939,10 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
   async function loadCatalogView(activeToken = token, viewer = user) {
     await loadCatalogItems(activeToken, viewer);
     await loadMaterialsCatalog(activeToken, { category: "dsp", search: "" });
+    await loadEdgesCatalog(activeToken);
+    await loadFittingsCatalog(activeToken, {
+      search: "",
+    });
     await loadViyarServices(activeToken, viewer);
     await loadManualServices(activeToken, viewer);
   }
@@ -18159,9 +19423,26 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
     setSelectedFittingCategory("");
   }
 
+  function openFittingCategoryCatalog(categoryCode) {
+    const normalizedCategoryCode = String(categoryCode || "").trim();
+    if (!normalizedCategoryCode) {
+      return;
+    }
+
+    const nextFittingView = activeView === "catalogFasteners" ? "catalogFasteners" : "catalogFittings";
+    setSelectedFittingCategory(normalizedCategoryCode);
+    setActiveView(nextFittingView);
+    activeViewRef.current = nextFittingView;
+    localStorage.setItem(ACTIVE_VIEW_STORAGE_KEY, nextFittingView);
+    updateAdminHistory({
+      category: normalizedCategoryCode,
+      view: nextFittingView,
+    });
+  }
+
   function openFittingCatalogRoot() {
     resetFittingCatalogNavigation();
-    switchView("catalogFittings");
+    switchView(activeView === "catalogFasteners" ? "catalogFasteners" : "catalogFittings");
   }
 
   function openMaterialCatalogRoot() {
@@ -18170,6 +19451,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
     setMaterialCategoryFilter("");
     localStorage.removeItem(MATERIAL_CATEGORY_STORAGE_KEY);
     updateAdminHistory({
+      category: null,
       view: "catalogMaterials",
     });
   }
@@ -18187,6 +19469,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
     activeViewRef.current = "catalogMaterials";
     localStorage.setItem(ACTIVE_VIEW_STORAGE_KEY, "catalogMaterials");
     updateAdminHistory({
+      category: normalizedCategoryCode,
       view: "catalogMaterials",
     });
   }
@@ -18198,6 +19481,14 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
     let nextMountingNodesRoute = null;
 
     if ((nextView === "catalogFittings" || nextView === "catalogFasteners") && !canViewFittingCatalog) {
+      return;
+    }
+
+    if (nextView === "catalogEdges" && !canViewMaterialCatalog) {
+      const fallbackView = canViewMaterialCatalog ? "catalogMaterials" : "home";
+      setActiveView(fallbackView);
+      activeViewRef.current = fallbackView;
+      localStorage.setItem(ACTIVE_VIEW_STORAGE_KEY, fallbackView);
       return;
     }
 
@@ -19215,6 +20506,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
         } else {
           setStatus({ message: result.error || t.materialImportSuccess, tone: "success" });
         }
+        closeMaterialCreateModal();
         if (canViewMaterialCatalog) {
           await loadMaterialsCatalog(token);
         }
@@ -19352,6 +20644,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
       setLoading(false);
       setMaterialImportWorking(false);
       resetMaterialImportProgress();
+      closeMaterialCreateModal();
 
       if (canViewMaterialCatalog) {
         await loadMaterialsCatalog(token);
@@ -19367,6 +20660,178 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
       setMaterialImportWorking(false);
       resetMaterialImportProgress();
     }
+  }
+
+  async function handleEdgeCreateSubmit(event) {
+    event.preventDefault();
+
+    if (!token || !canEditMaterialCatalog) {
+      return;
+    }
+
+    if (edgeCreateMode === "source") {
+      if (!edgeCreateSourcePreview || !edgeCreateSourcePreview.success) {
+        await handlePreviewEdgeCreateSource();
+        return;
+      }
+
+      setEdgeCreateSaving(true);
+      setEdgeCreateError("");
+      setLoading(true);
+
+      try {
+        const result = await createEdgeCatalogFromSource(token, {
+          preview_result: edgeCreateSourcePreview,
+          city: String(activeCity || "").trim() || null,
+        });
+
+        if (!result.success) {
+          setEdgeCreateError(result.error || t.unableToLoadCatalog);
+          return;
+        }
+
+        closeEdgeCreateModal();
+        setStatus({
+          message: language === "uk" ? "Крайки створено" : "Edges created",
+          tone: "success",
+        });
+        if (isCatalogEdgesView) {
+          await loadEdgesCatalog(token);
+        }
+      } catch (error) {
+        setEdgeCreateError(error?.message || t.unableToLoadCatalog);
+      } finally {
+        setLoading(false);
+        setEdgeCreateSaving(false);
+      }
+
+      return;
+    }
+
+    if (edgeCreateImageUploading) {
+      setEdgeCreateError(language === "uk" ? "Зачекайте, поки завершиться завантаження зображення" : "Wait for image upload to finish");
+      return;
+    }
+
+    const normalizedManufacturerId = String(edgeCreateForm.manufacturer_id || "").trim();
+    const normalizedName = String(edgeCreateForm.name || "").trim();
+    const normalizedWidth = String(edgeCreateForm.width_mm || "").trim().replace(",", ".");
+    const normalizedThickness = String(edgeCreateForm.thickness_mm || "").trim().replace(",", ".");
+
+    if (!normalizedManufacturerId) {
+      setEdgeCreateError(language === "uk" ? "Оберіть виробника" : "Select a manufacturer");
+      return;
+    }
+
+    if (!normalizedName) {
+      setEdgeCreateError(language === "uk" ? "Назва крайки є обов'язковою" : "Edge name is required");
+      return;
+    }
+
+    const parsedManufacturerId = Number(normalizedManufacturerId);
+    const parsedWidth = Number(normalizedWidth);
+    const parsedThickness = Number(normalizedThickness);
+
+    if (!Number.isFinite(parsedManufacturerId) || parsedManufacturerId <= 0) {
+      setEdgeCreateError(language === "uk" ? "Оберіть виробника" : "Select a manufacturer");
+      return;
+    }
+
+    if (!Number.isFinite(parsedWidth) || parsedWidth <= 0) {
+      setEdgeCreateError(language === "uk" ? "Ширина має бути додатним числом" : "Width must be a positive number");
+      return;
+    }
+
+    if (!Number.isFinite(parsedThickness) || parsedThickness <= 0) {
+      setEdgeCreateError(language === "uk" ? "Товщина має бути додатним числом" : "Thickness must be a positive number");
+      return;
+    }
+
+    const payload = {
+      manufacturer_id: parsedManufacturerId,
+      name: normalizedName,
+      width_mm: parsedWidth,
+      thickness_mm: parsedThickness,
+      is_active: Boolean(edgeCreateForm.is_active),
+    };
+
+    const normalizedUploadedImageUrl = normalizeEdgeImageUrl(edgeCreateUploadedImageUrl);
+    const normalizedExternalImageUrl = normalizeEdgeImageUrl(edgeCreateForm.image_url);
+    const optionalTextFields = [
+      ["manufacturer_article", edgeCreateForm.manufacturer_article],
+      ["decor_code", edgeCreateForm.decor_code],
+      ["color", edgeCreateForm.color],
+      ["material_type", edgeCreateForm.material_type],
+      ["finish", edgeCreateForm.finish],
+    ];
+
+    optionalTextFields.forEach(([key, value]) => {
+      const normalizedValue = String(value || "").trim();
+      if (normalizedValue) {
+        payload[key] = normalizedValue;
+      }
+    });
+
+    if (normalizedUploadedImageUrl || normalizedExternalImageUrl) {
+      payload.image_url = normalizedUploadedImageUrl || normalizedExternalImageUrl;
+    }
+
+    setEdgeCreateSaving(true);
+    setEdgeCreateError("");
+    setLoading(true);
+
+    try {
+      const result = await createEdgeCatalog(token, payload);
+      if (!result.success) {
+        setEdgeCreateError(result.error || t.unableToLoadCatalog);
+        return;
+      }
+
+      closeEdgeCreateModal();
+      setStatus({
+        message: language === "uk" ? "Крайку створено" : "Edge created",
+        tone: "success",
+      });
+      if (isCatalogEdgesView) {
+        await loadEdgesCatalog(token);
+      }
+    } catch (error) {
+      setEdgeCreateError(error?.message || t.unableToLoadCatalog);
+    } finally {
+      setLoading(false);
+      setEdgeCreateSaving(false);
+    }
+  }
+
+  async function handlePreviewEdgeCreateSource() {
+    if (!token || edgeCreateSourcePreviewLoading) {
+      return;
+    }
+
+    const sourceUrl = String(edgeCreateSourceUrl || "").trim();
+    if (!sourceUrl) {
+      setEdgeCreateSourcePreviewError(language === "uk" ? "Вкажіть посилання на товар" : "Enter a product URL");
+      setEdgeCreateSourcePreview(null);
+      return;
+    }
+
+    setEdgeCreateSourcePreviewLoading(true);
+    setEdgeCreateSourcePreviewError("");
+    setEdgeCreateError("");
+
+    const result = await previewEdgeCatalogSource(token, {
+      source_url: sourceUrl,
+    });
+
+    setEdgeCreateSourcePreviewLoading(false);
+
+    if (!result.success) {
+      setEdgeCreateSourcePreview(null);
+      setEdgeCreateSourcePreviewError(result.error || t.unableToLoadCatalog);
+      return;
+    }
+
+    setEdgeCreateSourcePreview(result);
   }
 
   async function handleMaterialImageUpload(event) {
@@ -19391,7 +20856,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
       return;
     }
 
-    setOpenMaterialMenuId("");
+    closeMaterialMenu();
     setConfirmAction({
       type: "deleteMaterial",
       title: t.deleteMaterial,
@@ -19406,7 +20871,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
       return;
     }
 
-    setOpenMaterialMenuId("");
+    closeMaterialMenu();
     setMaterialEditItem(item);
     setMaterialEditForm(buildMaterialEditForm(item));
     setMaterialEditError("");
@@ -19420,11 +20885,136 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
     setMaterialEditItem(null);
   }
 
+  function openMaterialCreateModal() {
+    if (!canEditMaterialCatalog) {
+      return;
+    }
+
+    setMaterialCreateModalOpen(true);
+  }
+
+  function closeMaterialCreateModal() {
+    setMaterialCreateModalOpen(false);
+  }
+
+  function openEdgeCreateModal() {
+    if (!canEditMaterialCatalog) {
+      return;
+    }
+
+    setEdgeCreateMode("source");
+    setEdgeCreateForm(buildEdgeCreateForm());
+    setEdgeCreateSourceUrl("");
+    setEdgeCreateSourcePreview(null);
+    setEdgeCreateSourcePreviewLoading(false);
+    setEdgeCreateSourcePreviewError("");
+    setEdgeCreateError("");
+    setEdgeCreateImageUploading(false);
+    setEdgeCreateUploadedImageUrl("");
+    if (edgeCreateImageFileInputRef.current) {
+      edgeCreateImageFileInputRef.current.value = "";
+    }
+    setEdgeCreateModalOpen(true);
+  }
+
+  function openEdgeCreateManualForm() {
+    setEdgeCreateMode("manual");
+    setEdgeCreateSourcePreviewError("");
+    setEdgeCreateError("");
+  }
+
+  function openEdgeCreateSourceForm() {
+    setEdgeCreateMode("source");
+    setEdgeCreateSourcePreviewError("");
+    setEdgeCreateError("");
+  }
+
+  function closeEdgeCreateModal() {
+    if (edgeCreateImageUploading) {
+      return;
+    }
+
+    setEdgeCreateModalOpen(false);
+    setEdgeCreateMode("source");
+    setEdgeCreateSaving(false);
+    setEdgeCreateImageUploading(false);
+    setEdgeCreateError("");
+    setEdgeCreateForm(buildEdgeCreateForm());
+    setEdgeCreateUploadedImageUrl("");
+    setEdgeCreateSourceUrl("");
+    setEdgeCreateSourcePreview(null);
+    setEdgeCreateSourcePreviewLoading(false);
+    setEdgeCreateSourcePreviewError("");
+    if (edgeCreateImageFileInputRef.current) {
+      edgeCreateImageFileInputRef.current.value = "";
+    }
+  }
+
   function updateMaterialEditForm(field, value) {
     setMaterialEditForm((current) => ({
       ...current,
       [field]: value,
     }));
+  }
+
+  function updateEdgeCreateForm(field, value) {
+    setEdgeCreateForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  }
+
+  function clearEdgeCreateImageSelection() {
+    setEdgeCreateImageUploading(false);
+    setEdgeCreateUploadedImageUrl("");
+    updateEdgeCreateForm("image_url", "");
+    if (edgeCreateImageFileInputRef.current) {
+      edgeCreateImageFileInputRef.current.value = "";
+    }
+  }
+
+  function openEdgeCreateImageFilePicker() {
+    edgeCreateImageFileInputRef.current?.click?.();
+  }
+
+  async function handleEdgeCreateImageFileChange(event) {
+    const file = event.target.files?.[0] || null;
+    if (!file || !token || !canEditMaterialCatalog) {
+      if (event.target) {
+        event.target.value = "";
+      }
+      return;
+    }
+
+    const normalizedType = String(file.type || "").toLowerCase();
+    if (!isAllowedEdgeImageType(normalizedType)) {
+      setEdgeCreateError(language === "uk" ? "Дозволені тільки PNG, JPG, JPEG або WEBP" : "Only PNG, JPG, JPEG, or WEBP files are allowed");
+      event.target.value = "";
+      return;
+    }
+
+    if (file.size > EDGE_IMAGE_MAX_SIZE_BYTES) {
+      setEdgeCreateError(language === "uk" ? "Файл занадто великий" : "File is too large");
+      event.target.value = "";
+      return;
+    }
+
+    setEdgeCreateImageUploading(true);
+    setEdgeCreateError("");
+
+    try {
+      const result = await uploadEdgeImage(token, file);
+      if (!result?.success || !result?.image_url) {
+        throw new Error(result?.error || (language === "uk" ? "Не вдалося завантажити зображення" : "Unable to upload image"));
+      }
+
+      setEdgeCreateUploadedImageUrl(normalizeEdgeImageUrl(result.image_url));
+    } catch (error) {
+      setEdgeCreateError(error?.message || (language === "uk" ? "Не вдалося завантажити зображення" : "Unable to upload image"));
+    } finally {
+      setEdgeCreateImageUploading(false);
+      event.target.value = "";
+    }
   }
 
   async function handleMaterialEditSubmit(event) {
@@ -19586,7 +21176,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
       return;
     }
 
-    setOpenMaterialMenuId("");
+    closeMaterialMenu();
     setStatus({ message: t.materialRefreshStarted, tone: "info" });
     setMaterialImportWorking(true);
     setLoading(true);
@@ -20614,6 +22204,11 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
       return;
     }
 
+    if (confirmAction.type === "unlinkCanonicalEdge") {
+      await handleUnlinkMaterialCanonicalEdge(confirmAction.targetId);
+      return;
+    }
+
     if (confirmAction.type === "deleteFitting") {
       await handleDeleteFitting(confirmAction.targetId);
       return;
@@ -20851,6 +22446,45 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
   }, [selectedFittingCategory]);
 
   useEffect(() => {
+    if (!isCatalogFittingsView && !isCatalogFastenersView) {
+      return;
+    }
+
+    if (fittingCanonicalCatalogLoading) {
+      return;
+    }
+
+    const normalizedCategoryCode = String(selectedFittingCategory || "").trim();
+    if (!normalizedCategoryCode) {
+      return;
+    }
+
+    const hasValidCategory = fittingCategories.some(
+      (category) => String(category?.code || "").trim() === normalizedCategoryCode,
+    );
+
+    if (hasValidCategory) {
+      return;
+    }
+
+    setSelectedFittingCategory("");
+    updateAdminHistory(
+      {
+        category: null,
+        view: activeView === "catalogFasteners" ? "catalogFasteners" : "catalogFittings",
+      },
+      { replace: true },
+    );
+  }, [
+    activeView,
+    fittingCanonicalCatalogLoading,
+    fittingCategories,
+    isCatalogFastenersView,
+    isCatalogFittingsView,
+    selectedFittingCategory,
+  ]);
+
+  useEffect(() => {
     localStorage.setItem(FITTING_VIEW_MODE_STORAGE_KEY, fittingViewMode);
   }, [fittingViewMode]);
 
@@ -21005,6 +22639,49 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
   }, [token, canViewMaterialCatalog, isCatalogMaterialsView, materialCategoryFilter, materialSearch, materialOwnershipScope]);
 
   useEffect(() => {
+    if (!token || !isCatalogEdgesView || !canViewMaterialCatalog) {
+      return;
+    }
+
+    loadEdgesCatalog(token);
+  }, [token, canViewMaterialCatalog, isCatalogEdgesView, edgeSearch, edgeManufacturerFilter, edgeSupplierFilter]);
+
+  useEffect(() => {
+    if (!token || !isCatalogEdgesView || !canViewMaterialCatalog) {
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      if (!materialManufacturers.length) {
+        try {
+          const result = await listMaterialManufacturers(token, false);
+          if (!cancelled && result.success) {
+            setMaterialManufacturers(Array.isArray(result.items) ? result.items : []);
+          }
+        } catch {
+          // Keep the current manufacturer list when the shared directory request fails.
+        }
+      }
+
+      if (!fittingSupplierItems.length) {
+        await loadFittingSuppliers(token);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    canViewMaterialCatalog,
+    fittingSupplierItems.length,
+    isCatalogEdgesView,
+    materialManufacturers.length,
+    token,
+  ]);
+
+  useEffect(() => {
     if (
       !token ||
       sidebarFlyout?.groupKey !== "catalog" ||
@@ -21098,6 +22775,75 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
 
     localStorage.removeItem(MATERIAL_CATEGORY_STORAGE_KEY);
   }, [materialCategoryFilter]);
+
+  useEffect(() => {
+    if (edgeSearch) {
+      localStorage.setItem(EDGE_CATALOG_SEARCH_STORAGE_KEY, edgeSearch);
+      return;
+    }
+
+    localStorage.removeItem(EDGE_CATALOG_SEARCH_STORAGE_KEY);
+  }, [edgeSearch]);
+
+  useEffect(() => {
+    if (edgeManufacturerFilter) {
+      localStorage.setItem(EDGE_CATALOG_MANUFACTURER_STORAGE_KEY, edgeManufacturerFilter);
+      return;
+    }
+
+    localStorage.removeItem(EDGE_CATALOG_MANUFACTURER_STORAGE_KEY);
+  }, [edgeManufacturerFilter]);
+
+  useEffect(() => {
+    if (edgeSupplierFilter) {
+      localStorage.setItem(EDGE_CATALOG_SUPPLIER_STORAGE_KEY, edgeSupplierFilter);
+      return;
+    }
+
+    localStorage.removeItem(EDGE_CATALOG_SUPPLIER_STORAGE_KEY);
+  }, [edgeSupplierFilter]);
+
+  useEffect(() => {
+    if (!isCatalogMaterialsView || materialsCatalogLoading || !materialCategoryValidationReady) {
+      return;
+    }
+
+    const normalizedCategoryCode = normalizeMaterialCategoryCode(materialCategoryFilter);
+    if (!normalizedCategoryCode) {
+      return;
+    }
+
+    const hasValidCategory = materialCategories.some(
+      (category) => normalizeMaterialCategoryCode(category?.code) === normalizedCategoryCode,
+    );
+
+    if (hasValidCategory) {
+      return;
+    }
+
+    setMaterialCategoryFilter("");
+    updateAdminHistory(
+      {
+        category: null,
+        view: "catalogMaterials",
+      },
+      { replace: true },
+    );
+  }, [
+    isCatalogMaterialsView,
+    materialCategories,
+    materialCategoryFilter,
+    materialCategoryValidationReady,
+    materialsCatalogLoading,
+  ]);
+
+  useEffect(() => {
+    localStorage.setItem(MATERIAL_CATALOG_VIEW_MODE_STORAGE_KEY, materialCatalogViewMode);
+  }, [materialCatalogViewMode]);
+
+  useEffect(() => {
+    localStorage.setItem(EDGE_CATALOG_VIEW_MODE_STORAGE_KEY, edgeCatalogViewMode);
+  }, [edgeCatalogViewMode]);
 
   useEffect(() => {
     if (!token || (!isCatalogFittingsView && !isCatalogFastenersView)) {
@@ -21652,6 +23398,17 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                     >
                     {t.catalogMaterials}
                   </button>
+                  <button
+                    className={isCatalogEdgesView ? "active" : ""}
+                    onClick={() => {
+                      setSidebarCatalogSubmenuKey("");
+                      switchView("catalogEdges");
+                      closeSidebarOnMobile();
+                    }}
+                    type="button"
+                  >
+                    {language === "uk" ? "Крайки" : "Edges"}
+                  </button>
                   {canViewMaterialCatalog ? (
                     <button
                       className={isCatalogMaterialCategoriesView ? "active" : ""}
@@ -22054,7 +23811,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
         : null}
 
       <section className={`workspace${isMaterialCleanupView ? " materials-workspace" : ""}`}>
-        {!isMaterialCleanupView && !isCatalogFittingManufacturersView ? (
+        {!isMaterialCleanupView && !isCatalogFittingManufacturersView && !shouldHideFittingsCatalogOuterToolbar && !isCatalogHubView ? (
         <header
           className={`toolbar${activeView === "projectDetails" ? " project-toolbar" : ""}`}
         >
@@ -22069,7 +23826,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
             </button>
             {isCatalogHolesView
               ? renderCatalogHolesToolbarBreadcrumb(getMountingNodesToolbarBreadcrumbItemsCanonical())
-            : isMountingSchemesView || isCatalogSuppliersView
+              : isMountingSchemesView || isCatalogSuppliersView || shouldHideFittingsCatalogOuterToolbar
               ? null
               : (
                 <h2>
@@ -22111,6 +23868,8 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                       ? t.catalogViyar
                     : isCatalogManualView
                       ? t.catalogManual
+                    : isCatalogEdgesView
+                      ? ""
                     : isProcessingView
                       ? (language === "uk" ? "Обробка деталей" : "Processing")
                     : isConnectionsWorkspaceView
@@ -22136,7 +23895,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   <Info size={16} />
                 </button>
               </div>
-            ) : activePageLabel ? (
+            ) : activePageLabel && !shouldHideFittingsCatalogOuterToolbar ? (
               <p>{activePageLabel}</p>
             ) : null}
           </div>
@@ -22271,7 +24030,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
               >
                 <RefreshCw size={18} />
               </button>
-            ) : isCatalogView && !isCatalogFittingManufacturersView ? (
+            ) : isCatalogView && !isCatalogFittingManufacturersView && !shouldHideFittingsCatalogOuterToolbar ? (
               <button
                 aria-label="Refresh catalog"
                 className="icon-button"
@@ -22481,6 +24240,15 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                     description: t.catalogMaterialsDescription,
                     count: materialItems.length,
                     onClick: () => switchView("catalogMaterials"),
+                  },
+                  {
+                    key: "edges",
+                    label: language === "uk" ? "Крайки" : "Edges",
+                    description: language === "uk"
+                      ? "Крайки з фільтрами по виробнику та постачальнику."
+                      : "Edge bands with manufacturer and supplier filters.",
+                    count: edgeItems.length,
+                    onClick: () => switchView("catalogEdges"),
                   },
                   {
                     key: "fittings",
@@ -23890,120 +25658,952 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
         ) : isCatalogHubView ? (
           <section className="table-panel full-panel">
             <div className="catalog-hub-layout">
-              <article className="catalog-hub-card catalog-hub-card-hero">
-                <div className="service-catalog-title">
-                  <h3>{t.catalogHubTitle}</h3>
+              <div className="catalog-hub-header">
+                <div className="service-catalog-title catalog-hub-header-copy">
+                  <h3>{t.catalog}</h3>
                   <p>{t.catalogHubDescription}</p>
                 </div>
-                <div className="catalog-hub-quick-grid">
-                  {[
-                    {
-                      key: "materials",
-                      count: materialItems.length,
-                      description: t.catalogMaterialsDescription,
-                      label: t.catalogMaterials,
-                      onClick: () => switchView("catalogMaterials"),
-                    },
-                    {
-                      key: "viyar",
-                      count: viyarServiceCounts.services,
-                      description: t.viyarServicesDescription,
-                      label: t.catalogViyar,
-                      onClick: () => switchView("catalogViyar"),
-                    },
-                    {
-                      key: "drilling_rules",
-                      count: drillingRuleItems.length,
-                      description: t.drillingServiceRulesDescription,
-                      label: t.drillingServiceRulesTitle,
-                      onClick: () => switchView("catalogDrillingRules"),
-                    },
-                    {
-                      key: "manual",
-                      count: manualServiceItems.length,
-                      description: t.catalogManualDescription,
-                      label: t.catalogManual,
-                      onClick: () => switchView("catalogManual"),
-                    },
-                    {
-                      key: "values",
-                      count: catalogItems.length,
-                      description: t.catalogValuesDescription,
-                      label: t.catalogValues,
-                      onClick: () => switchView("catalogValues"),
-                    },
-                  ].map((item) => {
-                    const visual = CATALOG_TILE_VISUALS[item.key];
-                    const Icon = visual.icon;
+              </div>
+              <div className="catalog-hub-grid" role="list" aria-label={t.catalog}>
+                {catalogHubCards.map((item) => {
+                  const Icon = item.icon;
 
-                    return (
-                      <button
-                        className="catalog-choice-card"
-                        key={item.key}
-                        onClick={item.onClick}
-                        type="button"
-                      >
-                        <span
-                          className="catalog-choice-art"
-                          style={{ "--catalog-accent": visual.accent }}
-                        >
-                          <Icon size={34} />
+                  return (
+                    <button
+                      className={`catalog-hub-tile${item.wide ? " catalog-hub-tile-wide" : ""}`}
+                      key={item.key}
+                      onClick={item.onClick}
+                      type="button"
+                    >
+                      <span className="catalog-hub-tile-media">
+                        <span className="catalog-hub-tile-image-frame">
+                          <img alt="" aria-hidden="true" loading="lazy" src={item.image} />
                         </span>
-                        <div className="catalog-choice-copy">
+                        <span
+                          className="catalog-hub-tile-icon"
+                          style={{ "--catalog-accent": item.accent }}
+                        >
+                          <Icon size={24} />
+                        </span>
+                      </span>
+                      <span className="catalog-hub-tile-body">
+                        <span className="catalog-hub-tile-copy">
                           <strong>{item.label}</strong>
                           <span>{item.description}</span>
-                        </div>
-                        <div className="catalog-choice-meta">
-                          <span className="service-tree-badge subtle">{item.count}</span>
-                          <span>{t.openDirectory}</span>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </article>
-
-              <article className="catalog-hub-card">
-                <div className="service-catalog-header">
-                  <div className="service-catalog-title">
-                    <h3>{t.catalogBrowseCategories}</h3>
-                    <p>{t.viyarServicesDescription}</p>
+                        </span>
+                        <span className="catalog-hub-tile-chips">
+                          {item.chips.map((chip) => (
+                            <span className="catalog-hub-chip" key={`${item.key}-${chip.label}`}>
+                              <strong>{chip.value}</strong>
+                              <span>{chip.label}</span>
+                            </span>
+                          ))}
+                        </span>
+                        <span className="catalog-hub-tile-link">
+                          {t.openDirectory}
+                          <ChevronRight size={16} />
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </section>
+        ) : isCatalogEdgesView ? (
+          <section className="table-panel full-panel" key="catalogEdges">
+            <article className="catalog-card service-catalog-card service-catalog-card-full">
+              <div className="catalog-page-header material-taxonomy-page-header">
+                <div className="service-catalog-title material-taxonomy-page-title">
+                      <div className="fitting-category-breadcrumb fitting-category-breadcrumb-top">
+                        <h3 className="catalog-breadcrumb-title">
+                          <button className="catalog-breadcrumb-link" onClick={() => switchView("catalogHub")} type="button">
+                            {t.catalog}
+                          </button>
+                        </h3>
+                    <span className="fitting-breadcrumb-separator">/</span>
+                    <h3 className="catalog-breadcrumb-title">{language === "uk" ? "Крайки" : "Edges"}</h3>
                   </div>
+                  <p>
+                    {language === "uk"
+                      ? "Каталог крайок із пов’язаними постачальниками та цінами."
+                      : "Catalog of edge bands with related suppliers and prices."}
+                  </p>
                 </div>
-                <div className="catalog-category-grid">
-                  {viyarTopFolders.map((folder) => {
-                    const visual = VIYAR_FOLDER_TILE_VISUALS[folder.external_code] || {
-                      accent: "#2f8ecb",
-                      icon: FolderTree,
-                    };
-                    const Icon = visual.icon;
+                <div className="service-catalog-header-actions material-taxonomy-page-actions">
+                  <span className="service-tree-badge subtle">
+                    {edgeCatalogLoading && !edgeItems.length
+                      ? t.loading
+                      : `${edgeItems.length} ${language === "uk" ? "позицій" : "items"}`}
+                  </span>
+                  <div className="fittings-view-toggle material-catalog-view-toggle" role="tablist" aria-label={language === "uk" ? "Вигляд каталогу" : "Catalog view mode"}>
+                    <button
+                      className={`icon-button${edgeCatalogViewMode === "list" ? " active" : ""}`}
+                      onClick={() => setEdgeCatalogViewMode("list")}
+                      title={language === "uk" ? "Список" : "List"}
+                      type="button"
+                    >
+                      <Blocks size={16} />
+                    </button>
+                    <button
+                      className={`icon-button${edgeCatalogViewMode === "grid" ? " active" : ""}`}
+                      onClick={() => setEdgeCatalogViewMode("grid")}
+                      title={language === "uk" ? "Плитка" : "Grid"}
+                      type="button"
+                    >
+                      <LayoutGrid size={16} />
+                    </button>
+                  </div>
+                  {canEditMaterialCatalog ? (
+                    <button
+                      className="primary-button material-create-button"
+                      onClick={openEdgeCreateModal}
+                      type="button"
+                    >
+                      <Plus size={16} />
+                      {language === "uk" ? "Додати крайку" : "Add edge"}
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="fittings-toolbar-row material-category-toolbar-row">
+                <div className="fittings-toolbar-main">
+                  <label className="service-catalog-search">
+                    <Search size={16} />
+                    <input
+                      onChange={(event) => setEdgeSearch(event.target.value)}
+                      placeholder={language === "uk" ? "Пошук крайок" : "Search edges"}
+                      type="search"
+                      value={edgeSearch}
+                    />
+                  </label>
+                  <label className="materials-filter">
+                    <span>{language === "uk" ? "Виробник" : "Manufacturer"}</span>
+                    <select
+                      onChange={(event) => setEdgeManufacturerFilter(event.target.value)}
+                      value={edgeManufacturerFilter}
+                    >
+                      <option value="">{language === "uk" ? "Усі виробники" : "All manufacturers"}</option>
+                      {materialManufacturers.map((manufacturer) => (
+                        <option key={manufacturer.id} value={manufacturer.id}>
+                          {manufacturer.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="materials-filter">
+                    <span>{language === "uk" ? "Постачальник" : "Supplier"}</span>
+                    <select
+                      onChange={(event) => setEdgeSupplierFilter(event.target.value)}
+                      value={edgeSupplierFilter}
+                    >
+                      <option value="">{language === "uk" ? "Усі постачальники" : "All suppliers"}</option>
+                      {fittingSupplierItems.map((supplier) => (
+                        <option key={supplier.id} value={supplier.id}>
+                          {supplier.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <button
+                    className="ghost-button"
+                    disabled={edgeCatalogLoading}
+                    onClick={() => loadEdgesCatalog(token)}
+                    type="button"
+                  >
+                    <RefreshCw size={16} />
+                    {t.refresh}
+                  </button>
+                </div>
+              </div>
+
+              {edgeCatalogLoading && !edgeItems.length ? (
+                <div className="empty-state compact-empty-state">
+                  <span>{t.loading}</span>
+                </div>
+              ) : edgeItems.length ? (
+                <div className={edgeCatalogViewMode === "list" ? "material-card-grid material-card-grid-list" : "material-card-grid"}>
+                  {edgeItems.map((item) => {
+                    const manufacturerMeta = getMaterialManufacturerMeta(item, materialManufacturersById);
+                    const priceSummaryViewModel = getMaterialPriceSummaryViewModel(item);
+                    const supplierSummaryViewModel = getMaterialSupplierSummaryViewModel(item);
+                    const edgeImageUrl = String(item.image_url || "").trim();
+                    const resolvedEdgeImageUrl = edgeImageUrl ? resolveAdminAssetUrl(edgeImageUrl) : "";
+                    const sizeParts = [
+                      String(item.material_type || "").trim(),
+                      item.width_mm !== null && item.width_mm !== undefined ? `${String(item.width_mm).replace(/\.0+$/, "")} mm` : "",
+                      item.thickness_mm !== null && item.thickness_mm !== undefined ? `${String(item.thickness_mm).replace(/\.0+$/, "")} mm` : "",
+                    ].filter(Boolean);
+                    const sizeLabel = sizeParts.join(" × ");
 
                     return (
-                      <button
-                        className="catalog-category-card"
-                        key={folder.external_code}
-                        onClick={() => openViyarFolderCatalog(folder.external_code)}
-                        type="button"
+                      <article
+                        className={`material-card material-card-clickable${edgeCatalogViewMode === "list" ? " material-card-list" : ""}`}
+                        key={item.id}
+                        onClick={() => openEdgeDetails(item)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            openEdgeDetails(item);
+                          }
+                        }}
+                        role="button"
+                        tabIndex={0}
                       >
-                        <span
-                          className="catalog-category-art"
-                          style={{ "--catalog-accent": visual.accent }}
-                        >
-                          <Icon size={44} />
-                        </span>
-                        <div className="catalog-category-copy">
-                          <strong>{folder.name}</strong>
-                          <span>{folder.description}</span>
+                        <div className="material-card-media">
+                          {resolvedEdgeImageUrl ? (
+                            <img alt={item.name || ""} loading="lazy" src={resolvedEdgeImageUrl} />
+                          ) : (
+                            <div className="material-card-placeholder">
+                              {language === "uk" ? "Без фото" : "No image"}
+                            </div>
+                          )}
                         </div>
-                        <span className="service-tree-badge subtle">
-                          {countServiceTreeItems(folder.children || [])}
-                        </span>
-                      </button>
+                        <div className="material-card-body">
+                          <div className="material-card-topline">
+                            {manufacturerMeta ? renderManufacturerBadge(manufacturerMeta, { className: "fitting-manufacturer-badge" }) : null}
+                            {item.manufacturer_article ? (
+                              <span className="material-card-article">{item.manufacturer_article}</span>
+                            ) : null}
+                            {item.color ? (
+                              <span className="service-tree-badge subtle">{item.color}</span>
+                            ) : null}
+                            {item.finish ? (
+                              <span className="service-tree-badge subtle">{item.finish}</span>
+                            ) : null}
+                          </div>
+                          <strong>{item.name || item.manufacturer_article || t.notSet}</strong>
+                          <div className="material-card-price">
+                            {priceSummaryViewModel ? (
+                              <div className="material-card-price-summary">
+                                {priceSummaryViewModel.map((row) => (
+                                  <div className="material-card-price-summary-row" key={row.key}>
+                                    <b>{`${row.priceText} ${row.currency}${row.unit ? ` /${row.unit}` : ""}`}</b>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <b>{t.notSet}</b>
+                            )}
+                            {sizeLabel ? <span className="material-card-article">{sizeLabel}</span> : null}
+                          </div>
+                          <div className="material-card-meta">
+                            {supplierSummaryViewModel.length ? (
+                              <div className="material-card-supplier-strip" aria-label={language === "uk" ? "Постачальники крайки" : "Edge suppliers"}>
+                                {supplierSummaryViewModel.map((supplier) => (
+                                  <MaterialSupplierLogo
+                                    key={supplier.key}
+                                    name={supplier.name}
+                                    logoUrl={supplier.logoUrl}
+                                  />
+                                ))}
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+                      </article>
                     );
                   })}
                 </div>
-              </article>
-            </div>
+              ) : (
+                <div className="empty-state compact-empty-state">
+                  <span>{language === "uk" ? "Крайок поки немає." : "No edges yet."}</span>
+                </div>
+              )}
+            </article>
+            {edgeCreateModalOpen ? (
+              <div
+                aria-modal="true"
+                className="modal-backdrop"
+                onClick={closeEdgeCreateModal}
+                role="dialog"
+              >
+                <section
+                  className="confirm-modal material-details-modal material-create-modal"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <header className="confirm-header">
+                    <div>
+                      <strong>{language === "uk" ? "Додати крайку" : "Add edge"}</strong>
+                      <p>
+                        {edgeCreateMode === "source"
+                          ? (language === "uk"
+                            ? "Автоматичне створення крайки за посиланням."
+                            : "Create an edge from a link.")
+                          : (language === "uk"
+                            ? "Створення канонічної крайки в каталозі."
+                            : "Create a canonical edge in the catalog.")}
+                      </p>
+                    </div>
+                    <button
+                      ref={edgeCreateCloseButtonRef}
+                      aria-label={t.cancel}
+                      className="ghost-button compact-button detail-info-button"
+                      disabled={edgeCreateSaving || edgeCreateImageUploading}
+                      onClick={closeEdgeCreateModal}
+                      type="button"
+                    >
+                      <X size={16} />
+                    </button>
+                  </header>
+
+                  {edgeCreateError ? (
+                    <p className="status-message error">{edgeCreateError}</p>
+                  ) : null}
+
+                  <form className="materials-import-form" onSubmit={handleEdgeCreateSubmit}>
+                    <fieldset className="materials-import-form-fieldset" disabled={edgeCreateSaving || edgeCreateImageUploading}>
+                      <div className="materials-mode-switch" role="tablist" aria-label={language === "uk" ? "Спосіб створення" : "Create mode"}>
+                        <button
+                          className={`ghost-button${edgeCreateMode === "source" ? " active" : ""}`}
+                          onClick={openEdgeCreateSourceForm}
+                          type="button"
+                        >
+                          {language === "uk" ? "За посиланням" : "From link"}
+                        </button>
+                        <button
+                          className={`ghost-button${edgeCreateMode === "manual" ? " active" : ""}`}
+                          onClick={openEdgeCreateManualForm}
+                          type="button"
+                        >
+                          {language === "uk" ? "Вручну" : "Manual"}
+                        </button>
+                      </div>
+
+                      {edgeCreateMode === "source" ? (
+                        <>
+                          <label>
+                            {language === "uk" ? "Посилання на товар" : "Product URL"}
+                            <input
+                              autoFocus
+                              onChange={(event) => {
+                                setEdgeCreateSourceUrl(event.target.value);
+                                setEdgeCreateSourcePreview(null);
+                                setEdgeCreateSourcePreviewError("");
+                              }}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter") {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                }
+                              }}
+                              placeholder="https://..."
+                              type="url"
+                              value={edgeCreateSourceUrl}
+                            />
+                          </label>
+                          <div className="settings-hint">
+                            {edgeCreateSourcePreviewLoading
+                              ? (language === "uk" ? "Завантажуємо дані..." : "Loading data...")
+                              : (edgeCreateSourcePreview
+                                ? (language === "uk"
+                                  ? "Дані завантажено. Натисніть «Додати крайку»."
+                                  : "Data loaded. Click \"Add edge\".")
+                                : (edgeCreateSourcePreviewError || (language === "uk"
+                                  ? "Вставте посилання і натисніть нижню кнопку."
+                                  : "Paste a link and use the button below.")))}
+                          </div>
+                          {edgeCreateSourcePreview ? (
+                            <section className="edge-create-preview-card">
+                              <header className="edge-create-preview-header">
+                                <div>
+                                  <strong>{language === "uk" ? "Попередній перегляд" : "Preview"}</strong>
+                                  <p>
+                                    {`${edgeCreateSourcePreview.preview_count || 0} ${language === "uk" ? "результатів" : "results"}`}
+                                  </p>
+                                </div>
+                              </header>
+                              <div className="edge-create-preview-list">
+                                {(edgeCreateSourcePreview.items || []).map((item, index) => {
+                                  const discoveredCard = item?.discovered_card || {};
+                                  const canonicalCandidate = item?.canonical_candidate || {};
+                                  const supplierCandidate = item?.supplier_offer_candidate || {};
+                                  const name = String(canonicalCandidate.name || discoveredCard.name || "").trim();
+                                  const manufacturer = String(canonicalCandidate.manufacturer || "").trim();
+                                  const article = String(canonicalCandidate.manufacturer_article || discoveredCard.article || "").trim();
+                                  const sourceUrl = String(discoveredCard.source_url || supplierCandidate.source_url || "").trim();
+                                  const width = canonicalCandidate.width_mm === null || canonicalCandidate.width_mm === undefined ? "" : `${canonicalCandidate.width_mm}`;
+                                  const thickness = canonicalCandidate.thickness_mm === null || canonicalCandidate.thickness_mm === undefined ? "" : `${canonicalCandidate.thickness_mm}`;
+                                  const price = supplierCandidate.price === null || supplierCandidate.price === undefined || supplierCandidate.price === "" ? "" : `${supplierCandidate.price}`;
+
+                                  return (
+                                    <div className="edge-create-preview-row" key={`${sourceUrl || name || "edge"}-${index}`}>
+                                      <span>{name || (language === "uk" ? "Без назви" : "Untitled")}</span>
+                                      <strong>
+                                        {[
+                                          manufacturer,
+                                          article,
+                                          width ? `${language === "uk" ? "Ш" : "W"} ${width}` : "",
+                                          thickness ? `${language === "uk" ? "Т" : "T"} ${thickness}` : "",
+                                          supplierCandidate.supplier ? String(supplierCandidate.supplier) : "",
+                                          price ? `${price}${supplierCandidate.currency ? ` ${supplierCandidate.currency}` : ""}` : "",
+                                        ].filter(Boolean).join(" · ")}
+                                      </strong>
+                                      {sourceUrl ? <small>{sourceUrl}</small> : null}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </section>
+                          ) : null}
+                        </>
+                      ) : (
+                        <>
+                          <label>
+                            {language === "uk" ? "Виробник" : "Manufacturer"}
+                            <select
+                              onChange={(event) => updateEdgeCreateForm("manufacturer_id", event.target.value)}
+                              value={edgeCreateForm.manufacturer_id}
+                            >
+                              <option value="">{language === "uk" ? "Оберіть виробника" : "Select manufacturer"}</option>
+                              {materialManufacturers.map((manufacturer) => (
+                                <option key={manufacturer.id} value={manufacturer.id}>
+                                  {manufacturer.name}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label>
+                            {language === "uk" ? "Назва" : "Name"}
+                            <input
+                              onChange={(event) => updateEdgeCreateForm("name", event.target.value)}
+                              placeholder={language === "uk" ? "Наприклад: Крайка ABS" : "For example: ABS edge"}
+                              type="text"
+                              value={edgeCreateForm.name}
+                            />
+                          </label>
+                          <div className="materials-mode-switch" role="group" aria-label={language === "uk" ? "Розміри" : "Dimensions"}>
+                            <label>
+                              {language === "uk" ? "Ширина, мм" : "Width, mm"}
+                              <input
+                                min="0"
+                                onChange={(event) => updateEdgeCreateForm("width_mm", event.target.value)}
+                                step="0.01"
+                                type="number"
+                                value={edgeCreateForm.width_mm}
+                              />
+                            </label>
+                            <label>
+                              {language === "uk" ? "Товщина, мм" : "Thickness, mm"}
+                              <input
+                                min="0"
+                                onChange={(event) => updateEdgeCreateForm("thickness_mm", event.target.value)}
+                                step="0.01"
+                                type="number"
+                                value={edgeCreateForm.thickness_mm}
+                              />
+                            </label>
+                          </div>
+                          <label>
+                            {language === "uk" ? "Артикул виробника" : "Manufacturer article"}
+                            <input
+                              onChange={(event) => updateEdgeCreateForm("manufacturer_article", event.target.value)}
+                              type="text"
+                              value={edgeCreateForm.manufacturer_article}
+                            />
+                          </label>
+                          <label>
+                            {language === "uk" ? "Декор / код" : "Decor / code"}
+                            <input
+                              onChange={(event) => updateEdgeCreateForm("decor_code", event.target.value)}
+                              type="text"
+                              value={edgeCreateForm.decor_code}
+                            />
+                          </label>
+                          <label>
+                            {language === "uk" ? "Колір" : "Color"}
+                            <input
+                              onChange={(event) => updateEdgeCreateForm("color", event.target.value)}
+                              type="text"
+                              value={edgeCreateForm.color}
+                            />
+                          </label>
+                          <label>
+                            {language === "uk" ? "Тип матеріалу" : "Material type"}
+                            <input
+                              onChange={(event) => updateEdgeCreateForm("material_type", event.target.value)}
+                              type="text"
+                              value={edgeCreateForm.material_type}
+                            />
+                          </label>
+                          <label>
+                            {language === "uk" ? "Фініш" : "Finish"}
+                            <input
+                              onChange={(event) => updateEdgeCreateForm("finish", event.target.value)}
+                              type="text"
+                              value={edgeCreateForm.finish}
+                            />
+                          </label>
+                           <div className="supplier-form-field supplier-form-field-wide">
+                             <span>{language === "uk" ? "Зображення крайки" : "Edge image"}</span>
+                             <input
+                               ref={edgeCreateImageFileInputRef}
+                               accept={EDGE_IMAGE_ACCEPT}
+                               className="supplier-logo-file-input"
+                               onChange={handleEdgeCreateImageFileChange}
+                               type="file"
+                             />
+                             <div className="supplier-logo-upload-panel">
+                               <div className="supplier-logo-preview">
+                                 {(edgeCreateUploadedImageUrl || edgeCreateForm.image_url) ? (
+                                   <img
+                                     alt={edgeCreateForm.name || (language === "uk" ? "Зображення крайки" : "Edge image")}
+                                     className="supplier-logo-preview-mark"
+                                     loading="lazy"
+                                     src={resolveAdminAssetUrl(edgeCreateUploadedImageUrl || edgeCreateForm.image_url)}
+                                   />
+                                 ) : (
+                                   <div className="supplier-logo-preview-placeholder">
+                                     <span className="supplier-logo-fallback">{language === "uk" ? "Немає зображення" : "No image"}</span>
+                                   </div>
+                                 )}
+                               </div>
+                               <div className="supplier-logo-input-row">
+                                 <button
+                                   className="ghost-button compact-button"
+                                   disabled={edgeCreateSaving || edgeCreateImageUploading}
+                                   onClick={openEdgeCreateImageFilePicker}
+                                   type="button"
+                                 >
+                                   {edgeCreateImageUploading
+                                     ? (language === "uk" ? "Завантаження..." : "Uploading...")
+                                     : (language === "uk" ? "Завантажити файл" : "Upload file")}
+                                 </button>
+                                 <button
+                                   className="ghost-button compact-button"
+                                   disabled={edgeCreateSaving || edgeCreateImageUploading || !(edgeCreateUploadedImageUrl || edgeCreateForm.image_url)}
+                                   onClick={clearEdgeCreateImageSelection}
+                                   type="button"
+                                 >
+                                   {language === "uk" ? "Прибрати" : "Remove"}
+                                 </button>
+                               </div>
+                               <label className="supplier-form-field supplier-form-field-wide">
+                                 <span>{language === "uk" ? "URL зображення (необов'язково)" : "Image URL (optional)"}</span>
+                                 <input
+                                   onChange={(event) => updateEdgeCreateForm("image_url", event.target.value)}
+                                   placeholder="https://..."
+                                   type="url"
+                                   value={edgeCreateForm.image_url}
+                                 />
+                               </label>
+                             </div>
+                           </div>
+                           <label className="material-inline-check">
+                             <input
+                               checked={Boolean(edgeCreateForm.is_active)}
+                              onChange={(event) => updateEdgeCreateForm("is_active", event.target.checked)}
+                              type="checkbox"
+                            />
+                            {language === "uk" ? "Активна" : "Active"}
+                          </label>
+                        </>
+                      )}
+
+                      <div className="material-create-actions">
+                          <button className="ghost-button" disabled={edgeCreateSaving || edgeCreateImageUploading} onClick={closeEdgeCreateModal} type="button">
+                            {t.cancel}
+                          </button>
+                        <button
+                          className={`primary-button${edgeCreateMode === "source" && !edgeCreateSourcePreview ? " recommended-action" : ""}`}
+                          disabled={
+                            edgeCreateSaving
+                            || edgeCreateImageUploading
+                            || (edgeCreateMode === "source" && !String(edgeCreateSourceUrl || "").trim())
+                          }
+                          type="submit"
+                        >
+                          <Plus size={16} />
+                          {edgeCreateMode === "source" && !edgeCreateSourcePreview
+                            ? (language === "uk" ? "Завантажити дані" : "Load data")
+                            : (language === "uk" ? "Додати крайку" : "Add edge")}
+                        </button>
+                      </div>
+                    </fieldset>
+                  </form>
+                </section>
+              </div>
+            ) : null}
+            {edgeDetailModalOpen && selectedEdgeDetail ? (
+              <div aria-modal="true" className="modal-backdrop" onClick={closeEdgeDetails} role="dialog">
+                <section
+                  className="confirm-modal material-details-modal fitting-details-modal edge-details-modal"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <header className="confirm-header">
+                    <div>
+                      <strong>{language === "uk" ? "Детальна картка крайки" : "Edge details"}</strong>
+                      <p>{selectedEdgeDetail.name || selectedEdgeDetail.manufacturer_article || t.notSet}</p>
+                    </div>
+                    <div className="catalog-actions material-details-meta-actions">
+                      <button
+                        aria-label={language === "uk" ? "Редагувати крайку" : "Edit edge"}
+                        className="icon-button"
+                        disabled={edgeDetailLoading}
+                        onClick={openEdgeEditModal}
+                        type="button"
+                      >
+                        <Pencil size={14} />
+                      </button>
+                      <button
+                        aria-label={language === "uk" ? "Видалити крайку" : "Delete edge"}
+                        className="icon-button danger-button"
+                        disabled={edgeDetailLoading}
+                        onClick={() => setEdgeDeleteTarget(selectedEdgeDetail)}
+                        type="button"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                      <button
+                        ref={edgeDetailCloseButtonRef}
+                        aria-label={t.cancel}
+                        className="ghost-button compact-button detail-info-button"
+                        onClick={closeEdgeDetails}
+                        type="button"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                  </header>
+
+                  {edgeDetailError ? (
+                    <div className="fitting-details-error">
+                      <span>{edgeDetailError}</span>
+                      <button className="ghost-button compact-button" onClick={() => openEdgeDetails(selectedEdgeDetail)} type="button">
+                        <RefreshCw size={14} />
+                        {language === "uk" ? "Повторити" : "Retry"}
+                      </button>
+                    </div>
+                  ) : null}
+
+                  {edgeDetailLoading ? (
+                    <div className="fitting-details-loading">
+                      <span className="service-tree-badge subtle">{t.loading}</span>
+                    </div>
+                  ) : null}
+
+                  {(() => {
+                    const manufacturerMeta = getMaterialManufacturerMeta(selectedEdgeDetail, materialManufacturersById);
+                    const edgeSupplierOffers = [...(Array.isArray(selectedEdgeDetail.supplier_offers) ? selectedEdgeDetail.supplier_offers : [])].sort((left, right) => {
+                      const leftPriority = Number(left?.priority ?? 0);
+                      const rightPriority = Number(right?.priority ?? 0);
+                      if (leftPriority !== rightPriority) {
+                        return leftPriority - rightPriority;
+                      }
+                      return String(left?.id || "").localeCompare(String(right?.id || ""));
+                    });
+                    const selectedEdgeSupplierOffer = edgeSupplierOffers.find((offer) => String(offer?.id || "") === String(selectedEdgeSupplierOfferId)) || edgeSupplierOffers[0] || null;
+                    const selectedOfferPrices = [...(Array.isArray(selectedEdgeSupplierOffer?.prices) ? selectedEdgeSupplierOffer.prices : [])].sort((left, right) => String(left?.city || "").localeCompare(String(right?.city || "")));
+                    const primaryOfferPrice = selectedOfferPrices[0] || null;
+                    const edgeMaterials = Array.isArray(selectedEdgeDetail.material_relations) ? selectedEdgeDetail.material_relations : [];
+                    const edgeImageUrl = selectedEdgeDetail.image_url ? resolveAdminAssetUrl(selectedEdgeDetail.image_url) : "";
+
+                    return (
+                      <div className="fitting-details-layout">
+                        <div className="fitting-details-media">
+                          {edgeImageUrl ? (
+                            <img alt={selectedEdgeDetail.name || selectedEdgeDetail.manufacturer_article || ""} className="material-details-media-image" loading="eager" src={edgeImageUrl} />
+                          ) : (
+                            <div className="material-card-placeholder">{language === "uk" ? "Без фото" : "No image"}</div>
+                          )}
+                          <div className="fitting-details-meta">
+                            {manufacturerMeta ? renderManufacturerBadge(manufacturerMeta, { className: "fitting-manufacturer-badge" }) : null}
+                            <span className="service-tree-badge subtle">{selectedEdgeDetail.is_active ? (language === "uk" ? "Активна" : "Active") : (language === "uk" ? "Неактивна" : "Inactive")}</span>
+                            {selectedEdgeDetail.manufacturer_article ? <span className="service-tree-badge subtle">{selectedEdgeDetail.manufacturer_article}</span> : null}
+                          </div>
+
+                          <section className="edge-linked-materials-section">
+                            <div className="edge-linked-materials-section-header">
+                              <h4>{language === "uk" ? "Пов'язані матеріали" : "Linked materials"}</h4>
+                              {edgeMaterials.length ? <span className="service-tree-badge subtle">{edgeMaterials.length}</span> : null}
+                            </div>
+
+                            {edgeMaterials.length ? (
+                              <div className="edge-linked-materials-list">
+                                {edgeMaterials.map((edgeItem) => {
+                                  const materialArticle = String(edgeItem.material_article || "").trim();
+                                  const materialName = edgeItem.material_name || materialArticle || t.notSet;
+                                  const materialDimensions = String(edgeItem.material_dimensions || "").trim();
+                                  const materialThickness = String(edgeItem.material_thickness || "").trim();
+                                  const materialManufacturerName = String(edgeItem.material_manufacturer_name || "").trim();
+                                  const materialPreviewItem = {
+                                    article: materialArticle,
+                                    has_cached_image: Boolean(edgeItem.material_has_cached_image),
+                                    image_cached_hash: edgeItem.material_image_hash || "",
+                                  };
+                                  const materialMetaItems = [
+                                    materialManufacturerName,
+                                    materialArticle ? `${language === "uk" ? "Артикул" : "Article"} ${materialArticle}` : "",
+                                    edgeItem.material_category,
+                                    edgeItem.material_product_type,
+                                    materialDimensions,
+                                    materialThickness ? `${materialThickness} мм` : "",
+                                  ].filter((value) => String(value || "").trim());
+
+                                  return (
+                                    <article className="material-card edge-linked-material-card" key={edgeItem.id || materialArticle}>
+                                      <div className="edge-linked-material-card-media">
+                                        <MaterialImage
+                                          alt={materialName}
+                                          item={materialPreviewItem}
+                                          loading="eager"
+                                          placeholderLabel={language === "uk" ? "Без фото" : "No image"}
+                                          token={token}
+                                        />
+                                      </div>
+                                      <div className="edge-linked-material-card-body">
+                                        <div className="edge-linked-material-card-title">
+                                          <strong title={materialName}>{materialName}</strong>
+                                        </div>
+                                        <div className="edge-linked-material-card-meta">
+                                          {materialMetaItems.map((value) => (
+                                            <span key={String(value)}>{value}</span>
+                                          ))}
+                                        </div>
+                                        <div className="edge-linked-material-card-actions">
+                                          <button
+                                            className="ghost-button compact-button"
+                                            onClick={() => openEdgeMaterialDetails(edgeItem)}
+                                            type="button"
+                                          >
+                                            {language === "uk" ? "Відкрити матеріал" : "Open material"}
+                                          </button>
+                                        </div>
+                                      </div>
+                                    </article>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <p className="empty-inline-note material-edge-empty-note">{language === "uk" ? "Матеріали не пов'язані" : "No linked materials"}</p>
+                            )}
+                          </section>
+                        </div>
+
+                        <div className="fitting-details-content">
+                          <div className="material-details-grid">
+                            <div><span>{language === "uk" ? "Назва" : "Name"}</span><strong>{selectedEdgeDetail.name || t.notSet}</strong></div>
+                            <div><span>{language === "uk" ? "Виробник" : "Manufacturer"}</span><strong>{selectedEdgeDetail.manufacturer_name || t.notSet}</strong></div>
+                            <div><span>{language === "uk" ? "Артикул виробника" : "Manufacturer article"}</span><strong>{selectedEdgeDetail.manufacturer_article || t.notSet}</strong></div>
+                            <div><span>{language === "uk" ? "Ширина" : "Width"}</span><strong>{selectedEdgeDetail.width_mm !== null && selectedEdgeDetail.width_mm !== undefined ? `${selectedEdgeDetail.width_mm} mm` : t.notSet}</strong></div>
+                            <div><span>{language === "uk" ? "Товщина" : "Thickness"}</span><strong>{selectedEdgeDetail.thickness_mm !== null && selectedEdgeDetail.thickness_mm !== undefined ? `${selectedEdgeDetail.thickness_mm} mm` : t.notSet}</strong></div>
+                            <div><span>{language === "uk" ? "Декор / код" : "Decor / code"}</span><strong>{selectedEdgeDetail.decor_code || t.notSet}</strong></div>
+                            <div><span>{language === "uk" ? "Колір" : "Color"}</span><strong>{selectedEdgeDetail.color || t.notSet}</strong></div>
+                            <div><span>{language === "uk" ? "Тип матеріалу" : "Material type"}</span><strong>{selectedEdgeDetail.material_type || t.notSet}</strong></div>
+                            <div><span>{language === "uk" ? "Фініш" : "Finish"}</span><strong>{selectedEdgeDetail.finish || t.notSet}</strong></div>
+                          </div>
+
+                          <div className="edge-supplier-section">
+                            <span className="edge-supplier-section-title">{language === "uk" ? "Постачальники" : "Suppliers"}</span>
+                            <div className="materials-mode-switch edge-supplier-tabs" role="tablist" aria-label={language === "uk" ? "Постачальники крайки" : "Edge suppliers"}>
+                              {edgeSupplierOffers.length ? edgeSupplierOffers.map((offer) => (
+                                <button key={offer.id} className={`ghost-button${String(offer.id) === String(selectedEdgeSupplierOfferId) ? " active" : ""}`} onClick={() => setSelectedEdgeSupplierOfferId(String(offer.id))} type="button">
+                                  {offer.supplier_name || (language === "uk" ? "Постачальник" : "Supplier")}
+                                </button>
+                              )) : <span className="service-tree-badge subtle">{language === "uk" ? "Постачальників немає" : "No suppliers"}</span>}
+                            </div>
+
+                            {selectedEdgeSupplierOffer ? (
+                              <div className="edge-supplier-panel">
+                                <div className="material-details-supplier-card-field">
+                                  <span>{language === "uk" ? "Постачальник" : "Supplier"}</span>
+                                  <strong>{selectedEdgeSupplierOffer.supplier_name || t.notSet}</strong>
+                                </div>
+                                <div className="material-details-supplier-card-field">
+                                  <span>{language === "uk" ? "Артикул" : "Article"}</span>
+                                  <strong>{selectedEdgeSupplierOffer.article || t.notSet}</strong>
+                                </div>
+                                <div className="material-details-supplier-card-field">
+                                  <span>{language === "uk" ? "Місто" : "City"}</span>
+                                  <strong>{primaryOfferPrice ? formatCatalogCityLabel(primaryOfferPrice.city, t) : t.notSet}</strong>
+                                </div>
+                                <div className="material-details-supplier-card-field">
+                                  <span>{language === "uk" ? "Ціна" : "Price"}</span>
+                                  <strong>
+                                    {primaryOfferPrice?.price !== null && primaryOfferPrice?.price !== undefined
+                                      ? `${primaryOfferPrice.price} ${primaryOfferPrice.currency || "UAH"}${primaryOfferPrice.unit ? ` / ${primaryOfferPrice.unit}` : ""}`
+                                      : t.notSet}
+                                  </strong>
+                                </div>
+                                <div className="material-details-supplier-card-field">
+                                  <span>{language === "uk" ? "Одиниця" : "Unit"}</span>
+                                  <strong>{selectedEdgeSupplierOffer.unit || t.notSet}</strong>
+                                </div>
+                                <div className="material-details-supplier-card-field">
+                                  <span>{language === "uk" ? "Наявність" : "Availability"}</span>
+                                  <strong>{selectedEdgeSupplierOffer.stock || t.notSet}</strong>
+                                </div>
+                                {selectedEdgeSupplierOffer.source_url ? (
+                                  <div className="material-details-supplier-card-link-row">
+                                    <a href={selectedEdgeSupplierOffer.source_url} rel="noreferrer" target="_blank">
+                                      {language === "uk" ? "Відкрити товар" : "Open product"}
+                                    </a>
+                                  </div>
+                                ) : null}
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </section>
+              </div>
+            ) : null}
+
+            <DeleteConfirmModal
+              cancelLabel={t.cancel}
+              confirmLabel={language === "uk" ? "Видалити" : "Delete"}
+              loadingLabel={language === "uk" ? "Видаляємо..." : "Deleting..."}
+              message={edgeDeleteTarget ? (language === "uk" ? "Цю дію неможливо скасувати." : "This action cannot be undone.") : ""}
+              open={Boolean(edgeDeleteTarget)}
+              onCancel={closeEdgeDeleteConfirm}
+              onConfirm={handleDeleteEdgeConfirm}
+              title={language === "uk" ? "Видалити крайку?" : "Delete edge?"}
+            />
+
+            {edgeEditModalOpen && edgeEditItem ? (
+              <div aria-modal="true" className="modal-backdrop" onClick={closeEdgeEditModal} role="dialog">
+                <section
+                  className="confirm-modal material-details-modal material-edit-modal"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <header className="confirm-header">
+                    <div>
+                      <strong>{language === "uk" ? "Редагувати крайку" : "Edit edge"}</strong>
+                      <p>{edgeEditItem.name || edgeEditItem.manufacturer_article || t.notSet}</p>
+                    </div>
+                    <button
+                      ref={edgeEditCloseButtonRef}
+                      aria-label={t.cancel}
+                      className="ghost-button compact-button detail-info-button"
+                      disabled={edgeEditSaving || edgeEditImageUploading}
+                      onClick={closeEdgeEditModal}
+                      type="button"
+                    >
+                      <X size={16} />
+                    </button>
+                  </header>
+
+                  {edgeEditError ? <p className="status-message error">{edgeEditError}</p> : null}
+
+                  <form className="hole-template-form" onSubmit={handleEdgeEditSubmit}>
+                    <div className="hole-template-form-grid">
+                      <label>
+                        {language === "uk" ? "Виробник" : "Manufacturer"}
+                        <select
+                          onChange={(event) => updateEdgeEditForm("manufacturer_id", event.target.value)}
+                          value={edgeEditForm.manufacturer_id}
+                        >
+                          <option value="">{t.notSet}</option>
+                          {materialManufacturers.map((manufacturer) => (
+                            <option key={manufacturer.id} value={manufacturer.id}>
+                              {manufacturer.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        {language === "uk" ? "Назва" : "Name"}
+                        <input autoComplete="off" onChange={(event) => updateEdgeEditForm("name", event.target.value)} type="text" value={edgeEditForm.name} />
+                      </label>
+                      <label>
+                        {language === "uk" ? "Артикул виробника" : "Manufacturer article"}
+                        <input autoComplete="off" onChange={(event) => updateEdgeEditForm("manufacturer_article", event.target.value)} type="text" value={edgeEditForm.manufacturer_article} />
+                      </label>
+                      <label>
+                        {language === "uk" ? "Декор / код" : "Decor / code"}
+                        <input autoComplete="off" onChange={(event) => updateEdgeEditForm("decor_code", event.target.value)} type="text" value={edgeEditForm.decor_code} />
+                      </label>
+                      <label>
+                        {language === "uk" ? "Колір" : "Color"}
+                        <input autoComplete="off" onChange={(event) => updateEdgeEditForm("color", event.target.value)} type="text" value={edgeEditForm.color} />
+                      </label>
+                      <label>
+                        {language === "uk" ? "Тип матеріалу" : "Material type"}
+                        <input autoComplete="off" onChange={(event) => updateEdgeEditForm("material_type", event.target.value)} type="text" value={edgeEditForm.material_type} />
+                      </label>
+                      <label>
+                        {language === "uk" ? "Ширина, мм" : "Width, mm"}
+                        <input min="0" onChange={(event) => updateEdgeEditForm("width_mm", event.target.value)} step="0.01" type="number" value={edgeEditForm.width_mm} />
+                      </label>
+                      <label>
+                        {language === "uk" ? "Товщина, мм" : "Thickness, mm"}
+                        <input min="0" onChange={(event) => updateEdgeEditForm("thickness_mm", event.target.value)} step="0.01" type="number" value={edgeEditForm.thickness_mm} />
+                      </label>
+                      <label>
+                        {language === "uk" ? "Фініш" : "Finish"}
+                        <input autoComplete="off" onChange={(event) => updateEdgeEditForm("finish", event.target.value)} type="text" value={edgeEditForm.finish} />
+                      </label>
+                      <div className="supplier-form-field supplier-form-field-wide">
+                        <span>{language === "uk" ? "Зображення крайки" : "Edge image"}</span>
+                        <input
+                          ref={edgeEditImageFileInputRef}
+                          accept={EDGE_IMAGE_ACCEPT}
+                          className="supplier-logo-file-input"
+                          onChange={handleEdgeEditImageFileChange}
+                          type="file"
+                        />
+                        <div className="supplier-logo-upload-panel">
+                          <div className="supplier-logo-preview">
+                            {(edgeEditUploadedImageUrl || edgeEditForm.image_url) ? (
+                              <img
+                                alt={edgeEditForm.name || (language === "uk" ? "Зображення крайки" : "Edge image")}
+                                className="supplier-logo-preview-mark"
+                                loading="lazy"
+                                src={resolveAdminAssetUrl(edgeEditUploadedImageUrl || edgeEditForm.image_url)}
+                              />
+                            ) : (
+                              <div className="supplier-logo-preview-placeholder">
+                                <span className="supplier-logo-fallback">{language === "uk" ? "Немає зображення" : "No image"}</span>
+                              </div>
+                            )}
+                          </div>
+                          <div className="supplier-logo-input-row">
+                            <button
+                              className="ghost-button compact-button"
+                              disabled={edgeEditSaving || edgeEditImageUploading}
+                              onClick={openEdgeEditImageFilePicker}
+                              type="button"
+                            >
+                              {edgeEditImageUploading ? (language === "uk" ? "Завантаження..." : "Uploading...") : (language === "uk" ? "Завантажити файл" : "Upload file")}
+                            </button>
+                            <button
+                              className="ghost-button compact-button"
+                              disabled={edgeEditSaving || edgeEditImageUploading || !(edgeEditUploadedImageUrl || edgeEditForm.image_url)}
+                              onClick={clearEdgeEditImageSelection}
+                              type="button"
+                            >
+                              {language === "uk" ? "Прибрати" : "Remove"}
+                            </button>
+                          </div>
+                          <label className="supplier-form-field supplier-form-field-wide">
+                            <span>{language === "uk" ? "URL зображення (необов'язково)" : "Image URL (optional)"}</span>
+                            <input onChange={(event) => updateEdgeEditForm("image_url", event.target.value)} placeholder="https://..." type="url" value={edgeEditForm.image_url} />
+                          </label>
+                        </div>
+                      </div>
+                      <label className="material-inline-check">
+                        <input checked={Boolean(edgeEditForm.is_active)} onChange={(event) => updateEdgeEditForm("is_active", event.target.checked)} type="checkbox" />
+                        {language === "uk" ? "Активна" : "Active"}
+                      </label>
+                    </div>
+
+                    <div className="confirm-actions hole-template-actions">
+                      <button className="ghost-button" disabled={edgeEditSaving || edgeEditImageUploading} onClick={closeEdgeEditModal} type="button">
+                        {t.cancel}
+                      </button>
+                      <button className="primary-button" disabled={edgeEditSaving || edgeEditImageUploading} type="submit">
+                        <Save size={16} />
+                        {t.save}
+                      </button>
+                    </div>
+                  </form>
+                </section>
+              </div>
+            ) : null}
+
           </section>
         ) : isCatalogMaterialCategoriesView ? (
           <MaterialTaxonomyAdminWorkspace
@@ -24040,37 +26640,82 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
           />
         ) : isCatalogMaterialsView ? (
           <section className={`table-panel full-panel${isCatalogMaterialRootView ? " materials-root-panel" : ""}`} key="catalogMaterials">
-            <div className={`catalog-page-header${isCatalogMaterialRootView ? "" : " material-category-detail-header"}`}>
-              <div className="service-catalog-title material-category-detail-title">
-                {isCatalogMaterialRootView ? (
-                  <>
-                    <h3>{language === "uk" ? "Матеріали" : "Materials"}</h3>
-                    <p>{language === "uk" ? "Оберіть категорію, щоб відкрити матеріали всередині неї." : "Choose a category to open its materials."}</p>
-                  </>
-                ) : (
-                  <>
-                    <div className="fitting-category-breadcrumb fitting-category-breadcrumb-top">
-                      <button className="fitting-breadcrumb-link" onClick={openMaterialCatalogRoot} type="button">
-                        {t.catalogMaterials}
-                      </button>
-                      <span className="fitting-breadcrumb-separator">/</span>
-                      <strong>{currentMaterialCategoryMeta?.name || formatCatalogLabel(materialCategoryFilter, t)}</strong>
-                    </div>
-                    <p>{t.catalogMaterialsDescription}</p>
-                  </>
-                )}
-              </div>
-              {!isCatalogMaterialRootView ? (
-                <div className="service-catalog-header-actions material-category-detail-actions">
+            <article className="catalog-card service-catalog-card service-catalog-card-full">
+              <div className="catalog-page-header material-taxonomy-page-header">
+                <div className="service-catalog-title material-taxonomy-page-title">
+                  {isCatalogMaterialRootView ? (
+                    <>
+                      <div className="fitting-category-breadcrumb fitting-category-breadcrumb-top">
+                        <h3 className="catalog-breadcrumb-title">
+                          <button className="catalog-breadcrumb-link" onClick={() => switchView("catalogHub")} type="button">
+                            {t.catalog}
+                          </button>
+                        </h3>
+                        <span className="fitting-breadcrumb-separator">/</span>
+                        <h3 className="catalog-breadcrumb-title">{t.catalogMaterials}</h3>
+                      </div>
+                      <p>{language === "uk" ? "Оберіть категорію, щоб відкрити матеріали всередині неї." : "Choose a category to open its materials."}</p>
+                    </>
+                  ) : (
+                    <>
+                      <div className="fitting-category-breadcrumb fitting-category-breadcrumb-top">
+                        <h3 className="catalog-breadcrumb-title">
+                          <button className="catalog-breadcrumb-link" onClick={() => switchView("catalogHub")} type="button">
+                            {t.catalog}
+                          </button>
+                        </h3>
+                        <span className="fitting-breadcrumb-separator">/</span>
+                        <h3 className="catalog-breadcrumb-title">
+                          <button className="catalog-breadcrumb-link" onClick={openMaterialCatalogRoot} type="button">
+                            {t.catalogMaterials}
+                          </button>
+                        </h3>
+                        <span className="fitting-breadcrumb-separator">/</span>
+                        <h3 className="catalog-breadcrumb-title">{currentMaterialCategoryMeta?.name || formatCatalogLabel(materialCategoryFilter, t)}</h3>
+                      </div>
+                      <p>{t.catalogMaterialsDescription}</p>
+                    </>
+                  )}
+                </div>
+                <div className="service-catalog-header-actions material-taxonomy-page-actions">
                   <span className="service-tree-badge subtle">
                     {t.currentCity}: {formatCatalogLabel(activeCity, t)}
                   </span>
                   <span className="service-tree-badge subtle">
-                    {materialsCatalogLoading && !materialItems.length
-                      ? t.loading
-                      : `${materialItems.length} ${t.materialsCount}`}
+                    {isCatalogMaterialRootView
+                      ? materialsCatalogLoading && !materialCategories.length
+                        ? t.loading
+                        : `${materialCategories.length} ${language === "uk" ? "категорій" : "categories"}`
+                      : materialsCatalogLoading && !materialItems.length
+                        ? t.loading
+                        : `${materialItems.length} ${t.materialsCount}`}
                   </span>
-                  <div className="materials-toolbar materials-toolbar-inline">
+                  {!isCatalogMaterialRootView ? (
+                    <div className="fittings-view-toggle material-catalog-view-toggle" role="tablist" aria-label={language === "uk" ? "Вигляд каталогу" : "Catalog view mode"}>
+                      <button
+                        className={`icon-button${materialCatalogViewMode === "list" ? " active" : ""}`}
+                        onClick={() => setMaterialCatalogViewMode("list")}
+                        title={language === "uk" ? "Список" : "List"}
+                        type="button"
+                      >
+                        <Blocks size={16} />
+                      </button>
+                      <button
+                        className={`icon-button${materialCatalogViewMode === "grid" ? " active" : ""}`}
+                        onClick={() => setMaterialCatalogViewMode("grid")}
+                        title={language === "uk" ? "Плитка" : "Grid"}
+                        type="button"
+                      >
+                        <LayoutGrid size={16} />
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+
+              {!isCatalogMaterialRootView ? (
+                <div className="fittings-toolbar-row material-category-toolbar-row">
+                  <div className="fittings-toolbar-main">
                     <label className="service-catalog-search">
                       <Search size={16} />
                       <input
@@ -24117,20 +26762,21 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                       {t.refresh}
                     </button>
                   </div>
+                  <div className="fittings-toolbar-actions">
+                    {canEditMaterialCatalog ? (
+                      <button
+                        className="primary-button material-create-button"
+                        onClick={openMaterialCreateModal}
+                        type="button"
+                      >
+                        <Plus size={16} />
+                        {language === "uk" ? "Додати матеріал" : "Add material"}
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
               ) : null}
-              {isCatalogMaterialRootView ? (
-                <div className="service-catalog-header-actions catalog-page-header-actions">
-                  <span className="service-tree-badge subtle">
-                    {materialsCatalogLoading && !materialCategories.length
-                      ? t.loading
-                      : `${materialCategories.length} ${language === "uk" ? "категорій" : "categories"}`}
-                  </span>
-                </div>
-              ) : null}
-            </div>
 
-            <article className="catalog-card service-catalog-card service-catalog-card-full">
               {canViewMaterialCatalog ? (
                 isCatalogMaterialRootView ? (
                   <div className="catalog-category-groups material-category-groups">
@@ -24251,217 +26897,244 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   </div>
                 ) : (
                   <>
-              {canEditMaterialCatalog ? (
-                <>
-                  <div className="materials-quota-hint">
-                    <span className="service-tree-badge subtle">
-                      {materialOwnershipQuotaLabel || "Власні матеріали: дані недоступні"}
+              {canEditMaterialCatalog && activeMaterialImportJob ? (
+                <div className={`material-import-status material-import-status-${activeMaterialImportJob.status || "queued"}`}>
+                  <div className="material-import-status-header">
+                    <strong>{t.materialImportStatusTitle}</strong>
+                    <span className={`service-tree-badge subtle material-import-state-badge material-import-state-badge-${activeMaterialImportJob.status || "queued"}`}>
+                      <span className="material-import-state-dot" />
+                      {materialImportStateLabel}
                     </span>
                   </div>
-                  <form className="materials-import-form" onSubmit={handleImportMaterial}>
-                    <fieldset className="materials-import-form-fieldset" disabled={materialImportWorking}>
-                      <div className="materials-mode-switch" role="tablist" aria-label={t.catalogMaterials}>
-                        <button
-                          className={`ghost-button${materialCreateMode === "source" ? " active" : ""}`}
-                          onClick={() => {
-                            setMaterialCreateMode("source");
-                            setNewMaterialManufacturerId("");
-                          }}
-                          type="button"
-                        >
-                          {t.materialModeLinked}
-                        </button>
-                        <button
-                          className={`ghost-button${materialCreateMode === "manual" ? " active" : ""}`}
-                          onClick={() => setMaterialCreateMode("manual")}
-                          type="button"
-                        >
-                          {t.materialModeManual}
-                        </button>
-                      </div>
-                      {materialCreateMode === "source" ? (
-                        <>
-                          <label>
-                            {language === "uk" ? "Артикул, якщо немає прямого URL" : "Article if the URL is not enough"}
-                            <input
-                              onChange={(event) => setNewMaterialArticle(event.target.value)}
-                              placeholder={language === "uk" ? "Необов'язково" : "Optional fallback"}
-                              type="text"
-                              value={newMaterialArticle}
-                            />
-                          </label>
-                          <label>
-                            {language === "uk" ? "Посилання на товар" : "Product URL"}
-                            <input
-                              onChange={(event) => setNewMaterialSourceUrl(event.target.value)}
-                              placeholder="https://..."
-                              type="url"
-                              value={newMaterialSourceUrl}
-                            />
-                          </label>
-                          <label>
-                            {language === "uk" ? "Місто для ціни / наявності" : "City for price / availability"}
-                            <input disabled readOnly type="text" value={formatCatalogLabel(activeCity, t)} />
-                          </label>
-                          {canManageSystemMaterials(user) ? (
-                            <label className="material-inline-check">
-                              <input
-                                checked={newMaterialIsDefault}
-                                onChange={(event) => setNewMaterialIsDefault(event.target.checked)}
-                                type="checkbox"
-                              />
-                              {t.materialDefaultForAll}
-                            </label>
-                          ) : null}
-                          <div className="settings-hint">
-                            {language === "uk"
-                              ? "Система сама визначить постачальника, виробника та інші поля після збереження."
-                              : "The system will resolve supplier, manufacturer, and other fields after saving."}
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <label>
-                            {t.materialManualName}
-                            <input
-                              onChange={(event) => setNewMaterialName(event.target.value)}
-                              placeholder={t.materialManualNamePlaceholder}
-                              type="text"
-                              value={newMaterialName}
-                            />
-                          </label>
-                          <label>
-                            {t.materialManualPrice}
-                            <input
-                              min="0"
-                              onChange={(event) => setNewMaterialPrice(event.target.value)}
-                              placeholder="0"
-                              step="0.01"
-                              type="number"
-                              value={newMaterialPrice}
-                            />
-                          </label>
-                          <label>
-                            {t.materialManualImage}
-                            <input
-                              accept="image/*"
-                              onChange={handleMaterialImageUpload}
-                              type="file"
-                            />
-                            <small className="settings-hint">
-                              {newMaterialImageUrl ? t.fittingImageSelected : t.materialManualImageHint}
-                            </small>
-                          </label>
-                          <label>
-                            {t.materialManufacturer}
-                            <select
-                              onChange={(event) => setNewMaterialManufacturerId(event.target.value)}
-                              value={newMaterialManufacturerId}
-                            >
-                              <option value="">{t.notSet}</option>
-                              {materialManufacturers.map((manufacturer) => (
-                                <option key={manufacturer.id} value={manufacturer.id}>
-                                  {manufacturer.name}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                        </>
-                      )}
-                      {materialCreateMode === "manual" ? (
-                        <label>
-                          {t.city}
-                          <input disabled readOnly type="text" value={formatCatalogLabel(activeCity, t)} />
-                        </label>
-                      ) : null}
-                      <button
-                        className="primary-button"
-                        disabled={
-                          loading || materialImportWorking || (
-                            materialCreateMode === "source"
-                              ? (!newMaterialSourceUrl.trim() || isMaterialCreationBlockedByQuota)
-                              : (!newMaterialName.trim() || newMaterialPrice === "" || isMaterialCreationBlockedByQuota)
-                          )
-                        }
-                        type="submit"
-                      >
-                        {materialImportWorking ? (
-                          <span className="material-import-processing-button-content">
-                            <span aria-hidden="true" className="material-import-processing-button-spinner" />
-                            {language === "uk" ? "Обробка..." : "Processing..."}
-                          </span>
-                        ) : (
-                          <>
-                            <Plus size={16} />
-                            {materialCreateMode === "source" ? t.materialAdd : t.materialManualAdd}
-                          </>
-                        )}
-                      </button>
-                    </fieldset>
-                  </form>
-                  {activeMaterialImportJob ? (
-                    <div className={`material-import-status material-import-status-${activeMaterialImportJob.status || "queued"}`}>
-                      <div className="material-import-status-header">
-                        <strong>{t.materialImportStatusTitle}</strong>
-                        <span className={`service-tree-badge subtle material-import-state-badge material-import-state-badge-${activeMaterialImportJob.status || "queued"}`}>
-                          <span className="material-import-state-dot" />
-                          {materialImportStateLabel}
-                        </span>
-                      </div>
-                      <div className="material-import-status-grid">
-                        <div>
-                          <span>{t.materialImportArticle}</span>
-                          <b>{activeMaterialImportJob.article}</b>
-                        </div>
-                        <div>
-                          <span>{t.materialImportAttempts}</span>
-                          <b>
-                            {activeMaterialImportJob.attempt_count} / {activeMaterialImportJob.max_attempts}
-                          </b>
-                        </div>
-                        <div>
-                          <span>{t.materialImportNextRetry}</span>
-                          <b>
-                            {activeMaterialImportJob.next_retry_at
-                              ? formatDateTimeValue(activeMaterialImportJob.next_retry_at)
-                              : t.notSet}
-                          </b>
-                        </div>
-                        <div>
-                          <span>{t.materialImportStrategy || "Стратегія"}</span>
-                          <b>{activeMaterialImportJob.last_strategy || t.notSet}</b>
-                        </div>
-                        <div>
-                          <span>{t.materialImportSourceUrl || "Сторінка"}</span>
-                          <b className="material-import-source-url">
-                            {activeMaterialImportJob.last_source_url || t.notSet}
-                          </b>
-                        </div>
-                      </div>
-                      {activeMaterialImportJob.last_error ? (
-                        <div className="material-import-status-error">
-                          <span>{t.materialImportLastError}</span>
-                          <p>{formatMaterialImportDiagnostic(activeMaterialImportJob.last_error, 420)}</p>
-                        </div>
-                      ) : null}
-                      {Array.isArray(activeMaterialImportJob.debug_trace) && activeMaterialImportJob.debug_trace.length ? (
-                        <details className="material-import-status-trace">
-                          <summary>{t.materialImportTrace || "Технічні деталі"}</summary>
-                          <ul>
-                            {activeMaterialImportJob.debug_trace.slice(-8).map((entry, index) => (
-                              <li key={`${entry.stage || "trace"}-${index}`}>
-                                <b>{entry.stage || "step"}</b>
-                                {entry.message ? `: ${formatMaterialImportDiagnostic(entry.message)}` : ""}
-                                {!entry.message && entry.url ? `: ${entry.url}` : ""}
-                                {!entry.message && !entry.url && entry.product_url ? `: ${entry.product_url}` : ""}
-                              </li>
-                            ))}
-                          </ul>
-                        </details>
-                      ) : null}
+                  <div className="material-import-status-grid">
+                    <div>
+                      <span>{t.materialImportArticle}</span>
+                      <b>{activeMaterialImportJob.article}</b>
+                    </div>
+                    <div>
+                      <span>{t.materialImportAttempts}</span>
+                      <b>
+                        {activeMaterialImportJob.attempt_count} / {activeMaterialImportJob.max_attempts}
+                      </b>
+                    </div>
+                    <div>
+                      <span>{t.materialImportNextRetry}</span>
+                      <b>
+                        {activeMaterialImportJob.next_retry_at
+                          ? formatDateTimeValue(activeMaterialImportJob.next_retry_at)
+                          : t.notSet}
+                      </b>
+                    </div>
+                    <div>
+                      <span>{t.materialImportStrategy || "Стратегія"}</span>
+                      <b>{activeMaterialImportJob.last_strategy || t.notSet}</b>
+                    </div>
+                    <div>
+                      <span>{t.materialImportSourceUrl || "Сторінка"}</span>
+                      <b className="material-import-source-url">
+                        {activeMaterialImportJob.last_source_url || t.notSet}
+                      </b>
+                    </div>
+                  </div>
+                  {activeMaterialImportJob.last_error ? (
+                    <div className="material-import-status-error">
+                      <span>{t.materialImportLastError}</span>
+                      <p>{formatMaterialImportDiagnostic(activeMaterialImportJob.last_error, 420)}</p>
                     </div>
                   ) : null}
-                </>
+                  {Array.isArray(activeMaterialImportJob.debug_trace) && activeMaterialImportJob.debug_trace.length ? (
+                    <details className="material-import-status-trace">
+                      <summary>{t.materialImportTrace || "Технічні деталі"}</summary>
+                      <ul>
+                        {activeMaterialImportJob.debug_trace.slice(-8).map((entry, index) => (
+                          <li key={`${entry.stage || "trace"}-${index}`}>
+                            <b>{entry.stage || "step"}</b>
+                            {entry.message ? `: ${formatMaterialImportDiagnostic(entry.message)}` : ""}
+                            {!entry.message && entry.url ? `: ${entry.url}` : ""}
+                            {!entry.message && !entry.url && entry.product_url ? `: ${entry.product_url}` : ""}
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {canEditMaterialCatalog && materialCreateModalOpen ? (
+                <div
+                  aria-modal="true"
+                  className="modal-backdrop"
+                  onClick={closeMaterialCreateModal}
+                  role="dialog"
+                >
+                  <section
+                    className="confirm-modal material-details-modal material-create-modal"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <header className="confirm-header">
+                      <div>
+                        <strong>{language === "uk" ? "Додати матеріал" : "Add material"}</strong>
+                        <p>{language === "uk" ? "Створення матеріалу в каталозі." : "Create a material in the catalog."}</p>
+                      </div>
+                      <button
+                        ref={materialCreateCloseButtonRef}
+                        aria-label={t.cancel}
+                        className="ghost-button compact-button detail-info-button"
+                        onClick={closeMaterialCreateModal}
+                        type="button"
+                      >
+                        <X size={16} />
+                      </button>
+                    </header>
+
+                    <div className="materials-quota-hint">
+                      <span className="service-tree-badge subtle">
+                        {materialOwnershipQuotaLabel || "Власні матеріали: дані недоступні"}
+                      </span>
+                    </div>
+                    <form className="materials-import-form" onSubmit={handleImportMaterial}>
+                      <fieldset className="materials-import-form-fieldset" disabled={materialImportWorking}>
+                        <div className="materials-mode-switch" role="tablist" aria-label={t.catalogMaterials}>
+                          <button
+                            className={`ghost-button${materialCreateMode === "source" ? " active" : ""}`}
+                            onClick={() => {
+                              setMaterialCreateMode("source");
+                              setNewMaterialManufacturerId("");
+                            }}
+                            type="button"
+                          >
+                            {t.materialModeLinked}
+                          </button>
+                          <button
+                            className={`ghost-button${materialCreateMode === "manual" ? " active" : ""}`}
+                            onClick={() => setMaterialCreateMode("manual")}
+                            type="button"
+                          >
+                            {t.materialModeManual}
+                          </button>
+                        </div>
+                        {materialCreateMode === "source" ? (
+                          <>
+                            <label>
+                              {language === "uk" ? "Артикул, якщо немає прямого URL" : "Article if the URL is not enough"}
+                              <input
+                                onChange={(event) => setNewMaterialArticle(event.target.value)}
+                                placeholder={language === "uk" ? "Необов'язково" : "Optional fallback"}
+                                type="text"
+                                value={newMaterialArticle}
+                              />
+                            </label>
+                            <label>
+                              {language === "uk" ? "Посилання на товар" : "Product URL"}
+                              <input
+                                onChange={(event) => setNewMaterialSourceUrl(event.target.value)}
+                                placeholder="https://..."
+                                type="url"
+                                value={newMaterialSourceUrl}
+                              />
+                            </label>
+                            <label>
+                              {language === "uk" ? "Місто для ціни / наявності" : "City for price / availability"}
+                              <input disabled readOnly type="text" value={formatCatalogLabel(activeCity, t)} />
+                            </label>
+                            {canManageSystemMaterials(user) ? (
+                              <label className="material-inline-check">
+                                <input
+                                  checked={newMaterialIsDefault}
+                                  onChange={(event) => setNewMaterialIsDefault(event.target.checked)}
+                                  type="checkbox"
+                                />
+                                {t.materialDefaultForAll}
+                              </label>
+                            ) : null}
+                            <div className="settings-hint">
+                              {language === "uk"
+                                ? "Система сама визначить постачальника, виробника та інші поля після збереження."
+                                : "The system will resolve supplier, manufacturer, and other fields after saving."}
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <label>
+                              {t.materialManualName}
+                              <input
+                                onChange={(event) => setNewMaterialName(event.target.value)}
+                                placeholder={t.materialManualNamePlaceholder}
+                                type="text"
+                                value={newMaterialName}
+                              />
+                            </label>
+                            <label>
+                              {t.materialManualPrice}
+                              <input
+                                min="0"
+                                onChange={(event) => setNewMaterialPrice(event.target.value)}
+                                placeholder="0"
+                                step="0.01"
+                                type="number"
+                                value={newMaterialPrice}
+                              />
+                            </label>
+                            <label>
+                              {t.materialManualImage}
+                              <input
+                                accept="image/*"
+                                onChange={handleMaterialImageUpload}
+                                type="file"
+                              />
+                              <small className="settings-hint">
+                                {newMaterialImageUrl ? t.fittingImageSelected : t.materialManualImageHint}
+                              </small>
+                            </label>
+                            <label>
+                              {t.materialManufacturer}
+                              <select
+                                onChange={(event) => setNewMaterialManufacturerId(event.target.value)}
+                                value={newMaterialManufacturerId}
+                              >
+                                <option value="">{t.notSet}</option>
+                                {materialManufacturers.map((manufacturer) => (
+                                  <option key={manufacturer.id} value={manufacturer.id}>
+                                    {manufacturer.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                          </>
+                        )}
+                        {materialCreateMode === "manual" ? (
+                          <label>
+                            {t.city}
+                            <input disabled readOnly type="text" value={formatCatalogLabel(activeCity, t)} />
+                          </label>
+                        ) : null}
+                        <button
+                          className="primary-button"
+                          disabled={
+                            loading || materialImportWorking || (
+                              materialCreateMode === "source"
+                                ? (!newMaterialSourceUrl.trim() || isMaterialCreationBlockedByQuota)
+                                : (!newMaterialName.trim() || newMaterialPrice === "" || isMaterialCreationBlockedByQuota)
+                            )
+                          }
+                          type="submit"
+                        >
+                          {materialImportWorking ? (
+                            <span className="material-import-processing-button-content">
+                              <span aria-hidden="true" className="material-import-processing-button-spinner" />
+                              {language === "uk" ? "Обробка..." : "Processing..."}
+                            </span>
+                          ) : (
+                            <>
+                              <Plus size={16} />
+                              {materialCreateMode === "source" ? t.materialAdd : t.materialManualAdd}
+                            </>
+                          )}
+                        </button>
+                      </fieldset>
+                    </form>
+                  </section>
+                </div>
               ) : null}
 
               {materialsCatalogLoading && !materialItems.length ? (
@@ -24469,9 +27142,11 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   <span>{t.loading}</span>
                 </div>
               ) : materialItems.length ? (
-                <div className="material-card-grid">
+                <div className={materialCatalogViewMode === "list" ? "material-card-grid material-card-grid-list" : "material-card-grid"}>
                   {materialItems.map((item) => {
                     const sourceMeta = getMaterialSourceMeta(item, t);
+                    const priceSummaryViewModel = getMaterialPriceSummaryViewModel(item);
+                    const supplierSummaryViewModel = getMaterialSupplierSummaryViewModel(item);
                     const promoViewModel = getMaterialPromoViewModel(item, t, language);
                     const promoRibbonViewModel = getMaterialPromoRibbonViewModel(item, language);
                     const manufacturerMeta = getMaterialManufacturerMeta(item, materialManufacturersById);
@@ -24479,7 +27154,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
 
                     return (
                     <article
-                      className="material-card material-card-clickable"
+                      className={`material-card material-card-clickable${materialCatalogViewMode === "list" ? " material-card-list" : ""}`}
                       key={item.id}
                       onClick={() => openMaterialDetails(item)}
                       onKeyDown={(event) => {
@@ -24498,56 +27173,33 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                             className="material-card-menu-trigger"
                             onClick={(event) => {
                               event.stopPropagation();
-                              setOpenMaterialMenuId((current) =>
-                                current === item.id ? "" : item.id,
-                              );
+                              openMaterialMenuTriggerRef.current = event.currentTarget;
+                              openMaterialMenuActionCountRef.current =
+                                (materialEntitlementFlags.edit ? 1 : 0) + (item.source_url ? 1 : 0) + 1;
+                              if (openMaterialMenuId === item.id) {
+                                closeMaterialMenu();
+                                return;
+                              }
+
+                              if (materialCatalogViewMode === "list") {
+                                setOpenMaterialMenuPosition(
+                                  getFittingMenuPosition(
+                                    event.currentTarget,
+                                    openMaterialMenuActionCountRef.current,
+                                  ),
+                                );
+                              } else {
+                                setOpenMaterialMenuPosition(null);
+                              }
+
+                              setOpenMaterialMenuId(item.id);
                             }}
                             title={t.editMaterial}
                             type="button"
                           >
                             <Pencil size={14} />
                           </button>
-                          {openMaterialMenuId === item.id ? (
-                            <div className="material-card-menu-dropdown">
-                              {materialEntitlementFlags.edit ? (
-                                <button
-                                  className="material-card-menu-action"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    openMaterialEditModal(item);
-                                  }}
-                                  type="button"
-                                >
-                                  <Pencil size={14} />
-                                  {t.editMaterial}
-                                </button>
-                              ) : null}
-                              {item.source_url ? (
-                              <button
-                                className="material-card-menu-action"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  handleRefreshMaterial(item);
-                                }}
-                                type="button"
-                              >
-                                <RefreshCw size={14} />
-                                {t.refreshFromViyar}
-                              </button>
-                              ) : null}
-                              <button
-                                className="material-card-menu-action danger"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  openDeleteMaterialConfirm(item);
-                                }}
-                                type="button"
-                              >
-                                <Trash2 size={14} />
-                                {t.deleteMaterial}
-                              </button>
-                            </div>
-                          ) : null}
+                          {renderMaterialActionMenu(item)}
                         </div>
                       ) : null}
                       <div className="material-card-media">
@@ -24604,18 +27256,36 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                                 </span>
                               ) : null}
                             </>
+                          ) : priceSummaryViewModel ? (
+                            <div className="material-card-price-summary">
+                              {priceSummaryViewModel.map((row) => (
+                                <div className="material-card-price-summary-row" key={row.key}>
+                                  <b>{`${row.priceText} ${row.currency}${row.unit ? ` /${row.unit}` : ""}`}</b>
+                                </div>
+                              ))}
+                            </div>
                           ) : (
                             <>
                               <b>
                                 {item.current_price !== null && item.current_price !== undefined
-                                  ? `${item.current_price} UAH`
+                                  ? `${formatMoneyValue(item.current_price)} UAH`
                                   : t.notSet}
                               </b>
                             </>
                           )}
                         </div>
                         <div className="material-card-meta">
-                          {renderSourceBadge(sourceMeta)}
+                          {supplierSummaryViewModel.length ? (
+                            <div className="material-card-supplier-strip" aria-label={language === "uk" ? "Постачальники матеріалу" : "Material suppliers"}>
+                              {supplierSummaryViewModel.map((supplier) => (
+                                <MaterialSupplierLogo
+                                  key={supplier.key}
+                                  name={supplier.name}
+                                  logoUrl={supplier.logoUrl}
+                                />
+                              ))}
+                            </div>
+                          ) : null}
                         </div>
                       </div>
                     </article>
@@ -24665,21 +27335,31 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                 <div className="service-catalog-title">
                   {activeFittingCategory ? (
                     <div className="fitting-category-breadcrumb fitting-category-breadcrumb-top">
-                      <button
-                      className="fitting-breadcrumb-link"
-                      onClick={() => {
-                        setSelectedFittingCategory("");
-                      }}
-                      type="button"
-                    >
-                        {t.catalogFittings}
-                      </button>
+                      <h3 className="catalog-breadcrumb-title">
+                        <button className="catalog-breadcrumb-link" onClick={() => switchView("catalogHub")} type="button">
+                          {t.catalog}
+                        </button>
+                      </h3>
                       <span className="fitting-breadcrumb-separator">/</span>
-                      <strong>{currentFittingCategoryMeta?.name || t.catalogFittings}</strong>
+                      <h3 className="catalog-breadcrumb-title">
+                        <button className="fitting-breadcrumb-link" onClick={openFittingCatalogRoot} type="button">
+                          {t.catalogFittings}
+                        </button>
+                      </h3>
+                      <span className="fitting-breadcrumb-separator">/</span>
+                      <h3 className="catalog-breadcrumb-title">{currentFittingCategoryMeta?.name || t.catalogFittings}</h3>
                     </div>
                   ) : (
                     <>
-                      <h3>{t.catalogFittings}</h3>
+                      <div className="fitting-category-breadcrumb fitting-category-breadcrumb-top">
+                        <h3 className="catalog-breadcrumb-title">
+                          <button className="catalog-breadcrumb-link" onClick={() => switchView("catalogHub")} type="button">
+                            {t.catalog}
+                          </button>
+                        </h3>
+                        <span className="fitting-breadcrumb-separator">/</span>
+                        <h3 className="catalog-breadcrumb-title">{t.catalogFittings}</h3>
+                      </div>
                       <p>
                         {t.fittingsManageDescription}
                       </p>
@@ -24831,7 +27511,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                         className="catalog-choice-card fitting-category-card"
                       key={category.code}
                       onClick={() => {
-                        setSelectedFittingCategory(category.code);
+                        openFittingCategoryCatalog(category.code);
                         setNewFittingForm((current) => ({
                           ...current,
                           fitting_group: category.group || "",
@@ -30223,6 +32903,115 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
               </div>
             </div>
 
+            <section className="material-edge-section material-canonical-edge-section">
+              <div className="material-edge-section-header">
+                <h4>{language === "uk" ? "Крайки" : "Edges"}</h4>
+                <div className="material-edge-section-actions">
+                  {materialCanonicalEdgeSelectorLoading ? <span className="service-tree-badge subtle">{t.loading}</span> : null}
+                  {canEditMaterialItem(user, selectedMaterialDetail) ? (
+                    <button
+                      className="ghost-button compact-button"
+                      onClick={openMaterialCanonicalEdgeSelector}
+                      type="button"
+                    >
+                      <Plus size={14} />
+                      {language === "uk" ? "Додати крайку" : "Add edge"}
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+
+              {getCanonicalMaterialEdgeItems(selectedMaterialDetail).length ? (
+                <div className="material-edge-grid material-canonical-edge-grid">
+                  {getCanonicalMaterialEdgeItems(selectedMaterialDetail).map((edgeItem) => {
+                    const supplierViewModel = getMaterialSupplierSummaryViewModel(edgeItem);
+                    const supplierLabel = supplierViewModel.length
+                      ? supplierViewModel.map((supplier) => supplier.name).join(", ")
+                      : (language === "uk" ? "Постачальники не вказані" : "No suppliers listed");
+                    const priceValue = edgeItem.current_price !== null && edgeItem.current_price !== undefined
+                      ? `${edgeItem.current_price} ${edgeItem.current_price_currency || "UAH"}${edgeItem.current_price_unit ? ` / ${edgeItem.current_price_unit}` : ""}`
+                      : null;
+                    const edgeImageUrl = String(edgeItem.image_url || edgeItem.image || "").trim();
+
+                    return (
+                      <article className="material-edge-card material-canonical-edge-card" key={`${edgeItem.id || edgeItem.edge_key}`}>
+                        <div className="material-edge-card-head">
+                          <strong>{edgeItem.name || edgeItem.manufacturer_article || t.notSet}</strong>
+                          <div className="material-edge-card-head-actions">
+                            <button
+                              className="ghost-button compact-button"
+                              onClick={() => openMaterialEdgeDetails(edgeItem)}
+                              type="button"
+                            >
+                              {language === "uk" ? "Відкрити" : "Open"}
+                            </button>
+                            {canEditMaterialItem(user, selectedMaterialDetail) ? (
+                              <button
+                                className="ghost-button compact-button danger-button"
+                                onClick={() => openUnlinkMaterialCanonicalEdgeConfirm(edgeItem)}
+                                type="button"
+                              >
+                                {language === "uk" ? "Відв'язати" : "Unlink"}
+                              </button>
+                            ) : null}
+                          </div>
+                        </div>
+
+                        <div className="material-edge-card-body">
+                          <div className="material-edge-card-copy">
+                            <div className="material-edge-card-details-row">
+                              <div className="material-edge-card-meta material-canonical-edge-meta">
+                                {edgeItem.manufacturer_name ? <span>{edgeItem.manufacturer_name}</span> : null}
+                                {edgeItem.manufacturer_article ? <span>{edgeItem.manufacturer_article}</span> : null}
+                                <span>
+                                  {edgeItem.width_mm !== null && edgeItem.width_mm !== undefined
+                                    ? `${edgeItem.width_mm} × ${edgeItem.thickness_mm !== null && edgeItem.thickness_mm !== undefined ? edgeItem.thickness_mm : "?"} мм`
+                                    : (edgeItem.thickness_mm !== null && edgeItem.thickness_mm !== undefined ? `${edgeItem.thickness_mm} мм` : (language === "uk" ? "Розмір не вказано" : "Size not set"))}
+                                </span>
+                                <span>{supplierLabel}</span>
+                                <span>
+                                  {t.materialPriceForCity}: {priceValue || t.notSet}
+                                </span>
+                              </div>
+                              <div className="material-edge-card-preview material-edge-card-preview-rect">
+                                {edgeImageUrl ? (
+                                  <>
+                                    <div className="material-edge-card-preview-placeholder material-edge-card-preview-skeleton">
+                                      {t.loading}
+                                    </div>
+                                    <img
+                                      alt={edgeItem.name || edgeItem.manufacturer_article || t.notSet}
+                                      loading="eager"
+                                      src={resolveAdminAssetUrl(edgeImageUrl)}
+                                    />
+                                  </>
+                                ) : (
+                                  <div className="material-edge-card-preview-placeholder">
+                                    {language === "uk" ? "Без фото" : "No image"}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="material-edge-empty-state">
+                  <p>{language === "uk" ? "Крайки не додані" : "No edges added"}</p>
+                  {canEditMaterialItem(user, selectedMaterialDetail) ? (
+                    <button className="primary-button compact-button" onClick={openMaterialCanonicalEdgeSelector} type="button">
+                      <Plus size={14} />
+                      {language === "uk" ? "Додати крайку" : "Add edge"}
+                    </button>
+                  ) : null}
+                </div>
+              )}
+            </section>
+
+            {false ? (
             <section className="material-edge-section">
               <div className="material-edge-section-header">
                 <h4>{t.materialEdgeBands}</h4>
@@ -30381,6 +33170,194 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                 <p className="empty-inline-note material-edge-empty-note">{t.materialEdgeSlotEmpty}</p>
               )}
             </section>
+            ) : null}
+
+            {materialCanonicalEdgeSelectorOpen ? (
+              <div aria-modal="true" className="modal-backdrop" onClick={closeMaterialCanonicalEdgeSelector} role="dialog">
+                <section
+                  className="confirm-modal material-details-modal material-canonical-edge-selector-modal"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <header className="confirm-header">
+                    <div>
+                      <strong>{language === "uk" ? "Додати крайку" : "Add edge"}</strong>
+                      <p>{selectedMaterialDetail?.name || selectedMaterialDetail?.article || t.notSet}</p>
+                    </div>
+                    <button
+                      aria-label={t.cancel}
+                      className="ghost-button compact-button detail-info-button"
+                      onClick={closeMaterialCanonicalEdgeSelector}
+                      type="button"
+                    >
+                      <X size={16} />
+                    </button>
+                  </header>
+
+                  <div className="material-canonical-edge-selector-filters">
+                    <input
+                      aria-label={language === "uk" ? "Пошук крайки" : "Search edges"}
+                      onChange={(event) => setMaterialCanonicalEdgeSelectorSearch(event.target.value)}
+                      placeholder={language === "uk" ? "Пошук" : "Search"}
+                      type="search"
+                      value={materialCanonicalEdgeSelectorSearch}
+                    />
+                    <select
+                      aria-label={language === "uk" ? "Фільтр виробника" : "Manufacturer filter"}
+                      onChange={(event) => setMaterialCanonicalEdgeSelectorManufacturerId(event.target.value)}
+                      value={materialCanonicalEdgeSelectorManufacturerId}
+                    >
+                      <option value="">{language === "uk" ? "Усі виробники" : "All manufacturers"}</option>
+                      {materialManufacturers.map((manufacturer) => (
+                        <option key={manufacturer.id} value={manufacturer.id}>
+                          {manufacturer.name}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      aria-label={language === "uk" ? "Фільтр постачальника" : "Supplier filter"}
+                      onChange={(event) => setMaterialCanonicalEdgeSelectorSupplierId(event.target.value)}
+                      value={materialCanonicalEdgeSelectorSupplierId}
+                    >
+                      <option value="">{language === "uk" ? "Усі постачальники" : "All suppliers"}</option>
+                      {materialCanonicalEdgeSupplierOptions.map((supplier) => (
+                        <option key={supplier.id} value={supplier.id}>
+                          {supplier.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {materialCanonicalEdgeSelectorError ? (
+                    <div className="fitting-details-error">
+                      <span>{materialCanonicalEdgeSelectorError}</span>
+                    </div>
+                  ) : null}
+
+                  {materialCanonicalEdgeSelectorLoading ? (
+                    <div className="fitting-details-loading">
+                      <span className="service-tree-badge subtle">{t.loading}</span>
+                    </div>
+                  ) : null}
+
+                  <div className="material-canonical-edge-selector-body">
+                    {materialCanonicalEdgeSelectorItems.length ? (
+                      <div className="material-canonical-edge-selector-grid">
+                        {materialCanonicalEdgeSelectorItems.map((edgeItem) => {
+                          const edgeId = String(edgeItem.id || "").trim();
+                          const attachedEdgeIds = new Set(
+                            getCanonicalMaterialEdgeItems(selectedMaterialDetail).map((item) => String(item.id || "").trim()),
+                          );
+                          const isAttached = attachedEdgeIds.has(edgeId);
+                          const isSelected = materialCanonicalEdgeSelectorSelectedEdgeId === edgeId;
+                          const supplierViewModel = getMaterialSupplierSummaryViewModel(edgeItem);
+                          const supplierLabel = supplierViewModel.length
+                            ? supplierViewModel.map((supplier) => supplier.name).join(", ")
+                            : (language === "uk" ? "Постачальники не вказані" : "No suppliers listed");
+                          const priceSummary = Array.isArray(edgeItem.price_summary) && edgeItem.price_summary.length
+                            ? edgeItem.price_summary[0]
+                            : null;
+                          const priceSummaryLabel = priceSummary
+                            ? `${priceSummary.min_price !== null && priceSummary.min_price !== undefined ? priceSummary.min_price : t.notSet}${priceSummary.max_price !== null && priceSummary.max_price !== undefined && priceSummary.max_price !== priceSummary.min_price ? ` - ${priceSummary.max_price}` : ""} ${priceSummary.currency || "UAH"}${priceSummary.unit ? ` / ${priceSummary.unit}` : ""}`
+                            : "";
+                          const edgeImageUrl = resolveAdminAssetUrl(String(edgeItem.image_url || edgeItem.image || "").trim());
+
+                          return (
+                            <article key={edgeId} className={`material-canonical-edge-selector-card${isSelected ? " active" : ""}${isAttached ? " is-attached" : ""}`}>
+                              <button
+                                className="material-canonical-edge-selector-card-main"
+                                disabled={isAttached}
+                                onClick={() => setMaterialCanonicalEdgeSelectorSelectedEdgeId(edgeId)}
+                                type="button"
+                              >
+                                <div className="material-canonical-edge-selector-card-preview material-edge-card-preview material-edge-card-preview-rect">
+                                  {edgeImageUrl ? (
+                                    <img alt={edgeItem.name || edgeItem.manufacturer_article || t.notSet} loading="eager" src={edgeImageUrl} />
+                                  ) : (
+                                    <div className="material-edge-card-preview-placeholder">
+                                      {language === "uk" ? "Без фото" : "No image"}
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="material-canonical-edge-selector-card-copy">
+                                  <div className="material-edge-card-topline">
+                                    <b>{edgeItem.name || edgeItem.manufacturer_article || t.notSet}</b>
+                                  </div>
+                                  <div className="material-edge-card-meta material-canonical-edge-meta">
+                                    {edgeItem.manufacturer_name ? <span>{edgeItem.manufacturer_name}</span> : null}
+                                    <span>
+                                      {edgeItem.width_mm !== null && edgeItem.width_mm !== undefined
+                                        ? `${edgeItem.width_mm} × ${edgeItem.thickness_mm !== null && edgeItem.thickness_mm !== undefined ? edgeItem.thickness_mm : "?"} мм`
+                                        : edgeItem.thickness_mm !== null && edgeItem.thickness_mm !== undefined
+                                          ? `${edgeItem.thickness_mm} мм`
+                                          : (language === "uk" ? "Розмір не вказано" : "Size not set")}
+                                    </span>
+                                    <span>{supplierLabel}</span>
+                                    {priceSummaryLabel ? <span>{priceSummaryLabel}</span> : null}
+                                  </div>
+                                </div>
+                              </button>
+
+                              <div className="material-canonical-edge-selector-card-actions">
+                                <button
+                                  className="ghost-button compact-button"
+                                  onClick={() => openEdgeDetails(edgeItem)}
+                                  type="button"
+                                >
+                                  {language === "uk" ? "Відкрити" : "Open"}
+                                </button>
+                                {isAttached ? (
+                                  <span className="service-tree-badge subtle">
+                                    {language === "uk" ? "Вже додана" : "Already added"}
+                                  </span>
+                                ) : (
+                                  <button
+                                    className="ghost-button compact-button"
+                                    onClick={() => setMaterialCanonicalEdgeSelectorSelectedEdgeId(edgeId)}
+                                    type="button"
+                                  >
+                                    {language === "uk" ? "Вибрати" : "Select"}
+                                  </button>
+                                )}
+                              </div>
+                            </article>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="material-edge-empty-state">
+                        <p>{language === "uk" ? "Нічого не знайдено" : "Nothing found"}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="confirm-actions">
+                    <button className="ghost-button" onClick={closeMaterialCanonicalEdgeSelector} type="button">
+                      {t.cancel}
+                    </button>
+                    <button
+                      className="primary-button"
+                      disabled={
+                        materialCanonicalEdgeSelectorSaving
+                        || !materialCanonicalEdgeSelectorSelectedEdgeId
+                        || getCanonicalMaterialEdgeItems(selectedMaterialDetail).some(
+                          (edge) => String(edge.id || "").trim() === String(materialCanonicalEdgeSelectorSelectedEdgeId || "").trim(),
+                        )
+                      }
+                      onClick={() => {
+                        const selectedEdge = materialCanonicalEdgeSelectorItems.find(
+                          (edge) => String(edge.id || "").trim() === String(materialCanonicalEdgeSelectorSelectedEdgeId || "").trim(),
+                        ) || null;
+                        void handleAttachMaterialCanonicalEdge(selectedEdge);
+                      }}
+                      type="button"
+                    >
+                      <Plus size={16} />
+                      {language === "uk" ? "Прив'язати крайку" : "Attach edge"}
+                    </button>
+                  </div>
+                </section>
+              </div>
+            ) : null}
           </section>
         </div>
       ) : null}
@@ -31938,7 +34915,8 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   confirmAction.type === "deleteHoleTemplate" ||
                   confirmAction.type === "deleteHolePoint" ||
                   confirmAction.type === "deleteHoleBundle" ||
-                  confirmAction.type === "deleteHoleServiceRule"
+                  confirmAction.type === "deleteHoleServiceRule" ||
+                  confirmAction.type === "unlinkCanonicalEdge"
                     ? "danger-button"
                     : "primary-button"
                 }

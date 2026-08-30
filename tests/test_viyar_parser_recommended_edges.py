@@ -96,6 +96,21 @@ VIYAR_RECOMMENDED_EDGE_THREE_CARDS_HTML = """
 """
 
 
+VIYAR_RECOMMENDED_EDGE_SECTION_NAME_ONLY_HTML = """
+<html>
+  <body>
+    <section data-section_name="  Крайка  ">
+      <div class="vr-card">
+        <a class="vr-card__link" href="/ua/catalog/444444-fallback-edge/?from=card" title="444444 Fallback edge">
+          <span class="vr-card__title">444444 Fallback edge</span>
+        </a>
+      </div>
+    </section>
+  </body>
+</html>
+"""
+
+
 VIYAR_RECOMMENDED_EDGE_NEEDS_REVIEW_HTML = """
 <html>
   <body>
@@ -209,6 +224,13 @@ class ViyarRecommendedEdgeParserTests(unittest.TestCase):
         """
 
         self.assertEqual(viyar_parser.extract_recommended_edge_cards(no_section_html), [])
+
+    def test_extract_recommended_edge_cards_falls_back_to_edge_section_name(self) -> None:
+        cards = viyar_parser.extract_recommended_edge_cards(VIYAR_RECOMMENDED_EDGE_SECTION_NAME_ONLY_HTML)
+
+        self.assertEqual(len(cards), 1)
+        self.assertEqual(cards[0]["article"], "444444")
+        self.assertEqual(cards[0]["source_url"], "https://viyar.ua/ua/catalog/444444-fallback-edge/")
 
     def test_preview_recommended_edges_preserves_needs_review_reason_and_missing_fields(self) -> None:
         async def fake_fetcher(page, url):

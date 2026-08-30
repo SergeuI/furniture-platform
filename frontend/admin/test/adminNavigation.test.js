@@ -28,7 +28,11 @@ test("admin app uses canonical section-based navigation helpers", () => {
   );
   assert.match(
     source,
-    /function openFittingCatalogRoot\(\) \{[\s\S]*resetFittingCatalogNavigation\(\);[\s\S]*switchView\("catalogFittings"\);[\s\S]*\}/,
+    /function openFittingCategoryCatalog\(categoryCode\) \{[\s\S]*updateAdminHistory\(\{[\s\S]*category: normalizedCategoryCode,[\s\S]*view: nextFittingView,[\s\S]*\}\);[\s\S]*\}/,
+  );
+  assert.match(
+    source,
+    /function openFittingCatalogRoot\(\) \{[\s\S]*resetFittingCatalogNavigation\(\);[\s\S]*switchView\(activeView === "catalogFasteners" \? "catalogFasteners" : "catalogFittings"\);[\s\S]*\}/,
   );
   assert.match(
     source,
@@ -50,5 +54,5 @@ test("admin app uses canonical section-based navigation helpers", () => {
     source,
     /className="sidebar-flyout sidebar-flyout-submenu"/,
   );
-  assert.match(source, /onClick=\{\(\) => \{[\s\S]*setSelectedFittingCategory\(category\.code\);[\s\S]*\}\}/);
+  assert.match(source, /onClick=\{\(\) => \{[\s\S]*openFittingCategoryCatalog\(category\.code\);[\s\S]*setNewFittingForm\(\(current\) => \(\{[\s\S]*fitting_group: category\.group \|\| ""/);
 });
