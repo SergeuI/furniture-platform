@@ -224,7 +224,7 @@ function NodeSelectorModal({
   );
 }
 
-export default function MountingSchemesPanel({ language = "uk", token = "" }) {
+export default function MountingSchemesPanel({ language = "uk", onOpenConnectionsOverview = null, token = "" }) {
   const [route, setRoute] = useState(() => normalizeMountingSchemesRoute(parseMountingSchemesRoute(window.location.search) || {}));
   const [schemes, setSchemes] = useState([]);
   const [schemesLoading, setSchemesLoading] = useState(false);
@@ -411,6 +411,30 @@ export default function MountingSchemesPanel({ language = "uk", token = "" }) {
     () => getMountingSchemesBreadcrumbTrail(route, currentScheme || {}, language),
     [currentScheme, language, route],
   );
+  const headerBreadcrumbTrail = useMemo(
+    () => [
+      {
+        current: false,
+        label: language === "uk" ? "Кріплення та з'єднання" : "Connections",
+        onClick: typeof onOpenConnectionsOverview === "function" ? onOpenConnectionsOverview : undefined,
+        title: language === "uk" ? "Кріплення та з'єднання" : "Connections",
+      },
+      ...breadcrumbTrail,
+    ],
+    [breadcrumbTrail, language, onOpenConnectionsOverview],
+  );
+  const headerSubtitle =
+    route.mode === "list"
+      ? (language === "uk"
+          ? "Керуйте схемами кріплення в одному списку."
+          : "Manage mounting schemes in one compact list.")
+      : route.mode === "create"
+        ? (language === "uk"
+            ? "Створюйте та редагуйте схеми кріплення."
+            : "Create and edit mounting schemes.")
+        : (language === "uk"
+            ? "Переглядайте схему кріплення, її вузли та правила."
+            : "Inspect the scheme, its nodes, and placement rules.");
 
   function applyDraft(updater) {
     setDraft((current) => {
@@ -615,52 +639,88 @@ export default function MountingSchemesPanel({ language = "uk", token = "" }) {
   }
 
   return (
-    <section className="dashboard-layout mounting-schemes-workspace">
-      <nav aria-label={language === "uk" ? "Хлібні крихти" : "Breadcrumbs"} className="mounting-node-breadcrumb mounting-node-breadcrumb-top">
-        <ol className="mounting-node-breadcrumb-list">
-          {breadcrumbTrail.map((item, index) => {
-            const isLast = index === breadcrumbTrail.length - 1;
+    <article className="catalog-card service-catalog-card service-catalog-card-full mounting-schemes-workspace">
+      <div className="catalog-page-header material-taxonomy-page-header mounting-schemes-page-header">
+        <div className="service-catalog-title material-taxonomy-page-title">
+          <div className="fitting-category-breadcrumb fitting-category-breadcrumb-top">
+            {headerBreadcrumbTrail.map((item, index) => {
+              const isLast = index === headerBreadcrumbTrail.length - 1;
+              const isCurrent = Boolean(item?.current);
+              const label = String(item?.label || "").trim();
+              const title = String(item?.title || label || "").trim();
 
-            return (
-              <li className="mounting-node-breadcrumb-item" key={`${item.label}-${index}`}>
-                {item.route && !item.current ? (
-                  <button
-                    className="mounting-node-breadcrumb-link"
-                    onClick={() => navigate(item.route, { replace: true })}
-                    type="button"
-                  >
-                    {item.label}
-                  </button>
-                ) : (
-                  <span aria-current={item.current ? "page" : undefined} className="mounting-node-breadcrumb-current">
-                    {item.label}
-                  </span>
-                )}
-                {!isLast ? <span className="mounting-node-breadcrumb-separator">›</span> : null}
-              </li>
-            );
-          })}
-        </ol>
-      </nav>
+              return (
+                <span className="fitting-category-breadcrumb-item" key={`${label}-${index}`}>
+                  <h3 className="catalog-breadcrumb-title">
+                    {isCurrent || !item?.onClick ? (
+                      <span aria-current={isCurrent ? "page" : undefined} title={title || label}>
+                        {label}
+                      </span>
+                    ) : (
+                      <button className="catalog-breadcrumb-link" onClick={item.onClick} title={title || label} type="button">
+                        {label}
+                      </button>
+                    )}
+                  </h3>
+                  {!isLast ? <span className="fitting-breadcrumb-separator">/</span> : null}
+                </span>
+              );
+            })}
+          </div>
+          <p>{headerSubtitle}</p>
+        </div>
+        <div className="service-catalog-header-actions mounting-schemes-page-actions">
+          <span className="service-tree-badge subtle">
+            {route.mode === "detail" && detailScheme
+              ? `${detailScheme.nodes_count || 0} ${language === "uk" ? "вузлів" : "nodes"}`
+              : `${schemes.length} ${language === "uk" ? "схем" : "schemes"}`}
+          </span>
+        </div>
+      </div>
+
+      {route.mode === "list" ? (
+        <div className="mounting-schemes-panel-head-actions mounting-schemes-workspace-actions">
+          {workspaceChrome.listCreateActionCount ? (
+            <button className="primary-button" onClick={handleStartCreate} type="button">
+              <Plus size={16} />
+              {language === "uk" ? "Створити схему кріплення" : "Create mounting scheme"}
+            </button>
+          ) : null}
+        </div>
+      ) : route.mode === "detail" ? (
+        <div className="mounting-schemes-panel-head-actions mounting-schemes-workspace-actions">
+          {workspaceChrome.backActionCount ? (
+            <button className="ghost-button mounting-node-return-button" onClick={handleBackToList} type="button">
+              <ArrowLeft size={16} />
+              {language === "uk" ? "Повернутися до списку" : "Back to list"}
+            </button>
+          ) : null}
+          {workspaceChrome.editActionCount ? (
+            <button className="primary-button" onClick={handleStartEdit} type="button">
+              <Pencil size={16} />
+              {language === "uk" ? "Редагувати схему" : "Edit scheme"}
+            </button>
+          ) : null}
+        </div>
+      ) : (
+        <div className="mounting-schemes-panel-head-actions mounting-schemes-workspace-actions">
+          {workspaceChrome.backActionCount ? (
+            <button className="ghost-button mounting-node-return-button" onClick={handleBackToList} type="button">
+              <ArrowLeft size={16} />
+              {language === "uk" ? "Повернутися до списку" : "Back to list"}
+            </button>
+          ) : null}
+          {workspaceChrome.saveActionCount ? (
+            <button className="primary-button" disabled={saving} form="mounting-schemes-editor-form" type="submit">
+              <Save size={16} />
+              {saving ? (language === "uk" ? "Збереження..." : "Saving...") : language === "uk" ? "Зберегти" : "Save"}
+            </button>
+          ) : null}
+        </div>
+      )}
 
       {route.mode === "list" ? (
         <article className="table-panel full-panel mounting-schemes-table-panel">
-          <div className="dashboard-panel-head mounting-schemes-panel-head">
-            <div>
-              <p>
-                {language === "uk"
-                  ? "Керуйте схемами кріплення в одному списку."
-                  : "Manage mounting schemes in one compact list."}
-              </p>
-            </div>
-            {workspaceChrome.listCreateActionCount ? (
-              <button className="primary-button" onClick={handleStartCreate} type="button">
-                <Plus size={16} />
-                {language === "uk" ? "Створити схему кріплення" : "Create mounting scheme"}
-              </button>
-            ) : null}
-          </div>
-
           {schemesError ? <div className="mounting-schemes-alert error">{schemesError}</div> : null}
           {schemesLoading ? <div className="mounting-schemes-alert subtle">{language === "uk" ? "Завантаження..." : "Loading..."}</div> : null}
 
@@ -704,21 +764,6 @@ export default function MountingSchemesPanel({ language = "uk", token = "" }) {
         </article>
       ) : route.mode === "detail" ? (
         <article className="table-panel full-panel mounting-schemes-detail-panel">
-          <div className="mounting-schemes-panel-head-actions mounting-schemes-workspace-actions">
-            {workspaceChrome.backActionCount ? (
-              <button className="ghost-button mounting-node-return-button" onClick={handleBackToList} type="button">
-                <ArrowLeft size={16} />
-                {language === "uk" ? "Повернутися до списку" : "Back to list"}
-              </button>
-            ) : null}
-            {workspaceChrome.editActionCount ? (
-              <button className="primary-button" onClick={handleStartEdit} type="button">
-                <Pencil size={16} />
-                {language === "uk" ? "Редагувати схему" : "Edit scheme"}
-              </button>
-            ) : null}
-          </div>
-
           {currentSchemeLoading ? (
             <div className="mounting-schemes-alert subtle">{language === "uk" ? "Завантаження схеми..." : "Loading scheme..."}</div>
           ) : null}
@@ -797,22 +842,7 @@ export default function MountingSchemesPanel({ language = "uk", token = "" }) {
           ) : null}
         </article>
       ) : (
-        <form className="table-panel full-panel mounting-schemes-editor-panel" onSubmit={handleSave}>
-          <div className="mounting-schemes-panel-head-actions mounting-schemes-workspace-actions">
-            {workspaceChrome.backActionCount ? (
-              <button className="ghost-button mounting-node-return-button" onClick={handleBackToList} type="button">
-                <ArrowLeft size={16} />
-                {language === "uk" ? "Повернутися до списку" : "Back to list"}
-              </button>
-            ) : null}
-            {workspaceChrome.saveActionCount ? (
-              <button className="primary-button" disabled={saving} type="submit">
-                <Save size={16} />
-                {saving ? (language === "uk" ? "Збереження..." : "Saving...") : language === "uk" ? "Зберегти" : "Save"}
-              </button>
-            ) : null}
-          </div>
-
+        <form className="table-panel full-panel mounting-schemes-editor-panel" id="mounting-schemes-editor-form" onSubmit={handleSave}>
           {saveError ? <div className="mounting-schemes-alert error">{saveError}</div> : null}
           {draftValidationMessage ? <div className="mounting-schemes-alert subtle">{draftValidationMessage}</div> : null}
 
@@ -1094,6 +1124,6 @@ export default function MountingSchemesPanel({ language = "uk", token = "" }) {
         search={selectorSearch}
         selectorError={availableNodesError}
       />
-    </section>
+    </article>
   );
 }

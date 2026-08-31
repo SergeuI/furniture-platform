@@ -31,6 +31,10 @@ import {
 import {
   getMountingNodeFunctionalLabel,
 } from "../../mountingNodeFunctionalCodes.js";
+import {
+  buildMountingNodesBreadcrumbItems,
+  resolveMountingNodesCategoryCode,
+} from "../../mountingNodesNavigation.js";
 import surfaceMountIcon from "../../assets/hole-mounting/surface_mount.png";
 import faceToEdgeIcon from "../../assets/hole-mounting/face_to_edge.png";
 import edgeToEdgeIcon from "../../assets/hole-mounting/edge_to_edge.png";
@@ -754,6 +758,7 @@ export default function MountingNodesPanelRefined({
   language = "uk",
   editorMode = false,
   initialState = null,
+  onOpenConnectionsOverview = null,
   onOpenMountingNodeCreate = null,
   onOpenMountingNodeCategories = null,
   onOpenMountingNodeDetail = null,
@@ -1725,6 +1730,48 @@ export default function MountingNodesPanelRefined({
     }
   }
 
+  const mountingNodesHeaderBreadcrumbItems = useMemo(() => {
+    const rootLabel = language === "uk" ? "Кріплення та з'єднання" : "Connections";
+    const nodesLabel = language === "uk" ? "Монтажні вузли" : "Mounting nodes";
+    const categoryLabel = activeCategoryFilter === "all" ? nodesLabel : activeMountingCategoryLabel;
+    const detailNodeName = String(selectedNodeDetailForDisplay?.name || selectedNodeDetail?.name || "").trim();
+    const isDetailMode = mountingNodesViewMode === "detail";
+    const baseTrail = buildMountingNodesBreadcrumbItems({
+      allListLabel: language === "uk" ? "Усі монтажні вузли" : "All mounting nodes",
+      categoryCode: activeCategoryFilter === "all" ? undefined : activeCategoryFilter,
+      categoryLabel,
+      createLabel: language === "uk" ? "Створення вузла" : "Node creation",
+      editingLabel: language === "uk" ? "Редагування вузла" : "Node editing",
+      language,
+      listLabel: nodesLabel,
+      mode: isDetailMode ? "detail" : "list",
+      nodeName: detailNodeName,
+      onOpenCategories: onOpenMountingNodeCategories || undefined,
+      onOpenCategoryList: handleBackToList,
+      onOpenNodeDetail: handleBackToList,
+    });
+
+    return [
+      {
+        current: false,
+        label: rootLabel,
+        onClick: typeof onOpenConnectionsOverview === "function" ? onOpenConnectionsOverview : undefined,
+        title: rootLabel,
+      },
+      ...baseTrail,
+    ];
+  }, [
+    activeCategoryFilter,
+    activeMountingCategoryLabel,
+    handleBackToList,
+    language,
+    mountingNodesViewMode,
+    onOpenConnectionsOverview,
+    onOpenMountingNodeCategories,
+    selectedNodeDetail,
+    selectedNodeDetailForDisplay,
+  ]);
+
   if (!token) {
     return null;
   }
@@ -1733,41 +1780,65 @@ export default function MountingNodesPanelRefined({
     <section aria-hidden={editorMode} className="dashboard-panel" hidden={editorMode} id="mounting-nodes-panel">
       {mountingNodesViewMode === "list" ? (
         <>
-          <div className="dashboard-panel-head mounting-nodes-panel-head">
-            <div className="mounting-nodes-header-row">
-              <div className="mounting-nodes-header-copy">
-                <p>{t.mountingNodesDescription || "Переглядайте монтажні вузли у компактній плитці або списку та відкривайте деталі окремо."}</p>
-              </div>
-              <div className="mounting-nodes-header-actions">
-                <span className="service-tree-badge subtle">{language === "uk" ? `Знайдено: ${nodes.length}` : `Found: ${nodes.length}`}</span>
-                {activeCategoryFilter !== "all" ? (
-                  <span className="service-tree-badge subtle">
-                    {language === "uk" ? "Категорія:" : "Category:"} {activeMountingCategoryLabel}
-                  </span>
-                ) : null}
-                {activeCategoryFilter !== "all" ? (
-                  <button
-                    className="primary-button mounting-node-detail-action-button mounting-node-return-button"
-                    onClick={handleReturnToCategories}
-                    type="button"
-                  >
-                    <ArrowLeft size={16} />
-                    {language === "uk" ? "Повернутися до категорій" : "Return to categories"}
-                  </button>
-                ) : null}
-                {typeof onOpenMountingNodeCreate === "function" ? (
-                  <button
-                    className="primary-button mounting-node-create-button"
-                    onClick={handleOpenCreate}
-                    type="button"
-                  >
-                    <Plus size={16} />
-                    {language === "uk" ? "Створити монтажний вузол" : "Create mounting node"}
-                  </button>
-                ) : null}
-              </div>
-            </div>
+          <div className="catalog-page-header material-taxonomy-page-header mounting-nodes-page-header">
+            <div className="service-catalog-title material-taxonomy-page-title">
+              <div className="fitting-category-breadcrumb fitting-category-breadcrumb-top">
+                {mountingNodesHeaderBreadcrumbItems.map((item, index) => {
+                  const isLast = index === mountingNodesHeaderBreadcrumbItems.length - 1;
+                  const isCurrent = Boolean(item?.current);
+                  const label = String(item?.label || "").trim();
+                  const title = String(item?.title || label || "").trim();
 
+                  return (
+                    <span className="fitting-category-breadcrumb-item" key={`${label || "crumb"}-${index}`}>
+                      <h3 className="catalog-breadcrumb-title">
+                        {isCurrent || !item?.onClick ? (
+                          <span aria-current={isCurrent ? "page" : undefined} title={title || label}>
+                            {label}
+                          </span>
+                        ) : (
+                          <button className="catalog-breadcrumb-link" onClick={item.onClick} title={title || label} type="button">
+                            {label}
+                          </button>
+                        )}
+                      </h3>
+                      {!isLast ? <span className="fitting-breadcrumb-separator">/</span> : null}
+                    </span>
+                  );
+                })}
+              </div>
+              <p>{t.mountingNodesDescription || "Переглядайте монтажні вузли у компактній плитці або списку та відкривайте деталі окремо."}</p>
+            </div>
+            <div className="service-catalog-header-actions mounting-nodes-header-actions">
+              <span className="service-tree-badge subtle">{language === "uk" ? `Знайдено: ${nodes.length}` : `Found: ${nodes.length}`}</span>
+              {activeCategoryFilter !== "all" ? (
+                <span className="service-tree-badge subtle">
+                  {language === "uk" ? "Категорія:" : "Category:"} {activeMountingCategoryLabel}
+                </span>
+              ) : null}
+              {activeCategoryFilter !== "all" ? (
+                <button
+                  className="primary-button mounting-node-detail-action-button mounting-node-return-button"
+                  onClick={handleReturnToCategories}
+                  type="button"
+                >
+                  <ArrowLeft size={16} />
+                  {language === "uk" ? "Повернутися до категорій" : "Return to categories"}
+                </button>
+              ) : null}
+              {typeof onOpenMountingNodeCreate === "function" ? (
+                <button
+                  className="primary-button mounting-node-create-button"
+                  onClick={handleOpenCreate}
+                  type="button"
+                >
+                  <Plus size={16} />
+                  {language === "uk" ? "Створити монтажний вузол" : "Create mounting node"}
+                </button>
+              ) : null}
+            </div>
+          </div>
+          <div className="mounting-nodes-panel-head">
             <div className="mounting-nodes-controls-row">
               <form className="project-filter-form mounting-nodes-filter-form" onSubmit={handleSearchSubmit}>
                 <label className="mounting-nodes-search mounting-nodes-search-field">
@@ -1969,6 +2040,31 @@ export default function MountingNodesPanelRefined({
         <article className="catalog-card service-catalog-card service-catalog-card-full holes-view-card mounting-node-detail-screen">
           <div className="catalog-page-header mounting-node-detail-header">
             <div className="service-catalog-title">
+              <div className="fitting-category-breadcrumb fitting-category-breadcrumb-top">
+                {mountingNodesHeaderBreadcrumbItems.map((item, index) => {
+                  const isLast = index === mountingNodesHeaderBreadcrumbItems.length - 1;
+                  const isCurrent = Boolean(item?.current);
+                  const label = String(item?.label || "").trim();
+                  const title = String(item?.title || label || "").trim();
+
+                  return (
+                    <span className="fitting-category-breadcrumb-item" key={`${label || "crumb"}-${index}`}>
+                      <h3 className="catalog-breadcrumb-title">
+                        {isCurrent || !item?.onClick ? (
+                          <span aria-current={isCurrent ? "page" : undefined} title={title || label}>
+                            {label}
+                          </span>
+                        ) : (
+                          <button className="catalog-breadcrumb-link" onClick={item.onClick} title={title || label} type="button">
+                            {label}
+                          </button>
+                        )}
+                      </h3>
+                      {!isLast ? <span className="fitting-breadcrumb-separator">/</span> : null}
+                    </span>
+                  );
+                })}
+              </div>
               <p>{t.mountingNodeDetailsDescription || (language === "uk" ? "Переглядайте склад вузла, варіант кріплення та переходьте до редактора за потреби." : "Inspect the node fittings, mounting variant, and open the editor when needed.")}</p>
             </div>
             <div className="service-catalog-header-actions mounting-node-detail-actions">

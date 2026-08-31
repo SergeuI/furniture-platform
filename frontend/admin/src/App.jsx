@@ -89,6 +89,7 @@ import {
   getNextCollapsedSidebarFlyoutState,
 } from "./sidebarGroupState.js";
 import {
+  getConnectionsWorkspacePageDescription,
   getConnectionsWorkspacePageLabel,
   getConnectionsWorkspaceSidebarTabs,
   resolveActiveConnectionsNavigationKey,
@@ -12806,7 +12807,7 @@ export default function App() {
     }
 
     if (isConnectionsWorkspaceView) {
-      return getConnectionsWorkspacePageLabel(activeView, language);
+      return isConnectionsOverviewView ? "" : getConnectionsWorkspacePageDescription(activeView, language);
     }
 
     if (activeView === "settings") {
@@ -23811,7 +23812,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
         : null}
 
       <section className={`workspace${isMaterialCleanupView ? " materials-workspace" : ""}`}>
-        {!isMaterialCleanupView && !isCatalogFittingManufacturersView && !shouldHideFittingsCatalogOuterToolbar && !isCatalogHubView ? (
+        {!isMaterialCleanupView && !isCatalogFittingManufacturersView && !shouldHideFittingsCatalogOuterToolbar && !isCatalogHubView && !isCatalogHolesView && !isConnectionsWorkspaceView ? (
         <header
           className={`toolbar${activeView === "projectDetails" ? " project-toolbar" : ""}`}
         >
@@ -28915,9 +28916,17 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
             ) : (
               isMountingNodesRoute && mountingNodesRouteState?.mode === "categories" ? (
                 <article className="catalog-card service-catalog-card service-catalog-card-full">
-                  <div className="catalog-page-header">
+              <div className="catalog-page-header">
                     <div className="service-catalog-title">
-                      <h3>{language === "uk" ? "Каталог категорій монтажних вузлів" : "Mounting node category catalog"}</h3>
+                      <div className="fitting-category-breadcrumb fitting-category-breadcrumb-top">
+                        <h3 className="catalog-breadcrumb-title">
+                          <button className="catalog-breadcrumb-link" onClick={() => switchView("connectionsOverview")} type="button">
+                            {language === "uk" ? "Кріплення та з'єднання" : "Connections"}
+                          </button>
+                        </h3>
+                        <span className="fitting-breadcrumb-separator">/</span>
+                        <h3 className="catalog-breadcrumb-title">{language === "uk" ? "Монтажні вузли" : "Mounting nodes"}</h3>
+                      </div>
                       <p>
                         {language === "uk"
                           ? "Оберіть категорію для перегляду монтажних вузлів."
@@ -29068,6 +29077,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   initialState={mountingNodesPanelInitialState}
                   listRequestToken={catalogHolesListRequestToken}
                   language={language}
+                  onOpenConnectionsOverview={() => switchView("connectionsOverview")}
                   onOpenMountingNodeCategories={handleOpenMountingNodesCategoryCatalog}
                   onCloseMountingNodeDetail={handleCloseCatalogHolesDetail}
                   onOpenFittingDetail={openFittingDetails}

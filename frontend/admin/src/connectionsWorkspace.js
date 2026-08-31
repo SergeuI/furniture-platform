@@ -2,12 +2,12 @@ const CONNECTIONS_WORKSPACE_TAB_DEFINITIONS = [
   {
     key: "connectionsOverview",
     label: {
-      en: "Overview",
-      uk: "Огляд",
+      en: "Connections",
+      uk: "Кріплення та з'єднання",
     },
     description: {
-      en: "A compact start page for mounting nodes and the related placeholder pages.",
-      uk: "Коротка стартова сторінка для монтажних вузлів і пов'язаних сторінок-заглушок.",
+      en: "Settings for mounting nodes, fastening schemes, connection types, and replacement rules.",
+      uk: "Налаштування монтажних вузлів, схем кріплення, типів з'єднань і правил замін.",
     },
     section: "connections-overview",
   },
@@ -101,6 +101,11 @@ export function getConnectionsWorkspaceOverviewCards({ language = "uk" } = {}) {
 export function getConnectionsWorkspacePageLabel(viewKey, language = "uk") {
   const tab = CONNECTIONS_WORKSPACE_TAB_DEFINITIONS.find((item) => item.key === viewKey);
   return tab ? pickLocalizedText(tab.label, language) : pickLocalizedText(CONNECTIONS_WORKSPACE_TAB_DEFINITIONS[0].label, language);
+}
+
+export function getConnectionsWorkspacePageDescription(viewKey, language = "uk") {
+  const tab = CONNECTIONS_WORKSPACE_TAB_DEFINITIONS.find((item) => item.key === viewKey);
+  return tab ? pickLocalizedText(tab.description, language) : pickLocalizedText(CONNECTIONS_WORKSPACE_TAB_DEFINITIONS[0].description, language);
 }
 
 export function shouldAutoOpenConnectionsMenu(activeView) {

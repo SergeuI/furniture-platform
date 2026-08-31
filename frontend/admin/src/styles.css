@@ -1669,7 +1669,7 @@ tbody tr.selected {
 }
 
 .mounting-schemes-workspace {
-  gap: 12px;
+  gap: 16px;
 }
 
 .dashboard-hero-card,
@@ -3611,9 +3611,10 @@ tbody tr.selected {
   border: 0;
   color: #0f766e;
   cursor: pointer;
-  font-size: clamp(21px, 2.1vw, 30px);
-  font-weight: 700;
-  line-height: 1.15;
+  font-family: inherit;
+  font-size: 25px;
+  font-weight: 800;
+  line-height: 1.25;
   padding: 0;
 }
 
@@ -3625,9 +3626,9 @@ tbody tr.selected {
 .mounting-node-breadcrumb-current,
 .mounting-node-toolbar-breadcrumb-current {
   color: #132028;
-  font-size: clamp(21px, 2.1vw, 30px);
+  font-size: 25px;
   font-weight: 800;
-  line-height: 1.15;
+  line-height: 1.25;
   max-width: min(100%, 46rem);
   min-width: 0;
   overflow: hidden;
@@ -3638,8 +3639,8 @@ tbody tr.selected {
 .mounting-node-breadcrumb-separator,
 .mounting-node-toolbar-breadcrumb-separator {
   color: #6b7b88;
-  font-size: clamp(20px, 2vw, 28px);
-  line-height: 1.15;
+  font-size: 18px;
+  line-height: 1.2;
   flex: 0 0 auto;
 }
 
@@ -13250,6 +13251,15 @@ tbody tr.selected {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .connections-overview-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .connections-overview-card,
+  .connections-overview-card-wide {
+    grid-column: auto;
+  }
+
   .catalog-hub-tile-wide {
     grid-column: 1 / -1;
     grid-template-columns: minmax(0, 1fr);
@@ -13377,6 +13387,15 @@ tbody tr.selected {
 
   .catalog-hub-grid {
     grid-template-columns: 1fr;
+  }
+
+  .connections-overview-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .connections-overview-card,
+  .connections-overview-card-wide {
+    grid-column: auto;
   }
 
   .catalog-hub-tile-wide {
