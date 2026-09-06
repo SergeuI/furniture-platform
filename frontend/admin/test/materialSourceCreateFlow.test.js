@@ -25,18 +25,17 @@ test("material source mode uses url-first flow with optional article fallback", 
   assert.doesNotMatch(sourceModeSource, /t\.materialManufacturer/);
 });
 
-test("material refresh skips gallery request when source import already returned images", () => {
+test("material source create completes without a gallery request", () => {
   const appPath = fileURLToPath(new URL("../src/App.jsx", import.meta.url));
   const appSource = readFileSync(appPath, "utf8");
-  const refreshStart = appSource.indexOf("async function handleRefreshMaterial(item) {");
-  const refreshEnd = appSource.indexOf("function toggleMaterialEdgeForm(edgeKey)", refreshStart);
-  const refreshSource = refreshStart >= 0 && refreshEnd > refreshStart
-    ? appSource.slice(refreshStart, refreshEnd)
+  const createStart = appSource.indexOf("async function handleImportMaterial(event) {");
+  const createEnd = appSource.indexOf("async function handleEdgeCreateSubmit(event)", createStart);
+  const createSource = createStart >= 0 && createEnd > createStart
+    ? appSource.slice(createStart, createEnd)
     : appSource;
 
-  assert.match(refreshSource, /const preloadedGalleryImages = Array\.isArray\(refreshedMaterial\?\.images\)/);
-  assert.match(refreshSource, /if \(preloadedGalleryImages\.length\) \{/);
-  assert.match(refreshSource, /updateMaterialImportProgress\("gallery", "done"\);/);
-  assert.match(refreshSource, /await loadMaterialsCatalog\(token\);/);
-  assert.match(refreshSource, /galleryResult = await refreshMaterialGallery\(token, refreshedMaterialId\);/);
+  assert.doesNotMatch(createSource, /refreshMaterialGallery\(token, refreshedMaterialId\)/);
+  assert.match(createSource, /updateMaterialImportProgress\("gallery", "done"\);/);
+  assert.match(createSource, /await loadMaterialsCatalog\(token\);/);
+  assert.match(createSource, /closeMaterialCreateModal\(\);/);
 });

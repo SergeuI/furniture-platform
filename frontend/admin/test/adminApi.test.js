@@ -119,23 +119,25 @@ test("material source import dev timing logs request lifecycle", async () => {
   }
 });
 
-test("material import submit handler stops after gallery for source imports", () => {
+test("material source import does not block on legacy gallery refresh", () => {
   const source = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
   const handlerStart = source.indexOf("async function handleImportMaterial(event) {");
+  const handlerEnd = source.indexOf("\n  async function handleEdgeCreateSubmit(event)", handlerStart);
   assert.ok(handlerStart >= 0, "handleImportMaterial not found");
+  assert.ok(handlerEnd > handlerStart, "handleImportMaterial boundary not found");
 
-  const handlerSnippet = source.slice(handlerStart, handlerStart + 12000);
+  const handlerSnippet = source.slice(handlerStart, handlerEnd);
   assert.match(handlerSnippet, /await createMaterial\(token, payload\);/);
-  assert.match(handlerSnippet, /await refreshMaterialGallery\(token, refreshedMaterialId\);/);
+  assert.doesNotMatch(handlerSnippet, /await refreshMaterialGallery\(token, refreshedMaterialId\);/);
   assert.match(handlerSnippet, /Отримуємо дані матеріалу/);
-  assert.match(handlerSnippet, /Завантажуємо фотографії/);
+  assert.doesNotMatch(handlerSnippet, /Завантажуємо фотографії/);
   assert.match(handlerSnippet, /Матеріал готовий/);
-  assert.match(handlerSnippet, /Матеріал додано, але не всі фотографії вдалося завантажити\./);
+  assert.match(handlerSnippet, /updateMaterialImportProgress\("gallery", "done"\);/);
   assert.doesNotMatch(handlerSnippet, /refreshMaterialRecommendedEdges/);
   assert.doesNotMatch(handlerSnippet, /Шукаємо рекомендовані крайки/);
   assert.ok(
-    handlerSnippet.indexOf("setMaterialImportWorking(false);") < handlerSnippet.indexOf("await loadMaterialsCatalog(token);"),
-    "material import overlay should close before catalog reload",
+    handlerSnippet.indexOf("await loadMaterialsCatalog(token);") < handlerSnippet.lastIndexOf("closeMaterialCreateModal();"),
+    "material import overlay should close after catalog reload",
   );
   assert.match(handlerSnippet, /finally \{[\s\S]*setLoading\(false\);[\s\S]*setMaterialImportWorking\(false\);[\s\S]*resetMaterialImportProgress\(\);/);
 });
@@ -207,6 +209,31 @@ test("material detail releases core loading before supplier and owners hydration
   assert.ok(
     detailSnippet.indexOf("setMaterialDetailLoading(false);") < detailSnippet.indexOf("await loadMaterialOwners"),
     "core material detail should stop loading before owners hydration",
+  );
+});
+
+test("material detail supplier fallback keeps the active city context", () => {
+  const source = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
+  const detailStart = source.indexOf("async function openMaterialDetails(item, options = {}) {");
+  assert.ok(detailStart >= 0, "openMaterialDetails not found");
+
+  const detailSnippet = source.slice(detailStart, detailStart + 11000);
+  assert.match(
+    detailSnippet,
+    /listMaterialSupplierOffers\(token, article, activeCity \|\| ""\)/,
+  );
+
+  const apiSource = readFileSync(new URL("../src/api.js", import.meta.url), "utf8");
+  assert.match(apiSource, /export async function listMaterialSupplierOffers\(token, article, city = ""\)/);
+  assert.match(apiSource, /searchParams\.set\("city", city\)/);
+});
+
+test("launch mode hides the editable profile city selector", () => {
+  const source = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
+  assert.match(source, /<input disabled readOnly type="text" value=\{formatCatalogLabel\(activeCity, t\)\} \/>/);
+  assert.doesNotMatch(
+    source,
+    /<label>\s*\{t\.city\}\s*<select[\s\S]*?value=\{ownProfileForm\.city\}/,
   );
 });
 

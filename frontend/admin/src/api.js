@@ -1880,7 +1880,7 @@ export async function getMaterialDetails(token, article, city = "") {
   });
 }
 
-export async function listMaterialSupplierOffers(token, article) {
+export async function listMaterialSupplierOffers(token, article, city = "") {
   const normalizedArticle = String(article || "").trim();
 
   if (!normalizedArticle) {
@@ -1891,7 +1891,13 @@ export async function listMaterialSupplierOffers(token, article) {
     };
   }
 
-  return request(`/catalog/materials/${encodeURIComponent(normalizedArticle)}/supplier-offers`, {
+  const searchParams = new URLSearchParams();
+  if (city) {
+    searchParams.set("city", city);
+  }
+  const query = searchParams.toString();
+
+  return request(`/catalog/materials/${encodeURIComponent(normalizedArticle)}/supplier-offers${query ? `?${query}` : ""}`, {
     headers: authHeaders(token),
     timeoutMs: 30000,
   });

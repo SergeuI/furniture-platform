@@ -19,6 +19,7 @@ from binascii import Error as BinasciiError
 from hashlib import sha256
 from datetime import datetime
 import json
+from time import perf_counter
 from threading import Lock
 from uuid import uuid4
 from urllib.parse import urlparse
@@ -287,10 +288,15 @@ from services.material_identity_validation_service import (
 from services.material_catalog_service import (
     CITY_COOKIES as MATERIAL_CITY_COOKIES,
     detect_material_source_site,
+    get_effective_material_city,
     fetch_material_by_source_live_traced,
     fetch_material_by_source_url_live_traced,
     fetch_viyar_product_details_by_url_traced,
     fetch_remote_image_payload,
+    _material_perf_increment,
+    _material_perf_stage,
+    material_performance_endpoint,
+    material_performance_update,
     is_material_gallery_candidate_url,
     normalize_material_gallery_image_url,
     prefetch_material_image_cache,
@@ -479,6 +485,47 @@ def _prepare_material_gallery_images(
         selected_city=selected_city,
         cookie_override=cookie_override,
     )
+
+
+def _prepare_viyar_import_image_urls(material: dict) -> list[str]:
+    """Keep VIYAR import local; gallery bytes can be warmed separately."""
+    images_started_at = perf_counter()
+    _material_perf_increment("IMAGE_RESOLUTION_CALL_COUNT")
+    raw_image_urls = list(material.get("image_urls") or [])
+    if not raw_image_urls and material.get("image"):
+        raw_image_urls = [material.get("image")]
+
+    deduped_image_urls: list[str] = []
+    seen_urls: set[str] = set()
+    for image_url in raw_image_urls:
+        if not is_material_gallery_candidate_url(image_url):
+            continue
+        canonical_image_url = normalize_material_gallery_image_url(str(image_url))
+        if not canonical_image_url:
+            continue
+        if canonical_image_url in seen_urls:
+            continue
+        seen_urls.add(canonical_image_url)
+        deduped_image_urls.append(canonical_image_url)
+
+    primary_image = material.get("image")
+    normalized_primary_image = normalize_material_gallery_image_url(str(primary_image)) if primary_image else None
+    if normalized_primary_image:
+        material["image"] = normalized_primary_image
+
+    _material_perf_increment("IMAGE_CANDIDATES_FOUND", len(deduped_image_urls))
+    _material_perf_increment("IMAGE_URLS_ACCEPTED", len(deduped_image_urls))
+    _material_perf_stage(
+        "images_total",
+        images_started_at,
+        candidates_found=len(deduped_image_urls),
+        candidates_checked=0,
+        urls_accepted=len(deduped_image_urls),
+    )
+    material["image_urls"] = deduped_image_urls
+    if not material.get("image") and deduped_image_urls:
+        material["image"] = deduped_image_urls[0]
+    return deduped_image_urls
 
 
 async def _hydrate_material_supplier_offer_display_flags(
@@ -755,6 +802,8 @@ def _prepare_remote_material_gallery_images(
     existing_primary_bytes: bytes | None = None,
     existing_primary_content_type: str | None = None,
 ) -> tuple[PreparedFittingGalleryImage, ...] | None:
+    images_started_at = perf_counter()
+    _material_perf_increment("IMAGE_RESOLUTION_CALL_COUNT")
     raw_image_urls = list(image_urls or [])
     filtered_image_urls = [
         image_url
@@ -771,7 +820,10 @@ def _prepare_remote_material_gallery_images(
         deduped_image_urls.append((canonical_image_url, image_url))
         seen_urls.add(canonical_image_url)
     if not deduped_image_urls:
+        _material_perf_stage("images_total", images_started_at, candidates_found=0, candidates_checked=0, urls_accepted=0)
         return None
+
+    _material_perf_increment("IMAGE_CANDIDATES_FOUND", len(deduped_image_urls))
 
     prepared_images: list[PreparedFittingGalleryImage] = []
     seen_hashes: set[str] = set()
@@ -808,6 +860,7 @@ def _prepare_remote_material_gallery_images(
         payload = None
         try:
             for fetch_url in fetch_candidates:
+                _material_perf_increment("IMAGE_CANDIDATES_CHECKED")
                 payload = fetch_remote_image_payload(
                     fetch_url,
                     city=selected_city,
@@ -854,10 +907,13 @@ def _prepare_remote_material_gallery_images(
             continue
 
         prepared_images.append(prepared_image)
+        _material_perf_increment("IMAGE_URLS_ACCEPTED")
         seen_hashes.add(prepared_image.sha256)
         next_sort_order += 1
     if not prepared_images:
+        _material_perf_stage("images_total", images_started_at, status="ok")
         return None
+    _material_perf_stage("images_total", images_started_at, status="ok")
     return tuple(prepared_images)
 
 
@@ -885,7 +941,7 @@ async def _refresh_material_gallery_for_item(
         return material, _summarize_material_gallery_refresh(discovered=0, persisted=0), None
 
     cookie_override = await _resolve_viyar_cookie_for_user(current_user)
-    selected_city = (current_user.city or "").strip() or None
+    selected_city = get_effective_material_city(user_city=current_user.city)
 
     try:
         parsed_material, _debug_payload = await fetch_material_by_source_url_live_traced(
@@ -1882,7 +1938,7 @@ async def list_materials_route(
         else include_private_categories
     )
 
-    selected_city = city or current_user.city
+    selected_city = get_effective_material_city(city, current_user.city)
     items = list_materials(
         search=search,
         category=category,
@@ -2500,13 +2556,14 @@ async def get_material_edge_image_route(
     "/materials",
     response_model=MaterialCatalogOperationResponseSchema,
 )
+@material_performance_endpoint
 async def create_material_route(
 
     payload: MaterialCatalogCreateSchema,
     current_user = Depends(require_material_editor)
 ):
 
-    selected_city = (payload.city or current_user.city or "").strip()
+    selected_city = get_effective_material_city(payload.city, current_user.city)
     manufacturer_id_in_payload = "manufacturer_id" in payload.model_fields_set
     selected_manufacturer_id = None
     if manufacturer_id_in_payload:
@@ -2540,14 +2597,16 @@ async def create_material_route(
             "error": "Only admin can create system materials",
         }
 
-    is_default = current_user.role == "admin"
-
     effective_category = (payload.category or "dsp").strip() or "dsp"
     effective_source_url = (payload.source_url or "").strip() or None
     requested_source_site = detect_material_source_site(effective_source_url) if effective_source_url else None
     should_import_from_source = bool(
         effective_source_url and requested_source_site and requested_source_site != "generic"
     )
+    # Manual creation is always private to the authenticated owner. Admin
+    # creates become system materials only when a supported source import was
+    # explicitly requested.
+    is_default = current_user.role == "admin" and should_import_from_source
     manual_source_url = effective_source_url if effective_source_url and not should_import_from_source else None
     effective_article = (payload.article or "").strip() or None
     effective_name = (payload.name or "").strip() or None
@@ -2606,12 +2665,27 @@ async def create_material_route(
 
         try:
             parsed_material = None
-            parsed_material, _parsed_debug_payload = await fetch_material_by_source_url_live_traced(
-                effective_source_url,
-                city=selected_city,
-                cookie_override=cookie_override,
-                article_hint=effective_article,
-            )
+            source_started_at = perf_counter()
+            fetch_succeeded = False
+            try:
+                parsed_material, _parsed_debug_payload = await fetch_material_by_source_url_live_traced(
+                    effective_source_url,
+                    city=selected_city,
+                    cookie_override=cookie_override,
+                    article_hint=effective_article,
+                )
+                fetch_succeeded = True
+            except Exception as error:
+                _material_perf_stage(
+                    "http_fetch",
+                    source_started_at,
+                    status="error",
+                    exception_type=type(error).__name__,
+                )
+                raise
+            finally:
+                if fetch_succeeded:
+                    _material_perf_stage("http_fetch", source_started_at)
             if not parsed_material:
                 logger.warning(
                     "Explicit source-url import returned no parsed material; source_site=%s article=%s source_url=%s stage=direct_source_parse",
@@ -2628,6 +2702,7 @@ async def create_material_route(
                     ),
                 }
             effective_article = (parsed_material.get("article") or effective_article or "").strip()
+            material_performance_update(article=effective_article)
             if not effective_article:
                 raise RuntimeError(unresolved_article_error)
 
@@ -2646,12 +2721,16 @@ async def create_material_route(
             if not material.get("source_url"):
                 material["source_url"] = effective_source_url
 
-            prepared_gallery_images = _prepare_material_gallery_images(
-                material=material,
-                selected_city=selected_city,
-                source_url=material.get("source_url") or effective_source_url,
-                cookie_override=cookie_override,
-            )
+            if source_site == "viyar":
+                _prepare_viyar_import_image_urls(material)
+                prepared_gallery_images = None
+            else:
+                prepared_gallery_images = _prepare_material_gallery_images(
+                    material=material,
+                    selected_city=selected_city,
+                    source_url=material.get("source_url") or effective_source_url,
+                    cookie_override=cookie_override,
+                )
 
             if not existing_item:
                 existing_item = _find_material_import_match(
@@ -2662,11 +2741,13 @@ async def create_material_route(
 
             identity_validation = None
             if existing_item:
+                identity_started_at = perf_counter()
                 identity_validation = validate_material_supplier_offer_identity(
                     existing_item,
                     material,
                     expected_category=effective_category,
                 )
+                _material_perf_stage("identity", identity_started_at)
                 if identity_validation["status"] != "compatible":
                     return {
                         "success": False,
@@ -2686,6 +2767,7 @@ async def create_material_route(
             if preserve_existing_canonical:
                 item = existing_item
             else:
+                material_upsert_started_at = perf_counter()
                 item = upsert_material(
                     article=material["article"],
                     name=material["name"],
@@ -2704,8 +2786,10 @@ async def create_material_route(
                     imported_at=now,
                     static_updated_at=now,
                     prepared_gallery_images=prepared_gallery_images,
+                    allow_deleted_restore=True,
                     **manufacturer_write_kwargs,
                 )
+                _material_perf_stage("material_upsert", material_upsert_started_at)
 
             for city_code, price_value in prices_by_city.items():
                 upsert_material_price(
@@ -2723,6 +2807,18 @@ async def create_material_route(
             )
             supplier = get_supplier_by_code(source_site)
             if supplier and supplier.get("is_active"):
+                offer_payload_kwargs = {}
+                if source_site == "viyar":
+                    offer_payload_kwargs["source_payload_json"] = json.dumps(
+                        {
+                            "source_url": material.get("source_url") or effective_source_url,
+                            "source_site": source_site,
+                            "parsed_material": material,
+                        },
+                        ensure_ascii=False,
+                        default=str,
+                    )
+                offer_started_at = perf_counter()
                 upsert_material_supplier_offer_for_import(
                     material_id=item["id"],
                     supplier_id=supplier["id"],
@@ -2732,14 +2828,16 @@ async def create_material_route(
                     price=material.get("price"),
                     currency=material.get("currency"),
                     unit=material.get("unit"),
-                    stock=material.get("stock"),
+                    stock=material.get("availability") or material.get("stock"),
                     city=selected_city,
                     region=material.get("region"),
                     is_active=True,
                     priority=0,
                     parsed_at=now,
                     price_updated_at=now,
+                    **offer_payload_kwargs,
                 )
+                _material_perf_stage("supplier_offer_upsert", offer_started_at)
 
             item = get_material_by_article(material["article"]) or item
             item = _resolve_material_with_city_context(
@@ -2899,7 +2997,7 @@ async def import_material_from_viyar_route(
 ):
 
     normalized_article = payload.article.strip()
-    selected_city = (current_user.city or "").strip()
+    selected_city = get_effective_material_city(user_city=current_user.city)
 
     if not selected_city:
         return {
@@ -2975,12 +3073,17 @@ async def import_material_from_viyar_route(
             selected_city: material.get("price"),
         }
 
-        prepared_gallery_images = _prepare_material_gallery_images(
-            material=material,
-            selected_city=selected_city,
-            source_url=material.get("source_url") or payload.source_url,
-            cookie_override=cookie_override,
-        )
+        source_site = detect_material_source_site(material.get("source_url") or payload.source_url)
+        if source_site == "viyar":
+            _prepare_viyar_import_image_urls(material)
+            prepared_gallery_images = None
+        else:
+            prepared_gallery_images = _prepare_material_gallery_images(
+                material=material,
+                selected_city=selected_city,
+                source_url=material.get("source_url") or payload.source_url,
+                cookie_override=cookie_override,
+            )
 
         now = datetime.utcnow()
         is_default = current_user.role == "admin"
@@ -3002,6 +3105,7 @@ async def import_material_from_viyar_route(
             imported_at=now,
             static_updated_at=now,
             prepared_gallery_images=prepared_gallery_images,
+            allow_deleted_restore=True,
         )
         for city_code, price_value in prices_by_city.items():
             upsert_material_price(
@@ -3017,9 +3121,19 @@ async def import_material_from_viyar_route(
             product_type=payload.category,
             source_url=material.get("source_url") or payload.source_url,
         )
-        source_site = detect_material_source_site(material.get("source_url") or payload.source_url)
         supplier = get_supplier_by_code(source_site)
         if supplier and supplier.get("is_active"):
+            offer_payload_kwargs = {}
+            if source_site == "viyar":
+                offer_payload_kwargs["source_payload_json"] = json.dumps(
+                    {
+                        "source_url": material.get("source_url") or payload.source_url,
+                        "source_site": source_site,
+                        "parsed_material": material,
+                    },
+                    ensure_ascii=False,
+                    default=str,
+                )
             upsert_material_supplier_offer_for_import(
                 material_id=item["id"],
                 supplier_id=supplier["id"],
@@ -3029,13 +3143,14 @@ async def import_material_from_viyar_route(
                 price=material.get("price"),
                 currency=material.get("currency"),
                 unit=material.get("unit"),
-                stock=material.get("stock"),
+                stock=material.get("availability") or material.get("stock"),
                 city=selected_city,
                 region=material.get("region"),
                 is_active=True,
                 priority=0,
                 parsed_at=now,
                 price_updated_at=now,
+                **offer_payload_kwargs,
             )
 
         item = get_material_by_article(
@@ -3126,7 +3241,7 @@ async def refresh_material_gallery_route(
     )
     refreshed_item = _resolve_material_with_city_context(
         material["article"],
-        current_user.city,
+        get_effective_material_city(user_city=current_user.city),
         current_user,
         material.get("category"),
         base_item=refreshed_item,
@@ -3316,7 +3431,7 @@ async def get_material_route(
 
     _ensure_material_feature_access(current_user, "materials.view")
 
-    selected_city = (city or current_user.city or "").strip() or None
+    selected_city = get_effective_material_city(city, current_user.city)
     item = _resolve_material_with_city_context(
         article.strip(),
         selected_city,
@@ -3374,15 +3489,18 @@ async def get_material_route(
 )
 async def list_material_supplier_offers_route(
     article: str,
+    city: str | None = Query(default=None),
     current_user = Depends(require_catalog_reader),
 ):
 
     _ensure_material_feature_access(current_user, "materials.view")
+    selected_city = get_effective_material_city(city, current_user.city)
 
     material = get_material_by_article(
         article.strip(),
         viewer_user_id=str(current_user.id),
         viewer_role=current_user.role,
+        city=selected_city,
     )
     if not material:
         raise HTTPException(
@@ -3395,7 +3513,7 @@ async def list_material_supplier_offers_route(
 
     return {
         "success": True,
-        "items": list_material_supplier_offers(material["id"]),
+        "items": list_material_supplier_offers(material["id"], city=selected_city),
     }
 
 
@@ -3548,7 +3666,7 @@ async def attach_material_supplier_offer_from_source_route(
             "error": "Source URL is required",
         }
 
-    selected_city = (current_user.city or "").strip() or None
+    selected_city = get_effective_material_city(user_city=current_user.city)
     cookie_override = await _resolve_viyar_cookie_for_user(current_user)
     source_site = detect_material_source_site(source_url)
 
@@ -3895,7 +4013,7 @@ async def update_material_route(
             selected_manufacturer_id = int(manufacturer_row["id"])
 
     normalized_article = article.strip()
-    selected_city = (current_user.city or "").strip() or None
+    selected_city = get_effective_material_city(user_city=current_user.city)
     existing_item = _resolve_material_with_city_context(
         normalized_article,
         selected_city,

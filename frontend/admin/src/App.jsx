@@ -7,11 +7,13 @@ import {
   Circle,
   Drill,
   FileSliders,
+  Factory,
   FolderTree,
   History,
   House,
   Info,
   LayoutGrid,
+  LockKeyhole,
   Layers,
   MoreHorizontal,
   Menu,
@@ -30,6 +32,7 @@ import {
   EyeOff,
   X,
   Trash2,
+  Truck,
   Users,
   Wrench,
 } from "lucide-react";
@@ -59,6 +62,7 @@ import ConnectionsWorkspace from "./components/connections/ConnectionsWorkspace.
 import FittingSuppliersAdminWorkspace from "./components/FittingSuppliersAdminWorkspace.jsx";
 import MaterialSupplierOffersSection from "./components/MaterialSupplierOffersSection.jsx";
 import MaterialTaxonomyAdminWorkspace from "./components/MaterialTaxonomyAdminWorkspace.jsx";
+import CatalogBreadcrumbTrail from "./components/CatalogBreadcrumbTrail.jsx";
 import {
   getProcessingWorkspaceSidebarTabs,
   getProcessingWorkspaceTabTargetView,
@@ -73,6 +77,7 @@ import {
   shouldShowOwnersEmptyState,
   shouldShowOwnersLoadingState,
 } from "./components/materialDetailState.js";
+import { normalizeMaterialImageUrl } from "./materialImageUrl.js";
 import { FITTING_TAXONOMY_VIEWS } from "./fittingTaxonomyAdmin.js";
 import {
   buildCanonicalFittingCatalogView,
@@ -119,6 +124,14 @@ import {
   hasUserEntitlement,
   isMaterialCreationBlockedByQuota as isMaterialCreationBlockedByQuotaHelper,
 } from "./materialEntitlements.js";
+import { getManualMaterialFormValidity } from "./materialManualForm.js";
+import {
+  getEffectiveProductCity,
+  getMaterialCatalogContextKey,
+  shouldShowMaterialSquareMeterBadge,
+  shouldRenderMaterialItems,
+} from "./materialCatalogLifecycle.js";
+import { getProjectMaterialPriceRows } from "./materialProjectPricing.js";
 import { loadPrimaryFittingImageBlob } from "./fittingImagePreview.js";
 import {
   SidebarAssetIcon,
@@ -227,7 +240,11 @@ import faceToEdgeIcon from "./assets/hole-mounting/face_to_edge.png";
 import edgeToEdgeIcon from "./assets/hole-mounting/edge_to_edge.png";
 import drawerSlidesIcon from "./assets/hole-mounting/drawer_slides.png";
 import catalogMaterialsImage from "./assets/catalog-hub/catalog-materials.png";
+import catalogMaterialCategoriesImage from "./assets/catalog-hub/catalog-material-categories.png";
+import catalogMaterialManufacturersImage from "./assets/catalog-hub/catalog-material-manufacturers.png";
+import catalogMaterialSuppliersImage from "./assets/catalog-hub/catalog-material-suppliers.png";
 import catalogEdgesImage from "./assets/catalog-hub/catalog-edges.png";
+import catalogSquareMeterImage from "./assets/catalog-hub/catalog-square-meter.png";
 import catalogFittingsImage from "./assets/catalog-hub/catalog-fittings.png";
 import catalogViyarImage from "./assets/catalog-hub/catalog-viyar.png";
 import catalogDrillingRulesImage from "./assets/catalog-hub/catalog-drilling-rules.png";
@@ -2401,6 +2418,9 @@ const CATALOG_TILE_VISUALS = {
 
 const CATALOG_HUB_CARD_VISUALS = {
   materials: { accent: "#2563eb", icon: Layers, image: catalogMaterialsImage },
+  material_categories: { accent: "#2563eb", icon: FolderTree, image: catalogMaterialCategoriesImage },
+  material_manufacturers: { accent: "#2563eb", icon: Factory, image: catalogMaterialManufacturersImage },
+  material_suppliers: { accent: "#2563eb", icon: Truck, image: catalogMaterialSuppliersImage },
   edges: { accent: "#7c3aed", icon: Circle, image: catalogEdgesImage },
   fittings: { accent: "#0f766e", icon: Package, image: catalogFittingsImage },
   viyar: { accent: "#1f6b34", icon: FolderTree, image: catalogViyarImage },
@@ -4502,6 +4522,8 @@ Object.assign(TRANSLATIONS.en, {
   materialManualName: "Material name",
   materialManualNamePlaceholder: "Enter material name",
   materialManualPrice: "Price",
+  materialManualRequiredHint: "Enter a name and price to add your own material.",
+  materialQuotaReachedHint: "The limit for your own materials has been reached.",
   materialManualImage: "Material image",
   materialManualImageHint: "Optional image for your own material",
   materialImportSuccess: "Material added from source",
@@ -4601,6 +4623,8 @@ Object.assign(TRANSLATIONS.uk, {
   materialManualNamePlaceholder:
     "\u0412\u0432\u0435\u0434\u0456\u0442\u044c \u043d\u0430\u0437\u0432\u0443 \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b\u0443",
   materialManualPrice: "\u0426\u0456\u043d\u0430",
+  materialManualRequiredHint: "\u0412\u043a\u0430\u0436\u0456\u0442\u044c \u043d\u0430\u0437\u0432\u0443 \u0442\u0430 \u0446\u0456\u043d\u0443, \u0449\u043e\u0431 \u0434\u043e\u0434\u0430\u0442\u0438 \u0432\u043b\u0430\u0441\u043d\u0438\u0439 \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b.",
+  materialQuotaReachedHint: "\u041b\u0456\u043c\u0456\u0442 \u0432\u043b\u0430\u0441\u043d\u0438\u0445 \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b\u0456\u0432 \u0432\u0438\u0447\u0435\u0440\u043f\u0430\u043d\u043e.",
   materialManualImage: "\u0417\u043e\u0431\u0440\u0430\u0436\u0435\u043d\u043d\u044f \u043c\u0430\u0442\u0435\u0440\u0456\u0430\u043b\u0443",
   materialManualImageHint:
     "\u041c\u043e\u0436\u043d\u0430 \u0434\u043e\u0434\u0430\u0442\u0438 \u0441\u0432\u043e\u0454 \u0437\u043e\u0431\u0440\u0430\u0436\u0435\u043d\u043d\u044f",
@@ -5573,24 +5597,32 @@ function detectProjectSlideLength(value) {
 
 function buildMaterialImageCandidates(item, token = "") {
   const candidates = [];
-  const article = String(item?.article || "").trim();
-  const cacheVersion = item?.has_cached_image ? "db" : "source";
-  // Always use the stable API URL first. The endpoint serves the database BLOB
-  // and fills that cache once when an older record has only a source URL.
-  const imageEndpoint = article
-    ? `${API_BASE_URL}/catalog/materials/${encodeURIComponent(article)}/image?v=${cacheVersion}`
-    : "";
+  const addCandidate = (value) => {
+    const normalizedUrl = normalizeMaterialImageUrl(value);
+    if (normalizedUrl && !candidates.includes(normalizedUrl)) {
+      candidates.push(normalizedUrl);
+    }
+  };
 
-  if (imageEndpoint) {
-    candidates.push(imageEndpoint);
+  addCandidate(item?.image);
+  addCandidate(item?.image_source_url);
+  for (const offer of Array.isArray(item?.supplier_offers) ? item.supplier_offers : []) {
+    for (const imageUrl of Array.isArray(offer?.image_urls) ? offer.image_urls : []) {
+      addCandidate(imageUrl);
+    }
   }
 
-  return [...new Set(candidates.filter(Boolean))];
+  return candidates;
 }
 
 function MaterialImage({ item, token, alt, loading = "lazy", placeholderLabel }) {
   const [objectUrl, setObjectUrl] = useState("");
+  const [fallbackIndex, setFallbackIndex] = useState(-1);
   const objectUrlRef = useRef("");
+  const fallbackCandidates = useMemo(
+    () => buildMaterialImageCandidates(item, token),
+    [item?.image, item?.image_source_url, item?.supplier_offers, token],
+  );
 
   useEffect(() => {
     const article = String(item?.article || "").trim();
@@ -5642,10 +5674,284 @@ function MaterialImage({ item, token, alt, loading = "lazy", placeholderLabel })
     );
   }
 
+  const fallbackUrl = fallbackCandidates[fallbackIndex] || "";
+  if (fallbackUrl) {
+    return (
+      <img
+        alt={alt}
+        decoding="async"
+        loading={loading}
+        onError={() => {
+          setFallbackIndex((currentIndex) => currentIndex + 1);
+        }}
+        src={fallbackUrl}
+      />
+    );
+  }
+
   return <div className="material-card-placeholder">{placeholderLabel}</div>;
 }
 
-function MaterialDetailGallery({ item, token, alt, loading = "eager", placeholderLabel, t }) {
+function normalizeMaterialGalleryUrl(value) {
+  return normalizeMaterialImageUrl(value);
+}
+
+const MATERIAL_IMAGE_CACHE_LIMIT = 40;
+const MATERIAL_REMOTE_IMAGE_CACHE_LIMIT = 200;
+const materialImageBlobCache = new Map();
+const materialRemoteImageCache = new Map();
+
+function rememberMaterialRemoteImageResult(sourceUrl, loaded) {
+  materialRemoteImageCache.delete(sourceUrl);
+  materialRemoteImageCache.set(sourceUrl, loaded);
+  while (materialRemoteImageCache.size > MATERIAL_REMOTE_IMAGE_CACHE_LIMIT) {
+    const oldestUrl = materialRemoteImageCache.keys().next().value;
+    if (!oldestUrl) {
+      break;
+    }
+    materialRemoteImageCache.delete(oldestUrl);
+  }
+}
+
+function getMaterialImageCacheKey(article, image) {
+  return [
+    article,
+    String(image?.id || "").trim(),
+    String(image?.image_sha256 || image?.sha256 || image?.image_cached_hash || "").trim(),
+    normalizeMaterialImageUrl(image?.source_url) || "",
+  ].join("::");
+}
+
+function evictMaterialImageCacheEntries(article, imageId, keepKey = "") {
+  const prefix = `${article}::${imageId}::`;
+  for (const [key, entry] of materialImageBlobCache) {
+    if (key.startsWith(prefix) && key !== keepKey) {
+      URL.revokeObjectURL(entry.objectUrl);
+      materialImageBlobCache.delete(key);
+    }
+  }
+}
+
+function cacheMaterialImageBlob(key, article, image, blob) {
+  const imageId = String(image?.id || "").trim();
+  evictMaterialImageCacheEntries(article, imageId, key);
+  const entry = {
+    blob,
+    objectUrl: URL.createObjectURL(blob),
+    lastUsedAt: Date.now(),
+  };
+  materialImageBlobCache.set(key, entry);
+
+  while (materialImageBlobCache.size > MATERIAL_IMAGE_CACHE_LIMIT) {
+    const oldest = [...materialImageBlobCache.entries()].sort(
+      (left, right) => left[1].lastUsedAt - right[1].lastUsedAt,
+    )[0];
+    if (!oldest) {
+      break;
+    }
+    URL.revokeObjectURL(oldest[1].objectUrl);
+    materialImageBlobCache.delete(oldest[0]);
+  }
+
+  return entry;
+}
+
+function getCachedMaterialImage(image, article) {
+  const key = getMaterialImageCacheKey(article, image);
+  const entry = materialImageBlobCache.get(key);
+  if (entry) {
+    entry.lastUsedAt = Date.now();
+  }
+  return entry || null;
+}
+
+function MaterialDetailGallery({ item, supplierOffer, token, alt, loading = "eager", placeholderLabel, t }) {
+  const [validRemoteUrls, setValidRemoteUrls] = useState([]);
+  const article = String(item?.article || "").trim();
+  const selectedSupplierSource = detectFittingSourceSite(
+    supplierOffer?.source_url || supplierOffer?.supplier_code || supplierOffer?.supplier_name,
+  );
+  const supplierScopedGallery = selectedSupplierSource === "viyar" || selectedSupplierSource === "kronas";
+  const supplierImageUrls = useMemo(() => {
+    const normalizedUrls = [];
+    for (const rawUrl of Array.isArray(supplierOffer?.image_urls) ? supplierOffer.image_urls : []) {
+      const sourceUrl = normalizeMaterialGalleryUrl(rawUrl);
+      if (sourceUrl && !normalizedUrls.includes(sourceUrl)) {
+        normalizedUrls.push(sourceUrl);
+      }
+    }
+    return normalizedUrls;
+  }, [supplierOffer?.image_urls]);
+  const canonicalImages = useMemo(() => {
+    const materialImages = Array.isArray(item?.images) ? item.images : [];
+    if (selectedSupplierSource === "viyar" && !supplierImageUrls.length) {
+      return materialImages.filter(
+        (image) => detectFittingSourceSite(image?.source_url) === "viyar",
+      );
+    }
+    if (supplierScopedGallery) {
+      return [];
+    }
+    return materialImages;
+  }, [item?.images, selectedSupplierSource, supplierImageUrls.length, supplierScopedGallery]);
+  const remoteCandidateUrls = useMemo(() => {
+    const cachedUrls = new Set(
+      canonicalImages
+        .map((image) => normalizeMaterialGalleryUrl(image?.source_url))
+        .filter(Boolean),
+    );
+    if (supplierScopedGallery && !supplierImageUrls.length) {
+      return [];
+    }
+    const candidates = [];
+    const seenUrls = new Set(cachedUrls);
+
+    for (const sourceUrl of supplierImageUrls) {
+      if (!sourceUrl || seenUrls.has(sourceUrl)) {
+        continue;
+      }
+      seenUrls.add(sourceUrl);
+      candidates.push(sourceUrl);
+    }
+    return candidates;
+  }, [canonicalImages, supplierImageUrls, supplierScopedGallery]);
+
+  useEffect(() => {
+    let active = true;
+    const preloaders = [];
+    const cachedValidUrls = remoteCandidateUrls.filter(
+      (sourceUrl) => materialRemoteImageCache.get(sourceUrl) === true,
+    );
+    const urlsToCheck = remoteCandidateUrls.filter(
+      (sourceUrl) => !materialRemoteImageCache.has(sourceUrl),
+    );
+    setValidRemoteUrls(cachedValidUrls);
+
+    if (typeof Image === "undefined" || !urlsToCheck.length) {
+      return () => {
+        active = false;
+      };
+    }
+
+    Promise.all(
+      urlsToCheck.map(
+        (sourceUrl) =>
+          new Promise((resolve) => {
+            const preloader = new Image();
+            preloaders.push(preloader);
+            preloader.onload = () => {
+              rememberMaterialRemoteImageResult(sourceUrl, true);
+              resolve(sourceUrl);
+            };
+            preloader.onerror = () => {
+              rememberMaterialRemoteImageResult(sourceUrl, false);
+              resolve(null);
+            };
+            preloader.src = sourceUrl;
+          }),
+      ),
+    ).then((loadedUrls) => {
+      if (active) {
+        setValidRemoteUrls([...cachedValidUrls, ...loadedUrls.filter(Boolean)]);
+      }
+    });
+
+    return () => {
+      active = false;
+      preloaders.forEach((preloader) => {
+        preloader.onload = null;
+        preloader.onerror = null;
+        preloader.src = "";
+      });
+    };
+  }, [remoteCandidateUrls]);
+
+  const galleryItems = useMemo(() => {
+    const cachedImages = canonicalImages
+      .filter((image) => String(image?.id || "").trim())
+      .sort((left, right) => {
+        const leftSort = Number(left?.sort_order ?? 0);
+        const rightSort = Number(right?.sort_order ?? 0);
+        return leftSort !== rightSort
+          ? leftSort - rightSort
+          : Number(left?.id ?? 0) - Number(right?.id ?? 0);
+      })
+      .map((image) => {
+        const cachedEntry = getCachedMaterialImage(image, article);
+        return cachedEntry
+          ? { ...image, is_remote: true, source_url: cachedEntry.objectUrl }
+          : image;
+      });
+    const seenUrls = new Set(
+      cachedImages.map((image) => normalizeMaterialGalleryUrl(image?.source_url)).filter(Boolean),
+    );
+    const remoteImages = [];
+    for (const sourceUrl of validRemoteUrls) {
+      if (!sourceUrl || seenUrls.has(sourceUrl)) {
+        continue;
+      }
+      seenUrls.add(sourceUrl);
+      remoteImages.push({
+        id: `remote-${remoteImages.length}-${sourceUrl}`,
+        is_remote: true,
+        is_primary: false,
+        sort_order: cachedImages.length + remoteImages.length,
+        source_url: sourceUrl,
+      });
+    }
+    return [...cachedImages, ...remoteImages];
+  }, [article, canonicalImages, validRemoteUrls]);
+
+  const fallbackImageUrl = article
+    ? `${API_BASE_URL}/catalog/materials/${encodeURIComponent(article)}/image?v=${item?.has_cached_image ? "db" : "source"}`
+    : "";
+  const allowCanonicalFallback = !supplierScopedGallery || (
+    selectedSupplierSource === "viyar" && canonicalImages.length > 0
+  );
+
+  const materialImageLoader = useCallback(
+    async (image) => {
+      const cacheKey = getMaterialImageCacheKey(article, image);
+      const cachedEntry = materialImageBlobCache.get(cacheKey);
+      if (cachedEntry) {
+        cachedEntry.lastUsedAt = Date.now();
+        return {
+          success: true,
+          status: 200,
+          blob: cachedEntry.blob,
+          contentType: cachedEntry.blob.type || image?.content_type || "image/jpeg",
+        };
+      }
+
+      const result = await getMaterialImageBlobById(token, article, image.id);
+      if (result?.success && result.blob) {
+        const entry = cacheMaterialImageBlob(cacheKey, article, image, result.blob);
+        return {
+          ...result,
+          blob: entry.blob,
+        };
+      }
+      return result;
+    },
+    [article, token],
+  );
+
+  return (
+    <FittingDetailGallery
+      allowPartialFailure
+      fallbackImageCandidatesOverride={allowCanonicalFallback && item?.image ? [item.image] : []}
+      fallbackImageUrlOverride={allowCanonicalFallback ? fallbackImageUrl : null}
+      galleryItemsOverride={galleryItems}
+      imageLoader={materialImageLoader}
+      item={{ ...item, id: article }}
+      loading={loading === "eager"}
+      t={t}
+      token={token}
+    />
+  );
+}
+
+function LegacyMaterialDetailGallery({ item, supplierOffer, token, alt, loading = "eager", placeholderLabel, t }) {
   const [galleryEntries, setGalleryEntries] = useState([]);
   const [galleryLoading, setGalleryLoading] = useState(false);
   const [galleryError, setGalleryError] = useState(false);
@@ -6082,7 +6388,17 @@ function FittingPrimaryImage({ item, token, alt, loading = "lazy", placeholder =
   return placeholder || <div className="material-card-placeholder" />;
 }
 
-function FittingDetailGallery({ item, token, t, loading = false }) {
+function FittingDetailGallery({
+  item,
+  token,
+  t,
+  loading = false,
+  galleryItemsOverride = null,
+  imageLoader = null,
+  allowPartialFailure = false,
+  fallbackImageUrlOverride = null,
+  fallbackImageCandidatesOverride = null,
+}) {
   const [galleryEntries, setGalleryEntries] = useState([]);
   const [galleryLoading, setGalleryLoading] = useState(false);
   const [galleryError, setGalleryError] = useState(false);
@@ -6104,8 +6420,8 @@ function FittingDetailGallery({ item, token, t, loading = false }) {
   const fittingId = String(item?.id || "").trim();
   const gallerySignature = useMemo(
     () =>
-      Array.isArray(item?.images)
-        ? item.images
+      Array.isArray(galleryItemsOverride || item?.images)
+        ? (galleryItemsOverride || item.images)
             .map((image) => {
               const imageId = String(image?.id || "").trim();
 
@@ -6119,14 +6435,14 @@ function FittingDetailGallery({ item, token, t, loading = false }) {
             })
             .join("|")
         : "",
-    [item?.images],
+    [galleryItemsOverride, item?.images],
   );
   const galleryImages = useMemo(() => {
-    if (!Array.isArray(item?.images)) {
+    if (!Array.isArray(galleryItemsOverride || item?.images)) {
       return [];
     }
 
-    return [...item.images]
+    return [...(galleryItemsOverride || item.images)]
       .filter((image) => String(image?.id || "").trim())
       .sort((left, right) => {
         const leftSort = Number(left?.sort_order ?? 0);
@@ -6138,19 +6454,36 @@ function FittingDetailGallery({ item, token, t, loading = false }) {
 
         return Number(left?.id ?? 0) - Number(right?.id ?? 0);
       });
-  }, [gallerySignature]);
+  }, [galleryItemsOverride, gallerySignature]);
   const hasGalleryImages = galleryImages.length > 0;
   const isGalleryBusy = loading || galleryLoading;
   const activeEntry = galleryEntries[activeIndex] || galleryEntries[0] || null;
-  const fallbackImageUrl = useFittingPrimaryImageObjectUrl(item, token, !hasGalleryImages, reloadNonce);
+  const fittingFallbackImageUrl = useFittingPrimaryImageObjectUrl(
+    item,
+    token,
+    !hasGalleryImages && !fallbackImageUrlOverride,
+    reloadNonce,
+  );
+  const fallbackImageUrl = fallbackImageUrlOverride || fittingFallbackImageUrl;
   const previewFallbackCandidates = useMemo(
-    () => buildFittingImageCandidates(item),
-    [item?.id, item?.has_cached_image, item?.image_url, item?.source_url],
+    () => fallbackImageCandidatesOverride || buildFittingImageCandidates(item),
+    [fallbackImageCandidatesOverride, item?.id, item?.has_cached_image, item?.image_url, item?.source_url],
   );
   const previewImageSrc = hasGalleryImages
     ? activeEntry?.objectUrl || previewFallbackCandidates[0] || ""
     : fallbackImageUrl || previewFallbackCandidates[0] || "";
   const canNavigate = galleryEntries.length > 1;
+  const removeFailedGalleryEntry = (entryId) => {
+    if (!allowPartialFailure) {
+      return;
+    }
+    setGalleryEntries((current) => {
+      const nextEntries = current.filter((entry) => entry.id !== entryId);
+      setActiveIndex((currentIndex) => Math.min(currentIndex, Math.max(0, nextEntries.length - 1)));
+      setGalleryError(nextEntries.length === 0);
+      return nextEntries;
+    });
+  };
 
   const resetPreviewTransform = useCallback(() => {
     setPreviewZoom(100);
@@ -6245,10 +6578,19 @@ function FittingDetailGallery({ item, token, t, loading = false }) {
         const nextEntries = [];
 
         for (const image of galleryImages) {
+          if (image?.is_remote && image?.source_url) {
+            nextEntries.push({ ...image, objectUrl: image.source_url });
+            continue;
+          }
           const imageId = String(image?.id || "").trim();
-          const result = await getFittingImageBlob(token, fittingId, imageId);
+          const result = imageLoader
+            ? await imageLoader(image)
+            : await getFittingImageBlob(token, fittingId, imageId);
 
           if (!result.success || !result.blob) {
+            if (allowPartialFailure) {
+              continue;
+            }
             throw new Error(result.error || "Failed to load image");
           }
 
@@ -6270,6 +6612,7 @@ function FittingDetailGallery({ item, token, t, loading = false }) {
 
         objectUrlsRef.current = [...createdUrls];
         setGalleryEntries(nextEntries);
+        setGalleryError(nextEntries.length === 0);
       } catch {
         revokeUrls(createdUrls);
 
@@ -6289,7 +6632,7 @@ function FittingDetailGallery({ item, token, t, loading = false }) {
       revokeUrls(objectUrlsRef.current);
       objectUrlsRef.current = [];
     };
-  }, [closePreview, fittingId, galleryImages, hasGalleryImages, reloadNonce, token]);
+  }, [allowPartialFailure, closePreview, fittingId, galleryImages, hasGalleryImages, imageLoader, reloadNonce, token]);
 
   useEffect(() => {
     resetPreviewTransform();
@@ -6523,6 +6866,7 @@ function FittingDetailGallery({ item, token, t, loading = false }) {
               decoding="async"
               draggable="false"
               loading="eager"
+              onError={() => removeFailedGalleryEntry(activeEntry?.id)}
               src={previewImageSrc}
               style={{
                 transform: `translate(${previewPosition.x}px, ${previewPosition.y}px) scale(${previewZoom / 100})`,
@@ -6607,6 +6951,7 @@ function FittingDetailGallery({ item, token, t, loading = false }) {
                 className="fitting-details-gallery-image"
                 decoding="async"
                 loading="eager"
+                onError={() => removeFailedGalleryEntry(activeEntry?.id)}
                 src={activeEntry?.objectUrl || ""}
               />
             </button>
@@ -6647,7 +6992,13 @@ function FittingDetailGallery({ item, token, t, loading = false }) {
                   onClick={() => setActiveIndex(index)}
                   type="button"
                 >
-                  <img alt="" decoding="async" loading="lazy" src={entry.objectUrl} />
+                  <img
+                    alt=""
+                    decoding="async"
+                    loading="lazy"
+                    onError={() => removeFailedGalleryEntry(entry.id)}
+                    src={entry.objectUrl}
+                  />
                 </button>
               ))}
             </div>
@@ -7015,6 +7366,14 @@ function sortMaterialSupplierOffers(left, right) {
   }
 
   return Number(left?.id ?? 0) - Number(right?.id ?? 0);
+}
+
+function getActiveMaterialSupplierOffer(offers, selectedOfferId) {
+  const normalizedSelectedOfferId = String(selectedOfferId || "").trim();
+  const normalizedOffers = Array.isArray(offers) ? offers : [];
+  return normalizedOffers.find((offer) => String(offer?.id || "").trim() === normalizedSelectedOfferId) ||
+    [...normalizedOffers].sort(sortMaterialSupplierOffers)[0] ||
+    null;
 }
 
 function pickDefaultOfferId(offers) {
@@ -8343,6 +8702,7 @@ export default function App() {
   const [materialCategories, setMaterialCategories] = useState([]);
   const [materialCategoryStatsByCode, setMaterialCategoryStatsByCode] = useState({});
   const [materialManufacturers, setMaterialManufacturers] = useState([]);
+  const [materialSupplierDirectoryItems, setMaterialSupplierDirectoryItems] = useState([]);
   const [materialCityOptions, setMaterialCityOptions] = useState(DEFAULT_CITY_OPTIONS);
   const [materialOwnershipQuota, setMaterialOwnershipQuota] = useState(null);
   const [materialCreateMode, setMaterialCreateMode] = useState("source");
@@ -8351,6 +8711,7 @@ export default function App() {
     () => normalizeMaterialCatalogViewMode(localStorage.getItem(MATERIAL_CATALOG_VIEW_MODE_STORAGE_KEY) || "grid"),
   );
   const [materialsCatalogLoading, setMaterialsCatalogLoading] = useState(false);
+  const [materialItemsLoadedContext, setMaterialItemsLoadedContext] = useState(null);
   const [materialCategoryValidationReady, setMaterialCategoryValidationReady] = useState(false);
   const [materialCategoryFilter, setMaterialCategoryFilter] = useState(
     () =>
@@ -10909,6 +11270,7 @@ export default function App() {
   const canCreateMaterialCatalog = materialEntitlementFlags.create;
   const canEditMaterialCatalog = canCreateMaterialCatalog;
   const canViewFittingCatalog = canViewFittings(user);
+  const canOpenMaterialTaxonomy = canViewMaterialCatalog && user?.role === "admin";
   const canCreateFittingCatalog = canCreateFittings(user);
   const canDeleteFittingCatalog = canDeleteFittings(user);
   const canManageSystemFittingCatalog = canManageSystemFittingsHelper(user);
@@ -10923,6 +11285,14 @@ export default function App() {
     materialOwnershipQuota,
     isNewMaterialSubmission,
   );
+  const manualMaterialValidity = getManualMaterialFormValidity(newMaterialName, newMaterialPrice);
+  const manualMaterialFormValid = manualMaterialValidity.formValid;
+  const manualMaterialButtonDisabled =
+    materialImportWorking || (
+      materialCreateMode === "source"
+        ? (loading || !newMaterialSourceUrl.trim() || isMaterialCreationBlockedByQuota)
+        : (!manualMaterialFormValid || isMaterialCreationBlockedByQuota)
+    );
   const materialOwnershipQuotaLabel = materialOwnershipQuota
     ? (materialOwnershipQuota.is_unlimited
         ? "Власні матеріали: без обмежень"
@@ -11060,7 +11430,18 @@ export default function App() {
   }, [materialCategories, materialCategoryItemCountByCode, materialCategoryStatsByCode]);
   const isConnectionsNavigationView = shouldAutoOpenConnectionsMenu(activeView) || isConnectionsWorkspaceView;
   const isProcessingView = activeView === "processing";
-  const activeCity = (user?.city || "").trim();
+  const activeCity = getEffectiveProductCity();
+  const materialCatalogContextKey = getMaterialCatalogContextKey({
+    category: materialCategoryFilter,
+    city: activeCity || "",
+    search: materialSearch,
+    ownershipScope: user?.role === "admin" ? materialOwnershipScope : "",
+  });
+  const materialItemsAreCurrent = shouldRenderMaterialItems({
+    loading: materialsCatalogLoading,
+    loadedContext: materialItemsLoadedContext,
+    currentContext: materialCatalogContextKey,
+  });
   const sidebarIdentityTitle = [userLoginName, userTierLabel, activeCity ? formatCatalogLabel(activeCity, t) : ""]
     .filter(Boolean)
     .join(" · ");
@@ -11868,6 +12249,7 @@ export default function App() {
       materialItems
         .map((item) => ({
           ...item,
+          projectPriceRows: getProjectMaterialPriceRows(item.price_summary, item.current_price),
           pickerValue: buildProjectMaterialOption(item),
           pickerTitle: getMaterialShortName(item) || buildProjectMaterialOption(item),
           pickerSubtitle: [item.dimensions, item.thickness].filter(Boolean).join(" / "),
@@ -12979,6 +13361,42 @@ export default function App() {
       label: t.catalogValues,
       wide: true,
       onClick: () => switchView("catalogValues"),
+    },
+  ];
+
+  const materialTaxonomyCards = [
+    {
+      key: "material_categories",
+      accent: CATALOG_HUB_CARD_VISUALS.material_categories.accent,
+      chips: [{ label: language === "uk" ? "Категорій" : "Categories", value: materialCategories.length }],
+      description: language === "uk" ? "Системні та власні категорії матеріалів." : "System and personal material categories.",
+      disabled: !canOpenMaterialTaxonomy,
+      icon: CATALOG_HUB_CARD_VISUALS.material_categories.icon,
+      image: CATALOG_HUB_CARD_VISUALS.material_categories.image,
+      label: language === "uk" ? "Категорії матеріалів" : "Material categories",
+      onClick: canOpenMaterialTaxonomy ? () => switchView("catalogMaterialCategories") : undefined,
+    },
+    {
+      key: "material_manufacturers",
+      accent: CATALOG_HUB_CARD_VISUALS.material_manufacturers.accent,
+      chips: [{ label: language === "uk" ? "Виробників" : "Manufacturers", value: materialManufacturers.length }],
+      description: language === "uk" ? "Довідник виробників матеріалів." : "Material manufacturer directory.",
+      disabled: !canOpenMaterialTaxonomy,
+      icon: CATALOG_HUB_CARD_VISUALS.material_manufacturers.icon,
+      image: CATALOG_HUB_CARD_VISUALS.material_manufacturers.image,
+      label: language === "uk" ? "Виробники матеріалів" : "Material manufacturers",
+      onClick: canOpenMaterialTaxonomy ? () => switchView("catalogMaterialManufacturers") : undefined,
+    },
+    {
+      key: "material_suppliers",
+      accent: CATALOG_HUB_CARD_VISUALS.material_suppliers.accent,
+      chips: [{ label: language === "uk" ? "Постачальників" : "Suppliers", value: materialSupplierDirectoryItems.length }],
+      description: language === "uk" ? "Системні та власні постачальники матеріалів." : "System and personal material suppliers.",
+      disabled: !canOpenMaterialTaxonomy,
+      icon: CATALOG_HUB_CARD_VISUALS.material_suppliers.icon,
+      image: CATALOG_HUB_CARD_VISUALS.material_suppliers.image,
+      label: language === "uk" ? "Постачальники матеріалів" : "Material suppliers",
+      onClick: canOpenMaterialTaxonomy ? () => switchView("catalogMaterialSuppliers") : undefined,
     },
   ];
 
@@ -14565,6 +14983,15 @@ export default function App() {
     return items;
   }
 
+  function invalidateMaterialCatalogResults() {
+    materialsCatalogRequestRef.current = {
+      id: materialsCatalogRequestRef.current.id + 1,
+      pending: false,
+    };
+    setMaterialItems([]);
+    setMaterialItemsLoadedContext(null);
+  }
+
   async function loadMaterialsCatalog(
     activeToken = token,
     options = {},
@@ -14573,29 +15000,37 @@ export default function App() {
       return;
     }
 
-    if (materialsCatalogRequestRef.current.pending) {
-      return materialItems;
-    }
-
     const requestId = materialsCatalogRequestRef.current.id + 1;
     const viewAtStart = activeViewRef.current;
+    const requestedCategory = Object.prototype.hasOwnProperty.call(options, "category")
+      ? options.category
+      : materialCategoryFilter;
+      const requestedCity = getEffectiveProductCity();
+    const requestedSearch = options.search ?? materialSearch;
+    const requestedOwnershipScope = user?.role === "admin"
+      ? (options.ownershipScope ?? materialOwnershipScope ?? "all")
+      : "";
+    const requestContextKey = getMaterialCatalogContextKey({
+      category: requestedCategory,
+      city: requestedCity,
+      search: requestedSearch,
+      ownershipScope: requestedOwnershipScope,
+    });
     materialsCatalogRequestRef.current = { id: requestId, pending: true };
     setMaterialsCatalogLoading(true);
 
     try {
       const result = await getMaterialsCatalog(activeToken, {
-        category: Object.prototype.hasOwnProperty.call(options, "category")
-          ? options.category
-          : materialCategoryFilter,
-        city: options.city ?? activeCity ?? "",
-        search: options.search ?? materialSearch,
+        category: requestedCategory,
+        city: requestedCity,
+        search: requestedSearch,
         include_private_categories:
           user?.role === "admin"
             ? false
             : (options.includePrivateCategories ?? true),
         ownership_scope:
           user?.role === "admin"
-            ? (options.ownershipScope ?? materialOwnershipScope ?? "all")
+            ? requestedOwnershipScope
             : undefined,
       });
 
@@ -14631,7 +15066,12 @@ export default function App() {
             ))?.items || catalogCategories
           );
 
+      if (materialsCatalogRequestRef.current.id !== requestId || activeViewRef.current !== viewAtStart) {
+        return materialItems;
+      }
+
       setMaterialItems(result.items || []);
+      setMaterialItemsLoadedContext(requestContextKey);
       setMaterialCategories(rootCategories);
       setMaterialCategoryValidationReady(true);
       try {
@@ -14654,6 +15094,24 @@ export default function App() {
         setMaterialsCatalogLoading(false);
       }
     }
+  }
+
+  async function loadMaterialSupplierDirectory(activeToken = token) {
+    if (!activeToken || !canOpenMaterialTaxonomy) {
+      setMaterialSupplierDirectoryItems([]);
+      return [];
+    }
+
+    const result = await listFittingSuppliers(activeToken, true);
+    if (!result.success) {
+      setMaterialSupplierDirectoryItems([]);
+      return [];
+    }
+
+    const visibleSuppliers = (Array.isArray(result.items) ? result.items : [])
+      .filter((item) => item?.is_active);
+    setMaterialSupplierDirectoryItems(visibleSuppliers);
+    return visibleSuppliers;
   }
 
   async function loadEdgesCatalog(
@@ -15253,7 +15711,7 @@ export default function App() {
       setMaterialDetailLoading(false);
 
       if (!resolvedSupplierOffers.length) {
-        const offersResult = await listMaterialSupplierOffers(token, article);
+        const offersResult = await listMaterialSupplierOffers(token, article, activeCity || "");
         if (
           offersResult.success &&
           Array.isArray(offersResult.items)
@@ -19448,6 +19906,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
 
   function openMaterialCatalogRoot() {
     closeMaterialDetails();
+    invalidateMaterialCatalogResults();
     setMaterialSearch("");
     setMaterialCategoryFilter("");
     localStorage.removeItem(MATERIAL_CATEGORY_STORAGE_KEY);
@@ -19464,6 +19923,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
     }
 
     closeMaterialDetails();
+    invalidateMaterialCatalogResults();
     setMaterialCategoryFilter(normalizedCategoryCode);
     localStorage.setItem(MATERIAL_CATEGORY_STORAGE_KEY, normalizedCategoryCode);
     setActiveView("catalogMaterials");
@@ -19966,7 +20426,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
       setOwnProfileForm({
         username: result.user.username || "",
         phone: result.user.phone || "",
-        city: savedCity,
+        city: activeCity,
       });
       setStatus(t.profileSaved);
 
@@ -19974,12 +20434,12 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
       if (currentView === "catalogMaterials") {
         await loadMaterialsCatalog(token, {
           category: materialCategoryFilter,
-          city: savedCity,
+          city: activeCity,
           search: materialSearch,
         });
       } else if (currentView === "catalogFittings" || currentView === "catalogFasteners") {
         await loadFittingsCatalog(token, {
-          city: savedCity,
+          city: activeCity,
           search: fittingSearch,
         });
       }
@@ -20454,6 +20914,10 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
     }
 
     const isSourceMode = materialCreateMode === "source";
+    if (!isSourceMode && !manualMaterialFormValid) {
+      setStatus({ message: t.materialManualRequiredHint, tone: "error" });
+      return;
+    }
     const payload = {
       category: materialCategoryFilter || "dsp",
       city: effectiveCity,
@@ -20575,81 +21039,22 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
         tone: "success",
       });
 
-      const preloadedGalleryImages = Array.isArray(refreshedMaterial?.images)
-        ? refreshedMaterial.images
-        : [];
-      if (preloadedGalleryImages.length) {
-        updateMaterialImportProgress("gallery", "done");
-        setStatus({
-          message: language === "uk"
-            ? "Матеріал готовий"
-            : "Material ready",
-          tone: "success",
-        });
-
-        if (canViewMaterialCatalog) {
-          await loadMaterialsCatalog(token);
-        }
-        return;
-      }
-
-      updateMaterialImportProgress("gallery", "active");
+      updateMaterialImportProgress("gallery", "done");
       setStatus({
         message: language === "uk"
-          ? "Завантажуємо фотографії"
-          : "Loading photos",
-        tone: "info",
+          ? "Матеріал готовий"
+          : "Material ready",
+        tone: "success",
       });
 
-      galleryResult = await refreshMaterialGallery(token, refreshedMaterialId);
-      if (!galleryResult.success || galleryResult.error) {
-        galleryWarning = true;
-      }
-      const gallerySummary = galleryResult?.summary || { discovered: 0, persisted: 0, failed: 0 };
-      updateMaterialImportProgress("gallery", gallerySummary.failed > 0 ? "warning" : "done");
-      if (gallerySummary.failed > 0) {
-        setStatus({
-          message: language === "uk"
-            ? "Матеріал додано, але не всі фотографії вдалося завантажити."
-            : "Material saved, but not all photos could be loaded.",
-          tone: "warning",
-        });
-      } else {
-        setStatus({
-          message: language === "uk"
-            ? "Фотографії збережено"
-            : "Photos saved",
-          tone: "success",
-        });
-      }
-
-      updateMaterialImportProgress("source", "done");
-      updateMaterialImportProgress("gallery", gallerySummary.failed > 0 ? "warning" : "done");
-
-      if (!galleryWarning) {
-        setStatus({
-          message: language === "uk"
-            ? "Матеріал готовий"
-            : "Material ready",
-          tone: "success",
-        });
-      } else {
-        setStatus({
-          message: language === "uk"
-            ? "Матеріал додано, але не всі фотографії вдалося завантажити."
-            : "Material saved, but not all photos could be loaded.",
-          tone: "warning",
-        });
+      if (canViewMaterialCatalog) {
+        await loadMaterialsCatalog(token);
       }
 
       setLoading(false);
       setMaterialImportWorking(false);
       resetMaterialImportProgress();
       closeMaterialCreateModal();
-
-      if (canViewMaterialCatalog) {
-        await loadMaterialsCatalog(token);
-      }
     } catch (error) {
       setStatus({
         message: error?.message || t.unableToLoadCatalog,
@@ -20896,6 +21301,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
 
   function closeMaterialCreateModal() {
     setMaterialCreateModalOpen(false);
+    setNewMaterialImageUrl("");
   }
 
   function openEdgeCreateModal() {
@@ -22575,7 +22981,16 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
       return;
     }
 
-    if (!materialItems.length) {
+    const projectMaterialContextKey = getMaterialCatalogContextKey({
+      category: "dsp",
+      city: activeCity || "",
+      search: "",
+      ownershipScope: user?.role === "admin" ? materialOwnershipScope : "",
+    });
+    const projectMaterialsAreCurrent =
+      !materialsCatalogLoading && materialItemsLoadedContext === projectMaterialContextKey;
+
+    if (!projectMaterialsAreCurrent && !materialsCatalogLoading) {
       loadMaterialsCatalog(token, {
         category: "dsp",
         search: "",
@@ -22590,9 +23005,14 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
   }, [
     activeProjectTab,
     activeView,
+    activeCity,
     fittingItems.length,
     materialItems.length,
+    materialItemsLoadedContext,
+    materialOwnershipScope,
+    materialsCatalogLoading,
     token,
+    user?.role,
   ]);
 
   useEffect(() => {
@@ -22638,6 +23058,14 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
 
     loadMaterialsCatalog(token);
   }, [token, canViewMaterialCatalog, isCatalogMaterialsView, materialCategoryFilter, materialSearch, materialOwnershipScope]);
+
+  useEffect(() => {
+    if (!token || !isCatalogMaterialRootView || !canOpenMaterialTaxonomy) {
+      return;
+    }
+
+    void loadMaterialSupplierDirectory(token);
+  }, [token, isCatalogMaterialRootView, canOpenMaterialTaxonomy]);
 
   useEffect(() => {
     if (!token || !isCatalogEdgesView || !canViewMaterialCatalog) {
@@ -23090,7 +23518,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
             <span>{userLoginName}</span>
             <strong>{sidebarRoleMarker}</strong>
             <small>
-              {t.currentCity}: {formatCatalogLabel(user.city, t)}
+              {t.currentCity}: {formatCatalogLabel(activeCity, t)}
             </small>
           </div>
 
@@ -25233,18 +25661,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   </label>
                   <label>
                     {t.city}
-                    <select
-                      onChange={(event) =>
-                        setOwnProfileForm((current) => ({ ...current, city: event.target.value }))
-                      }
-                      value={ownProfileForm.city}
-                    >
-                      {(materialCityOptions.length ? materialCityOptions : DEFAULT_CITY_OPTIONS).map((city) => (
-                        <option key={city} value={city}>
-                          {formatCatalogLabel(city, t)}
-                        </option>
-                      ))}
-                    </select>
+                    <input disabled readOnly type="text" value={formatCatalogLabel(activeCity, t)} />
                   </label>
                   <div className="settings-actions">
                     <button
@@ -25671,7 +26088,9 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
 
                   return (
                     <button
-                      className={`catalog-hub-tile${item.wide ? " catalog-hub-tile-wide" : ""}`}
+                      aria-disabled={item.disabled ? "true" : undefined}
+                      className={`catalog-hub-tile${item.wide ? " catalog-hub-tile-wide" : ""}${item.disabled ? " catalog-hub-tile-disabled" : ""}`}
+                      disabled={item.disabled}
                       key={item.key}
                       onClick={item.onClick}
                       type="button"
@@ -25716,15 +26135,20 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
             <article className="catalog-card service-catalog-card service-catalog-card-full">
               <div className="catalog-page-header material-taxonomy-page-header">
                 <div className="service-catalog-title material-taxonomy-page-title">
-                      <div className="fitting-category-breadcrumb fitting-category-breadcrumb-top">
-                        <h3 className="catalog-breadcrumb-title">
-                          <button className="catalog-breadcrumb-link" onClick={() => switchView("catalogHub")} type="button">
-                            {t.catalog}
-                          </button>
-                        </h3>
-                    <span className="fitting-breadcrumb-separator">/</span>
-                    <h3 className="catalog-breadcrumb-title">{language === "uk" ? "Крайки" : "Edges"}</h3>
-                  </div>
+                  <CatalogBreadcrumbTrail
+                    items={[
+                      {
+                        label: t.catalog,
+                        onClick: () => switchView("catalogHub"),
+                        title: t.catalog,
+                      },
+                      {
+                        current: true,
+                        label: language === "uk" ? "Крайки" : "Edges",
+                        title: language === "uk" ? "Крайки" : "Edges",
+                      },
+                    ]}
+                  />
                   <p>
                     {language === "uk"
                       ? "Каталог крайок із пов’язаними постачальниками та цінами."
@@ -26630,8 +27054,10 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
           <FittingSuppliersAdminWorkspace
             currentUserId={user?.id || ""}
             currentUserRole={user?.role || "free"}
+            breadcrumbCatalogLabel={language === "uk" ? "Довідники" : "Catalogs"}
             breadcrumbCurrentLabel={language === "uk" ? "Постачальники" : "Suppliers"}
             breadcrumbRootLabel={language === "uk" ? "Матеріали" : "Materials"}
+            onBreadcrumbCatalogClick={() => switchView("catalogHub")}
             onBreadcrumbRootClick={() => switchView("catalogMaterials")}
             description={language === "uk"
               ? "Керування системними та власними постачальниками матеріалів."
@@ -26646,34 +27072,43 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                 <div className="service-catalog-title material-taxonomy-page-title">
                   {isCatalogMaterialRootView ? (
                     <>
-                      <div className="fitting-category-breadcrumb fitting-category-breadcrumb-top">
-                        <h3 className="catalog-breadcrumb-title">
-                          <button className="catalog-breadcrumb-link" onClick={() => switchView("catalogHub")} type="button">
-                            {t.catalog}
-                          </button>
-                        </h3>
-                        <span className="fitting-breadcrumb-separator">/</span>
-                        <h3 className="catalog-breadcrumb-title">{t.catalogMaterials}</h3>
-                      </div>
+                      <CatalogBreadcrumbTrail
+                        items={[
+                          {
+                            label: t.catalog,
+                            onClick: () => switchView("catalogHub"),
+                            title: t.catalog,
+                          },
+                          {
+                            current: true,
+                            label: t.catalogMaterials,
+                            title: t.catalogMaterials,
+                          },
+                        ]}
+                      />
                       <p>{language === "uk" ? "Оберіть категорію, щоб відкрити матеріали всередині неї." : "Choose a category to open its materials."}</p>
                     </>
                   ) : (
                     <>
-                      <div className="fitting-category-breadcrumb fitting-category-breadcrumb-top">
-                        <h3 className="catalog-breadcrumb-title">
-                          <button className="catalog-breadcrumb-link" onClick={() => switchView("catalogHub")} type="button">
-                            {t.catalog}
-                          </button>
-                        </h3>
-                        <span className="fitting-breadcrumb-separator">/</span>
-                        <h3 className="catalog-breadcrumb-title">
-                          <button className="catalog-breadcrumb-link" onClick={openMaterialCatalogRoot} type="button">
-                            {t.catalogMaterials}
-                          </button>
-                        </h3>
-                        <span className="fitting-breadcrumb-separator">/</span>
-                        <h3 className="catalog-breadcrumb-title">{currentMaterialCategoryMeta?.name || formatCatalogLabel(materialCategoryFilter, t)}</h3>
-                      </div>
+                      <CatalogBreadcrumbTrail
+                        items={[
+                          {
+                            label: t.catalog,
+                            onClick: () => switchView("catalogHub"),
+                            title: t.catalog,
+                          },
+                          {
+                            label: t.catalogMaterials,
+                            onClick: openMaterialCatalogRoot,
+                            title: t.catalogMaterials,
+                          },
+                          {
+                            current: true,
+                            label: currentMaterialCategoryMeta?.name || formatCatalogLabel(materialCategoryFilter, t),
+                            title: currentMaterialCategoryMeta?.name || formatCatalogLabel(materialCategoryFilter, t),
+                          },
+                        ]}
+                      />
                       <p>{t.catalogMaterialsDescription}</p>
                     </>
                   )}
@@ -26720,7 +27155,10 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                     <label className="service-catalog-search">
                       <Search size={16} />
                       <input
-                        onChange={(event) => setMaterialSearch(event.target.value)}
+                        onChange={(event) => {
+                          invalidateMaterialCatalogResults();
+                          setMaterialSearch(event.target.value);
+                        }}
                         placeholder={t.viyarSearch}
                         type="search"
                         value={materialSearch}
@@ -26729,7 +27167,10 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                     <label className="materials-filter">
                       <span>{t.materialCategory}</span>
                       <select
-                        onChange={(event) => setMaterialCategoryFilter(event.target.value)}
+                        onChange={(event) => {
+                          invalidateMaterialCatalogResults();
+                          setMaterialCategoryFilter(event.target.value);
+                        }}
                         value={materialCategoryFilter}
                       >
                         {materialCategories.map((category) => (
@@ -26895,6 +27336,70 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                         </div>
                       </section>
                     ) : null}
+                  <section
+                    aria-labelledby="material-taxonomy-auxiliary-title"
+                    className="material-taxonomy-auxiliary-section"
+                  >
+                    <h4 id="material-taxonomy-auxiliary-title">
+                      {language === "uk" ? "Довідники матеріалів" : "Material directories"}
+                    </h4>
+                    <div className="material-taxonomy-auxiliary-grid" role="list">
+                      {materialTaxonomyCards.map((item) => {
+                        const Icon = item.icon;
+
+                        return (
+                          <button
+                            aria-disabled={item.disabled ? "true" : undefined}
+                            className={`catalog-hub-tile catalog-hub-tile-compact${item.disabled ? " catalog-hub-tile-disabled" : ""}`}
+                            disabled={item.disabled}
+                            key={item.key}
+                            onClick={item.onClick}
+                            role="listitem"
+                            type="button"
+                          >
+                            <span className="catalog-hub-tile-media">
+                              <span className="catalog-hub-tile-image-frame">
+                                <img alt="" aria-hidden="true" loading="lazy" src={item.image} />
+                              </span>
+                              <span
+                                className="catalog-hub-tile-icon"
+                                style={{ "--catalog-accent": item.accent }}
+                              >
+                                <Icon size={20} />
+                              </span>
+                            </span>
+                            <span className="catalog-hub-tile-body">
+                              <span className="catalog-hub-tile-copy">
+                                <strong>{item.label}</strong>
+                                <span>{item.description}</span>
+                              </span>
+                              <span className="catalog-hub-tile-chips">
+                                {item.chips.map((chip) => (
+                                  <span className="catalog-hub-chip" key={`${item.key}-${chip.label}`}>
+                                    <strong>{chip.value}</strong>
+                                    <span>{chip.label}</span>
+                                  </span>
+                                ))}
+                              </span>
+                              <span className="catalog-hub-tile-link">
+                                {item.disabled ? (
+                                  <>
+                                    <LockKeyhole size={14} />
+                                    {language === "uk" ? "Немає доступу" : "No access"}
+                                  </>
+                                ) : (
+                                  <>
+                                    {t.openDirectory}
+                                    <ChevronRight size={16} />
+                                  </>
+                                )}
+                              </span>
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </section>
                   </div>
                 ) : (
                   <>
@@ -27070,7 +27575,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                               <input
                                 min="0"
                                 onChange={(event) => setNewMaterialPrice(event.target.value)}
-                                placeholder="0"
+                                required
                                 step="0.01"
                                 type="number"
                                 value={newMaterialPrice}
@@ -27086,6 +27591,14 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                               <small className="settings-hint">
                                 {newMaterialImageUrl ? t.fittingImageSelected : t.materialManualImageHint}
                               </small>
+                              {newMaterialImageUrl ? (
+                                <div className="material-manual-image-preview">
+                                  <img
+                                    alt={t.materialManualImage}
+                                    src={newMaterialImageUrl}
+                                  />
+                                </div>
+                              ) : null}
                             </label>
                             <label>
                               {t.materialManufacturer}
@@ -27111,13 +27624,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                         ) : null}
                         <button
                           className="primary-button"
-                          disabled={
-                            loading || materialImportWorking || (
-                              materialCreateMode === "source"
-                                ? (!newMaterialSourceUrl.trim() || isMaterialCreationBlockedByQuota)
-                                : (!newMaterialName.trim() || newMaterialPrice === "" || isMaterialCreationBlockedByQuota)
-                            )
-                          }
+                          disabled={manualMaterialButtonDisabled}
                           type="submit"
                         >
                           {materialImportWorking ? (
@@ -27132,15 +27639,29 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                             </>
                           )}
                         </button>
+                        {materialCreateMode === "manual" && !manualMaterialFormValid ? (
+                          <small className="settings-hint" role="status">
+                            {t.materialManualRequiredHint}
+                          </small>
+                        ) : null}
+                        {isMaterialCreationBlockedByQuota ? (
+                          <small className="settings-hint" role="status">
+                            {t.materialQuotaReachedHint}
+                          </small>
+                        ) : null}
                       </fieldset>
                     </form>
                   </section>
                 </div>
               ) : null}
 
-              {materialsCatalogLoading && !materialItems.length ? (
-                <div className="empty-state compact-empty-state">
-                  <span>{t.loading}</span>
+              {materialsCatalogLoading || !materialItemsAreCurrent ? (
+                <div
+                  aria-live="polite"
+                  className="empty-state compact-empty-state materials-catalog-loading-state"
+                  role="status"
+                >
+                  <span>{language === "uk" ? "Завантаження матеріалів..." : "Loading materials..."}</span>
                 </div>
               ) : materialItems.length ? (
                 <div className={materialCatalogViewMode === "list" ? "material-card-grid material-card-grid-list" : "material-card-grid"}>
@@ -27211,6 +27732,13 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                           placeholderLabel={formatCatalogLabel(item.category, t)}
                           token={token}
                         />
+                        {shouldShowMaterialSquareMeterBadge(item) ? (
+                          <img
+                            alt={language === "uk" ? "Продаж за м²" : "Sold by m²"}
+                            className="material-card-square-meter-badge"
+                            src={catalogSquareMeterImage}
+                          />
+                        ) : null}
                         {promoRibbonViewModel ? (
                           <div className="material-promo-ribbon" aria-hidden="true">
                             <span className="material-promo-ribbon-badge">
@@ -27335,32 +27863,41 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
               <div className="catalog-page-header">
                 <div className="service-catalog-title">
                   {activeFittingCategory ? (
-                    <div className="fitting-category-breadcrumb fitting-category-breadcrumb-top">
-                      <h3 className="catalog-breadcrumb-title">
-                        <button className="catalog-breadcrumb-link" onClick={() => switchView("catalogHub")} type="button">
-                          {t.catalog}
-                        </button>
-                      </h3>
-                      <span className="fitting-breadcrumb-separator">/</span>
-                      <h3 className="catalog-breadcrumb-title">
-                        <button className="fitting-breadcrumb-link" onClick={openFittingCatalogRoot} type="button">
-                          {t.catalogFittings}
-                        </button>
-                      </h3>
-                      <span className="fitting-breadcrumb-separator">/</span>
-                      <h3 className="catalog-breadcrumb-title">{currentFittingCategoryMeta?.name || t.catalogFittings}</h3>
-                    </div>
+                    <CatalogBreadcrumbTrail
+                      items={[
+                        {
+                          label: t.catalog,
+                          onClick: () => switchView("catalogHub"),
+                          title: t.catalog,
+                        },
+                        {
+                          label: t.catalogFittings,
+                          onClick: openFittingCatalogRoot,
+                          title: t.catalogFittings,
+                        },
+                        {
+                          current: true,
+                          label: currentFittingCategoryMeta?.name || t.catalogFittings,
+                          title: currentFittingCategoryMeta?.name || t.catalogFittings,
+                        },
+                      ]}
+                    />
                   ) : (
                     <>
-                      <div className="fitting-category-breadcrumb fitting-category-breadcrumb-top">
-                        <h3 className="catalog-breadcrumb-title">
-                          <button className="catalog-breadcrumb-link" onClick={() => switchView("catalogHub")} type="button">
-                            {t.catalog}
-                          </button>
-                        </h3>
-                        <span className="fitting-breadcrumb-separator">/</span>
-                        <h3 className="catalog-breadcrumb-title">{t.catalogFittings}</h3>
-                      </div>
+                      <CatalogBreadcrumbTrail
+                        items={[
+                          {
+                            label: t.catalog,
+                            onClick: () => switchView("catalogHub"),
+                            title: t.catalog,
+                          },
+                          {
+                            current: true,
+                            label: t.catalogFittings,
+                            title: t.catalogFittings,
+                          },
+                        ]}
+                      />
                       <p>
                         {t.fittingsManageDescription}
                       </p>
@@ -28917,19 +29454,24 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
               isMountingNodesRoute && mountingNodesRouteState?.mode === "categories" ? (
                 <article className="catalog-card service-catalog-card service-catalog-card-full">
               <div className="catalog-page-header">
-                    <div className="service-catalog-title">
-                      <div className="fitting-category-breadcrumb fitting-category-breadcrumb-top">
-                        <h3 className="catalog-breadcrumb-title">
-                          <button className="catalog-breadcrumb-link" onClick={() => switchView("connectionsOverview")} type="button">
-                            {language === "uk" ? "Кріплення та з'єднання" : "Connections"}
-                          </button>
-                        </h3>
-                        <span className="fitting-breadcrumb-separator">/</span>
-                        <h3 className="catalog-breadcrumb-title">{language === "uk" ? "Монтажні вузли" : "Mounting nodes"}</h3>
-                      </div>
-                      <p>
-                        {language === "uk"
-                          ? "Оберіть категорію для перегляду монтажних вузлів."
+                <div className="service-catalog-title">
+                  <CatalogBreadcrumbTrail
+                    items={[
+                      {
+                        label: language === "uk" ? "Кріплення та з'єднання" : "Connections",
+                        onClick: () => switchView("connectionsOverview"),
+                        title: language === "uk" ? "Кріплення та з'єднання" : "Connections",
+                      },
+                      {
+                        current: true,
+                        label: language === "uk" ? "Монтажні вузли" : "Mounting nodes",
+                        title: language === "uk" ? "Монтажні вузли" : "Mounting nodes",
+                      },
+                    ]}
+                  />
+                  <p>
+                    {language === "uk"
+                      ? "Оберіть категорію для перегляду монтажних вузлів."
                           : "Choose a category to browse mounting nodes."}
                       </p>
                     </div>
@@ -29095,7 +29637,20 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
             <article className="catalog-card service-catalog-card service-catalog-card-full">
               <div className="catalog-page-header">
                 <div className="service-catalog-title">
-                  <h3>{t.fittingBundlesTitle}</h3>
+                  <CatalogBreadcrumbTrail
+                    items={[
+                      {
+                        label: t.catalog,
+                        onClick: () => switchView("catalogHub"),
+                        title: t.catalog,
+                      },
+                      {
+                        current: true,
+                        label: t.fittingBundlesTitle,
+                        title: t.fittingBundlesTitle,
+                      },
+                    ]}
+                  />
                   <p>{t.fittingBundlesDescription}</p>
                 </div>
                 <div className="service-catalog-header-actions">
@@ -29209,7 +29764,20 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
             <article className="catalog-card service-catalog-card service-catalog-card-full">
               <div className="catalog-page-header">
                 <div className="service-catalog-title">
-                  <h3>{t.holeServiceRulesTitle}</h3>
+                  <CatalogBreadcrumbTrail
+                    items={[
+                      {
+                        label: t.catalog,
+                        onClick: () => switchView("catalogHub"),
+                        title: t.catalog,
+                      },
+                      {
+                        current: true,
+                        label: t.holeServiceRulesTitle,
+                        title: t.holeServiceRulesTitle,
+                      },
+                    ]}
+                  />
                   <p>{t.holeServiceRulesDescription}</p>
                 </div>
                 <div className="service-catalog-header-actions">
@@ -29523,7 +30091,20 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
             <article className="catalog-card">
               <div className="catalog-page-header">
                 <div className="service-catalog-title">
-                  <h3>{t.catalogValues}</h3>
+                  <CatalogBreadcrumbTrail
+                    items={[
+                      {
+                        label: t.catalog,
+                        onClick: () => switchView("catalogHub"),
+                        title: t.catalog,
+                      },
+                      {
+                        current: true,
+                        label: t.catalogValues,
+                        title: t.catalogValues,
+                      },
+                    ]}
+                  />
                   <p>{t.catalogValuesDescription}</p>
                 </div>
                 <div className="service-catalog-header-actions">
@@ -29685,7 +30266,20 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
             <article className="catalog-card service-catalog-card service-catalog-card-full">
               <div className="service-catalog-header">
                 <div className="service-catalog-title">
-                  <h3>{t.viyarServicesTitle}</h3>
+                  <CatalogBreadcrumbTrail
+                    items={[
+                      {
+                        label: t.catalog,
+                        onClick: () => switchView("catalogHub"),
+                        title: t.catalog,
+                      },
+                      {
+                        current: true,
+                        label: t.viyarServicesTitle,
+                        title: t.viyarServicesTitle,
+                      },
+                    ]}
+                  />
                   <p>{t.viyarServicesDescription}</p>
                 </div>
                 <div className="service-catalog-header-actions">
@@ -29854,7 +30448,20 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
             <article className="catalog-card service-catalog-card service-catalog-card-full">
               <div className="service-catalog-header nested-service-catalog-header">
                 <div className="service-catalog-title">
-                  <h3>{t.catalogManual}</h3>
+                  <CatalogBreadcrumbTrail
+                    items={[
+                      {
+                        label: t.catalog,
+                        onClick: () => switchView("catalogHub"),
+                        title: t.catalog,
+                      },
+                      {
+                        current: true,
+                        label: t.catalogManual,
+                        title: t.catalogManual,
+                      },
+                    ]}
+                  />
                   <p>{t.catalogManualDescription}</p>
                 </div>
                 <div className="service-catalog-header-actions">
@@ -32619,11 +33226,17 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                         ) : null}
                         <div className="project-option-picker-card-price">
                           <span>{t.materialPriceForCity}</span>
-                          <b>
-                            {item.current_price !== null && item.current_price !== undefined
-                              ? `${item.current_price} UAH`
-                              : t.notSet}
-                          </b>
+                          {item.projectPriceRows?.length ? (
+                            <div className="material-card-price-summary">
+                              {item.projectPriceRows.map((row) => (
+                                <div className="material-card-price-summary-row" key={row.key}>
+                                  <b>{`${row.priceText} ${row.currency}${row.unit ? ` / ${row.unit}` : ""}`}</b>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <b>{t.notSet}</b>
+                          )}
                         </div>
                         <div className="project-option-picker-card-meta">
                           <span>
@@ -32653,7 +33266,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
           role="dialog"
         >
           <section
-            className="confirm-modal material-details-modal"
+            className="confirm-modal material-details-modal material-details-scroll-modal"
             onClick={(event) => event.stopPropagation()}
           >
             <header className="confirm-header">
@@ -32671,28 +33284,34 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
               </button>
             </header>
 
-            <MaterialSupplierOffersSection
-              canEdit={canEditMaterialItem(user, selectedMaterialDetail)}
-              language={language}
-              materialDetail={selectedMaterialDetail}
-              onRefreshMaterialDetail={() =>
-                selectedMaterialDetail?.article
-                    ? openMaterialDetails(selectedMaterialDetail, { keepVisible: true })
-                  : Promise.resolve()
-              }
-              onSelectedOfferActionsChange={setSelectedMaterialSupplierOfferActions}
-              onSelectedOfferChange={setSelectedMaterialSupplierOfferId}
-              selectedOfferId={selectedMaterialSupplierOfferId}
-              supplierOffers={selectedMaterialSupplierOffers}
-              status={materialSupplierOffersStatus}
-              token={token}
-            />
+            <div className="material-details-supplier-tabs">
+              <MaterialSupplierOffersSection
+                canEdit={canEditMaterialItem(user, selectedMaterialDetail)}
+                language={language}
+                materialDetail={selectedMaterialDetail}
+                onRefreshMaterialDetail={() =>
+                  selectedMaterialDetail?.article
+                      ? openMaterialDetails(selectedMaterialDetail, { keepVisible: true })
+                    : Promise.resolve()
+                }
+                onSelectedOfferActionsChange={setSelectedMaterialSupplierOfferActions}
+                onSelectedOfferChange={setSelectedMaterialSupplierOfferId}
+                selectedOfferId={selectedMaterialSupplierOfferId}
+                supplierOffers={selectedMaterialSupplierOffers}
+                status={materialSupplierOffersStatus}
+                token={token}
+              />
+            </div>
 
             <div className="material-details-layout">
               <div className="material-details-media">
                 <MaterialDetailGallery
                   alt={selectedMaterialDetail.name || selectedMaterialDetail.article}
                   item={selectedMaterialDetail}
+                  supplierOffer={getActiveMaterialSupplierOffer(
+                    selectedMaterialSupplierOffers,
+                    selectedMaterialSupplierOfferId,
+                  )}
                   loading="eager"
                   placeholderLabel={formatCatalogLabel(selectedMaterialDetail.category, t)}
                   t={t}
@@ -32903,10 +33522,61 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   ) : null}
                       </div>
 
-                      <div className="material-details-description">
-                        <span>{t.materialDescription}</span>
-                        <p>{getMaterialDescriptionText(selectedMaterialDetail, t)}</p>
-                      </div>
+                      {selectedMaterialDetail.description ? (
+                        <section className={`fitting-details-section-card${materialDescriptionOpen ? " is-open" : ""}`}>
+                          <button
+                            aria-expanded={materialDescriptionOpen}
+                            className="fitting-details-section-header fitting-details-section-toggle"
+                            onClick={() => setMaterialDescriptionOpen((open) => !open)}
+                            type="button"
+                          >
+                            <strong>{t.materialDescription}</strong>
+                            <ChevronRight className={materialDescriptionOpen ? "expanded" : ""} size={16} />
+                          </button>
+                          {materialDescriptionOpen ? (
+                            <div className="fitting-details-section-body fitting-details-description">
+                              <p>{getMaterialDescriptionText(selectedMaterialDetail, t)}</p>
+                            </div>
+                          ) : null}
+                        </section>
+                      ) : null}
+
+                      {(() => {
+                        const characteristics = selectedMaterialSupplierOffer?.characteristics;
+                        const entries = characteristics && typeof characteristics === "object"
+                          ? Object.entries(characteristics)
+                          : [];
+                        if (!entries.length) return null;
+
+                        return (
+                          <section className={`fitting-details-section-card${materialCharacteristicsOpen ? " is-open" : ""}`}>
+                            <button
+                              aria-expanded={materialCharacteristicsOpen}
+                              className="fitting-details-section-header fitting-details-section-toggle"
+                              onClick={() => setMaterialCharacteristicsOpen((open) => !open)}
+                              type="button"
+                            >
+                              <span className="fitting-details-section-title">
+                                <strong>{language === "en" ? "Characteristics" : "Характеристики"}</strong>
+                                <span className="service-tree-badge subtle">{entries.length}</span>
+                              </span>
+                              <ChevronRight className={materialCharacteristicsOpen ? "expanded" : ""} size={16} />
+                            </button>
+                            {materialCharacteristicsOpen ? (
+                              <div className="fitting-details-section-body">
+                                <dl className="fitting-details-characteristics-list">
+                                  {entries.map(([name, value]) => (
+                                    <div className="fitting-details-characteristic" key={name}>
+                                      <dt>{name}</dt>
+                                      <dd>{String(value)}</dd>
+                                    </div>
+                                  ))}
+                                </dl>
+                              </div>
+                            ) : null}
+                          </section>
+                        );
+                      })()}
                     </>
                   );
                 })()}

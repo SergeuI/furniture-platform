@@ -110,8 +110,19 @@ test("material taxonomy admin views are wired into the catalog sidebar and rende
   assert.match(stylesSource, /\.material-taxonomy-table--manufacturers \.manufacturer-logo-cell \{[\s\S]*display: flex;/);
   assert.match(stylesSource, /\.material-taxonomy-table--manufacturers \.manufacturer-logo-cell \{[\s\S]*justify-content: center;/);
   assert.match(stylesSource, /\.material-taxonomy-manufacturer-logo \{[\s\S]*max-width: 100%;/);
-  assert.match(stylesSource, /Materials taxonomy header standard: title block and actions are vertically centered on desktop\./);
-  assert.match(stylesSource, /\.material-taxonomy-page-header \{\s*align-items: center;/);
-  assert.match(stylesSource, /\.material-taxonomy-page-actions \{\s*align-items: center;[\s\S]*flex-wrap: nowrap;/);
-  assert.match(stylesSource, /@media \(max-width: 1200px\) \{\s*\.material-taxonomy-page-actions \{\s*flex-wrap: wrap;/);
+  assert.match(stylesSource, /\.catalog-page-header\.material-taxonomy-page-header \{[\s\S]*display: flex;/);
+  assert.match(stylesSource, /\.catalog-page-header\.material-taxonomy-page-header \.service-catalog-header-actions \{[\s\S]*align-items: center;[\s\S]*flex-wrap: nowrap;/);
+});
+
+test("material taxonomy pages use the standard three-level breadcrumb", () => {
+  const workspacePath = fileURLToPath(new URL("../src/components/MaterialTaxonomyAdminWorkspace.jsx", import.meta.url));
+  const breadcrumbPath = fileURLToPath(new URL("../src/components/CatalogBreadcrumbTrail.jsx", import.meta.url));
+  const workspaceSource = readFileSync(workspacePath, "utf8");
+  const breadcrumbSource = readFileSync(breadcrumbPath, "utf8");
+
+  assert.match(workspaceSource, /<CatalogBreadcrumbTrail[\s\S]*label: language === "uk" \? "Довідники" : "Catalogs"/);
+  assert.match(breadcrumbSource, /className="catalog-breadcrumb-link"/);
+  assert.match(workspaceSource, /onClick: \(\) => onNavigate\("catalogHub"\)/);
+  assert.match(workspaceSource, /onClick: \(\) => onNavigate\("catalogMaterials"\)/);
+  assert.match(workspaceSource, /Довідники[\s\S]*Матеріали[\s\S]*config\.breadcrumb\[language\]/);
 });

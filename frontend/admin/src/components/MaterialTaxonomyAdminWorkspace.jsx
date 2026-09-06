@@ -14,6 +14,7 @@ import {
   updateMaterialCategory,
   updateMaterialManufacturer,
 } from "../api.js";
+import CatalogBreadcrumbTrail from "./CatalogBreadcrumbTrail.jsx";
 import DeleteConfirmModal from "./DeleteConfirmModal.jsx";
 
 function buildCategoryForm(item = null) {
@@ -782,13 +783,25 @@ export default function MaterialTaxonomyAdminWorkspace({
       <div className="catalog-page-header material-taxonomy-page-header">
         <div className="service-catalog-title material-taxonomy-page-title">
           {typeof onNavigate === "function" ? (
-            <div className="fitting-category-breadcrumb fitting-category-breadcrumb-top">
-              <button className="fitting-breadcrumb-link" onClick={() => onNavigate("catalogMaterials")} type="button">
-                {language === "uk" ? "Матеріали" : "Materials"}
-              </button>
-              <span className="fitting-breadcrumb-separator">/</span>
-              <strong>{config.breadcrumb[language] || config.breadcrumb.uk}</strong>
-            </div>
+            <CatalogBreadcrumbTrail
+              items={[
+                {
+                  label: language === "uk" ? "Довідники" : "Catalogs",
+                  onClick: () => onNavigate("catalogHub"),
+                  title: language === "uk" ? "Довідники" : "Catalogs",
+                },
+                {
+                  label: language === "uk" ? "Матеріали" : "Materials",
+                  onClick: () => onNavigate("catalogMaterials"),
+                  title: language === "uk" ? "Матеріали" : "Materials",
+                },
+                {
+                  current: true,
+                  label: config.breadcrumb[language] || config.breadcrumb.uk,
+                  title: config.breadcrumb[language] || config.breadcrumb.uk,
+                },
+              ]}
+            />
           ) : null}
           <p>{config.description[language] || config.description.uk}</p>
         </div>

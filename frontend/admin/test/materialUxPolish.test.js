@@ -18,6 +18,18 @@ test("material gallery opens a local lightbox and keeps the fetch path unchanged
 
   assert.match(gallerySource, /const \[isPreviewOpen, setIsPreviewOpen\] = useState\(false\);/);
   assert.match(gallerySource, /onClick=\{\(\) => setIsPreviewOpen\(true\)\}/);
+  assert.match(gallerySource, /supplierOffer\?\.image_urls/);
+  assert.match(gallerySource, /new Image\(\)/);
+  assert.match(gallerySource, /preloader\.onload/);
+  assert.match(gallerySource, /preloader\.onerror/);
+  assert.match(gallerySource, /const cachedValidUrls = remoteCandidateUrls\.filter/);
+  assert.match(gallerySource, /setValidRemoteUrls\(\[\.\.\.cachedValidUrls, \.\.\.loadedUrls\.filter\(Boolean\)\]\)/);
+  assert.match(gallerySource, /preloader\.src = ""/);
+  assert.match(gallerySource, /is_remote: true/);
+  assert.match(gallerySource, /normalizeMaterialGalleryUrl/);
+  assert.match(gallerySource, /removeFailedGalleryEntry/);
+  assert.match(gallerySource, /onError=\{\(\) => removeFailedGalleryEntry/);
+  assert.match(gallerySource, /return \[\.\.\.cachedImages, \.\.\.remoteImages\]/);
   assert.match(gallerySource, /window\.addEventListener\("keydown", handleKeyDown\);/);
   assert.match(lightboxSource, /className="fitting-details-preview-backdrop"/);
   assert.match(lightboxSource, /className="fitting-details-preview-panel"/);

@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import importlib
+import json
 import re
 import sys
 import unittest
 from io import BytesIO
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 from urllib.error import URLError
 
 from fastapi.testclient import TestClient
@@ -134,7 +135,7 @@ class MaterialImportRequestTraceTests(unittest.TestCase):
         self.assertIn("REQUEST_COMPLETE", log_output)
         self.assertIn("status=200", log_output)
 
-    def test_material_import_uses_single_source_parse_and_persists_multi_image_gallery(self) -> None:
+    def test_material_import_uses_single_source_parse_without_remote_image_validation(self) -> None:
         main_api = self._load_main_api()
 
         parsed_material = {
@@ -155,7 +156,12 @@ class MaterialImportRequestTraceTests(unittest.TestCase):
             "brand": "Kronospan",
             "currency": "UAH",
             "availability": "В наявності",
-            "characteristics": {},
+            "characteristics": {
+                "Тип основи": "ДСП",
+                "Колекція": "Standart",
+                "Площа": "5.796",
+                "Текстура": "SN",
+            },
             "source_url": "https://viyar.ua/ua/catalog/k533/",
             "source_site": "viyar",
             "external_product_id": None,
@@ -174,25 +180,10 @@ class MaterialImportRequestTraceTests(unittest.TestCase):
             "images": [],
             "supplier_offers": [],
         }
-        gallery_payloads = {
-            "https://www.viyar.ua/store/Items/photos/ph242944_lOLfy.jpg": {
-                "bytes": self._build_jpeg_bytes(),
-                "content_type": "image/jpeg",
-                "resolved_url": "https://www.viyar.ua/store/Items/photos/ph242944_lOLfy.jpg",
-            },
-            "https://www.viyar.ua/store/Items/photos/ph242944_MWJFJ.jpg": {
-                "bytes": self._build_jpeg_bytes((120, 160, 200)),
-                "content_type": "image/jpeg",
-                "resolved_url": "https://www.viyar.ua/store/Items/photos/ph242944_MWJFJ.jpg",
-            },
-        }
-
         fetch_mock = AsyncMock(return_value=(parsed_material, {"strategy": "direct_url_html"}))
         prices_mock = AsyncMock(side_effect=AssertionError("normal material import must not repeat source fetch per city"))
         upsert_calls: list[dict] = []
-
-        def _fake_fetch_remote_image_payload(image_url, city=None, cookie_override=None):
-            return gallery_payloads.get(image_url)
+        image_fetch_mock = Mock(side_effect=AssertionError("VIYAR import must not validate remote images"))
 
         def _fake_upsert_material(**kwargs):
             upsert_calls.append(kwargs)
@@ -220,11 +211,11 @@ class MaterialImportRequestTraceTests(unittest.TestCase):
             patch.object(catalog_routes, "_resolve_material_with_city_context", return_value=None),
             patch.object(catalog_routes, "validate_material_supplier_offer_identity", return_value={"status": "compatible"}),
             patch.object(catalog_routes, "get_supplier_by_code", return_value={"id": 1, "is_active": True}),
-            patch.object(catalog_routes, "fetch_remote_image_payload", side_effect=_fake_fetch_remote_image_payload),
+            patch.object(catalog_routes, "fetch_remote_image_payload", image_fetch_mock),
             patch.object(catalog_routes, "upsert_material", side_effect=_fake_upsert_material),
             patch.object(catalog_routes, "upsert_material_price"),
             patch.object(catalog_routes, "ensure_material_user_link"),
-            patch.object(catalog_routes, "upsert_material_supplier_offer_for_import"),
+            patch.object(catalog_routes, "upsert_material_supplier_offer_for_import") as offer_mock,
             patch.object(catalog_routes, "create_audit_log"),
             patch.object(catalog_routes, "persist_viyar_recommended_edges_for_material_import") as edge_mock,
             TestClient(main_api.app) as client,
@@ -244,23 +235,30 @@ class MaterialImportRequestTraceTests(unittest.TestCase):
         body = response.json()
         self.assertTrue(body["success"])
         self.assertEqual(body["item"]["id"], "2126")
-        self.assertEqual(len(body["item"]["images"]), 2)
+        self.assertEqual(len(body["item"]["images"]), 0)
         self.assertIsNone(body["recommended_edges"])
         fetch_mock.assert_awaited_once()
         prices_mock.assert_not_awaited()
         self.assertEqual(len(upsert_calls), 1)
-        self.assertEqual(len(upsert_calls[0]["prepared_gallery_images"]), 2)
-        self.assertEqual(
-            [image.source_url for image in upsert_calls[0]["prepared_gallery_images"]],
-            [
-                "https://www.viyar.ua/store/Items/photos/ph242944_lOLfy.jpg",
-                "https://www.viyar.ua/store/Items/photos/ph242944_MWJFJ.jpg",
-            ],
-        )
-        self.assertEqual(len(upsert_calls[0]["prepared_gallery_images"]), 2)
+        self.assertIsNone(upsert_calls[0]["prepared_gallery_images"])
+        image_fetch_mock.assert_not_called()
         self.assertEqual(upsert_calls[0]["article"], "242944")
         self.assertEqual(upsert_calls[0]["source_url"], "https://viyar.ua/ua/catalog/k533/")
-        self.assertEqual(upsert_calls[0]["image_source_url"], "https://www.viyar.ua/store/Items/photos/ph242944_lOLfy.jpg")
+        self.assertEqual(upsert_calls[0]["image_source_url"], "https://viyar.ua/store/Items/photos/ph242944_lOLfy.jpg")
+        self.assertEqual(upsert_calls[0]["dimensions"], "2800x2070x18 мм")
+        self.assertEqual(offer_mock.call_args.kwargs["stock"], "В наявності")
+        offer_call = offer_mock.call_args.kwargs
+        self.assertEqual(
+            json.loads(offer_call["source_payload_json"])["parsed_material"]["characteristics"],
+            parsed_material["characteristics"],
+        )
+        self.assertEqual(
+            json.loads(offer_call["source_payload_json"])["parsed_material"]["image_urls"],
+            [
+                "https://viyar.ua/store/Items/photos/ph242944_lOLfy.jpg",
+                "https://viyar.ua/store/Items/photos/ph242944_MWJFJ.jpg",
+            ],
+        )
         edge_mock.assert_not_called()
 
     def test_material_import_keeps_gallery_when_city_context_is_refreshed(self) -> None:

@@ -6,8 +6,10 @@ import test from "node:test";
 test("materials suppliers admin view reuses the supplier workspace with materials labels", () => {
   const appPath = fileURLToPath(new URL("../src/App.jsx", import.meta.url));
   const workspacePath = fileURLToPath(new URL("../src/components/FittingSuppliersAdminWorkspace.jsx", import.meta.url));
+  const breadcrumbPath = fileURLToPath(new URL("../src/components/CatalogBreadcrumbTrail.jsx", import.meta.url));
   const appSource = readFileSync(appPath, "utf8");
   const workspaceSource = readFileSync(workspacePath, "utf8");
+  const breadcrumbSource = readFileSync(breadcrumbPath, "utf8");
   const stylesSource = readFileSync(fileURLToPath(new URL("../src/styles.css", import.meta.url)), "utf8");
 
   assert.match(appSource, /catalogMaterialSuppliers: "catalog-material-suppliers"/);
@@ -15,9 +17,15 @@ test("materials suppliers admin view reuses the supplier workspace with material
   assert.match(appSource, /const isMaterialCleanupView = isCatalogMaterialsView \|\| isMaterialTaxonomyManagementView \|\| isCatalogMaterialSuppliersView;/);
   assert.match(appSource, /switchView\("catalogMaterialSuppliers"\)/);
   assert.match(appSource, /Матеріали → Постачальники|Materials → Suppliers/);
-  assert.match(appSource, /<FittingSuppliersAdminWorkspace[\s\S]*breadcrumbCurrentLabel=\{language === "uk" \? "Постачальники" : "Suppliers"\}/);
-  assert.match(appSource, /<FittingSuppliersAdminWorkspace[\s\S]*breadcrumbRootLabel=\{language === "uk" \? "Матеріали" : "Materials"\}/);
-  assert.match(appSource, /<FittingSuppliersAdminWorkspace[\s\S]*onBreadcrumbRootClick=\{\(\) => switchView\("catalogMaterials"\)\}/);
+  const liveSupplierRouteSource = appSource.slice(
+    appSource.indexOf(") : isCatalogMaterialSuppliersView"),
+    appSource.indexOf(") : isCatalogMaterialsView"),
+  );
+  assert.match(liveSupplierRouteSource, /<FittingSuppliersAdminWorkspace[\s\S]*breadcrumbCatalogLabel=\{language === "uk" \? "Довідники" : "Catalogs"\}/);
+  assert.match(liveSupplierRouteSource, /breadcrumbRootLabel=\{language === "uk" \? "Матеріали" : "Materials"\}/);
+  assert.match(liveSupplierRouteSource, /breadcrumbCurrentLabel=\{language === "uk" \? "Постачальники" : "Suppliers"\}/);
+  assert.match(liveSupplierRouteSource, /onBreadcrumbCatalogClick=\{\(\) => switchView\("catalogHub"\)\}/);
+  assert.match(liveSupplierRouteSource, /onBreadcrumbRootClick=\{\(\) => switchView\("catalogMaterials"\)\}/);
   assert.match(appSource, /<FittingSuppliersAdminWorkspace[\s\S]*description=\{language === "uk"[\s\S]*material suppliers/);
   assert.match(appSource, /user\.role === "admin"[\s\S]*catalogMaterialSuppliers/);
   assert.match(appSource, /nextView === "catalogMaterialSuppliers"/);
@@ -33,8 +41,15 @@ test("materials suppliers admin view reuses the supplier workspace with material
   assert.doesNotMatch(workspaceSource, /<section className="dashboard-layout">/);
   assert.match(workspaceSource, /catalog-page-header material-taxonomy-page-header supplier-page-header/);
   assert.match(workspaceSource, /service-catalog-header-actions material-taxonomy-page-actions supplier-page-actions/);
-  assert.match(workspaceSource, /fitting-category-breadcrumb fitting-category-breadcrumb-top/);
-  assert.match(workspaceSource, /fitting-breadcrumb-link/);
+  assert.match(workspaceSource, /CatalogBreadcrumbTrail/);
+  assert.match(workspaceSource, /breadcrumbCatalogLabel/);
+  assert.match(workspaceSource, /onBreadcrumbCatalogClick/);
+  assert.match(breadcrumbSource, /export default function CatalogBreadcrumbTrail/);
+  assert.match(breadcrumbSource, /return \([\s\S]*<nav/);
+  assert.match(breadcrumbSource, /item\.onClick/);
+  assert.match(breadcrumbSource, /current: true|isCurrent/);
+  assert.match(breadcrumbSource, /catalog-breadcrumb-link/);
+  assert.match(breadcrumbSource, /aria-current=\{isCurrent \? "page" : undefined\}/);
   assert.match(workspaceSource, /<h1>\{title\}<\/h1>/);
   assert.match(workspaceSource, /<p>\{description\}<\/p>/);
   assert.match(workspaceSource, /listFittingSuppliers/);

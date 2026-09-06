@@ -9,6 +9,7 @@ import {
   updateFittingSupplier,
   uploadSupplierLogo,
 } from "../api.js";
+import CatalogBreadcrumbTrail from "./CatalogBreadcrumbTrail.jsx";
 import DeleteConfirmModal from "./DeleteConfirmModal.jsx";
 
 function normalizeSupplierText(value) {
@@ -80,8 +81,10 @@ export default function FittingSuppliersAdminWorkspace({
   token = "",
   currentUserId = "",
   currentUserRole = "admin",
+  breadcrumbCatalogLabel = "",
   breadcrumbRootLabel = "",
   breadcrumbCurrentLabel = "",
+  onBreadcrumbCatalogClick = null,
   onBreadcrumbRootClick = null,
   title = language === "uk" ? "Постачальники" : "Suppliers",
   description = language === "uk"
@@ -365,17 +368,27 @@ export default function FittingSuppliersAdminWorkspace({
       {breadcrumbRootLabel && breadcrumbCurrentLabel ? (
         <header className="catalog-page-header material-taxonomy-page-header supplier-page-header">
           <div className="service-catalog-title material-taxonomy-page-title">
-            <div className="fitting-category-breadcrumb fitting-category-breadcrumb-top">
-              <button
-                className="fitting-breadcrumb-link"
-                onClick={onBreadcrumbRootClick}
-                type="button"
-              >
-                {breadcrumbRootLabel}
-              </button>
-              <span className="fitting-breadcrumb-separator">/</span>
-              <strong>{breadcrumbCurrentLabel}</strong>
-            </div>
+            <CatalogBreadcrumbTrail
+              items={[
+                ...(breadcrumbCatalogLabel
+                  ? [{
+                      label: breadcrumbCatalogLabel,
+                      onClick: onBreadcrumbCatalogClick,
+                      title: breadcrumbCatalogLabel,
+                    }]
+                  : []),
+                {
+                  label: breadcrumbRootLabel,
+                  onClick: onBreadcrumbRootClick,
+                  title: breadcrumbRootLabel,
+                },
+                {
+                  current: true,
+                  label: breadcrumbCurrentLabel,
+                  title: breadcrumbCurrentLabel,
+                },
+              ]}
+            />
             <p>{description}</p>
           </div>
           <div className="service-catalog-header-actions material-taxonomy-page-actions supplier-page-actions">

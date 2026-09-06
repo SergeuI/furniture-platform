@@ -8,14 +8,16 @@ function countMatches(source, pattern) {
   return matches ? matches.length : 0;
 }
 
-test("catalog hub renders seven image cards with real counts and responsive layout", () => {
+test("catalog hub keeps only primary directory cards with real counts and responsive layout", () => {
   const appPath = fileURLToPath(new URL("../src/App.jsx", import.meta.url));
   const stylesPath = fileURLToPath(new URL("../src/styles.css", import.meta.url));
+  const breadcrumbPath = fileURLToPath(new URL("../src/components/CatalogBreadcrumbTrail.jsx", import.meta.url));
   const source = readFileSync(appPath, "utf8");
   const stylesSource = readFileSync(stylesPath, "utf8");
+  const breadcrumbSource = readFileSync(breadcrumbPath, "utf8");
 
   const hubStart = source.indexOf("const catalogHubCards = [");
-  const hubEnd = source.indexOf("useDismissableCatalogItemMenu({", hubStart);
+  const hubEnd = source.indexOf("const materialTaxonomyCards = [", hubStart);
   const edgesStart = source.indexOf(") : isCatalogEdgesView ? (");
   const materialsStart = source.indexOf(") : isCatalogMaterialsView ? (");
   const fittingsStart = source.indexOf(") : isCatalogFittingsView || isCatalogFastenersView ? (");
@@ -46,6 +48,7 @@ test("catalog hub renders seven image cards with real counts and responsive layo
   assert.match(hubBlock, /key: "manual"/);
   assert.match(hubBlock, /key: "values"/);
   assert.equal(countMatches(hubBlock, /key: "/g), 7);
+  assert.doesNotMatch(hubBlock, /material_(categories|manufacturers|suppliers)/);
 
   assert.match(hubBlock, /switchView\("catalogMaterials"\)/);
   assert.match(hubBlock, /switchView\("catalogEdges"\)/);
@@ -82,19 +85,13 @@ test("catalog hub renders seven image cards with real counts and responsive layo
   assert.match(source, /<p>\{t\.catalogHubDescription\}<\/p>/);
   assert.match(source, /async function loadCatalogView\(activeToken = token, viewer = user\) \{\s*await loadCatalogItems\(activeToken, viewer\);\s*await loadMaterialsCatalog\(activeToken, \{ category: "dsp", search: "" \}\);\s*await loadEdgesCatalog\(activeToken\);\s*await loadFittingsCatalog\(activeToken, \{\s*search: "",\s*\}\);\s*await loadViyarServices\(activeToken, viewer\);\s*await loadManualServices\(activeToken, viewer\);\s*\}/);
   assert.doesNotMatch(source, /catalog-hub-card-hero/);
-  assert.match(
-    source,
-    /!isMaterialCleanupView && !isCatalogFittingManufacturersView && !shouldHideFittingsCatalogOuterToolbar && !isCatalogHubView \? \(/,
-  );
-  assert.match(source, /catalog-breadcrumb-title/);
-  assert.match(source, /catalog-breadcrumb-link/);
-  assert.match(edgesBlock, /catalog-breadcrumb-title/);
-  assert.match(edgesBlock, /catalog-breadcrumb-link/);
-  assert.match(materialsBlock, /catalog-breadcrumb-title/);
-  assert.match(materialsBlock, /catalog-breadcrumb-link/);
-  assert.match(fittingsBlock, /catalog-breadcrumb-title/);
-  assert.match(fittingsBlock, /catalog-breadcrumb-link/);
-  assert.match(source, /className={`catalog-hub-tile\$\{item\.wide \? " catalog-hub-tile-wide" : ""\}`}/);
+  assert.match(source, /CatalogBreadcrumbTrail/);
+  assert.match(breadcrumbSource, /catalog-breadcrumb-title/);
+  assert.match(breadcrumbSource, /catalog-breadcrumb-link/);
+  assert.match(edgesBlock, /CatalogBreadcrumbTrail/);
+  assert.match(materialsBlock, /CatalogBreadcrumbTrail/);
+  assert.match(fittingsBlock, /CatalogBreadcrumbTrail/);
+  assert.match(source, /className={`catalog-hub-tile\$\{item\.wide \? " catalog-hub-tile-wide" : ""\}\$\{item\.disabled/);
   assert.match(source, /className="catalog-hub-grid" role="list" aria-label=\{t\.catalog\}/);
   assert.match(source, /className="catalog-hub-tile-media"/);
   assert.match(source, /className="catalog-hub-tile-image-frame"/);
@@ -124,4 +121,57 @@ test("catalog hub renders seven image cards with real counts and responsive layo
   assert.match(stylesSource, /@media \(max-width: 640px\) \{[\s\S]*\.catalog-hub-grid \{\s*grid-template-columns: 1fr;/);
   assert.match(stylesSource, /@media \(max-width: 640px\) \{[\s\S]*\.catalog-hub-tile-wide \{\s*grid-column: auto;[\s\S]*grid-template-columns: 1fr;/);
   assert.match(stylesSource, /@media \(max-width: 640px\) \{[\s\S]*\.catalog-hub-tile-media \{\s*min-height: 148px;/);
+});
+
+test("material root keeps taxonomy cards in a separate compact auxiliary block", () => {
+  const appPath = fileURLToPath(new URL("../src/App.jsx", import.meta.url));
+  const stylesPath = fileURLToPath(new URL("../src/styles.css", import.meta.url));
+  const source = readFileSync(appPath, "utf8");
+  const stylesSource = readFileSync(stylesPath, "utf8");
+  const hubStart = source.indexOf("const catalogHubCards = [");
+  const hubEnd = source.indexOf("const materialTaxonomyCards = [", hubStart);
+  const taxonomyStart = source.indexOf("const materialTaxonomyCards = [");
+  const taxonomyEnd = source.indexOf("useDismissableCatalogItemMenu({", taxonomyStart);
+  const auxiliaryStart = source.indexOf('className="material-taxonomy-auxiliary-section"');
+  const auxiliaryEnd = source.indexOf(") : isCatalogFittingManufacturersView ||", auxiliaryStart);
+  const auxiliaryBlock = source.slice(auxiliaryStart, auxiliaryEnd);
+  const taxonomyBlock = source.slice(taxonomyStart, taxonomyEnd);
+  const auxiliaryStylesStart = stylesSource.indexOf(".material-taxonomy-auxiliary-section {");
+  const auxiliaryStylesEnd = stylesSource.indexOf(".dashboard-layout {", auxiliaryStylesStart);
+  const auxiliaryStyles = stylesSource.slice(auxiliaryStylesStart, auxiliaryStylesEnd);
+
+  assert.doesNotMatch(source.slice(hubStart, hubEnd), /material_(categories|manufacturers|suppliers)/);
+  assert.equal((taxonomyBlock.match(/key: "material_/g) || []).length, 3);
+  assert.ok(auxiliaryStart > -1 && auxiliaryEnd > auxiliaryStart);
+  assert.match(auxiliaryBlock, /Довідники матеріалів|Material directories/);
+  assert.match(auxiliaryBlock, /materialTaxonomyCards\.map/);
+  assert.match(taxonomyBlock, /switchView\("catalogMaterialCategories"\)/);
+  assert.match(taxonomyBlock, /switchView\("catalogMaterialManufacturers"\)/);
+  assert.match(taxonomyBlock, /switchView\("catalogMaterialSuppliers"\)/);
+  assert.match(source, /import catalogMaterialCategoriesImage from "\.\/assets\/catalog-hub\/catalog-material-categories\.png";/);
+  assert.match(source, /import catalogMaterialManufacturersImage from "\.\/assets\/catalog-hub\/catalog-material-manufacturers\.png";/);
+  assert.match(source, /import catalogMaterialSuppliersImage from "\.\/assets\/catalog-hub\/catalog-material-suppliers\.png";/);
+  assert.match(source, /material_categories: \{ accent: "#2563eb", icon: FolderTree, image: catalogMaterialCategoriesImage \}/);
+  assert.match(source, /material_manufacturers: \{ accent: "#2563eb", icon: Factory, image: catalogMaterialManufacturersImage \}/);
+  assert.match(source, /material_suppliers: \{ accent: "#2563eb", icon: Truck, image: catalogMaterialSuppliersImage \}/);
+  assert.doesNotMatch(source, /material_(categories|manufacturers|suppliers):[^\n]*image: catalogMaterialsImage/);
+  assert.match(source, /const \[materialSupplierDirectoryItems, setMaterialSupplierDirectoryItems\] = useState\(\[\]\);/);
+  assert.match(source, /listFittingSuppliers\(activeToken, true\)/);
+  assert.match(source, /\.filter\(\(item\) => item\?\.is_active\)/);
+  assert.match(source, /value: materialSupplierDirectoryItems\.length/);
+  assert.doesNotMatch(source, /value: fittingSupplierItems\.length/);
+  const mockedSupplierList = [
+    { is_active: true, is_system: true },
+    { is_active: true, is_system: true },
+    { is_active: true, owner_user_id: "own-1" },
+    { is_active: true, owner_user_id: "own-2" },
+    { is_active: false, is_system: true },
+  ];
+  assert.equal(mockedSupplierList.filter((item) => item?.is_active).length, 4);
+  assert.match(auxiliaryBlock, /disabled=\{item\.disabled\}/);
+  assert.match(auxiliaryBlock, /Немає доступу/);
+  assert.match(stylesSource, /\.material-taxonomy-auxiliary-section \{/);
+  assert.match(stylesSource, /\.material-taxonomy-auxiliary-grid \{[\s\S]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);/);
+  assert.match(stylesSource, /\.catalog-hub-tile-compact[\s\S]*min-height: 92px;/);
+  assert.doesNotMatch(auxiliaryStyles, /transform:\s*scale/);
 });

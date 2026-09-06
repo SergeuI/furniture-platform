@@ -14,6 +14,7 @@ export function getMaterialEntitlementFlags(user) {
 export function isMaterialCreationBlockedByQuota(materialOwnershipQuota, isNewMaterialSubmission) {
   return Boolean(
     materialOwnershipQuota &&
+      materialOwnershipQuota.is_unlimited !== true &&
       materialOwnershipQuota.can_create === false &&
       isNewMaterialSubmission,
   );

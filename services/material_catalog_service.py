@@ -1,11 +1,15 @@
 import asyncio
 import json
+import functools
+import logging
 import re
 import subprocess
 import sys
+from contextvars import ContextVar
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
+from time import perf_counter
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qsl, quote, urlencode, urlparse, urlunparse
 from urllib.request import Request, urlopen
@@ -14,6 +18,105 @@ from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright
 
 from services.fitting_source_parser import parse_fitting_source_metadata
+
+
+logger = logging.getLogger(__name__)
+_material_perf_context: ContextVar[dict | None] = ContextVar("material_perf_context", default=None)
+
+
+def _material_perf_log(message: str, **fields: object) -> None:
+    context = _material_perf_context.get()
+    if not context:
+        return
+    values = {
+        "request_id": context.get("request_id", ""),
+        "source_site": context.get("source_site", ""),
+        "article": context.get("article", "") or "",
+        **fields,
+    }
+    rendered = " ".join(f"{key}={value}" for key, value in values.items())
+    logger.info("[MATERIAL_PERF] %s %s", message, rendered)
+
+
+def _material_perf_increment(name: str, amount: int = 1) -> None:
+    context = _material_perf_context.get()
+    if context is not None:
+        context[name] = int(context.get(name, 0)) + amount
+
+
+def _material_perf_stage(stage: str, started_at: float, *, status: str = "ok", **fields: object) -> None:
+    _material_perf_log(
+        f"stage={stage}",
+        elapsed_ms=int((perf_counter() - started_at) * 1000),
+        status=status,
+        **fields,
+    )
+
+
+def material_performance_endpoint(endpoint):
+    @functools.wraps(endpoint)
+    async def wrapped(*args, **kwargs):
+        payload = kwargs.get("payload")
+        source_url = getattr(payload, "source_url", None)
+        source_site = detect_material_source_site(source_url)
+        context = {
+            "request_id": _request_id_for_performance(),
+            "source_site": source_site,
+            "article": getattr(payload, "article", None),
+            "FETCH_HTML_CALL_COUNT": 0,
+            "PARSER_CALL_COUNT": 0,
+            "IMAGE_RESOLUTION_CALL_COUNT": 0,
+            "TOTAL_EXTERNAL_REQUESTS": 0,
+            "VIYAR_HTML_REQUESTS": 0,
+            "IMAGE_REMOTE_REQUESTS": 0,
+            "IMAGE_CANDIDATES_FOUND": 0,
+            "IMAGE_CANDIDATES_CHECKED": 0,
+            "IMAGE_URLS_ACCEPTED": 0,
+            "IMAGE_REMOTE_VALIDATION_MS": 0,
+            "started_at": perf_counter(),
+        }
+        token = _material_perf_context.set(context)
+        try:
+            return await endpoint(*args, **kwargs)
+        except Exception as error:
+            context["error_type"] = type(error).__name__
+            raise
+        finally:
+            if _material_perf_context.get() is context:
+                _material_perf_log(
+                    "stage=total",
+                    elapsed_ms=int((perf_counter() - context["started_at"]) * 1000),
+                    status="error" if context.get("error_type") else "ok",
+                    **({"exception_type": context["error_type"]} if context.get("error_type") else {}),
+                    total_external_requests=context["TOTAL_EXTERNAL_REQUESTS"],
+                    viyar_html_requests=context["VIYAR_HTML_REQUESTS"],
+                    image_remote_requests=context["IMAGE_REMOTE_REQUESTS"],
+                    fetch_html_calls=context["FETCH_HTML_CALL_COUNT"],
+                    parser_calls=context["PARSER_CALL_COUNT"],
+                    image_resolution_calls=context["IMAGE_RESOLUTION_CALL_COUNT"],
+                    image_candidates_found=context["IMAGE_CANDIDATES_FOUND"],
+                    image_candidates_checked=context["IMAGE_CANDIDATES_CHECKED"],
+                    image_urls_accepted=context["IMAGE_URLS_ACCEPTED"],
+                    image_remote_validation_ms=context["IMAGE_REMOTE_VALIDATION_MS"],
+                )
+                _material_perf_context.reset(token)
+
+    return wrapped
+
+
+def _request_id_for_performance() -> str:
+    try:
+        from services.request_trace import get_request_id
+
+        return get_request_id()
+    except Exception:
+        return ""
+
+
+def material_performance_update(**fields: object) -> None:
+    context = _material_perf_context.get()
+    if context is not None:
+        context.update(fields)
 
 
 VIYAR_BASE_URL = "https://www.viyar.ua"
@@ -28,6 +131,14 @@ CITY_COOKIES = {
     "khmelnytskyi": "KHMELNYTSKYI",
     "rivne": "RIVNE",
 }
+
+LAUNCH_MODE_CITY = "kyiv"
+
+
+def get_effective_material_city(requested_city: str | None = None, user_city: str | None = None) -> str:
+    """Apply the temporary product launch city without removing multi-city support."""
+
+    return LAUNCH_MODE_CITY
 
 
 def detect_material_source_site(source_url: str | None) -> str:
@@ -191,6 +302,15 @@ def _normalize_gallery_asset_url(value: str | None) -> str | None:
     asset = _normalize_asset_url(value)
     if not asset:
         return None
+
+    # VIYAR may store the real image URL inside its fit=contain wrapper.
+    wrapper_match = re.match(
+        r"^https?://(?:www\.)?viyar\.ua/fit=contain/(https?://.+)$",
+        asset,
+        flags=re.IGNORECASE,
+    )
+    if wrapper_match:
+        asset = wrapper_match.group(1)
 
     parsed = urlparse(asset)
     query_items = [
@@ -539,6 +659,14 @@ def _fetch_html(
     return_final_url: bool = False,
 ) -> str | tuple[str, str]:
 
+    started_at = perf_counter()
+    _material_perf_increment("FETCH_HTML_CALL_COUNT")
+    _material_perf_increment("TOTAL_EXTERNAL_REQUESTS")
+    parsed_url = urlparse(url)
+    host = parsed_url.netloc or parsed_url.path
+    if "viyar" in host.casefold():
+        _material_perf_increment("VIYAR_HTML_REQUESTS")
+
     request = Request(
         url,
         headers=_build_request_headers(
@@ -547,46 +675,71 @@ def _fetch_html(
         ),
     )
 
-    with urlopen(request, timeout=10) as response:
-        final_url = response.geturl()
-        payload = response.read()
-        charset = None
-
-        try:
-            charset = response.headers.get_content_charset()
-        except Exception:
+    try:
+        with urlopen(request, timeout=10) as response:
+            final_url = response.geturl()
+            payload = response.read()
             charset = None
 
-        encodings = [
-            charset,
-            "utf-8",
-            "utf-8-sig",
-            "windows-1251",
-            "cp1251",
-        ]
-
-        seen: set[str] = set()
-        for encoding in encodings:
-            if not encoding:
-                continue
-
-            normalized_encoding = encoding.lower()
-            if normalized_encoding in seen:
-                continue
-            seen.add(normalized_encoding)
-
             try:
-                html = payload.decode(normalized_encoding)
-                if return_final_url:
-                    return html, final_url
-                return html
-            except UnicodeDecodeError:
-                continue
+                charset = response.headers.get_content_charset()
+            except Exception:
+                charset = None
 
-        html = payload.decode("utf-8", errors="replace")
-        if return_final_url:
-            return html, final_url
-        return html
+            encodings = [
+                charset,
+                "utf-8",
+                "utf-8-sig",
+                "windows-1251",
+                "cp1251",
+            ]
+
+            seen: set[str] = set()
+            for encoding in encodings:
+                if not encoding:
+                    continue
+
+                normalized_encoding = encoding.lower()
+                if normalized_encoding in seen:
+                    continue
+                seen.add(normalized_encoding)
+
+                try:
+                    html = payload.decode(normalized_encoding)
+                    _material_perf_log(
+                        "network purpose=product_html",
+                        host=host,
+                        elapsed_ms=int((perf_counter() - started_at) * 1000),
+                        status="ok",
+                        http_status=getattr(response, "status", None) or response.getcode(),
+                    )
+                    if return_final_url:
+                        return html, final_url
+                    return html
+                except UnicodeDecodeError:
+                    continue
+
+            html = payload.decode("utf-8", errors="replace")
+            _material_perf_log(
+                "network purpose=product_html",
+                host=host,
+                elapsed_ms=int((perf_counter() - started_at) * 1000),
+                status="ok",
+                http_status=getattr(response, "status", None) or response.getcode(),
+            )
+            if return_final_url:
+                return html, final_url
+            return html
+    except Exception as error:
+        _material_perf_log(
+            "network purpose=product_html",
+            host=host,
+            elapsed_ms=int((perf_counter() - started_at) * 1000),
+            status="error",
+            exception_type=type(error).__name__,
+            http_status=getattr(error, "code", None),
+        )
+        raise
 
 
 def _fetch_binary(
@@ -594,6 +747,10 @@ def _fetch_binary(
     city: str | None = None,
     cookie_override: str | None = None,
 ) -> tuple[bytes, str | None, str]:
+
+    started_at = perf_counter()
+    _material_perf_increment("TOTAL_EXTERNAL_REQUESTS")
+    _material_perf_increment("IMAGE_REMOTE_REQUESTS")
 
     headers = _build_request_headers(
         city=city,
@@ -606,12 +763,33 @@ def _fetch_binary(
 
     request = Request(url, headers=headers)
 
-    with urlopen(request, timeout=10) as response:
-        return (
-            response.read(),
-            response.headers.get("Content-Type"),
-            response.geturl(),
+    try:
+        with urlopen(request, timeout=10) as response:
+            result = (
+                response.read(),
+                response.headers.get("Content-Type"),
+                response.geturl(),
+            )
+            _material_perf_log(
+                "network purpose=image",
+                host=parsed_url.netloc or parsed_url.path,
+                elapsed_ms=int((perf_counter() - started_at) * 1000),
+                status="ok",
+                http_status=getattr(response, "status", None) or response.getcode(),
+            )
+            _material_perf_increment("IMAGE_REMOTE_VALIDATION_MS", int((perf_counter() - started_at) * 1000))
+            return result
+    except Exception as error:
+        _material_perf_log(
+            "network purpose=image",
+            host=parsed_url.netloc or parsed_url.path,
+            elapsed_ms=int((perf_counter() - started_at) * 1000),
+            status="error",
+            exception_type=type(error).__name__,
+            http_status=getattr(error, "code", None),
         )
+        _material_perf_increment("IMAGE_REMOTE_VALIDATION_MS", int((perf_counter() - started_at) * 1000))
+        raise
 
 
 def _sanitize_viyar_price_url(source_url: str) -> str:
@@ -976,12 +1154,77 @@ def _resolve_product_url(
     return f"{VIYAR_BASE_URL}{href}"
 
 
+def _extract_viyar_article_from_product_area(soup: BeautifulSoup) -> str | None:
+
+    code_pattern = re.compile(r"\bкод\s*:?\s*(?:артикул\s*:?\s*)?(\d{3,})\b", re.IGNORECASE)
+    area_selectors = [
+        "#about",
+        ".vr-card-info",
+        ".card-info-head",
+        ".product-about",
+    ]
+
+    for area_selector in area_selectors:
+        for area in soup.select(area_selector):
+            candidates = [area, *area.find_all(True)]
+            matches = []
+            for candidate in candidates:
+                text = _normalize_text(candidate.get_text(" ", strip=True))
+                match = code_pattern.search(text)
+                if match:
+                    matches.append((len(text), match.group(1)))
+            if matches:
+                return min(matches, key=lambda item: item[0])[1]
+
+    return None
+
+
+def _extract_viyar_characteristics_from_product_html(soup: BeautifulSoup) -> dict[str, str]:
+
+    characteristics_root = soup.select_one("#characteristics")
+    if not characteristics_root:
+        return {}
+
+    characteristics: dict[str, str] = {}
+    for row in characteristics_root.select("tr"):
+        label_node = row.select_one(".vr-block-char__name")
+        value_node = row.select_one(".vr-block-char__value")
+
+        if label_node is None or value_node is None:
+            cells = row.find_all(["th", "td"], recursive=False)
+            if len(cells) < 2:
+                cells = row.find_all(["th", "td"])
+            if len(cells) >= 2:
+                label_node, value_node = cells[0], cells[1]
+
+        label = _normalize_text(label_node.get_text(" ", strip=True) if label_node else "").rstrip(":").strip()
+        value = _normalize_text(value_node.get_text(" ", strip=True) if value_node else "")
+        if label and value and label not in characteristics:
+            characteristics[label] = value
+
+    return characteristics
+
+
+def _find_viyar_characteristic_value(
+    characteristics: dict[str, str],
+    *labels: str,
+) -> str | None:
+
+    normalized_labels = {label.casefold().rstrip(":").strip() for label in labels}
+    for key, value in characteristics.items():
+        if key.casefold().rstrip(":").strip() in normalized_labels:
+            return value
+    return None
+
+
 def _extract_material_from_product_html(
     html: str,
     article: str,
     source_url: str,
 ) -> dict | None:
 
+    parser_started_at = perf_counter()
+    _material_perf_increment("PARSER_CALL_COUNT")
     soup = BeautifulSoup(html, "html.parser")
     name = _first_text(
         soup,
@@ -993,6 +1236,13 @@ def _extract_material_from_product_html(
         ],
     ) or article
 
+    current_article_text = _first_text(
+        soup,
+        [
+            ".vr-code span",
+            ".vr-code",
+        ],
+    )
     article_text = _first_text(
         soup,
         [
@@ -1002,12 +1252,31 @@ def _extract_material_from_product_html(
         ],
     )
 
-    if article_text and any(symbol.isdigit() for symbol in article_text):
-        article = article_text
+    if current_article_text and any(symbol.isdigit() for symbol in current_article_text):
+        article = _normalize_article(current_article_text)
+    elif article_text and any(symbol.isdigit() for symbol in article_text):
+        article = _normalize_article(article_text)
+    else:
+        scoped_article = _extract_viyar_article_from_product_area(soup)
+        if scoped_article:
+            article = scoped_article
 
+    _material_perf_stage("basic_parse", parser_started_at)
+
+    characteristics_started_at = perf_counter()
+    characteristics = _extract_viyar_characteristics_from_product_html(soup)
+    _material_perf_stage("characteristics", characteristics_started_at, count=len(characteristics))
+    characteristic_thickness = _find_viyar_characteristic_value(characteristics, "Товщина, мм", "Товщина")
+    characteristic_width = _find_viyar_characteristic_value(characteristics, "Ширина, мм", "Ширина")
+    characteristic_length = _find_viyar_characteristic_value(characteristics, "Довжина, мм", "Довжина")
+
+    images_started_at = perf_counter()
     image_urls = _extract_unique_asset_urls_from_nodes(
         soup,
         [
+            "#about .swiper-slide img",
+            "#about picture img",
+            "#about picture source",
             ".vr-about-product img",
             ".vr-card-slider img",
             "img.main-image",
@@ -1018,23 +1287,20 @@ def _extract_material_from_product_html(
         ],
     )
     image = image_urls[0] if image_urls else None
+    _material_perf_stage("image_extract", images_started_at, candidates_found=len(image_urls))
 
     price_text = _first_text(
         soup,
         [
+            ".product-card__price span",
+            ".product-card__price",
             'span[id*="_price"]',
             ".price-actual",
             ".card-info-prices__price-actual",
             ".price-current",
         ],
     )
-    unit_text = _first_text(
-        soup,
-        [
-            ".card-info-prices__price-row .text-unit",
-            ".text-unit",
-        ],
-    )
+    unit_text = _extract_viyar_unit_from_product_html(soup)
     price = _extract_price(price_text)
     description = (
         _first_attr(
@@ -1057,13 +1323,21 @@ def _extract_material_from_product_html(
     )
     description = _clean_material_description(description, name)
     dimensions = _extract_dimensions_from_text(name)
-    thickness = (
-        _extract_thickness_from_text(name)
-        or _extract_thickness_from_text(html)
-    )
+    thickness = _extract_thickness_from_text(name) or _extract_thickness_from_text(html)
+    if characteristic_thickness and re.search(r"\d", characteristic_thickness):
+        thickness = f"{characteristic_thickness} мм" if "мм" not in characteristic_thickness.casefold() else characteristic_thickness
+    if not dimensions and characteristic_length and characteristic_width and characteristic_thickness:
+        dimensions = f"{characteristic_length}x{characteristic_width}x{characteristic_thickness} мм"
     color = _extract_color_from_name(name)
+    availability = _extract_viyar_availability_from_product_html(soup)
     supports_square_meter_sale = _extract_viyar_square_meter_support_from_product_html(soup)
 
+    _material_perf_stage(
+        "parser_total",
+        parser_started_at,
+        characteristics_count=len(characteristics),
+        image_candidates_found=len(image_urls),
+    )
     return {
         "article": article,
         "name": name,
@@ -1076,6 +1350,8 @@ def _extract_material_from_product_html(
         "price": price,
         "price_raw": price_text or None,
         "unit": unit_text or None,
+        "characteristics": characteristics,
+        "availability": availability,
         "supports_square_meter_sale": supports_square_meter_sale,
         "source_url": source_url,
     }
@@ -1087,6 +1363,7 @@ def _extract_viyar_unit_from_product_html(soup: BeautifulSoup) -> str | None:
         _first_text(
             soup,
             [
+                ".product-card__price",
                 ".card-info-prices__price--row .price-actual + .text-unit",
                 ".card-info-prices__price-row .price-actual + .text-unit",
             ],
@@ -1199,6 +1476,88 @@ def _extract_viyar_square_meter_support_from_product_html(soup: BeautifulSoup) -
     return "чистий розмір" in normalized_text
 
 
+def _extract_viyar_availability_from_product_html(soup: BeautifulSoup) -> str | None:
+    def normalize_status(value: str | None) -> str | None:
+        text = _normalize_text(value)
+        if not text:
+            return None
+
+        lowered = text.casefold()
+        if "скоро у продажу" in lowered:
+            return "Скоро у продажу"
+        if "немає в наявності" in lowered or "нема в наявності" in lowered:
+            return "Немає в наявності"
+        if "в наявності" in lowered or "є в наявності" in lowered:
+            return "В наявності"
+        if lowered.endswith("instock") or lowered.endswith("in stock"):
+            return "В наявності"
+        if lowered.endswith("outofstock") or lowered.endswith("out of stock"):
+            return "Немає в наявності"
+        return None
+
+    def choose_statuses(value: str) -> str | None:
+        statuses = []
+        for match in re.finditer(
+            r"(?:скоро\s+у\s+продажу|немає\s+в\s+наявності|нема\s+в\s+наявності|є\s+в\s+наявності|в\s+наявності|out\s+of\s+stock|in\s+stock)",
+            value,
+            flags=re.IGNORECASE,
+        ):
+            status = normalize_status(match.group(0))
+            if status and status not in statuses:
+                statuses.append(status)
+
+        if "В наявності" in statuses:
+            return "В наявності"
+        if statuses and all(status == "Немає в наявності" for status in statuses):
+            return "Немає в наявності"
+        return statuses[0] if statuses else None
+
+    product_scope = soup.select_one("#about") or soup.select_one("main") or soup
+    has_branch_availability = any(
+        "наявність на філіях" in _normalize_text(text_node).casefold()
+        for text_node in product_scope.find_all(string=True)
+    )
+    selectors = (
+        ".productLabel",
+        "[itemprop='availability']",
+        ".availability",
+        ".product-card__availability",
+        ".card-info-availability",
+        "[data-availability]",
+    )
+    for selector in selectors:
+        if selector == ".productLabel" and has_branch_availability:
+            continue
+        for node in product_scope.select(selector):
+            raw_value = node.get("content") or node.get_text(" ", strip=True)
+            status = normalize_status(raw_value)
+            if status:
+                return status
+
+    boundary_markers = ("доставка та оплата", "характеристики")
+    for text_node in product_scope.find_all(string=True):
+        heading_text = _normalize_text(text_node)
+        if "наявність на філіях" not in heading_text.casefold():
+            continue
+
+        for ancestor in [text_node.parent, *text_node.parent.parents][:6]:
+            container_text = _normalize_text(ancestor.get_text(" ", strip=True))
+            tail = container_text[container_text.casefold().find("наявність на філіях") + len("наявність на філіях"):]
+            boundary_positions = [
+                tail.casefold().find(marker)
+                for marker in boundary_markers
+                if tail.casefold().find(marker) >= 0
+            ]
+            if boundary_positions:
+                tail = tail[:min(boundary_positions)]
+            status = choose_statuses(tail)
+            if status:
+                return status
+
+    summary_text = _normalize_text(product_scope.get_text(" ", strip=True))
+    return choose_statuses(summary_text)
+
+
 def _extract_viyar_current_price_from_product_html(
     html: str,
 ) -> tuple[float, float | None, str | None, str | None, str | None, bool, dict[str, object | None]]:
@@ -1223,7 +1582,7 @@ def _extract_viyar_current_price_from_product_html(
 
     unit = _extract_viyar_unit_from_product_html(soup)
 
-    availability = "В наявності" if "В наявності" in _normalize_text(soup.get_text(" ", strip=True)) else None
+    availability = _extract_viyar_availability_from_product_html(soup)
     currency = "UAH" if "₴" in _normalize_text(price_text or "") or "₴" in _normalize_text(unit or "") or "₴" in _normalize_text(html) else None
     supports_square_meter_sale = _extract_viyar_square_meter_support_from_product_html(soup)
     promo = _extract_viyar_promo_metadata_from_product_html(soup, price, price_text)
@@ -2158,6 +2517,17 @@ def _material_from_source_metadata(
         )
 
     description = _clean_material_description(name, name)
+    primary_image = _normalize_gallery_asset_url(metadata.get("image_url"))
+    normalized_image_urls: list[str] = []
+    for image_url in [
+        primary_image,
+        *[
+            _normalize_gallery_asset_url(image_url)
+            for image_url in list(metadata.get("image_urls") or [])
+        ],
+    ]:
+        if image_url and image_url not in normalized_image_urls:
+            normalized_image_urls.append(image_url)
 
     return {
         # A category number in a product URL can look like an article. The
@@ -2168,18 +2538,8 @@ def _material_from_source_metadata(
         "color": _extract_color_from_name(name),
         "dimensions": _extract_dimensions_from_text(name),
         "thickness": _extract_thickness_from_text(name),
-        "image": _normalize_gallery_asset_url(metadata.get("image_url")),
-        "image_urls": [
-            normalized_url
-            for normalized_url in [
-                _normalize_gallery_asset_url(metadata.get("image_url")),
-                *[
-                    _normalize_gallery_asset_url(image_url)
-                    for image_url in list(metadata.get("image_urls") or [])
-                ],
-            ]
-            if normalized_url
-        ],
+        "image": primary_image,
+        "image_urls": normalized_image_urls,
         "price": metadata.get("price"),
         "price_raw": metadata.get("price_raw"),
         "unit": metadata.get("unit"),

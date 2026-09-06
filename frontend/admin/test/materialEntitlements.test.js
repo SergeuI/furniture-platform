@@ -46,6 +46,10 @@ test("material entitlement flags stay separated by feature key", () => {
 
 test("quota blocks new material creation without replacing entitlement checks", () => {
   assert.equal(
+    isMaterialCreationBlockedByQuota({ can_create: false, is_unlimited: true }, true),
+    false,
+  );
+  assert.equal(
     isMaterialCreationBlockedByQuota({ can_create: false, is_unlimited: false }, true),
     true,
   );

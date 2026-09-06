@@ -71,6 +71,10 @@ from database.repositories.fitting_foundation_repository import (
 from services.fitting_image_gallery_service import (
     PreparedFittingGalleryImage,
 )
+from services.material_catalog_service import (
+    is_material_gallery_candidate_url,
+    normalize_material_gallery_image_url,
+)
 
 
 _FITTINGS_CATALOG_KEY_COLUMN_CACHE: dict[int, bool] = {}
@@ -158,6 +162,50 @@ def _extract_supplier_offer_square_meter_support(offer: MaterialSupplierOfferMod
     return None
 
 
+def _extract_supplier_offer_characteristics(offer: MaterialSupplierOfferModel) -> dict[str, str]:
+
+    payload = _safe_parse_supplier_offer_payload_json(getattr(offer, "source_payload_json", None))
+    parsed_material = payload.get("parsed_material")
+    raw_characteristics = (
+        parsed_material.get("characteristics")
+        if isinstance(parsed_material, dict)
+        else payload.get("characteristics")
+    )
+    if not isinstance(raw_characteristics, dict):
+        return {}
+
+    return {
+        key: value
+        for raw_key, raw_value in raw_characteristics.items()
+        if (key := _normalize_source(raw_key)) and (value := _normalize_source(raw_value))
+    }
+
+
+def _extract_supplier_offer_image_urls(offer: MaterialSupplierOfferModel) -> list[str]:
+    payload = _safe_parse_supplier_offer_payload_json(getattr(offer, "source_payload_json", None))
+    parsed_material = payload.get("parsed_material")
+    raw_image_urls = parsed_material.get("image_urls") if isinstance(parsed_material, dict) else []
+    if not isinstance(raw_image_urls, list):
+        return []
+
+    normalized_urls: list[str] = []
+    seen_urls: set[str] = set()
+    for raw_url in raw_image_urls:
+        if not isinstance(raw_url, str):
+            continue
+        normalized_raw_url = raw_url.strip()
+        if urlparse(normalized_raw_url).scheme.lower() not in {"http", "https"}:
+            continue
+        if not is_material_gallery_candidate_url(normalized_raw_url):
+            continue
+        normalized_url = normalize_material_gallery_image_url(normalized_raw_url)
+        if not normalized_url or normalized_url in seen_urls:
+            continue
+        seen_urls.add(normalized_url)
+        normalized_urls.append(normalized_url)
+    return normalized_urls
+
+
 def _serialize_material_price_row(price: MaterialPriceModel) -> dict:
 
     return {
@@ -197,6 +245,8 @@ def _build_material_price_summary_payload(
                 MaterialSupplierOfferModel.currency,
                 MaterialSupplierOfferModel.unit,
                 MaterialSupplierOfferModel.city,
+                MaterialSupplierOfferModel.supplier_id,
+                MaterialSupplierOfferModel.source_url,
                 MaterialSupplierOfferModel.is_active,
             )
         )
@@ -206,12 +256,25 @@ def _build_material_price_summary_payload(
         .all()
     )
 
+    supplier_profiles = _load_material_supplier_profiles(
+        db,
+        [offer_row.supplier_id for offer_row in offer_rows],
+    )
+
     grouped_rows: dict[int, dict[tuple[str | None, str | None], list[MaterialSupplierOfferModel]]] = defaultdict(
         lambda: defaultdict(list)
     )
 
     for offer_row in offer_rows:
-        if normalized_city_key is not None and _normalize_fitting_city_key(offer_row.city) != normalized_city_key:
+        supplier_profile = supplier_profiles.get(int(offer_row.supplier_id))
+        if (
+            normalized_city_key is not None
+            and _material_supplier_city_policy(
+                supplier_profile,
+                source_url=offer_row.source_url,
+            ) != "ignore_city"
+            and _normalize_fitting_city_key(offer_row.city) != normalized_city_key
+        ):
             continue
 
         currency_value = _normalize_source(offer_row.currency) or "UAH"
@@ -278,6 +341,7 @@ def _build_material_supplier_summary_payload(
                 MaterialSupplierOfferModel.supplier_id,
                 MaterialSupplierOfferModel.priority,
                 MaterialSupplierOfferModel.city,
+                MaterialSupplierOfferModel.source_url,
                 MaterialSupplierOfferModel.is_active,
             )
         )
@@ -299,7 +363,15 @@ def _build_material_supplier_summary_payload(
     seen_supplier_ids_by_material_id: dict[int, set[int]] = defaultdict(set)
 
     for offer_row in offer_rows:
-        if normalized_city_key is not None and _normalize_fitting_city_key(offer_row.city) != normalized_city_key:
+        supplier_profile = supplier_profiles.get(int(offer_row.supplier_id))
+        if (
+            normalized_city_key is not None
+            and _material_supplier_city_policy(
+                supplier_profile,
+                source_url=offer_row.source_url,
+            ) != "ignore_city"
+            and _normalize_fitting_city_key(offer_row.city) != normalized_city_key
+        ):
             continue
 
         material_id = int(offer_row.material_id)
@@ -323,11 +395,64 @@ def _build_material_supplier_summary_payload(
     return payload_by_material_id
 
 
+def _build_material_square_meter_support_payload(
+    db,
+    material_ids: Sequence[int],
+    *,
+    city: str | None = None,
+) -> dict[int, bool]:
+    """Expose the existing offer flag for material cards without text heuristics."""
+
+    normalized_material_ids = [int(material_id) for material_id in material_ids if material_id is not None]
+    if not normalized_material_ids:
+        return {}
+
+    offer_rows = (
+        db.query(MaterialSupplierOfferModel)
+        .options(
+            load_only(
+                MaterialSupplierOfferModel.material_id,
+                MaterialSupplierOfferModel.supplier_id,
+                MaterialSupplierOfferModel.source_url,
+                MaterialSupplierOfferModel.source_payload_json,
+                MaterialSupplierOfferModel.city,
+                MaterialSupplierOfferModel.is_active,
+            )
+        )
+        .filter(MaterialSupplierOfferModel.material_id.in_(normalized_material_ids))
+        .filter(MaterialSupplierOfferModel.is_active.is_(True))
+        .all()
+    )
+    supplier_profiles = _load_material_supplier_profiles(
+        db,
+        [offer_row.supplier_id for offer_row in offer_rows],
+    )
+    normalized_city_key = _normalize_fitting_city_key(city)
+    supported_material_ids: set[int] = set()
+
+    for offer_row in offer_rows:
+        supplier_profile = supplier_profiles.get(int(offer_row.supplier_id))
+        if (
+            normalized_city_key is not None
+            and _material_supplier_city_policy(
+                supplier_profile,
+                source_url=offer_row.source_url,
+            ) != "ignore_city"
+            and _normalize_fitting_city_key(offer_row.city) != normalized_city_key
+        ):
+            continue
+        if _extract_supplier_offer_square_meter_support(offer_row):
+            supported_material_ids.add(int(offer_row.material_id))
+
+    return {material_id: True for material_id in supported_material_ids}
+
+
 def _serialize_material_image_metadata(item: MaterialImageModel) -> dict:
     return {
         "id": int(item.id),
         "sort_order": int(item.sort_order or 0),
         "is_primary": bool(item.is_primary),
+        "source_url": item.source_url,
         "content_type": item.image_cached_content_type,
     }
 
@@ -451,6 +576,8 @@ def _serialize_material_supplier_offer_row(
         "city": _normalize_source(offer.city),
         "region": _normalize_source(offer.region),
         "supports_square_meter_sale": _extract_supplier_offer_square_meter_support(offer),
+        "characteristics": _extract_supplier_offer_characteristics(offer),
+        "image_urls": _extract_supplier_offer_image_urls(offer),
         "is_active": bool(offer.is_active),
         "priority": int(offer.priority or 0),
         "parsed_at": offer.parsed_at,
@@ -511,7 +638,12 @@ def _normalize_material_supplier_offer_source_url(value: str | None) -> str | No
     return normalized
 
 
-def _list_material_supplier_offers(db, material_id: str | int) -> list[dict]:
+def _list_material_supplier_offers(
+    db,
+    material_id: str | int,
+    *,
+    city: str | None = None,
+) -> list[dict]:
 
     rows = (
         db.query(MaterialSupplierOfferModel)
@@ -551,21 +683,36 @@ def _list_material_supplier_offers(db, material_id: str | int) -> list[dict]:
         [row.supplier_id for row in rows],
     )
 
+    normalized_city_key = _normalize_fitting_city_key(city)
+    filtered_rows = []
+    for row in rows:
+        supplier_profile = supplier_profiles.get(int(row.supplier_id))
+        if (
+            normalized_city_key is not None
+            and _material_supplier_city_policy(
+                supplier_profile,
+                source_url=row.source_url,
+            ) != "ignore_city"
+            and _normalize_fitting_city_key(row.city) != normalized_city_key
+        ):
+            continue
+        filtered_rows.append(row)
+
     return [
         _serialize_material_supplier_offer_row(
             row,
             supplier=supplier_profiles.get(int(row.supplier_id)),
         )
-        for row in rows
+        for row in filtered_rows
     ]
 
 
-def list_material_supplier_offers(material_id: str | int) -> list[dict]:
+def list_material_supplier_offers(material_id: str | int, city: str | None = None) -> list[dict]:
 
     db = SessionLocal()
 
     try:
-        return _list_material_supplier_offers(db, material_id)
+        return _list_material_supplier_offers(db, material_id, city=city)
     finally:
         db.close()
 
@@ -1951,6 +2098,23 @@ def _detect_source_site(source_url: str | None) -> str:
     return "manual"
 
 
+def _material_supplier_city_policy(
+    supplier: SupplierModel | None,
+    *,
+    source_url: str | None = None,
+) -> str:
+    """Return the city matching policy for a material supplier offer."""
+
+    source_site = _detect_source_site(source_url)
+    supplier_code = str(getattr(supplier, "code", "") or "").strip().casefold()
+
+    if source_site == "viyar" or supplier_code == "viyar":
+        return "exact_city"
+    if source_site == "kronas" or supplier_code == "kronas":
+        return "ignore_city"
+    return "legacy"
+
+
 def _detect_fitting_source_site(source_url: str | None) -> str:
     return _detect_source_site(source_url)
 
@@ -2981,6 +3145,11 @@ def list_materials(
             [int(item.id) for item in materials],
             city=city,
         )
+        square_meter_support_by_material_id = _build_material_square_meter_support_payload(
+            db,
+            [int(item.id) for item in materials],
+            city=city,
+        )
 
         for price in material_prices:
             prices_by_article[price.article].append(price)
@@ -3061,6 +3230,7 @@ def list_materials(
                         else None
                     ),
                     "price_summary": price_summary_by_material_id.get(int(item.id), []),
+                    "supports_square_meter_sale": bool(square_meter_support_by_material_id.get(int(item.id))),
                     "supplier_summary": supplier_summary_by_material_id.get(int(item.id), []),
                     "fallback_price": fallback_price_row.price if fallback_price_row else None,
                     "fallback_price_city": fallback_price_row.city if fallback_price_row else None,
@@ -4078,6 +4248,13 @@ def get_material_by_article(
             [int(item.id)],
             city=city,
         ).get(int(item.id), [])
+        supports_square_meter_sale = bool(
+            _build_material_square_meter_support_payload(
+                db,
+                [int(item.id)],
+                city=city,
+            ).get(int(item.id))
+        )
         supplier_summary = _build_material_supplier_summary_payload(
             db,
             [int(item.id)],
@@ -4130,8 +4307,9 @@ def get_material_by_article(
             ],
             "current_price_details": None,
             "price_summary": price_summary,
+            "supports_square_meter_sale": supports_square_meter_sale,
             "supplier_summary": supplier_summary,
-            "supplier_offers": _list_material_supplier_offers(db, item.id),
+            "supplier_offers": _list_material_supplier_offers(db, item.id, city=city),
             "edge_options": [
                 *(
                     _load_material_edges_payload(
@@ -4301,7 +4479,8 @@ def upsert_material(
     static_updated_at: datetime | None = None,
     manufacturer_id: int | None | object = _UNSET,
     prepared_gallery_images: Sequence[PreparedFittingGalleryImage] | None = None,
-) -> dict:
+    allow_deleted_restore: bool = False,
+) -> dict | None:
 
     db = SessionLocal()
 
@@ -4314,6 +4493,9 @@ def upsert_material(
         )
 
         if not item:
+            if not allow_deleted_restore and is_auto_recreate_suppressed(db, "material", article):
+                return None
+
             item = MaterialModel(
                 article=article,
             )
