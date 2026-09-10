@@ -246,6 +246,11 @@ import catalogMaterialSuppliersImage from "./assets/catalog-hub/catalog-material
 import catalogEdgesImage from "./assets/catalog-hub/catalog-edges.png";
 import catalogSquareMeterImage from "./assets/catalog-hub/catalog-square-meter.png";
 import catalogFittingsImage from "./assets/catalog-hub/catalog-fittings.png";
+import catalogFittingManufacturersImage from "./assets/catalog-hub/catalog-fitting-manufacturers.png";
+import catalogFittingSeriesImage from "./assets/catalog-hub/catalog-fitting-series.png";
+import catalogFittingCategoriesImage from "./assets/catalog-hub/catalog-fitting-categories.png";
+import catalogTechnicalProductsImage from "./assets/catalog-hub/catalog-technical-products.png";
+import catalogFittingSuppliersImage from "./assets/catalog-hub/catalog-fitting-suppliers.png";
 import catalogViyarImage from "./assets/catalog-hub/catalog-viyar.png";
 import catalogDrillingRulesImage from "./assets/catalog-hub/catalog-drilling-rules.png";
 import catalogManualServicesImage from "./assets/catalog-hub/catalog-manual-services.png";
@@ -13240,6 +13245,74 @@ export default function App() {
     usersPageLabel,
     viyarServiceCounts.services,
   ]);
+
+  const fittingTaxonomyCards = [
+    {
+      key: "manufacturers",
+      accent: CATALOG_HUB_CARD_VISUALS.material_manufacturers.accent,
+      icon: CATALOG_HUB_CARD_VISUALS.material_manufacturers.icon,
+      image: catalogFittingManufacturersImage,
+      label: language === "uk" ? "Виробники фурнітури" : "Fitting manufacturers",
+      description: language === "uk" ? "Довідник виробників фурнітури." : "Fitting manufacturer directory.",
+      chips: fittingTaxonomyManufacturers.length
+        ? [{ label: language === "uk" ? "Виробників" : "Manufacturers", value: fittingTaxonomyManufacturers.length }]
+        : [],
+      disabled: user.role !== "admin",
+      onClick: () => switchView(FITTING_TAXONOMY_VIEWS.manufacturers),
+    },
+    {
+      key: "series",
+      accent: CATALOG_HUB_CARD_VISUALS.fittings.accent,
+      icon: CATALOG_HUB_CARD_VISUALS.fittings.icon,
+      image: catalogFittingSeriesImage,
+      label: language === "uk" ? "Серії фурнітури" : "Fitting series",
+      description: language === "uk" ? "Серії та лінійки меблевої фурнітури." : "Furniture fitting series and product lines.",
+      chips: fittingTaxonomySeries.length
+        ? [{ label: language === "uk" ? "Серій" : "Series", value: fittingTaxonomySeries.length }]
+        : [],
+      disabled: user.role !== "admin",
+      onClick: () => switchView(FITTING_TAXONOMY_VIEWS.series),
+    },
+    {
+      key: "categories",
+      accent: CATALOG_HUB_CARD_VISUALS.material_categories.accent,
+      icon: CATALOG_HUB_CARD_VISUALS.material_categories.icon,
+      image: catalogFittingCategoriesImage,
+      label: language === "uk" ? "Категорії фурнітури" : "Fitting categories",
+      description: language === "uk" ? "Системні та власні категорії фурнітури." : "System and personal fitting categories.",
+      chips: fittingTaxonomyCategories.length
+        ? [{ label: language === "uk" ? "Категорій" : "Categories", value: fittingTaxonomyCategories.length }]
+        : [],
+      disabled: user.role !== "admin",
+      onClick: () => switchView(FITTING_TAXONOMY_VIEWS.categories),
+    },
+    {
+      key: "products",
+      accent: CATALOG_HUB_CARD_VISUALS.fittings.accent,
+      icon: CATALOG_HUB_CARD_VISUALS.fittings.icon,
+      image: catalogTechnicalProductsImage,
+      label: language === "uk" ? "Технічні товари" : "Technical products",
+      description: language === "uk" ? "Технічні товари, артикули та параметри." : "Technical products, articles and parameters.",
+      chips: fittingCanonicalProducts.length
+        ? [{ label: language === "uk" ? "Товарів" : "Products", value: fittingCanonicalProducts.length }]
+        : [],
+      disabled: user.role !== "admin",
+      onClick: () => switchView(FITTING_TAXONOMY_VIEWS.products),
+    },
+    {
+      key: "suppliers",
+      accent: CATALOG_HUB_CARD_VISUALS.material_suppliers.accent,
+      icon: CATALOG_HUB_CARD_VISUALS.material_suppliers.icon,
+      image: catalogFittingSuppliersImage,
+      label: language === "uk" ? "Постачальники" : "Suppliers",
+      description: language === "uk" ? "Системні та власні постачальники фурнітури." : "System and personal fitting suppliers.",
+      chips: fittingSupplierItems.length
+        ? [{ label: language === "uk" ? "Постачальників" : "Suppliers", value: fittingSupplierItems.length }]
+        : [],
+      disabled: user.role !== "admin",
+      onClick: () => switchView("catalogSuppliers"),
+    },
+  ];
 
   const catalogHubCards = [
     {
@@ -28093,6 +28166,73 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                     );
                   })}
                 </div>
+              ) : null}
+
+              {isCatalogFittingsView && !activeFittingCategory ? (
+                  <section
+                    aria-labelledby="fitting-taxonomy-auxiliary-title"
+                    className="material-taxonomy-auxiliary-section"
+                  >
+                    <h4 id="fitting-taxonomy-auxiliary-title">
+                      {language === "uk" ? "Довідники фурнітури" : "Fitting directories"}
+                    </h4>
+                    <div className="material-taxonomy-auxiliary-grid" role="list">
+                      {fittingTaxonomyCards.map((item) => {
+                        const Icon = item.icon;
+
+                        return (
+                          <button
+                            aria-disabled={item.disabled ? "true" : undefined}
+                            className={`catalog-hub-tile catalog-hub-tile-compact${item.disabled ? " catalog-hub-tile-disabled" : ""}`}
+                            disabled={item.disabled}
+                            key={item.key}
+                            onClick={item.onClick}
+                            role="listitem"
+                            type="button"
+                          >
+                            <span className="catalog-hub-tile-media">
+                              <span className="catalog-hub-tile-image-frame">
+                                <img alt="" aria-hidden="true" loading="lazy" src={item.image} />
+                              </span>
+                              <span
+                                className="catalog-hub-tile-icon"
+                                style={{ "--catalog-accent": item.accent }}
+                              >
+                                <Icon size={20} />
+                              </span>
+                            </span>
+                            <span className="catalog-hub-tile-body">
+                              <span className="catalog-hub-tile-copy">
+                                <strong>{item.label}</strong>
+                                <span>{item.description}</span>
+                              </span>
+                              <span className="catalog-hub-tile-chips">
+                                {item.chips.map((chip) => (
+                                  <span className="catalog-hub-chip" key={`${item.key}-${chip.label}`}>
+                                    <strong>{chip.value}</strong>
+                                    <span>{chip.label}</span>
+                                  </span>
+                                ))}
+                              </span>
+                              <span className="catalog-hub-tile-link">
+                                {item.disabled ? (
+                                  <>
+                                    <LockKeyhole size={14} />
+                                    {language === "uk" ? "Немає доступу" : "No access"}
+                                  </>
+                                ) : (
+                                  <>
+                                    {t.openDirectory}
+                                    <ChevronRight size={16} />
+                                  </>
+                                )}
+                              </span>
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </section>
               ) : null}
 
               {activeFittingCategory ? (

@@ -8,6 +8,43 @@ function countMatches(source, pattern) {
   return matches ? matches.length : 0;
 }
 
+test("fitting directory cards reuse menu actions and loaded counts without inventing empty totals", () => {
+  const source = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
+  const start = source.indexOf("  const fittingTaxonomyCards = [");
+  const end = source.indexOf("  const catalogHubCards = [", start);
+  assert.ok(start > -1 && end > start);
+  const config = source.slice(start, end);
+  const images = [...config.matchAll(/image: (\w+),/g)].map((match) => match[1]);
+  const lists = [...new Set([...config.matchAll(/chips: (\w+)\.length/g)].map((match) => match[1]))];
+  const views = {
+    manufacturers: "catalogFittingManufacturers",
+    series: "catalogFittingSeries",
+    categories: "catalogFittingCategories",
+    products: "catalogFittingProducts",
+  };
+  const visits = [];
+  const build = new Function("language", "user", "canViewFittingCatalog", "CATALOG_HUB_CARD_VISUALS",
+    "FITTING_TAXONOMY_VIEWS", "switchView", "openFittingCatalogRoot", ...images, ...lists,
+    config + "return fittingTaxonomyCards;");
+  const cards = (role, items) => build("uk", { role }, true,
+    new Proxy({}, { get: () => ({ accent: "#2563eb", icon: () => null }) }),
+    views, (view) => visits.push(view), () => visits.push("root"),
+    ...images, ...lists.map(() => items));
+  const loaded = cards("admin", [{ id: 1 }, { id: 2 }]);
+  assert.equal(loaded.length, 5);
+  assert.equal(new Set(loaded.map((card) => card.image)).size, 5);
+  loaded.forEach((card) => {
+    assert.equal(card.disabled, false);
+    assert.equal(card.chips[0].value, 2);
+    card.onClick();
+  });
+  assert.deepEqual(visits, [...Object.values(views), "catalogSuppliers"]);
+  assert.ok(cards("admin", []).every((card) => card.chips.length === 0));
+  assert.ok(cards("user", []).every((card) => card.disabled));
+  assert.match(source, /isCatalogFittingsView && !activeFittingCategory \? \(/);
+  assert.match(source, /fittingTaxonomyCards\.map/);
+});
+
 test("catalog hub keeps only primary directory cards with real counts and responsive layout", () => {
   const appPath = fileURLToPath(new URL("../src/App.jsx", import.meta.url));
   const stylesPath = fileURLToPath(new URL("../src/styles.css", import.meta.url));
@@ -159,7 +196,7 @@ test("material root keeps taxonomy cards in a separate compact auxiliary block",
   assert.match(source, /listFittingSuppliers\(activeToken, true\)/);
   assert.match(source, /\.filter\(\(item\) => item\?\.is_active\)/);
   assert.match(source, /value: materialSupplierDirectoryItems\.length/);
-  assert.doesNotMatch(source, /value: fittingSupplierItems\.length/);
+  assert.doesNotMatch(taxonomyBlock, /value: fittingSupplierItems\.length/);
   const mockedSupplierList = [
     { is_active: true, is_system: true },
     { is_active: true, is_system: true },
