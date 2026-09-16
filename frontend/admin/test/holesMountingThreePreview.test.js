@@ -25,6 +25,18 @@ test("holes mounting three preview is extracted into a reusable component", () =
   assert.equal(componentSource.includes("function getSafeHolePointLabel("), true);
   assert.equal(componentSource.includes("buildSurfaceMountThreePreviewHoleVolumes"), true);
   assert.equal(componentSource.includes("buildAngledTwoPlanesThreePreviewHoleVolumes"), true);
+  assert.equal(componentSource.includes('case "face_to_edge":'), true);
+  assert.equal(componentSource.includes("normalizeAngledTwoPlanesPreviewThicknessMm(faceToEdgeVerticalPreviewThicknessMm) * 0.01"), true);
+  assert.equal(componentSource.includes('normalizedVariantKey === "face_to_edge"'), true);
+  assert.equal(componentSource.includes("getFaceToEdgeHolePlacement(baseLayout, hole, index)"), true);
+  assert.equal(componentSource.includes('isAngledTwoPlanesPreview || normalizedVariantKey === "face_to_edge"'), true);
+  assert.equal(componentSource.includes("normalizedFaceToEdgeVerticalPreviewThicknessMm"), true);
+  assert.equal(componentSource.includes("normalizedFaceToEdgeHorizontalPreviewThicknessMm"), true);
+  assert.equal(componentSource.includes("const hasDepth = Number.isFinite(depthValue) && depthValue > 0"), true);
+  assert.equal(componentSource.includes("const throughHoleLength = isHorizontalEdge || isHorizontalPlane ? panelBThickness : panelAThickness"), true);
+  assert.equal(componentSource.includes("const depthScene = hasDepth ? Math.abs(depthValue) * mmToScene : holeLength"), true);
+  assert.equal(componentSource.includes('color: "#b9ffb9"'), true);
+  assert.equal(componentSource.includes("opacity: 0.28"), true);
 
   assert.equal(
     appSource.includes('import HolesMountingThreePreview from "./components/processing/HolesMountingThreePreview.jsx";'),

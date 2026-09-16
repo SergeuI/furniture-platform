@@ -63,6 +63,10 @@ function normalizePoint(point, templateId) {
     target_panel: normalizeOptionalText(point?.target_panel),
     target_surface: normalizeOptionalText(point?.target_surface),
     target_side: normalizeOptionalText(point?.target_side),
+    hole_library_type_id:
+      point?.hole_library_type_id === "" || point?.hole_library_type_id === undefined
+        ? null
+        : point?.hole_library_type_id,
     diameter_mm: point?.diameter_mm === "" || point?.diameter_mm === undefined ? null : point?.diameter_mm,
     service_drilling_rule_id:
       point?.service_drilling_rule_id === "" || point?.service_drilling_rule_id === undefined
@@ -259,6 +263,7 @@ function resolveMountingNodeEditorSnapshot(nodeDetail) {
   return {
     ...nodeDetail,
     ...snapshot,
+    fastening_type: snapshot.fastening_type ?? null,
     id: snapshot.id ?? nodeDetail.id,
     node_id: snapshot.node_id ?? nodeDetail.node_id ?? nodeDetail.id,
     code: snapshot.code ?? nodeDetail.code,
@@ -327,6 +332,7 @@ export function resolveMountingNodeEditorContext(nodeDetail, fallbackNodeId = ""
     mountingNodeId,
     mountingVariantKey,
     functional_code: normalizeMountingNodeFunctionalCode(snapshotNodeDetail.functional_code) || null,
+    fastening_type: snapshotNodeDetail.fastening_type ?? null,
     nodeDetail: snapshotNodeDetail,
     nodeName: normalizeText(snapshotNodeDetail.name),
     points,
@@ -573,6 +579,9 @@ export function buildMountingNodeEditorSavePayload({
     category_code: categoryCode,
     code: normalizeOptionalText(nodeDetail.code) || undefined,
     functional_code: functionalCode,
+    fastening_type: Object.prototype.hasOwnProperty.call(context || {}, "fastening_type")
+      ? context.fastening_type
+      : nodeDetail.fastening_type ?? null,
     name: normalizeText(nodeDetail.name),
     description: normalizeOptionalText(nodeDetail.description),
     is_active: normalizeBoolean(nodeDetail.is_active, true),

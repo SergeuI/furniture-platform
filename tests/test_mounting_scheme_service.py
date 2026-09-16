@@ -8,6 +8,7 @@ from sqlalchemy.orm import sessionmaker
 
 from database.base import Base
 from database.models.fitting import FittingModel
+from database.models.hole_library import HoleLibraryTypeModel
 from database.models.mounting_node import MountingNodeModel
 from database.models.service_catalog_item import ServiceCatalogItemModel
 from database.models.service_drilling_rule import ServiceDrillingRuleModel

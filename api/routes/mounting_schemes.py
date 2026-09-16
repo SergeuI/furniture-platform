@@ -8,8 +8,11 @@ from schemas.mounting_schemes import (
     MountingSchemeDetailResponseSchema,
     MountingSchemeListResponseSchema,
     MountingSchemeOperationResponseSchema,
+    MountingSchemePlacementPreviewRequestSchema,
+    MountingSchemePlacementPreviewResponseSchema,
     MountingSchemeUpdateSchema,
 )
+from services.mounting_scheme_placement_engine import calculate_mounting_scheme_placement
 from services.mounting_scheme_service import MountingSchemeService
 
 
@@ -36,6 +39,23 @@ async def list_mounting_schemes_route(
     return {
         "success": True,
         "schemes": schemes,
+    }
+
+
+@router.post("/placement-preview", response_model=MountingSchemePlacementPreviewResponseSchema)
+async def placement_preview_route(
+    payload: MountingSchemePlacementPreviewRequestSchema,
+    current_user = Depends(require_current_user),
+):
+    del current_user
+    result = calculate_mounting_scheme_placement(
+        payload.joint_length_mm,
+        payload.rule.model_dump(),
+    )
+
+    return {
+        "success": True,
+        "result": result,
     }
 
 

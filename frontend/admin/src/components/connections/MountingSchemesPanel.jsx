@@ -9,6 +9,7 @@ import {
   listMountingSchemes,
   updateMountingScheme,
 } from "../../api.js";
+import CatalogBreadcrumbTrail from "../CatalogBreadcrumbTrail.jsx";
 import {
   getMountingNodeCategoryLabel,
   normalizeMountingNodeCategoryCode,
@@ -642,31 +643,7 @@ export default function MountingSchemesPanel({ language = "uk", onOpenConnection
     <article className="catalog-card service-catalog-card service-catalog-card-full mounting-schemes-workspace">
       <div className="catalog-page-header material-taxonomy-page-header mounting-schemes-page-header">
         <div className="service-catalog-title material-taxonomy-page-title">
-          <div className="fitting-category-breadcrumb fitting-category-breadcrumb-top">
-            {headerBreadcrumbTrail.map((item, index) => {
-              const isLast = index === headerBreadcrumbTrail.length - 1;
-              const isCurrent = Boolean(item?.current);
-              const label = String(item?.label || "").trim();
-              const title = String(item?.title || label || "").trim();
-
-              return (
-                <span className="fitting-category-breadcrumb-item" key={`${label}-${index}`}>
-                  <h3 className="catalog-breadcrumb-title">
-                    {isCurrent || !item?.onClick ? (
-                      <span aria-current={isCurrent ? "page" : undefined} title={title || label}>
-                        {label}
-                      </span>
-                    ) : (
-                      <button className="catalog-breadcrumb-link" onClick={item.onClick} title={title || label} type="button">
-                        {label}
-                      </button>
-                    )}
-                  </h3>
-                  {!isLast ? <span className="fitting-breadcrumb-separator">/</span> : null}
-                </span>
-              );
-            })}
-          </div>
+          <CatalogBreadcrumbTrail items={headerBreadcrumbTrail} />
           <p>{headerSubtitle}</p>
         </div>
         <div className="service-catalog-header-actions mounting-schemes-page-actions">
@@ -696,7 +673,7 @@ export default function MountingSchemesPanel({ language = "uk", onOpenConnection
             </button>
           ) : null}
           {workspaceChrome.editActionCount ? (
-            <button className="primary-button" onClick={handleStartEdit} type="button">
+            <button className="primary-button" key="mounting-scheme-edit-action" onClick={handleStartEdit} type="button">
               <Pencil size={16} />
               {language === "uk" ? "Редагувати схему" : "Edit scheme"}
             </button>
@@ -711,7 +688,7 @@ export default function MountingSchemesPanel({ language = "uk", onOpenConnection
             </button>
           ) : null}
           {workspaceChrome.saveActionCount ? (
-            <button className="primary-button" disabled={saving} form="mounting-schemes-editor-form" type="submit">
+            <button className="primary-button" key="mounting-scheme-save-action" disabled={saving} form="mounting-schemes-editor-form" type="submit">
               <Save size={16} />
               {saving ? (language === "uk" ? "Збереження..." : "Saving...") : language === "uk" ? "Зберегти" : "Save"}
             </button>

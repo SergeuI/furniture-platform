@@ -912,6 +912,13 @@ class FittingHolePointModel(Base):
         nullable=True,
     )
 
+    hole_library_type_id = Column(
+        Integer,
+        ForeignKey("hole_library_types.id"),
+        index=True,
+        nullable=True,
+    )
+
     diameter_mm = Column(
         Float,
         nullable=True,
@@ -981,3 +988,5 @@ class FittingHolePointModel(Base):
         "FittingHoleTemplateModel",
         back_populates="points",
     )
+
+    hole_library_type = relationship("HoleLibraryTypeModel")

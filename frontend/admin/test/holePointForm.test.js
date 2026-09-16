@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   buildHolePointFormFromPoint,
   buildHolePointPayload,
+  buildHoleLibraryDiameterOptions,
   createHolePointFormDefaults,
   mergeHolePointSaveResponse,
 } from "../src/holePointForm.js";
@@ -92,6 +93,32 @@ test("saved hole point with null depth restores as through hole in edit form", (
   assert.equal(form.target_panel, "horizontal_panel");
 });
 
+test("legacy hole point restores diameter from the hole library type", () => {
+  const form = buildHolePointFormFromPoint(
+    {
+      id: 104,
+      template_id: 7467,
+      hole_library_type_id: 77,
+      target_panel: "horizontal_panel",
+      target_surface: "plane",
+      target_side: "inner_face",
+      x_mm: 50,
+      y_mm: 0,
+      z_mm: 0,
+      depth_mm: 13,
+      side: "inner_face",
+    },
+    {
+      holeLibraryItems: [
+        { id: 77, diameter_mm: 10, is_active: true },
+      ],
+    },
+  );
+
+  assert.equal(form.diameter_mm, 10);
+  assert.equal(form.hole_library_type_id, "77");
+});
+
 test("saved hole point with depth restores as blind hole in edit form", () => {
   const form = buildHolePointFormFromPoint({
     id: 104,
@@ -110,6 +137,22 @@ test("saved hole point with depth restores as blind hole in edit form", () => {
   assert.equal(form.is_through, false);
   assert.equal(form.depth_mm, 13);
   assert.equal(form.target_panel, "horizontal_panel");
+});
+
+test("hole library diameter options stay unique and hide internal codes", () => {
+  const options = buildHoleLibraryDiameterOptions([
+    { id: 1, code: "PLANE_BLIND_D10", diameter_mm: 10, is_active: true },
+    { id: 2, code: "PLANE_THROUGH_D10", diameter_mm: "10", is_active: true },
+    { id: 3, code: "EDGE_D10", diameter_mm: 10, is_active: false },
+    { id: 4, code: "EDGE_D4_5", diameter_mm: 4.5, is_active: true },
+    { id: 5, code: "HINGE_CUP_D35", diameter_mm: 35, is_active: true },
+  ]);
+
+  assert.deepEqual(options, [
+    { value: "4.5", label: "Ø4.5" },
+    { value: "10", label: "Ø10" },
+    { value: "35", label: "Ø35" },
+  ]);
 });
 
 test("angled two planes through-hole keeps empty depth and does not need numeric validation", () => {
@@ -141,6 +184,68 @@ test("angled two planes through-hole keeps empty depth and does not need numeric
   assert.equal(payload.target_surface, "plane");
   assert.equal(payload.target_side, "inner_face");
   assert.equal(payload.side, "inner_face");
+});
+
+test("new mounting node point payload accepts only active hole library diameters", () => {
+  const payload = buildHolePointPayload(
+    {
+      panel_key: "vertical_panel",
+      target_panel: "vertical_panel",
+      target_surface: "plane",
+      target_side: "inner_face",
+      side: "inner_face",
+      x_mm: "10",
+      y_mm: "20",
+      z_mm: "30",
+      diameter_mm: "10",
+      depth_mm: "13",
+      is_through: false,
+      notes: "",
+    },
+    {
+      holeLibraryItems: [
+        { id: 1, diameter_mm: 10, is_active: true },
+        { id: 2, diameter_mm: 10, is_active: true },
+        { id: 3, diameter_mm: 12, is_active: true },
+      ],
+      persistHoleLibraryTypeId: false,
+      messages,
+    },
+  );
+
+  assert.equal(payload.diameter_mm, 10);
+  assert.equal(payload.hole_library_type_id, undefined);
+});
+
+test("arbitrary mounting node diameter is rejected when it is not in the active hole library", () => {
+  assert.throws(
+    () =>
+      buildHolePointPayload(
+        {
+          panel_key: "vertical_panel",
+          target_panel: "vertical_panel",
+          target_surface: "plane",
+          target_side: "inner_face",
+          side: "inner_face",
+          x_mm: "10",
+          y_mm: "20",
+          z_mm: "30",
+          diameter_mm: "4.7",
+          depth_mm: "13",
+          is_through: false,
+          notes: "",
+        },
+        {
+          holeLibraryItems: [
+            { id: 1, diameter_mm: 4, is_active: true },
+            { id: 2, diameter_mm: 5, is_active: true },
+          ],
+          persistHoleLibraryTypeId: false,
+          messages,
+        },
+      ),
+    /diameter/,
+  );
 });
 
 test("explicit form selection wins over preset and existing state when building angled payloads", () => {

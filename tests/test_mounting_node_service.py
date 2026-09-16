@@ -13,6 +13,7 @@ from database.models.fitting import (
     FittingHoleTemplateModel,
     FittingModel,
 )
+from database.models.hole_library import HoleLibraryTypeModel  # noqa: F401
 from database.models.mounting_node import (
     MountingNodeItemModel,
     MountingNodeModel,
@@ -26,10 +27,49 @@ from services.mounting_node_service import MountingNodePermissionError, Mounting
 
 
 class MountingNodeServiceTests(unittest.TestCase):
+    def test_fastening_type_roundtrip_and_legacy_snapshot(self) -> None:
+        session, engine = self._build_session()
+        try:
+            fitting = self._create_fitting(session, name="Test", code="fastening-test", article="FT")
+            template = self._create_template(session, fitting.id, name="Test template")
+            self._create_point(session, template.id, x_mm=1, y_mm=2, z_mm=3)
+            service = MountingNodeService(session=session)
+            node = service.create_mounting_node({
+                "name": "Legacy node", "category_code": "fastening",
+                "items": [{"fitting_id": fitting.id}],
+                "templates": [{"template_id": template.id}],
+            })
+            self.assertIsNone(node["fastening_type"])
+            original_templates = node["templates"]
+            original_items = node["items"]
+            version = session.get(MountingNodeVersionModel, node["versions"][0]["id"])
+            version.snapshot = {key: value for key, value in version.snapshot.items() if key != "fastening_type"}
+            session.commit()
+            for value in ("confirmat", "minifix", None):
+                updated = service.update_mounting_node(node["id"], {"fastening_type": value})
+                self.assertEqual(updated["fastening_type"], value)
+                self.assertEqual(updated["versions"][0]["snapshot"]["fastening_type"], value)
+                self.assertEqual(updated["templates"], original_templates)
+                self.assertEqual(updated["items"], original_items)
+            detail = service.get_mounting_node(node["id"])
+            self.assertNotIn("fastening_type", detail["versions"][-1]["snapshot"])
+            created = service.create_mounting_node({
+                "name": "Typed node", "fastening_type": "confirmat",
+                "items": [{"fitting_id": fitting.id}],
+            })
+            self.assertEqual(created["fastening_type"], "confirmat")
+            with self.assertRaises(ValueError):
+                service.update_mounting_node(node["id"], {"fastening_type": "invalid"})
+        finally:
+            session.close()
+            engine.dispose()
+
     def test_create_node_serializes_items_and_templates(self) -> None:
         session, engine = self._build_session()
         try:
             fitting = self._create_fitting(session, name="Confirmat 7x50", code="confirmat-7x50", article="190106")
+            fitting.image_url = "https://example.test/confirmat.png"
+            session.commit()
             template = self._create_template(session, fitting.id, name="Main template")
             self._create_point(session, template.id, x_mm=0, y_mm=0, z_mm=0)
 
@@ -62,6 +102,7 @@ class MountingNodeServiceTests(unittest.TestCase):
             self.assertEqual(node["templates_count"], 1)
             self.assertEqual(node["items"][0]["fitting_id"], fitting.id)
             self.assertEqual(node["items"][0]["fitting_code"], "confirmat-7x50")
+            self.assertEqual(node["items"][0]["image_url"], "https://example.test/confirmat.png")
             self.assertEqual(node["items"][0]["quantity"], 2)
             self.assertEqual(node["templates"][0]["template_id"], template.id)
             self.assertEqual(node["templates"][0]["points_count"], 1)
@@ -485,6 +526,65 @@ class MountingNodeServiceTests(unittest.TestCase):
             self.assertEqual(reloaded["items_count"], 1)
             self.assertEqual(reloaded["templates_count"], 1)
             self.assertEqual(reloaded["items"][0]["fitting_id"], fitting_a.id)
+        finally:
+            session.close()
+            engine.dispose()
+
+    def test_update_node_persists_new_point_and_returns_it_after_reload(self) -> None:
+        session, engine = self._build_session()
+        try:
+            fitting = self._create_fitting(session, name="Confirmat", code="confirmat", article="C-1")
+            template = self._create_template(session, fitting.id, name="Confirmat template")
+            service = MountingNodeService(session=session)
+            node = service.create_mounting_node(
+                {
+                    "name": "Confirmat node",
+                    "items": [{"fitting_id": fitting.id, "quantity": 1}],
+                    "templates": [{"template_id": template.id, "is_default": True}],
+                }
+            )
+
+            updated = service.update_mounting_node(
+                node["id"],
+                {
+                    "templates": [
+                        {
+                            "template_id": template.id,
+                            "is_default": True,
+                            "template": {
+                                "template_id": template.id,
+                                "fitting_id": fitting.id,
+                                "mounting_variant_key": "face_to_edge",
+                                "points": [
+                                    {
+                                        "id": -123,
+                                        "template_id": template.id,
+                                        "label": "Horizontal panel",
+                                        "x_mm": 10,
+                                        "y_mm": 20,
+                                        "z_mm": 30,
+                                        "diameter_mm": 7,
+                                        "depth_mm": None,
+                                        "target_panel": "horizontal_panel",
+                                        "target_surface": "edge",
+                                        "target_side": "front",
+                                        "side": "front",
+                                        "operation": "drill",
+                                    }
+                                ],
+                            },
+                        }
+                    ]
+                },
+            )
+
+            reloaded = service.get_mounting_node(node["id"])
+            saved_points = reloaded["templates"][0]["template"]["points"]
+            self.assertEqual(len(saved_points), 1)
+            self.assertGreater(saved_points[0]["id"], 0)
+            self.assertEqual(saved_points[0]["target_panel"], "horizontal_panel")
+            self.assertEqual(saved_points[0]["diameter_mm"], 7.0)
+            self.assertEqual(updated["templates"][0]["points_count"], 1)
         finally:
             session.close()
             engine.dispose()

@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   buildMountingNodeEditorSavePayload,
   canSaveMountingNodeEditor,
+  getMountingNodeEditorItemImageUrl,
   resolveMountingNodeEditorContext,
 } from "../src/mountingNodesEditor.js";
 
@@ -95,6 +96,26 @@ const fixtureContext = {
   nodeDetail: fixtureNodeDetail,
   templateId: "7480",
 };
+
+test("fastening type changes preserve template and point payloads", () => {
+  const args = { context: fixtureContext, points: fixturePoints, pointsLoaded: true };
+  const original = buildMountingNodeEditorSavePayload(args);
+  for (const fastening_type of ["confirmat", "minifix", null]) {
+    const updated = buildMountingNodeEditorSavePayload({ ...args, context: { ...fixtureContext, fastening_type } });
+    assert.equal(updated.fastening_type, fastening_type);
+    assert.deepEqual(updated.templates, original.templates);
+    assert.deepEqual(updated.items, original.items);
+  }
+});
+
+test("old snapshot does not inherit current fastening type", () => {
+  const context = resolveMountingNodeEditorContext({
+    ...fixtureNodeDetail,
+    fastening_type: "confirmat",
+    versions: [{ id: 1, version_number: 1, is_current: true, snapshot: { ...fixtureNodeDetail } }],
+  });
+  assert.equal(context.fastening_type, null);
+});
 
 const nestedLinkNodeDetail = {
   ...fixtureNodeDetail,
@@ -214,6 +235,17 @@ test("mounting node editor payload keeps node fields, items, template id, and st
   assert.equal(payload.templates[0].template_id, 7428);
   assert.equal(payload.templates[0].template.template_id, 7428);
   assert.deepEqual(payload.templates[0].template.points.map((point) => point.id), [29, 30]);
+});
+
+test("mounting node editor keeps fitting image URL from item metadata", () => {
+  assert.equal(
+    getMountingNodeEditorItemImageUrl({ image_url: "https://example.test/from-item.png" }),
+    "https://example.test/from-item.png",
+  );
+  assert.equal(
+    getMountingNodeEditorItemImageUrl({ fitting_id: 42 }, { image_url: "https://example.test/from-fitting.png" }),
+    "https://example.test/from-fitting.png",
+  );
 });
 
 test("mounting node editor payload keeps null category_code empty instead of auto-filling a fallback", () => {

@@ -9,6 +9,7 @@ import {
   getConnectionsWorkspacePageDescription,
   getConnectionsWorkspacePageLabel,
 } from "../../connectionsWorkspace.js";
+import CatalogBreadcrumbTrail from "../CatalogBreadcrumbTrail.jsx";
 import MountingSchemesPanel from "./MountingSchemesPanel.jsx";
 
 const CONNECTIONS_OVERVIEW_CARDS = [
@@ -66,36 +67,6 @@ const CONNECTIONS_OVERVIEW_CARDS = [
   },
 ];
 
-function renderBreadcrumbTrail(items = []) {
-  return (
-    <div className="fitting-category-breadcrumb fitting-category-breadcrumb-top">
-      {items.map((item, index) => {
-        const isLast = index === items.length - 1;
-        const isCurrent = Boolean(item?.current);
-        const label = String(item?.label || "").trim();
-        const title = String(item?.title || label || "").trim();
-
-        return (
-          <span className="fitting-category-breadcrumb-item" key={`${label || "crumb"}-${index}`}>
-            <h3 className="catalog-breadcrumb-title">
-              {isCurrent || !item?.onClick ? (
-                <span aria-current={isCurrent ? "page" : undefined} title={title || label}>
-                  {label}
-                </span>
-              ) : (
-                <button className="catalog-breadcrumb-link" onClick={item.onClick} title={title || label} type="button">
-                  {label}
-                </button>
-              )}
-            </h3>
-            {!isLast ? <span className="fitting-breadcrumb-separator">/</span> : null}
-          </span>
-        );
-      })}
-    </div>
-  );
-}
-
 function getPageMeta(activeView, language) {
   if (activeView === "connectionsOverview") {
     return {
@@ -131,18 +102,20 @@ export default function ConnectionsWorkspace({
         <article className="catalog-card service-catalog-card service-catalog-card-full connections-placeholder-card">
           <div className="catalog-page-header material-taxonomy-page-header connections-placeholder-header">
             <div className="service-catalog-title material-taxonomy-page-title">
-              {renderBreadcrumbTrail([
-                {
-                  label: language === "uk" ? "Кріплення та з'єднання" : "Connections",
-                  onClick: typeof onNavigate === "function" ? () => onNavigate("connectionsOverview") : undefined,
-                  title: language === "uk" ? "Кріплення та з'єднання" : "Connections",
-                },
-                {
-                  current: true,
-                  label: meta.title,
-                  title: meta.title,
-                },
-              ])}
+              <CatalogBreadcrumbTrail
+                items={[
+                  {
+                    label: language === "uk" ? "Кріплення та з'єднання" : "Connections",
+                    onClick: typeof onNavigate === "function" ? () => onNavigate("connectionsOverview") : undefined,
+                    title: language === "uk" ? "Кріплення та з'єднання" : "Connections",
+                  },
+                  {
+                    current: true,
+                    label: meta.title,
+                    title: meta.title,
+                  },
+                ]}
+              />
               <p>{meta.description}</p>
             </div>
           </div>
@@ -164,13 +137,15 @@ export default function ConnectionsWorkspace({
       <article className="catalog-card service-catalog-card service-catalog-card-full connections-overview-card">
         <div className="catalog-page-header material-taxonomy-page-header connections-overview-header">
           <div className="service-catalog-title material-taxonomy-page-title">
-            {renderBreadcrumbTrail([
-              {
-                current: true,
-                label: meta.title,
-                title: meta.title,
-              },
-            ])}
+            <CatalogBreadcrumbTrail
+              items={[
+                {
+                  current: true,
+                  label: meta.title,
+                  title: meta.title,
+                },
+              ]}
+            />
             <p>{meta.description}</p>
           </div>
           <div className="service-catalog-header-actions connections-overview-actions">

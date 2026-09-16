@@ -63,6 +63,8 @@ class MountingNodeModel(Base):
         index=True,
     )
 
+    fastening_type = Column(String(32), nullable=True)
+
     owner_user_id = Column(
         String,
         ForeignKey("users.id"),

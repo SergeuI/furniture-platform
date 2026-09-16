@@ -1,4 +1,5 @@
 import ProcessingOperations from "./ProcessingOperations.jsx";
+import HoleLibraryPanel from "./HoleLibraryPanel.jsx";
 import ProcessingOverview from "./ProcessingOverview.jsx";
 import ProcessingPricingRules from "./ProcessingPricingRules.jsx";
 import ProcessingServicesPrices from "./ProcessingServicesPrices.jsx";
@@ -12,13 +13,13 @@ import {
 function buildProcessingWorkspaceIntro(language) {
   if (language === "uk") {
     return {
-      description: "Інтерфейс поступово розвивається без записів операцій у БД і без дублювання чинної присадки фурнітури.",
+      description: "Робочий простір обробки зберігає налаштування та довідники у БД.",
       title: "Обробка деталей",
     };
   }
 
   return {
-    description: "The interface grows without database writes and without duplicating the current fitting holes workflow.",
+    description: "The processing workspace stores settings and reference data in the database.",
     title: "Processing",
   };
 }
@@ -55,8 +56,8 @@ export default function ProcessingWorkspace({
           </div>
           <p>
             {language === "uk"
-              ? "Інтерфейс поки що каркасний: без записів до БД і без дублювання чинної присадки фурнітури."
-              : "The interface is still skeletal: no database writes and no duplication of the current fitting holes workflow."}
+              ? "Довідники та налаштування обробки зберігаються у БД."
+              : "Processing settings and reference data are stored in the database."}
           </p>
         </div>
       </article>
@@ -75,6 +76,8 @@ export default function ProcessingWorkspace({
           }
           token={token}
         />
+      ) : activeTab === "hole-library" ? (
+        <HoleLibraryPanel language={language} token={token} />
       ) : activeTab === "services-prices" ? (
         <ProcessingServicesPrices language={language} />
       ) : activeTab === "pricing-rules" ? (

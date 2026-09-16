@@ -14,6 +14,7 @@ from api.dependencies import auth as auth_dependencies
 from api.routes import mounting_schemes as mounting_schemes_route
 from database.base import Base
 from database.models.fitting import FittingModel
+from database.models.hole_library import HoleLibraryTypeModel
 from database.models.mounting_node import MountingNodeModel
 from database.models.service_catalog_item import ServiceCatalogItemModel
 from database.models.service_drilling_rule import ServiceDrillingRuleModel
@@ -147,6 +148,59 @@ class MountingSchemesApiTests(unittest.TestCase):
                 self.assertEqual(response.json()["schemes"][0]["name"], "Active scheme")
         finally:
             service_patch.stop()
+
+    def test_placement_preview_route_returns_engine_result(self) -> None:
+        app, session_factory, service_patch = self._build_app()
+        del session_factory, service_patch
+
+        with TestClient(app) as client:
+            response = client.post(
+                "/mounting-schemes/placement-preview",
+                json={
+                    "joint_length_mm": 1000,
+                    "rule": {
+                        "group_key": "confirmat",
+                        "distribution_mode": "equal",
+                        "fixed_group_count": 4,
+                        "start_offset_mm": 50,
+                        "end_offset_mm": 50,
+                    },
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["success"])
+        self.assertTrue(payload["result"]["valid"])
+        self.assertEqual(payload["result"]["group_count"], 4)
+        self.assertEqual(payload["result"]["positions"], [50.0, 350.0, 650.0, 950.0])
+        self.assertEqual(payload["result"]["actual_spacing_mm"], 300.0)
+
+    def test_placement_preview_route_returns_invalid_engine_result(self) -> None:
+        app, session_factory, service_patch = self._build_app()
+        del session_factory, service_patch
+
+        with TestClient(app) as client:
+            response = client.post(
+                "/mounting-schemes/placement-preview",
+                json={
+                    "joint_length_mm": 100,
+                    "rule": {
+                        "group_key": "confirmat",
+                        "distribution_mode": "equal",
+                        "start_offset_mm": 60,
+                        "end_offset_mm": 60,
+                    },
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["success"])
+        self.assertFalse(payload["result"]["valid"])
+        self.assertEqual(payload["result"]["group_count"], 0)
+        self.assertEqual(payload["result"]["positions"], [])
+        self.assertIsNotNone(payload["result"]["reason"])
 
     @staticmethod
     def _build_app():

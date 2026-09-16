@@ -1,4 +1,4 @@
-﻿import { memo, useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import { BoxGeometry, CanvasTexture, DoubleSide, EdgesGeometry, Float32BufferAttribute, LinearFilter, MOUSE, Quaternion, Vector3 } from "three";
@@ -37,7 +37,13 @@ import {
     return allowedVariants.has(key) ? key : "surface_mount";
   }
 
-  function getHoleWorkspaceThreePreviewLayout(variantKey, surfaceMountPreviewThicknessMm = SURFACE_MOUNT_PREVIEW_THICKNESS_MM_DEFAULT) {
+  function getHoleWorkspaceThreePreviewLayout(
+    variantKey,
+    surfaceMountPreviewThicknessMm = SURFACE_MOUNT_PREVIEW_THICKNESS_MM_DEFAULT,
+    holes = [],
+    faceToEdgeVerticalPreviewThicknessMm = ANGLED_TWO_PLANES_PREVIEW_THICKNESS_MM_DEFAULT,
+    faceToEdgeHorizontalPreviewThicknessMm = ANGLED_TWO_PLANES_PREVIEW_THICKNESS_MM_DEFAULT,
+  ) {
     switch (variantKey) {
       case "angled_two_planes":
         return {
@@ -62,29 +68,51 @@ import {
           ],
           subtitle: "Панель A → панель B · angled_two_planes",
         };
-      case "face_to_edge":
+      case "face_to_edge": {
+        const sourceHoles = Array.isArray(holes) ? holes : [];
+        const mmToScene = 0.01;
+        const maxAbsY = sourceHoles.reduce((maxValue, hole) => {
+          const value = Number(hole?.y ?? hole?.y_mm);
+          return Number.isFinite(value) ? Math.max(maxValue, Math.abs(value) * mmToScene) : maxValue;
+        }, 0);
+        const maxX = sourceHoles.reduce((maxValue, hole) => {
+          const value = Number(hole?.x ?? hole?.x_mm);
+          return Number.isFinite(value) ? Math.max(maxValue, value * mmToScene) : maxValue;
+        }, 0);
+        const maxAbsZ = sourceHoles.reduce((maxValue, hole) => {
+          const value = Number(hole?.z ?? hole?.z_mm);
+          return Number.isFinite(value) ? Math.max(maxValue, Math.abs(value) * mmToScene) : maxValue;
+        }, 0);
+        const panelHeight = Math.max(2.18, maxAbsY * 2 + 0.3);
+        const panelWidth = Math.max(1.55, maxX + 0.3);
+        const panelDepth = Math.max(1.40, maxAbsZ * 2 + 0.3);
+        const cameraDistance = Math.max(4.1, Math.min(8.2, Math.max(panelHeight, panelWidth, panelDepth) * 2.25));
+        const verticalPanelThickness = normalizeAngledTwoPlanesPreviewThicknessMm(faceToEdgeVerticalPreviewThicknessMm) * 0.01;
+        const horizontalPanelThickness = normalizeAngledTwoPlanesPreviewThicknessMm(faceToEdgeHorizontalPreviewThicknessMm) * 0.01;
+
         return {
-          camera: [3.55, 2.35, 4.1],
+          camera: [cameraDistance * 0.72, cameraDistance * 0.48, cameraDistance],
           label: "Пласть → торець",
-          markerPlane: { axis: "z", origin: [0, 0, 0], spanU: 1.22, spanV: 1.72 },
+          markerPlane: { axis: "z", origin: [0, 0, 0], spanU: panelDepth, spanV: panelHeight },
           panels: [
             {
-              args: [0.28, 2.18, 1.34],
+              args: [verticalPanelThickness, panelHeight, panelDepth],
               color: "#b9ffb9",
               opacity: 0.28,
-              position: [-0.14, 0, 0],
+              position: [-verticalPanelThickness / 2, 0, 0],
               rotation: [0, 0, 0],
             },
             {
-              args: [1.96, 0.28, 1.08],
+              args: [panelWidth, horizontalPanelThickness, panelDepth],
               color: "#b9ffb9",
               opacity: 0.28,
-              position: [0.98, -0.14, 0],
+              position: [panelWidth / 2, -horizontalPanelThickness / 2, 0],
               rotation: [0, 0, 0],
             },
           ],
           subtitle: "Пласть панелі → торець панелі · face_to_edge",
         };
+      }
       case "edge_to_edge":
         return {
           camera: [4.9, 2.8, 6.1],
@@ -419,6 +447,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
   const mmToScene = 0.01;
   const diameterValue = readHolePreviewNumber(sourceHole, ["diameter", "diameter_mm"], 8);
   const depthValue = readHolePreviewNumber(sourceHole, ["depth", "depth_mm"], null);
+  const hasDepth = Number.isFinite(depthValue) && depthValue > 0;
   const xOffset = readHolePreviewNumber(sourceHole, ["x", "x_mm"], 0) * mmToScene;
   const yOffset = readHolePreviewNumber(sourceHole, ["y", "y_mm"], 0) * mmToScene;
   const zOffset = readHolePreviewNumber(sourceHole, ["z", "z_mm"], 0) * mmToScene;
@@ -426,13 +455,14 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
   const isHorizontalPlane = location.targetPanel === "horizontal_panel" && location.targetSurface === "plane";
   const isVerticalEdge = location.targetPanel === "vertical_panel" && location.targetSurface === "edge";
   const holeRadius = Math.max(0.028, Math.min(0.08, Number.isFinite(diameterValue) ? diameterValue * 0.005 : 0.04));
-  const holeLength = isHorizontalEdge
-    ? Math.max(0.18, Math.min(0.74, Number.isFinite(depthValue) ? Math.abs(depthValue) * mmToScene : 0.32))
-    : Math.max(0.18, Math.min(0.62, Number.isFinite(depthValue) ? Math.abs(depthValue) * mmToScene : panelAThickness));
+  const throughHoleLength = isHorizontalEdge || isHorizontalPlane ? panelBThickness : panelAThickness;
+  const holeLength = hasDepth
+    ? Math.abs(depthValue) * mmToScene
+    : throughHoleLength;
   const sourcePanelKey = String(sourceHole?.panelKey || sourceHole?.panel_key || sourceHole?.panelId || sourceHole?.panel_id || "").trim();
   const sourceSurface = String(sourceHole?.surface || sourceHole?.target_surface || sourceHole?.targetSurface || "").trim();
   const sourceSide = String(sourceHole?.side || "").trim();
-  const depthScene = Number.isFinite(depthValue) ? Math.abs(depthValue) * mmToScene : holeLength;
+  const depthScene = hasDepth ? Math.abs(depthValue) * mmToScene : holeLength;
   const placementFunctionName = "getFaceToEdgeHolePlacement";
   const renderPath = "holeVolumes.map -> marker.isFaceToEdge ? group -> <cylinderGeometry/> : <mesh><cylinderGeometry/></mesh>";
 
@@ -459,7 +489,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
       holeLength,
       holeRadius,
       isFaceToEdge: true,
-      isThrough: !Number.isFinite(depthValue) || depthValue <= 0,
+      isThrough: !hasDepth,
       location,
       orderIndex: index,
       placementFunctionName,
@@ -496,7 +526,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
       holeLength,
       holeRadius,
       isFaceToEdge: true,
-      isThrough: !Number.isFinite(depthValue) || depthValue <= 0,
+      isThrough: !hasDepth,
       location,
       orderIndex: index,
       placementFunctionName,
@@ -533,7 +563,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
       holeLength,
       holeRadius,
       isFaceToEdge: true,
-      isThrough: !Number.isFinite(depthValue) || depthValue <= 0,
+      isThrough: !hasDepth,
       location,
       orderIndex: index,
       placementFunctionName,
@@ -569,7 +599,7 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
     holeLength,
     holeRadius,
     isFaceToEdge: true,
-    isThrough: !Number.isFinite(depthValue) || depthValue <= 0,
+    isThrough: !hasDepth,
     location,
     orderIndex: index,
     placementFunctionName,
@@ -635,6 +665,10 @@ export default function HolesMountingThreePreview({
   onLeaveHole,
   onSelectHole,
   renderSchematicPreview,
+  faceToEdgeVerticalPreviewThicknessMm,
+  faceToEdgeHorizontalPreviewThicknessMm,
+  onFaceToEdgeVerticalPreviewThicknessMmChange,
+  onFaceToEdgeHorizontalPreviewThicknessMmChange,
 }) {
         const [surfaceMountPreviewThicknessMm, setSurfaceMountPreviewThicknessMm] = useState(
           SURFACE_MOUNT_PREVIEW_THICKNESS_MM_DEFAULT,
@@ -654,14 +688,48 @@ export default function HolesMountingThreePreview({
         const normalizedAngledTwoPlanesHorizontalPreviewThicknessMm = normalizeAngledTwoPlanesPreviewThicknessMm(
           angledTwoPlanesHorizontalPreviewThicknessMm,
         );
+        const normalizedFaceToEdgeVerticalPreviewThicknessMm = normalizeAngledTwoPlanesPreviewThicknessMm(
+          faceToEdgeVerticalPreviewThicknessMm ?? angledTwoPlanesVerticalPreviewThicknessMm,
+        );
+        const normalizedFaceToEdgeHorizontalPreviewThicknessMm = normalizeAngledTwoPlanesPreviewThicknessMm(
+          faceToEdgeHorizontalPreviewThicknessMm ?? angledTwoPlanesHorizontalPreviewThicknessMm,
+        );
         const normalizedVariantKey = normalizeHoleWorkspaceMountingVariantKey(mountingVariantKey);
+        const activeVerticalPreviewThicknessMm = normalizedVariantKey === "face_to_edge" ? normalizedFaceToEdgeVerticalPreviewThicknessMm : normalizedAngledTwoPlanesVerticalPreviewThicknessMm;
+        const activeHorizontalPreviewThicknessMm = normalizedVariantKey === "face_to_edge" ? normalizedFaceToEdgeHorizontalPreviewThicknessMm : normalizedAngledTwoPlanesHorizontalPreviewThicknessMm;
+        const setActiveVerticalPreviewThicknessMm = (value) => {
+          if (normalizedVariantKey === "face_to_edge" && typeof onFaceToEdgeVerticalPreviewThicknessMmChange === "function") {
+            onFaceToEdgeVerticalPreviewThicknessMmChange(value);
+            return;
+          }
+          setAngledTwoPlanesVerticalPreviewThicknessMm(value);
+        };
+        const setActiveHorizontalPreviewThicknessMm = (value) => {
+          if (normalizedVariantKey === "face_to_edge" && typeof onFaceToEdgeHorizontalPreviewThicknessMmChange === "function") {
+            onFaceToEdgeHorizontalPreviewThicknessMmChange(value);
+            return;
+          }
+          setAngledTwoPlanesHorizontalPreviewThicknessMm(value);
+        };
         const isSurfaceMountPreview = normalizedVariantKey === "surface_mount";
         const isAngledTwoPlanesPreview = normalizedVariantKey === "angled_two_planes";
         const isFaceToEdgePreview = normalizedVariantKey === "face_to_edge" || isSurfaceMountPreview;
         const isCompactThreePreview = isFaceToEdgePreview || isAngledTwoPlanesPreview;
         const baseLayout = useMemo(
-          () => getHoleWorkspaceThreePreviewLayout(mountingVariantKey, normalizedSurfaceMountPreviewThicknessMm),
-          [mountingVariantKey, normalizedSurfaceMountPreviewThicknessMm],
+          () => getHoleWorkspaceThreePreviewLayout(
+            mountingVariantKey,
+            normalizedSurfaceMountPreviewThicknessMm,
+            holes,
+            normalizedFaceToEdgeVerticalPreviewThicknessMm,
+            normalizedFaceToEdgeHorizontalPreviewThicknessMm,
+          ),
+          [
+            holes,
+            mountingVariantKey,
+            normalizedFaceToEdgeHorizontalPreviewThicknessMm,
+            normalizedFaceToEdgeVerticalPreviewThicknessMm,
+            normalizedSurfaceMountPreviewThicknessMm,
+          ],
         );
         const markerPositions = useMemo(
           () => buildThreePreviewMarkerPositions(holes, baseLayout.markerPlane),
@@ -775,7 +843,7 @@ export default function HolesMountingThreePreview({
           : layout.panels;
         const previewOrigin = layout.sceneOrigin || layout.markerPlane.origin;
         const shouldRenderSurfaceMountContour =
-          shouldRenderSurfaceMountPanelContour(mountingVariantKey) || isAngledTwoPlanesPreview;
+          shouldRenderSurfaceMountPanelContour(mountingVariantKey) || isAngledTwoPlanesPreview || normalizedVariantKey === "face_to_edge";
         const axisLabelTextures = useMemo(() => {
           const createAxisLabelTexture = (label, color) => {
             const canvas = document.createElement("canvas");
@@ -977,6 +1045,7 @@ export default function HolesMountingThreePreview({
           }
 
           const panelA = Array.isArray(layout.panels) ? layout.panels[0] || null : null;
+          const panelB = Array.isArray(layout.panels) ? layout.panels[1] || null : null;
 
           if (!panelA) {
             return null;
@@ -985,7 +1054,7 @@ export default function HolesMountingThreePreview({
           const panelAThickness = Number(panelA?.args?.[0]) || 0.28;
           return [
             isSurfaceMountPreview ? 0 : (Number(panelA?.position?.[0]) || 0) + panelAThickness / 2,
-            Number(panelA?.position?.[1]) || 0,
+            Number(panelB?.position?.[1]) || Number(panelA?.position?.[1]) || 0,
             Number(panelA?.position?.[2]) || 0,
           ];
         }, [isFaceToEdgePreview, isSurfaceMountPreview, layout.panels]);
@@ -1012,16 +1081,7 @@ export default function HolesMountingThreePreview({
     return (
       <div className="holes-three-preview">
         {isSurfaceMountPreview ? (
-          <div
-            style={{
-              alignItems: "center",
-              display: "flex",
-              flexWrap: "wrap",
-              gap: "0.5rem",
-              justifyContent: "space-between",
-              marginBottom: "0.5rem",
-            }}
-          >
+          <div className="holes-three-preview-thickness-toolbar is-single">
             <strong style={{ fontSize: "0.85rem" }}>Товщина панелі для перегляду, мм</strong>
             <div style={{ alignItems: "center", display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>
               {surfaceMountPreviewThicknessMmOptions.map((value) => (
@@ -1046,15 +1106,8 @@ export default function HolesMountingThreePreview({
               />
             </div>
           </div>
-        ) : isAngledTwoPlanesPreview ? (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-              gap: "0.5rem",
-              marginBottom: "0.5rem",
-            }}
-          >
+        ) : isAngledTwoPlanesPreview || normalizedVariantKey === "face_to_edge" ? (
+          <div className="holes-three-preview-thickness-toolbar">
             <div
               style={{
                 display: "grid",
@@ -1062,13 +1115,13 @@ export default function HolesMountingThreePreview({
                 minWidth: 0,
               }}
             >
-              <strong style={{ fontSize: "0.85rem" }}>Товщина вертикальної панелі, мм</strong>
+              <strong style={{ fontSize: "0.85rem" }}>{"\u0412\u0435\u0440\u0442\u0438\u043a\u0430\u043b\u044c\u043d\u0430, \u043c\u043c"}</strong>
               <div style={{ alignItems: "center", display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>
                 {[16, 18, 19].map((value) => (
                   <button
-                    key={`angled-vertical-${value}`}
-                    className={`ghost-button compact-button${normalizedAngledTwoPlanesVerticalPreviewThicknessMm === value ? " is-active" : ""}`}
-                    onClick={() => setAngledTwoPlanesVerticalPreviewThicknessMm(value)}
+                    key={`${normalizedVariantKey}-vertical-${value}`}
+                    className={`ghost-button compact-button${activeVerticalPreviewThicknessMm === value ? " is-active" : ""}`}
+                    onClick={() => setActiveVerticalPreviewThicknessMm(value)}
                     type="button"
                   >
                     {value}
@@ -1078,11 +1131,11 @@ export default function HolesMountingThreePreview({
                   aria-label="Товщина вертикальної панелі, мм"
                   max={ANGLED_TWO_PLANES_PREVIEW_THICKNESS_MM_MAX}
                   min={ANGLED_TWO_PLANES_PREVIEW_THICKNESS_MM_MIN}
-                  onChange={(event) => setAngledTwoPlanesVerticalPreviewThicknessMm(event.target.value)}
+                  onChange={(event) => setActiveVerticalPreviewThicknessMm(event.target.value)}
                   step="1"
                   style={{ width: "6rem" }}
                   type="number"
-                  value={normalizedAngledTwoPlanesVerticalPreviewThicknessMm}
+                  value={activeVerticalPreviewThicknessMm}
                 />
               </div>
             </div>
@@ -1093,13 +1146,13 @@ export default function HolesMountingThreePreview({
                 minWidth: 0,
               }}
             >
-              <strong style={{ fontSize: "0.85rem" }}>Товщина горизонтальної панелі, мм</strong>
+              <strong style={{ fontSize: "0.85rem" }}>{"\u0413\u043e\u0440\u0438\u0437\u043e\u043d\u0442\u0430\u043b\u044c\u043d\u0430, \u043c\u043c"}</strong>
               <div style={{ alignItems: "center", display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>
                 {[16, 18, 19].map((value) => (
                   <button
-                    key={`angled-horizontal-${value}`}
-                    className={`ghost-button compact-button${normalizedAngledTwoPlanesHorizontalPreviewThicknessMm === value ? " is-active" : ""}`}
-                    onClick={() => setAngledTwoPlanesHorizontalPreviewThicknessMm(value)}
+                    key={`${normalizedVariantKey}-horizontal-${value}`}
+                    className={`ghost-button compact-button${activeHorizontalPreviewThicknessMm === value ? " is-active" : ""}`}
+                    onClick={() => setActiveHorizontalPreviewThicknessMm(value)}
                     type="button"
                   >
                     {value}
@@ -1109,11 +1162,11 @@ export default function HolesMountingThreePreview({
                   aria-label="Товщина горизонтальної панелі, мм"
                   max={ANGLED_TWO_PLANES_PREVIEW_THICKNESS_MM_MAX}
                   min={ANGLED_TWO_PLANES_PREVIEW_THICKNESS_MM_MIN}
-                  onChange={(event) => setAngledTwoPlanesHorizontalPreviewThicknessMm(event.target.value)}
+                  onChange={(event) => setActiveHorizontalPreviewThicknessMm(event.target.value)}
                   step="1"
                   style={{ width: "6rem" }}
                   type="number"
-                  value={normalizedAngledTwoPlanesHorizontalPreviewThicknessMm}
+                  value={activeHorizontalPreviewThicknessMm}
                 />
               </div>
             </div>
@@ -1192,8 +1245,8 @@ export default function HolesMountingThreePreview({
                     const isSelected = String(selectedHoleId) === String(marker.id);
                     const isHovered = String(hoveredHoleId) === String(marker.id);
                     const isActive = isSelected || isHovered;
-                    const holeColor = isSelected ? "#334155" : isHovered ? "#475569" : "#6b7280";
-                    const holeEmissive = isSelected ? "#f8fafc" : isHovered ? "#dbeafe" : "#cfd8e3";
+                    const holeColor = isSelected ? "#2563eb" : isHovered ? "#475569" : "#6b7280";
+                    const holeEmissive = isSelected ? "#93c5fd" : isHovered ? "#dbeafe" : "#cfd8e3";
                     const holeOpacity = isSelected ? 0.92 : isHovered ? 0.78 : 0.58;
                     const holeEmissiveIntensity = isSelected ? 0.42 : isHovered ? 0.22 : 0.08;
                     const labelScale = isSelected ? 0.22 : isHovered ? 0.2 : 0.18;

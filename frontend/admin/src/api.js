@@ -1474,6 +1474,14 @@ export async function getMountingScheme(token, schemeId) {
   });
 }
 
+export async function previewMountingSchemePlacement(token, payload) {
+  return request("/mounting-schemes/placement-preview", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function createMountingScheme(token, payload) {
   return request("/mounting-schemes", {
     method: "POST",
@@ -1579,6 +1587,42 @@ export async function getProjectPartOperationsPreview(token, projectId, partIden
 export async function getProcessingOperationTypes(token) {
   return request("/processing/operation-types", {
     headers: authHeaders(token),
+  });
+}
+
+export async function listProcessingHoleLibraryItems(token, params = {}) {
+  const searchParams = new URLSearchParams();
+
+  if (params.include_inactive) {
+    searchParams.set("include_inactive", "true");
+  }
+
+  const query = searchParams.toString();
+
+  return request(`/processing/hole-library${query ? `?${query}` : ""}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function getProcessingHoleLibraryItem(token, holeTypeId) {
+  return request(`/processing/hole-library/${encodeURIComponent(String(holeTypeId || "").trim())}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function updateProcessingHoleLibraryItem(token, holeTypeId, payload) {
+  return request(`/processing/hole-library/${encodeURIComponent(String(holeTypeId || "").trim())}`, {
+    method: "PATCH",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function createProcessingHoleLibraryItem(token, payload) {
+  return request("/processing/hole-library", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
   });
 }
 

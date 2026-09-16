@@ -119,6 +119,7 @@ function pickMountingNodeCreateDraftStorageFields(draft = {}) {
   return {
     category_code: normalizeMountingNodeCategoryCode(draft.category_code),
     functional_code: normalizeMountingNodeFunctionalCode(draft.functional_code),
+    fastening_type: draft.fastening_type || null,
     name: normalizeText(draft.name),
     description: normalizeText(draft.description),
     is_active: normalizeBoolean(draft.is_active, true),
@@ -235,6 +236,7 @@ export function createMountingNodeCreateDraft(overrides = {}) {
   return {
     category_code: normalizeMountingNodeCategoryCode(overrides.category_code),
     functional_code: normalizeMountingNodeFunctionalCode(overrides.functional_code),
+    fastening_type: overrides.fastening_type || null,
     name: normalizeText(overrides.name),
     description: normalizeText(overrides.description),
     is_active: normalizeBoolean(overrides.is_active, true),

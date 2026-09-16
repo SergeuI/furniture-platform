@@ -20,6 +20,7 @@ from database.mounting_node_categories import (
     ALLOWED_MOUNTING_NODE_CATEGORY_CODES,
     normalize_mounting_node_category_code,
 )
+from database.mounting_node_fastening_types import validate_mounting_node_fastening_type
 from database.mounting_node_functional_codes import (
     ALLOWED_MOUNTING_NODE_FUNCTIONAL_CODES,
     normalize_mounting_node_functional_code,
@@ -358,6 +359,7 @@ class MountingNodeService:
             "fitting_code": getattr(fitting, "code", None),
             "fitting_article": getattr(fitting, "article", None),
             "fitting_name": getattr(fitting, "name", None),
+            "image_url": getattr(fitting, "image_url", None),
             "fitting_category_code": getattr(fitting, "fitting_type", None)
             or getattr(fitting, "fitting_group", None),
             "quantity": int(item.quantity or 0),
@@ -379,6 +381,7 @@ class MountingNodeService:
             "target_panel": getattr(point, "target_panel", None),
             "target_surface": getattr(point, "target_surface", None),
             "target_side": getattr(point, "target_side", None),
+            "hole_library_type_id": getattr(point, "hole_library_type_id", None),
             "diameter_mm": getattr(point, "diameter_mm", None),
             "service_drilling_rule_id": getattr(point, "service_drilling_rule_id", None),
             "depth_mm": getattr(point, "depth_mm", None),
@@ -426,6 +429,7 @@ class MountingNodeService:
             "fitting_id": getattr(template, "fitting_id", None),
             "fitting_code": getattr(fitting, "code", None),
             "fitting_article": getattr(fitting, "article", None),
+            "image_url": getattr(fitting, "image_url", None),
             "mounting_variant_key": getattr(template, "mounting_variant_key", None),
             "is_default": bool(getattr(link, "is_default", False)),
             "order_index": int(getattr(link, "order_index", 0) or 0),
@@ -488,6 +492,7 @@ class MountingNodeService:
             "description": node.description,
             "category_code": self._raw_node_value(node, "category_code"),
             "functional_code": self._raw_node_value(node, "functional_code"),
+            "fastening_type": self._raw_node_value(node, "fastening_type"),
             **ownership_snapshot,
             "is_active": bool(self._raw_node_value(node, "is_active", True)),
             "created_by_user_id": self._raw_node_value(node, "created_by_user_id"),
@@ -626,6 +631,9 @@ class MountingNodeService:
     ) -> FittingHolePointModel:
         raw_point_id = point_payload.get("id")
         point_id = None if raw_point_id in (None, "") else int(raw_point_id)
+        # The editor uses negative temporary IDs for unsaved points.
+        if point_id is not None and point_id <= 0:
+            point_id = None
         raw_template_id = point_payload.get("template_id")
         point_template_id = None if raw_template_id in (None, "") else int(raw_template_id)
         if point_template_id is not None and point_template_id != template.id:
@@ -1140,6 +1148,7 @@ class MountingNodeService:
         description = self._optional_text(payload.get("description"))
         category_code = self._normalize_category_code(payload.get("category_code"))
         functional_code = self._normalize_functional_code(payload.get("functional_code"))
+        fastening_type = validate_mounting_node_fastening_type(payload.get("fastening_type"))
         is_active = self._normalize_bool(payload.get("is_active"), True)
         owner_user_id, created_by_user_id, updated_by_user_id = self._resolve_create_ownership(
             payload,
@@ -1163,6 +1172,7 @@ class MountingNodeService:
                 description=description,
                 category_code=category_code,
                 functional_code=functional_code,
+                fastening_type=fastening_type,
                 is_active=is_active,
                 owner_user_id=owner_user_id,
                 created_by_user_id=created_by_user_id,
@@ -1264,6 +1274,9 @@ class MountingNodeService:
 
         if "functional_code" in payload:
             update_fields["functional_code"] = self._normalize_functional_code(payload.get("functional_code"))
+
+        if "fastening_type" in payload:
+            update_fields["fastening_type"] = validate_mounting_node_fastening_type(payload.get("fastening_type"))
 
         if "is_active" in payload:
             update_fields["is_active"] = self._normalize_bool(payload.get("is_active"), True)

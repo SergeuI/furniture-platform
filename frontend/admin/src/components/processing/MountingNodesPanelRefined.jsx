@@ -1,3 +1,5 @@
+import { getMountingNodeFasteningTypeLabel } from "../../mountingNodeFasteningTypes.js";
+import { filterMountingNodesByType, mountingNodeTypeTiles, resolveMountingNodeTypeSelection } from "../../mountingNodeTypeNavigation.js";
 import { ArrowLeft, Box, ChevronRight, Info, LayoutGrid, List, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
 import { createPortal } from "react-dom";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -23,6 +25,7 @@ import {
   resolveActiveMountingNodeVersion,
   resolveMountingNodeEditorContext,
 } from "../../mountingNodesEditor.js";
+import CatalogBreadcrumbTrail from "../CatalogBreadcrumbTrail.jsx";
 import {
   getMountingNodeCategoryLabel,
   getMountingNodeCategoryOptions,
@@ -221,6 +224,7 @@ export function buildMountingNodesReturnState(payload = {}) {
 
   return {
     activeStatusFilter: normalizeFilterValue(normalizedPayload.activeStatusFilter || "all") || "all",
+    selectedFasteningType: normalizedPayload.selectedFasteningType || null,
     activeCategoryFilter: normalizeCategoryFilterValue(normalizedPayload.activeCategoryFilter || "all"),
     activeVariantFilter: normalizeFilterValue(normalizedPayload.activeVariantFilter || "all") || "all",
     appliedSearch: normalizeFilterValue(normalizedPayload.appliedSearch),
@@ -412,6 +416,7 @@ export function buildNodeEditorContext(nodeDetail, fallbackNodeId = "") {
 }
 
 function buildNodeReturnState({
+  selectedFasteningType,
   activeStatusFilter,
   activeCategoryFilter,
   activeVariantFilter,
@@ -431,6 +436,7 @@ function buildNodeReturnState({
   nextViewMode,
 }) {
   return buildMountingNodesReturnState({
+    selectedFasteningType,
     activeStatusFilter,
     activeCategoryFilter,
     activeVariantFilter,
@@ -593,14 +599,14 @@ function getNodeVariantOptions(language) {
 
 function getNodeVariantChangeWarning(language) {
   if (language === "uk") {
-    return "У вузлі вже є налаштовані точки. Зміна варіанта кріплення може змінити їх відображення. Після збереження перевірте точки у розділі «Отвори та 3D». Продовжити?";
+    return "У вузлі вже є налаштовані монтажні отвори. Зміна способу з'єднання може змінити їх відображення. Після збереження перевірте монтажні отвори у розділі «Отвори та 3D». Продовжити?";
   }
 
   return 'This node already has configured points. Changing the mounting variant may affect how they are shown. After saving, check the points in the "Openings and 3D" section. Continue?';
 }
 
 function getNodeVariantChangeTitle(language) {
-  return language === "uk" ? "Змінити варіант кріплення" : "Change mounting variant";
+  return language === "uk" ? "Змінити спосіб з'єднання" : "Change mounting variant";
 }
 
 
@@ -770,6 +776,7 @@ export default function MountingNodesPanelRefined({
   token = "",
 }) {
   const initialReturnState = buildMountingNodesReturnState(initialState);
+  const [selectedFasteningType, setSelectedFasteningType] = useState(() => resolveMountingNodeTypeSelection(initialReturnState));
   const [searchInput, setSearchInput] = useState(initialReturnState.searchInput);
   const [appliedSearch, setAppliedSearch] = useState(initialReturnState.appliedSearch);
   const [activeStatusFilter, setActiveStatusFilter] = useState(initialReturnState.activeStatusFilter);
@@ -783,6 +790,9 @@ export default function MountingNodesPanelRefined({
   ));
   const [reloadToken, setReloadToken] = useState(0);
   const [nodes, setNodes] = useState(initialReturnState.nodes);
+  const showFasteningTypes = activeCategoryFilter === "fastening" && !selectedFasteningType;
+  const visibleNodes = filterMountingNodesByType(nodes, activeCategoryFilter, selectedFasteningType);
+  const selectedFasteningTypeLabel = mountingNodeTypeTiles.find((tile) => tile.code === selectedFasteningType)?.label || "";
   const [listLoading, setListLoading] = useState(initialReturnState.listLoading);
   const [listError, setListError] = useState(initialReturnState.listError);
   const [selectedNodeId, setSelectedNodeId] = useState(initialReturnState.selectedNodeId);
@@ -1425,6 +1435,7 @@ export default function MountingNodesPanelRefined({
 
   function captureReturnState(nextViewMode, restoreScrollOnMount = false) {
     return buildNodeReturnState({
+      selectedFasteningType,
       activeStatusFilter,
       activeCategoryFilter,
       activeVariantFilter,
@@ -1460,6 +1471,7 @@ export default function MountingNodesPanelRefined({
   }
 
   function handleCategoryFilterChange(value) {
+    setSelectedFasteningType(null);
     setActiveCategoryFilter(normalizeCategoryFilterValue(value));
   }
 
@@ -1490,6 +1502,10 @@ export default function MountingNodesPanelRefined({
   }
 
   function handleReturnToCategories() {
+    if (activeCategoryFilter === "fastening" && selectedFasteningType) {
+      handleBackToFasteningTypes();
+      return;
+    }
     if (typeof onOpenMountingNodeCategories === "function") {
       onOpenMountingNodeCategories();
       return;
@@ -1497,6 +1513,11 @@ export default function MountingNodesPanelRefined({
 
     setActiveCategoryFilter("all");
     setMountingNodesViewMode("list");
+  }
+
+  function handleBackToFasteningTypes() {
+    setSelectedFasteningType(null);
+    handleBackToList();
   }
 
   function handleScrollToVersionHistory() {
@@ -1588,7 +1609,7 @@ export default function MountingNodesPanelRefined({
       const result = await updateMountingNode(token, selectedNodeDetail.id, payload);
 
       if (!result.success || !result.node) {
-        setVariantSaveError(result.error || (language === "uk" ? "Не вдалося зберегти варіант кріплення." : "Unable to save mounting variant."));
+        setVariantSaveError(result.error || (language === "uk" ? "Не вдалося зберегти спосіб з'єднання." : "Unable to save mounting variant."));
         setSelectedNodeVariantKey(selectedNodeCurrentVariantKey);
         return;
       }
@@ -1606,7 +1627,7 @@ export default function MountingNodesPanelRefined({
       closeVariantDropdown(false);
       setVariantConfirmOpen(false);
     } catch (error) {
-      setVariantSaveError(error?.message || (language === "uk" ? "Не вдалося зберегти варіант кріплення." : "Unable to save mounting variant."));
+      setVariantSaveError(error?.message || (language === "uk" ? "Не вдалося зберегти спосіб з'єднання." : "Unable to save mounting variant."));
       setSelectedNodeVariantKey(selectedNodeCurrentVariantKey);
     } finally {
       setVariantSaveLoading(false);
@@ -1659,6 +1680,7 @@ export default function MountingNodesPanelRefined({
     }
 
     const nextReturnState = buildNodeReturnState({
+      selectedFasteningType,
       activeStatusFilter,
       activeCategoryFilter,
       activeVariantFilter,
@@ -1751,6 +1773,16 @@ export default function MountingNodesPanelRefined({
       onOpenNodeDetail: handleBackToList,
     });
 
+    if (activeCategoryFilter === "fastening" && selectedFasteningTypeLabel) {
+      baseTrail[1] = { ...baseTrail[1], current: false, onClick: handleBackToFasteningTypes };
+      baseTrail.splice(2, 0, {
+        label: selectedFasteningTypeLabel,
+        title: selectedFasteningTypeLabel,
+        current: !isDetailMode,
+        onClick: isDetailMode ? handleBackToList : undefined,
+      });
+    }
+
     return [
       {
         current: false,
@@ -1763,6 +1795,7 @@ export default function MountingNodesPanelRefined({
   }, [
     activeCategoryFilter,
     activeMountingCategoryLabel,
+    selectedFasteningTypeLabel,
     handleBackToList,
     language,
     mountingNodesViewMode,
@@ -1782,35 +1815,11 @@ export default function MountingNodesPanelRefined({
         <>
           <div className="catalog-page-header material-taxonomy-page-header mounting-nodes-page-header">
             <div className="service-catalog-title material-taxonomy-page-title">
-              <div className="fitting-category-breadcrumb fitting-category-breadcrumb-top">
-                {mountingNodesHeaderBreadcrumbItems.map((item, index) => {
-                  const isLast = index === mountingNodesHeaderBreadcrumbItems.length - 1;
-                  const isCurrent = Boolean(item?.current);
-                  const label = String(item?.label || "").trim();
-                  const title = String(item?.title || label || "").trim();
-
-                  return (
-                    <span className="fitting-category-breadcrumb-item" key={`${label || "crumb"}-${index}`}>
-                      <h3 className="catalog-breadcrumb-title">
-                        {isCurrent || !item?.onClick ? (
-                          <span aria-current={isCurrent ? "page" : undefined} title={title || label}>
-                            {label}
-                          </span>
-                        ) : (
-                          <button className="catalog-breadcrumb-link" onClick={item.onClick} title={title || label} type="button">
-                            {label}
-                          </button>
-                        )}
-                      </h3>
-                      {!isLast ? <span className="fitting-breadcrumb-separator">/</span> : null}
-                    </span>
-                  );
-                })}
-              </div>
+              <CatalogBreadcrumbTrail items={mountingNodesHeaderBreadcrumbItems} />
               <p>{t.mountingNodesDescription || "Переглядайте монтажні вузли у компактній плитці або списку та відкривайте деталі окремо."}</p>
             </div>
             <div className="service-catalog-header-actions mounting-nodes-header-actions">
-              <span className="service-tree-badge subtle">{language === "uk" ? `Знайдено: ${nodes.length}` : `Found: ${nodes.length}`}</span>
+              {!showFasteningTypes ? <span className="service-tree-badge subtle">{language === "uk" ? `Знайдено: ${visibleNodes.length}` : `Found: ${visibleNodes.length}`}</span> : null}
               {activeCategoryFilter !== "all" ? (
                 <span className="service-tree-badge subtle">
                   {language === "uk" ? "Категорія:" : "Category:"} {activeMountingCategoryLabel}
@@ -1823,7 +1832,7 @@ export default function MountingNodesPanelRefined({
                   type="button"
                 >
                   <ArrowLeft size={16} />
-                  {language === "uk" ? "Повернутися до категорій" : "Return to categories"}
+                  {activeCategoryFilter === "fastening" && selectedFasteningType ? "До типів кріплень" : language === "uk" ? "Повернутися до категорій" : "Return to categories"}
                 </button>
               ) : null}
               {typeof onOpenMountingNodeCreate === "function" ? (
@@ -1838,7 +1847,7 @@ export default function MountingNodesPanelRefined({
               ) : null}
             </div>
           </div>
-          <div className="mounting-nodes-panel-head">
+          {!showFasteningTypes ? <div className="mounting-nodes-panel-head">
             <div className="mounting-nodes-controls-row">
               <form className="project-filter-form mounting-nodes-filter-form" onSubmit={handleSearchSubmit}>
                 <label className="mounting-nodes-search mounting-nodes-search-field">
@@ -1913,7 +1922,18 @@ export default function MountingNodesPanelRefined({
               </div>
             </div>
           </div>
-          {listLoading ? (
+          : null}
+          {showFasteningTypes ? (
+            <div className="settings-grid mounting-nodes-grid mounting-node-types-grid" aria-label="Типи кріплень">
+              {mountingNodeTypeTiles.map((tile) => (
+                <button className="settings-card mounting-node-card mounting-node-type-card" key={tile.code} type="button"
+                  onClick={() => setSelectedFasteningType(tile.code)}>
+                  <img className="mounting-node-type-preview" src={tile.imageSrc} alt="" aria-hidden="true" loading="lazy" />
+                  <h3>{tile.label}</h3>
+                </button>
+              ))}
+            </div>
+          ) : listLoading ? (
             <div className="empty-state compact-empty-state">
               <span>{t.mountingNodesLoading || (language === "uk" ? "Завантаження монтажних вузлів…" : "Loading mounting nodes…")}</span>
             </div>
@@ -1924,10 +1944,10 @@ export default function MountingNodesPanelRefined({
                 {t.mountingNodesRetry || (language === "uk" ? "Повторити" : "Retry")}
               </button>
             </div>
-          ) : nodes.length ? (
+          ) : visibleNodes.length ? (
             displayMode === "grid" ? (
               <div className="settings-grid mounting-nodes-grid">
-                {nodes.map((node) => {
+                {visibleNodes.map((node) => {
                   const nodeDetail = nodeDetailsById[String(node.id)] || null;
                   const isSelected = String(selectedNodeId) === String(node.id);
                   const ownershipLabel = getOwnershipLabel(nodeDetail || node, language);
@@ -1972,7 +1992,7 @@ export default function MountingNodesPanelRefined({
               </div>
             ) : (
               <div className="mounting-nodes-list">
-                {nodes.map((node) => {
+                {visibleNodes.map((node) => {
                   const nodeDetail = nodeDetailsById[String(node.id)] || null;
                   const isSelected = String(selectedNodeId) === String(node.id);
                   const ownershipLabel = getOwnershipLabel(nodeDetail || node, language);
@@ -2040,31 +2060,7 @@ export default function MountingNodesPanelRefined({
         <article className="catalog-card service-catalog-card service-catalog-card-full holes-view-card mounting-node-detail-screen">
           <div className="catalog-page-header mounting-node-detail-header">
             <div className="service-catalog-title">
-              <div className="fitting-category-breadcrumb fitting-category-breadcrumb-top">
-                {mountingNodesHeaderBreadcrumbItems.map((item, index) => {
-                  const isLast = index === mountingNodesHeaderBreadcrumbItems.length - 1;
-                  const isCurrent = Boolean(item?.current);
-                  const label = String(item?.label || "").trim();
-                  const title = String(item?.title || label || "").trim();
-
-                  return (
-                    <span className="fitting-category-breadcrumb-item" key={`${label || "crumb"}-${index}`}>
-                      <h3 className="catalog-breadcrumb-title">
-                        {isCurrent || !item?.onClick ? (
-                          <span aria-current={isCurrent ? "page" : undefined} title={title || label}>
-                            {label}
-                          </span>
-                        ) : (
-                          <button className="catalog-breadcrumb-link" onClick={item.onClick} title={title || label} type="button">
-                            {label}
-                          </button>
-                        )}
-                      </h3>
-                      {!isLast ? <span className="fitting-breadcrumb-separator">/</span> : null}
-                    </span>
-                  );
-                })}
-              </div>
+              <CatalogBreadcrumbTrail items={mountingNodesHeaderBreadcrumbItems} />
               <p>{t.mountingNodeDetailsDescription || (language === "uk" ? "Переглядайте склад вузла, варіант кріплення та переходьте до редактора за потреби." : "Inspect the node fittings, mounting variant, and open the editor when needed.")}</p>
             </div>
             <div className="service-catalog-header-actions mounting-node-detail-actions">
@@ -2150,15 +2146,15 @@ export default function MountingNodesPanelRefined({
                       value={selectedNodeVersionBannerSummary?.dateLabel || formatMountingNodeVersionDate(selectedNodeActiveVersion?.created_at, language) || t.notSet}
                     />
                     <DetailField
-                      label={language === "uk" ? "Позиції фурнітури" : "Items"}
+                      label={language === "uk" ? "Склад фурнітури" : "Items"}
                       value={selectedNodeActiveVersion?.items_count ?? selectedNodeDetail?.items?.length ?? 0}
                     />
                     <DetailField
-                      label={language === "uk" ? "Точки" : "Points"}
+                      label={language === "uk" ? "Монтажні отвори" : "Points"}
                       value={selectedNodeActivePointCount}
                     />
                     <DetailField
-                      label={language === "uk" ? "Варіант кріплення" : "Mounting variant"}
+                      label={language === "uk" ? "Спосіб з'єднання деталей" : "Mounting variant"}
                       value={selectedNodeActiveVariantLabel}
                     />
                     <DetailField
@@ -2166,9 +2162,12 @@ export default function MountingNodesPanelRefined({
                       value={getNodeCategoryLabel(selectedNodeDetailForDisplay, language)}
                     />
                     <DetailField
-                      label={language === "uk" ? "Функціональне призначення" : "Functional purpose"}
+                      label={language === "uk" ? "Функціональний код" : "Functional purpose"}
                       value={getNodeFunctionalLabel(selectedNodeDetailForDisplay, language)}
                     />
+                    {getMountingNodeFasteningTypeLabel(selectedNodeDetailForDisplay?.fastening_type) ? (
+                      <DetailField label="Тип кріплення" value={getMountingNodeFasteningTypeLabel(selectedNodeDetailForDisplay.fastening_type)} />
+                    ) : null}
                   </div>
                   {selectedNodeVersionBanner ? (
                     <div className="mounting-node-detail-version-preview-note">
@@ -2179,7 +2178,7 @@ export default function MountingNodesPanelRefined({
                       </strong>
                       <p>
                         {language === "uk"
-                          ? `Ця версія відкрита лише для перегляду. Позиції: ${selectedNodeVersionBannerSummary?.itemsCount || 0}, шаблони: ${selectedNodeVersionBannerSummary?.templatesCount || 0}, точки: ${selectedNodeVersionBannerSummary?.pointCount || 0}.`
+                          ? `Ця версія відкрита лише для перегляду. Позиції: ${selectedNodeVersionBannerSummary?.itemsCount || 0}, шаблони: ${selectedNodeVersionBannerSummary?.templatesCount || 0}, монтажні отвори: ${selectedNodeVersionBannerSummary?.pointCount || 0}.`
                           : `This version is read-only. Items: ${selectedNodeVersionBannerSummary?.itemsCount || 0}, templates: ${selectedNodeVersionBannerSummary?.templatesCount || 0}, points: ${selectedNodeVersionBannerSummary?.pointCount || 0}.`}
                       </p>
                       <p>
@@ -2206,7 +2205,7 @@ export default function MountingNodesPanelRefined({
                 <article className="settings-card mounting-node-detail-items-card">
                   <div className="settings-card-header">
                     <div>
-                      <strong>{language === "uk" ? "Фурнітура вузла" : "Node fittings"}</strong>
+                      <strong>{language === "uk" ? "Склад фурнітури" : "Node fittings"}</strong>
                       <p>{language === "uk" ? "Клікніть картку, щоб відкрити ту саму картку фурнітури в модалі." : "Click a card to open the same fitting details modal."}</p>
                     </div>
                   </div>
@@ -2237,14 +2236,14 @@ export default function MountingNodesPanelRefined({
                 <article className="settings-card mounting-node-detail-variant-card">
                   <div className="settings-card-header">
                     <div>
-                      <strong>{language === "uk" ? "Варіант кріплення" : "Mounting variant"}</strong>
+                      <strong>{language === "uk" ? "Спосіб з'єднання деталей" : "Mounting variant"}</strong>
                       <p>
                         {selectedNodeVersionBanner
                           ? (language === "uk"
                             ? "Ви переглядаєте read-only snapshot версії."
                             : "You are viewing a read-only version snapshot.")
                           : (language === "uk"
-                            ? "Змініть варіант кріплення поточного вузла та збережіть зміни."
+                            ? "Змініть спосіб з'єднання деталей поточного вузла та збережіть зміни."
                             : "Change the current node mounting variant and save the update.")}
                       </p>
                     </div>
@@ -2286,7 +2285,7 @@ export default function MountingNodesPanelRefined({
                         >
                           {variantSaveLoading
                             ? (language === "uk" ? "Збереження..." : "Saving...")
-                            : (language === "uk" ? "Зберегти варіант кріплення" : "Save mounting variant")}
+                            : (language === "uk" ? "Зберегти спосіб з'єднання" : "Save mounting variant")}
                         </button>
                       </div>
                     ) : null}

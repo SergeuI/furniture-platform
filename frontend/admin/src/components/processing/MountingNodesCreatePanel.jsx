@@ -1,3 +1,4 @@
+import { mountingNodeFasteningTypes } from "../../mountingNodeFasteningTypes.js";
 import { ArrowLeft, ChevronRight, LayoutGrid, List, Plus, Search, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -573,7 +574,7 @@ export default function MountingNodesCreatePanel({
                   />
                 </label>
                 <label className="mounting-node-create-field mounting-node-create-category-field">
-                  <span>{language === "uk" ? "РљР°С‚РµРіРѕСЂС–СЏ РІСѓР·Р»Р°" : "Node category"}</span>
+                  <span>{language === "uk" ? "Категорія" : "Node category"}</span>
                   <select
                     disabled={isCreating || internalSubmitting}
                     onChange={(event) => handleCategoryChange(event.target.value)}
@@ -588,8 +589,20 @@ export default function MountingNodesCreatePanel({
                   </select>
                   <span className="mounting-node-create-field-hint">{selectedCategoryLabel}</span>
                 </label>
+                {selectedCategoryCode === "fastening" ? (
+                  <label className="mounting-node-create-field">
+                    <span>Тип кріплення</span>
+                    <select disabled={isCreating || internalSubmitting} value={draft.fastening_type || ""}
+                      onChange={(event) => updateDraft((current) => ({ ...current, fastening_type: event.target.value || null, is_dirty: true }))}>
+                      <option value="">Не вказано</option>
+                      {mountingNodeFasteningTypes.map((option) => (
+                        <option key={option.code} value={option.code}>{option.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
                 <label className="mounting-node-create-field mounting-node-create-functional-field">
-                  <span>{language === "uk" ? "Функціональне призначення" : "Functional purpose"}</span>
+                  <span>{language === "uk" ? "Функціональний код" : "Functional purpose"}</span>
                   <select
                     disabled={isCreating || internalSubmitting}
                     onChange={(event) => handleFunctionalChange(event.target.value)}
@@ -622,7 +635,7 @@ export default function MountingNodesCreatePanel({
 
             <section className="mounting-node-create-card mounting-node-create-variant-card">
               <div className="mounting-node-create-card-head">
-                <strong>{language === "uk" ? "Варіант кріплення" : "Mounting variant"}</strong>
+                <strong>{language === "uk" ? "Спосіб з'єднання деталей" : "Mounting variant"}</strong>
               </div>
               <div className={`holes-mounting-variant-dropdown-shell${variantOpen ? " is-open" : ""}`}>
                 <button
@@ -676,7 +689,7 @@ export default function MountingNodesCreatePanel({
           <section className="mounting-node-create-card mounting-node-create-items-card">
             <div className="hole-template-fitting-list-head mounting-node-create-items-head">
               <div>
-                <h4>{language === "uk" ? "Фурнітура вузла" : "Node fittings"}</h4>
+                <h4>{language === "uk" ? "Склад фурнітури" : "Node fittings"}</h4>
               </div>
               <button
                 className="primary-button mounting-node-create-add-button"

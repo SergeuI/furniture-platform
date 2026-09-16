@@ -36,6 +36,18 @@ const PROCESSING_TAB_DEFINITIONS = [
     visibleTo: "admin",
   },
   {
+    key: "hole-library",
+    label: {
+      en: "Hole library",
+      uk: "Отвори",
+    },
+    status: {
+      en: "Working",
+      uk: "Працює",
+    },
+    visibleTo: "admin",
+  },
+  {
     key: "fitting-holes",
     label: {
       en: "Mounting nodes",

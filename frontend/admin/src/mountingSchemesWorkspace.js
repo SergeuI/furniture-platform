@@ -218,6 +218,10 @@ export function validateMountingSchemeDraft(draft = {}) {
     const maxSpacing = rule.max_spacing_mm === "" ? null : normalizeInteger(rule.max_spacing_mm, null);
     const fixedSpacing = rule.fixed_spacing_mm === "" ? null : normalizeInteger(rule.fixed_spacing_mm, null);
 
+    if (normalizeText(rule.distribution_mode) === "fixed_spacing" && fixedSpacing === null) {
+      errors.push(`${rowLabel}: fixed spacing is required`);
+    }
+
     if (maxGroupCount !== null && maxGroupCount < (normalizeInteger(rule.min_group_count, 0) || 0)) {
       errors.push(`${rowLabel}: maximum group count must be greater than or equal to minimum`);
     }
@@ -268,6 +272,7 @@ const MOUNTING_SCHEMES_VALIDATION_MESSAGES_UK = {
   "start offset cannot be negative": "початкове зміщення не може бути від'ємним",
   "end offset cannot be negative": "кінцеве зміщення не може бути від'ємним",
   "maximum spacing must be greater than 0": "максимальний інтервал має бути більшим за 0",
+  "fixed spacing is required": "для режиму «Фіксований крок» вкажіть фіксований крок, мм",
   "fixed spacing must be greater than 0": "фіксований інтервал має бути більшим за 0",
   "fixed group count must match minimum group count": "фіксована кількість груп має збігатися з мінімальною кількістю груп",
   "fixed group count must match maximum group count": "фіксована кількість груп має збігатися з максимальною кількістю груп",

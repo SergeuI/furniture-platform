@@ -46,6 +46,10 @@ from database.models.fitting_hole_service_rule import (
 from database.models.service_drilling_rule import (
     ServiceDrillingRuleModel
 )
+from database.models.hole_library import (
+    HoleLibraryServiceMappingModel,
+    HoleLibraryTypeModel,
+)
 from database.models.material import (
     MaterialModel
 )
@@ -110,6 +114,9 @@ from database.repositories.catalog_repository import (
 )
 from database.repositories.service_catalog_repository import (
     seed_default_viyar_service_catalog
+)
+from database.repositories.hole_library_repository import (
+    seed_default_hole_library,
 )
 from database.repositories.user_repository import (
     get_user_by_email
@@ -434,7 +441,41 @@ def upgrade_sqlite_schema():
             "INTEGER"
         )
 
+        _add_column_if_missing(
+
+            connection,
+
+            "fitting_hole_points",
+
+            "hole_library_type_id",
+
+            "INTEGER"
+        )
+
+        _add_column_if_missing(
+
+            connection,
+
+            "hole_library_types",
+
+            "owner_user_id",
+
+            "VARCHAR"
+        )
+
+        _add_column_if_missing(
+
+            connection,
+
+            "hole_library_types",
+
+            "is_system",
+
+            "BOOLEAN NOT NULL DEFAULT 1"
+        )
+
         mounting_node_columns = {
+            "fastening_type": "VARCHAR(32)",
             "category_code": "VARCHAR",
             "functional_code": "VARCHAR",
             "is_archived": "BOOLEAN NOT NULL DEFAULT 0",
@@ -972,6 +1013,7 @@ def init_database(*, run_legacy_migration: bool = False):
 
     seed_default_catalog_items()
     seed_default_viyar_service_catalog()
+    seed_default_hole_library()
 
 
 if __name__ == "__main__":

@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
+from database.mounting_node_fastening_types import validate_mounting_node_fastening_type
 
 from database.mounting_node_categories import (
     ALLOWED_MOUNTING_NODE_CATEGORY_CODES,
@@ -31,6 +32,7 @@ class MountingNodeItemReadSchema(BaseModel):
     fitting_code: str | None = None
     fitting_article: str | None = None
     fitting_name: str | None = None
+    image_url: str | None = None
     fitting_category_code: str | None = None
     quantity: int
     role: str | None = None
@@ -152,6 +154,7 @@ class MountingNodeTemplateLinkReadSchema(BaseModel):
     fitting_id: int
     fitting_code: str | None = None
     fitting_article: str | None = None
+    image_url: str | None = None
     mounting_variant_key: str | None = None
     is_default: bool = False
     order_index: int = 0
@@ -161,6 +164,8 @@ class MountingNodeTemplateLinkReadSchema(BaseModel):
 
 
 class MountingNodeCreateSchema(BaseModel):
+    fastening_type: str | None = None
+    _validate_fastening_type = field_validator("fastening_type", mode="before")(validate_mounting_node_fastening_type)
     code: str | None = Field(default=None, max_length=128)
     name: str = Field(min_length=1, max_length=255)
     description: str | None = Field(default=None, max_length=5000)
@@ -199,6 +204,8 @@ class MountingNodeCreateSchema(BaseModel):
 
 
 class MountingNodeUpdateSchema(BaseModel):
+    fastening_type: str | None = None
+    _validate_fastening_type = field_validator("fastening_type", mode="before")(validate_mounting_node_fastening_type)
     code: str | None = Field(default=None, max_length=128)
     name: str | None = Field(default=None, min_length=1, max_length=255)
     description: str | None = Field(default=None, max_length=5000)
@@ -236,6 +243,7 @@ class MountingNodeUpdateSchema(BaseModel):
 
 
 class MountingNodeListItemSchema(BaseModel):
+    fastening_type: str | None = None
     id: int
     code: str
     name: str

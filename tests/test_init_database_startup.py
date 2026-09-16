@@ -35,7 +35,9 @@ class InitDatabaseStartupTests(unittest.TestCase):
             "database.init_db.seed_default_catalog_items",
         ) as seed_default_catalog_items, patch(
             "database.init_db.seed_default_viyar_service_catalog",
-        ) as seed_default_viyar_service_catalog:
+        ) as seed_default_viyar_service_catalog, patch(
+            "database.init_db.seed_default_hole_library",
+        ) as seed_default_hole_library:
             init_db.init_database(run_legacy_migration=False)
 
         create_all.assert_called_once()
@@ -52,6 +54,7 @@ class InitDatabaseStartupTests(unittest.TestCase):
         seed_demo_access_users.assert_called_once()
         seed_default_catalog_items.assert_called_once()
         seed_default_viyar_service_catalog.assert_called_once()
+        seed_default_hole_library.assert_called_once()
 
     def test_init_database_runs_legacy_migration_when_enabled(self) -> None:
         with patch("database.init_db.Base.metadata.create_all"), patch(
@@ -80,6 +83,8 @@ class InitDatabaseStartupTests(unittest.TestCase):
             "database.init_db.seed_default_catalog_items",
         ), patch(
             "database.init_db.seed_default_viyar_service_catalog",
+        ), patch(
+            "database.init_db.seed_default_hole_library",
         ):
             init_db.init_database(run_legacy_migration=True)
 

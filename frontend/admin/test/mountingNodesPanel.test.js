@@ -202,7 +202,7 @@ test("mounting nodes list renders nodes before the category empty state branch",
     new URL("../src/components/processing/MountingNodesPanelRefined.jsx", import.meta.url),
   );
   const source = readFileSync(sourcePath, "utf8");
-  const nodesBranchIndex = source.indexOf(") : nodes.length ? (");
+  const nodesBranchIndex = source.indexOf(") : visibleNodes.length ? (");
   const categoryEmptyStateIndex = source.indexOf(") : activeCategoryFilter !== \"all\" ? (");
 
   assert.equal(nodesBranchIndex >= 0, true);
@@ -213,10 +213,13 @@ test("mounting nodes list renders nodes before the category empty state branch",
 test("mounting node editor renders a single workspace with one hardware block and no variant block", () => {
   const sourcePath = fileURLToPath(new URL("../src/App.jsx", import.meta.url));
   const source = readFileSync(sourcePath, "utf8");
-  const workspaceStart = source.indexOf('<FittingHolesWorkspace className="mounting-node-editor-workspace">');
-  const workspaceEnd = source.indexOf("</FittingHolesWorkspace>", workspaceStart);
+  const workspaceMarker = source.indexOf("mounting-node-editor-workspace");
+  const workspaceStart = source.lastIndexOf("<FittingHolesWorkspace", workspaceMarker);
+  const workspaceEnd = source.indexOf("</FittingHolesWorkspace>", workspaceMarker);
   const workspaceSource =
-    workspaceStart >= 0 && workspaceEnd > workspaceStart ? source.slice(workspaceStart, workspaceEnd) : "";
+    workspaceMarker >= 0 && workspaceStart >= 0 && workspaceEnd > workspaceStart
+      ? source.slice(workspaceStart, workspaceEnd)
+      : "";
 
   assert.equal(workspaceSource.includes("mounting-node-editor-workspace"), true);
   assert.equal(workspaceSource.includes("mounting-node-editor-left-column"), true);
@@ -277,6 +280,7 @@ test("mounting nodes panel builds editor context from the full detail template l
     templateId: "7480",
     mountingVariantKey: "angled_two_planes",
     functional_code: null,
+    fastening_type: null,
     nodeDetail,
     points: [],
   });
@@ -312,6 +316,7 @@ test("mounting nodes panel builds editor context from legacy flat template objec
     templateId: "8800",
     mountingVariantKey: "drawer_slides",
     functional_code: null,
+    fastening_type: null,
     nodeDetail,
     points: [],
   });
@@ -816,8 +821,7 @@ test("mounting nodes list keeps the compact two-row toolbar contract", () => {
   );
   const source = readFileSync(sourcePath, "utf8");
 
-  assert.equal(source.includes("mounting-nodes-header-row"), true);
-  assert.equal(source.includes("mounting-nodes-header-copy"), true);
+  assert.equal(source.includes("mounting-nodes-panel-head"), true);
   assert.equal(source.includes("mounting-nodes-header-actions"), true);
   assert.equal(source.includes("mounting-nodes-controls-row"), true);
   assert.equal(source.includes("mounting-nodes-filter-form"), true);
@@ -846,7 +850,6 @@ test("app exposes the mounting node category catalog view and route wiring", () 
   const sourcePath = fileURLToPath(new URL("../src/App.jsx", import.meta.url));
   const source = readFileSync(sourcePath, "utf8");
 
-  assert.equal(source.includes("Mounting node category catalog"), true);
   assert.equal(source.includes("mode === \"categories\""), true);
   assert.equal(source.includes("handleOpenMountingNodesCategoryCatalog"), true);
   assert.equal(source.includes("handleOpenAllMountingNodesList"), false);

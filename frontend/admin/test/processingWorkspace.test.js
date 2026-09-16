@@ -14,6 +14,29 @@ import {
 } from "../src/processingWorkspace.js";
 import { getProcessingOperationsPreview } from "../src/api.js";
 
+const holeLibraryPanelSource = readFileSync(
+  fileURLToPath(new URL("../src/components/processing/HoleLibraryPanel.jsx", import.meta.url)),
+  "utf8",
+);
+
+test("hole library uses Ukrainian presentation labels and generates code on the backend", () => {
+  assert.match(holeLibraryPanelSource, /Глухий/);
+  assert.match(holeLibraryPanelSource, /Глибокий торцевий/);
+  assert.match(holeLibraryPanelSource, /Залежить від товщини матеріалу/);
+  assert.match(holeLibraryPanelSource, /Послуги/);
+  assert.doesNotMatch(holeLibraryPanelSource, /label>\s*Code/);
+  assert.doesNotMatch(holeLibraryPanelSource, /editorForm\.code/);
+  assert.doesNotMatch(holeLibraryPanelSource, /\$\{label\} \(\$\{code\}\)/);
+  assert.match(holeLibraryPanelSource, /createProcessingHoleLibraryItem/);
+  assert.match(holeLibraryPanelSource, /return \[savedItem, \.\.\.current\]/);
+  assert.match(holeLibraryPanelSource, /\+ Створити отвір/);
+  assert.match(holeLibraryPanelSource, /editorModalOpen/);
+  assert.match(holeLibraryPanelSource, /aria-modal="true"/);
+  assert.match(holeLibraryPanelSource, /Редагувати отвір/);
+  assert.match(holeLibraryPanelSource, /handleCancelEdit\(\)/);
+  assert.match(holeLibraryPanelSource, /event\.key === "Escape"/);
+});
+
 test("processing workspace tabs keep admin pages and restrict non-admin users to fitting holes only", () => {
   const adminTabs = getProcessingWorkspaceTabs({
     canUseFittingHoles: true,
@@ -37,6 +60,7 @@ test("processing workspace tabs keep admin pages and restrict non-admin users to
       "overview",
       "operations",
       "templates",
+      "hole-library",
       "fitting-holes",
       "services-prices",
       "pricing-rules",
@@ -60,6 +84,7 @@ test("processing workspace tabs keep admin pages and restrict non-admin users to
     "overview",
   );
   assert.equal(getProcessingWorkspaceTabTargetView("fitting-holes"), "catalogHoles");
+  assert.equal(getProcessingWorkspaceTabTargetView("hole-library"), "processing");
   assert.equal(getProcessingWorkspaceTabTargetView("overview"), "processing");
 });
 
@@ -122,6 +147,7 @@ test("processing sidebar tabs show only names without status text", () => {
       "Overview",
       "Processing operations",
       "Processing templates",
+      "Hole library",
       "Services & prices",
       "Pricing rules",
       "Testing",

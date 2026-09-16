@@ -44,6 +44,7 @@ import {
   formatTrialCountdown,
   getSubscriptionLabel,
 } from "../../shared/trialStatus.js";
+import { mountingNodeFasteningTypes } from "./mountingNodeFasteningTypes.js";
 import {
   listMaterialCategories,
   listMaterialManufacturers,
@@ -56,6 +57,7 @@ import FittingHolesWorkspace from "./components/processing/FittingHolesWorkspace
 import MountingNodesCreatePanel from "./components/processing/MountingNodesCreatePanel.jsx";
 import MountingNodesFittingSelectorModal from "./components/processing/MountingNodesFittingSelectorModal.jsx";
 import HolesMountingThreePreview from "./components/processing/HolesMountingThreePreview.jsx";
+import SchematicZoomSvg from "./components/processing/SchematicZoomSvg.jsx";
 import MountingNodesPanel from "./components/processing/MountingNodesPanelRefined.jsx";
 import ProcessingWorkspace from "./components/processing/ProcessingWorkspace.jsx";
 import ConnectionsWorkspace from "./components/connections/ConnectionsWorkspace.jsx";
@@ -183,8 +185,10 @@ import {
 import {
   buildHolePointPayload as buildHolePointPayloadHelper,
   buildHolePointFormFromPoint,
+  buildHoleLibraryDiameterOptions,
   createHolePointFormDefaults,
   mergeHolePointSaveResponse,
+  resolveHolePointDiameterValue,
 } from "./holePointForm.js";
 import {
   MOUNTING_NODE_CREATE_ROLE_OPTIONS,
@@ -293,6 +297,9 @@ import {
   confirmProjectScan,
   getCatalogAutoRefreshStatus,
   getCurrentUser,
+  getMountingScheme,
+  listMountingSchemes,
+  previewMountingSchemePlacement,
   getMountingNode,
   getFittingHoleBundle,
   getFittingHoleTemplate,
@@ -328,6 +335,7 @@ import {
   listAuditLogs,
   listCatalogItems,
   createFittingHoleServiceRule,
+  listProcessingHoleLibraryItems,
   createServiceDrillingRule,
   deleteFittingHoleServiceRule,
   deleteServiceDrillingRule,
@@ -1437,6 +1445,25 @@ function normalizeFaceToEdgePreviewLocation(point) {
       "",
   ).trim();
   const side = String(point?.side || sourcePoint?.side || rawTargetSide || "").trim().toLowerCase();
+
+  const hasExplicitCanonicalLocation = Boolean(rawTargetPanel && rawTargetSurface);
+  if (hasExplicitCanonicalLocation) {
+    const fallbackSide =
+      rawTargetPanel === "horizontal_panel" && rawTargetSurface === "plane"
+        ? "top_face"
+        : rawTargetPanel === "horizontal_panel" && rawTargetSurface === "edge"
+          ? "edge_near_vertical"
+          : rawTargetPanel === "vertical_panel" && rawTargetSurface === "edge"
+            ? "top_edge"
+            : "inner_face";
+
+    return {
+      needsClarification: false,
+      targetPanel: rawTargetPanel,
+      targetSide: rawTargetSide || fallbackSide,
+      targetSurface: rawTargetSurface,
+    };
+  }
 
   if (side === "edge_near_vertical" || side === "edge_near_vertical_panel") {
     return {
@@ -3281,6 +3308,7 @@ const TRANSLATIONS = {
     holePointDepth: "Depth, mm",
     holePointDiameter: "Diameter, mm",
     holePointDiameterInvalid: "Diameter must be a valid positive number",
+    holePointDiameterNotAllowed: "Choose a diameter from the active hole library",
     holePointDiameterRequired: "Diameter is required",
     holePointTypeAuto: "Auto",
     holePointTypeManual: "Manual",
@@ -3846,6 +3874,7 @@ Object.assign(TRANSLATIONS.uk, {
   holePointDepth: "\u0413\u043b\u0438\u0431\u0438\u043d\u0430, \u043c\u043c",
   holePointDiameter: "\u0414\u0456\u0430\u043c\u0435\u0442\u0440, \u043c\u043c",
   holePointDiameterInvalid: "\u0414\u0456\u0430\u043c\u0435\u0442\u0440 \u043c\u0430\u0454 \u0431\u0443\u0442\u0438 \u0434\u0456\u0439\u0441\u043d\u0438\u043c \u0434\u043e\u0434\u0430\u0442\u043d\u0438\u043c \u0447\u0438\u0441\u043b\u043e\u043c",
+  holePointDiameterNotAllowed: "\u041e\u0431\u0435\u0440\u0456\u0442\u044c \u0434\u0456\u0430\u043c\u0435\u0442\u0440 \u0456\u0437 \u0430\u043a\u0442\u0438\u0432\u043d\u043e\u0457 \u0431\u0456\u0431\u043b\u0456\u043e\u0442\u0435\u043a\u0438 \u043e\u0442\u0432\u043e\u0440\u0456\u0432",
   holePointDiameterRequired: "\u0414\u0456\u0430\u043c\u0435\u0442\u0440 \u043e\u0431\u043e\u0432'\u044f\u0437\u043a\u043e\u0432\u0438\u0439",
   holePointTypeAuto: "Auto",
   holePointTypeManual: "Manual",
@@ -9095,7 +9124,21 @@ export default function App() {
   const [holePointEditError, setHolePointEditError] = useState("");
   const [holePointEditForm, setHolePointEditForm] = useState(DEFAULT_HOLE_POINT_FORM);
   const [holePointEditPointId, setHolePointEditPointId] = useState("");
+  const [holeLibraryItems, setHoleLibraryItems] = useState([]);
+  const holeLibraryDiameterOptions = useMemo(
+    () => buildHoleLibraryDiameterOptions(holeLibraryItems),
+    [holeLibraryItems],
+  );
+  const [holeLibraryLoading, setHoleLibraryLoading] = useState(false);
+  const [holeLibraryLoadError, setHoleLibraryLoadError] = useState("");
   const [hoveredHolePointId, setHoveredHolePointId] = useState("");
+  const [mounting_node_visualization_tab, set_mounting_node_visualization_tab] = useState("3d");
+  const [faceToEdgeVerticalPreviewThicknessMm, setFaceToEdgeVerticalPreviewThicknessMm] = useState(
+    ANGLED_TWO_PLANES_PREVIEW_THICKNESS_MM_DEFAULT,
+  );
+  const [faceToEdgeHorizontalPreviewThicknessMm, setFaceToEdgeHorizontalPreviewThicknessMm] = useState(
+    ANGLED_TWO_PLANES_PREVIEW_THICKNESS_MM_DEFAULT,
+  );
   const [selectedHolePointId, setSelectedHolePointId] = useState("");
   const [selectedHoleMountingVariantKey, setSelectedHoleMountingVariantKey] =
     useState("surface_mount");
@@ -9114,6 +9157,14 @@ export default function App() {
   const [catalogHolesListRequestToken, setCatalogHolesListRequestToken] = useState(0);
   const [mountingNodeEditorDraft, setMountingNodeEditorDraft] = useState(null);
   const [mountingNodeEditorDraftNodeId, setMountingNodeEditorDraftNodeId] = useState("");
+  const [mountingNodeFasteningSchemes, setMountingNodeFasteningSchemes] = useState([]);
+  const [mountingNodeFasteningSchemesLoading, setMountingNodeFasteningSchemesLoading] = useState(false);
+  const [mountingNodeFasteningSchemesError, setMountingNodeFasteningSchemesError] = useState("");
+  const [mountingNodePlacementPreview, setMountingNodePlacementPreview] = useState(null);
+  const [mountingNodePlacementPreviewLoading, setMountingNodePlacementPreviewLoading] = useState(false);
+  const [mountingNodePlacementPreviewError, setMountingNodePlacementPreviewError] = useState("");
+  const mountingNodePlacementPreviewLengthMm = 1000;
+
   const [mountingNodeEditorSelectorOpen, setMountingNodeEditorSelectorOpen] = useState(false);
   const [mountingNodeEditorSelectorSearch, setMountingNodeEditorSelectorSearch] = useState("");
   const [mountingNodeEditorSelectorCategoryCode, setMountingNodeEditorSelectorCategoryCode] = useState("");
@@ -9143,6 +9194,63 @@ export default function App() {
   const storedProjectTab = localStorage.getItem(ACTIVE_PROJECT_TAB_STORAGE_KEY) || "data";
   const isMountingNodesRoute = Boolean(mountingNodesRouteState);
   const mountingNodesPanelInitialState = isMountingNodesRoute ? mountingNodesInitialState : catalogHolesReturnState;
+
+  useEffect(() => {
+    if (!token || (!holePointCreateOpen && !holePointEditOpen)) {
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      setHoleLibraryLoading(true);
+      setHoleLibraryLoadError("");
+      try {
+        const response = await listProcessingHoleLibraryItems(token, { include_inactive: false });
+        if (cancelled) {
+          return;
+        }
+
+        if (response?.success && Array.isArray(response.items)) {
+          setHoleLibraryItems(response.items);
+          if (holePointEditOpen) {
+            setHolePointEditForm((current) => {
+              const existingDiameter = String(current?.diameter_mm ?? "").trim();
+              if (existingDiameter) {
+                return current;
+              }
+
+              const resolvedDiameter = resolveHolePointDiameterValue(current, response.items);
+              if (resolvedDiameter === null) {
+                return current;
+              }
+
+              return {
+                ...current,
+                diameter_mm: String(resolvedDiameter),
+              };
+            });
+          }
+        } else {
+          setHoleLibraryItems([]);
+          setHoleLibraryLoadError(language === "uk" ? "Не вдалося завантажити діаметри отворів." : "Unable to load hole diameters.");
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setHoleLibraryItems([]);
+          setHoleLibraryLoadError(error?.message || (language === "uk" ? "Не вдалося завантажити діаметри отворів." : "Unable to load hole diameters."));
+        }
+      } finally {
+        if (!cancelled) {
+          setHoleLibraryLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [holePointCreateOpen, holePointEditOpen, language, token]);
 
   function updateMountingNodesHistory(route, { replace = false } = {}) {
     updateAdminHistory({
@@ -10309,6 +10417,7 @@ export default function App() {
         diameter: point.diameter,
         hasCoordinates: point.hasCoordinates,
         id: point.id,
+        label: point.label,
         isHovered: String(hoveredHolePointId) === String(point.id),
         isSelected: String(selectedHolePointId) === String(point.id),
         operation: point.operation,
@@ -14427,6 +14536,122 @@ export default function App() {
   const mountingNodeEditorPointsLoadedForSave = isMountingNodeEditorMode ? true : holeTemplateDetailsLoaded;
 
   useEffect(() => {
+    const nodeId = String(mountingNodeEditorDraftNodeId || "").trim();
+
+    if (!isMountingNodeEditorMode || catalogHolesMode !== "editor" || !nodeId || !token) {
+      setMountingNodeFasteningSchemes([]);
+      setMountingNodeFasteningSchemesLoading(false);
+      setMountingNodeFasteningSchemesError("");
+      return undefined;
+    }
+
+    let cancelled = false;
+    setMountingNodeFasteningSchemesLoading(true);
+    setMountingNodeFasteningSchemesError("");
+
+    void (async () => {
+      const listResult = await listMountingSchemes(token, false);
+
+      if (cancelled) {
+        return;
+      }
+
+      if (!listResult.success) {
+        setMountingNodeFasteningSchemes([]);
+        setMountingNodeFasteningSchemesLoading(false);
+        setMountingNodeFasteningSchemesError(listResult.error || "Unable to load mounting schemes.");
+        return;
+      }
+
+      const summaries = Array.isArray(listResult.schemes) ? listResult.schemes : [];
+      const details = await Promise.all(
+        summaries.map(async (scheme) => {
+          const schemeId = String(scheme?.id || "").trim();
+          if (!schemeId) {
+            return null;
+          }
+          const detailResult = await getMountingScheme(token, schemeId);
+          return detailResult.success && detailResult.scheme ? detailResult.scheme : null;
+        }),
+      );
+
+      if (cancelled) {
+        return;
+      }
+
+      const linked = details.filter((scheme) =>
+        scheme &&
+        Array.isArray(scheme.nodes) &&
+        scheme.nodes.some((link) => String(link?.node_id || "").trim() === nodeId),
+      );
+
+      setMountingNodeFasteningSchemes(linked);
+      setMountingNodeFasteningSchemesLoading(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [catalogHolesMode, isMountingNodeEditorMode, mountingNodeEditorDraftNodeId, token]);
+  useEffect(() => {
+    const scheme = mountingNodeFasteningSchemes[0];
+    const nodeId = String(mountingNodeEditorDraftNodeId || "").trim();
+    const linkedNode = (Array.isArray(scheme?.nodes) ? scheme.nodes : []).find(
+      (link) => String(link?.node_id || "").trim() === nodeId,
+    );
+    const linkedRule = (Array.isArray(scheme?.placement_rules) ? scheme.placement_rules : []).find(
+      (rule) => String(rule?.group_key || "").trim() === String(linkedNode?.group_key || "").trim(),
+    );
+
+    if (!scheme || !linkedNode || !linkedRule || !token) {
+      setMountingNodePlacementPreview(null);
+      setMountingNodePlacementPreviewLoading(false);
+      setMountingNodePlacementPreviewError("");
+      return undefined;
+    }
+
+    let cancelled = false;
+    setMountingNodePlacementPreviewLoading(true);
+    setMountingNodePlacementPreviewError("");
+
+    void (async () => {
+      const result = await previewMountingSchemePlacement(token, {
+        joint_length_mm: mountingNodePlacementPreviewLengthMm,
+        rule: {
+          group_key: linkedRule.group_key,
+          distribution_mode: linkedRule.distribution_mode,
+          min_group_count: linkedRule.min_group_count,
+          max_group_count: linkedRule.max_group_count,
+          fixed_group_count: linkedRule.fixed_group_count,
+          start_offset_mm: linkedRule.start_offset_mm,
+          end_offset_mm: linkedRule.end_offset_mm,
+          max_spacing_mm: linkedRule.max_spacing_mm,
+          fixed_spacing_mm: linkedRule.fixed_spacing_mm,
+          role_code: linkedRule.role_code,
+          sort_order: linkedRule.sort_order,
+          is_required: linkedRule.is_required,
+        },
+      });
+
+      if (cancelled) return;
+
+      if (!result.success || !result.result) {
+        setMountingNodePlacementPreview(null);
+        setMountingNodePlacementPreviewError(result.error || "Unable to calculate placement preview.");
+        setMountingNodePlacementPreviewLoading(false);
+        return;
+      }
+
+      setMountingNodePlacementPreview(result.result);
+      setMountingNodePlacementPreviewLoading(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [mountingNodeEditorDraftNodeId, mountingNodeFasteningSchemes, token]);
+
+  useEffect(() => {
     if (!isMountingNodeEditorMode || catalogHolesMode !== "editor") {
       mountingNodeEditorHydrationKeyRef.current = "";
       return undefined;
@@ -14574,6 +14799,7 @@ export default function App() {
       description: String(draft.description || "").trim() || undefined,
       category_code: categoryCode || undefined,
       functional_code: normalizeMountingNodeFunctionalCode(draft.functional_code) || undefined,
+      fastening_type: categoryCode === "fastening" ? draft.fastening_type || null : null,
       is_active: draft.is_active !== false,
       ownership_type: ownershipType,
       items: selectedItems.map((item, index) => ({
@@ -14711,6 +14937,7 @@ export default function App() {
       ...(catalogHolesOpenContext || {}),
       category_code: selectedCategoryCode || undefined,
       functional_code: selectedFunctionalCode,
+      fastening_type: selectedCategoryCode === "fastening" ? mountingNodeEditorDraft?.fastening_type ?? null : null,
       nodeDetail: mountingNodeEditorDraft || catalogHolesOpenContext?.nodeDetail || null,
     };
     const mountingNodeId = String(catalogHolesOpenContext?.mountingNodeId || "").trim();
@@ -18075,13 +18302,17 @@ function getFaceToEdgeHolePlacement(layout, hole, index) {
   const isHorizontalPlane = location.targetPanel === "horizontal_panel" && location.targetSurface === "plane";
   const isVerticalEdge = location.targetPanel === "vertical_panel" && location.targetSurface === "edge";
   const holeRadius = Math.max(0.028, Math.min(0.08, Number.isFinite(diameterValue) ? diameterValue * 0.005 : 0.04));
-  const holeLength = isHorizontalEdge
-    ? Math.max(0.18, Math.min(0.74, Number.isFinite(depthValue) ? Math.abs(depthValue) * mmToScene : 0.32))
-    : Math.max(0.18, Math.min(0.62, Number.isFinite(depthValue) ? Math.abs(depthValue) * mmToScene : panelAThickness));
+  const hasBlindDepth = Number.isFinite(depthValue) && depthValue > 0;
+  const throughHoleLength = isHorizontalEdge
+    ? 0.32
+    : isHorizontalPlane
+      ? panelBThickness
+      : panelAThickness;
+  const holeLength = hasBlindDepth ? Math.abs(depthValue) * mmToScene : throughHoleLength;
   const sourcePanelKey = String(sourceHole?.panelKey || sourceHole?.panel_key || sourceHole?.panelId || sourceHole?.panel_id || "").trim();
   const sourceSurface = String(sourceHole?.surface || sourceHole?.target_surface || sourceHole?.targetSurface || "").trim();
   const sourceSide = String(sourceHole?.side || "").trim();
-  const depthScene = Number.isFinite(depthValue) ? Math.abs(depthValue) * mmToScene : holeLength;
+  const depthScene = holeLength;
   const placementFunctionName = "getFaceToEdgeHolePlacement";
   const renderPath = "holeVolumes.map -> marker.isFaceToEdge ? group -> <cylinderGeometry/> : <mesh><cylinderGeometry/></mesh>";
 
@@ -18295,6 +18526,322 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
     const materialPlaneA = scene?.materialPlanes?.planeA?.label || "Площина A";
     const materialPlaneB = scene?.materialPlanes?.planeB?.label || "Площина B";
     const connectionDirection = scene?.materialPlanes?.connectionDirection || "—";
+
+    if (variantKey === "face_to_edge") {
+      const numericOrNull = (value) => {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : null;
+      };
+      const formatTechnicalMm = (value) => {
+        if (!Number.isFinite(value)) {
+          return "—";
+        }
+        const rounded = Math.round(value * 100) / 100;
+        return String(rounded).replace(".", ",");
+      };
+      const holeLocationToken = (hole) =>
+        [
+          hole?.panelKey,
+          hole?.panel_key,
+          hole?.target_panel,
+          hole?.targetPanel,
+          hole?.target_surface,
+          hole?.targetSurface,
+          hole?.target_side,
+          hole?.targetSide,
+          hole?.side,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+      const holeIsThrough = (hole) => {
+        const depth = numericOrNull(hole?.depth);
+        const operation = String(hole?.operation || "").toLowerCase();
+        return depth === null || depth <= 0 || operation.includes("through") || operation.includes("наскр");
+      };
+
+      const selectedTechnicalHole = holes.find((hole) => Boolean(hole?.isSelected)) || null;
+      const getFaceToEdgeHolePanelKey = (hole) => String(
+        hole?.target_panel ||
+        hole?.targetPanel ||
+        hole?.panelKey ||
+        hole?.panel_key ||
+        hole?.rawSource?.target_panel ||
+        hole?.rawSource?.targetPanel ||
+        hole?.rawSource?.panelKey ||
+        hole?.rawSource?.panel_key ||
+        ""
+      ).trim().toLowerCase();
+      const selectedTechnicalHolePanelKey = getFaceToEdgeHolePanelKey(selectedTechnicalHole);
+      const selectedTechnicalHoleIsVertical = selectedTechnicalHolePanelKey === "vertical_panel";
+      const selectedTechnicalHoleIsHorizontal = selectedTechnicalHolePanelKey === "horizontal_panel";
+      const verticalHole =
+        (selectedTechnicalHoleIsVertical ? selectedTechnicalHole : null) ||
+        holes.find((hole) => getFaceToEdgeHolePanelKey(hole) === "vertical_panel") ||
+        holes.find((hole) => holeIsThrough(hole)) ||
+        holes[0] ||
+        null;
+      const horizontalHole =
+        (selectedTechnicalHoleIsHorizontal ? selectedTechnicalHole : null) ||
+        holes.find(
+          (hole) =>
+            hole !== verticalHole &&
+            getFaceToEdgeHolePanelKey(hole) === "horizontal_panel",
+        ) ||
+        holes.find((hole) => hole !== verticalHole) ||
+        null;
+
+      const verticalThicknessMm = normalizeAngledTwoPlanesPreviewThicknessMm(
+        faceToEdgeVerticalPreviewThicknessMm,
+      );
+      const horizontalThicknessMm = normalizeAngledTwoPlanesPreviewThicknessMm(
+        faceToEdgeHorizontalPreviewThicknessMm,
+      );
+      const verticalDiameterMm = numericOrNull(verticalHole?.diameter);
+      const horizontalDiameterMm = numericOrNull(horizontalHole?.diameter);
+      const horizontalDepthMm = numericOrNull(horizontalHole?.depth);
+      const effectiveDepthMm =
+        Number.isFinite(horizontalDepthMm) && horizontalDepthMm > 0 ? horizontalDepthMm : 50;
+      const sectionHoleYValues = holes.map((hole) => numericOrNull(hole?.y ?? hole?.rawSource?.y_mm ?? hole?.rawSource?.y)).filter(Number.isFinite);
+      const maxAbsSectionHoleYMm = sectionHoleYValues.length ? Math.max(...sectionHoleYValues.map((value) => Math.abs(value))) : 0;
+      const sectionDepthValues = holes.map((hole) => numericOrNull(hole?.depth ?? hole?.rawSource?.depth_mm ?? hole?.rawSource?.depth)).filter((value) => Number.isFinite(value) && value > 0);
+      const maxSectionDepthMm = sectionDepthValues.length ? Math.max(...sectionDepthValues) : effectiveDepthMm;
+      const sectionScaleByDepth = 260 / Math.max(50, maxSectionDepthMm);
+      const sectionScaleByY = maxAbsSectionHoleYMm > 0 ? 96 / maxAbsSectionHoleYMm : 5;
+      const sectionScale = Math.min(5, sectionScaleByDepth, sectionScaleByY);
+
+      const verticalX = 76;
+      const verticalWidth = verticalThicknessMm * sectionScale;
+      const verticalTop = 56;
+      const verticalHeight = 220;
+      const jointX = verticalX + verticalWidth;
+      const axisY = 166;
+      const horizontalHeight = horizontalThicknessMm * sectionScale;
+      const horizontalTop = axisY - horizontalHeight / 2;
+      const horizontalWidth = Math.min(420, Math.max(320, effectiveDepthMm * sectionScale + 140));
+      const boardRight = jointX + horizontalWidth;
+      const verticalHoleHeight = Math.max(1, (Number.isFinite(verticalDiameterMm) ? verticalDiameterMm : 0) * sectionScale);
+      const horizontalHoleHeight = Math.max(1, (Number.isFinite(horizontalDiameterMm) ? horizontalDiameterMm : 0) * sectionScale);
+      const horizontalHoleEndX = Math.min(boardRight - 18, jointX + effectiveDepthMm * sectionScale);
+      const horizontalHoleWidth = Math.max(1, horizontalHoleEndX - jointX);
+      const verticalHoles = holes.filter((hole) => getFaceToEdgeHolePanelKey(hole) === "vertical_panel");
+      const horizontalHoles = holes.filter((hole) => getFaceToEdgeHolePanelKey(hole) === "horizontal_panel");
+      const getFaceToEdgeHoleSurfaceKey = (hole) => String(
+        hole?.target_surface ||
+        hole?.targetSurface ||
+        hole?.surface ||
+        hole?.rawSource?.target_surface ||
+        hole?.rawSource?.targetSurface ||
+        ""
+      ).trim().toLowerCase();
+      const horizontalEdgeHoles = horizontalHoles.filter((hole) => {
+        const surfaceKey = getFaceToEdgeHoleSurfaceKey(hole);
+        return !surfaceKey || surfaceKey === "edge";
+      });
+      const horizontalPlaneHoles = horizontalHoles.filter((hole) => getFaceToEdgeHoleSurfaceKey(hole) === "plane");
+      const horizontalEdgeHole = horizontalEdgeHoles.find((hole) => Boolean(hole?.isSelected)) || horizontalEdgeHoles[0] || null;
+      const horizontalEdgeDiameterMm = numericOrNull(horizontalEdgeHole?.diameter ?? horizontalEdgeHole?.rawSource?.diameter_mm ?? horizontalEdgeHole?.rawSource?.diameter);
+      const horizontalEdgeDepthMm = numericOrNull(horizontalEdgeHole?.depth ?? horizontalEdgeHole?.rawSource?.depth_mm ?? horizontalEdgeHole?.rawSource?.depth);
+      const horizontalEdgeHoleHeight = Math.max(1, (Number.isFinite(horizontalEdgeDiameterMm) ? horizontalEdgeDiameterMm : 0) * sectionScale);
+      const horizontalEdgeHoleEndX = Math.min(boardRight - 18, jointX + (Number.isFinite(horizontalEdgeDepthMm) ? horizontalEdgeDepthMm : effectiveDepthMm) * sectionScale);
+      const horizontalEdgeHoleWidth = Math.max(1, horizontalEdgeHoleEndX - jointX);
+      const horizontalEdgePointLabel = horizontalEdgeHole
+        ? getMountingNodeEditorPointDisplayLabel(horizontalEdgeHole?.rawSource || horizontalEdgeHole, 1)
+        : "P2";
+      const getSectionHoleY = (hole) => {
+        const yMm = numericOrNull(hole?.y ?? hole?.rawSource?.y_mm ?? hole?.rawSource?.y);
+        const projectedY = axisY - (Number.isFinite(yMm) ? yMm : 0) * sectionScale;
+        return projectedY;
+      };
+
+      const verticalPointLabel = verticalHole
+        ? getMountingNodeEditorPointDisplayLabel(verticalHole?.rawSource || verticalHole, 0)
+        : "P1";
+      const horizontalPointLabel = horizontalHole
+        ? getMountingNodeEditorPointDisplayLabel(horizontalHole?.rawSource || horizontalHole, 1)
+        : "P2";
+
+      const formatTechnicalHoleLabel = (hole, pointLabel) => {
+        const diameterMm = numericOrNull(hole?.diameter ?? hole?.rawSource?.diameter_mm ?? hole?.rawSource?.diameter);
+        const depthMm = numericOrNull(hole?.depth ?? hole?.rawSource?.depth_mm ?? hole?.rawSource?.depth);
+        const diameterText = `Ø${formatTechnicalMm(diameterMm)}`;
+        return holeIsThrough(hole)
+          ? `${pointLabel} · ${diameterText} мм · наскрізний`
+          : `${pointLabel} · ${diameterText}${Number.isFinite(depthMm) ? ` × ${formatTechnicalMm(depthMm)} мм` : ""}`;
+      };
+
+      const renderInteractiveHoleGroup = (hole, content) => {
+        const hasId = hole?.id !== null && hole?.id !== undefined && String(hole.id).trim() !== "";
+        const isSelected = Boolean(hole?.isSelected);
+        const isHovered = Boolean(hole?.isHovered);
+        return (
+          <g
+            className={`mounting-node-technical-hole${isSelected ? " is-selected" : ""}${isHovered ? " is-hovered" : ""}${hasId ? " is-interactive" : ""}`}
+            onClick={hasId && typeof onSelectHole === "function" ? () => onSelectHole(hole.id) : undefined}
+            onKeyDown={hasId && typeof onSelectHole === "function" ? (event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                onSelectHole(hole.id);
+              }
+            } : undefined}
+            onMouseEnter={hasId && typeof onHoverHole === "function" ? () => onHoverHole(hole.id) : undefined}
+            onMouseLeave={hasId && typeof onLeaveHole === "function" ? onLeaveHole : undefined}
+            role={hasId && typeof onSelectHole === "function" ? "button" : undefined}
+            tabIndex={hasId && typeof onSelectHole === "function" ? 0 : undefined}
+          >
+            {content}
+          </g>
+        );
+      };
+
+      return (
+        <section className={`holes-preview-schematic variant-${variantKey}${showHeader ? "" : " holes-preview-schematic-embedded"}`}>
+          {showHeader ? (
+            <div className="holes-preview-schematic-head">
+              <strong>Технічний переріз вузла</strong>
+              <span>{materialPlaneA} → {materialPlaneB} · {connectionDirection}</span>
+            </div>
+          ) : null}
+          <SchematicZoomSvg ariaLabel="Технічний переріз face to edge" className="holes-preview-schematic-svg mounting-node-technical-schematic-svg" controlsHostId="mounting-node-schematic-zoom-controls" height={340} width={640}>
+            <defs>
+              <pattern id="mounting-node-face-to-edge-hatch" height="8" patternUnits="userSpaceOnUse" width="8">
+                <rect fill="#f7fbf7" height="8" width="8" x="0" y="0" />
+                <path d="M -2 8 L 8 -2 M 2 10 L 10 2" fill="none" opacity="0.92" stroke="#2f7d46" strokeWidth="1.25" />
+              </pattern>
+              <marker id="mounting-node-dimension-arrow" markerHeight="7" markerWidth="7" orient="auto-start-reverse" refX="3.5" refY="3.5" viewBox="0 0 7 7">
+                <path d="M 0 0 L 7 3.5 L 0 7 Z" fill="#c62828" />
+              </marker>
+              <marker id="mounting-node-callout-arrow" markerHeight="8" markerWidth="8" orient="auto" refX="7" refY="4" viewBox="0 0 8 8">
+                <path d="M 0 0 L 8 4 L 0 8 Z" fill="#24343d" />
+              </marker>
+            </defs>
+            <rect fill="#ffffff" height="340" width="640" x="0" y="0" />
+            <g aria-label="Деталі">
+              <rect fill="url(#mounting-node-face-to-edge-hatch)" height={verticalHeight} stroke="#17212b" strokeWidth="2" width={verticalWidth} x={verticalX} y={verticalTop} />
+              <rect fill="url(#mounting-node-face-to-edge-hatch)" height={horizontalHeight} stroke="#17212b" strokeWidth="2" width={horizontalWidth} x={jointX} y={horizontalTop} />
+            </g>
+            <line stroke="#2f6fa3" strokeDasharray="8 6" strokeWidth="1.5" x1={verticalX - 34} x2={Math.min(boardRight + 24, 720)} y1={axisY} y2={axisY} />
+            {verticalHoles.map((hole, index) => {
+              const diameterMm = numericOrNull(hole?.diameter);
+              const holeHeight = Math.max(1, (Number.isFinite(diameterMm) ? diameterMm : 0) * sectionScale);
+              const holeY = getSectionHoleY(hole);
+              const yMm = numericOrNull(hole?.y ?? hole?.rawSource?.y_mm ?? hole?.rawSource?.y);
+              const depthMm = numericOrNull(hole?.depth ?? hole?.rawSource?.depth_mm ?? hole?.rawSource?.depth);
+              const targetSide = String(hole?.target_side || hole?.targetSide || hole?.side || hole?.rawSource?.target_side || hole?.rawSource?.targetSide || hole?.rawSource?.side || "").trim().toLowerCase();
+              const isThrough = holeIsThrough(hole);
+              const holeDepthWidth = isThrough ? verticalWidth : Math.min(verticalWidth, Math.max(1, (Number.isFinite(depthMm) ? depthMm : 0) * sectionScale));
+              const holeX = targetSide === "outer_face" ? verticalX : jointX - holeDepthWidth;
+              const hasOffsetDimension = Number.isFinite(yMm) && Math.abs(yMm) > 0.001;
+              const dimensionX = verticalX - 18;
+              const dimensionMidY = (axisY + holeY) / 2;
+              const pointLabel = getMountingNodeEditorPointDisplayLabel(hole?.rawSource || hole, index);
+              return (
+                <g key={`vertical-hole-${String(hole?.id ?? index)}`}>
+                  {renderInteractiveHoleGroup(hole, <>
+                    <title>{`${pointLabel}: Ø${formatTechnicalMm(diameterMm)} мм · ${holeIsThrough(hole) ? "наскрізний" : `${formatTechnicalMm(numericOrNull(hole?.depth))} мм`}`}</title>
+                    <rect fill="#ffffff" height={holeHeight} stroke={hole?.isSelected ? "#1d4ed8" : hole?.isHovered ? "#0f766e" : "#111827"} strokeWidth={hole?.isSelected || hole?.isHovered ? 2.6 : 1.7} width={holeDepthWidth} x={holeX} y={holeY - holeHeight / 2} />
+                    <line stroke="#2f6fa3" strokeDasharray="5 4" strokeWidth="1" x1={verticalX - 10} x2={jointX + 84} y1={holeY} y2={holeY} />
+                    {hasOffsetDimension ? <>
+                      <line fill="none" markerEnd="url(#mounting-node-dimension-arrow)" markerStart="url(#mounting-node-dimension-arrow)" stroke="#c62828" strokeWidth="1.35" x1={dimensionX} x2={dimensionX} y1={axisY} y2={holeY} />
+                      <line stroke="#c62828" strokeWidth="1" x1={dimensionX - 5} x2={verticalX - 2} y1={axisY} y2={axisY} />
+                      <line stroke="#c62828" strokeWidth="1" x1={dimensionX - 5} x2={verticalX - 2} y1={holeY} y2={holeY} />
+                      <text fill="#c62828" fontFamily="system-ui, sans-serif" fontSize="12" fontWeight="800" textAnchor="middle" transform={`rotate(-90 ${dimensionX - 8} ${dimensionMidY})`} x={dimensionX - 8} y={dimensionMidY}>{formatTechnicalMm(Math.abs(yMm))} мм</text>
+                      <g className="mounting-node-hole-callout">
+                        <text fill="#24343d" fontFamily="system-ui, sans-serif" fontSize="12" fontWeight="700" x={verticalX + verticalWidth + 26} y={verticalTop + 6}>{formatTechnicalHoleLabel(hole, pointLabel)}</text>
+                        <path d={`M ${verticalX + verticalWidth + 28} ${verticalTop + 4} L ${holeX + holeDepthWidth / 2} ${holeY}`} fill="none" markerEnd="url(#mounting-node-callout-arrow)" stroke="#334155" strokeWidth="1.15" />
+                      </g>
+                    </> : null}
+                  </>)}
+                </g>
+              );
+            })}
+            {horizontalEdgeHole ? renderInteractiveHoleGroup(horizontalEdgeHole, <>
+              <title>{`${horizontalEdgePointLabel}: Ø${formatTechnicalMm(horizontalEdgeDiameterMm)} мм · ${holeIsThrough(horizontalEdgeHole) ? "наскрізний" : `${formatTechnicalMm(horizontalEdgeDepthMm)} мм`}`}</title>
+              {holeIsThrough(horizontalEdgeHole) ? (
+                <rect fill="#ffffff" height={horizontalEdgeHoleHeight} stroke={horizontalEdgeHole?.isSelected ? "#1d4ed8" : horizontalEdgeHole?.isHovered ? "#0f766e" : "#111827"} strokeWidth={horizontalEdgeHole?.isSelected || horizontalEdgeHole?.isHovered ? 2.6 : 1.7} width={horizontalWidth} x={jointX} y={axisY - horizontalEdgeHoleHeight / 2} />
+              ) : (
+                <rect fill="#ffffff" height={horizontalEdgeHoleHeight} stroke={horizontalEdgeHole?.isSelected ? "#1d4ed8" : horizontalEdgeHole?.isHovered ? "#0f766e" : "#111827"} strokeWidth={horizontalEdgeHole?.isSelected || horizontalEdgeHole?.isHovered ? 2.6 : 1.7} width={horizontalEdgeHoleWidth} x={jointX} y={axisY - horizontalEdgeHoleHeight / 2} />
+              )}
+            </>) : null}
+            {horizontalPlaneHoles.map((hole, index) => {
+              const diameterMm = numericOrNull(hole?.diameter ?? hole?.rawSource?.diameter_mm ?? hole?.rawSource?.diameter);
+              const depthMm = numericOrNull(hole?.depth ?? hole?.rawSource?.depth_mm ?? hole?.rawSource?.depth);
+              const xMm = numericOrNull(hole?.x ?? hole?.rawSource?.x_mm ?? hole?.rawSource?.x);
+              const targetSide = String(hole?.target_side || hole?.targetSide || hole?.rawSource?.target_side || "").trim().toLowerCase();
+              const isBottomFace = targetSide === "bottom_face";
+              const isThrough = holeIsThrough(hole);
+              const holeCenterX = jointX + (Number.isFinite(xMm) ? xMm : 0) * sectionScale;
+              const holeWidth = Math.max(1, (Number.isFinite(diameterMm) ? diameterMm : 0) * sectionScale);
+              const holeDepthPx = isThrough ? horizontalHeight : Math.min(horizontalHeight, Math.max(1, (Number.isFinite(depthMm) ? depthMm : 0) * sectionScale));
+              const holeTop = isBottomFace ? horizontalTop + horizontalHeight - holeDepthPx : horizontalTop;
+              const pointLabel = getMountingNodeEditorPointDisplayLabel(hole?.rawSource || hole, horizontalEdgeHoles.length + index);
+              return (
+                <g key={`horizontal-plane-hole-${String(hole?.id ?? index)}`}>
+                  {renderInteractiveHoleGroup(hole, <>
+                    <title>{`${pointLabel}: Ø${formatTechnicalMm(diameterMm)} мм · ${isThrough ? "наскрізний" : `${formatTechnicalMm(depthMm)} мм`}`}</title>
+                    <rect fill="#ffffff" height={holeDepthPx} stroke={hole?.isSelected ? "#1d4ed8" : hole?.isHovered ? "#0f766e" : "#111827"} strokeWidth={hole?.isSelected || hole?.isHovered ? 2.6 : 1.7} width={holeWidth} x={holeCenterX - holeWidth / 2} y={holeTop} />
+                    <line stroke="#2f6fa3" strokeDasharray="5 4" strokeWidth="1" x1={holeCenterX} x2={holeCenterX} y1={horizontalTop - 10} y2={horizontalTop + horizontalHeight + 10} />
+                    <g className="mounting-node-hole-callout">
+                      <text fill="#24343d" fontFamily="system-ui, sans-serif" fontSize="12" fontWeight="700" textAnchor="middle" x={holeCenterX + 42} y={horizontalTop - 18}>{formatTechnicalHoleLabel(hole, pointLabel)}</text>
+                      <path d={`M ${holeCenterX + 46} ${horizontalTop - 14} L ${holeCenterX} ${holeTop + holeDepthPx / 2}`} fill="none" markerEnd="url(#mounting-node-callout-arrow)" stroke="#334155" strokeWidth="1.15" />
+                    </g>
+                  </>)}
+                </g>
+              );
+            })}
+            <g className="mounting-node-panel-callouts" fill="#24343d" fontFamily="system-ui, sans-serif" fontSize="12" fontWeight="700">
+              <text x={verticalX - 70} y="18">Вертикальна панель · площина</text>
+              <path
+                d={`M ${verticalX + 72} 22 L ${verticalX + 4} ${verticalTop + 34}`}
+                fill="none"
+                markerEnd="url(#mounting-node-callout-arrow)"
+                stroke="#24343d"
+                strokeWidth="1.2"
+              />
+              <text x={jointX + 100} y="18">Горизонтальна панель · торець</text>
+              <path
+                d={`M ${jointX + 294} 26 L ${jointX + horizontalWidth * 0.72} ${horizontalTop}`}
+                fill="none"
+                markerEnd="url(#mounting-node-callout-arrow)"
+                stroke="#24343d"
+                strokeWidth="1.2"
+              />
+            </g>
+            <g fill="#24343d" fontFamily="system-ui, sans-serif" fontSize="12" fontWeight="700">
+              {verticalHole ? <g className="mounting-node-hole-callout">
+                <text x={verticalX - 54} y={verticalTop + verticalHeight + 54}>{formatTechnicalHoleLabel(verticalHole, verticalPointLabel)}</text>
+                <path d={`M ${verticalX + 18} ${verticalTop + verticalHeight + 46} L ${verticalX + verticalWidth / 2} ${axisY + 2}`} fill="none" markerEnd="url(#mounting-node-callout-arrow)" stroke="#334155" strokeWidth="1.15" />
+              </g> : null}
+              {horizontalEdgeHole ? <g className="mounting-node-hole-callout">
+                <text x={jointX + 126} y={horizontalTop + horizontalHeight + 42}>{formatTechnicalHoleLabel(horizontalEdgeHole, horizontalEdgePointLabel)}</text>
+                <path d={`M ${jointX + 120} ${horizontalTop + horizontalHeight + 34} L ${jointX + horizontalEdgeHoleWidth / 2 + 6} ${axisY + 2}`} fill="none" markerEnd="url(#mounting-node-callout-arrow)" stroke="#334155" strokeWidth="1.15" />
+              </g> : null}
+            </g>
+            <g fill="none" markerEnd="url(#mounting-node-dimension-arrow)" markerStart="url(#mounting-node-dimension-arrow)" stroke="#c62828" strokeWidth="1.35">
+              <line x1={verticalX} x2={jointX} y1="44" y2="44" />
+              <line x1={boardRight + 24} x2={boardRight + 24} y1={horizontalTop} y2={horizontalTop + horizontalHeight} />
+              {!holeIsThrough(horizontalEdgeHole) && Number.isFinite(horizontalEdgeDepthMm) ? <line x1={jointX} x2={horizontalEdgeHoleEndX} y1="286" y2="286" /> : null}
+            </g>
+            <g fill="#c62828" fontFamily="system-ui, sans-serif" fontSize="12" fontWeight="800">
+              <text textAnchor="middle" x={(verticalX + jointX) / 2} y="39">{formatTechnicalMm(verticalThicknessMm)} мм</text>
+              <text textAnchor="middle" transform={`rotate(-90 ${boardRight + 42} ${axisY})`} x={boardRight + 42} y={axisY}>{formatTechnicalMm(horizontalThicknessMm)} мм</text>
+              {!holeIsThrough(horizontalEdgeHole) && Number.isFinite(horizontalEdgeDepthMm) ? <text textAnchor="middle" x={(jointX + horizontalEdgeHoleEndX) / 2} y="280">{formatTechnicalMm(horizontalEdgeDepthMm)} мм</text> : null}
+            </g>
+            <g stroke="#c62828" strokeWidth="1">
+              <line x1={verticalX} x2={verticalX} y1="38" y2={verticalTop - 2} />
+              <line x1={jointX} x2={jointX} y1="38" y2={verticalTop - 2} />
+              <line x1={boardRight + 18} x2={boardRight + 30} y1={horizontalTop} y2={horizontalTop} />
+              <line x1={boardRight + 18} x2={boardRight + 30} y1={horizontalTop + horizontalHeight} y2={horizontalTop + horizontalHeight} />
+              {!holeIsThrough(horizontalEdgeHole) && Number.isFinite(horizontalEdgeDepthMm) ? <>
+                <line x1={jointX} x2={jointX} y1={horizontalTop + horizontalHeight + 5} y2="292" />
+                <line x1={horizontalEdgeHoleEndX} x2={horizontalEdgeHoleEndX} y1={axisY + horizontalEdgeHoleHeight / 2 + 5} y2="292" />
+              </> : null}
+            </g>
+          </SchematicZoomSvg>
+        </section>
+      );
+    }
+
     const zoneByVariant = {
       angled_two_planes: { height: 126, width: 160, x: 266, y: 118 },
       drawer_slides: { height: 118, width: 120, x: 320, y: 110 },
@@ -18853,7 +19400,11 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
     }
 
     setHolePointEditPointId(String(point.id));
-    setHolePointEditForm(buildHolePointFormFromPoint(point));
+    setHolePointEditForm(
+      buildHolePointFormFromPoint({
+        ...point,
+      }, { holeLibraryItems }),
+    );
     setHolePointEditError("");
     setHolePointSubmitting(false);
     setHolePointEditOpen(true);
@@ -18886,6 +19437,8 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
       variantKey: normalizedSelectedHoleMountingVariantKey,
       inferFaceToEdgePointLocation,
       getAngledTwoPlanesPointFormPreset,
+      holeLibraryItems,
+      persistHoleLibraryTypeId: !isMountingNodeEditorMode,
       messages: t,
     });
   }
@@ -18941,9 +19494,36 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
         };
 
         setHolePoints((current) => [...current, nextPoint]);
+        setMountingNodeEditorDraft((current) => {
+          if (!current || typeof current !== "object") {
+            return current;
+          }
+
+          const templates = Array.isArray(current.templates) ? current.templates : [];
+          const selectedTemplateId = String(activeTemplateId || "").trim();
+          return {
+            ...current,
+            templates: templates.map((link) => {
+              const linkTemplateId = String(link?.template_id || link?.template?.id || "").trim();
+              if (linkTemplateId !== selectedTemplateId) {
+                return link;
+              }
+
+              const template = link?.template && typeof link.template === "object" ? link.template : link;
+              return {
+                ...link,
+                template: {
+                  ...template,
+                  points: [...(Array.isArray(template.points) ? template.points : []), nextPoint],
+                },
+              };
+            }),
+            is_dirty: true,
+          };
+        });
+        setMountingNodeEditorHasChanges(true);
         setSelectedHolePointId(String(nextPoint.id));
         closeHolePointCreateForm();
-        setMountingNodeEditorHasChanges(true);
         setStatus({ message: t.holePointCreateSuccess, tone: "success" });
         setHolePointSubmitting(false);
         return;
@@ -18976,7 +19556,8 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
       const errorMessage =
         error?.message === t.holePointOrderIndexInvalid ||
         error?.message === t.holePointQuantityInvalid ||
-        error?.message === t.holePointDiameterRequired
+        error?.message === t.holePointDiameterRequired ||
+        error?.message === t.holePointDiameterNotAllowed
           ? error.message
           : t.holePointNumericInvalid;
       setHolePointCreateError(errorMessage);
@@ -19096,7 +19677,8 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
       const errorMessage =
         error?.message === t.holePointOrderIndexInvalid ||
         error?.message === t.holePointQuantityInvalid ||
-        error?.message === t.holePointDiameterRequired
+        error?.message === t.holePointDiameterRequired ||
+        error?.message === t.holePointDiameterNotAllowed
           ? error.message
           : t.holePointNumericInvalid;
       setHolePointEditError(errorMessage);
@@ -28586,23 +29168,148 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
             ) : catalogHolesMode === "editor" ? (
               <>
               <article className="catalog-card service-catalog-card service-catalog-card-full holes-view-card">
-                <div className="catalog-page-header">
-                  <div className="service-catalog-title">
-                    <h3>{language === "uk" ? "Редактор монтажного вузла" : "Mounting node editor"}</h3>
-                    <p>
-                      {language === "uk"
-                        ? "Редагування фурнітури, точок і 3D-схеми монтажного вузла."
-                        : "Editing hardware, points, and the 3D scheme of the mounting node."}
-                    </p>
+                <CatalogBreadcrumbTrail
+                  className="mounting-node-workspace-breadcrumbs"
+                  items={[
+                    {
+                      label:
+                        language === "uk"
+                          ? "\u041a\u0440\u0456\u043f\u043b\u0435\u043d\u043d\u044f"
+                          : "Connections",
+                      onClick: () => switchView("connectionsOverview"),
+                      title:
+                        language === "uk"
+                          ? "\u041a\u0440\u0456\u043f\u043b\u0435\u043d\u043d\u044f \u0442\u0430 \u0437'\u0454\u0434\u043d\u0430\u043d\u043d\u044f"
+                          : "Connections",
+                    },
+                    {
+                      label:
+                        language === "uk"
+                          ? "\u041c\u043e\u043d\u0442\u0430\u0436\u043d\u0456 \u0432\u0443\u0437\u043b\u0438"
+                          : "Mounting nodes",
+                      onClick: () => handleOpenMountingNodesCategoryList(mountingNodesRouteState?.categoryCode),
+                      title:
+                        language === "uk"
+                          ? "\u041c\u043e\u043d\u0442\u0430\u0436\u043d\u0456 \u0432\u0443\u0437\u043b\u0438"
+                          : "Mounting nodes",
+                    },
+                    {
+                      current: true,
+                      label: getCatalogHolesBreadcrumbNodeName(),
+                      title: getCatalogHolesBreadcrumbNodeName(),
+                    },
+                  ]}
+                />
+                <div className="catalog-page-header mounting-node-workspace-page-header">
+                  <div className="service-catalog-title mounting-node-workspace-title">
+
+                    <div className="mounting-node-workspace-title-row">
+                      <div className="mounting-node-workspace-entity-thumb">
+                        {getMountingNodeEditorItemImageUrl(mountingNodeEditorSelectedItems[0]) ? (
+                          <img
+                            alt=""
+                            src={getMountingNodeEditorItemImageUrl(mountingNodeEditorSelectedItems[0])}
+                          />
+                        ) : (
+                          <span aria-hidden="true">{"\u2022"}</span>
+                        )}
+                      </div>
+
+                      <div className="mounting-node-workspace-entity-heading">
+                      <h3>
+                        {String(mountingNodeEditorDraft?.name || "").trim() ||
+                          getMountingNodeEditorItemName(mountingNodeEditorSelectedItems[0]) ||
+                          (language === "uk"
+                            ? "\u041c\u043e\u043d\u0442\u0430\u0436\u043d\u0438\u0439 \u0432\u0443\u0437\u043e\u043b"
+                            : "Mounting node")}
+                      </h3>
+                        <div className="mounting-node-workspace-entity-subtitle">
+                          {language === "uk"
+                            ? "\u041c\u043e\u043d\u0442\u0430\u0436\u043d\u0438\u0439 \u0432\u0443\u0437\u043e\u043b \u0434\u043b\u044f \u0437\u0027\u0454\u0434\u043d\u0430\u043d\u043d\u044f \u0434\u0435\u0442\u0430\u043b\u0435\u0439"
+                            : "Mounting node for joining parts"}
+                        </div>
+                      </div>
+
+                      {mountingNodeEditorSelectedCategoryLabel ? (
+                        <span className="service-tree-badge subtle">
+                          {mountingNodeEditorSelectedCategoryLabel}
+                        </span>
+                      ) : null}
+                    </div>
+
+                    <div className="mounting-node-workspace-meta">
+                      {String(
+                        mountingNodeEditorDraft?.ownership_type ||
+                          catalogHolesOpenContext?.nodeDetail?.ownership_type ||
+                          "",
+                      ).trim() ? (
+                        <span className="service-tree-badge subtle">
+                          {String(
+                            mountingNodeEditorDraft?.ownership_type ||
+                              catalogHolesOpenContext?.nodeDetail?.ownership_type ||
+                              "",
+                          ).trim() === "system"
+                            ? language === "uk"
+                              ? "\u0421\u0438\u0441\u0442\u0435\u043c\u043d\u0438\u0439"
+                              : "System"
+                            : language === "uk"
+                              ? "\u041c\u0456\u0439"
+                              : "Mine"}
+                        </span>
+                      ) : null}
+
+                      {catalogHolesOpenContext?.mountingNodeId ? (
+                        <span>
+                          ID:
+                          <strong>{catalogHolesOpenContext.mountingNodeId}</strong>
+                        </span>
+                      ) : null}
+
+                      {resolveActiveMountingNodeVersion(
+                        mountingNodeEditorDraft || catalogHolesOpenContext?.nodeDetail,
+                      )?.version_number ? (
+                        <span>
+                          {language === "uk"
+                            ? "\u0412\u0435\u0440\u0441\u0456\u044f"
+                            : "Version"}
+                          :
+                          <strong>
+                            {resolveActiveMountingNodeVersion(
+                              mountingNodeEditorDraft || catalogHolesOpenContext?.nodeDetail,
+                            )?.version_number}
+                          </strong>
+                        </span>
+                      ) : null}
+
+                      <span>
+                        {language === "uk"
+                          ? "\u0421\u043f\u043e\u0441\u0456\u0431 \u0437'\u0454\u0434\u043d\u0430\u043d\u043d\u044f"
+                          : "Connection method"}
+                        :
+                        <strong>{mountingNodeEditorSelectedVariantLabel}</strong>
+                      </span>
+
+                      <span>
+                        {language === "uk"
+                          ? "\u041e\u0442\u0432\u043e\u0440\u0456\u0432"
+                          : "Holes"}
+                        :
+                        <strong>{holePoints.length}</strong>
+                      </span>
+                    </div>
                   </div>
-                  <div className="service-catalog-header-actions">
+
+                  <div className="service-catalog-header-actions mounting-node-workspace-actions">
                     <button
-                      className="primary-button mounting-node-detail-action-button mounting-node-return-button"
+                      className="ghost-button mounting-node-detail-action-button mounting-node-return-button"
                       onClick={handleCatalogHolesBackToList}
                       type="button"
                     >
-                      {language === "uk" ? "Повернутися до деталей вузла" : "Return to node details"}
+                      {language === "uk"
+                        ? "\u041d\u0430\u0437\u0430\u0434"
+                        : "Back"}
                     </button>
+
                     {catalogHolesOpenContext?.mountingNodeId && catalogHolesOpenContext?.nodeDetail ? (
                       <button
                         className="primary-button mounting-node-save-button"
@@ -28622,12 +29329,13 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                         type="button"
                       >
                         <Save size={16} />
-                        {language === "uk" ? "Зберегти нову версію" : "Save new version"}
+                        {language === "uk"
+                          ? "Зберегти нову версію"
+                          : "Save"}
                       </button>
                     ) : null}
                   </div>
                 </div>
-
               {!isMountingNodeEditorMode ? (
                 <section className="holes-bundle-create-panel">
                   <div className="holes-bundle-create-head">
@@ -28709,21 +29417,59 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                 </section>
               ) : null}
 
-              <FittingHolesWorkspace className="mounting-node-editor-workspace">
-                <div className="holes-left-column mounting-node-editor-left-column">
+              <FittingHolesWorkspace className={`mounting-node-editor-workspace${isMountingNodeEditorMode ? " is-ordered-columns" : ""}`}>
+                <div className="holes-left-column mounting-node-editor-left-column mounting-node-editor-layout-column is-left">
+                  <div className="mounting-node-editor-primary-column">
                   <section className="mounting-node-create-card mounting-node-editor-category-card">
                     <div className="mounting-node-create-card-head">
-                      <strong>{language === "uk" ? "Категорія монтажного вузла" : "Mounting node category"}</strong>
+                      <strong>
+                        {language === "uk"
+                          ? "\u041e\u0441\u043d\u043e\u0432\u043d\u0430 \u0456\u043d\u0444\u043e\u0440\u043c\u0430\u0446\u0456\u044f"
+                          : "Basic information"}
+                      </strong>
                     </div>
+
+                    <label className="mounting-node-create-field">
+                      <span>
+                        {language === "uk"
+                          ? "\u041d\u0430\u0437\u0432\u0430 \u043c\u043e\u043d\u0442\u0430\u0436\u043d\u043e\u0433\u043e \u0432\u0443\u0437\u043b\u0430"
+                          : "Mounting node name"}
+                      </span>
+                      <input
+                        disabled={catalogHolesSaving}
+                        onChange={(event) => {
+                          const nextName = event.target.value;
+                          setMountingNodeEditorDraft((current) =>
+                            current && typeof current === "object"
+                              ? {
+                                  ...current,
+                                  name: nextName,
+                                  is_dirty: true,
+                                }
+                              : current,
+                          );
+                          setMountingNodeEditorHasChanges(true);
+                        }}
+                        type="text"
+                        value={mountingNodeEditorDraft?.name || ""}
+                      />
+                    </label>
+
                     <label className="mounting-node-create-field mounting-node-editor-category-field">
-                      <span>{language === "uk" ? "Категорія" : "Category"}</span>
+                      <span>
+                        {language === "uk"
+                          ? "\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0456\u044f"
+                          : "Category"}
+                      </span>
                       <select
                         disabled={catalogHolesSaving}
                         onChange={(event) => handleMountingNodeEditorCategoryChange(event.target.value)}
                         value={mountingNodeEditorSelectedCategoryCode}
                       >
                         <option value="">
-                          {language === "uk" ? "Категорію не вказано" : "Category not set"}
+                          {language === "uk"
+                            ? "\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0456\u044e \u043d\u0435 \u0432\u043a\u0430\u0437\u0430\u043d\u043e"
+                            : "Category not set"}
                         </option>
                         {mountingNodeEditorCategoryOptions.map((category) => (
                           <option key={category.code} value={category.code}>
@@ -28731,16 +29477,65 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                           </option>
                         ))}
                       </select>
-                      <span className="mounting-node-create-field-hint">{mountingNodeEditorSelectedCategoryLabel}</span>
+                      <span className="mounting-node-create-field-hint">
+                        {mountingNodeEditorSelectedCategoryLabel}
+                      </span>
                     </label>
+
+                    {mountingNodeEditorSelectedCategoryCode === "fastening" ? (
+                      <label className="mounting-node-create-field">
+                        <span>
+                          {language === "uk"
+                            ? "\u0422\u0438\u043f \u043a\u0440\u0456\u043f\u043b\u0435\u043d\u043d\u044f"
+                            : "Fastening type"}
+                        </span>
+                        <select
+                          disabled={catalogHolesSaving}
+                          onChange={(event) => {
+                            const fasteningType = event.target.value || null;
+                            setMountingNodeEditorDraft((current) =>
+                              current && typeof current === "object"
+                                ? {
+                                    ...current,
+                                    fastening_type: fasteningType,
+                                    is_dirty: true,
+                                  }
+                                : current,
+                            );
+                            setMountingNodeEditorHasChanges(true);
+                          }}
+                          value={mountingNodeEditorDraft?.fastening_type || ""}
+                        >
+                          <option value="">
+                            {language === "uk"
+                              ? "\u041d\u0435 \u0432\u043a\u0430\u0437\u0430\u043d\u043e"
+                              : "Not set"}
+                          </option>
+                          {mountingNodeFasteningTypes.map((option) => (
+                            <option key={option.code} value={option.code}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    ) : null}
+
                     <label className="mounting-node-create-field mounting-node-editor-functional-field">
-                      <span>{language === "uk" ? "Функціональне призначення" : "Functional purpose"}</span>
+                      <span>
+                        {language === "uk"
+                          ? "Функціональний код"
+                          : "Functional purpose"}
+                      </span>
                       <select
                         disabled={catalogHolesSaving}
                         onChange={(event) => handleMountingNodeEditorFunctionalChange(event.target.value)}
                         value={mountingNodeEditorSelectedFunctionalCode}
                       >
-                        <option value="">{language === "uk" ? "Не вказано" : "Not set"}</option>
+                        <option value="">
+                          {language === "uk"
+                            ? "\u041d\u0435 \u0432\u043a\u0430\u0437\u0430\u043d\u043e"
+                            : "Not set"}
+                        </option>
                         {mountingNodeEditorFunctionalOptions.map((functional) => (
                           <option key={functional.code} value={functional.code}>
                             {functional.label}
@@ -28748,14 +29543,48 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                         ))}
                       </select>
                       <span className="mounting-node-create-field-hint">
-                        {getMountingNodeFunctionalLabel(mountingNodeEditorSelectedFunctionalCode, language) ||
-                          (language === "uk" ? "Не вказано" : "Not set")}
+                        {getMountingNodeFunctionalLabel(
+                          mountingNodeEditorSelectedFunctionalCode,
+                          language,
+                        ) || (language === "uk"
+                          ? "\u041d\u0435 \u0432\u043a\u0430\u0437\u0430\u043d\u043e"
+                          : "Not set")}
                       </span>
                     </label>
+
+                    <label className="mounting-node-create-field">
+                      <span>
+                        {language === "uk"
+                          ? "\u041e\u043f\u0438\u0441"
+                          : "Description"}
+                      </span>
+                      <textarea
+                        disabled={catalogHolesSaving}
+                        onChange={(event) => {
+                          const nextDescription = event.target.value;
+                          setMountingNodeEditorDraft((current) =>
+                            current && typeof current === "object"
+                              ? {
+                                  ...current,
+                                  description: nextDescription,
+                                  is_dirty: true,
+                                }
+                              : current,
+                          );
+                          setMountingNodeEditorHasChanges(true);
+                        }}
+                        rows={3}
+                        value={mountingNodeEditorDraft?.description || ""}
+                      />
+                    </label>
                   </section>
+
                   <section className="mounting-node-create-card mounting-node-editor-items-card">
                     <div className="mounting-node-create-card-head mounting-node-editor-items-head">
                       <strong>{language === "uk" ? "Склад фурнітури" : "Fitting list"}</strong>
+                      {isMountingNodeEditorMode ? (
+                        <span>{language === "uk" ? "Спосіб з'єднання деталей" : "Connection method"}: {mountingNodeEditorSelectedVariantLabel}</span>
+                      ) : null}
                       <button
                         className="primary-button mounting-node-create-add-button"
                         onClick={openMountingNodeEditorSelector}
@@ -28845,20 +29674,21 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                     )}
                   </section>
 
+                  </div>
                   <section className="holes-panel holes-workspace-points-panel">
                   <div className="holes-panel-header">
-                    <h4>{t.holeTabPoints}</h4>
+                    <h4>{isMountingNodeEditorMode && language === "uk" ? "Монтажні отвори" : t.holeTabPoints}</h4>
                     <span className="service-tree-badge subtle">
                       {holePoints.length}
                     </span>
                     <button
-                      className="ghost-button compact-button"
+                      className="primary-button mounting-node-create-add-button"
                       disabled={!mountingNodeEditorCanAddPoint}
                       onClick={openHolePointCreateForm}
                       type="button"
                     >
                       <Plus size={14} />
-                      {t.holePointAdd}
+                      {isMountingNodeEditorMode && language === "uk" ? "Додати отвір" : t.holePointAdd}
                     </button>
                   </div>
                   {holePoints.length ? (
@@ -28893,7 +29723,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
 
                                   return (
                                   <article
-                                    className={`holes-points-table-row${String(hoveredHolePointId) === String(point.id) ? " is-hovered" : ""}${String(selectedHolePointId) === String(point.id) ? " is-selected" : ""}`}
+                                    className={`holes-points-table-row holes-drilling-card${String(hoveredHolePointId) === String(point.id) ? " is-hovered" : ""}${String(selectedHolePointId) === String(point.id) ? " is-selected" : ""}`}
                                     key={point.id}
                                     onClick={() => setSelectedHolePointId(String(point.id))}
                                     onMouseEnter={() => setHoveredHolePointId(String(point.id))}
@@ -28922,13 +29752,13 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                                         <Pencil size={14} />
                                       </button>
                                       <button
-                                        aria-label={t.holePointDelete}
+                                        aria-label={isMountingNodeEditorMode && language === "uk" ? "Видалити отвір" : t.holePointDelete}
                                         className="ghost-button compact-button holes-point-delete-button"
                                         onClick={(event) => {
                                           event.stopPropagation();
                                           openDeleteHolePointConfirm(point);
                                         }}
-                                        title={t.holePointDelete}
+                                        title={isMountingNodeEditorMode && language === "uk" ? "Видалити отвір" : t.holePointDelete}
                                         type="button"
                                       >
                                         <Trash2 size={14} />
@@ -28964,18 +29794,26 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
 
                                       return (
                                         <>
-                                          <span className="holes-point-label-cell">
-                                            {getSafeHolePointLabel(point.label, pointDisplayLabel)}
-                                          </span>
-                                          <span>{detailValue}</span>
-                                          <span>{surfaceValue}</span>
-                                          <span>{sideValue}</span>
-                                          <span>{point.x_mm ?? "—"}</span>
-                                          <span>{point.y_mm ?? "—"}</span>
-                                          <span>{point.z_mm ?? "—"}</span>
-                                          <span>{point.diameter_mm ?? "—"}</span>
-                                          <span>{formatHolePointDepthDisplay(point)}</span>
-                                          <span className="holes-point-notes-cell">{point.notes || "—"}</span>
+                                          <div className="holes-drilling-card-main">
+                                            <div className="holes-drilling-card-title">
+                                              <strong>{getSafeHolePointLabel(point.label, pointDisplayLabel)}</strong>
+                                              <span>{detailValue}</span>
+                                            </div>
+                                            <div className="holes-drilling-card-primary">
+                                              <span><small>{"\u00d8"}</small><strong>{point.diameter_mm ?? "\u2014"} mm</strong></span>
+                                              <span><small>{language === "uk" ? "\u0413\u043b\u0438\u0431\u0438\u043d\u0430" : "Depth"}</small><strong>{formatHolePointDepthDisplay(point)}</strong></span>
+                                            </div>
+                                          </div>
+                                          <div className="holes-drilling-card-location">
+                                            <span><small>{language === "uk" ? "\u041f\u043e\u0432\u0435\u0440\u0445\u043d\u044f" : "Surface"}</small><strong>{surfaceValue}</strong></span>
+                                            <span><small>{language === "uk" ? "\u0421\u0442\u043e\u0440\u043e\u043d\u0430" : "Side"}</small><strong>{sideValue}</strong></span>
+                                          </div>
+                                          <div className="holes-drilling-card-coordinates">
+                                            <span><small>X</small><strong>{point.x_mm ?? "\u2014"}</strong></span>
+                                            <span><small>Y</small><strong>{point.y_mm ?? "\u2014"}</strong></span>
+                                            <span><small>Z</small><strong>{point.z_mm ?? "\u2014"}</strong></span>
+                                          </div>
+                                          {point.notes ? <div className="holes-drilling-card-notes">{point.notes}</div> : null}
                                         </>
                                       );
                                     })()}
@@ -28989,7 +29827,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                       </div>
                   ) : (
                       <div className="empty-state compact-empty-state">
-                        <span>{t.holePreviewEmpty}</span>
+                        <span>{isMountingNodeEditorMode && language === "uk" ? "Монтажні отвори ще не додані" : t.holePreviewEmpty}</span>
                       </div>
                     )}
                   </section>
@@ -29192,7 +30030,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                       </>
                     ) : (
                       <div className="empty-state compact-empty-state">
-                        <span>{t.holePreviewEmpty}</span>
+                        <span>{isMountingNodeEditorMode && language === "uk" ? "Монтажні отвори ще не додані" : t.holePreviewEmpty}</span>
                       </div>
                     )}
                     </section>
@@ -29200,21 +30038,60 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                     </>
                   ) : null}
                 </div>
-
+                <div className="mounting-node-editor-layout-column is-center">
                 <section
                   className={`holes-preview-card holes-preview-3d-card mounting-node-editor-right-column${holeWorkspaceCanPreview ? "" : " is-placeholder"}`}
                 >
                   <div className="holes-preview-header">
                     <div>
-                      <h4>{t.holeWorkspacePreview3dTitle}</h4>
+                      <h4>{isMountingNodeEditorMode ? (language === "uk" ? "3D монтажного вузла" : "Node visualization") : t.holeWorkspacePreview3dTitle}</h4>
                     </div>
                   </div>
-                  {normalizedSelectedHoleMountingVariantKey === "face_to_edge" ||
-                  normalizedSelectedHoleMountingVariantKey === "surface_mount" ||
-                  shouldRenderAngledTwoPlanesThreePreview(normalizedSelectedHoleMountingVariantKey) ? (
+                  {isMountingNodeEditorMode ? (
+                    <div className="mounting-node-editor-visualization-tabs">
+                      <div className="mounting-node-editor-visualization-tab-buttons" role="tablist">
+                      <button
+                        className={mounting_node_visualization_tab === "3d" ? "is-active" : ""}
+                        onClick={() => set_mounting_node_visualization_tab("3d")}
+                        role="tab"
+                        aria-selected={mounting_node_visualization_tab === "3d"}
+                        type="button"
+                      >
+                        {"3D \u043c\u043e\u0434\u0435\u043b\u044c"}
+                      </button>
+                      <button
+                        className={mounting_node_visualization_tab === "2d" ? "is-active" : ""}
+                        onClick={() => set_mounting_node_visualization_tab("2d")}
+                        role="tab"
+                        aria-selected={mounting_node_visualization_tab === "2d"}
+                        type="button"
+                      >
+                        {"2D \u0441\u0445\u0435\u043c\u0430"}
+                      </button>
+                      </div>
+                      {mounting_node_visualization_tab === "2d" ? (
+                        <div className="mounting-node-schematic-zoom-controls-host" id="mounting-node-schematic-zoom-controls" />
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {isMountingNodeEditorMode && mounting_node_visualization_tab === "2d" ? (
+                    renderHolesSceneSchematicPreview(
+                      holesPreviewModel.scene,
+                      (holeId) => setHoveredHolePointId(String(holeId)),
+                      () => setHoveredHolePointId(""),
+                      (holeId) => setSelectedHolePointId(String(holeId)),
+                      { showHeader: false },
+                    )
+                  ) : normalizedSelectedHoleMountingVariantKey === "face_to_edge" ||
+                    normalizedSelectedHoleMountingVariantKey === "surface_mount" ||
+                    shouldRenderAngledTwoPlanesThreePreview(normalizedSelectedHoleMountingVariantKey) ? (
                     <HolesMountingThreePreview
                       holes={holesPreviewModel.scene?.holes || []}
                       mountingVariantKey={normalizedSelectedHoleMountingVariantKey}
+                      faceToEdgeVerticalPreviewThicknessMm={faceToEdgeVerticalPreviewThicknessMm}
+                      faceToEdgeHorizontalPreviewThicknessMm={faceToEdgeHorizontalPreviewThicknessMm}
+                      onFaceToEdgeVerticalPreviewThicknessMmChange={setFaceToEdgeVerticalPreviewThicknessMm}
+                      onFaceToEdgeHorizontalPreviewThicknessMmChange={setFaceToEdgeHorizontalPreviewThicknessMm}
                       hoveredHoleId={hoveredHolePointId}
                       onHoverHole={(holeId) => setHoveredHolePointId(String(holeId))}
                       onLeaveHole={() => setHoveredHolePointId("")}
@@ -29568,6 +30445,482 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                     </>
                   ) : null}
                 </section>
+                  {isMountingNodeEditorMode ? (
+                    <section className="mounting-node-placement-example-panel">
+                      <div className="holes-panel-header">
+                        <div>
+                          <h4>{language === "uk" ? "\u0421\u0445\u0435\u043c\u0430 \u0440\u043e\u0437\u043c\u0456\u0449\u0435\u043d\u043d\u044f (\u043f\u0440\u0438\u043a\u043b\u0430\u0434)" : "Placement scheme (example)"}</h4>
+                          <p>{language === "uk" ? "\u0412\u0456\u0437\u0443\u0430\u043b\u044c\u043d\u0438\u0439 \u043f\u0435\u0440\u0435\u0433\u043b\u044f\u0434 \u0440\u043e\u0437\u0441\u0442\u0430\u043d\u043e\u0432\u043a\u0438 \u0433\u0440\u0443\u043f \u043a\u0440\u0456\u043f\u043b\u0435\u043d\u044c \u0432\u0437\u0434\u043e\u0432\u0436 \u0437\u0027\u0454\u0434\u043d\u0430\u043d\u043d\u044f." : "Visual preview of fastening-group placement along the joint."}</p>
+                        </div>
+                        <span className="service-tree-badge subtle">{language === "uk" ? "\u041f\u043e\u043f\u0435\u0440\u0435\u0434\u043d\u0456\u0439 \u043f\u0435\u0440\u0435\u0433\u043b\u044f\u0434" : "Preview"}</span>
+                      </div>
+                      <div className="mounting-node-placement-example-content">
+                        <div className="mounting-node-placement-example-diagram">
+                          <div className="mounting-node-placement-example-board">
+                            {mountingNodePlacementPreview?.valid && Array.isArray(mountingNodePlacementPreview.positions)
+                              ? mountingNodePlacementPreview.positions.map((position, index) => {
+                                  const jointLength = Number(
+                                    mountingNodePlacementPreview.joint_length_mm || mountingNodePlacementPreviewLengthMm,
+                                  );
+                                  const left = jointLength > 0
+                                    ? Math.max(0, Math.min(100, (Number(position) / jointLength) * 100))
+                                    : 0;
+
+                                  return (
+                                    <span
+                                      key={`${position}-${index}`}
+                                      style={{ left: `${left}%` }}
+                                      title={`${Number(position).toFixed(1)} mm`}
+                                    ></span>
+                                  );
+                                })
+                              : null}
+                          </div>
+                          {mountingNodePlacementPreview?.valid && Array.isArray(mountingNodePlacementPreview.positions) ? (() => {
+                            const jointLength = Number(
+                              mountingNodePlacementPreview.joint_length_mm || mountingNodePlacementPreviewLengthMm,
+                            );
+                            const positions = mountingNodePlacementPreview.positions
+                              .map((value) => Number(value))
+                              .filter((value) => Number.isFinite(value) && value >= 0 && value <= jointLength)
+                              .sort((left, right) => left - right);
+                            const boundaries = [0, ...positions, jointLength];
+                            const unit = language === "uk" ? "мм" : "mm";
+
+                            return (
+                              <div
+                                aria-label={language === "uk" ? "Розміри розташування кріплень" : "Fastening placement dimensions"}
+                                className="mounting-node-placement-dimensions"
+                              >
+                                {boundaries.slice(0, -1).map((start, index) => {
+                                  const end = boundaries[index + 1];
+                                  const distance = Math.max(0, end - start);
+                                  const left = jointLength > 0 ? (start / jointLength) * 100 : 0;
+                                  const width = jointLength > 0 ? (distance / jointLength) * 100 : 0;
+                                  const label = Number.isInteger(distance) ? String(distance) : distance.toFixed(1);
+
+                                  return (
+                                    <span
+                                      className="mounting-node-placement-dimension-segment"
+                                      key={`${start}-${end}-${index}`}
+                                      style={{ left: `${left}%`, width: `${width}%` }}
+                                    >
+                                      <strong>{label} {unit}</strong>
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })() : null}
+                          <div className="mounting-node-placement-example-caption">
+                            {mountingNodePlacementPreviewLoading
+                              ? (language === "uk" ? "\u0420\u043e\u0437\u0440\u0430\u0445\u0443\u043d\u043e\u043a \u0440\u043e\u0437\u043c\u0456\u0449\u0435\u043d\u043d\u044f\u2026" : "Calculating placement\u2026")
+                              : mountingNodePlacementPreview?.valid
+                                ? (language === "uk" ? "\u0420\u043e\u0437\u0440\u0430\u0445\u0443\u043d\u043e\u043a \u0437\u0430 \u043f\u0440\u0430\u0432\u0438\u043b\u043e\u043c \u0430\u043a\u0442\u0438\u0432\u043d\u043e\u0457 \u0441\u0438\u0441\u0442\u0435\u043c\u0438 \u043a\u0440\u0456\u043f\u043b\u0435\u043d\u043d\u044f." : "Calculated from the active fastening-system rule.")
+                                : (mountingNodePlacementPreviewError || mountingNodePlacementPreview?.reason || (language === "uk" ? "\u041d\u0435\u043c\u0430\u0454 \u0432\u0430\u043b\u0456\u0434\u043d\u043e\u0433\u043e \u0440\u043e\u0437\u0440\u0430\u0445\u0443\u043d\u043a\u0443." : "No valid placement calculation."))}
+                          </div>
+                        </div>
+                        <div className="mounting-node-placement-example-insights">
+                          <div className="mounting-node-placement-example-insight is-calculation">
+                            <span aria-hidden="true" className="mounting-node-placement-example-insight-icon">#</span>
+                            <div className="mounting-node-placement-example-insight-copy">
+                              <strong>{language === "uk" ? "\u0420\u043e\u0437\u0440\u0430\u0445\u0443\u043d\u043e\u043a" : "Calculation"}</strong>
+                              <span>
+                                {mountingNodePlacementPreview?.valid
+                                  ? (
+                                      language === "uk"
+                                        ? <>{"\u0414\u043b\u044f \u0434\u043e\u0432\u0436\u0438\u043d\u0438 "}<b>{Number(mountingNodePlacementPreview.joint_length_mm || mountingNodePlacementPreviewLengthMm)} {"\u043c\u043c"}</b>{": "}<em>{mountingNodePlacementPreview.group_count} {"\u0433\u0440\u0443\u043f\u0438"}</em></>
+                                        : <>{"For length "}<b>{Number(mountingNodePlacementPreview.joint_length_mm || mountingNodePlacementPreviewLengthMm)} mm</b>{": "}<em>{mountingNodePlacementPreview.group_count} groups</em></>
+                                    )
+                                  : "\u2014"}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="mounting-node-placement-example-insight is-formula">
+                            <span aria-hidden="true" className="mounting-node-placement-example-insight-icon">fx</span>
+                            <div className="mounting-node-placement-example-insight-copy">
+                              <strong>{language === "uk" ? "\u0424\u043e\u0440\u043c\u0443\u043b\u0430" : "Formula"}</strong>
+                              {mountingNodePlacementPreview?.valid &&
+                              mountingNodePlacementPreview?.distribution_mode === "equal" &&
+                              Number(mountingNodePlacementPreview.group_count || 0) > 1 ? (
+                                <>
+                                  <span className="mounting-node-placement-example-formula">
+                                    {"S = (L - A - B) / (N - 1)"}
+                                  </span>
+                                  <small>
+                                    {`(${Number(mountingNodePlacementPreview.joint_length_mm || mountingNodePlacementPreviewLengthMm)} - ${Number(mountingNodePlacementPreview.start_offset_mm || 0)} - ${Number(mountingNodePlacementPreview.end_offset_mm || 0)}) / (${Number(mountingNodePlacementPreview.group_count || 0)} - 1) = ${Number(mountingNodePlacementPreview.actual_spacing_mm || 0)} ${language === "uk" ? "\u043c\u043c" : "mm"}`}
+                                  </small>
+                                </>
+                              ) : (
+                                <span>{mountingNodePlacementPreview?.distribution_mode === "fixed_spacing" ? (language === "uk" ? `\u0424\u0456\u043a\u0441\u043e\u0432\u0430\u043d\u0438\u0439 \u043a\u0440\u043e\u043a: ${Number(mountingNodePlacementPreview.actual_spacing_mm || 0)} \u043c\u043c` : `Fixed spacing: ${Number(mountingNodePlacementPreview.actual_spacing_mm || 0)} mm`) : (mountingNodePlacementPreview?.distribution_mode || "\u2014")}</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </section>
+                  ) : null}
+                </div>
+                <div className="mounting-node-editor-layout-column is-right">
+                  <section className="mounting-node-create-card mounting-node-editor-hole-summary-card mounting-node-hole-technical-preview">
+                    <div className="mounting-node-editor-hole-summary-head">
+                      <strong>{language === "uk" ? "\u0414\u0435\u0442\u0430\u043b\u044c \u0442\u0430 \u043e\u0442\u0432\u0456\u0440" : "Part and hole"}</strong>
+                    </div>
+
+                    {holePoints.length ? (() => {
+                      const previewPoint = selectedHolePoint || holePoints[0];
+                      const previewPointIndex = Math.max(0, holePoints.findIndex((point) => String(point.id) === String(previewPoint?.id)));
+                      const previewPointLabel = getMountingNodeEditorPointDisplayLabel(previewPoint, previewPointIndex);
+                      const previewLocation = isSurfaceMountVariant
+                        ? {
+                            needsClarification: false,
+                            targetPanel: "vertical_panel",
+                            targetSurface: "plane",
+                            targetSide: "inner_face",
+                          }
+                        : inferFaceToEdgePointLocation(previewPoint);
+                      const previewDetail = previewLocation.needsClarification
+                        ? "\u2014"
+                        : getHolePointTargetPanelLabel(
+                            previewLocation.targetPanel,
+                            normalizedSelectedHoleMountingVariantKey,
+                          );
+                      const previewSurface = previewLocation.needsClarification
+                        ? "\u2014"
+                        : getHolePointTargetSurfaceLabel(
+                            previewLocation.targetSurface,
+                            normalizedSelectedHoleMountingVariantKey,
+                          );
+                      const previewSide = previewLocation.needsClarification
+                        ? "\u2014"
+                        : getHolePointTargetSideLabel(
+                            previewLocation.targetSide,
+                            normalizedSelectedHoleMountingVariantKey,
+                          );
+
+                      return (
+                        <>
+
+                    <div className="mounting-node-details-view">
+                    <div className="mounting-node-detail-panel-tabs" role="tablist">
+                      {holePanelGroups.map((group) => {
+                        const isActivePanel = group.key === (selectedHolePointPanelKey || holePanelGroups[0]?.key || "");
+                        return (
+                          <button
+                            aria-selected={isActivePanel}
+                            className={isActivePanel ? "is-active" : ""}
+                            key={`detail-tab-${group.key}`}
+                            onClick={() => {
+                              const firstPoint = group.points[0] || null;
+                              if (firstPoint?.id != null) {
+                                setSelectedHolePointId(String(firstPoint.id));
+                              }
+                            }}
+                            role="tab"
+                            type="button"
+                          >
+                            {group.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                      {holePanelGroups.filter((group) => group.key === (selectedHolePointPanelKey || holePanelGroups[0]?.key || "")).map((group) => (
+                        <section className={`mounting-node-detail-card is-${group.key}`} key={group.key}>
+                          <div className="mounting-node-detail-card-head">
+                            <div>
+                              <strong>{group.label}</strong>
+                              {group.helper ? <span>{group.helper}</span> : null}
+                            </div>
+                            <span className="service-tree-badge subtle">{group.points.length}</span>
+                          </div>
+                          <div className={`mounting-node-detail-board mounting-node-detail-tech-board${group.key === "horizontal_panel" ? " is-horizontal" : " is-vertical"}`}>
+                            {(() => {
+                              const point =
+                                group.points.find((candidate) => String(candidate?.id ?? "") === String(selectedHolePointId ?? "")) ||
+                                group.points[0] ||
+                                null;
+                              if (!point) {
+                                return null;
+                              }
+                              const diameter = Number(point?.diameter_mm ?? point?.diameter ?? 0);
+                              const depth = Number(point?.depth_mm ?? point?.depth ?? 0);
+                              const pointId = String(point.id);
+                              const pointDisplayId = getMountingNodeEditorPointDisplayId(point);
+                              const isSelected = String(selectedHolePointId) === pointId;
+                              const isHovered = String(hoveredHolePointId) === pointId;
+                              const hatchId = `mounting-node-detail-hatch-${group.key}`;
+                              const holeLength = Math.max(
+                                42,
+                                Math.min(112, Number.isFinite(depth) && depth > 0 ? depth * 2.35 : 88),
+                              );
+                              const holeHeight = Math.max(
+                                8,
+                                Math.min(18, Number.isFinite(diameter) && diameter > 0 ? diameter * 1.8 : 10),
+                              );
+                              const selectPoint = () => setSelectedHolePointId(pointId);
+                              const detailProjectionScale = 0.72;
+                              const detailProjectionPoints = group.points.map((candidate, candidateIndex) => {
+                                const yMm = Number(candidate?.y_mm ?? candidate?.y ?? 0);
+                                const zMm = Number(candidate?.z_mm ?? candidate?.z ?? 0);
+                                const diameterMm = Number(candidate?.diameter_mm ?? candidate?.diameter ?? 0);
+                                const candidateId = String(candidate?.id ?? candidateIndex);
+                                return {
+                                  id: candidateId,
+                                  label: getMountingNodeEditorPointDisplayLabel(candidate, candidateIndex),
+                                  isThrough: (() => { const candidateDepth = Number(candidate?.depth_mm ?? candidate?.depth); const candidateOperation = String(candidate?.operation || "").toLowerCase(); return !Number.isFinite(candidateDepth) || candidateDepth <= 0 || candidateOperation.includes("through") || candidateOperation.includes("наскр"); })(),
+                                  targetSurface: String(candidate?.target_surface || candidate?.targetSurface || candidate?.surface || "").trim().toLowerCase(),
+                                  targetSide: String(candidate?.target_side || candidate?.targetSide || candidate?.side || "").trim().toLowerCase(),
+                                  cx: Math.max(56, Math.min(204, 130 + (Number.isFinite(zMm) ? zMm : 0) * detailProjectionScale)),
+                                  cy: Math.max(28, Math.min(122, 75 - (Number.isFinite(yMm) ? yMm : 0) * detailProjectionScale)),
+                                  radius: Math.max(5, Math.min(12, Number.isFinite(diameterMm) && diameterMm > 0 ? diameterMm * 0.8 : 6)),
+                                };
+                              });
+                              const horizontalDetailPoints = group.points.map((candidate, candidateIndex) => {
+                                const xMm = Number(candidate?.x_mm ?? candidate?.x ?? 0);
+                                const zMm = Number(candidate?.z_mm ?? candidate?.z ?? 0);
+                                const diameterMm = Number(candidate?.diameter_mm ?? candidate?.diameter ?? 0);
+                                const depthMm = Number(candidate?.depth_mm ?? candidate?.depth ?? 0);
+                                const targetSurface = String(candidate?.target_surface || candidate?.targetSurface || candidate?.surface || "").trim().toLowerCase();
+                                const targetSide = String(candidate?.target_side || candidate?.targetSide || candidate?.side || "").trim().toLowerCase();
+                                const candidateId = String(candidate?.id ?? candidateIndex);
+                                return {
+                                  id: candidateId,
+                                  label: getMountingNodeEditorPointDisplayLabel(candidate, candidateIndex),
+                                  isThrough: (() => { const candidateDepth = Number(candidate?.depth_mm ?? candidate?.depth); const candidateOperation = String(candidate?.operation || "").toLowerCase(); return !Number.isFinite(candidateDepth) || candidateDepth <= 0 || candidateOperation.includes("through") || candidateOperation.includes("наскр"); })(),
+                                  targetSurface,
+                                  targetSide,
+                                  cx: Math.max(54, Math.min(206, 130 + (Number.isFinite(xMm) ? xMm : 0) * detailProjectionScale)),
+                                  cy: Math.max(30, Math.min(120, 75 - (Number.isFinite(zMm) ? zMm : 0) * detailProjectionScale)),
+                                  radius: Math.max(5, Math.min(12, Number.isFinite(diameterMm) && diameterMm > 0 ? diameterMm * 0.8 : 6)),
+                                  diameterPx: Math.max(4, Math.min(18, Number.isFinite(diameterMm) && diameterMm > 0 ? diameterMm * detailProjectionScale : 6)),
+                                  depthPx: Math.max(4, Math.min(112, Number.isFinite(depthMm) && depthMm > 0 ? depthMm * detailProjectionScale : 28)),
+                                };
+                              });
+
+                              return (
+                                <svg
+                                  aria-label={`${group.label}: ${pointDisplayId}`}
+                                  className="mounting-node-detail-tech-svg"
+                                  role="img"
+                                  viewBox="0 0 260 150"
+                                >
+                                  <defs>
+                                    <pattern
+                                      height="8"
+                                      id={hatchId}
+                                      patternTransform="rotate(45)"
+                                      patternUnits="userSpaceOnUse"
+                                      width="8"
+                                    >
+                                      <line className="mounting-node-detail-tech-hatch" x1="0" x2="0" y1="0" y2="8" />
+                                    </pattern>
+                                  </defs>
+
+                                  {group.key === "horizontal_panel" ? (
+                                    <>
+                                      <rect className="mounting-node-detail-tech-panel" fill={`url(#${hatchId})`} height="110" width="168" x="46" y="20" />
+                                      <line className="mounting-node-detail-tech-axis" x1="26" x2="234" y1="75" y2="75" />
+                                      <line className="mounting-node-detail-tech-axis" x1="130" x2="130" y1="8" y2="142" />
+                                      <text className="mounting-node-detail-tech-dimension-text" x="218" y="70">X</text>
+                                      <text className="mounting-node-detail-tech-dimension-text" x="136" y="16">Z</text>
+                                      {horizontalDetailPoints.map((candidate) => {
+                                        const isEdgeHole = candidate.targetSurface === "edge";
+                                        const isFarEdge = candidate.targetSide === "edge_far_vertical";
+                                        const edgeStartX = isFarEdge ? 214 : 46;
+                                        const edgeEndX = isFarEdge
+                                          ? Math.max(46, edgeStartX - candidate.depthPx)
+                                          : Math.min(214, edgeStartX + candidate.depthPx);
+                                        const hiddenX = Math.min(edgeStartX, edgeEndX);
+                                        const hiddenWidth = Math.max(1, Math.abs(edgeEndX - edgeStartX));
+                                        const isCandidateSelected = String(selectedHolePointId) === candidate.id;
+                                        const isCandidateHovered = String(hoveredHolePointId) === candidate.id;
+                                        return (
+                                          <g className={`mounting-node-detail-tech-hole${isCandidateSelected ? " is-selected" : ""}${isCandidateHovered ? " is-hovered" : ""}`} key={candidate.id} onClick={() => setSelectedHolePointId(candidate.id)} onMouseEnter={() => setHoveredHolePointId(candidate.id)} onMouseLeave={() => setHoveredHolePointId("")}>
+                                            {isEdgeHole ? (
+                                              <>
+                                                <rect fill="none" height={candidate.diameterPx} stroke={isCandidateSelected ? "#1d4ed8" : isCandidateHovered ? "#0f766e" : "#475569"} strokeDasharray="5 4" strokeWidth={isCandidateSelected || isCandidateHovered ? 1.1 : 0.8} width={hiddenWidth} x={hiddenX} y={candidate.cy - candidate.diameterPx / 2} />
+                                                <line stroke={isCandidateSelected ? "#1d4ed8" : "#64748b"} strokeDasharray="3 3" strokeWidth="0.7" x1={edgeStartX} x2={edgeEndX} y1={candidate.cy} y2={candidate.cy} />
+                                              </>
+                                            ) : (
+                                              <>
+                                                <circle className="mounting-node-detail-tech-hole-circle" cx={candidate.cx} cy={candidate.cy} r={candidate.radius} />
+                                                {!candidate.isThrough ? <circle cx={candidate.cx} cy={candidate.cy} fill="none" r={candidate.radius + 1.4} stroke="#c62828" strokeDasharray="2 2" strokeWidth="0.8" /> : null}
+                                                <circle className="mounting-node-detail-tech-hole-center" cx={candidate.cx} cy={candidate.cy} r="2" />
+                                              </>
+                                            )}
+                                            <text className="mounting-node-detail-tech-point-label" x={isEdgeHole ? edgeEndX + 6 : candidate.cx + candidate.radius + 5} y={candidate.cy - candidate.radius - 3}>{candidate.label}</text>
+                                          </g>
+                                        );
+                                      })}
+                                    </>
+                                  ) : (
+                                    <>
+                                      <rect className="mounting-node-detail-tech-panel" fill={`url(#${hatchId})`} height="110" width="168" x="46" y="20" />
+                                      <line className="mounting-node-detail-tech-axis" x1="26" x2="234" y1="75" y2="75" />
+                                      <line className="mounting-node-detail-tech-axis" x1="130" x2="130" y1="8" y2="142" />
+                                      <text className="mounting-node-detail-tech-dimension-text" x="218" y="70">Z</text>
+                                      <text className="mounting-node-detail-tech-dimension-text" x="136" y="16">Y</text>
+                                      {detailProjectionPoints.map((candidate) => (
+                                        <g className={`mounting-node-detail-tech-hole${String(selectedHolePointId) === candidate.id ? " is-selected" : ""}${String(hoveredHolePointId) === candidate.id ? " is-hovered" : ""}`} key={candidate.id} onClick={() => setSelectedHolePointId(candidate.id)} onMouseEnter={() => setHoveredHolePointId(candidate.id)} onMouseLeave={() => setHoveredHolePointId("")}>
+                                          <circle className="mounting-node-detail-tech-hole-circle" cx={candidate.cx} cy={candidate.cy} r={candidate.radius} />
+                                                {!candidate.isThrough ? <circle cx={candidate.cx} cy={candidate.cy} fill="none" r={candidate.radius + 1.4} stroke="#c62828" strokeDasharray="2 2" strokeWidth="0.8" /> : null}
+                                          <circle className="mounting-node-detail-tech-hole-center" cx={candidate.cx} cy={candidate.cy} r="2" />
+                                          <text className="mounting-node-detail-tech-point-label" x={candidate.cx + candidate.radius + 5} y={candidate.cy - candidate.radius - 3}>{candidate.label}</text>
+                                        </g>
+                                      ))}
+                                    </>
+                                  )}
+                                </svg>
+                              );
+                            })()}
+                          </div>
+                          <div className="mounting-node-detail-points">
+                            {group.points.map((point, pointIndex) => (
+                              <button
+                                className={`mounting-node-detail-point${String(selectedHolePointId) === String(point.id) ? " is-selected" : ""}`}
+                                key={point.id ?? `${group.key}-detail-${pointIndex}`}
+                                onClick={() => setSelectedHolePointId(String(point.id))}
+                                onMouseEnter={() => setHoveredHolePointId(String(point.id))}
+                                onMouseLeave={() => setHoveredHolePointId("")}
+                                type="button"
+                              >
+                                <strong>{getMountingNodeEditorPointDisplayLabel(point, pointIndex)}</strong>
+                                <span>
+                                  {"\u00d8"}{point.diameter_mm ?? point.diameter ?? "\u2014"} {"\u043c\u043c"} · {formatHolePointDepthDisplay(point)}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        </section>
+                      ))}
+                    </div>
+
+                          <div className="mounting-node-hole-preview-body">
+                            <div className="mounting-node-hole-preview-copy">
+                              <div className="mounting-node-hole-preview-title">
+                                <div>
+                                  <strong>{previewPointLabel}</strong>
+                                  <span>{previewDetail}</span>
+                                </div>
+                                <button
+                                  aria-label={language === "uk" ? "едагувати отвір" : "Edit hole"}
+                                  className="ghost-button compact-button"
+                                  onClick={() => openHolePointEditForm(previewPoint)}
+                                  title={language === "uk" ? "едагувати отвір" : "Edit hole"}
+                                  type="button"
+                                >
+                                  <Pencil size={14} />
+                                </button>
+                              </div>
+
+                              <div className="mounting-node-hole-preview-specs">
+                                <span>
+                                  <small>{"\u00d8"}</small>
+                                  <strong>{previewPoint?.diameter_mm ?? previewPoint?.diameter ?? "\u2014"} mm</strong>
+                                </span>
+                                <span>
+                                  <small>{language === "uk" ? "\u0413\u043b\u0438\u0431\u0438\u043d\u0430" : "Depth"}</small>
+                                  <strong>{formatHolePointDepthDisplay(previewPoint)}</strong>
+                                </span>
+                                <span>
+                                  <small>{language === "uk" ? "\u041f\u043e\u0432\u0435\u0440\u0445\u043d\u044f" : "Surface"}</small>
+                                  <strong>{previewSurface}</strong>
+                                </span>
+                                <span>
+                                  <small>{language === "uk" ? "\u0421\u0442\u043e\u0440\u043e\u043d\u0430" : "Side"}</small>
+                                  <strong>{previewSide}</strong>
+                                </span>
+                              </div>
+
+                              <div className="mounting-node-hole-preview-coordinates">
+                                <span>X <strong>{previewPoint?.x_mm ?? "\u2014"}</strong></span>
+                                <span>Y <strong>{previewPoint?.y_mm ?? "\u2014"}</strong></span>
+                                <span>Z <strong>{previewPoint?.z_mm ?? "\u2014"}</strong></span>
+                              </div>
+                            </div>
+                          </div>
+                        </>
+                      );
+                    })() : (
+                      <div className="mounting-node-editor-hole-summary-empty">
+                        {language === "uk"
+                          ? "онтажні отвори ще не додані."
+                          : "No mounting holes added yet."}
+                      </div>
+                    )}
+                  </section>
+                  {isMountingNodeEditorMode ? (
+                    <section className="mounting-node-fastening-systems-panel">
+                      <div className="holes-panel-header">
+                        <div>
+                          <h4>{language === "uk" ? "\u0421\u0438\u0441\u0442\u0435\u043c\u0438 \u043a\u0440\u0456\u043f\u043b\u0435\u043d\u044c" : "Fastening systems"}</h4>
+                          <p>{language === "uk" ? "\u0421\u0445\u0435\u043c\u0438 \u0442\u0430 \u043f\u0440\u0430\u0432\u0438\u043b\u0430 \u0440\u043e\u0437\u0441\u0442\u0430\u043d\u043e\u0432\u043a\u0438, \u0443 \u044f\u043a\u0438\u0445 \u0432\u0438\u043a\u043e\u0440\u0438\u0441\u0442\u043e\u0432\u0443\u0454\u0442\u044c\u0441\u044f \u0446\u0435\u0439 \u043c\u043e\u043d\u0442\u0430\u0436\u043d\u0438\u0439 \u0432\u0443\u0437\u043e\u043b." : "Schemes and placement rules that use this mounting node."}</p>
+                        </div>
+                        <span className="service-tree-badge subtle">
+                          {mountingNodeFasteningSchemesLoading ? "\u2026" : mountingNodeFasteningSchemes.length}
+                        </span>
+                      </div>
+
+                      {mountingNodeFasteningSchemesLoading ? (
+                        <div className="mounting-node-fastening-systems-empty">
+                          <div>
+                            <strong>{language === "uk" ? "\u0417\u0430\u0432\u0430\u043d\u0442\u0430\u0436\u0435\u043d\u043d\u044f\u2026" : "Loading\u2026"}</strong>
+                          </div>
+                        </div>
+                      ) : mountingNodeFasteningSchemesError ? (
+                        <div className="mounting-node-fastening-systems-empty">
+                          <div>
+                            <strong>{language === "uk" ? "\u041d\u0435 \u0432\u0434\u0430\u043b\u043e\u0441\u044f \u0437\u0430\u0432\u0430\u043d\u0442\u0430\u0436\u0438\u0442\u0438 \u0441\u0445\u0435\u043c\u0438" : "Unable to load schemes"}</strong>
+                            <span>{mountingNodeFasteningSchemesError}</span>
+                          </div>
+                        </div>
+                      ) : mountingNodeFasteningSchemes.length ? (
+                        <div className="mounting-schemes-detail-list">
+                          {mountingNodeFasteningSchemes.map((scheme) => {
+                            const linkedNode = (Array.isArray(scheme.nodes) ? scheme.nodes : []).find(
+                              (link) => String(link?.node_id || "").trim() === String(mountingNodeEditorDraftNodeId || "").trim(),
+                            );
+                            const linkedRule = (Array.isArray(scheme.placement_rules) ? scheme.placement_rules : []).find(
+                              (rule) => String(rule?.group_key || "").trim() === String(linkedNode?.group_key || "").trim(),
+                            );
+
+                            return (
+                              <div className="mounting-schemes-detail-row" key={scheme.id}>
+                                <div className="mounting-schemes-detail-row-main">
+                                  <strong>{scheme.name || scheme.code || scheme.id}</strong>
+                                  <span>
+                                    {[linkedNode?.group_key, linkedRule?.distribution_mode].filter(Boolean).join(" \u00b7 ") || "\u2014"}
+                                  </span>
+                                </div>
+                                <div className="mounting-schemes-detail-row-meta">
+                                  <span className="service-tree-badge subtle">
+                                    {language === "uk" ? "\u041a-\u0441\u0442\u044c \u0443 \u0433\u0440\u0443\u043f\u0456" : "Per group"}: {linkedNode?.quantity_per_group ?? "\u2014"}
+                                  </span>
+                                  <span className="service-tree-badge subtle">
+                                    {linkedRule?.distribution_mode || "\u2014"}
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="mounting-node-fastening-systems-empty">
+                          <div className="mounting-node-fastening-systems-empty-icon" aria-hidden="true">
+                            <span></span>
+                            <span></span>
+                            <span></span>
+                          </div>
+                          <div>
+                            <strong>{language === "uk" ? "\u0421\u0445\u0435\u043c\u0438 \u043a\u0440\u0456\u043f\u043b\u0435\u043d\u043d\u044f \u0449\u0435 \u043d\u0435 \u043f\u0440\u0438\u0437\u043d\u0430\u0447\u0435\u043d\u0456" : "No fastening schemes assigned yet"}</strong>
+                            <span>{language === "uk" ? "\u0426\u0435\u0439 \u0432\u0443\u0437\u043e\u043b \u043f\u043e\u043a\u0438 \u043d\u0435 \u0432\u0445\u043e\u0434\u0438\u0442\u044c \u0434\u043e \u0436\u043e\u0434\u043d\u043e\u0457 \u0441\u0445\u0435\u043c\u0438 \u043a\u0440\u0456\u043f\u043b\u0435\u043d\u043d\u044f." : "This node is not currently used by any fastening scheme."}</span>
+                          </div>
+                        </div>
+                      )}
+                    </section>
+                  ) : null}
+                </div>
               </FittingHolesWorkspace>
               <MountingNodesFittingSelectorModal
                 categoryCode={mountingNodeEditorSelectorCategoryCode}
@@ -35293,40 +36646,91 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                 </div>
               ) : null}
 
-              <div className="hole-template-form-grid">
-                <label>
-                  {t.holePointDiameter}
-                  <input
-                    disabled={loading}
-                    min="0.01"
-                    onChange={(event) =>
-                      setHolePointCreateForm((current) => ({
-                        ...current,
-                        diameter_mm: event.target.value,
-                      }))
-                    }
-                    required
-                    step="any"
-                    type="number"
-                    value={holePointCreateForm.diameter_mm}
-                  />
-                </label>
-                <label className="material-inline-check">
-                  <input
-                    checked={holePointCreateForm.is_through}
-                    disabled={loading}
-                    onChange={(event) =>
-                      setHolePointCreateForm((current) => ({
-                        ...current,
-                        is_through: event.target.checked,
-                        depth_mm: event.target.checked ? "" : current.depth_mm,
-                      }))
-                    }
-                    type="checkbox"
-                  />
-                  Наскрізний отвір
-                </label>
-              </div>
+              {isMountingNodeEditorMode ? (
+                <div className="hole-template-form-grid">
+                  <label>
+                    {language === "uk" ? "Діаметр отвору" : "Hole diameter"}
+                    <select
+                      disabled={loading || holeLibraryLoading || !holeLibraryDiameterOptions.length}
+                      onChange={(event) =>
+                        setHolePointCreateForm((current) => ({
+                          ...current,
+                          diameter_mm: event.target.value,
+                        }))
+                      }
+                      required
+                      value={holePointCreateForm.diameter_mm ? String(holePointCreateForm.diameter_mm) : ""}
+                    >
+                      <option value="">
+                        {holeLibraryLoading
+                          ? (language === "uk" ? "Завантаження..." : "Loading...")
+                          : holeLibraryDiameterOptions.length
+                            ? (language === "uk" ? "Оберіть діаметр" : "Choose a diameter")
+                            : (language === "uk" ? "Немає доступних діаметрів" : "No diameters available")}
+                      </option>
+                      {holeLibraryDiameterOptions.map((item) => (
+                        <option key={item.value} value={item.value}>
+                          {item.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="material-inline-check">
+                    <input
+                      checked={holePointCreateForm.is_through}
+                      disabled={loading}
+                      onChange={(event) =>
+                        setHolePointCreateForm((current) => ({
+                          ...current,
+                          is_through: event.target.checked,
+                          depth_mm: event.target.checked ? "" : current.depth_mm,
+                        }))
+                      }
+                      type="checkbox"
+                    />
+                    Наскрізний отвір
+                  </label>
+                </div>
+              ) : (
+                <div className="hole-template-form-grid">
+                  <label>
+                    Бібліотека отворів
+                    <select
+                      disabled={loading || holeLibraryLoading}
+                      onChange={(event) =>
+                        setHolePointCreateForm((current) => ({
+                          ...current,
+                          hole_library_type_id: event.target.value,
+                        }))
+                      }
+                      required
+                      value={holePointCreateForm.hole_library_type_id}
+                    >
+                      <option value="">{holeLibraryLoading ? "Завантаження..." : "Оберіть тип"}</option>
+                      {holeLibraryItems.map((item) => (
+                        <option key={item.id} value={String(item.id)}>
+                          {`${item.code} · ${item.name} · Ø${item.diameter_mm ?? "—"}`}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="material-inline-check">
+                    <input
+                      checked={holePointCreateForm.is_through}
+                      disabled={loading}
+                      onChange={(event) =>
+                        setHolePointCreateForm((current) => ({
+                          ...current,
+                          is_through: event.target.checked,
+                          depth_mm: event.target.checked ? "" : current.depth_mm,
+                        }))
+                      }
+                      type="checkbox"
+                    />
+                    Наскрізний отвір
+                  </label>
+                </div>
+              )}
 
               {!holePointCreateForm.is_through ? (
                 <div className="hole-template-form-grid">
@@ -35367,6 +36771,9 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
 
               {holePointCreateError ? (
                 <p className="hole-template-error">{holePointCreateError}</p>
+              ) : null}
+              {holeLibraryLoadError ? (
+                <p className="hole-template-error">{holeLibraryLoadError}</p>
               ) : null}
 
               <div className="confirm-actions hole-template-actions">
@@ -35603,40 +37010,91 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                 </div>
               ) : null}
 
-              <div className="hole-template-form-grid">
-                <label>
-                  {t.holePointDiameter}
-                  <input
-                    disabled={loading}
-                    min="0.01"
-                    onChange={(event) =>
-                      setHolePointEditForm((current) => ({
-                        ...current,
-                        diameter_mm: event.target.value,
-                      }))
-                    }
-                    required
-                    step="any"
-                    type="number"
-                    value={holePointEditForm.diameter_mm}
-                  />
-                </label>
-                <label className="material-inline-check">
-                  <input
-                    checked={holePointEditForm.is_through}
-                    disabled={loading}
-                    onChange={(event) =>
-                      setHolePointEditForm((current) => ({
-                        ...current,
-                        is_through: event.target.checked,
-                        depth_mm: event.target.checked ? "" : current.depth_mm,
-                      }))
-                    }
-                    type="checkbox"
-                  />
-                  Наскрізний отвір
-                </label>
-              </div>
+              {isMountingNodeEditorMode ? (
+                <div className="hole-template-form-grid">
+                  <label>
+                    {language === "uk" ? "Діаметр отвору" : "Hole diameter"}
+                    <select
+                      disabled={loading || holeLibraryLoading || !holeLibraryDiameterOptions.length}
+                      onChange={(event) =>
+                        setHolePointEditForm((current) => ({
+                          ...current,
+                          diameter_mm: event.target.value,
+                        }))
+                      }
+                      required
+                      value={holePointEditForm.diameter_mm ? String(holePointEditForm.diameter_mm) : ""}
+                    >
+                      <option value="">
+                        {holeLibraryLoading
+                          ? (language === "uk" ? "Завантаження..." : "Loading...")
+                          : holeLibraryDiameterOptions.length
+                            ? (language === "uk" ? "Оберіть діаметр" : "Choose a diameter")
+                            : (language === "uk" ? "Немає доступних діаметрів" : "No diameters available")}
+                      </option>
+                      {holeLibraryDiameterOptions.map((item) => (
+                        <option key={item.value} value={item.value}>
+                          {item.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="material-inline-check">
+                    <input
+                      checked={holePointEditForm.is_through}
+                      disabled={loading}
+                      onChange={(event) =>
+                        setHolePointEditForm((current) => ({
+                          ...current,
+                          is_through: event.target.checked,
+                          depth_mm: event.target.checked ? "" : current.depth_mm,
+                        }))
+                      }
+                      type="checkbox"
+                    />
+                    Наскрізний отвір
+                  </label>
+                </div>
+              ) : (
+                <div className="hole-template-form-grid">
+                  <label>
+                    Бібліотека отворів
+                    <select
+                      disabled={loading || holeLibraryLoading}
+                      onChange={(event) =>
+                        setHolePointEditForm((current) => ({
+                          ...current,
+                          hole_library_type_id: event.target.value,
+                        }))
+                      }
+                      required
+                      value={holePointEditForm.hole_library_type_id}
+                    >
+                      <option value="">{holeLibraryLoading ? "Завантаження..." : "Оберіть тип"}</option>
+                      {holeLibraryItems.map((item) => (
+                        <option key={item.id} value={String(item.id)}>
+                          {`${item.code} · ${item.name} · Ø${item.diameter_mm ?? "—"}`}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="material-inline-check">
+                    <input
+                      checked={holePointEditForm.is_through}
+                      disabled={loading}
+                      onChange={(event) =>
+                        setHolePointEditForm((current) => ({
+                          ...current,
+                          is_through: event.target.checked,
+                          depth_mm: event.target.checked ? "" : current.depth_mm,
+                        }))
+                      }
+                      type="checkbox"
+                    />
+                    Наскрізний отвір
+                  </label>
+                </div>
+              )}
 
               {!holePointEditForm.is_through ? (
                 <div className="hole-template-form-grid">

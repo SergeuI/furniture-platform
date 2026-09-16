@@ -105,3 +105,27 @@ class MountingSchemeOperationResponseSchema(BaseModel):
     success: bool
     scheme: MountingSchemeDetailSchema | None = None
     error: str | None = None
+
+
+class MountingSchemePlacementPreviewRequestSchema(BaseModel):
+    joint_length_mm: float = Field(gt=0)
+    rule: MountingSchemePlacementRuleCreateSchema
+
+
+class MountingSchemePlacementPreviewResultSchema(BaseModel):
+    valid: bool
+    reason: str | None = None
+    distribution_mode: str | None = None
+    joint_length_mm: float | None = None
+    start_offset_mm: float | None = None
+    end_offset_mm: float | None = None
+    usable_length_mm: float | None = None
+    group_count: int = 0
+    positions: list[float] = Field(default_factory=list)
+    actual_spacing_mm: float | None = None
+
+
+class MountingSchemePlacementPreviewResponseSchema(BaseModel):
+    success: bool
+    result: MountingSchemePlacementPreviewResultSchema
+    error: str | None = None

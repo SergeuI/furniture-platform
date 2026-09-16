@@ -5,6 +5,7 @@ export function createHolePointFormDefaults() {
     target_panel: "",
     target_surface: "",
     target_side: "",
+    hole_library_type_id: "",
     label: "",
     x_mm: "",
     y_mm: "",
@@ -21,7 +22,67 @@ export function createHolePointFormDefaults() {
   };
 }
 
-export function buildHolePointFormFromPoint(point) {
+function parseHoleLibraryDiameterValue(value) {
+  const numericValue = Number(String(value ?? "").trim().replace(",", "."));
+
+  if (!Number.isFinite(numericValue) || numericValue <= 0) {
+    return null;
+  }
+
+  return numericValue;
+}
+
+function sameHoleLibraryDiameter(left, right) {
+  return Math.abs(left - right) < 0.0001;
+}
+
+export function buildHoleLibraryDiameterOptions(holeLibraryItems = []) {
+  const uniqueDiameters = new Map();
+
+  for (const item of Array.isArray(holeLibraryItems) ? holeLibraryItems : []) {
+    if (item?.is_active === false) {
+      continue;
+    }
+
+    const diameterValue = parseHoleLibraryDiameterValue(item?.diameter_mm);
+    if (diameterValue === null) {
+      continue;
+    }
+
+    const key = diameterValue.toString();
+    if (!uniqueDiameters.has(key)) {
+      uniqueDiameters.set(key, diameterValue);
+    }
+  }
+
+  return Array.from(uniqueDiameters.values())
+    .sort((left, right) => left - right)
+    .map((value) => ({
+      value: String(value),
+      label: `Ø${value}`,
+    }));
+}
+
+export function resolveHolePointDiameterValue(point, holeLibraryItems = []) {
+  const pointDiameter = parseHoleLibraryDiameterValue(point?.diameter_mm);
+  if (pointDiameter !== null) {
+    return pointDiameter;
+  }
+
+  const holeLibraryTypeId = String(point?.hole_library_type_id ?? "").trim();
+  if (!holeLibraryTypeId) {
+    return null;
+  }
+
+  const matchingItem = (Array.isArray(holeLibraryItems) ? holeLibraryItems : []).find(
+    (item) => String(item?.id || "") === holeLibraryTypeId,
+  );
+
+  return parseHoleLibraryDiameterValue(matchingItem?.diameter_mm);
+}
+
+export function buildHolePointFormFromPoint(point, options = {}) {
+  const holeLibraryItems = Array.isArray(options?.holeLibraryItems) ? options.holeLibraryItems : [];
   const targetPanel = String(point?.target_panel || "").trim();
   const panelKey = String(point?.panelKey || point?.panel_key || point?.panelId || point?.panel_id || "").trim();
   const targetSurface = String(point?.target_surface || "").trim();
@@ -32,6 +93,7 @@ export function buildHolePointFormFromPoint(point) {
     point?.is_through === true ||
     point?.depth_mm === null ||
     point?.depth_mm === undefined;
+  const resolvedDiameter = resolveHolePointDiameterValue(point, holeLibraryItems);
 
   return {
     template_id: String(point?.template_id ?? ""),
@@ -39,11 +101,12 @@ export function buildHolePointFormFromPoint(point) {
     target_panel: resolvedTargetPanel,
     target_surface: targetSurface,
     target_side: targetSide,
+    hole_library_type_id: String(point?.hole_library_type_id ?? ""),
     label: String(point?.label ?? ""),
     x_mm: point?.x_mm ?? "",
     y_mm: point?.y_mm ?? "",
     z_mm: point?.z_mm ?? "",
-    diameter_mm: point?.diameter_mm ?? "",
+    diameter_mm: resolvedDiameter ?? "",
     depth_mm: point?.depth_mm ?? "",
     side: String(point?.side || targetSide || "front"),
     operation: String(point?.operation ?? "drill"),
@@ -76,13 +139,36 @@ export function buildHolePointPayload(form, options = {}) {
     variantKey = "",
     inferFaceToEdgePointLocation = null,
     getAngledTwoPlanesPointFormPreset = null,
+    holeLibraryItems = [],
+    persistHoleLibraryTypeId = true,
     messages = {},
   } = options;
 
-  const diameterText = String(form?.diameter_mm || "").trim();
+  const selectedHoleLibraryTypeId = String(form?.hole_library_type_id || "").trim();
+  const selectedHoleLibraryType = selectedHoleLibraryTypeId
+    ? (Array.isArray(holeLibraryItems) ? holeLibraryItems : []).find(
+        (item) => String(item?.id || "") === selectedHoleLibraryTypeId,
+      ) || null
+    : null;
+  const selectedDiameterValue = parseHoleLibraryDiameterValue(selectedHoleLibraryType?.diameter_mm);
+  const formDiameterValue = parseHoleLibraryDiameterValue(form?.diameter_mm);
+  const resolvedDiameterValue = selectedDiameterValue ?? formDiameterValue;
+  const allowedDiameters = buildHoleLibraryDiameterOptions(holeLibraryItems).map((item) => Number(item.value));
 
-  if (!diameterText) {
+  if (resolvedDiameterValue === null) {
     throw new Error(messages.holePointDiameterRequired || "diameter");
+  }
+
+  if (
+    allowedDiameters.length &&
+    !allowedDiameters.some((allowedDiameter) => sameHoleLibraryDiameter(allowedDiameter, resolvedDiameterValue))
+  ) {
+    throw new Error(
+      messages.holePointDiameterNotAllowed ||
+        messages.holePointDiameterInvalid ||
+        messages.holePointDiameterRequired ||
+        "diameter",
+    );
   }
 
   const targetPanel = String(form?.target_panel || form?.panel_key || "").trim();
@@ -130,7 +216,7 @@ export function buildHolePointPayload(form, options = {}) {
     x_mm: parseMaybeNumber(form?.x_mm, messages.holePointX || "x"),
     y_mm: parseMaybeNumber(form?.y_mm, messages.holePointY || "y"),
     z_mm: parseMaybeNumber(form?.z_mm, messages.holePointZ || "z"),
-    diameter_mm: parseMaybeNumber(diameterText, messages.holePointDiameter || "diameter"),
+    diameter_mm: resolvedDiameterValue,
     depth_mm: depthValue,
     is_through: isThrough,
     target_panel: resolvedTargetPanel || undefined,
@@ -139,6 +225,10 @@ export function buildHolePointPayload(form, options = {}) {
     side: resolvedSide,
     notes: String(form?.notes || "").trim() || null,
   };
+
+  if (persistHoleLibraryTypeId && selectedHoleLibraryTypeId) {
+    payload.hole_library_type_id = selectedHoleLibraryTypeId;
+  }
 
   if (normalizedVariantKey !== "angled_two_planes") {
     payload.panel_key = panelKey || undefined;
@@ -186,6 +276,9 @@ export function mergeHolePointSaveResponse({
     ...responsePoint,
     ...payload,
     panel_key: resolvedPanelKey || undefined,
+    hole_library_type_id:
+      String(payload?.hole_library_type_id || responsePoint?.hole_library_type_id || existingPoint?.hole_library_type_id || "").trim() ||
+      undefined,
     target_panel: resolvedTargetPanel || undefined,
     target_surface: resolvedTargetSurface || undefined,
     target_side: resolvedTargetSide || undefined,

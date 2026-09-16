@@ -435,6 +435,15 @@ test("mounting node create draft normalizes null entries out of stored arrays", 
   });
 });
 
+test("mounting node create draft persists fastening type through storage", () => {
+  withSessionStorageMock(() => {
+    for (const fastening_type of [null, "confirmat", "minifix", "rafix", "screw", "dowel", "other"]) {
+      saveMountingNodeCreateDraft(createMountingNodeCreateDraft({ category_code: "fastening", fastening_type }));
+      assert.equal(loadMountingNodeCreateDraft().fastening_type, fastening_type);
+    }
+  });
+});
+
 test("mounting node create draft persists functional code through storage", () => {
   withSessionStorageMock(() => {
     const draft = createMountingNodeCreateDraft({

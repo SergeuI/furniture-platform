@@ -15,6 +15,7 @@ from api.dependencies import auth as auth_dependencies
 from api.routes import mounting_nodes as mounting_nodes_route
 from database.base import Base
 from database.models.fitting import FittingHolePointModel, FittingHoleTemplateModel, FittingModel
+from database.models.hole_library import HoleLibraryTypeModel  # noqa: F401
 from database.models.mounting_node import MountingNodeModel
 from database.models.mounting_node import MountingNodeVersionModel
 from database.models.user import UserModel
@@ -94,6 +95,34 @@ class _DeniedEntitlementService:
 
 
 class MountingNodesApiTests(unittest.TestCase):
+    def test_fastening_type_api_create_update_detail_list_and_validation(self) -> None:
+        session, engine = self._build_session()
+        try:
+            app = self._build_app()
+            user = self._create_user(session, email="fastening@example.test", role="admin")
+            fitting = self._create_fitting(session, name="Test", code="type-test", article="FT")
+            app.dependency_overrides[auth_dependencies.require_current_user] = lambda: user
+            service = MountingNodeService(session=session)
+            with patch.object(mounting_nodes_route, "EntitlementService", _AllowedEntitlementService), patch.object(
+                mounting_nodes_route, "MountingNodeService", return_value=service,
+            ), TestClient(app) as client:
+                payload = {"name": "Typed node", "category_code": "fastening", "fastening_type": "confirmat", "items": [{"fitting_id": fitting.id}]}
+                response = client.post("/mounting-nodes", json=payload)
+                self.assertEqual(response.status_code, 200, response.text)
+                node = response.json()["node"]
+                self.assertEqual(node["fastening_type"], "confirmat")
+                url = f"/mounting-nodes/{node['id']}"
+                self.assertEqual(client.get(url).json()["node"]["fastening_type"], "confirmat")
+                self.assertEqual(client.get("/mounting-nodes").json()["nodes"][0]["fastening_type"], "confirmat")
+                updated = client.patch(url, json={"fastening_type": "minifix"})
+                self.assertEqual(updated.status_code, 200, updated.text)
+                self.assertEqual(updated.json()["node"]["fastening_type"], "minifix")
+                self.assertEqual(client.patch(url, json={"fastening_type": "invalid"}).status_code, 422)
+                self.assertEqual(client.post("/mounting-nodes", json={**payload, "fastening_type": "invalid"}).status_code, 422)
+        finally:
+            session.close()
+            engine.dispose()
+
     def test_list_route_requires_fitting_holes_access(self) -> None:
         app = self._build_app()
 
