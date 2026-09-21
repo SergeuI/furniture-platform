@@ -1,6 +1,7 @@
 import { getMountingNodeCategoryLabel, normalizeMountingNodeCategoryCode } from "./mountingNodeCategories.js";
 
 const MOUNTING_NODES_SECTION = "mounting-nodes";
+const MOUNTING_NODE_FASTENING_TYPES = new Set(["confirmat", "minifix", "rafix", "screw", "dowel", "other"]);
 
 function normalizeSearchParams(value) {
   if (value instanceof URLSearchParams) {
@@ -36,6 +37,11 @@ function normalizeMountingNodeCategoryRouteValue(value) {
   return normalizeMountingNodeCategoryCode(rawValue) || null;
 }
 
+function normalizeMountingNodeFasteningTypeRouteValue(value) {
+  const normalizedValue = String(value || "").trim().toLowerCase();
+  return MOUNTING_NODE_FASTENING_TYPES.has(normalizedValue) ? normalizedValue : null;
+}
+
 function hasMountingNodeCategoryRouteValue(route = {}) {
   if (!route || typeof route !== "object") {
     return false;
@@ -62,12 +68,13 @@ function buildMountingNodesDetailRestoreKey(nodeId) {
 export function buildMountingNodesRestoredRoute(route = {}, nodeId = null) {
   const normalizedRoute = normalizeMountingNodesRoute(route);
   const restoredNodeId = normalizeMountingNodeId(nodeId ?? normalizedRoute.nodeId);
-  const restoredMode = normalizedRoute.mode === "editor" ? "editor" : "detail";
+  const restoredMode = normalizedRoute.mode === "editor" ? "editor" : "list";
 
   return normalizeMountingNodesRoute({
     mode: restoredMode,
     nodeId: restoredNodeId,
     categoryCode: normalizedRoute.categoryCode,
+    fasteningType: normalizedRoute.fasteningType,
   });
 }
 
@@ -76,6 +83,7 @@ export function normalizeMountingNodesRoute(route = {}) {
   const nodeId = normalizeMountingNodeId(route?.nodeId);
   const categoryCode = normalizeMountingNodeCategoryRouteValue(route?.categoryCode);
   const hasCategoryCode = hasMountingNodeCategoryRouteValue(route);
+  const fasteningType = normalizeMountingNodeFasteningTypeRouteValue(route?.fasteningType);
 
   if (mode === "categories") {
     return {
@@ -85,11 +93,21 @@ export function normalizeMountingNodesRoute(route = {}) {
     };
   }
 
-  if ((mode === "detail" || mode === "editor") && nodeId !== null) {
+  if (mode === "detail") {
+    return {
+      mode: "list",
+      nodeId: null,
+      categoryCode: hasCategoryCode ? categoryCode : undefined,
+      ...(fasteningType ? { fasteningType } : {}),
+    };
+  }
+
+  if (mode === "editor" && nodeId !== null) {
     return {
       mode,
       nodeId,
       categoryCode: hasCategoryCode ? categoryCode : undefined,
+      ...(fasteningType ? { fasteningType } : {}),
     };
   }
 
@@ -98,22 +116,16 @@ export function normalizeMountingNodesRoute(route = {}) {
       mode,
       nodeId: null,
       categoryCode: hasCategoryCode ? categoryCode : undefined,
+      ...(fasteningType ? { fasteningType } : {}),
     };
   }
 
   if (mode === "list") {
-    if (!hasCategoryCode) {
-      return {
-        mode: "categories",
-        nodeId: null,
-        categoryCode: null,
-      };
-    }
-
     return {
       mode,
       nodeId: null,
-      categoryCode,
+      categoryCode: hasCategoryCode ? categoryCode : undefined,
+      ...(fasteningType ? { fasteningType } : {}),
     };
   }
 
@@ -121,7 +133,18 @@ export function normalizeMountingNodesRoute(route = {}) {
     mode: "list",
     nodeId: null,
     categoryCode,
+    ...(fasteningType ? { fasteningType } : {}),
   };
+}
+
+export function buildMountingNodesRouteForMode(route, mode, nodeId = null) {
+  const currentRoute = normalizeMountingNodesRoute(route);
+  return normalizeMountingNodesRoute({
+    mode,
+    nodeId,
+    categoryCode: currentRoute.categoryCode,
+    fasteningType: currentRoute.fasteningType,
+  });
 }
 
 export function parseMountingNodesRoute(search = "") {
@@ -135,6 +158,7 @@ export function parseMountingNodesRoute(search = "") {
   const route = {
     mode: params.get("mode"),
     nodeId: params.get("node"),
+    fasteningType: params.get("fastening_type"),
   };
 
   if (params.has("category") && categoryParam) {
@@ -165,6 +189,12 @@ export function buildMountingNodesRouteUrl(route = {}, currentSearch = "") {
     params.delete("category");
   }
 
+  if (normalizedRoute.fasteningType) {
+    params.set("fastening_type", normalizedRoute.fasteningType);
+  } else {
+    params.delete("fastening_type");
+  }
+
   const queryString = params.toString();
   return queryString ? `?${queryString}` : "";
 }
@@ -177,6 +207,9 @@ export function buildMountingNodesRestoreState(route = {}, nodeDetail = null) {
 
   return {
     activeStatusFilter: "all",
+    ownershipFilter: "all",
+    sortOrder: "name-asc",
+    selectedFasteningType: normalizedRoute.fasteningType || null,
     activeCategoryFilter: normalizedRoute.categoryCode || "all",
     activeVariantFilter: "all",
     appliedSearch: "",
@@ -194,6 +227,18 @@ export function buildMountingNodesRestoreState(route = {}, nodeDetail = null) {
     selectedNodeId: normalizedRoute.mode === "list" ? "" : String(normalizedRoute.nodeId || restoredNodeId || ""),
     selectedNodeLoading: false,
   };
+}
+
+export function buildMountingNodesListRestoreState(route, returnState = null) {
+  const routeState = buildMountingNodesRestoreState(route);
+  return returnState && typeof returnState === "object"
+    ? {
+        ...returnState,
+        activeCategoryFilter: routeState.activeCategoryFilter,
+        selectedFasteningType: routeState.selectedFasteningType,
+        mountingNodesViewMode: "list",
+      }
+    : routeState;
 }
 
 export function resolveMountingNodesCategoryCode(categoryCode, fallbackCategoryCode = undefined) {
@@ -265,48 +310,22 @@ export function buildMountingNodesBreadcrumbItems({
 
   if (normalizedListLabel) {
     items.push({
+      current: normalizedMode === "list",
       label: normalizedListLabel,
-      onClick: onOpenCategories || undefined,
+      onClick: normalizedMode === "list" ? undefined : (onOpenCategories || undefined),
       title: normalizedListLabel,
     });
   }
 
   if (normalizedMode === "list") {
-    items.push({
-      current: true,
-      label: normalizedCategoryLabel || normalizedAllListLabel,
-      title: normalizedCategoryLabel || normalizedAllListLabel,
-    });
-    return items;
-  }
-
-  if (normalizedCategoryLabel) {
-    items.push({
-      label: normalizedCategoryLabel,
-      onClick: onOpenCategoryList || undefined,
-      title: normalizedCategoryLabel,
-    });
-  }
-
-  if (normalizedMode === "detail") {
-    items.push({
-      current: true,
-      label: normalizedNodeName || normalizedListLabel,
-      title: normalizedNodeName || normalizedListLabel,
-    });
     return items;
   }
 
   if (normalizedMode === "editor") {
     items.push({
-      label: normalizedNodeName,
-      onClick: onOpenNodeDetail || undefined,
-      title: normalizedNodeName,
-    });
-    items.push({
       current: true,
-      label: normalizedEditingLabel,
-      title: normalizedEditingLabel,
+      label: normalizedNodeName || normalizedEditingLabel,
+      title: normalizedNodeName || normalizedEditingLabel,
     });
     return items;
   }
@@ -325,7 +344,7 @@ export function buildMountingNodesBreadcrumbItems({
 
 export function shouldHydrateMountingNodeDetail(route = {}, nodeDetail = null) {
   const normalizedRoute = normalizeMountingNodesRoute(route);
-  if (normalizedRoute.mode !== "detail" && normalizedRoute.mode !== "editor") {
+  if (normalizedRoute.mode !== "editor") {
     return false;
   }
 

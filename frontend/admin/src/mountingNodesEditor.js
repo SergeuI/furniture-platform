@@ -503,6 +503,28 @@ export function getMountingNodeEditorPointDisplayLabel(point = {}, index = 0) {
 
   return `P${Number(index) + 1}`;
 }
+export function normalizeMountingNodePreviewMode(node = {}) {
+  const mode = normalizeText(node?.preview_mode).toLowerCase();
+  if (mode === "custom" && normalizeText(node?.preview_custom_image_url)) return "custom";
+  if (mode === "three_d" && (normalizeText(node?.preview_3d_image_url) || normalizeText(node?.preview_generated_image_url))) return "three_d";
+  return "auto";
+}
+
+export const normalizeMountingNodePreviewState = normalizeMountingNodePreviewMode;
+
+export function resolveMountingNodePreviewUrl(node = {}, fallbackUrl = "") {
+  const previewMode = normalizeMountingNodePreviewMode(node);
+  const customPreviewUrl = normalizeText(node?.preview_custom_image_url);
+  const threeDPreviewUrl = normalizeText(node?.preview_3d_image_url) || normalizeText(node?.preview_generated_image_url);
+
+  if (previewMode === "custom" && customPreviewUrl) {
+    return customPreviewUrl;
+  }
+
+  if (previewMode === "three_d") return threeDPreviewUrl;
+  return normalizeText(node?.preview_auto_image_url) || normalizeText(fallbackUrl);
+}
+
 
 export function buildMountingNodeEditorSavePayload({
   context = null,

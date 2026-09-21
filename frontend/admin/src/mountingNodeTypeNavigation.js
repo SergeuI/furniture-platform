@@ -8,7 +8,6 @@ export const mountingNodeTypeTiles = [
 ];
 
 export function resolveMountingNodeTypeSelection(state = {}) {
-  if (state.activeCategoryFilter !== "fastening") return null;
   if (mountingNodeTypeTiles.some((tile) => tile.code === state.selectedFasteningType)) {
     return state.selectedFasteningType;
   }
@@ -20,9 +19,14 @@ export function resolveMountingNodeTypeSelection(state = {}) {
 }
 
 export function filterMountingNodesByType(nodes, categoryCode, fasteningType) {
-  if (categoryCode !== "fastening") return nodes;
-  if (!fasteningType) return [];
-  return nodes.filter((node) => node.category_code === "fastening" && (
+  const category = String(categoryCode || "").trim().toLowerCase();
+  const categoryNodes = category && category !== "all"
+    ? nodes.filter((node) => category === "null"
+      ? !String(node.category_code || "").trim()
+      : node.category_code === category)
+    : nodes;
+  if (!fasteningType) return categoryNodes;
+  return categoryNodes.filter((node) => node.category_code === "fastening" && (
     fasteningType === "other"
       ? node.fastening_type === "other" || node.fastening_type == null
       : node.fastening_type === fasteningType

@@ -1,6 +1,6 @@
 import { getMountingNodeFasteningTypeLabel } from "../../mountingNodeFasteningTypes.js";
 import { filterMountingNodesByType, mountingNodeTypeTiles, resolveMountingNodeTypeSelection } from "../../mountingNodeTypeNavigation.js";
-import { ArrowLeft, Box, ChevronRight, Info, LayoutGrid, List, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
+import { ArrowLeft, Box, ChevronRight, Heart, Info, LayoutGrid, List, Pencil, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
 import { createPortal } from "react-dom";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
@@ -24,6 +24,7 @@ import {
   getMountingNodeSnapshotPointCount,
   resolveActiveMountingNodeVersion,
   resolveMountingNodeEditorContext,
+  resolveMountingNodePreviewUrl,
 } from "../../mountingNodesEditor.js";
 import CatalogBreadcrumbTrail from "../CatalogBreadcrumbTrail.jsx";
 import {
@@ -35,7 +36,6 @@ import {
   getMountingNodeFunctionalLabel,
 } from "../../mountingNodeFunctionalCodes.js";
 import {
-  buildMountingNodesBreadcrumbItems,
   resolveMountingNodesCategoryCode,
 } from "../../mountingNodesNavigation.js";
 import surfaceMountIcon from "../../assets/hole-mounting/surface_mount.png";
@@ -225,6 +225,8 @@ export function buildMountingNodesReturnState(payload = {}) {
   return {
     activeStatusFilter: normalizeFilterValue(normalizedPayload.activeStatusFilter || "all") || "all",
     selectedFasteningType: normalizedPayload.selectedFasteningType || null,
+    ownershipFilter: normalizeFilterValue(normalizedPayload.ownershipFilter || "all") || "all",
+    sortOrder: normalizeFilterValue(normalizedPayload.sortOrder || "name-asc") || "name-asc",
     activeCategoryFilter: normalizeCategoryFilterValue(normalizedPayload.activeCategoryFilter || "all"),
     activeVariantFilter: normalizeFilterValue(normalizedPayload.activeVariantFilter || "all") || "all",
     appliedSearch: normalizeFilterValue(normalizedPayload.appliedSearch),
@@ -418,6 +420,8 @@ export function buildNodeEditorContext(nodeDetail, fallbackNodeId = "") {
 function buildNodeReturnState({
   selectedFasteningType,
   activeStatusFilter,
+  ownershipFilter,
+  sortOrder,
   activeCategoryFilter,
   activeVariantFilter,
   appliedSearch,
@@ -438,6 +442,8 @@ function buildNodeReturnState({
   return buildMountingNodesReturnState({
     selectedFasteningType,
     activeStatusFilter,
+    ownershipFilter,
+    sortOrder,
     activeCategoryFilter,
     activeVariantFilter,
     appliedSearch,
@@ -470,7 +476,7 @@ function getNodeItemLabel(item, t) {
   return String(item?.fitting_name || item?.name || item?.fitting_article || item?.fitting_code || "").trim() || t.notSet;
 }
 
-function renderNodeItemGallery(items, language, t, fittingThumbnailStateById) {
+function renderNodeItemGallery(items, language, t, fittingThumbnailStateById, fasteningType = null, node = null) {
   const nodeItems = Array.isArray(items) ? items : [];
   const renderedItems = nodeItems.map((item, index) => {
     const fittingId = String(item?.fitting_id || "").trim();
@@ -487,12 +493,25 @@ function renderNodeItemGallery(items, language, t, fittingThumbnailStateById) {
   });
   const visibleItems = renderedItems.filter((item) => item.fittingThumbnailState?.status === "loaded" && item.imageUrl);
   const hasLoadingImages = renderedItems.some((item) => item.fittingThumbnailState?.status === "loading");
+  const fallbackPreview = mountingNodeTypeTiles.find((tile) => tile.code === fasteningType)?.imageSrc || "";
+  const existingImageUrl = visibleItems[0]?.imageUrl || fallbackPreview;
+  const effectivePreviewUrl = resolveMountingNodePreviewUrl(node, existingImageUrl);
+
+  if (effectivePreviewUrl) {
+    return (
+      <div className="mounting-node-item-gallery" aria-label={language === "uk" ? "Прев’ю монтажного вузла" : "Mounting node preview"}>
+        <div className="mounting-node-item-thumb">
+          <img alt={String(node?.name || "")} loading="lazy" src={effectivePreviewUrl} />
+        </div>
+      </div>
+    );
+  }
 
   if (!nodeItems.length || !visibleItems.length && !hasLoadingImages) {
     return (
       <div className="mounting-node-item-gallery is-empty" aria-label={language === "uk" ? "Немає зображень" : "No images"}>
-        <div className="mounting-node-item-thumb is-empty">
-          <span>{t.holeWorkspaceNoImage || (language === "uk" ? "Без зображення" : "No image")}</span>
+        <div className={`mounting-node-item-thumb${fallbackPreview ? " is-fallback" : " is-empty"}`}>
+          {fallbackPreview ? <img alt="" aria-hidden="true" loading="lazy" src={fallbackPreview} /> : <span>{t.holeWorkspaceNoImage || (language === "uk" ? "Без зображення" : "No image")}</span>}
         </div>
       </div>
     );
@@ -521,25 +540,13 @@ function renderNodeItemGallery(items, language, t, fittingThumbnailStateById) {
   );
 }
 
-function renderNodeCardActions(node, nodeDetail, language, t, onOpenNodeDetail, onOpenNodeEditor) {
+function renderNodeCardActions(node, nodeDetail, language, t, onOpenNodeEditor) {
   const canEdit = Boolean((nodeDetail || node)?.can_edit);
   const openNodeDetailLabel = language === "uk" ? "Інформація про вузол" : "Node info";
   const openNodeEditorLabel = language === "uk" ? "Отвори та 3D" : "Open editor and 3D";
 
   return (
     <div className="mounting-node-card-actions">
-      <button
-        aria-label={openNodeDetailLabel}
-        className="ghost-button compact-button detail-info-button mounting-node-card-action"
-        onClick={(event) => {
-          event.stopPropagation();
-          onOpenNodeDetail(node.id);
-        }}
-        title={openNodeDetailLabel}
-        type="button"
-      >
-        <Info size={16} />
-      </button>
       {canEdit ? (
         <button
           aria-label={openNodeEditorLabel}
@@ -551,7 +558,7 @@ function renderNodeCardActions(node, nodeDetail, language, t, onOpenNodeDetail, 
           title={openNodeEditorLabel}
           type="button"
         >
-          <Box size={16} />
+          <Pencil size={16} />
         </button>
       ) : null}
     </div>
@@ -767,8 +774,7 @@ export default function MountingNodesPanelRefined({
   onOpenConnectionsOverview = null,
   onOpenMountingNodeCreate = null,
   onOpenMountingNodeCategories = null,
-  onOpenMountingNodeDetail = null,
-  onCloseMountingNodeDetail = null,
+  onListContextChange = null,
   onOpenFittingDetail = null,
   onOpenMountingNodeEditor = null,
   listRequestToken = 0,
@@ -780,6 +786,8 @@ export default function MountingNodesPanelRefined({
   const [searchInput, setSearchInput] = useState(initialReturnState.searchInput);
   const [appliedSearch, setAppliedSearch] = useState(initialReturnState.appliedSearch);
   const [activeStatusFilter, setActiveStatusFilter] = useState(initialReturnState.activeStatusFilter);
+  const [ownershipFilter, setOwnershipFilter] = useState(initialReturnState.ownershipFilter);
+  const [sortOrder, setSortOrder] = useState(initialReturnState.sortOrder);
   const [activeCategoryFilter, setActiveCategoryFilter] = useState(initialReturnState.activeCategoryFilter);
   const [activeVariantFilter, setActiveVariantFilter] = useState(initialReturnState.activeVariantFilter);
   const [mountingNodesViewMode, setMountingNodesViewMode] = useState(initialReturnState.mountingNodesViewMode);
@@ -790,9 +798,6 @@ export default function MountingNodesPanelRefined({
   ));
   const [reloadToken, setReloadToken] = useState(0);
   const [nodes, setNodes] = useState(initialReturnState.nodes);
-  const showFasteningTypes = activeCategoryFilter === "fastening" && !selectedFasteningType;
-  const visibleNodes = filterMountingNodesByType(nodes, activeCategoryFilter, selectedFasteningType);
-  const selectedFasteningTypeLabel = mountingNodeTypeTiles.find((tile) => tile.code === selectedFasteningType)?.label || "";
   const [listLoading, setListLoading] = useState(initialReturnState.listLoading);
   const [listError, setListError] = useState(initialReturnState.listError);
   const [selectedNodeId, setSelectedNodeId] = useState(initialReturnState.selectedNodeId);
@@ -815,6 +820,44 @@ export default function MountingNodesPanelRefined({
   const [selectedNodeVersionDetail, setSelectedNodeVersionDetail] = useState(null);
   const [selectedNodeVersionLoadingId, setSelectedNodeVersionLoadingId] = useState("");
   const [selectedNodeVersionError, setSelectedNodeVersionError] = useState("");
+  const nodeMatchesOwnershipFilter = useCallback((node) => {
+    if (ownershipFilter === "system") return Boolean(node?.is_system || node?.ownership_type === "system");
+    if (ownershipFilter === "own") return Boolean(node?.is_owner || node?.ownership_type === "mine");
+    return true;
+  }, [ownershipFilter]);
+  const nodeMatchesStatusFilter = useCallback((node) => {
+    if (activeStatusFilter === "active") return node?.is_active !== false;
+    if (activeStatusFilter === "inactive") return node?.is_active === false;
+    return true;
+  }, [activeStatusFilter]);
+  const statusCounts = useMemo(() => {
+    const countableNodes = filterMountingNodesByType(nodes, activeCategoryFilter, selectedFasteningType)
+      .filter(nodeMatchesOwnershipFilter);
+    return {
+      all: countableNodes.length,
+      active: countableNodes.filter((node) => node?.is_active !== false).length,
+      inactive: countableNodes.filter((node) => node?.is_active === false).length,
+    };
+  }, [activeCategoryFilter, nodeMatchesOwnershipFilter, nodes, selectedFasteningType]);
+  const fasteningTypeCounts = useMemo(() => {
+    const countableNodes = nodes.filter(nodeMatchesOwnershipFilter).filter(nodeMatchesStatusFilter);
+    return Object.fromEntries([
+      ["all", countableNodes.length],
+      ...mountingNodeTypeTiles.map((tile) => [
+        tile.code,
+        filterMountingNodesByType(countableNodes, "all", tile.code).length,
+      ]),
+    ]);
+  }, [nodeMatchesOwnershipFilter, nodeMatchesStatusFilter, nodes]);
+  const visibleNodes = useMemo(() => {
+    const typedNodes = filterMountingNodesByType(nodes, activeCategoryFilter, selectedFasteningType);
+    const ownedNodes = typedNodes.filter(nodeMatchesStatusFilter).filter(nodeMatchesOwnershipFilter);
+
+    return [...ownedNodes].sort((left, right) => {
+      const direction = sortOrder === "name-desc" ? -1 : 1;
+      return String(left?.name || "").localeCompare(String(right?.name || ""), language === "uk" ? "uk" : "en") * direction;
+    });
+  }, [activeCategoryFilter, language, nodeMatchesOwnershipFilter, nodeMatchesStatusFilter, nodes, selectedFasteningType, sortOrder]);
   const listRequestIdRef = useRef(0);
   const detailRequestIdRef = useRef(0);
   const thumbnailRequestGenerationRef = useRef(0);
@@ -855,6 +898,14 @@ export default function MountingNodesPanelRefined({
 
     return undefined;
   }, [displayMode]);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setAppliedSearch(searchInput.trim());
+    }, 250);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [searchInput]);
 
   useLayoutEffect(() => {
     if (editorMode) {
@@ -897,7 +948,7 @@ export default function MountingNodesPanelRefined({
 
     getMountingNodes(token, {
       search: appliedSearch,
-      is_active: activeStatusFilter === "all" ? undefined : activeStatusFilter === "active",
+      include_inactive: true,
       category_code:
         activeCategoryFilter === "all"
           ? undefined
@@ -947,7 +998,7 @@ export default function MountingNodesPanelRefined({
       });
 
     return undefined;
-  }, [activeCategoryFilter, activeStatusFilter, activeVariantFilter, appliedSearch, reloadToken, t.mountingNodesError, token]);
+  }, [activeCategoryFilter, activeVariantFilter, appliedSearch, reloadToken, t.mountingNodesError, token]);
 
   useEffect(() => {
     setOpenEditorError("");
@@ -1437,6 +1488,8 @@ export default function MountingNodesPanelRefined({
     return buildNodeReturnState({
       selectedFasteningType,
       activeStatusFilter,
+      ownershipFilter,
+      sortOrder,
       activeCategoryFilter,
       activeVariantFilter,
       appliedSearch,
@@ -1471,53 +1524,40 @@ export default function MountingNodesPanelRefined({
   }
 
   function handleCategoryFilterChange(value) {
+    const nextCategory = normalizeCategoryFilterValue(value);
     setSelectedFasteningType(null);
-    setActiveCategoryFilter(normalizeCategoryFilterValue(value));
+    setActiveCategoryFilter(nextCategory);
+    onListContextChange?.(nextCategory === "all" ? undefined : nextCategory, null);
+  }
+
+  function handleFasteningTypeFilterChange(event) {
+    if (event.target.value) {
+      setSelectedFasteningType(event.target.value || null);
+      onListContextChange?.(activeCategoryFilter === "all" ? undefined : activeCategoryFilter, event.target.value);
+      return;
+    }
+    setSelectedFasteningType(event.currentTarget.value || null);
+    onListContextChange?.(activeCategoryFilter === "all" ? undefined : activeCategoryFilter, event.currentTarget.value || null);
   }
 
   function handleVariantFilterChange(value) {
     setActiveVariantFilter(String(value || "all"));
   }
 
-  function handleSelectNode(nodeId) {
-    const resolvedNodeId = String(nodeId || "").trim();
-    const selectedNode = nodes.find((node) => String(node.id) === resolvedNodeId) || null;
-    const resolvedNodeName = String(selectedNode?.name || "").trim();
-
-    if (typeof onOpenMountingNodeDetail === "function" && resolvedNodeId && resolvedNodeName) {
-      onOpenMountingNodeDetail(resolvedNodeId, resolvedNodeName, selectedNode?.category_code ?? null);
-    }
-
-    pendingReturnStateRef.current = captureReturnState("list", false);
-    setSelectedNodeId(resolvedNodeId);
-    setMountingNodesViewMode("detail");
+  function handleResetFilters() {
+    setSearchInput("");
+    setAppliedSearch("");
+    setActiveStatusFilter("all");
+    setActiveCategoryFilter("all");
+    setActiveVariantFilter("all");
+    setSelectedFasteningType(null);
+    setOwnershipFilter("all");
+    setSortOrder("name-asc");
+    onListContextChange?.(undefined, null);
   }
 
   function handleBackToList() {
-    if (typeof onCloseMountingNodeDetail === "function") {
-      onCloseMountingNodeDetail();
-    }
-
     setMountingNodesViewMode("list");
-  }
-
-  function handleReturnToCategories() {
-    if (activeCategoryFilter === "fastening" && selectedFasteningType) {
-      handleBackToFasteningTypes();
-      return;
-    }
-    if (typeof onOpenMountingNodeCategories === "function") {
-      onOpenMountingNodeCategories();
-      return;
-    }
-
-    setActiveCategoryFilter("all");
-    setMountingNodesViewMode("list");
-  }
-
-  function handleBackToFasteningTypes() {
-    setSelectedFasteningType(null);
-    handleBackToList();
   }
 
   function handleScrollToVersionHistory() {
@@ -1682,6 +1722,8 @@ export default function MountingNodesPanelRefined({
     const nextReturnState = buildNodeReturnState({
       selectedFasteningType,
       activeStatusFilter,
+      ownershipFilter,
+      sortOrder,
       activeCategoryFilter,
       activeVariantFilter,
       appliedSearch,
@@ -1697,7 +1739,7 @@ export default function MountingNodesPanelRefined({
       selectedNodeDetail: resolvedNodeDetail,
       selectedNodeId: resolvedNodeId,
       selectedNodeLoading: false,
-      nextViewMode: "detail",
+      nextViewMode: "list",
     });
     pendingReturnStateRef.current = nextReturnState;
     setOpenEditorError("");
@@ -1737,10 +1779,6 @@ export default function MountingNodesPanelRefined({
         return;
       }
 
-      if (typeof onCloseMountingNodeDetail === "function") {
-        onCloseMountingNodeDetail();
-      }
-
       setDeleteConfirmNode(null);
       setMountingNodesViewMode("list");
       setSelectedNodeId("");
@@ -1755,52 +1793,33 @@ export default function MountingNodesPanelRefined({
   const mountingNodesHeaderBreadcrumbItems = useMemo(() => {
     const rootLabel = language === "uk" ? "Кріплення та з'єднання" : "Connections";
     const nodesLabel = language === "uk" ? "Монтажні вузли" : "Mounting nodes";
-    const categoryLabel = activeCategoryFilter === "all" ? nodesLabel : activeMountingCategoryLabel;
     const detailNodeName = String(selectedNodeDetailForDisplay?.name || selectedNodeDetail?.name || "").trim();
     const isDetailMode = mountingNodesViewMode === "detail";
-    const baseTrail = buildMountingNodesBreadcrumbItems({
-      allListLabel: language === "uk" ? "Усі монтажні вузли" : "All mounting nodes",
-      categoryCode: activeCategoryFilter === "all" ? undefined : activeCategoryFilter,
-      categoryLabel,
-      createLabel: language === "uk" ? "Створення вузла" : "Node creation",
-      editingLabel: language === "uk" ? "Редагування вузла" : "Node editing",
-      language,
-      listLabel: nodesLabel,
-      mode: isDetailMode ? "detail" : "list",
-      nodeName: detailNodeName,
-      onOpenCategories: onOpenMountingNodeCategories || undefined,
-      onOpenCategoryList: handleBackToList,
-      onOpenNodeDetail: handleBackToList,
-    });
-
-    if (activeCategoryFilter === "fastening" && selectedFasteningTypeLabel) {
-      baseTrail[1] = { ...baseTrail[1], current: false, onClick: handleBackToFasteningTypes };
-      baseTrail.splice(2, 0, {
-        label: selectedFasteningTypeLabel,
-        title: selectedFasteningTypeLabel,
-        current: !isDetailMode,
-        onClick: isDetailMode ? handleBackToList : undefined,
-      });
-    }
-
-    return [
+    const items = [
       {
         current: false,
         label: rootLabel,
         onClick: typeof onOpenConnectionsOverview === "function" ? onOpenConnectionsOverview : undefined,
         title: rootLabel,
       },
-      ...baseTrail,
+      {
+        current: !isDetailMode,
+        label: nodesLabel,
+        onClick: isDetailMode ? handleBackToList : undefined,
+        title: nodesLabel,
+      },
     ];
+
+    if (isDetailMode) {
+      items.push({ current: true, label: detailNodeName || nodesLabel, title: detailNodeName || nodesLabel });
+    }
+
+    return items;
   }, [
-    activeCategoryFilter,
-    activeMountingCategoryLabel,
-    selectedFasteningTypeLabel,
     handleBackToList,
     language,
     mountingNodesViewMode,
     onOpenConnectionsOverview,
-    onOpenMountingNodeCategories,
     selectedNodeDetail,
     selectedNodeDetailForDisplay,
   ]);
@@ -1810,31 +1829,30 @@ export default function MountingNodesPanelRefined({
   }
 
   return (
-    <section aria-hidden={editorMode} className="dashboard-panel" hidden={editorMode} id="mounting-nodes-panel">
+    <section aria-hidden={editorMode} className="dashboard-panel mounting-node-catalog-page" hidden={editorMode} id="mounting-nodes-panel">
       {mountingNodesViewMode === "list" ? (
         <>
-          <div className="catalog-page-header material-taxonomy-page-header mounting-nodes-page-header">
-            <div className="service-catalog-title material-taxonomy-page-title">
-              <CatalogBreadcrumbTrail items={mountingNodesHeaderBreadcrumbItems} />
-              <p>{t.mountingNodesDescription || "Переглядайте монтажні вузли у компактній плитці або списку та відкривайте деталі окремо."}</p>
-            </div>
-            <div className="service-catalog-header-actions mounting-nodes-header-actions">
-              {!showFasteningTypes ? <span className="service-tree-badge subtle">{language === "uk" ? `Знайдено: ${visibleNodes.length}` : `Found: ${visibleNodes.length}`}</span> : null}
-              {activeCategoryFilter !== "all" ? (
-                <span className="service-tree-badge subtle">
-                  {language === "uk" ? "Категорія:" : "Category:"} {activeMountingCategoryLabel}
-                </span>
-              ) : null}
-              {activeCategoryFilter !== "all" ? (
-                <button
-                  className="primary-button mounting-node-detail-action-button mounting-node-return-button"
-                  onClick={handleReturnToCategories}
-                  type="button"
-                >
-                  <ArrowLeft size={16} />
-                  {activeCategoryFilter === "fastening" && selectedFasteningType ? "До типів кріплень" : language === "uk" ? "Повернутися до категорій" : "Return to categories"}
-                </button>
-              ) : null}
+          <div className="mounting-node-catalog-intro">
+          <header className="mounting-node-catalog-header">
+            <div className="mounting-node-catalog-heading-row">
+              <div className="mounting-node-catalog-heading-copy">
+                <div className="mounting-node-catalog-title-row">
+                  <h1>{language === "uk" ? "Монтажні вузли" : "Mounting nodes"}</h1>
+                  <span className="mounting-node-catalog-count">{language === "uk" ? `Знайдено: ${visibleNodes.length}` : `Found: ${visibleNodes.length}`}</span>
+                </div>
+                <p>{language === "uk" ? "Бібліотека монтажних вузлів для з’єднання деталей." : "A library of mounting nodes for connecting parts."}</p>
+              </div>
+              <div className="mounting-nodes-header-actions">
+                <form className="mounting-node-catalog-search" onSubmit={handleSearchSubmit}>
+                  <Search aria-hidden="true" size={17} />
+                  <input
+                    aria-label={language === "uk" ? "Пошук вузлів" : "Search nodes"}
+                    onChange={(event) => setSearchInput(event.target.value)}
+                    placeholder={language === "uk" ? "Пошук вузлів (назва, код, опис...)" : "Search nodes (name, code, description...)"}
+                    type="search"
+                    value={searchInput}
+                  />
+                </form>
               {typeof onOpenMountingNodeCreate === "function" ? (
                 <button
                   className="primary-button mounting-node-create-button"
@@ -1845,95 +1863,116 @@ export default function MountingNodesPanelRefined({
                   {language === "uk" ? "Створити монтажний вузол" : "Create mounting node"}
                 </button>
               ) : null}
-            </div>
-          </div>
-          {!showFasteningTypes ? <div className="mounting-nodes-panel-head">
-            <div className="mounting-nodes-controls-row">
-              <form className="project-filter-form mounting-nodes-filter-form" onSubmit={handleSearchSubmit}>
-                <label className="mounting-nodes-search mounting-nodes-search-field">
-                  {t.mountingNodesSearchPlaceholder || "Пошук монтажних вузлів"}
-                  <input
-                    onChange={(event) => setSearchInput(event.target.value)}
-                    placeholder={t.mountingNodesSearchPlaceholder || "Пошук монтажних вузлів"}
-                    type="search"
-                    value={searchInput}
-                  />
-                </label>
-                {activeCategoryFilter === "all" ? (
-                  <label className="mounting-nodes-filter-field">
-                    {language === "uk" ? "Категорія" : "Category"}
-                    <select onChange={(event) => handleCategoryFilterChange(event.target.value)} value={activeCategoryFilter}>
-                      {categoryFilterOptions.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                ) : null}
-                <label className="mounting-nodes-filter-field">
-                  {language === "uk" ? "Статус" : "Status"}
-                  <select onChange={(event) => handleStatusFilterChange(event.target.value)} value={activeStatusFilter}>
-                    <option value="all">{language === "uk" ? "Усі" : "All"}</option>
-                    <option value="active">{t.active || (language === "uk" ? "Активний" : "Active")}</option>
-                    <option value="inactive">{t.inactive || (language === "uk" ? "Неактивний" : "Inactive")}</option>
-                  </select>
-                </label>
-                <label className="mounting-nodes-filter-field">
-                  {language === "uk" ? "Варіант кріплення" : "Mounting variant"}
-                  <select onChange={(event) => handleVariantFilterChange(event.target.value)} value={activeVariantFilter}>
-                    {variantOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <button className="primary-button mounting-nodes-search-button" type="submit">
-                  <Search size={16} />
-                  {language === "uk" ? "Шукати" : "Search"}
-                </button>
-                <button className="ghost-button mounting-nodes-refresh-button" onClick={handleRefresh} type="button">
-                  <RefreshCw size={16} />
-                  {t.mountingNodesRetry || (language === "uk" ? "Повторити" : "Retry")}
-                </button>
-              </form>
-              <div className="mounting-nodes-view-toggle materials-mode-switch" role="group" aria-label={language === "uk" ? "Вигляд каталогу" : "Catalog view mode"}>
-                <button
-                  aria-pressed={displayMode === "grid"}
-                  className={`ghost-button compact-button${displayMode === "grid" ? " active" : ""}`}
-                  onClick={() => setDisplayMode("grid")}
-                  title={language === "uk" ? "Плитка" : "Grid"}
-                  type="button"
-                >
-                  <LayoutGrid size={16} />
-                  <span>{language === "uk" ? "Плитка" : "Grid"}</span>
-                </button>
-                <button
-                  aria-pressed={displayMode === "list"}
-                  className={`ghost-button compact-button${displayMode === "list" ? " active" : ""}`}
-                  onClick={() => setDisplayMode("list")}
-                  title={language === "uk" ? "Список" : "List"}
-                  type="button"
-                >
-                  <List size={16} />
-                  <span>{language === "uk" ? "Список" : "List"}</span>
-                </button>
               </div>
             </div>
-          </div>
-          : null}
-          {showFasteningTypes ? (
-            <div className="settings-grid mounting-nodes-grid mounting-node-types-grid" aria-label="Типи кріплень">
-              {mountingNodeTypeTiles.map((tile) => (
-                <button className="settings-card mounting-node-card mounting-node-type-card" key={tile.code} type="button"
-                  onClick={() => setSelectedFasteningType(tile.code)}>
-                  <img className="mounting-node-type-preview" src={tile.imageSrc} alt="" aria-hidden="true" loading="lazy" />
-                  <h3>{tile.label}</h3>
+          </header>
+          <div className="mounting-node-catalog-toolbar">
+            <div className="mounting-node-ownership-tabs" role="group" aria-label={language === "uk" ? "Власність" : "Ownership"}>
+              {[
+                ["all", language === "uk" ? "Усі" : "All"],
+                ["own", language === "uk" ? "Власні" : "Mine"],
+                ["system", language === "uk" ? "Системні" : "System"],
+              ].map(([value, label]) => (
+                <button
+                  aria-pressed={ownershipFilter === value}
+                  className={`ghost-button compact-button${ownershipFilter === value ? " active" : ""}`}
+                  key={value}
+                  onClick={() => setOwnershipFilter(value)}
+                  type="button"
+                >
+                  {label}
                 </button>
               ))}
             </div>
-          ) : listLoading ? (
+            <div className="mounting-nodes-view-toggle materials-mode-switch" role="group" aria-label={language === "uk" ? "Вигляд каталогу" : "Catalog view mode"}>
+              <button aria-pressed={displayMode === "grid"} className={`ghost-button compact-button${displayMode === "grid" ? " active" : ""}`} onClick={() => setDisplayMode("grid")} type="button">
+                <LayoutGrid size={16} /><span>{language === "uk" ? "Плитка" : "Grid"}</span>
+              </button>
+              <button aria-pressed={displayMode === "list"} className={`ghost-button compact-button${displayMode === "list" ? " active" : ""}`} onClick={() => setDisplayMode("list")} type="button">
+                <List size={16} /><span>{language === "uk" ? "Список" : "List"}</span>
+              </button>
+            </div>
+          </div>
+          </div>
+          <div className="mounting-node-catalog-layout">
+            <aside className="mounting-node-filter-sidebar" aria-label={language === "uk" ? "Фільтри" : "Filters"}>
+              <div className="mounting-node-filter-title">
+                <strong>{language === "uk" ? "Фільтри" : "Filters"}</strong>
+                <button className="ghost-button compact-button" onClick={handleResetFilters} type="button">
+                  {language === "uk" ? "Скинути всі" : "Reset all"}
+                </button>
+              </div>
+              <div className="mounting-node-filter-group">
+                <strong>{language === "uk" ? "Статус" : "Status"}</strong>
+                <div className="mounting-node-filter-options" role="radiogroup" aria-label={language === "uk" ? "Статус" : "Status"}>
+                  {[
+                    ["all", language === "uk" ? "Усі" : "All"],
+                    ["active", language === "uk" ? "Активні" : "Active"],
+                    ["inactive", language === "uk" ? "Неактивні" : "Inactive"],
+                  ].map(([value, label]) => (
+                    <button
+                      aria-checked={activeStatusFilter === value}
+                      className={`mounting-node-filter-option${activeStatusFilter === value ? " is-active" : ""}`}
+                      key={value}
+                      onClick={() => handleStatusFilterChange(value)}
+                      role="radio"
+                      type="button"
+                    >
+                      <span className="mounting-node-filter-check" aria-hidden="true" />
+                      <span>{label}</span>
+                      <small>{statusCounts[value]}</small>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="mounting-node-filter-group">
+                <strong>{language === "uk" ? "Тип кріплення" : "Fastening type"}</strong>
+                <div className="mounting-node-filter-options" role="radiogroup" aria-label={language === "uk" ? "Тип кріплення" : "Fastening type"}>
+                  {[
+                    { code: "", label: language === "uk" ? "Усі" : "All" },
+                    ...mountingNodeTypeTiles.map((tile) => ({ code: tile.code, label: getMountingNodeFasteningTypeLabel(tile.code) || tile.label })),
+                  ].map((option) => (
+                    <button
+                      aria-checked={(selectedFasteningType || "") === option.code}
+                      className={`mounting-node-filter-option${(selectedFasteningType || "") === option.code ? " is-active" : ""}`}
+                      key={option.code || "all"}
+                      onClick={handleFasteningTypeFilterChange}
+                      role="radio"
+                      type="button"
+                      value={option.code}
+                    >
+                      <span className="mounting-node-filter-check" aria-hidden="true" />
+                      <span>{option.label}</span>
+                      <small>{fasteningTypeCounts[option.code || "all"]}</small>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <label className="mounting-nodes-filter-field">
+                {language === "uk" ? "Категорія" : "Category"}
+                <select onChange={(event) => handleCategoryFilterChange(event.target.value)} value={activeCategoryFilter}>
+                  {categoryFilterOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                </select>
+              </label>
+              <label className="mounting-nodes-filter-field">
+                {language === "uk" ? "Тип з'єднання" : "Connection type"}
+                <select onChange={(event) => handleVariantFilterChange(event.target.value)} value={activeVariantFilter}>
+                  {variantOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                </select>
+              </label>
+              <label className="mounting-nodes-filter-field">
+                {language === "uk" ? "Сортування" : "Sort"}
+                <select onChange={(event) => setSortOrder(event.target.value)} value={sortOrder}>
+                  <option value="name-asc">{language === "uk" ? "За назвою A→Я" : "Name A→Z"}</option>
+                  <option value="name-desc">{language === "uk" ? "За назвою Я→A" : "Name Z→A"}</option>
+                </select>
+              </label>
+              <button className="ghost-button mounting-nodes-refresh-button" onClick={handleRefresh} type="button">
+                <RefreshCw size={16} />{t.mountingNodesRetry || (language === "uk" ? "Оновити" : "Refresh")}
+              </button>
+            </aside>
+            <div className="mounting-node-catalog-results">
+          {listLoading ? (
             <div className="empty-state compact-empty-state">
               <span>{t.mountingNodesLoading || (language === "uk" ? "Завантаження монтажних вузлів…" : "Loading mounting nodes…")}</span>
             </div>
@@ -1958,32 +1997,43 @@ export default function MountingNodesPanelRefined({
                       aria-selected={isSelected}
                       className={`settings-card mounting-node-card${isSelected ? " is-selected" : ""}`}
                       key={node.id}
-                      onClick={() => handleSelectNode(node.id)}
+                      onClick={() => handleOpenEditor(nodeDetail || node)}
                       onKeyDown={(event) => {
                         if (event.key === "Enter" || event.key === " ") {
                           event.preventDefault();
-                          handleSelectNode(node.id);
+                          handleOpenEditor(nodeDetail || node);
                         }
                       }}
                       role="button"
                       tabIndex={0}
                     >
                       <div className="mounting-node-card-layout">
-                        <div className="mounting-node-card-copy">
-                          <strong>{node.name || t.notSet}</strong>
-                          <p className="mounting-node-card-type">{ownershipLabel}</p>
-                          <p className="mounting-node-card-type">{categoryLabel}</p>
-                        </div>
-                        <div className="mounting-node-card-visuals">
-                          {renderNodeItemGallery(nodeDetail?.items, language, t, fittingThumbnailStateById)}
+                        <div className="mounting-node-card-preview">
+                          <span className="mounting-node-card-ownership service-tree-badge subtle">{ownershipLabel}</span>
+                          {renderNodeItemGallery(nodeDetail?.items, language, t, fittingThumbnailStateById, node.fastening_type, nodeDetail || node)}
                           {renderNodeCardActions(
                             node,
                             nodeDetail,
                             language,
                             t,
-                            handleSelectNode,
                             handleOpenEditor,
                           )}
+                        </div>
+                        <div className="mounting-node-card-copy">
+                          <div className="mounting-node-card-main">
+                            <strong className="mounting-node-card-title">{node.name || t.notSet}</strong>
+                            <p className="mounting-node-card-description">{node.description || (language === "uk" ? "Опис не вказано" : "Description not set")}</p>
+                          </div>
+                          <div className="mounting-node-card-footer">
+                            <div className="mounting-node-card-tags">
+                              <span>{getMountingNodeFasteningTypeLabel(node.fastening_type) || (language === "uk" ? "Інше" : "Other")}</span>
+                              <span>{categoryLabel}</span>
+                            </div>
+                            <div className={`mounting-node-card-status${node.is_active === false ? " is-inactive" : ""}`}>
+                              <span aria-hidden="true" />
+                              {node.is_active === false ? (language === "uk" ? "Неактивний" : "Inactive") : (language === "uk" ? "Активний" : "Active")}
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </article>
@@ -2003,34 +2053,44 @@ export default function MountingNodesPanelRefined({
                       aria-selected={isSelected}
                       className={`settings-card mounting-node-row${isSelected ? " is-selected" : ""}`}
                       key={node.id}
-                      onClick={() => handleSelectNode(node.id)}
+                      onClick={() => handleOpenEditor(nodeDetail || node)}
                       onKeyDown={(event) => {
                         if (event.key === "Enter" || event.key === " ") {
                           event.preventDefault();
-                          handleSelectNode(node.id);
+                          handleOpenEditor(nodeDetail || node);
                         }
                       }}
                       role="button"
                       tabIndex={0}
                     >
                       <div className="mounting-node-row-layout">
-                        <div className="mounting-node-row-copy">
-                          <strong>{node.name || t.notSet}</strong>
-                          <p className="mounting-node-card-type">{ownershipLabel}</p>
-                          <p className="mounting-node-card-type">{categoryLabel}</p>
+                        <div className="mounting-node-row-preview">
+                          {renderNodeItemGallery(nodeDetail?.items, language, t, fittingThumbnailStateById, node.fastening_type, nodeDetail || node)}
                         </div>
-                        <div className="mounting-node-row-visuals">
-                          {renderNodeItemGallery(nodeDetail?.items, language, t, fittingThumbnailStateById)}
-                          <div className="mounting-node-row-actions">
-                            {renderNodeCardActions(
-                              node,
-                              nodeDetail,
-                              language,
-                              t,
-                              handleSelectNode,
-                              handleOpenEditor,
-                            )}
+                        <div className="mounting-node-row-copy">
+                          <div className="mounting-node-card-badges">
+                            <span className="service-tree-badge subtle">{ownershipLabel}</span>
                           </div>
+                          <strong>{node.name || t.notSet}</strong>
+                          <p className="mounting-node-card-code">{node.code || getNodeFunctionalLabel(node, language)}</p>
+                          <p className="mounting-node-card-description">{node.description || (language === "uk" ? "Опис не вказано" : "Description not set")}</p>
+                          <div className="mounting-node-card-tags">
+                            <span>{getMountingNodeFasteningTypeLabel(node.fastening_type) || (language === "uk" ? "Інше" : "Other")}</span>
+                            <span>{categoryLabel}</span>
+                          </div>
+                          <div className={`mounting-node-card-status${node.is_active === false ? " is-inactive" : ""}`}>
+                            <span aria-hidden="true" />
+                            {node.is_active === false ? (language === "uk" ? "Неактивний" : "Inactive") : (language === "uk" ? "Активний" : "Active")}
+                          </div>
+                        </div>
+                        <div className="mounting-node-row-actions">
+                          {renderNodeCardActions(
+                            node,
+                            nodeDetail,
+                            language,
+                            t,
+                            handleOpenEditor,
+                          )}
                         </div>
                       </div>
                     </article>
@@ -2054,6 +2114,8 @@ export default function MountingNodesPanelRefined({
               <span>{t.mountingNodesEmpty || (language === "uk" ? "Монтажні вузли ще не створені." : "Mounting nodes have not been created yet.")}</span>
             </div>
           )}
+            </div>
+          </div>
         </>
       ) : (
         <>
