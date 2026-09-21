@@ -13,10 +13,29 @@ from database.models.canonical_edge import (
 )
 from database.models.material_taxonomy import MaterialManufacturerModel
 from sqlalchemy import func, or_, text
+from services.material_manufacturer_rules import MISSING_MANUFACTURER_CODE
 
 
 def _normalize_lookup_text(value: Any) -> str:
     return " ".join(str(value or "").replace("\xa0", " ").split()).strip().casefold()
+
+
+def normalize_supplier_article(value: Any) -> str:
+    """Normalize supplier SKUs without changing meaningful leading zeros."""
+    return str(value or "").strip()
+
+
+class SupplierOfferIdentityConflict(ValueError):
+    def __init__(self, *, supplier_id: int, supplier_article: str, edge_id: int, existing: list[EdgeSupplierOfferModel]):
+        self.supplier_id = supplier_id
+        self.supplier_article = supplier_article
+        self.edge_id = edge_id
+        self.existing = existing
+        existing_edges = ", ".join(str(offer.edge_id) for offer in existing)
+        super().__init__(
+            f"supplier_article_conflict:supplier_id={supplier_id};"
+            f"article={supplier_article};edge_id={edge_id};existing_edges={existing_edges}"
+        )
 
 
 class EdgeFoundationRepository:
@@ -30,6 +49,16 @@ class EdgeFoundationRepository:
         return (
             self.session.query(MaterialManufacturerModel)
             .filter(func.lower(MaterialManufacturerModel.normalized_name) == normalized_name)
+            .one_or_none()
+        )
+
+    def get_missing_manufacturer(self) -> MaterialManufacturerModel | None:
+        return (
+            self.session.query(MaterialManufacturerModel)
+            .filter(MaterialManufacturerModel.code == MISSING_MANUFACTURER_CODE)
+            .filter(MaterialManufacturerModel.is_system.is_(True))
+            .filter(MaterialManufacturerModel.is_active.is_(True))
+            .filter(MaterialManufacturerModel.owner_user_id.is_(None))
             .one_or_none()
         )
 
@@ -52,6 +81,7 @@ class EdgeFoundationRepository:
         manufacturer_id: int,
         manufacturer_article: str,
         material_type: str,
+        technology_code: str | None = None,
         width_mm: float,
         thickness_mm: float,
     ) -> CanonicalEdgeModel | None:
@@ -60,6 +90,7 @@ class EdgeFoundationRepository:
             .filter(CanonicalEdgeModel.manufacturer_id == int(manufacturer_id))
             .filter(CanonicalEdgeModel.manufacturer_article == str(manufacturer_article))
             .filter(CanonicalEdgeModel.material_type == str(material_type))
+            .filter(CanonicalEdgeModel.technology_code == technology_code)
             .filter(CanonicalEdgeModel.width_mm == float(width_mm))
             .filter(CanonicalEdgeModel.thickness_mm == float(thickness_mm))
             .one_or_none()
@@ -101,6 +132,11 @@ class EdgeFoundationRepository:
                 EdgeSupplierOfferModel,
                 EdgeSupplierOfferModel.edge_id == CanonicalEdgeModel.id,
             ).filter(EdgeSupplierOfferModel.supplier_id == supplier_id)
+        else:
+            query = query.outerjoin(
+                EdgeSupplierOfferModel,
+                EdgeSupplierOfferModel.edge_id == CanonicalEdgeModel.id,
+            )
 
         normalized_search = _normalize_lookup_text(search)
         if normalized_search:
@@ -110,6 +146,7 @@ class EdgeFoundationRepository:
                     func.lower(func.coalesce(CanonicalEdgeModel.name, "")).like(like_pattern),
                     func.lower(func.coalesce(CanonicalEdgeModel.manufacturer_article, "")).like(like_pattern),
                     func.lower(func.coalesce(CanonicalEdgeModel.decor_code, "")).like(like_pattern),
+                    func.lower(func.coalesce(EdgeSupplierOfferModel.article, "")).like(like_pattern),
                     func.lower(func.coalesce(CanonicalEdgeModel.color, "")).like(like_pattern),
                     func.lower(func.coalesce(CanonicalEdgeModel.material_type, "")).like(like_pattern),
                     func.lower(func.coalesce(CanonicalEdgeModel.finish, "")).like(like_pattern),
@@ -271,6 +308,26 @@ class EdgeFoundationRepository:
             query = query.filter(EdgeSupplierOfferModel.external_product_id == external_product_id)
         return query.one_or_none()
 
+    def list_offers_by_supplier_article(
+        self,
+        *,
+        supplier_id: int,
+        supplier_article: str,
+    ) -> list[EdgeSupplierOfferModel]:
+        normalized_article = normalize_supplier_article(supplier_article)
+        if not normalized_article:
+            return []
+        offers = (
+            self.session.query(EdgeSupplierOfferModel)
+            .filter(EdgeSupplierOfferModel.supplier_id == int(supplier_id))
+            .order_by(EdgeSupplierOfferModel.id.asc())
+            .all()
+        )
+        return [
+            offer for offer in offers
+            if normalize_supplier_article(offer.article) == normalized_article
+        ]
+
     def list_offers_by_edge(
         self,
         edge_id: int,
@@ -306,12 +363,68 @@ class EdgeFoundationRepository:
         return offer
 
     def upsert_offer(self, *, edge_id: int, supplier_id: int, **data: Any) -> EdgeSupplierOfferModel:
+        supplier_article = normalize_supplier_article(data.get("article"))
+        if supplier_article:
+            data["article"] = supplier_article
         external_product_id = data.get("external_product_id")
-        offer = self.get_offer_by_identity(
-            edge_id=edge_id,
-            supplier_id=supplier_id,
-            external_product_id=external_product_id,
+        if external_product_id is not None:
+            external_product_id = str(external_product_id).strip() or None
+            data["external_product_id"] = external_product_id
+
+        exact_offer = (
+            self.get_offer_by_identity(
+                edge_id=edge_id,
+                supplier_id=supplier_id,
+                external_product_id=external_product_id,
+            )
+            if external_product_id is not None
+            else None
         )
+        article_offers = self.list_offers_by_supplier_article(
+            supplier_id=supplier_id,
+            supplier_article=supplier_article,
+        ) if supplier_article else []
+        other_edge_offers = [offer for offer in article_offers if int(offer.edge_id) != int(edge_id)]
+        if other_edge_offers:
+            raise SupplierOfferIdentityConflict(
+                supplier_id=int(supplier_id),
+                supplier_article=supplier_article,
+                edge_id=int(edge_id),
+                existing=other_edge_offers,
+            )
+
+        if exact_offer is not None:
+            if supplier_article and normalize_supplier_article(exact_offer.article) != supplier_article:
+                raise SupplierOfferIdentityConflict(
+                    supplier_id=int(supplier_id),
+                    supplier_article=supplier_article,
+                    edge_id=int(edge_id),
+                    existing=[exact_offer],
+                )
+            offer = exact_offer
+        elif len(article_offers) == 1:
+            offer = article_offers[0]
+            existing_external = offer.external_product_id
+            if (
+                external_product_id is not None
+                and existing_external is not None
+                and str(existing_external).strip() != external_product_id
+            ):
+                raise SupplierOfferIdentityConflict(
+                    supplier_id=int(supplier_id),
+                    supplier_article=supplier_article,
+                    edge_id=int(edge_id),
+                    existing=[offer],
+                )
+        elif len(article_offers) > 1:
+            raise SupplierOfferIdentityConflict(
+                supplier_id=int(supplier_id),
+                supplier_article=supplier_article,
+                edge_id=int(edge_id),
+                existing=article_offers,
+            )
+        else:
+            offer = None
         if offer is None:
             offer = EdgeSupplierOfferModel(
                 edge_id=edge_id,
@@ -321,6 +434,8 @@ class EdgeFoundationRepository:
             self.session.add(offer)
         else:
             for key, value in data.items():
+                if key == "external_product_id" and value is None and offer.external_product_id is not None:
+                    continue
                 setattr(offer, key, value)
         self.session.flush()
         self.session.refresh(offer)

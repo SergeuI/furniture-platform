@@ -8,6 +8,7 @@ from database.session import (
 from database.models.audit_log import (
     AuditLogModel
 )
+from database.deletion_protection import is_auto_recreate_suppressed
 
 
 def _make_json_safe(
@@ -151,6 +152,23 @@ def count_audit_logs() -> int:
 
             .count()
         )
+
+    finally:
+
+        db.close()
+
+
+def has_material_delete_audit(article: str) -> bool:
+
+    normalized_article = str(article or "").strip()
+    if not normalized_article:
+        return False
+
+    db = SessionLocal()
+
+    try:
+
+        return is_auto_recreate_suppressed(db, "material", normalized_article)
 
     finally:
 

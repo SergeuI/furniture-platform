@@ -17,6 +17,8 @@ import {
   listProjects,
   getProjectQuota,
   updateMountingNode,
+  uploadMountingNodePreview,
+  deleteMountingNodeCustomPreview,
   updateMaterial,
 } from "../src/api.js";
 
@@ -134,7 +136,7 @@ test("material source import does not block on legacy gallery refresh", () => {
   assert.match(handlerSnippet, /Матеріал готовий/);
   assert.match(handlerSnippet, /updateMaterialImportProgress\("gallery", "done"\);/);
   assert.doesNotMatch(handlerSnippet, /refreshMaterialRecommendedEdges/);
-  assert.doesNotMatch(handlerSnippet, /Шукаємо рекомендовані крайки/);
+  assert.match(handlerSnippet, /Шукаємо рекомендовані крайки/);
   assert.ok(
     handlerSnippet.indexOf("await loadMaterialsCatalog(token);") < handlerSnippet.lastIndexOf("closeMaterialCreateModal();"),
     "material import overlay should close after catalog reload",
@@ -142,7 +144,7 @@ test("material source import does not block on legacy gallery refresh", () => {
   assert.match(handlerSnippet, /finally \{[\s\S]*setLoading\(false\);[\s\S]*setMaterialImportWorking\(false\);[\s\S]*resetMaterialImportProgress\(\);/);
 });
 
-test("material import handler no longer references recommended-edge warnings", () => {
+test("material import handler keeps recommended-edge warnings user friendly", () => {
   const source = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
   const handlerStart = source.indexOf("async function handleImportMaterial(event) {");
   assert.ok(handlerStart >= 0, "handleImportMaterial not found");
@@ -152,6 +154,8 @@ test("material import handler no longer references recommended-edge warnings", (
   assert.doesNotMatch(handlerSnippet, /edgesHasIssues/);
   assert.doesNotMatch(handlerSnippet, /рекомендована крайка потребує перевірки/);
   assert.doesNotMatch(handlerSnippet, /Recommended edges could not be updated yet/);
+  assert.match(handlerSnippet, /Матеріал створено, але рекомендовані крайки не додані/);
+  assert.doesNotMatch(handlerSnippet, /NoneType.*viyar_email/);
 });
 
 test("material refresh handler stops after gallery for existing materials", () => {
@@ -705,6 +709,36 @@ test("mounting node delete wrapper sends a DELETE request with no extra payload"
     assert.equal(calls[0].options.method, "DELETE");
     assert.equal(calls[0].options.headers.Authorization, "Bearer token-8");
     assert.equal(calls[0].options.body, undefined);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("mounting node preview wrappers upload multipart state and delete only custom preview", async () => {
+  const calls = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url, options });
+    return new Response(JSON.stringify({ success: true, node: { id: 17 } }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+
+  try {
+    const image = new File([new Uint8Array([1, 2, 3])], "preview.png", { type: "image/png" });
+    const uploaded = await uploadMountingNodePreview("token-9", 17, image, "custom");
+    const deleted = await deleteMountingNodeCustomPreview("token-9", 17);
+
+    assert.equal(uploaded.success, true);
+    assert.equal(deleted.success, true);
+    assert.equal(calls[0].url, "/api/mounting-nodes/17/preview-image");
+    assert.equal(calls[0].options.method, "POST");
+    assert.equal(calls[0].options.headers.Authorization, "Bearer token-9");
+    assert.equal(calls[0].options.headers["Content-Type"], undefined);
+    assert.equal(calls[0].options.body.get("source_type"), "custom");
+    assert.equal(calls[1].url, "/api/mounting-nodes/17/preview-image/custom");
+    assert.equal(calls[1].options.method, "DELETE");
   } finally {
     globalThis.fetch = originalFetch;
   }

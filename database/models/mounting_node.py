@@ -65,6 +65,27 @@ class MountingNodeModel(Base):
 
     fastening_type = Column(String(32), nullable=True)
 
+    preview_mode = Column(
+        String(16),
+        nullable=False,
+        default="auto",
+        server_default=text("'auto'"),
+    )
+
+    preview_generated_image_url = Column(Text, nullable=True)
+
+    preview_auto_image_url = Column(Text, nullable=True)
+
+    preview_3d_image_url = Column(Text, nullable=True)
+
+    preview_custom_image_url = Column(Text, nullable=True)
+
+    preview_generated_at = Column(DateTime, nullable=True)
+
+    preview_auto_generated_at = Column(DateTime, nullable=True)
+
+    preview_3d_generated_at = Column(DateTime, nullable=True)
+
     owner_user_id = Column(
         String,
         ForeignKey("users.id"),

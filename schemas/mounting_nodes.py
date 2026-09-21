@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 from database.mounting_node_fastening_types import validate_mounting_node_fastening_type
@@ -171,6 +171,7 @@ class MountingNodeCreateSchema(BaseModel):
     description: str | None = Field(default=None, max_length=5000)
     category_code: str | None = Field(default=None, max_length=64)
     functional_code: str | None = Field(default=None, max_length=64)
+    preview_mode: Literal["auto", "three_d", "custom"] = "auto"
     is_active: bool = True
     ownership_type: str = Field(default="mine", max_length=16)
     items: list[MountingNodeItemCreateSchema] = Field(default_factory=list)
@@ -211,6 +212,7 @@ class MountingNodeUpdateSchema(BaseModel):
     description: str | None = Field(default=None, max_length=5000)
     category_code: str | None = Field(default=None, max_length=64)
     functional_code: str | None = Field(default=None, max_length=64)
+    preview_mode: Literal["auto", "three_d", "custom"] | None = None
     is_active: bool | None = None
     items: list[MountingNodeItemCreateSchema] | None = None
     templates: list[MountingNodeTemplateLinkCreateSchema] | None = None
@@ -250,6 +252,14 @@ class MountingNodeListItemSchema(BaseModel):
     description: str | None = None
     category_code: str | None = None
     functional_code: str | None = None
+    preview_mode: Literal["auto", "three_d", "custom"] = "auto"
+    preview_generated_image_url: str | None = None
+    preview_auto_image_url: str | None = None
+    preview_3d_image_url: str | None = None
+    preview_custom_image_url: str | None = None
+    preview_generated_at: datetime | None = None
+    preview_auto_generated_at: datetime | None = None
+    preview_3d_generated_at: datetime | None = None
     owner_user_id: str | None = None
     ownership_type: str = "system"
     is_system: bool = True

@@ -92,6 +92,22 @@ class ViyarEdgeProductPreviewTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["items"], [])
         self.assertIn("parsed", result["error"].lower())
 
+    async def test_preview_viyar_edge_product_rejects_wrong_source_supplier_article(self) -> None:
+        async def fake_fetcher(page, url):
+            return VIYAR_EDGE_PRODUCT_HTML
+
+        result = await viyar_parser.preview_viyar_edge_product(
+            "https://viyar.ua/ua/catalog/requested-87189/",
+            page=object(),
+            fetcher=fake_fetcher,
+            expected_supplier_article="87189",
+        )
+
+        self.assertFalse(result["success"])
+        self.assertEqual(result["reason"], "source_product_mismatch")
+        self.assertEqual(result["requested_supplier_article"], "87189")
+        self.assertEqual(result["source_supplier_article"], "185187")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -24,6 +24,14 @@ TABLES = {
             description TEXT,
             category_code VARCHAR,
             functional_code VARCHAR,
+            preview_mode VARCHAR(16) NOT NULL DEFAULT 'auto',
+            preview_generated_image_url TEXT,
+            preview_auto_image_url TEXT,
+            preview_3d_image_url TEXT,
+            preview_custom_image_url TEXT,
+            preview_generated_at DATETIME,
+            preview_auto_generated_at DATETIME,
+            preview_3d_generated_at DATETIME,
             owner_user_id VARCHAR,
             is_active BOOLEAN NOT NULL DEFAULT 1,
             created_by_user_id VARCHAR,
@@ -91,6 +99,17 @@ TABLES = {
     """,
 }
 
+MOUNTING_NODE_COLUMN_ADDITIONS = {
+    "preview_mode": "VARCHAR(16) NOT NULL DEFAULT 'auto'",
+    "preview_generated_image_url": "TEXT",
+    "preview_auto_image_url": "TEXT",
+    "preview_3d_image_url": "TEXT",
+    "preview_custom_image_url": "TEXT",
+    "preview_generated_at": "DATETIME",
+    "preview_auto_generated_at": "DATETIME",
+    "preview_3d_generated_at": "DATETIME",
+}
+
 INDEXES = {
     "ix_mounting_nodes_name": "CREATE INDEX IF NOT EXISTS ix_mounting_nodes_name ON mounting_nodes (name)",
     "ix_mounting_nodes_owner_user_id": "CREATE INDEX IF NOT EXISTS ix_mounting_nodes_owner_user_id ON mounting_nodes (owner_user_id)",
@@ -143,6 +162,12 @@ def _index_exists(connection: sqlite3.Connection, index_name: str) -> bool:
     return row is not None
 
 
+def _column_names(connection: sqlite3.Connection, table_name: str) -> set[str]:
+    if not _table_exists(connection, table_name):
+        return set()
+    return {str(row[1]) for row in connection.execute(f"PRAGMA table_info({table_name})")}
+
+
 def _integrity_check(connection: sqlite3.Connection) -> str:
     row = connection.execute("PRAGMA integrity_check").fetchone()
     return str(row[0]) if row else "unknown"
@@ -168,8 +193,33 @@ def _build_plan(connection: sqlite3.Connection) -> dict[str, object]:
             "missing_prerequisites": missing_prerequisites,
             "missing_tables": [],
             "missing_indexes": [],
+            "missing_columns": [],
+            "preview_backfill_rows": 0,
+            "preview_normalize_rows": 0,
         }
 
+    mounting_nodes_exists = _table_exists(connection, "mounting_nodes")
+    column_names = _column_names(connection, "mounting_nodes") if mounting_nodes_exists else set()
+    backfill_conditions = []
+    if "preview_generated_image_url" in column_names:
+        empty_3d_url = "NULLIF(trim(preview_3d_image_url), '') IS NULL" if "preview_3d_image_url" in column_names else "1 = 1"
+        backfill_conditions.append(f"({empty_3d_url} AND NULLIF(trim(preview_generated_image_url), '') IS NOT NULL)")
+    if "preview_generated_at" in column_names:
+        empty_3d_time = "preview_3d_generated_at IS NULL" if "preview_3d_generated_at" in column_names else "1 = 1"
+        backfill_conditions.append(f"({empty_3d_time} AND preview_generated_at IS NOT NULL)")
+    backfill_rows = connection.execute(
+        "SELECT COUNT(*) FROM mounting_nodes WHERE " + " OR ".join(backfill_conditions)
+    ).fetchone()[0] if backfill_conditions else 0
+    normalize_rows = 0
+    if "preview_mode" in column_names:
+        conditions = ["preview_mode NOT IN ('auto', 'three_d', 'custom')"]
+        if "preview_custom_image_url" in column_names:
+            conditions.append("(preview_mode = 'custom' AND NULLIF(trim(preview_custom_image_url), '') IS NULL)")
+        if "preview_3d_image_url" in column_names and "preview_generated_image_url" in column_names:
+            conditions.append("(preview_mode = 'three_d' AND NULLIF(trim(preview_3d_image_url), '') IS NULL AND NULLIF(trim(preview_generated_image_url), '') IS NULL)")
+        normalize_rows = connection.execute(
+            "SELECT COUNT(*) FROM mounting_nodes WHERE " + " OR ".join(conditions)
+        ).fetchone()[0]
     return {
         "prerequisite_missing": False,
         "missing_prerequisites": [],
@@ -183,6 +233,13 @@ def _build_plan(connection: sqlite3.Connection) -> dict[str, object]:
             for index_name in INDEXES
             if not _index_exists(connection, index_name)
         ],
+        "missing_columns": [
+            column_name
+            for column_name in MOUNTING_NODE_COLUMN_ADDITIONS
+            if mounting_nodes_exists and column_name not in _column_names(connection, "mounting_nodes")
+        ],
+        "preview_backfill_rows": backfill_rows,
+        "preview_normalize_rows": normalize_rows,
     }
 
 
@@ -200,16 +257,37 @@ def _apply_plan(connection: sqlite3.Connection, plan: dict[str, object]) -> None
         for table_name in plan["missing_tables"]:
             connection.execute(TABLES[table_name])
 
+        for column_name in plan.get("missing_columns", []):
+            connection.execute(
+                f"ALTER TABLE mounting_nodes ADD COLUMN {column_name} {MOUNTING_NODE_COLUMN_ADDITIONS[column_name]}"
+            )
+
+        connection.execute("""
+            UPDATE mounting_nodes
+            SET preview_3d_image_url = CASE
+                    WHEN NULLIF(trim(preview_3d_image_url), '') IS NULL THEN NULLIF(trim(preview_generated_image_url), '')
+                    ELSE preview_3d_image_url END,
+                preview_3d_generated_at = COALESCE(preview_3d_generated_at, preview_generated_at)
+            WHERE (NULLIF(trim(preview_3d_image_url), '') IS NULL AND NULLIF(trim(preview_generated_image_url), '') IS NOT NULL)
+               OR (preview_3d_generated_at IS NULL AND preview_generated_at IS NOT NULL)
+        """)
+        connection.execute("""
+            UPDATE mounting_nodes SET preview_mode = 'auto'
+            WHERE preview_mode NOT IN ('auto', 'three_d', 'custom')
+               OR (preview_mode = 'custom' AND NULLIF(trim(preview_custom_image_url), '') IS NULL)
+               OR (preview_mode = 'three_d' AND NULLIF(trim(preview_3d_image_url), '') IS NULL AND NULLIF(trim(preview_generated_image_url), '') IS NULL)
+        """)
+
         for index_name in plan["missing_indexes"]:
             connection.execute(INDEXES[index_name])
+        if _integrity_check(connection) != "ok":
+            raise RuntimeError("Integrity check failed after schema update")
     except Exception:
         connection.rollback()
         raise
     else:
         connection.commit()
 
-    if _integrity_check(connection) != "ok":
-        raise SystemExit("Integrity check failed after schema update")
 
 
 def _print_plan(
@@ -227,6 +305,9 @@ def _print_plan(
         return
     print("Missing tables:", ", ".join(plan["missing_tables"]) or "none")
     print("Missing indexes:", ", ".join(plan["missing_indexes"]) or "none")
+    print("Missing columns:", ", ".join(plan.get("missing_columns", [])) or "none")
+    print("Legacy previews to copy into 3D:", plan.get("preview_backfill_rows", 0))
+    print("Invalid preview modes to normalize:", plan.get("preview_normalize_rows", 0))
 
 
 def main() -> None:
@@ -240,7 +321,7 @@ def main() -> None:
         plan = _build_plan(connection)
         has_changes = not plan["prerequisite_missing"] and any(
             plan[key]
-            for key in ("missing_tables", "missing_indexes")
+            for key in ("missing_tables", "missing_indexes", "missing_columns", "preview_backfill_rows", "preview_normalize_rows")
         )
         backup_path = _create_backup(database_path) if args.apply and has_changes else None
         if args.apply and has_changes:

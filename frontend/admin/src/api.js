@@ -1325,6 +1325,7 @@ export async function getMountingNodes(token, filters = {}) {
   const normalizedVariantKey = String(filters.mounting_variant_key || "").trim();
   const normalizedCategoryCode = String(filters.category_code || "").trim().toLowerCase();
   const normalizedIsActive = normalizeMountingNodeBoolean(filters.is_active);
+  const normalizedIncludeInactive = normalizeMountingNodeBoolean(filters.include_inactive);
 
   if (normalizedSearch) {
     searchParams.set("search", normalizedSearch);
@@ -1340,6 +1341,10 @@ export async function getMountingNodes(token, filters = {}) {
 
   if (normalizedCategoryCode) {
     searchParams.set("category_code", normalizedCategoryCode);
+  }
+
+  if (normalizedIncludeInactive === true) {
+    searchParams.set("include_inactive", "true");
   }
 
   if (normalizedIsActive !== null) {
@@ -1425,6 +1430,48 @@ export async function updateMountingNode(token, nodeId, payload) {
     method: "PATCH",
     headers: authHeaders(token),
     body: JSON.stringify(payload),
+  });
+}
+
+export async function uploadMountingNodePreview(token, nodeId, file, sourceType) {
+  const normalizedNodeId = String(nodeId || "").trim();
+  const normalizedSourceType = String(sourceType || "").trim().toLowerCase();
+  if (!normalizedNodeId || !file || !["auto", "three_d", "custom", "generated"].includes(normalizedSourceType)) {
+    return { success: false, error: "Mounting node ID, image, and source type are required", status: 0 };
+  }
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("source_type", normalizedSourceType);
+  try {
+    const response = await fetch(`${API_BASE_URL}/mounting-nodes/${encodeURIComponent(normalizedNodeId)}/preview-image`, {
+      method: "POST",
+      headers: authHeaders(token),
+      body: formData,
+    });
+    const responseText = await response.text();
+    let payload = {};
+    try {
+      payload = responseText ? JSON.parse(responseText) : {};
+    } catch {
+      payload = {};
+    }
+    if (!response.ok) {
+      return { success: false, error: extractErrorMessage(payload), status: response.status };
+    }
+    return payload;
+  } catch (error) {
+    return { success: false, error: error?.message || "Network request failed", status: 0 };
+  }
+}
+
+export async function deleteMountingNodeCustomPreview(token, nodeId) {
+  const normalizedNodeId = String(nodeId || "").trim();
+  if (!normalizedNodeId) {
+    return { success: false, error: "Mounting node ID is required", status: 0 };
+  }
+  return request(`/mounting-nodes/${encodeURIComponent(normalizedNodeId)}/preview-image/custom`, {
+    method: "DELETE",
+    headers: authHeaders(token),
   });
 }
 
@@ -1884,13 +1931,26 @@ export async function refreshMaterialRecommendedEdges(token, materialId) {
   });
 }
 
-export async function createMaterial(token, payload) {
+export async function createMaterial(token, payload, options = {}) {
   return request("/catalog/materials", {
     method: "POST",
-    headers: authHeaders(token),
+    headers: {
+      ...authHeaders(token),
+      ...(options.requestId ? { "X-Request-ID": options.requestId } : {}),
+    },
     body: JSON.stringify(payload),
     timeoutMs: 120000,
     diagnosticLabel: "material-source-import",
+  });
+}
+
+export async function getMaterialImportProgress(token, requestId) {
+  const normalizedRequestId = String(requestId || "").trim();
+  if (!normalizedRequestId) {
+    return { success: false, status: 0, error: "Request ID is required" };
+  }
+  return request(`/catalog/materials/import-progress/${encodeURIComponent(normalizedRequestId)}`, {
+    headers: authHeaders(token),
   });
 }
 

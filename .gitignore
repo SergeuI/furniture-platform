@@ -87,3 +87,12 @@ docs/update_packages/.update_package_state.json
 # Local runtime artifacts and backups
 .tmp/
 backups/
+.codex-chrome-profile-*/
+.server-catalog-sync/
+_stage_smoke/
+temp/
+*.bak-*
+furniture_platform.db.backup-*
+furniture_platform.db.corrupt-*
+fastening_type_git_status.txt
+viyar_*_preview_*.json

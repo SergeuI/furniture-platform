@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Mapping, Optional
 from uuid import uuid4
 
@@ -199,6 +199,24 @@ class MountingNodeService:
             if normalized in {"0", "false", "no", "off"}:
                 return False
         return bool(value)
+
+    @staticmethod
+    def _normalize_preview_mode(value: Any, default: str = "auto") -> str:
+        normalized = str(value or "").strip().lower()
+        if not normalized:
+            return default
+        if normalized not in {"auto", "three_d", "custom"}:
+            raise ValueError("preview_mode must be one of: auto, three_d, custom")
+        return normalized
+
+    @classmethod
+    def _effective_preview_mode(cls, mode: Any, *, custom_url: Any = None, three_d_url: Any = None, legacy_url: Any = None) -> str:
+        normalized = cls._normalize_preview_mode(mode)
+        if normalized == "custom" and str(custom_url or "").strip():
+            return "custom"
+        if normalized == "three_d" and (str(three_d_url or "").strip() or str(legacy_url or "").strip()):
+            return "three_d"
+        return "auto"
 
     @staticmethod
     def _slugify(text: str) -> str:
@@ -493,6 +511,19 @@ class MountingNodeService:
             "category_code": self._raw_node_value(node, "category_code"),
             "functional_code": self._raw_node_value(node, "functional_code"),
             "fastening_type": self._raw_node_value(node, "fastening_type"),
+            "preview_mode": self._effective_preview_mode(
+                self._raw_node_value(node, "preview_mode", "auto"),
+                custom_url=self._raw_node_value(node, "preview_custom_image_url"),
+                three_d_url=self._raw_node_value(node, "preview_3d_image_url"),
+                legacy_url=self._raw_node_value(node, "preview_generated_image_url"),
+            ),
+            "preview_generated_image_url": self._raw_node_value(node, "preview_generated_image_url"),
+            "preview_auto_image_url": self._raw_node_value(node, "preview_auto_image_url"),
+            "preview_3d_image_url": self._raw_node_value(node, "preview_3d_image_url"),
+            "preview_custom_image_url": self._raw_node_value(node, "preview_custom_image_url"),
+            "preview_generated_at": self._raw_node_value(node, "preview_generated_at"),
+            "preview_auto_generated_at": self._raw_node_value(node, "preview_auto_generated_at"),
+            "preview_3d_generated_at": self._raw_node_value(node, "preview_3d_generated_at"),
             **ownership_snapshot,
             "is_active": bool(self._raw_node_value(node, "is_active", True)),
             "created_by_user_id": self._raw_node_value(node, "created_by_user_id"),
@@ -1149,6 +1180,7 @@ class MountingNodeService:
         category_code = self._normalize_category_code(payload.get("category_code"))
         functional_code = self._normalize_functional_code(payload.get("functional_code"))
         fastening_type = validate_mounting_node_fastening_type(payload.get("fastening_type"))
+        preview_mode = self._effective_preview_mode(payload.get("preview_mode", "auto"))
         is_active = self._normalize_bool(payload.get("is_active"), True)
         owner_user_id, created_by_user_id, updated_by_user_id = self._resolve_create_ownership(
             payload,
@@ -1173,6 +1205,7 @@ class MountingNodeService:
                 category_code=category_code,
                 functional_code=functional_code,
                 fastening_type=fastening_type,
+                preview_mode=preview_mode,
                 is_active=is_active,
                 owner_user_id=owner_user_id,
                 created_by_user_id=created_by_user_id,
@@ -1278,6 +1311,14 @@ class MountingNodeService:
         if "fastening_type" in payload:
             update_fields["fastening_type"] = validate_mounting_node_fastening_type(payload.get("fastening_type"))
 
+        if "preview_mode" in payload:
+            update_fields["preview_mode"] = self._effective_preview_mode(
+                payload.get("preview_mode"),
+                custom_url=self._raw_node_value(node, "preview_custom_image_url"),
+                three_d_url=self._raw_node_value(node, "preview_3d_image_url"),
+                legacy_url=self._raw_node_value(node, "preview_generated_image_url"),
+            )
+
         if "is_active" in payload:
             update_fields["is_active"] = self._normalize_bool(payload.get("is_active"), True)
 
@@ -1339,6 +1380,82 @@ class MountingNodeService:
             return None
         return self._serialize_node(
             refreshed,
+            viewer_user_id=viewer_user_id,
+            viewer_role=viewer_role,
+            viewer_can_edit=viewer_can_edit,
+            viewer_can_delete=viewer_can_delete,
+            include_versions=True,
+        )
+
+    def set_preview_image(
+        self,
+        node_id: int,
+        *,
+        source_type: str,
+        image_url: str,
+        viewer_user_id: Any = None,
+        viewer_role: Any = None,
+        viewer_can_edit: bool | None = None,
+        viewer_can_delete: bool | None = None,
+    ) -> dict[str, Any] | None:
+        node = self.repository.get_node_by_id(self._require_int(node_id, "node_id"))
+        if node is None or bool(self._raw_node_value(node, "is_archived", False)):
+            return None
+        self._assert_mutation_access(node, viewer_user_id=viewer_user_id, viewer_role=viewer_role)
+        normalized_source_type = str(source_type or "").strip().lower()
+        if normalized_source_type == "generated":
+            normalized_source_type = "three_d"
+        if normalized_source_type not in {"auto", "three_d", "custom"}:
+            raise ValueError("source_type must be one of: auto, three_d, custom")
+        normalized_image_url = self._require_text(image_url, "image_url")
+        source_prefix = "preview_3d" if normalized_source_type == "three_d" else f"preview_{normalized_source_type}"
+        update_fields: dict[str, Any] = {
+            f"{source_prefix}_image_url": normalized_image_url,
+            "preview_mode": normalized_source_type,
+        }
+        if normalized_source_type in {"auto", "three_d"}:
+            update_fields[f"{source_prefix}_generated_at"] = datetime.now(timezone.utc).replace(tzinfo=None)
+        normalized_viewer_user_id = self._normalize_viewer_user_id(viewer_user_id)
+        if normalized_viewer_user_id:
+            update_fields["updated_by_user_id"] = normalized_viewer_user_id
+        self.session.rollback()
+        with self.session.begin():
+            self.repository.update_node(node, **update_fields)
+        refreshed = self.repository.get_node_by_id(node.id)
+        return self._serialize_node(
+            refreshed or node,
+            viewer_user_id=viewer_user_id,
+            viewer_role=viewer_role,
+            viewer_can_edit=viewer_can_edit,
+            viewer_can_delete=viewer_can_delete,
+            include_versions=True,
+        )
+
+    def delete_custom_preview(
+        self,
+        node_id: int,
+        *,
+        viewer_user_id: Any = None,
+        viewer_role: Any = None,
+        viewer_can_edit: bool | None = None,
+        viewer_can_delete: bool | None = None,
+    ) -> dict[str, Any] | None:
+        node = self.repository.get_node_by_id(self._require_int(node_id, "node_id"))
+        if node is None or bool(self._raw_node_value(node, "is_archived", False)):
+            return None
+        self._assert_mutation_access(node, viewer_user_id=viewer_user_id, viewer_role=viewer_role)
+        update_fields: dict[str, Any] = {"preview_custom_image_url": None}
+        if self._raw_node_value(node, "preview_mode") == "custom":
+            update_fields["preview_mode"] = "auto"
+        normalized_viewer_user_id = self._normalize_viewer_user_id(viewer_user_id)
+        if normalized_viewer_user_id:
+            update_fields["updated_by_user_id"] = normalized_viewer_user_id
+        self.session.rollback()
+        with self.session.begin():
+            self.repository.update_node(node, **update_fields)
+        refreshed = self.repository.get_node_by_id(node.id)
+        return self._serialize_node(
+            refreshed or node,
             viewer_user_id=viewer_user_id,
             viewer_role=viewer_role,
             viewer_can_edit=viewer_can_edit,

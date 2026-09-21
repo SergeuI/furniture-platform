@@ -164,7 +164,7 @@ async def build_profile_card(bot, user_id, name, phone, city, email, role=None):
     badge_font = load_font(15, bold=True)
 
     logo = load_png(
-        os.path.join(BASE_DIR, "branding", "logo", "mproject-logo-reference.jpg"),
+        os.path.join(BASE_DIR, "branding", "logo", "mp-furniture-new.png"),
         size=(210, 48),
     )
     if logo:
@@ -215,7 +215,7 @@ async def build_profile_card(bot, user_id, name, phone, city, email, role=None):
         shell.alpha_composite(avatar, (avatar_x, avatar_y))
     else:
         symbol = load_png(
-            os.path.join(BASE_DIR, "branding", "logo", "mp-symbol-reference.jpg"),
+            os.path.join(BASE_DIR, "branding", "logo", "mp-furniture-new.png"),
             size=(92, 92),
         )
         if symbol:

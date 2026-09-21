@@ -15,8 +15,12 @@ from database.models.canonical_edge import (  # noqa: F401
     EdgeSupplierOfferPriceModel,
     MaterialEdgeRelationModel,
 )
-from database.repositories.edge_foundation_repository import EdgeFoundationRepository
+from database.repositories.edge_foundation_repository import (
+    EdgeFoundationRepository,
+    SupplierOfferIdentityConflict,
+)
 from scripts import upgrade_edge_foundation_schema as migration
+from database.edge_lifecycle_schema import ensure_edge_lifecycle_schema
 
 
 class EdgeFoundationRepositoryTests(unittest.TestCase):
@@ -87,6 +91,7 @@ class EdgeFoundationRepositoryTests(unittest.TestCase):
                 """
             )
             migration.ensure_edge_foundation_schema(connection)
+            ensure_edge_lifecycle_schema(connection)
 
         db = self.session_maker()
         try:
@@ -267,6 +272,123 @@ class EdgeFoundationRepositoryTests(unittest.TestCase):
 
             offers_for_edge = repository.list_offers_by_edge(edge.id)
             self.assertEqual({row.supplier_id for row in offers_for_edge}, {supplier_viyar_id, supplier_kronas_id})
+        finally:
+            db.close()
+
+    def test_edge_search_matches_supplier_article_without_changing_canonical_identity(self) -> None:
+        with sqlite3.connect(self.database_path) as connection:
+            connection.executescript(
+                """
+                CREATE TABLE materials (id INTEGER PRIMARY KEY AUTOINCREMENT, article TEXT NOT NULL UNIQUE, name TEXT);
+                CREATE TABLE material_manufacturers (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, normalized_name TEXT NOT NULL);
+                CREATE TABLE suppliers (id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT NOT NULL UNIQUE, name TEXT NOT NULL);
+                INSERT INTO material_manufacturers (name, normalized_name) VALUES ('Hranipex', 'hranipex');
+                INSERT INTO suppliers (code, name) VALUES ('viyar', 'VIYAR');
+                """
+            )
+            migration.ensure_edge_foundation_schema(connection)
+            ensure_edge_lifecycle_schema(connection)
+
+        db = self.session_maker()
+        try:
+            manufacturer_id = db.execute(text("SELECT id FROM material_manufacturers WHERE normalized_name = 'hranipex'")).scalar_one()
+            supplier_id = db.execute(text("SELECT id FROM suppliers WHERE code = 'viyar'")).scalar_one()
+            repository = EdgeFoundationRepository(session=db)
+            edge = repository.create_edge(
+                manufacturer_id=manufacturer_id,
+                manufacturer_article="29881",
+                name="29881 HD ABS 42x2 Hranipex",
+                material_type="ABS",
+                width_mm=42.0,
+                thickness_mm=2.0,
+                is_active=True,
+            )
+            repository.create_offer(
+                edge_id=edge.id,
+                supplier_id=supplier_id,
+                article="12234",
+                source_url="https://viyar.ua/ua/catalog/29881-hd/",
+                external_product_id=None,
+                unit="м.п.",
+                stock="in stock",
+                is_active=True,
+                priority=0,
+            )
+            db.commit()
+
+            self.assertEqual([row.manufacturer_article for row in repository.list_edges_for_catalog(search="12234")], ["29881"])
+            self.assertEqual([row.manufacturer_article for row in repository.list_edges_for_catalog(search="29881")], ["29881"])
+        finally:
+            db.close()
+
+    def test_offer_upsert_matches_supplier_article_and_rejects_cross_edge_reuse(self) -> None:
+        with sqlite3.connect(self.database_path) as connection:
+            connection.executescript(
+                """
+                CREATE TABLE materials (id INTEGER PRIMARY KEY AUTOINCREMENT, article TEXT NOT NULL UNIQUE, name TEXT);
+                CREATE TABLE material_manufacturers (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, normalized_name TEXT NOT NULL);
+                CREATE TABLE suppliers (id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT NOT NULL UNIQUE, name TEXT NOT NULL, is_system BOOLEAN NOT NULL DEFAULT 1, is_active BOOLEAN NOT NULL DEFAULT 1);
+                INSERT INTO material_manufacturers (name, normalized_name) VALUES ('Maag', 'maag');
+                INSERT INTO suppliers (code, name) VALUES ('viyar', 'VIYAR');
+                """
+            )
+            migration.ensure_edge_foundation_schema(connection)
+            ensure_edge_lifecycle_schema(connection)
+
+        db = self.session_maker()
+        try:
+            repository = EdgeFoundationRepository(session=db)
+            edge = repository.create_edge(
+                manufacturer_id=1,
+                manufacturer_article="201B",
+                name="201B 22x0.6",
+                material_type="PVC",
+                width_mm=22.0,
+                thickness_mm=0.6,
+                is_active=True,
+            )
+            first = repository.upsert_offer(
+                edge_id=edge.id,
+                supplier_id=1,
+                article=" 00158 ",
+                external_product_id=None,
+                source_url="https://viyar.ua/158",
+            )
+            filled = repository.upsert_offer(
+                edge_id=edge.id,
+                supplier_id=1,
+                article="00158",
+                external_product_id="158015",
+                source_url="https://viyar.ua/158",
+            )
+            repeated = repository.upsert_offer(
+                edge_id=edge.id,
+                supplier_id=1,
+                article="00158",
+                external_product_id=None,
+                source_url="https://viyar.ua/158",
+            )
+            self.assertEqual(first.id, filled.id)
+            self.assertEqual(filled.id, repeated.id)
+            self.assertEqual(filled.external_product_id, "158015")
+
+            other_edge = repository.create_edge(
+                manufacturer_id=1,
+                manufacturer_article="201B",
+                name="201B 28x2",
+                material_type="PVC",
+                width_mm=28.0,
+                thickness_mm=2.0,
+                is_active=True,
+            )
+            with self.assertRaises(SupplierOfferIdentityConflict):
+                repository.upsert_offer(
+                    edge_id=other_edge.id,
+                    supplier_id=1,
+                    article="00158",
+                    external_product_id="158015",
+                    source_url="https://viyar.ua/158",
+                )
         finally:
             db.close()
 

@@ -39,6 +39,7 @@ from database.models.fitting import (
 )
 from database.models import fitting_hole_service_rule  # noqa: F401
 from database.models import fitting_image  # noqa: F401
+from database.models import hole_library  # noqa: F401
 from database.models.fitting_image import FittingImageModel
 from database.models.material import MaterialModel
 from database.models.material_image import MaterialImageModel
@@ -67,6 +68,7 @@ from database.models import service_drilling_rule  # noqa: F401
 from database.models import user  # noqa: F401
 from database.models import user_change_request  # noqa: F401
 from database.models import user_service_catalog_price  # noqa: F401
+from database.models.user import UserModel
 from database.repositories import inventory_repository
 from database.repositories import material_import_job_repository
 from database.repositories import fitting_hole_service_rule_repository
@@ -92,6 +94,8 @@ class UserStub:
     city: str = "kyiv"
     trial_started_at: datetime | None = None
     trial_ends_at: datetime | None = None
+    viyar_email: str | None = None
+    viyar_password_secret: str | None = None
 
 
 class CatalogVisibilityTests(unittest.TestCase):
@@ -392,6 +396,72 @@ class CatalogVisibilityTests(unittest.TestCase):
                 self.assertEqual(all_response.status_code, 200)
                 all_articles = {item["article"] for item in all_response.json()["items"]}
                 self.assertEqual(all_articles, {"ADMIN-SYS", "ADMIN-MINE", "USER-PRIVATE", "ORPHAN"})
+
+    def test_manager_material_scopes_and_search_are_server_side(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, _client):
+                with session_factory() as session:
+                    manufacturer = MaterialManufacturerModel(
+                        name="Swiss Krono",
+                        normalized_name="swiss krono",
+                        code="swiss-krono",
+                    )
+                    supplier = SupplierModel(code="viyar", name="VIYAR")
+                    session.add_all([manufacturer, supplier])
+                    session.flush()
+                    session.add_all([
+                        manufacturer,
+                        supplier,
+                        MaterialModel(
+                            article="MANAGER-SYS",
+                            name="System board",
+                            category="dsp",
+                            is_default=True,
+                            owner_user_id=None,
+                        ),
+                        MaterialModel(
+                            article="54263",
+                            name="Swiss Krono Appalachia",
+                            category="dsp",
+                            is_default=False,
+                            owner_user_id="manager-user",
+                            manufacturer_id=manufacturer.id,
+                        ),
+                        MaterialModel(
+                            article="OTHER-MAT",
+                            name="Other private board",
+                            category="dsp",
+                            is_default=False,
+                            owner_user_id="other-user",
+                        ),
+                    ])
+                    session.flush()
+                    session.add(MaterialSupplierOfferModel(
+                        material_id=session.query(MaterialModel).filter(MaterialModel.article == "54263").one().id,
+                        supplier_id=supplier.id,
+                        article="184339",
+                    ))
+                    session.commit()
+
+                def articles(scope=None, search=None):
+                    return {
+                        item["article"]
+                        for item in inventory_repository.list_materials(
+                            search=search,
+                            viewer_user_id="manager-user",
+                            viewer_role="pro",
+                            ownership_scope=scope,
+                        )
+                    }
+
+                self.assertEqual(articles("all"), {"MANAGER-SYS", "54263"})
+                self.assertEqual(articles("system"), {"MANAGER-SYS"})
+                self.assertEqual(articles("mine"), {"54263"})
+                self.assertEqual(articles("mine", "Appalachia"), {"54263"})
+                self.assertEqual(articles("mine", "Swiss Krono"), {"54263"})
+                self.assertEqual(articles("mine", "54263"), {"54263"})
+                self.assertEqual(articles("mine", "184339"), {"54263"})
+                self.assertNotIn("OTHER-MAT", articles("mine"))
 
     def test_admin_can_filter_fittings_by_ownership_scope_and_see_owner_metadata(self) -> None:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
@@ -1450,18 +1520,33 @@ class CatalogVisibilityTests(unittest.TestCase):
     def test_admin_created_material_is_system_and_visible_to_trial(self) -> None:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
-                created = client.post(
-                    "/catalog/materials",
-                    json={
-                        "article": "ADMIN-MAT",
-                        "name": "Admin Material",
-                        "category": "dsp",
-                        "city": "kyiv",
-                        "source_url": "https://example.com/system-material",
-                        "price": 42.0,
-                    },
-                    headers=self._auth_headers("admin-token"),
-                )
+                with patch.object(
+                    catalog,
+                    "fetch_material_by_source_url_live_traced",
+                    new=AsyncMock(
+                        return_value=(
+                            {
+                                "article": "ADMIN-MAT",
+                                "name": "Admin Material",
+                                "category": "dsp",
+                                "price": 42.0,
+                                "source_url": "https://viyar.ua/catalog/admin-material",
+                                "image": None,
+                            },
+                            {},
+                        )
+                    ),
+                ):
+                    created = client.post(
+                        "/catalog/materials",
+                        json={
+                            "article": "ADMIN-MAT",
+                            "category": "dsp",
+                            "city": "kyiv",
+                            "source_url": "https://viyar.ua/catalog/admin-material",
+                        },
+                        headers=self._auth_headers("admin-token"),
+                    )
                 self.assertEqual(created.status_code, 200)
                 self.assertTrue(created.json()["success"])
                 article = created.json()["item"]["article"]
@@ -1659,6 +1744,103 @@ class CatalogVisibilityTests(unittest.TestCase):
                 self.assertEqual(edge_item["supplier_offers"][0]["prices"][0]["city"], "kyiv")
                 self.assertEqual(edge_item["supplier_offers"][0]["prices"][0]["price"], 42.36)
 
+    def test_material_canonical_edge_attach_unlink_and_edge_delete_guard(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
+                with session_factory() as session:
+                    material = MaterialModel(
+                        article="M-EDGE-001",
+                        name="Material for canonical edge linking",
+                        category="dsp",
+                        owner_user_id=None,
+                        is_default=True,
+                    )
+                    manufacturer = MaterialManufacturerModel(
+                        name="REHAU",
+                        normalized_name="rehau",
+                        code="rehau",
+                        is_active=True,
+                        is_system=True,
+                    )
+                    edge = CanonicalEdgeModel(
+                        manufacturer_id=None,
+                        manufacturer_article="E-001",
+                        name="Edge for linking",
+                        color="Oak",
+                        material_type="ABS",
+                        width_mm=23.0,
+                        thickness_mm=0.8,
+                        image_url="https://example.com/edge.png",
+                        is_active=True,
+                    )
+                    session.add_all([material, manufacturer, edge])
+                    session.commit()
+                    edge_id = edge.id
+
+                headers = self._auth_headers("admin-token")
+
+                list_response = client.get(
+                    "/catalog/materials/M-EDGE-001/canonical-edges",
+                    headers=headers,
+                )
+                self.assertEqual(list_response.status_code, 200)
+                list_payload = list_response.json()
+                self.assertTrue(list_payload["success"])
+                self.assertEqual(list_payload["items"], [])
+
+                attach_response = client.post(
+                    "/catalog/materials/M-EDGE-001/canonical-edges",
+                    json={"edge_id": edge_id},
+                    headers=headers,
+                )
+                self.assertEqual(attach_response.status_code, 200)
+                attach_payload = attach_response.json()
+                self.assertTrue(attach_payload["success"])
+                self.assertEqual(len(attach_payload["item"]["edge_options"]), 1)
+                self.assertEqual(attach_payload["item"]["edge_options"][0]["edge_key"], f"recommended:{edge_id}")
+
+                duplicate_response = client.post(
+                    "/catalog/materials/M-EDGE-001/canonical-edges",
+                    json={"edge_id": edge_id},
+                    headers=headers,
+                )
+                self.assertEqual(duplicate_response.status_code, 200)
+                duplicate_payload = duplicate_response.json()
+                self.assertFalse(duplicate_payload["success"])
+                self.assertIn("вже додана", duplicate_payload["error"])
+
+                list_response = client.get(
+                    "/catalog/materials/M-EDGE-001/canonical-edges",
+                    headers=headers,
+                )
+                self.assertEqual(list_response.status_code, 200)
+                list_payload = list_response.json()
+                self.assertTrue(list_payload["success"])
+                self.assertEqual(len(list_payload["items"]), 1)
+
+                delete_guard_response = client.delete(
+                    f"/catalog/edges/{edge_id}",
+                    headers=headers,
+                )
+                self.assertEqual(delete_guard_response.status_code, 409)
+
+                unlink_response = client.delete(
+                    f"/catalog/materials/M-EDGE-001/canonical-edges/{edge_id}",
+                    headers=headers,
+                )
+                self.assertEqual(unlink_response.status_code, 200)
+                unlink_payload = unlink_response.json()
+                self.assertTrue(unlink_payload["success"])
+                self.assertEqual(unlink_payload["item"]["edge_options"], [])
+
+                delete_edge_response = client.delete(
+                    f"/catalog/edges/{edge_id}",
+                    headers=headers,
+                )
+                self.assertEqual(delete_edge_response.status_code, 200)
+                delete_edge_payload = delete_edge_response.json()
+                self.assertTrue(delete_edge_payload["success"])
+
     def test_material_detail_get_does_not_call_viyar_edge_preview(self) -> None:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
@@ -1747,6 +1929,16 @@ class CatalogVisibilityTests(unittest.TestCase):
                                 region="Kyivska oblast",
                                 is_active=True,
                                 priority=10,
+                                source_payload_json=json.dumps({
+                                    "parsed_material": {
+                                        "image_urls": [
+                                            " https://example.test/viyar-1.jpg ",
+                                            "https://example.test/viyar-1.jpg",
+                                            "javascript:void(0)",
+                                            42,
+                                        ],
+                                    },
+                                }),
                             ),
                             MaterialSupplierOfferModel(
                                 material_id=material.id,
@@ -1784,8 +1976,13 @@ class CatalogVisibilityTests(unittest.TestCase):
                 self.assertEqual(payload["supplier_offers"][0]["city"], "Kyiv")
                 self.assertEqual(payload["supplier_offers"][0]["region"], "Kyivska oblast")
                 self.assertTrue(payload["supplier_offers"][0]["is_active"])
+                self.assertEqual(
+                    payload["supplier_offers"][0]["image_urls"],
+                    ["https://example.test/viyar-1.jpg"],
+                )
                 self.assertEqual(payload["supplier_offers"][1]["supplier_name"], "KRONAS")
                 self.assertFalse(payload["supplier_offers"][1]["is_active"])
+                self.assertEqual(payload["supplier_offers"][1]["image_urls"], [])
                 self.assertEqual(payload["current_price_details"]["city"], "kyiv")
                 self.assertEqual(payload["current_price_details"]["price"], 99.5)
                 with session_factory() as session:
@@ -1847,6 +2044,40 @@ class CatalogVisibilityTests(unittest.TestCase):
                             priority=100,
                         )
                     )
+                    session.add(
+                        MaterialSupplierOfferModel(
+                            material_id=material.id,
+                            supplier_id=supplier.id,
+                            article="LIST-OFFER-2",
+                            external_product_id="LIST-OFFER-2",
+                            source_url="https://example.test/list-offer-2",
+                            price=49.0,
+                            currency="UAH",
+                            unit="лист",
+                            stock="11",
+                            city="kyiv",
+                            region="Kyivska oblast",
+                            is_active=True,
+                            priority=90,
+                        )
+                    )
+                    session.add(
+                        MaterialSupplierOfferModel(
+                            material_id=material.id,
+                            supplier_id=supplier.id,
+                            article="LIST-OFFER-3",
+                            external_product_id="LIST-OFFER-3",
+                            source_url="https://example.test/list-offer-3",
+                            price=64.5,
+                            currency="UAH",
+                            unit="м²",
+                            stock="4",
+                            city="Kyiv",
+                            region="Kyivska oblast",
+                            is_active=True,
+                            priority=80,
+                        )
+                    )
                     session.commit()
 
                 list_response = client.get(
@@ -1858,6 +2089,17 @@ class CatalogVisibilityTests(unittest.TestCase):
                 self.assertEqual(len(list_payload["items"]), 1)
                 self.assertNotIn("supplier_offers", list_payload["items"][0])
                 self.assertEqual(list_payload["items"][0]["current_price_details"]["price"], 55.0)
+                self.assertEqual(len(list_payload["items"][0]["price_summary"]), 2)
+                summary_by_unit = {
+                    row["unit"]: row
+                    for row in list_payload["items"][0]["price_summary"]
+                }
+                self.assertEqual(summary_by_unit["лист"]["min_price"], 49.0)
+                self.assertEqual(summary_by_unit["лист"]["max_price"], 49.0)
+                self.assertEqual(summary_by_unit["лист"]["offer_count"], 1)
+                self.assertEqual(summary_by_unit["м²"]["min_price"], 64.5)
+                self.assertEqual(summary_by_unit["м²"]["max_price"], 64.5)
+                self.assertEqual(summary_by_unit["м²"]["offer_count"], 1)
 
                 detail_response = client.get(
                     "/catalog/materials/LIST-MAT",
@@ -1868,8 +2110,518 @@ class CatalogVisibilityTests(unittest.TestCase):
                 self.assertEqual(detail_payload["article"], "LIST-MAT")
                 self.assertEqual(detail_payload["name"], "List Material")
                 self.assertEqual(detail_payload["current_price_details"]["price"], 55.0)
-                self.assertEqual(detail_payload["supplier_offers"][0]["supplier_name"], "VIYAR")
-                self.assertFalse(detail_payload["supplier_offers"][0]["is_active"])
+                self.assertTrue(
+                    any(
+                        offer["supplier_name"] == "VIYAR" and not offer["is_active"]
+                        for offer in detail_payload["supplier_offers"]
+                    )
+                )
+                self.assertEqual(len(detail_payload["price_summary"]), 2)
+
+    def test_material_supplier_city_policy_scopes_viyar_but_not_kronas(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
+                with session_factory() as session:
+                    viyar = SupplierModel(
+                        code="viyar",
+                        name="VIYAR",
+                        owner_user_id=None,
+                        is_system=True,
+                        is_active=True,
+                    )
+                    kronas = SupplierModel(
+                        code="supplier-b1749a95",
+                        name="Кронас",
+                        owner_user_id=None,
+                        is_system=True,
+                        is_active=True,
+                    )
+                    unknown = SupplierModel(
+                        code="unknown-supplier",
+                        name="Unknown",
+                        owner_user_id=None,
+                        is_system=False,
+                        is_active=True,
+                    )
+                    session.add_all([viyar, kronas, unknown])
+                    session.add(
+                        MaterialModel(
+                            article="GEO-MAT",
+                            name="Geography Material",
+                            category="dsp",
+                            owner_user_id=None,
+                            is_default=True,
+                        )
+                    )
+                    session.commit()
+                    material = session.query(MaterialModel).filter(MaterialModel.article == "GEO-MAT").one()
+                    session.add_all(
+                        [
+                            MaterialSupplierOfferModel(
+                                material_id=material.id,
+                                supplier_id=viyar.id,
+                                article="GEO-VIYAR",
+                                source_url="https://viyar.ua/catalog/geo-viyar",
+                                price=4657.44,
+                                currency="UAH",
+                                unit="лист",
+                                stock="В наявності",
+                                city="kyiv",
+                                is_active=True,
+                            ),
+                            MaterialSupplierOfferModel(
+                                material_id=material.id,
+                                supplier_id=kronas.id,
+                                article="GEO-KRONAS",
+                                source_url="https://kronas.com.ua/catalog/geo-kronas",
+                                price=4220.0,
+                                currency="UAH",
+                                unit="лист",
+                                stock="В наличии",
+                                city="kyiv",
+                                is_active=True,
+                            ),
+                            MaterialSupplierOfferModel(
+                                material_id=material.id,
+                                supplier_id=unknown.id,
+                                article="GEO-UNKNOWN",
+                                source_url="https://example.test/catalog/geo-unknown",
+                                price=100.0,
+                                currency="UAH",
+                                unit="лист",
+                                stock="В наявності",
+                                city="kyiv",
+                                is_active=True,
+                            ),
+                        ]
+                    )
+                    session.commit()
+
+                direct_city_payload = inventory_repository.get_material_by_article("GEO-MAT", city="lviv")
+                self.assertEqual(
+                    [offer["supplier_name"] for offer in direct_city_payload["supplier_offers"]],
+                    ["Кронас"],
+                )
+
+                list_response = client.get(
+                    "/catalog/materials?city=lviv&search=GEO-MAT",
+                    headers=self._auth_headers("admin-token"),
+                )
+                self.assertEqual(list_response.status_code, 200)
+                summary = list_response.json()["items"][0]["price_summary"]
+                self.assertEqual(list_response.json()["selected_city"], "kyiv")
+                self.assertEqual(len(summary), 1)
+                self.assertEqual(summary[0]["min_price"], 100.0)
+                self.assertEqual(summary[0]["max_price"], 4657.44)
+                self.assertEqual(summary[0]["offer_count"], 3)
+
+                detail_response = client.get(
+                    "/catalog/materials/GEO-MAT?city=lviv",
+                    headers=self._auth_headers("admin-token"),
+                )
+                self.assertEqual(detail_response.status_code, 200)
+                detail_offers = detail_response.json()["item"]["supplier_offers"]
+                self.assertEqual(detail_response.json()["selected_city"], "kyiv")
+                self.assertEqual(
+                    {offer["supplier_name"] for offer in detail_offers},
+                    {"VIYAR", "Кронас", "Unknown"},
+                )
+
+                lviv_fallback_response = client.get(
+                    "/catalog/materials/GEO-MAT/supplier-offers?city=lviv",
+                    headers=self._auth_headers("admin-token"),
+                )
+                self.assertEqual(lviv_fallback_response.status_code, 200)
+                self.assertEqual(
+                    {offer["supplier_name"] for offer in lviv_fallback_response.json()["items"]},
+                    {"VIYAR", "Кронас", "Unknown"},
+                )
+
+                kyiv_fallback_response = client.get(
+                    "/catalog/materials/GEO-MAT/supplier-offers?city=kyiv",
+                    headers=self._auth_headers("admin-token"),
+                )
+                self.assertEqual(kyiv_fallback_response.status_code, 200)
+                self.assertEqual(
+                    {offer["supplier_name"] for offer in kyiv_fallback_response.json()["items"]},
+                    {"VIYAR", "Кронас", "Unknown"},
+                )
+
+                no_city_fallback_response = client.get(
+                    "/catalog/materials/GEO-MAT/supplier-offers",
+                    headers=self._auth_headers("admin-token"),
+                )
+                self.assertEqual(no_city_fallback_response.status_code, 200)
+                self.assertEqual(len(no_city_fallback_response.json()["items"]), 3)
+
+                no_city_payload = inventory_repository.get_material_by_article("GEO-MAT")
+                self.assertEqual(len(no_city_payload["supplier_offers"]), 3)
+
+    def test_material_list_includes_unique_active_supplier_summary_with_logo_fallback(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
+                with session_factory() as session:
+                    viyar = SupplierModel(
+                        code="viyar",
+                        name="VIYAR",
+                        logo_url="https://example.test/viyar-logo.png",
+                        owner_user_id=None,
+                        is_system=True,
+                        is_active=True,
+                    )
+                    kronas = SupplierModel(
+                        code="kronas",
+                        name="KRONAS",
+                        logo_url="https://example.test/kronas-logo.png",
+                        owner_user_id=None,
+                        is_system=True,
+                        is_active=True,
+                    )
+                    local_supplier = SupplierModel(
+                        code="local",
+                        name="Local Supplier",
+                        logo_url=None,
+                        owner_user_id=None,
+                        is_system=True,
+                        is_active=True,
+                    )
+                    material_summary = MaterialModel(
+                        article="SUMMARY-MAT",
+                        name="Summary Material",
+                        category="dsp",
+                        owner_user_id=None,
+                        is_default=True,
+                    )
+                    material_fallback = MaterialModel(
+                        article="SUMMARY-NO-LOGO",
+                        name="Summary No Logo",
+                        category="dsp",
+                        owner_user_id=None,
+                        is_default=True,
+                    )
+                    session.add_all([viyar, kronas, local_supplier, material_summary, material_fallback])
+                    session.flush()
+
+                    session.add_all(
+                        [
+                            MaterialSupplierOfferModel(
+                                material_id=material_summary.id,
+                                supplier_id=viyar.id,
+                                article="SUMMARY-VIYAR-1",
+                                external_product_id="summary-viyar-1",
+                                source_url="https://example.test/summary/viyar-1",
+                                price=51.0,
+                                currency="UAH",
+                                unit="лист",
+                                city="Kyiv",
+                                region="Kyivska oblast",
+                                is_active=True,
+                                priority=10,
+                            ),
+                            MaterialSupplierOfferModel(
+                                material_id=material_summary.id,
+                                supplier_id=viyar.id,
+                                article="SUMMARY-VIYAR-2",
+                                external_product_id="summary-viyar-2",
+                                source_url="https://example.test/summary/viyar-2",
+                                price=53.0,
+                                currency="UAH",
+                                unit="лист",
+                                city="Kyiv",
+                                region="Kyivska oblast",
+                                is_active=True,
+                                priority=20,
+                            ),
+                            MaterialSupplierOfferModel(
+                                material_id=material_summary.id,
+                                supplier_id=kronas.id,
+                                article="SUMMARY-KRONAS",
+                                source_url="https://example.test/summary/kronas",
+                                price=49.5,
+                                currency="UAH",
+                                unit="лист",
+                                city="Kyiv",
+                                region="Kyivska oblast",
+                                is_active=True,
+                                priority=30,
+                            ),
+                            MaterialSupplierOfferModel(
+                                material_id=material_summary.id,
+                                supplier_id=local_supplier.id,
+                                article="SUMMARY-INACTIVE",
+                                source_url="https://example.test/summary/inactive",
+                                price=60.0,
+                                currency="UAH",
+                                unit="лист",
+                                city="Kyiv",
+                                region="Kyivska oblast",
+                                is_active=False,
+                                priority=5,
+                            ),
+                            MaterialSupplierOfferModel(
+                                material_id=material_fallback.id,
+                                supplier_id=local_supplier.id,
+                                article="SUMMARY-LOCAL",
+                                source_url="https://example.test/summary/local",
+                                price=38.0,
+                                currency="UAH",
+                                unit="лист",
+                                city="Kyiv",
+                                region="Kyivska oblast",
+                                is_active=True,
+                                priority=5,
+                            ),
+                        ]
+                    )
+                    session.commit()
+
+                summary_response = client.get(
+                    "/catalog/materials?city=kyiv&search=SUMMARY-MAT",
+                    headers=self._auth_headers("admin-token"),
+                )
+                self.assertEqual(summary_response.status_code, 200)
+                summary_payload = summary_response.json()["items"][0]
+                self.assertEqual(
+                    [row["supplier_name"] for row in summary_payload["supplier_summary"]],
+                    ["VIYAR", "KRONAS"],
+                )
+                self.assertEqual(
+                    [row["supplier_logo_url"] for row in summary_payload["supplier_summary"]],
+                    [
+                        "https://example.test/viyar-logo.png",
+                        "https://example.test/kronas-logo.png",
+                    ],
+                )
+
+                fallback_response = client.get(
+                    "/catalog/materials?city=kyiv&search=SUMMARY-NO-LOGO",
+                    headers=self._auth_headers("admin-token"),
+                )
+                self.assertEqual(fallback_response.status_code, 200)
+                fallback_payload = fallback_response.json()["items"][0]
+                self.assertEqual(len(fallback_payload["supplier_summary"]), 1)
+                self.assertEqual(fallback_payload["supplier_summary"][0]["supplier_name"], "Local Supplier")
+                self.assertIsNone(fallback_payload["supplier_summary"][0]["supplier_logo_url"])
+
+    def test_material_price_summary_normalizes_semantic_units_and_keeps_currency_separate(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
+                with session_factory() as session:
+                    supplier = SupplierModel(
+                        code="viyar",
+                        name="VIYAR",
+                        logo_url="https://example.test/viyar-logo.png",
+                        owner_user_id=None,
+                        is_system=True,
+                        is_active=True,
+                    )
+                    material_same = MaterialModel(
+                        article="UNIT-NORM-SAME",
+                        name="Unit Norm Same",
+                        category="dsp",
+                        owner_user_id=None,
+                        is_default=True,
+                    )
+                    material_mix = MaterialModel(
+                        article="UNIT-NORM-MIX",
+                        name="Unit Norm Mix",
+                        category="dsp",
+                        owner_user_id=None,
+                        is_default=True,
+                    )
+                    material_single = MaterialModel(
+                        article="UNIT-NORM-SINGLE",
+                        name="Unit Norm Single",
+                        category="dsp",
+                        owner_user_id=None,
+                        is_default=True,
+                    )
+                    material_inactive = MaterialModel(
+                        article="UNIT-NORM-INACTIVE",
+                        name="Unit Norm Inactive",
+                        category="dsp",
+                        owner_user_id=None,
+                        is_default=True,
+                    )
+                    session.add_all([supplier, material_same, material_mix, material_single, material_inactive])
+                    session.flush()
+
+                    session.add_all(
+                        [
+                            MaterialSupplierOfferModel(
+                                material_id=material_same.id,
+                                supplier_id=supplier.id,
+                                article="UNIT-SAME-1",
+                                external_product_id="UNIT-SAME-1",
+                                source_url="https://example.test/unit-same-1",
+                                price=4220.0,
+                                currency="UAH",
+                                unit="лист",
+                                city="kyiv",
+                                is_active=True,
+                                priority=100,
+                            ),
+                            MaterialSupplierOfferModel(
+                                material_id=material_same.id,
+                                supplier_id=supplier.id,
+                                article="UNIT-SAME-2",
+                                external_product_id="UNIT-SAME-2",
+                                source_url="https://example.test/unit-same-2",
+                                price=4657.44,
+                                currency=None,
+                                unit="₴/лист",
+                                city="Kyiv",
+                                is_active=True,
+                                priority=90,
+                            ),
+                            MaterialSupplierOfferModel(
+                                material_id=material_same.id,
+                                supplier_id=supplier.id,
+                                article="UNIT-SAME-3",
+                                external_product_id="UNIT-SAME-3",
+                                source_url="https://example.test/unit-same-3",
+                                price=4600.0,
+                                currency="UAH",
+                                unit="грн/лист",
+                                city="kyiv",
+                                is_active=True,
+                                priority=80,
+                            ),
+                            MaterialSupplierOfferModel(
+                                material_id=material_same.id,
+                                supplier_id=supplier.id,
+                                article="UNIT-SAME-INACTIVE",
+                                external_product_id="UNIT-SAME-INACTIVE",
+                                source_url="https://example.test/unit-same-inactive",
+                                price=4999.0,
+                                currency="UAH",
+                                unit="лист",
+                                city="kyiv",
+                                is_active=False,
+                                priority=70,
+                            ),
+                            MaterialSupplierOfferModel(
+                                material_id=material_same.id,
+                                supplier_id=supplier.id,
+                                article="UNIT-SAME-NULL",
+                                external_product_id="UNIT-SAME-NULL",
+                                source_url="https://example.test/unit-same-null",
+                                price=None,
+                                currency="UAH",
+                                unit="лист",
+                                city="kyiv",
+                                is_active=True,
+                                priority=60,
+                            ),
+                            MaterialSupplierOfferModel(
+                                material_id=material_mix.id,
+                                supplier_id=supplier.id,
+                                article="UNIT-MIX-1",
+                                external_product_id="UNIT-MIX-1",
+                                source_url="https://example.test/unit-mix-1",
+                                price=100.0,
+                                currency="UAH",
+                                unit="лист",
+                                city="kyiv",
+                                is_active=True,
+                                priority=100,
+                            ),
+                            MaterialSupplierOfferModel(
+                                material_id=material_mix.id,
+                                supplier_id=supplier.id,
+                                article="UNIT-MIX-2",
+                                external_product_id="UNIT-MIX-2",
+                                source_url="https://example.test/unit-mix-2",
+                                price=200.0,
+                                currency="UAH",
+                                unit="м²",
+                                city="kyiv",
+                                is_active=True,
+                                priority=90,
+                            ),
+                            MaterialSupplierOfferModel(
+                                material_id=material_single.id,
+                                supplier_id=supplier.id,
+                                article="UNIT-SINGLE-1",
+                                external_product_id="UNIT-SINGLE-1",
+                                source_url="https://example.test/unit-single-1",
+                                price=314.0,
+                                currency="UAH",
+                                unit="грн/лист",
+                                city="kyiv",
+                                is_active=True,
+                                priority=100,
+                            ),
+                            MaterialSupplierOfferModel(
+                                material_id=material_inactive.id,
+                                supplier_id=supplier.id,
+                                article="UNIT-INACTIVE-1",
+                                external_product_id="UNIT-INACTIVE-1",
+                                source_url="https://example.test/unit-inactive-1",
+                                price=900.0,
+                                currency="UAH",
+                                unit="лист",
+                                city="kyiv",
+                                is_active=False,
+                                priority=100,
+                            ),
+                            MaterialSupplierOfferModel(
+                                material_id=material_inactive.id,
+                                supplier_id=supplier.id,
+                                article="UNIT-INACTIVE-2",
+                                external_product_id="UNIT-INACTIVE-2",
+                                source_url="https://example.test/unit-inactive-2",
+                                price=None,
+                                currency="UAH",
+                                unit="лист",
+                                city="kyiv",
+                                is_active=True,
+                                priority=90,
+                            ),
+                        ]
+                    )
+                    session.commit()
+
+                same_response = client.get(
+                    "/catalog/materials?city=kyiv&search=UNIT-NORM-SAME",
+                    headers=self._auth_headers("admin-token"),
+                )
+                self.assertEqual(same_response.status_code, 200)
+                same_item = same_response.json()["items"][0]["price_summary"]
+                self.assertEqual(len(same_item), 1)
+                self.assertEqual(same_item[0]["unit"], "лист")
+                self.assertEqual(same_item[0]["currency"], "UAH")
+                self.assertEqual(same_item[0]["min_price"], 4220.0)
+                self.assertEqual(same_item[0]["max_price"], 4657.44)
+                self.assertEqual(same_item[0]["offer_count"], 3)
+
+                mix_response = client.get(
+                    "/catalog/materials?city=kyiv&search=UNIT-NORM-MIX",
+                    headers=self._auth_headers("admin-token"),
+                )
+                self.assertEqual(mix_response.status_code, 200)
+                mix_units = {row["unit"] for row in mix_response.json()["items"][0]["price_summary"]}
+                self.assertEqual(mix_units, {"лист", "м²"})
+
+                single_response = client.get(
+                    "/catalog/materials?city=kyiv&search=UNIT-NORM-SINGLE",
+                    headers=self._auth_headers("admin-token"),
+                )
+                self.assertEqual(single_response.status_code, 200)
+                single_item = single_response.json()["items"][0]["price_summary"]
+                self.assertEqual(len(single_item), 1)
+                self.assertEqual(single_item[0]["unit"], "лист")
+                self.assertEqual(single_item[0]["currency"], "UAH")
+                self.assertEqual(single_item[0]["min_price"], 314.0)
+                self.assertEqual(single_item[0]["max_price"], 314.0)
+                self.assertEqual(single_item[0]["offer_count"], 1)
+
+                inactive_response = client.get(
+                    "/catalog/materials?city=kyiv&search=UNIT-NORM-INACTIVE",
+                    headers=self._auth_headers("admin-token"),
+                )
+                self.assertEqual(inactive_response.status_code, 200)
+                self.assertEqual(inactive_response.json()["items"][0]["price_summary"], [])
 
     def test_material_supplier_offer_crud_flow_and_validation_contract(self) -> None:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
@@ -2320,15 +3072,8 @@ class CatalogVisibilityTests(unittest.TestCase):
                 self.assertEqual(response.status_code, 200)
                 payload = response.json()
                 self.assertTrue(payload["success"])
-                self.assertEqual(
-                    payload["recommended_edges"],
-                    {
-                        "discovered": 0,
-                        "persisted": 0,
-                        "needs_review": 0,
-                        "failed": 0,
-                    },
-                )
+                self.assertEqual(payload["recommended_edges"]["status"], "processing")
+                self.assertTrue(payload["recommended_edges"]["request_id"])
                 fetch_material_mock.assert_awaited_once()
                 recommended_edges_mock.assert_awaited_once()
 
@@ -3263,7 +4008,8 @@ class CatalogVisibilityTests(unittest.TestCase):
                 self.assertEqual(response.status_code, 200)
                 payload = response.json()
                 self.assertTrue(payload["success"])
-                self.assertEqual(payload["recommended_edges"], {"discovered": 0, "persisted": 0, "needs_review": 0, "failed": 1})
+                self.assertEqual(payload["recommended_edges"]["status"], "processing")
+                self.assertTrue(payload["recommended_edges"]["request_id"])
                 fetch_material_mock.assert_awaited_once()
 
                 with session_factory() as session:
@@ -3312,32 +4058,12 @@ class CatalogVisibilityTests(unittest.TestCase):
                     )
                 )
 
-                collect_prices_mock = AsyncMock(
-                    return_value=(
-                        {
-                            "article": "VIYAR-URL-ONLY-1",
-                            "name": "VIYAR URL Imported Material",
-                            "source_url": "https://viyar.ua/catalog/materials/url-only-1",
-                            "price": 210.0,
-                            "currency": "uah",
-                            "unit": "лист",
-                            "stock": "12",
-                            "region": "Kyivska oblast",
-                            "external_product_id": "viyar-url-only-1",
-                        },
-                        {
-                            "kyiv": 210.0,
-                        },
-                    )
-                )
-
                 with (
                     patch.object(
                         catalog,
                         "fetch_material_by_source_url_live_traced",
                         new=fetch_material_mock,
                     ),
-                    patch.object(catalog, "_collect_material_prices_for_all_cities", new=collect_prices_mock),
                     patch.object(catalog, "_resolve_viyar_cookie_for_user", return_value=None),
                     patch.object(
                         catalog,
@@ -3365,7 +4091,6 @@ class CatalogVisibilityTests(unittest.TestCase):
                 self.assertEqual(payload["item"]["article"], "VIYAR-URL-ONLY-1")
                 self.assertIsNone(payload["material_identity_validation"])
                 fetch_material_mock.assert_awaited_once()
-                collect_prices_mock.assert_awaited_once()
 
                 with session_factory() as session:
                     material = session.query(MaterialModel).filter(MaterialModel.article == "VIYAR-URL-ONLY-1").one()
@@ -3379,6 +4104,88 @@ class CatalogVisibilityTests(unittest.TestCase):
                 self.assertEqual(offers[0]["article"], "VIYAR-URL-ONLY-1")
                 self.assertEqual(offers[0]["source_url"], "https://viyar.ua/catalog/materials/url-only-1")
                 self.assertEqual(offers[0]["price"], 210.0)
+
+    def test_material_import_viyar_can_skip_recommended_edges_when_user_disables_them(self) -> None:
+        control_url = "https://viyar.ua/ua/catalog/materials/201247"
+
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
+                with session_factory() as session:
+                    session.add(
+                        SupplierModel(
+                            code="viyar",
+                            name="VIYAR",
+                            logo_url="https://example.test/viyar-logo.png",
+                            owner_user_id=None,
+                            is_system=True,
+                            is_active=True,
+                        )
+                    )
+                    session.commit()
+
+                fetch_material_mock = AsyncMock(
+                    return_value=(
+                        {
+                            "article": "201247",
+                            "name": "Kronospan K688 PW",
+                            "source_url": control_url,
+                            "price": 3676.8,
+                            "currency": "UAH",
+                            "unit": "лист",
+                            "stock": "В наявності",
+                        },
+                        {"strategy": "direct_url_html", "source_url": control_url, "trace": []},
+                    )
+                )
+                collect_prices_mock = AsyncMock(
+                    return_value=(
+                        {
+                            "article": "201247",
+                            "name": "Kronospan K688 PW",
+                            "source_url": control_url,
+                            "price": 3676.8,
+                            "currency": "UAH",
+                            "unit": "лист",
+                            "stock": "В наявності",
+                        },
+                        {"kyiv": 3676.8},
+                    )
+                )
+                recommended_edges_mock = AsyncMock()
+
+                with (
+                    patch.object(catalog, "fetch_material_by_source_url_live_traced", new=fetch_material_mock),
+                    patch.object(catalog, "_collect_material_prices_for_all_cities", new=collect_prices_mock),
+                    patch.object(catalog, "prefetch_material_image_cache", return_value=None),
+                    patch.object(catalog, "persist_viyar_recommended_edges_for_material_import", new=recommended_edges_mock),
+                    patch.object(catalog, "_resolve_viyar_cookie_for_user", return_value=None),
+                ):
+                    response = client.post(
+                        "/catalog/materials",
+                        json={
+                            "category": "dsp",
+                            "city": "kyiv",
+                            "source_url": control_url,
+                            "import_recommended_edges": False,
+                        },
+                        headers=self._auth_headers("admin-token"),
+                    )
+
+                self.assertEqual(response.status_code, 200)
+                payload = response.json()
+                self.assertTrue(payload["success"])
+                self.assertEqual(
+                    payload["recommended_edges"],
+                    {
+                        "discovered": 0,
+                        "persisted": 0,
+                        "needs_review": 0,
+                        "failed": 0,
+                        "status": "skipped",
+                        "reason": "user_disabled",
+                    },
+                )
+                recommended_edges_mock.assert_not_awaited()
 
     def test_material_import_viyar_source_url_with_article_still_uses_url_first_parsed_material(self) -> None:
         control_url = (
@@ -3490,12 +4297,13 @@ class CatalogVisibilityTests(unittest.TestCase):
                     payload["item"]["name"],
                     "ДСП лам. Kronospan K533 AD Каштан Арвадонна Мінк E-LE вологост. P3 2800x2070x18 мм",
                 )
-                self.assertEqual(payload["recommended_edges"], {"discovered": 1, "persisted": 1, "needs_review": 0, "failed": 0})
+                self.assertEqual(payload["recommended_edges"]["status"], "processing")
+                self.assertTrue(payload["recommended_edges"]["request_id"])
                 fetch_material_mock.assert_awaited_once()
                 self.assertEqual(fetch_material_mock.await_args.kwargs["article_hint"], "999999")
                 self.assertEqual(collect_prices_mock.await_count, 1)
                 self.assertEqual(collect_prices_mock.await_args.kwargs["article"], "242944")
-                recommended_edges_mock.assert_awaited_once()
+                recommended_edges_mock.assert_not_awaited()
 
                 with session_factory() as session:
                     material = session.query(MaterialModel).filter(MaterialModel.article == "242944").one()
@@ -4021,8 +4829,8 @@ class CatalogVisibilityTests(unittest.TestCase):
 
                     material_before = self._material_snapshot(session, "MAT-LEGACY-OFFER")
 
-                async def _fake_collect_material_prices_for_all_cities(**_kwargs):
-                    return (
+                fetch_material_mock = AsyncMock(
+                    return_value=(
                         {
                             "article": "MAT-LEGACY-OFFER",
                             "name": "VIYAR Legacy 5994 PD",
@@ -4037,12 +4845,15 @@ class CatalogVisibilityTests(unittest.TestCase):
                             "external_product_id": "viyar-legacy-1",
                         },
                         {
-                            "kyiv": 111.0,
+                            "strategy": "direct_url_html",
+                            "source_url": "https://viyar.ua/catalog/materials/legacy",
+                            "trace": [],
                         },
                     )
+                )
 
                 with (
-                    patch.object(catalog, "_collect_material_prices_for_all_cities", side_effect=_fake_collect_material_prices_for_all_cities),
+                    patch.object(catalog, "fetch_material_by_source_url_live_traced", new=fetch_material_mock),
                     patch.object(catalog, "_resolve_viyar_cookie_for_user", return_value=None),
                     patch.object(
                         catalog,
@@ -4318,8 +5129,8 @@ class CatalogVisibilityTests(unittest.TestCase):
                     material_before = self._material_snapshot(session, "MAT-GUARD-VIYAR")
                     prices_before = self._material_prices_snapshot(session, "MAT-GUARD-VIYAR")
 
-                async def _fake_collect_material_prices_for_all_cities(**_kwargs):
-                    return (
+                fetch_material_mock = AsyncMock(
+                    return_value=(
                         {
                             "article": "MAT-GUARD-VIYAR",
                             "name": "ЛДСП KRONOSPAN 5994 SU СИНИЙ АЛЬБІ 2800X2070X18",
@@ -4330,12 +5141,15 @@ class CatalogVisibilityTests(unittest.TestCase):
                             "stock": "8",
                         },
                         {
-                            "kyiv": 140.0,
+                            "strategy": "direct_url_html",
+                            "source_url": "https://viyar.ua/catalog/materials/guard",
+                            "trace": [],
                         },
                     )
+                )
 
                 with (
-                    patch.object(catalog, "_collect_material_prices_for_all_cities", side_effect=_fake_collect_material_prices_for_all_cities),
+                    patch.object(catalog, "fetch_material_by_source_url_live_traced", new=fetch_material_mock),
                     patch.object(catalog, "_resolve_viyar_cookie_for_user", return_value=None),
                 ):
                     response = client.post(
@@ -6508,6 +7322,106 @@ class CatalogVisibilityTests(unittest.TestCase):
                 )
                 self.assertEqual(admin_response.status_code, 200)
                 self.assertTrue(admin_response.json()["success"])
+
+    def test_manual_material_create_is_owned_for_admin_manager_and_user(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(
+                Path(tmpdir) / "catalog.db",
+                users_by_token={"manager-token": UserStub(
+                    id="manager-user",
+                    email="manager@example.com",
+                    role="pro",
+                )},
+            ) as (session_factory, client):
+                for token, expected_owner in (
+                    ("admin-token", "admin-user"),
+                    ("manager-token", "manager-user"),
+                    ("trial-token", "trial-user"),
+                ):
+                    response = client.post(
+                        "/catalog/materials",
+                        json={
+                            "name": f"Manual {expected_owner}",
+                            "category": "dsp",
+                            "city": "kyiv",
+                            "price": 0,
+                        },
+                        headers=self._auth_headers(token),
+                    )
+
+                    self.assertEqual(response.status_code, 200)
+                    payload = response.json()
+                    self.assertTrue(payload["success"])
+                    article = payload["item"]["article"]
+                    self.assertRegex(article, rf"^manual-{expected_owner}-[0-9a-f]+$")
+                    self.assertFalse(payload["item"]["is_default"])
+                    self.assertEqual(payload["item"]["owner_user_id"], expected_owner)
+                    self.assertIsNone(payload["item"]["source_url"])
+
+                with session_factory() as session:
+                    materials = session.query(MaterialModel).order_by(MaterialModel.id).all()
+                    self.assertEqual(len(materials), 3)
+                    self.assertTrue(all(not material.is_default for material in materials))
+                    self.assertEqual(
+                        {material.owner_user_id for material in materials},
+                        {"admin-user", "manager-user", "trial-user"},
+                    )
+
+    def test_manual_material_create_preserves_manufacturer_and_image(self) -> None:
+        image_data_url = (
+            "data:image/png;base64,"
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg=="
+        )
+
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            with self._catalog_context(Path(tmpdir) / "catalog.db") as (session_factory, client):
+                with session_factory() as session:
+                    manufacturer = MaterialManufacturerModel(
+                        name="Kronospan",
+                        normalized_name="kronospan",
+                        code="kronospan",
+                        is_active=True,
+                        is_system=True,
+                    )
+                    session.add(manufacturer)
+                    session.commit()
+                    manufacturer_id = manufacturer.id
+
+                response = client.post(
+                    "/catalog/materials",
+                    json={
+                        "name": "TEST MANUAL MATERIAL",
+                        "category": "dsp",
+                        "city": "kyiv",
+                        "price": 1000,
+                        "manufacturer_id": manufacturer_id,
+                        "image_url": image_data_url,
+                    },
+                    headers=self._auth_headers("trial-token"),
+                )
+
+                self.assertEqual(response.status_code, 200)
+                payload = response.json()
+                self.assertTrue(payload["success"])
+                article = payload["item"]["article"]
+                self.assertEqual(payload["item"]["manufacturer_id"], manufacturer_id)
+                self.assertEqual(payload["item"]["manufacturer_name"], "Kronospan")
+                self.assertEqual(payload["item"]["image"], image_data_url)
+
+                catalog_response = client.get(
+                    "/catalog/materials",
+                    params={"city": "kyiv", "category": "dsp"},
+                    headers=self._auth_headers("trial-token"),
+                )
+                self.assertEqual(catalog_response.status_code, 200)
+                catalog_item = next(item for item in catalog_response.json()["items"] if item["article"] == article)
+                self.assertEqual(catalog_item["manufacturer_id"], manufacturer_id)
+                self.assertEqual(catalog_item["image"], image_data_url)
+
+                with session_factory() as session:
+                    material = session.query(MaterialModel).filter(MaterialModel.article == article).one()
+                    self.assertEqual(material.manufacturer_id, manufacturer_id)
+                    self.assertEqual(material.image, image_data_url)
 
     @contextmanager
     def _catalog_context(self, database_path: Path, users_by_token: dict[str, UserStub] | None = None):

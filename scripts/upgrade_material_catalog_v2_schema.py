@@ -17,6 +17,7 @@ import unicodedata
 from datetime import datetime
 from pathlib import Path
 
+from database.deletion_protection import is_auto_recreate_suppressed
 
 TABLES = {
     "material_categories": """
@@ -394,8 +395,10 @@ def _build_plan(connection) -> dict[str, object]:
         "seed_rows": [
             row
             for row in CATEGORY_SEED_ROWS
-            if not _table_exists(connection, "material_categories")
+            if not is_auto_recreate_suppressed(connection, "material_category", row[0])
+            and (not _table_exists(connection, "material_categories")
             or not _category_seed_exists(connection, row[0])
+            )
         ],
         "existing_category_count": _count_rows(connection, "material_categories"),
         "existing_manufacturer_count": _count_rows(connection, "material_manufacturers"),
@@ -475,6 +478,8 @@ def _apply_plan(connection, plan: dict[str, object], *, caller_owns_transaction:
 
         if _table_exists(connection, "material_categories"):
             for code, name, sort_order in CATEGORY_SEED_ROWS:
+                if is_auto_recreate_suppressed(connection, "material_category", code):
+                    continue
                 _driver_execute(
                     connection,
                     """

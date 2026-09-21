@@ -50,8 +50,10 @@ except Exception:  # pragma: no cover - optional dependency
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-SETTINGS_PATH = PROJECT_ROOT / "product_center_settings.json"
-HISTORY_PATH = PROJECT_ROOT / "product_center_history.jsonl"
+RUNTIME_DIR = PROJECT_ROOT / '.tmp'
+RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
+SETTINGS_PATH = RUNTIME_DIR / 'product_center_settings.json'
+HISTORY_PATH = RUNTIME_DIR / 'product_center_history.jsonl'
 APP_LOG_PATH = PROJECT_ROOT / "product_center_app.log"
 API_STARTUP_LOG_PATH = PROJECT_ROOT / "product_center_api.log"
 UPDATE_PACKAGES_DIR = PROJECT_ROOT / "docs" / "update_packages"
@@ -737,6 +739,26 @@ def discover_windows_listener_rows() -> list[dict[str, object]]:
     return normalized_rows
 
 
+def listener_ports() -> set[int]:
+    try:
+        return {
+            int(row.get("LocalPort") or 0)
+            for row in discover_windows_listener_rows()
+            if int(row.get("LocalPort") or 0) > 0
+        }
+    except (OSError, TypeError, ValueError):
+        return set()
+
+
+def resolve_runtime_status(*, listener_present: bool, health_ok: bool) -> str:
+    """Resolve a fresh HTTP service state without consulting cached health."""
+    if not listener_present:
+        return "offline"
+    if health_ok:
+        return "online"
+    return "starting"
+
+
 def recent_history_process_pids(limit: int = 5000) -> dict[str, int]:
     entries = read_json_lines(HISTORY_PATH, limit=limit)
     if not entries:
@@ -1376,6 +1398,12 @@ class WizardApp(tk.Tk):
         self.component_launch_markers: dict[str, ttk.Label] = {}
         self.launch_status_var = tk.StringVar(value="")
         self._service_health_state: dict[str, bool | None] = {"api": None, "app": None, "admin": None}
+        self._runtime_status_state: dict[str, str] = {
+            "api": "offline",
+            "frontend-app": "offline",
+            "frontend-admin": "offline",
+            "bot": "offline",
+        }
         self._service_health_refresh_inflight = False
         self._process_refresh_interval_ms = 6000
         self._last_process_refresh_at = 0.0
@@ -1571,8 +1599,10 @@ class WizardApp(tk.Tk):
         return None
 
     def _managed_button_state(self, key: str, proc: subprocess.Popen | None) -> str:
-        cached_health = self._cached_service_health(key)
-        if cached_health is True:
+        runtime_status_state = self.__dict__.get("_runtime_status_state", {})
+        if runtime_status_state.get(key) == "starting":
+            return "starting"
+        if runtime_status_state.get(key) == "online":
             return "success"
         if key == "bot":
             if proc is None or proc.poll() is not None:
@@ -1583,17 +1613,19 @@ class WizardApp(tk.Tk):
         return "starting"
 
     def _managed_component_status(self, key: str, proc: subprocess.Popen | None) -> str:
-        cached_health = self._cached_service_health(key)
-        if cached_health is True:
+        runtime_status = self.__dict__.get("_runtime_status_state", {}).get(key)
+        if runtime_status == "online":
+            if key in {"api", "frontend-app", "frontend-admin"} and proc is None:
+                return "online (external)"
             return "online"
+        if runtime_status == "starting":
+            return "запускається..."
         if key == "bot":
             if proc is None or proc.poll() is not None:
                 return "не запущено"
             return self._bot_runtime_status(True)
         if proc is None or proc.poll() is not None:
             return "не запущено"
-        if cached_health is False:
-            return "запускається..."
         return "працює"
 
     def _process_list_colors(self, status_text: str) -> tuple[str, str]:
@@ -1649,7 +1681,7 @@ class WizardApp(tk.Tk):
 
     def _component_launch_style(self, status: str) -> str:
         normalized = status.strip().lower()
-        if normalized == "online":
+        if normalized.startswith("online"):
             return "LaunchOnline.TLabel"
         if normalized == "starting":
             return "LaunchStarting.TLabel"
@@ -1659,7 +1691,7 @@ class WizardApp(tk.Tk):
 
     def _component_launch_marker_color(self, status: str) -> str:
         normalized = status.strip().lower()
-        if normalized == "online":
+        if normalized.startswith("online"):
             return "#1f7a1f"
         if normalized == "starting":
             return "#a26b00"
@@ -2387,12 +2419,12 @@ class WizardApp(tk.Tk):
         self._register_action_button("start-full-stack", ttk.Button(left, text="Запустити весь продукт", command=self.start_full_local_stack)).pack(fill="x", pady=(8, 0))
         self._register_action_button("restart-full-stack", ttk.Button(left, text="Перезапустити весь продукт", command=self.restart_full_local_stack)).pack(fill="x", pady=(8, 0))
         ttk.Button(left, text="Відкрити всі сторінки", command=self.open_all_local_pages).pack(fill="x", pady=(8, 0))
-        ttk.Button(left, text="Оновити список процесів", command=self.refresh_managed_processes).pack(fill="x", pady=(8, 0))
+        ttk.Button(left, text="Оновити список процесів", command=self.refresh_runtime_views).pack(fill="x", pady=(8, 0))
         ttk.Button(left, text="Перезапустити вибраний процес", command=self.restart_selected_process).pack(fill="x", pady=(8, 0))
         ttk.Button(left, text="Зупинити вибраний процес", command=self.stop_selected_process).pack(fill="x", pady=(8, 0))
         self._register_action_button("stop-all", ttk.Button(left, text="Зупинити всі процеси", command=self.stop_all_processes)).pack(fill="x", pady=(8, 0))
 
-        process_box = ttk.LabelFrame(left, text="Запущені процеси", style="Card.TLabelframe")
+        process_box = ttk.LabelFrame(left, text="Процеси, запущені Product Center", style="Card.TLabelframe")
         process_box.pack(fill="both", expand=True, pady=(12, 0))
         process_box.columnconfigure(0, weight=1)
         process_box.rowconfigure(0, weight=1)
@@ -4929,11 +4961,14 @@ class WizardApp(tk.Tk):
     def _service_responds(self, url: str, timeout: float = 1.5) -> bool:
         try:
             with urlopen(url, timeout=timeout) as response:
-                return 200 <= getattr(response, "status", 200) < 500
+                return 200 <= getattr(response, "status", 200) < 300
         except URLError:
             return False
         except OSError:
             return False
+
+    def _api_service_responds(self, timeout: float = 1.5) -> bool:
+        return self._service_responds(LOCAL_API_HEALTH_URL, timeout=timeout)
 
     def _process_search_text(self, row: dict[str, object]) -> str:
         return " ".join(
@@ -5281,12 +5316,13 @@ class WizardApp(tk.Tk):
 
         def worker() -> None:
             api_up = app_up = admin_up = False
+            ports = listener_ports()
             api_proc = self.managed_processes.get("api")
             bot_proc = self.managed_processes.get("bot")
             bot_running = bot_proc is not None and bot_proc.poll() is None
             bot_status = self._bot_runtime_status(bot_running)
             try:
-                api_up = self._service_responds(LOCAL_API_HEALTH_URL)
+                api_up = self._api_service_responds()
                 app_up = self._service_responds(LOCAL_APP_URL)
                 admin_up = self._service_responds(LOCAL_ADMIN_URL)
             finally:
@@ -5294,10 +5330,23 @@ class WizardApp(tk.Tk):
                     self._service_health_state["api"] = api_up
                     self._service_health_state["app"] = app_up
                     self._service_health_state["admin"] = admin_up
+                    self._runtime_status_state["api"] = resolve_runtime_status(
+                        listener_present=8000 in ports,
+                        health_ok=api_up,
+                    )
+                    self._runtime_status_state["frontend-app"] = resolve_runtime_status(
+                        listener_present=5175 in ports,
+                        health_ok=app_up,
+                    )
+                    self._runtime_status_state["frontend-admin"] = resolve_runtime_status(
+                        listener_present=5173 in ports,
+                        health_ok=admin_up,
+                    )
+                    self._runtime_status_state["bot"] = "online" if bot_running else "offline"
                     self._service_health_refresh_inflight = False
-                    self._set_service_status("api", self._process_service_status(api_proc, api_up))
-                    self._set_service_status("app", self._process_service_status(self.managed_processes.get("frontend-app"), app_up))
-                    self._set_service_status("admin", self._process_service_status(self.managed_processes.get("frontend-admin"), admin_up))
+                    self._set_service_status("api", self._runtime_status_state["api"])
+                    self._set_service_status("app", self._runtime_status_state["frontend-app"])
+                    self._set_service_status("admin", self._runtime_status_state["frontend-admin"])
                     self._set_service_status("bot", bot_status)
                     self._set_action_button_state("api", self._managed_button_state("api", api_proc))
                     self._set_action_button_state("frontend-app", self._managed_button_state("frontend-app", self.managed_processes.get("frontend-app")))
@@ -5502,6 +5551,11 @@ class WizardApp(tk.Tk):
         for key in stale_keys:
             self.managed_processes.pop(key, None)
 
+    def refresh_runtime_views(self) -> None:
+        """Refresh managed entries and fresh service runtime status together."""
+        self.refresh_managed_processes()
+        self.refresh_product_status_async()
+
     def selected_process_key(self) -> str | None:
 
         selection = self.process_list.curselection()
@@ -5608,9 +5662,10 @@ class WizardApp(tk.Tk):
         return self._full_stack_is_healthy()
 
     def _full_stack_is_healthy(self) -> bool:
-        api_up = self._service_responds(LOCAL_API_HEALTH_URL)
-        app_up = self._service_responds(LOCAL_APP_URL)
-        admin_up = self._service_responds(LOCAL_ADMIN_URL)
+        ports = listener_ports()
+        api_up = 8000 in ports and self._api_service_responds()
+        app_up = 5175 in ports and self._service_responds(LOCAL_APP_URL)
+        admin_up = 5173 in ports and self._service_responds(LOCAL_ADMIN_URL)
         bot_proc = self.managed_processes.get("bot")
         bot_running = bot_proc is not None and bot_proc.poll() is None
         return api_up and app_up and admin_up and bot_running
@@ -5763,7 +5818,7 @@ class WizardApp(tk.Tk):
         threading.Thread(target=watcher, daemon=True).start()
 
     def start_local_api(self) -> None:
-        if self._service_responds(LOCAL_API_HEALTH_URL):
+        if 8000 in listener_ports() and self._api_service_responds():
             self._set_service_status("api", "online")
             self._set_component_launch_status("api", "online")
             self._set_action_button_state("api", "success")
@@ -5902,7 +5957,7 @@ class WizardApp(tk.Tk):
         self._run_script_async("Upgrade fittings schema", command, button_key="db-upgrade-fittings")
 
     def start_app_frontend(self) -> None:
-        if self._service_responds(LOCAL_APP_URL):
+        if 5175 in listener_ports() and self._service_responds(LOCAL_APP_URL):
             self._set_launch_status("Frontend app уже запущено.")
             self._append_product_log("[Frontend app] already responding on 127.0.0.1:5175; duplicate launch skipped")
             self._set_action_button_state("frontend-app", "success")
@@ -5916,7 +5971,7 @@ class WizardApp(tk.Tk):
         )
 
     def start_admin_frontend(self) -> None:
-        if self._service_responds(LOCAL_ADMIN_URL):
+        if 5173 in listener_ports() and self._service_responds(LOCAL_ADMIN_URL):
             self._set_launch_status("Frontend admin уже запущено.")
             self._append_product_log("[Frontend admin] already responding on 127.0.0.1:5173; duplicate launch skipped")
             self._set_action_button_state("frontend-admin", "success")

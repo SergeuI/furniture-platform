@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -95,6 +95,68 @@ class _DeniedEntitlementService:
 
 
 class MountingNodesApiTests(unittest.TestCase):
+    def test_preview_upload_generated_custom_and_delete_custom(self) -> None:
+        session, engine = self._build_session()
+        try:
+            app = self._build_app()
+            user = self._create_user(session, email="preview@example.test", role="admin")
+            fitting = self._create_fitting(session, name="Preview fitting", code="preview-fit", article="PF")
+            service = MountingNodeService(session=session)
+            node = service.create_mounting_node({"name": "Preview node", "items": [{"fitting_id": fitting.id}]})
+            app.dependency_overrides[auth_dependencies.require_current_user] = lambda: user
+
+            with patch.object(mounting_nodes_route, "EntitlementService", _AllowedEntitlementService), patch.object(
+                mounting_nodes_route, "MountingNodeService", return_value=service,
+            ), patch.object(
+                mounting_nodes_route,
+                "save_mounting_node_preview_file",
+                AsyncMock(side_effect=[
+                    "/uploads/mounting-node-previews/generated.png",
+                    "/uploads/mounting-node-previews/auto.png",
+                    "/uploads/mounting-node-previews/3d.png",
+                    "/uploads/mounting-node-previews/custom.png",
+                ]),
+            ), TestClient(app) as client:
+                generated = client.post(
+                    f"/mounting-nodes/{node['id']}/preview-image",
+                    data={"source_type": "generated"},
+                    files={"file": ("generated.png", b"png", "image/png")},
+                )
+                auto = client.post(
+                    f"/mounting-nodes/{node['id']}/preview-image",
+                    data={"source_type": "auto"},
+                    files={"file": ("auto.png", b"png", "image/png")},
+                )
+                three_d = client.post(
+                    f"/mounting-nodes/{node['id']}/preview-image",
+                    data={"source_type": "three_d"},
+                    files={"file": ("3d.png", b"png", "image/png")},
+                )
+                custom = client.post(
+                    f"/mounting-nodes/{node['id']}/preview-image",
+                    data={"source_type": "custom"},
+                    files={"file": ("custom.png", b"png", "image/png")},
+                )
+                deleted = client.delete(f"/mounting-nodes/{node['id']}/preview-image/custom")
+
+            self.assertEqual(generated.status_code, 200, generated.text)
+            self.assertEqual(generated.json()["node"]["preview_3d_image_url"], "/uploads/mounting-node-previews/generated.png")
+            self.assertEqual(generated.json()["node"]["preview_mode"], "three_d")
+            self.assertEqual(auto.status_code, 200, auto.text)
+            self.assertEqual(auto.json()["node"]["preview_auto_image_url"], "/uploads/mounting-node-previews/auto.png")
+            self.assertEqual(three_d.status_code, 200, three_d.text)
+            self.assertEqual(three_d.json()["node"]["preview_3d_image_url"], "/uploads/mounting-node-previews/3d.png")
+            self.assertEqual(custom.status_code, 200, custom.text)
+            self.assertEqual(custom.json()["node"]["preview_custom_image_url"], "/uploads/mounting-node-previews/custom.png")
+            self.assertEqual(deleted.status_code, 200, deleted.text)
+            self.assertIsNone(deleted.json()["node"]["preview_custom_image_url"])
+            self.assertEqual(deleted.json()["node"]["preview_3d_image_url"], "/uploads/mounting-node-previews/3d.png")
+            self.assertEqual(deleted.json()["node"]["preview_auto_image_url"], "/uploads/mounting-node-previews/auto.png")
+            self.assertEqual(deleted.json()["node"]["preview_mode"], "auto")
+        finally:
+            session.close()
+            engine.dispose()
+
     def test_fastening_type_api_create_update_detail_list_and_validation(self) -> None:
         session, engine = self._build_session()
         try:

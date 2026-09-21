@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from typing import Literal
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 
 from api.dependencies.auth import (
     require_current_user,
@@ -16,6 +18,7 @@ from schemas.mounting_nodes import (
 )
 from services.entitlement_service import EntitlementService
 from services.mounting_node_service import MountingNodeService
+from services.upload_service import save_mounting_node_preview_file
 
 
 router = APIRouter()
@@ -256,6 +259,78 @@ async def update_mounting_node_route(
         "success": True,
         "node": node,
     }
+
+
+@router.post(
+    "/{node_id}/preview-image",
+    response_model=MountingNodeOperationResponseSchema,
+)
+async def upload_mounting_node_preview_route(
+    node_id: int,
+    file: UploadFile = File(...),
+    source_type: Literal["auto", "three_d", "custom", "generated"] = Form(...),
+    current_user = Depends(require_mounting_nodes_edit),
+):
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="File name is required")
+    access = _resolve_mounting_nodes_access(current_user)
+    try:
+        with MountingNodeService() as service:
+            existing_node = service.get_mounting_node(
+                node_id,
+                viewer_user_id=getattr(current_user, "id", None),
+                viewer_role=getattr(current_user, "role", None),
+                viewer_can_edit=access["viewer_can_edit"],
+                viewer_can_delete=access["viewer_can_delete"],
+            )
+            if existing_node is None:
+                raise HTTPException(status_code=404, detail=f"Mounting node with id={node_id} does not exist")
+            if not existing_node.get("can_edit"):
+                raise PermissionError("Mounting node cannot be edited by this user")
+            image_url = await save_mounting_node_preview_file(file)
+            node = service.set_preview_image(
+                node_id,
+                source_type=source_type,
+                image_url=image_url,
+                viewer_user_id=getattr(current_user, "id", None),
+                viewer_role=getattr(current_user, "role", None),
+                viewer_can_edit=access["viewer_can_edit"],
+                viewer_can_delete=access["viewer_can_delete"],
+            )
+    except ValueError as error:
+        _raise_service_error(error)
+    except PermissionError as error:
+        _raise_service_permission_error(error)
+    if node is None:
+        raise HTTPException(status_code=404, detail=f"Mounting node with id={node_id} does not exist")
+    return {"success": True, "node": node}
+
+
+@router.delete(
+    "/{node_id}/preview-image/custom",
+    response_model=MountingNodeOperationResponseSchema,
+)
+async def delete_mounting_node_custom_preview_route(
+    node_id: int,
+    current_user = Depends(require_mounting_nodes_edit),
+):
+    access = _resolve_mounting_nodes_access(current_user)
+    try:
+        with MountingNodeService() as service:
+            node = service.delete_custom_preview(
+                node_id,
+                viewer_user_id=getattr(current_user, "id", None),
+                viewer_role=getattr(current_user, "role", None),
+                viewer_can_edit=access["viewer_can_edit"],
+                viewer_can_delete=access["viewer_can_delete"],
+            )
+    except ValueError as error:
+        _raise_service_error(error)
+    except PermissionError as error:
+        _raise_service_permission_error(error)
+    if node is None:
+        raise HTTPException(status_code=404, detail=f"Mounting node with id={node_id} does not exist")
+    return {"success": True, "node": node}
 
 
 @router.delete(

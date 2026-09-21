@@ -20,6 +20,7 @@ from database.models import entitlement_feature  # noqa: F401
 from database.models import fitting  # noqa: F401
 from database.models import fitting_hole_service_rule  # noqa: F401
 from database.models import fitting_image  # noqa: F401
+from database.models import hole_library  # noqa: F401
 from database.models import material  # noqa: F401
 from database.models import material_edge  # noqa: F401
 from database.models import material_edge_price  # noqa: F401

@@ -37,7 +37,7 @@ import {
     return allowedVariants.has(key) ? key : "surface_mount";
   }
 
-  function getHoleWorkspaceThreePreviewLayout(
+  export function getHoleWorkspaceThreePreviewLayout(
     variantKey,
     surfaceMountPreviewThicknessMm = SURFACE_MOUNT_PREVIEW_THICKNESS_MM_DEFAULT,
     holes = [],
@@ -427,7 +427,7 @@ import {
     return Math.max(0.24, Number(panel.args[0]) || 0.28);
   }
 
-function getFaceToEdgeHolePlacement(layout, hole, index) {
+export function getFaceToEdgeHolePlacement(layout, hole, index) {
   const sourceHole = hole?.source && typeof hole.source === "object" ? hole.source : hole;
   const location = inferFaceToEdgePointLocation(sourceHole);
   const panelA = Array.isArray(layout?.panels) ? layout.panels[0] || null : null;
@@ -1176,6 +1176,7 @@ export default function HolesMountingThreePreview({
           camera={{ fov: 32, position: layout.camera }}
           className="holes-three-preview-canvas"
           dpr={[1, 1.5]}
+          gl={{ preserveDrawingBuffer: true }}
           onContextMenu={(event) => event.preventDefault()}
           shadows
         >

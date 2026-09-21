@@ -10,6 +10,7 @@ from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 from time import perf_counter
+from threading import Lock
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qsl, quote, urlencode, urlparse, urlunparse
 from urllib.request import Request, urlopen
@@ -22,6 +23,34 @@ from services.fitting_source_parser import parse_fitting_source_metadata
 
 logger = logging.getLogger(__name__)
 _material_perf_context: ContextVar[dict | None] = ContextVar("material_perf_context", default=None)
+_material_progress_lock = Lock()
+_material_progress_by_request_id: dict[str, dict[str, object]] = {}
+
+
+def get_material_import_progress(request_id: str | None) -> dict[str, object] | None:
+    normalized_request_id = str(request_id or "").strip()
+    if not normalized_request_id:
+        return None
+    with _material_progress_lock:
+        snapshot = _material_progress_by_request_id.get(normalized_request_id)
+        return dict(snapshot) if snapshot else None
+
+
+def _set_material_import_progress(request_id: str, **fields: object) -> None:
+    with _material_progress_lock:
+        current = _material_progress_by_request_id.setdefault(
+            request_id,
+            {"request_id": request_id, "status": "running"},
+        )
+        current.update(fields)
+
+
+def set_material_import_progress(request_id: str, **fields: object) -> None:
+    """Update progress from work that runs after the request context ends."""
+
+    normalized_request_id = str(request_id or "").strip()
+    if normalized_request_id:
+        _set_material_import_progress(normalized_request_id, **fields)
 
 
 def _material_perf_log(message: str, **fields: object) -> None:
@@ -51,6 +80,26 @@ def _material_perf_stage(stage: str, started_at: float, *, status: str = "ok", *
         status=status,
         **fields,
     )
+    context = _material_perf_context.get()
+    if context:
+        phase_by_stage = {
+            "http_fetch": "material",
+            "basic_parse": "material",
+            "characteristics": "material",
+            "image_extract": "photos",
+            "parser_total": "material",
+            "images_total": "photos",
+            "material_upsert": "material",
+            "supplier_offer_upsert": "material",
+        }
+        phase = phase_by_stage.get(stage)
+        if phase:
+            _set_material_import_progress(
+                str(context.get("request_id") or ""),
+                phase=phase,
+                stage=stage,
+                status="running" if status == "ok" else "failed",
+            )
 
 
 def material_performance_endpoint(endpoint):
@@ -75,6 +124,13 @@ def material_performance_endpoint(endpoint):
             "IMAGE_REMOTE_VALIDATION_MS": 0,
             "started_at": perf_counter(),
         }
+        _set_material_import_progress(
+            str(context["request_id"]),
+            phase="material",
+            stage="material_fetch",
+            status="running",
+            import_recommended_edges=bool(getattr(payload, "import_recommended_edges", True)),
+        )
         token = _material_perf_context.set(context)
         try:
             return await endpoint(*args, **kwargs)
@@ -99,6 +155,14 @@ def material_performance_endpoint(endpoint):
                     image_urls_accepted=context["IMAGE_URLS_ACCEPTED"],
                     image_remote_validation_ms=context["IMAGE_REMOTE_VALIDATION_MS"],
                 )
+                if not context.get("background_pending"):
+                    _set_material_import_progress(
+                        str(context.get("request_id") or ""),
+                        status="failed" if context.get("error_type") else "completed",
+                        phase="complete",
+                        stage="complete",
+                        error_type=context.get("error_type"),
+                    )
                 _material_perf_context.reset(token)
 
     return wrapped
@@ -117,6 +181,17 @@ def material_performance_update(**fields: object) -> None:
     context = _material_perf_context.get()
     if context is not None:
         context.update(fields)
+        request_id = str(context.get("request_id") or "")
+        progress_fields = {
+            key: value
+            for key, value in fields.items()
+            if key.startswith("progress_")
+        }
+        if request_id and progress_fields:
+            _set_material_import_progress(
+                request_id,
+                **{key.removeprefix("progress_"): value for key, value in progress_fields.items()},
+            )
 
 
 VIYAR_BASE_URL = "https://www.viyar.ua"
@@ -2701,6 +2776,11 @@ async def fetch_viyar_product_details_by_url_traced(
 
     normalized_url = _normalize_text(source_url)
     trace: list[dict] = []
+    fetch_deadline = asyncio.get_running_loop().time() + WORKER_TIMEOUT_SECONDS
+    html = None
+    final_url = normalized_url
+    material = None
+    is_error_page = True
 
     if not normalized_url:
         raise ValueError("Source URL is required")
@@ -2714,12 +2794,15 @@ async def fetch_viyar_product_details_by_url_traced(
             city=city,
             article_hint=article_context or None,
         )
-        html, final_url = await asyncio.to_thread(
-            _fetch_html,
-            normalized_url,
-            city,
-            cookie_override,
-            return_final_url=True,
+        html, final_url = await asyncio.wait_for(
+            asyncio.to_thread(
+                _fetch_html,
+                normalized_url,
+                city,
+                cookie_override,
+                return_final_url=True,
+            ),
+            timeout=max(0.1, fetch_deadline - asyncio.get_running_loop().time()),
         )
         _push_trace(
             trace,
@@ -2754,12 +2837,7 @@ async def fetch_viyar_product_details_by_url_traced(
             error_text=str(error),
             phase="fetch",
         )
-        raise MaterialImportError(
-            "Material details were not found by URL",
-            trace=trace,
-            strategy="direct_url_html",
-            source_url=normalized_url,
-        ) from error
+        direct_error = error
 
     try:
         material = _extract_material_from_product_html(
@@ -2798,12 +2876,7 @@ async def fetch_viyar_product_details_by_url_traced(
             error_text=str(error),
             phase="extract",
         )
-        raise MaterialImportError(
-            "Material details were not found by URL",
-            trace=trace,
-            strategy="direct_url_html",
-            source_url=normalized_url,
-        ) from error
+        direct_error = error
 
     if material and material.get("name") and not is_error_page:
         _push_trace(
@@ -2835,9 +2908,49 @@ async def fetch_viyar_product_details_by_url_traced(
         has_name=bool(material and material.get("name")),
         error_page=is_error_page,
     )
-    raise MaterialImportError(
-        "Material details were not found by URL",
-        trace=trace,
-        strategy="direct_url_html",
-        source_url=normalized_url,
-    )
+    direct_error = LookupError(f"Direct VIYAR source did not contain usable material: {failure_reason}")
+
+    remaining_seconds = fetch_deadline - asyncio.get_running_loop().time()
+    if remaining_seconds <= 0:
+        _push_trace(trace, "source.budget.exhausted", budget_seconds=WORKER_TIMEOUT_SECONDS)
+        raise MaterialImportError(
+            "Не вдалося отримати дані матеріалу з VIYAR у відведений час",
+            trace=trace,
+            strategy="direct_url_budget_exhausted",
+            source_url=normalized_url,
+        ) from direct_error
+
+    try:
+        _push_trace(
+            trace,
+            "browser.fallback.start",
+            remaining_seconds=round(remaining_seconds, 2),
+            product_url=normalized_url,
+        )
+        fallback_article = article_context or normalized_url
+        material, debug_payload = await asyncio.wait_for(
+            _fetch_viyar_material_by_article_async_traced(
+                fallback_article,
+                city=city,
+                cookie_override=cookie_override,
+                preferred_url=normalized_url,
+                trace=trace,
+            ),
+            timeout=remaining_seconds,
+        )
+        _push_trace(trace, "browser.fallback.success", product_url=normalized_url)
+        return material, debug_payload
+    except Exception as fallback_error:
+        _push_trace(
+            trace,
+            "source.budget.failed",
+            budget_seconds=WORKER_TIMEOUT_SECONDS,
+            error_type=type(fallback_error).__name__,
+            message=_normalize_material_error_message(fallback_error),
+        )
+        raise MaterialImportError(
+            "Не вдалося отримати дані матеріалу з VIYAR. Спробуйте ще раз.",
+            trace=trace,
+            strategy="viyar_source_fetch_bounded",
+            source_url=normalized_url,
+        ) from fallback_error

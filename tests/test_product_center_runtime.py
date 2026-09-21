@@ -13,6 +13,41 @@ from scripts import upgrade_fittings_foundation_schema
 
 
 class ProductCenterRuntimeTests(unittest.TestCase):
+    def test_runtime_status_is_offline_without_listener_even_with_health(self) -> None:
+        self.assertEqual(
+            db_update_wizard.resolve_runtime_status(listener_present=False, health_ok=True),
+            "offline",
+        )
+
+    def test_runtime_status_is_starting_with_listener_and_failed_health(self) -> None:
+        self.assertEqual(
+            db_update_wizard.resolve_runtime_status(listener_present=True, health_ok=False),
+            "starting",
+        )
+
+    def test_runtime_status_is_online_with_listener_and_health(self) -> None:
+        self.assertEqual(
+            db_update_wizard.resolve_runtime_status(listener_present=True, health_ok=True),
+            "online",
+        )
+
+    def test_external_api_can_be_online_without_managed_process(self) -> None:
+        dummy = db_update_wizard.WizardApp.__new__(db_update_wizard.WizardApp)
+        dummy._runtime_status_state = {"api": "online"}
+        dummy._service_health_state = {"api": True, "app": None, "admin": None}
+
+        self.assertEqual(db_update_wizard.WizardApp._managed_component_status(dummy, "api", None), "online (external)")
+
+    def test_refresh_runtime_views_updates_processes_and_status(self) -> None:
+        dummy = db_update_wizard.WizardApp.__new__(db_update_wizard.WizardApp)
+        calls: list[str] = []
+        dummy.refresh_managed_processes = lambda: calls.append("processes")
+        dummy.refresh_product_status_async = lambda: calls.append("status")
+
+        db_update_wizard.WizardApp.refresh_runtime_views(dummy)
+
+        self.assertEqual(calls, ["processes", "status"])
+
     def test_launcher_prefers_repo_venv_python(self) -> None:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             root = Path(tmpdir)
@@ -111,7 +146,9 @@ class ProductCenterRuntimeTests(unittest.TestCase):
         dummy._append_product_log = lambda text: dummy.logs.append(text)
         dummy.record_history = lambda *args, **kwargs: None
 
-        with patch.object(db_update_wizard.WizardApp, "_service_responds", return_value=True), patch.object(
+        with patch.object(db_update_wizard, "listener_ports", return_value={8000}), patch.object(
+            db_update_wizard.WizardApp, "_service_responds", return_value=True
+        ), patch.object(
             db_update_wizard.WizardApp, "_start_managed_process"
         ) as start_mock:
             db_update_wizard.WizardApp.start_local_api(dummy)
@@ -326,8 +363,11 @@ class ProductCenterRuntimeTests(unittest.TestCase):
         dummy.start_app_frontend = lambda: None
         dummy.start_admin_frontend = lambda: None
         dummy._service_responds = lambda url, timeout=1.5: True
+        dummy._api_service_responds = lambda timeout=1.5: True
 
-        with patch.object(db_update_wizard.threading, "Thread", ImmediateThread), patch.object(
+        with patch.object(db_update_wizard, "listener_ports", return_value={8000, 5173, 5175}), patch.object(
+            db_update_wizard.threading, "Thread", ImmediateThread
+        ), patch.object(
             db_update_wizard.threading,
             "Event",
             side_effect=lambda: SimpleNamespace(wait=lambda *_args, **_kwargs: None),
@@ -399,7 +439,9 @@ class ProductCenterRuntimeTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             log_path = Path(tmpdir) / "product_center_api.log"
-            with patch.object(db_update_wizard, "API_STARTUP_LOG_PATH", log_path), patch.object(
+            with patch.object(db_update_wizard, "listener_ports", return_value=set()), patch.object(
+                db_update_wizard, "API_STARTUP_LOG_PATH", log_path
+            ), patch.object(
                 db_update_wizard.subprocess, "Popen", side_effect=fake_popen
             ):
                 db_update_wizard.WizardApp.start_local_api(dummy)
@@ -434,6 +476,7 @@ class ProductCenterRuntimeTests(unittest.TestCase):
         dummy = db_update_wizard.WizardApp.__new__(db_update_wizard.WizardApp)
         dummy.managed_processes = {}
         dummy._service_health_state = {"api": None, "app": None, "admin": None}
+        dummy._runtime_status_state = {"api": "offline", "frontend-app": "offline", "frontend-admin": "offline", "bot": "offline"}
         dummy._service_health_refresh_inflight = False
         dummy.service_status_calls: list[tuple[str, str]] = []
         dummy.component_status_calls: list[tuple[str, str]] = []
@@ -451,6 +494,7 @@ class ProductCenterRuntimeTests(unittest.TestCase):
             return url == db_update_wizard.LOCAL_API_HEALTH_URL
 
         dummy._service_responds = fake_service_responds
+        dummy._api_service_responds = lambda timeout=1.5: True
 
         class ImmediateThread:
             def __init__(self, target, daemon: bool = False) -> None:
@@ -459,16 +503,19 @@ class ProductCenterRuntimeTests(unittest.TestCase):
             def start(self) -> None:
                 self.target()
 
-        with patch.object(db_update_wizard.threading, "Thread", ImmediateThread):
+        with patch.object(db_update_wizard, "listener_ports", return_value={8000}), patch.object(
+            db_update_wizard.threading, "Thread", ImmediateThread
+        ):
             db_update_wizard.WizardApp.refresh_product_status_async(dummy)
 
         self.assertIn(("api", "online"), dummy.service_status_calls)
         self.assertIn(("api", "success"), dummy.action_state_calls)
-        self.assertIn(("api", "online"), dummy.component_status_calls)
+        self.assertIn(("api", "online (external)"), dummy.component_status_calls)
 
     def test_managed_button_state_uses_cached_health_without_process_handle(self) -> None:
         dummy = db_update_wizard.WizardApp.__new__(db_update_wizard.WizardApp)
         dummy._service_health_state = {"api": True, "app": True, "admin": True}
+        dummy._runtime_status_state = {"api": "online", "frontend-app": "online", "frontend-admin": "online", "bot": "offline"}
 
         self.assertEqual(db_update_wizard.WizardApp._managed_button_state(dummy, "frontend-app", None), "success")
         self.assertEqual(db_update_wizard.WizardApp._managed_button_state(dummy, "frontend-admin", None), "success")
@@ -499,6 +546,7 @@ class ProductCenterRuntimeTests(unittest.TestCase):
         }
         dummy.process_list_colors_enabled = False
         dummy._service_health_state = {"api": True, "app": True, "admin": True}
+        dummy._runtime_status_state = {"api": "online", "frontend-app": "online", "frontend-admin": "online", "bot": "offline"}
         dummy._set_action_button_state_calls: list[tuple[str, str]] = []
         dummy.process_list = DummyListbox()
         dummy._set_action_button_state = lambda key, state: dummy._set_action_button_state_calls.append((key, state))
@@ -514,7 +562,7 @@ class ProductCenterRuntimeTests(unittest.TestCase):
         self.assertNotIn(("frontend-app", "idle"), dummy._set_action_button_state_calls)
         self.assertNotIn(("frontend-admin", "idle"), dummy._set_action_button_state_calls)
 
-    def test_refresh_managed_processes_keeps_stale_online_buttons_green(self) -> None:
+    def test_refresh_managed_processes_does_not_use_stale_online_health(self) -> None:
         class DummyListbox:
             def delete(self, *_args, **_kwargs) -> None:
                 pass
@@ -534,6 +582,7 @@ class ProductCenterRuntimeTests(unittest.TestCase):
         dummy.action_buttons = {"frontend-admin": [object()]}
         dummy.process_list_colors_enabled = False
         dummy._service_health_state = {"api": False, "app": False, "admin": True}
+        dummy._runtime_status_state = {"api": "offline", "frontend-app": "offline", "frontend-admin": "offline", "bot": "offline"}
         dummy._set_action_button_state_calls: list[tuple[str, str]] = []
         dummy.process_list = DummyListbox()
         dummy._set_action_button_state = lambda key, state: dummy._set_action_button_state_calls.append((key, state))
@@ -542,8 +591,8 @@ class ProductCenterRuntimeTests(unittest.TestCase):
 
         db_update_wizard.WizardApp.refresh_managed_processes(dummy)
 
-        self.assertIn(("frontend-admin", "success"), dummy._set_action_button_state_calls)
-        self.assertNotIn(("frontend-admin", "idle"), dummy._set_action_button_state_calls)
+        self.assertIn(("frontend-admin", "idle"), dummy._set_action_button_state_calls)
+        self.assertNotIn(("frontend-admin", "success"), dummy._set_action_button_state_calls)
 
     def test_managed_button_state_stays_idle_when_health_is_offline_and_no_process(self) -> None:
         dummy = db_update_wizard.WizardApp.__new__(db_update_wizard.WizardApp)
@@ -591,8 +640,11 @@ class ProductCenterRuntimeTests(unittest.TestCase):
         dummy.refresh_managed_processes = lambda: None
         dummy.refresh_product_status = lambda: None
         dummy._service_responds = lambda url, timeout=1.5: True
+        dummy._api_service_responds = lambda timeout=1.5: True
 
-        with patch.object(db_update_wizard.threading, "Thread", ImmediateThread), patch.object(
+        with patch.object(db_update_wizard, "listener_ports", return_value={8000, 5173, 5175}), patch.object(
+            db_update_wizard.threading, "Thread", ImmediateThread
+        ), patch.object(
             db_update_wizard.threading,
             "Event",
             side_effect=lambda: SimpleNamespace(wait=lambda *_args, **_kwargs: None),
@@ -769,7 +821,9 @@ class ProductCenterRuntimeTests(unittest.TestCase):
             stopped_pids.append(pid)
             return True
 
-        with patch.object(db_update_wizard.WizardApp, "_discover_verified_stop_targets", fake_discovery), patch.object(
+        with patch.object(db_update_wizard, "listener_ports", return_value={8000, 5173, 5175}), patch.object(
+            db_update_wizard.WizardApp, "_discover_verified_stop_targets", fake_discovery
+        ), patch.object(
             db_update_wizard.WizardApp, "_stop_verified_process_tree", fake_stop
         ), patch.object(db_update_wizard, "recent_history_process_pids", return_value={}), patch.object(
             db_update_wizard.threading, "Thread", ImmediateThread
@@ -872,7 +926,9 @@ class ProductCenterRuntimeTests(unittest.TestCase):
             start_calls.append("start")
             dummy.managed_processes["bot"] = LiveProc(999)
 
-        with patch.object(db_update_wizard.WizardApp, "_discover_verified_stop_targets", fake_discovery), patch.object(
+        with patch.object(db_update_wizard, "listener_ports", return_value={8000, 5173, 5175}), patch.object(
+            db_update_wizard.WizardApp, "_discover_verified_stop_targets", fake_discovery
+        ), patch.object(
             db_update_wizard.WizardApp, "_stop_verified_process_tree", fake_stop
         ), patch.object(db_update_wizard.WizardApp, "_service_responds", return_value=True), patch.object(
             db_update_wizard.WizardApp, "start_all_local_services", fake_start_all

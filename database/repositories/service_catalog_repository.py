@@ -8,6 +8,7 @@ from sqlalchemy import and_, func
 from database.session import (
     SessionLocal,
 )
+from database.deletion_protection import is_auto_recreate_suppressed
 
 from database.models.service_catalog_item import (
     ServiceCatalogItemModel,
@@ -236,6 +237,10 @@ def sync_viyar_service_catalog(
         deactivated_suspicious_count = 0
 
         for record in records:
+
+            entity_key = f"{record['source']}:{record['external_code']}"
+            if is_auto_recreate_suppressed(db, "service_catalog_item", entity_key):
+                continue
 
             item = existing_by_code.get(record["external_code"])
 

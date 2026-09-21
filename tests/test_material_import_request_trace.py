@@ -7,7 +7,7 @@ import re
 import sys
 import unittest
 from io import BytesIO
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, Mock, patch
 from urllib.error import URLError
 
 from fastapi.testclient import TestClient
@@ -217,7 +217,11 @@ class MaterialImportRequestTraceTests(unittest.TestCase):
             patch.object(catalog_routes, "ensure_material_user_link"),
             patch.object(catalog_routes, "upsert_material_supplier_offer_for_import") as offer_mock,
             patch.object(catalog_routes, "create_audit_log"),
-            patch.object(catalog_routes, "persist_viyar_recommended_edges_for_material_import") as edge_mock,
+            patch.object(
+                catalog_routes,
+                "persist_viyar_recommended_edges_for_material_import",
+                new=AsyncMock(return_value={"summary": {}, "review_items": [], "error": None}),
+            ) as edge_mock,
             TestClient(main_api.app) as client,
         ):
             response = client.post(
@@ -236,7 +240,8 @@ class MaterialImportRequestTraceTests(unittest.TestCase):
         self.assertTrue(body["success"])
         self.assertEqual(body["item"]["id"], "2126")
         self.assertEqual(len(body["item"]["images"]), 0)
-        self.assertIsNone(body["recommended_edges"])
+        self.assertEqual(body["recommended_edges"]["status"], "processing")
+        self.assertTrue(body["recommended_edges"]["request_id"])
         fetch_mock.assert_awaited_once()
         prices_mock.assert_not_awaited()
         self.assertEqual(len(upsert_calls), 1)
@@ -259,7 +264,7 @@ class MaterialImportRequestTraceTests(unittest.TestCase):
                 "https://viyar.ua/store/Items/photos/ph242944_MWJFJ.jpg",
             ],
         )
-        edge_mock.assert_not_called()
+        edge_mock.assert_awaited_once()
 
     def test_material_import_keeps_gallery_when_city_context_is_refreshed(self) -> None:
         main_api = self._load_main_api()
@@ -367,7 +372,11 @@ class MaterialImportRequestTraceTests(unittest.TestCase):
             patch.object(catalog_routes, "ensure_material_user_link"),
             patch.object(catalog_routes, "upsert_material_supplier_offer_for_import"),
             patch.object(catalog_routes, "create_audit_log"),
-            patch.object(catalog_routes, "persist_viyar_recommended_edges_for_material_import") as edge_mock,
+            patch.object(
+                catalog_routes,
+                "persist_viyar_recommended_edges_for_material_import",
+                new=AsyncMock(return_value={"summary": {}, "review_items": [], "error": None}),
+            ),
             TestClient(main_api.app) as client,
         ):
             response = client.post(
@@ -391,7 +400,6 @@ class MaterialImportRequestTraceTests(unittest.TestCase):
         self.assertTrue(body["item"]["images"][0]["is_primary"])
         self.assertFalse(body["item"]["images"][1]["is_primary"])
         self.assertEqual(body["item"]["images"][0]["content_type"], "image/jpeg")
-        edge_mock.assert_not_called()
 
     def test_gallery_helper_persists_prepared_images_without_creating_material(self) -> None:
         material = {
@@ -565,3 +573,240 @@ class MaterialImportRequestTraceTests(unittest.TestCase):
                 "missing_fields": ["width_mm"],
             }
         ])
+
+    def test_final_recommended_edge_diagnostic_keeps_review_and_persisted_metadata(self) -> None:
+        preview_review = {
+            "status": "needs_review",
+            "discovered_card": {
+                "article": "158017",
+                "title": "201B Maag 22x2",
+                "source_url": "https://viyar.ua/158017",
+            },
+            "canonical_candidate": {
+                "manufacturer": "Maag",
+                "manufacturer_article": "201B",
+                "material_type": "PVC",
+                "technology_code": None,
+                "width_mm": 22.0,
+                "thickness_mm": 2.0,
+            },
+            "supplier_offer_candidate": {"article": "158017"},
+            "reason": "supplier_offer_conflict",
+            "missing_fields": [],
+        }
+        second_preview_review = {
+            "status": "needs_review",
+            "discovered_card": {
+                "article": "158018",
+                "title": "201B Maag 28x2",
+                "source_url": "https://viyar.ua/158018",
+            },
+            "canonical_candidate": {
+                "manufacturer": "Maag",
+                "manufacturer_article": "201B",
+                "material_type": "PVC",
+                "technology_code": None,
+                "width_mm": 28.0,
+                "thickness_mm": 2.0,
+            },
+            "supplier_offer_candidate": {"article": "158018"},
+            "reason": "canonical_identity_conflict",
+            "missing_fields": [],
+        }
+        persisted_preview = {
+            "status": "parsed",
+            "canonical_candidate": {
+                "manufacturer_article": "201B",
+                "material_type": "PVC",
+                "technology_code": None,
+                "width_mm": 22.0,
+                "thickness_mm": 0.6,
+            },
+            "supplier_offer_candidate": {"article": "158015"},
+        }
+        result = {
+            "preview": {"items": [persisted_preview, preview_review, second_preview_review]},
+            "summary": {
+                "total": 29,
+                "parsed": 27,
+                "persisted": 27,
+                "failed": 0,
+                "needs_review": 2,
+                "status": "completed_with_warnings",
+                "reason": None,
+            },
+            "persistence": {
+                "counts": {"items": 27, "persisted": 27},
+                "items": [{
+                    "status": "persisted",
+                    "edge_id": 37,
+                    "offer_id": 38,
+                    "manufacturer_id": 8,
+                    "preview_item": persisted_preview,
+                }],
+            },
+        }
+
+        diagnostic = catalog_routes._build_recommended_edge_final_diagnostic(
+            result=result,
+            material={"article": "29702", "source_url": "https://viyar.ua/material/29702"},
+            material_id=29702,
+            request_id="diagnostic-request",
+        )
+
+        self.assertEqual(diagnostic["counts"], {
+            "recommendations_found": 29,
+            "parsed": 27,
+            "ready_to_persist": 27,
+            "persisted": 27,
+            "failed": 0,
+            "needs_review": 2,
+        })
+        self.assertEqual(diagnostic["failed_or_needs_review"][0]["supplier_article"], "158017")
+        self.assertEqual(diagnostic["failed_or_needs_review"][0]["reason_code"], "supplier_offer_conflict")
+        self.assertEqual(len(diagnostic["failed_or_needs_review"]), 2)
+        self.assertEqual(diagnostic["failed_or_needs_review"][1]["supplier_article"], "158018")
+        self.assertEqual(diagnostic["persisted_candidates"][0]["edge_id"], 37)
+        self.assertNotIn("cookies", json.dumps(diagnostic).lower())
+        self.assertNotIn("password", json.dumps(diagnostic).lower())
+
+    def test_final_recommended_edge_diagnostic_is_written_as_separate_audit_event(self) -> None:
+        result = {
+            "preview": {"items": []},
+            "summary": {"total": 0, "parsed": 0, "persisted": 0, "failed": 1, "needs_review": 0, "status": "failed"},
+            "error": "preview_incomplete",
+        }
+
+        async def run():
+            with patch.object(catalog_routes, "create_audit_log") as audit_mock:
+                await catalog_routes._persist_recommended_edge_final_diagnostic(
+                    result=result,
+                    material={"article": "29702", "source_url": "https://viyar.ua/material/29702"},
+                    material_id=29702,
+                    request_id="final-request",
+                )
+                return audit_mock
+
+        audit_mock = asyncio.run(run())
+        audit_mock.assert_called_once()
+        self.assertEqual(audit_mock.call_args.kwargs["action"], "catalog.material_recommended_edges_completed")
+        self.assertEqual(audit_mock.call_args.kwargs["details"]["request_id"], "final-request")
+
+    def test_background_recommended_edge_job_uses_independent_persistence_call(self) -> None:
+        edge_mock = AsyncMock(
+            return_value={
+                "summary": {"discovered": 1, "persisted": 1, "needs_review": 0, "failed": 0},
+                "review_items": [],
+                "error": None,
+            }
+        )
+
+        with patch.object(catalog_routes, "persist_viyar_recommended_edges_for_material_import", new=edge_mock):
+            asyncio.run(
+                catalog_routes._run_material_recommended_edges_background(
+                    material={"article": "K520", "source_url": "https://viyar.ua/ua/catalog/k520/"},
+                    material_id=2093,
+                    selected_city="kyiv",
+                    cookie_override="cookie",
+                    request_id="background-test",
+                )
+            )
+
+        edge_mock.assert_awaited_once_with(
+            material_id=2093,
+            material_source_url="https://viyar.ua/ua/catalog/k520/",
+            selected_city="kyiv",
+            cookie_override="cookie",
+            relation_source_url="https://viyar.ua/ua/catalog/k520/",
+            progress_callback=ANY,
+            request_id="background-test",
+        )
+
+    def test_background_manager_enrichment_does_not_resolve_missing_user_credentials(self) -> None:
+        edge_mock = AsyncMock(
+            return_value={
+                "summary": {"discovered": 1, "persisted": 1, "needs_review": 0, "failed": 0},
+                "review_items": [],
+                "error": None,
+            }
+        )
+
+        with (
+            patch.object(catalog_routes, "_resolve_viyar_cookie_for_user", side_effect=AssertionError("user lookup is not needed")),
+            patch.object(catalog_routes, "persist_viyar_recommended_edges_for_material_import", new=edge_mock),
+        ):
+            asyncio.run(
+                catalog_routes._run_material_recommended_edges_background(
+                    material={"article": "18059", "source_url": "https://viyar.ua/ua/catalog/18059/"},
+                    material_id=2200,
+                    selected_city="kyiv",
+                    cookie_override=None,
+                    request_id="manager-background-test",
+                )
+            )
+
+        edge_mock.assert_awaited_once()
+        self.assertIsNone(edge_mock.await_args.kwargs["cookie_override"])
+
+    def test_background_edge_failure_exposes_friendly_warning_only(self) -> None:
+        edge_mock = AsyncMock(side_effect=AttributeError("'NoneType' object has no attribute 'viyar_email'"))
+
+        with patch.object(catalog_routes, "persist_viyar_recommended_edges_for_material_import", new=edge_mock):
+            asyncio.run(
+                catalog_routes._run_material_recommended_edges_background(
+                    material={"article": "18059", "source_url": "https://viyar.ua/ua/catalog/18059/"},
+                    material_id=2200,
+                    selected_city="kyiv",
+                    cookie_override=None,
+                    request_id="manager-warning-test",
+                )
+            )
+
+        progress = catalog_routes.get_material_import_progress("manager-warning-test")
+        self.assertEqual(progress["status"], "failed")
+        self.assertEqual(progress["error"], "не налаштовані облікові дані VIYAR")
+        self.assertNotIn("NoneType", progress["error"])
+
+    def test_structured_persistence_failure_is_logged_after_preview(self) -> None:
+        edge_mock = AsyncMock(
+            return_value={
+                "success": False,
+                "error": "item_4:manufacturer_not_found:New Brand",
+                "summary": {"discovered": 16, "persisted": 0, "needs_review": 0, "failed": 1},
+                "persistence": {
+                    "success": False,
+                    "reason": "item_4:manufacturer_not_found:New Brand",
+                    "failed_phase": "prevalidation",
+                    "failed_index": 4,
+                    "failed_supplier_article": "63936",
+                    "failed_manufacturer_article": "3522W",
+                    "exception_type": None,
+                    "rollback_performed": True,
+                    "persisted_count": 0,
+                    "items": [],
+                },
+                "review_items": [],
+            }
+        )
+
+        with (
+            patch.object(catalog_routes, "persist_viyar_recommended_edges_for_material_import", new=edge_mock),
+            self.assertLogs(catalog_routes.logger, level="ERROR") as captured,
+        ):
+            summary, warning, _ = asyncio.run(
+                catalog_routes._refresh_material_recommended_edges_for_item(
+                    material={"article": "54263", "source_url": "https://viyar.ua/ua/catalog/54263/"},
+                    material_id=2109,
+                    current_user=None,
+                    selected_city="kyiv",
+                    progress_request_id="diagnostic-request",
+                )
+            )
+
+        self.assertEqual(summary.failed, 1)
+        self.assertEqual(warning, "технічна помилка під час додавання рекомендованих крайок")
+        log_output = "\n".join(captured.output)
+        self.assertIn("phase=prevalidation", log_output)
+        self.assertIn("failed_index=4", log_output)
+        self.assertIn("failed_supplier_article=63936", log_output)
+        self.assertIn("rollback_performed=True", log_output)

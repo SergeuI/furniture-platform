@@ -4787,7 +4787,7 @@ export default function App() {
           <X size={18} />
         </button>
         <div className="brand-block brand-lockup">
-          <img alt="" className="brand-mark" src="/brand/mp-symbol-reference.jpg" />
+          <img alt="" className="brand-mark" src="/brand/logo-mpfc.png" />
           <div className="brand-copy">
             <p className="eyebrow">{t.furniturePlatform}</p>
             <h1>{t.app}</h1>

@@ -283,6 +283,7 @@ class MaterialCatalogImageSchema(BaseModel):
     id: int
     sort_order: int
     is_primary: bool
+    source_url: str | None = None
     content_type: str
 
 
@@ -295,6 +296,7 @@ class MaterialEdgeOptionSchema(BaseModel):
     manufacturer_name: str | None = None
     manufacturer_article: str | None = None
     material_type: str | None = None
+    technology_code: str | None = None
     width_mm: float | None = None
     thickness_mm: float | None = None
     article: str | None = None
@@ -395,6 +397,7 @@ class EdgeCatalogCreateSchema(BaseModel):
     decor_code: str | None = Field(default=None, max_length=64)
     color: str | None = Field(default=None, max_length=128)
     material_type: str | None = Field(default=None, max_length=64)
+    technology_code: str | None = Field(default=None, max_length=64)
     width_mm: float = Field(gt=0)
     thickness_mm: float = Field(gt=0)
     finish: str | None = Field(default=None, max_length=128)
@@ -409,6 +412,7 @@ class EdgeCatalogUpdateSchema(BaseModel):
     decor_code: str | None = Field(default=None, max_length=64)
     color: str | None = Field(default=None, max_length=128)
     material_type: str | None = Field(default=None, max_length=64)
+    technology_code: str | None = Field(default=None, max_length=64)
     width_mm: float | None = Field(default=None, gt=0)
     thickness_mm: float | None = Field(default=None, gt=0)
     finish: str | None = Field(default=None, max_length=128)
@@ -474,6 +478,8 @@ class MaterialSupplierOfferSchema(BaseModel):
     city: str | None = None
     region: str | None = None
     supports_square_meter_sale: bool | None = None
+    characteristics: dict[str, str] = Field(default_factory=dict)
+    image_urls: list[str] = Field(default_factory=list)
     is_active: bool = True
     priority: int = 0
     parsed_at: datetime | None = None
@@ -561,6 +567,7 @@ class MaterialCatalogItemSchema(BaseModel):
     current_price_details: MaterialPriceSchema | None = None
     prices: List[MaterialPriceSchema] = Field(default_factory=list)
     price_summary: List[MaterialPriceSummarySchema] = Field(default_factory=list)
+    supports_square_meter_sale: bool = False
     supplier_summary: List[MaterialSupplierSummarySchema] = Field(default_factory=list)
     edge_options: List[MaterialEdgeOptionSchema] = Field(default_factory=list)
 
@@ -762,6 +769,7 @@ class MaterialCatalogCreateSchema(BaseModel):
         max_length=500000,
     )
     is_default: bool = False
+    import_recommended_edges: bool = True
 
 
 class MaterialCatalogUpdateSchema(BaseModel):
@@ -830,10 +838,16 @@ class MaterialIdentityValidationSchema(BaseModel):
 
 
 class MaterialRecommendedEdgesSummarySchema(BaseModel):
+    total: int = 0
+    result_count: int = 0
+    parsed: int = 0
     discovered: int = 0
     persisted: int = 0
     needs_review: int = 0
     failed: int = 0
+    status: str | None = None
+    reason: str | None = None
+    request_id: str | None = None
 
 
 class MaterialRecommendedEdgeReviewItemSchema(BaseModel):

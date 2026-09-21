@@ -220,6 +220,7 @@ async def process_material_import_job(job_id: int, cookie_override: str | None =
                     thickness=material.get("thickness"),
                     image=material.get("image"),
                     source_url=material.get("source_url"),
+                    allow_deleted_restore=True,
                 )
             price_cities = (
                 CITY_COOKIES.keys()

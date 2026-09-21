@@ -33,6 +33,7 @@ import {
   resolveAdminAssetUrl,
   uploadFittingManufacturerLogo,
 } from "../api.js";
+import CatalogBreadcrumbTrail from "./CatalogBreadcrumbTrail.jsx";
 
 const ENTITY_LABELS = {
   manufacturers: { uk: "Виробники фурнітури", en: "Fitting manufacturers" },
@@ -648,13 +649,20 @@ export default function FittingTaxonomyAdminWorkspace({
           <div className="catalog-page-header fitting-taxonomy-page-header">
             <div className="service-catalog-title fitting-taxonomy-page-title">
               {typeof onNavigate === "function" ? (
-                <div className="fitting-category-breadcrumb fitting-category-breadcrumb-top">
-                  <button className="fitting-breadcrumb-link" onClick={() => onNavigate("catalogFittings")} type="button">
-                    {language === "uk" ? "Фурнітура" : "Fittings"}
-                  </button>
-                  <span className="fitting-breadcrumb-separator">/</span>
-                  <strong>{language === "uk" ? "Виробники" : "Manufacturers"}</strong>
-                </div>
+                <CatalogBreadcrumbTrail
+                  items={[
+                    {
+                      label: language === "uk" ? "Фурнітура" : "Fittings",
+                      onClick: () => onNavigate("catalogFittings"),
+                      title: language === "uk" ? "Фурнітура" : "Fittings",
+                    },
+                    {
+                      current: true,
+                      label: language === "uk" ? "Виробники" : "Manufacturers",
+                      title: language === "uk" ? "Виробники" : "Manufacturers",
+                    },
+                  ]}
+                />
               ) : null}
               <p>{language === "uk" ? "Керування виробниками фурнітури." : "Manage fitting manufacturers."}</p>
             </div>

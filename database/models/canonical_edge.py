@@ -64,6 +64,11 @@ class CanonicalEdgeModel(Base):
         nullable=True,
     )
 
+    technology_code = Column(
+        String,
+        nullable=True,
+    )
+
     width_mm = Column(
         Float,
         nullable=True,
@@ -88,6 +93,13 @@ class CanonicalEdgeModel(Base):
         Boolean,
         nullable=False,
         default=True,
+    )
+
+    cleanup_policy = Column(
+        String,
+        nullable=False,
+        default="protected",
+        server_default="protected",
     )
 
     created_at = Column(

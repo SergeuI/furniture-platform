@@ -16,6 +16,8 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
+from database.deletion_protection import is_auto_recreate_suppressed
+
 
 FITTINGS_CATALOG_KEY_COLUMN_SQL = """
     ALTER TABLE fittings ADD COLUMN catalog_key VARCHAR
@@ -250,7 +252,7 @@ def _build_plan(connection: sqlite3.Connection) -> dict[str, object]:
         "seed_viyar_supplier": (
             not supplier_table_exists
             or not _supplier_exists(connection, VIYAR_SUPPLIER_CODE)
-        ),
+        ) and not is_auto_recreate_suppressed(connection, "supplier", VIYAR_SUPPLIER_CODE),
     }
 
 

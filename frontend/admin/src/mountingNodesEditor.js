@@ -341,14 +341,22 @@ export function resolveMountingNodeEditorContext(nodeDetail, fallbackNodeId = ""
 }
 
 export function hydrateMountingNodeEditorState(nodeDetail, fallbackNodeId = "") {
-  const context = resolveMountingNodeEditorContext(
+  const rawContext = resolveMountingNodeEditorContext(
     nodeDetail && typeof nodeDetail === "object" ? nodeDetail : null,
     fallbackNodeId,
   );
 
-  if (!context) {
+  if (!rawContext) {
     return null;
   }
+
+  const context = {
+    ...rawContext,
+    nodeDetail: {
+      ...rawContext.nodeDetail,
+      preview_mode: normalizeMountingNodePreviewState(rawContext.nodeDetail),
+    },
+  };
 
   const templateItems = Array.isArray(context.nodeDetail?.templates)
     ? context.nodeDetail.templates.map((template) => cloneMountingNodeEditorTemplate(template)).filter(Boolean)
@@ -503,6 +511,7 @@ export function getMountingNodeEditorPointDisplayLabel(point = {}, index = 0) {
 
   return `P${Number(index) + 1}`;
 }
+
 export function normalizeMountingNodePreviewMode(node = {}) {
   const mode = normalizeText(node?.preview_mode).toLowerCase();
   if (mode === "custom" && normalizeText(node?.preview_custom_image_url)) return "custom";
@@ -511,6 +520,24 @@ export function normalizeMountingNodePreviewMode(node = {}) {
 }
 
 export const normalizeMountingNodePreviewState = normalizeMountingNodePreviewMode;
+
+export function mergeMountingNodePreviewState(node = {}, mode = "auto", { resultNode = null, clearCustom = false } = {}) {
+  const current = node && typeof node === "object" ? node : {};
+  const response = resultNode && typeof resultNode === "object" ? resultNode : {};
+  const next = { ...response, ...current };
+
+  for (const key of ["preview_generated_image_url", "preview_generated_at", "preview_auto_image_url", "preview_auto_generated_at", "preview_3d_image_url", "preview_3d_generated_at", "preview_custom_image_url"]) {
+    if (Object.prototype.hasOwnProperty.call(response, key)) {
+      next[key] = response[key];
+    }
+  }
+  if (clearCustom) {
+    next.preview_custom_image_url = null;
+  }
+
+  next.preview_mode = normalizeMountingNodePreviewMode({ ...next, preview_mode: mode });
+  return next;
+}
 
 export function resolveMountingNodePreviewUrl(node = {}, fallbackUrl = "") {
   const previewMode = normalizeMountingNodePreviewMode(node);
@@ -524,7 +551,6 @@ export function resolveMountingNodePreviewUrl(node = {}, fallbackUrl = "") {
   if (previewMode === "three_d") return threeDPreviewUrl;
   return normalizeText(node?.preview_auto_image_url) || normalizeText(fallbackUrl);
 }
-
 
 export function buildMountingNodeEditorSavePayload({
   context = null,
@@ -604,6 +630,7 @@ export function buildMountingNodeEditorSavePayload({
     fastening_type: Object.prototype.hasOwnProperty.call(context || {}, "fastening_type")
       ? context.fastening_type
       : nodeDetail.fastening_type ?? null,
+    preview_mode: normalizeMountingNodePreviewState(nodeDetail),
     name: normalizeText(nodeDetail.name),
     description: normalizeOptionalText(nodeDetail.description),
     is_active: normalizeBoolean(nodeDetail.is_active, true),

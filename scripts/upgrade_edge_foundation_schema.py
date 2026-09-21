@@ -26,6 +26,7 @@ TABLES = {
             decor_code TEXT,
             color TEXT,
             material_type TEXT,
+            technology_code TEXT,
             width_mm REAL,
             thickness_mm REAL,
             finish TEXT,
@@ -167,6 +168,12 @@ INDEXES = {
     ),
 }
 
+COLUMN_ADDITIONS = {
+    "canonical_edges": {
+        "technology_code": "TEXT",
+    },
+}
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -198,6 +205,15 @@ def _driver_execute(connection, statement: str, parameters=None):
     return cursor.execute(statement, parameters)
 
 
+def _connection_in_transaction(connection) -> bool:
+    in_transaction = getattr(connection, "in_transaction", None)
+    if callable(in_transaction):
+        return bool(in_transaction())
+    if in_transaction is not None:
+        return bool(in_transaction)
+    return False
+
+
 def _table_exists(connection, table_name: str) -> bool:
     row = _driver_execute(
         connection,
@@ -214,6 +230,13 @@ def _index_exists(connection, index_name: str) -> bool:
         (index_name,),
     ).fetchone()
     return row is not None
+
+
+def _column_exists(connection, table_name: str, column_name: str) -> bool:
+    return any(
+        row[1] == column_name
+        for row in _driver_execute(connection, f"PRAGMA table_info({table_name})").fetchall()
+    )
 
 
 def _integrity_check(connection) -> str:
@@ -247,6 +270,15 @@ def _build_plan(connection) -> dict[str, object]:
             for index_name in INDEXES
             if not _index_exists(connection, index_name)
         ],
+        "missing_columns": {
+            table_name: [
+                column_name
+                for column_name in columns
+                if not _column_exists(connection, table_name, column_name)
+            ]
+            for table_name, columns in COLUMN_ADDITIONS.items()
+            if _table_exists(connection, table_name)
+        },
         "obsolete_indexes": [
             index_name
             for index_name in ("uq_material_edge_relations_identity",)
@@ -266,7 +298,7 @@ def _apply_plan(
         raise SystemExit(f"Missing prerequisite tables: {missing}")
 
     _driver_execute(connection, "PRAGMA foreign_keys = ON")
-    if not caller_owns_transaction:
+    if not caller_owns_transaction and not _connection_in_transaction(connection):
         _driver_execute(connection, "BEGIN")
 
     try:
@@ -276,6 +308,13 @@ def _apply_plan(
         for table_name, table_sql in TABLES.items():
             if table_name in plan["missing_tables"]:
                 _driver_execute(connection, table_sql)
+
+        for table_name, columns in plan["missing_columns"].items():
+            for column_name in columns:
+                _driver_execute(
+                    connection,
+                    f"ALTER TABLE {table_name} ADD COLUMN {column_name} {COLUMN_ADDITIONS[table_name][column_name]}",
+                )
 
         for index_name in plan["missing_indexes"]:
             _driver_execute(connection, INDEXES[index_name])
@@ -292,13 +331,14 @@ def _apply_plan(
 
 
 def ensure_edge_foundation_schema(connection) -> None:
+    caller_owns_transaction = _connection_in_transaction(connection)
     plan = _build_plan(connection)
     if plan["prerequisite_missing"]:
         missing = ", ".join(plan["missing_prerequisites"]) or "unknown"
         raise SystemExit(f"Missing prerequisite tables: {missing}")
 
-    if plan["missing_tables"] or plan["missing_indexes"] or plan["obsolete_indexes"]:
-        _apply_plan(connection, plan, caller_owns_transaction=False)
+    if plan["missing_tables"] or plan["missing_indexes"] or plan["missing_columns"] or plan["obsolete_indexes"]:
+        _apply_plan(connection, plan, caller_owns_transaction=caller_owns_transaction)
 
 
 def _print_plan(
@@ -316,6 +356,11 @@ def _print_plan(
         return
     print("Missing tables:", ", ".join(plan["missing_tables"]) or "none")
     print("Missing indexes:", ", ".join(plan["missing_indexes"]) or "none")
+    print("Missing columns:", ", ".join(
+        f"{table}.{column}"
+        for table, columns in plan["missing_columns"].items()
+        for column in columns
+    ) or "none")
     print("Obsolete indexes:", ", ".join(plan["obsolete_indexes"]) or "none")
 
 
@@ -329,7 +374,10 @@ def main() -> None:
     with sqlite3.connect(database_path) as connection:
         plan = _build_plan(connection)
         has_changes = (not plan["prerequisite_missing"]) and (
-            bool(plan["missing_tables"]) or bool(plan["missing_indexes"]) or bool(plan["obsolete_indexes"])
+            bool(plan["missing_tables"])
+            or bool(plan["missing_indexes"])
+            or bool(plan["missing_columns"])
+            or bool(plan["obsolete_indexes"])
         )
         backup_path = _create_backup(database_path) if args.apply and has_changes else None
 

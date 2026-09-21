@@ -20,13 +20,7 @@ _DECOR_HINTS = (
 
 _STRUCTURE_HINTS = (
     "structure",
-    "surface",
-    "структур",
-    "поверх",
-    "texture",
-    "текстур",
-    "finish",
-    "emboss",
+    "структура",
 )
 
 _MANUFACTURER_HINTS = (

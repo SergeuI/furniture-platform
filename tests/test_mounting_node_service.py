@@ -27,6 +27,62 @@ from services.mounting_node_service import MountingNodePermissionError, Mounting
 
 
 class MountingNodeServiceTests(unittest.TestCase):
+    def test_preview_fields_roundtrip_and_custom_delete(self) -> None:
+        session, engine = self._build_session()
+        try:
+            fitting = self._create_fitting(session, name="Preview fitting", code="preview-fit", article="PF")
+            service = MountingNodeService(session=session)
+            created = service.create_mounting_node({
+                "name": "Preview node",
+                "preview_mode": "custom",
+                "items": [{"fitting_id": fitting.id}],
+            })
+
+            self.assertEqual(created["preview_mode"], "auto")
+            self.assertIsNone(created["preview_generated_image_url"])
+            generated = service.set_preview_image(
+                created["id"],
+                source_type="generated",
+                image_url="/uploads/mounting-node-previews/generated.png",
+            )
+            custom = service.set_preview_image(
+                created["id"],
+                source_type="custom",
+                image_url="/uploads/mounting-node-previews/custom.png",
+            )
+            self.assertEqual(generated["preview_3d_image_url"], "/uploads/mounting-node-previews/generated.png")
+            self.assertIsNotNone(generated["preview_3d_generated_at"])
+            self.assertIsNone(generated["preview_generated_image_url"])
+            self.assertEqual(generated["preview_mode"], "three_d")
+            self.assertEqual(custom["preview_custom_image_url"], "/uploads/mounting-node-previews/custom.png")
+            self.assertEqual(custom["preview_mode"], "custom")
+
+            deleted = service.delete_custom_preview(created["id"])
+            self.assertIsNone(deleted["preview_custom_image_url"])
+            self.assertEqual(deleted["preview_3d_image_url"], "/uploads/mounting-node-previews/generated.png")
+            self.assertEqual(deleted["preview_mode"], "auto")
+
+            auto = service.set_preview_image(created["id"], source_type="auto", image_url="/auto.png")
+            self.assertEqual(auto["preview_auto_image_url"], "/auto.png")
+            self.assertIsNotNone(auto["preview_auto_generated_at"])
+            self.assertEqual(auto["preview_3d_image_url"], "/uploads/mounting-node-previews/generated.png")
+            three_d = service.set_preview_image(created["id"], source_type="three_d", image_url="/3d.png")
+            self.assertEqual(three_d["preview_3d_image_url"], "/3d.png")
+            self.assertEqual(three_d["preview_auto_image_url"], "/auto.png")
+            self.assertEqual(three_d["preview_mode"], "three_d")
+            service.set_preview_image(created["id"], source_type="custom", image_url="/another-custom.png")
+            independent_delete = service.delete_custom_preview(created["id"])
+            self.assertEqual(independent_delete["preview_auto_image_url"], "/auto.png")
+            self.assertEqual(independent_delete["preview_3d_image_url"], "/3d.png")
+            self.assertEqual(independent_delete["preview_mode"], "auto")
+            self.assertEqual(service.update_mounting_node(created["id"], {"preview_mode": "custom"})["preview_mode"], "auto")
+            self.assertEqual(service.update_mounting_node(created["id"], {"preview_mode": "three_d"})["preview_mode"], "three_d")
+            empty = service.create_mounting_node({"name": "No 3D", "preview_mode": "three_d", "items": [{"fitting_id": fitting.id}]})
+            self.assertEqual(empty["preview_mode"], "auto")
+        finally:
+            session.close()
+            engine.dispose()
+
     def test_fastening_type_roundtrip_and_legacy_snapshot(self) -> None:
         session, engine = self._build_session()
         try:

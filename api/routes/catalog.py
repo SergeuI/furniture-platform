@@ -253,6 +253,7 @@ from database.repositories.material_import_job_repository import (
 from database.repositories.audit_log_repository import (
     create_audit_log
 )
+from database.deletion_protection import canonical_edge_identity_key
 from database.repositories.user_repository import (
     update_user_viyar_session,
 )
@@ -288,6 +289,7 @@ from services.material_identity_validation_service import (
 from services.material_catalog_service import (
     CITY_COOKIES as MATERIAL_CITY_COOKIES,
     detect_material_source_site,
+    get_material_import_progress,
     get_effective_material_city,
     fetch_material_by_source_live_traced,
     fetch_material_by_source_url_live_traced,
@@ -297,9 +299,11 @@ from services.material_catalog_service import (
     _material_perf_stage,
     material_performance_endpoint,
     material_performance_update,
+    _request_id_for_performance,
     is_material_gallery_candidate_url,
     normalize_material_gallery_image_url,
     prefetch_material_image_cache,
+    set_material_import_progress,
     warm_material_image_cache_for_item,
     resolve_material_gallery_image_payload,
     resolve_material_image_payload,
@@ -1038,39 +1042,425 @@ async def _refresh_material_gallery_for_item(
     return refreshed_item, summary, None
 
 
+def _friendly_recommended_edges_error(error) -> str | None:
+    if not error:
+        return None
+    message = str(error).strip()
+    if message in {"preview_incomplete", "preview_result_incomplete"}:
+        return "рекомендовані крайки не додані"
+    if "viyar_email" in message or "NoneType" in message or message == "viyar_credentials_missing":
+        return "не налаштовані облікові дані VIYAR"
+    return "технічна помилка під час додавання рекомендованих крайок"
+
+
+def _format_recommended_edges_preview_incomplete_warning(summary: MaterialRecommendedEdgesSummarySchema) -> str:
+    total = int(summary.total or summary.discovered or 0)
+    result_count = int(summary.result_count or 0)
+    parsed = int(summary.parsed or 0)
+    failed = int(summary.failed or 0)
+    needs_review = int(summary.needs_review or 0)
+    if summary.reason == "preview_result_incomplete":
+        return (
+            "Матеріал створено, але рекомендовані крайки не додані: "
+            f"preview неповний, отримано {result_count} результатів з {total}."
+        )
+    return (
+        "Матеріал створено, але рекомендовані крайки не додані: "
+        f"готово {parsed} з {total}; {failed} не вдалося отримати, "
+        f"{needs_review} потребують перевірки."
+    )
+
+
+def _format_recommended_edges_partial_success(summary: MaterialRecommendedEdgesSummarySchema) -> str:
+    total = int(summary.total or summary.discovered or 0)
+    parsed = int(summary.parsed or 0)
+    failed = int(summary.failed or 0)
+    needs_review = int(summary.needs_review or 0)
+    return (
+        "Матеріал створено. "
+        f"Додано рекомендованих крайок: {parsed} з {total}. "
+        f"{failed} не вдалося отримати. "
+        f"{needs_review} потребує перевірки."
+    )
+
+
 async def _refresh_material_recommended_edges_for_item(
     *,
     material: dict,
     material_id: int,
     current_user,
+    selected_city: str | None = None,
+    cookie_override: str | None = None,
+    progress_request_id: str | None = None,
+    final_diagnostic_callback=None,
 ) -> tuple[MaterialRecommendedEdgesSummarySchema, str | None, list[dict[str, object]]]:
     source_site = detect_material_source_site(material.get("source_url"))
     summary = MaterialRecommendedEdgesSummarySchema()
     warning = None
     review_items: list[dict[str, object]] = []
 
+    def update_progress(**fields: object) -> None:
+        if progress_request_id:
+            set_material_import_progress(
+                progress_request_id,
+                **{key.removeprefix("progress_"): value for key, value in fields.items() if key.startswith("progress_")},
+            )
+        else:
+            material_performance_update(**fields)
+
+    async def edge_progress_callback(event: dict[str, object]) -> None:
+        phase = str(event.get("phase") or "")
+        checked = event.get("checked")
+        total = event.get("total")
+        supplier_article = str(event.get("supplier_article") or "")
+        logger.info(
+            "[MATERIAL_EDGE_PROGRESS] request_id=%s material_id=%s phase=%s supplier_article=%s checked=%s total=%s elapsed_ms=%s",
+            progress_request_id or _request_id_for_performance(),
+            material_id,
+            phase,
+            supplier_article,
+            checked if checked is not None else "",
+            total if total is not None else "",
+            event.get("elapsed_ms", ""),
+        )
+        if phase == "recommendations_found":
+            update_progress(
+                progress_phase="recommendations_found",
+                progress_status="running",
+                progress_discovered=int(event.get("total") or 0),
+            )
+        elif phase == "edge_detail":
+            update_progress(
+                progress_phase="edge_details",
+                progress_status="running",
+                progress_discovered=int(event.get("total") or 0),
+                progress_checked=int(event.get("checked") or 0),
+            )
+        elif phase == "canonical_preflight":
+            update_progress(
+                progress_phase="canonical_preflight",
+                progress_status="running",
+                progress_discovered=int(event.get("total") or 0),
+                progress_checked=int(event.get("total") or 0),
+                progress_parsed=int(event.get("count") or 0),
+                progress_failed=int(event.get("failed") or 0),
+                progress_needs_review=int(event.get("needs_review") or 0),
+            )
+        elif phase == "persisting":
+            update_progress(
+                progress_phase="recommended_persisting",
+                progress_status="running",
+                progress_total=int(event.get("total") or 0),
+                progress_checked=int(event.get("total") or 0),
+                progress_parsed=int(event.get("count") or 0),
+                progress_persisting=int(event.get("count") or 0),
+            )
+
     if source_site == "viyar" and material.get("source_url"):
+        update_progress(
+            progress_phase="recommended_search",
+            progress_status="running",
+        )
         try:
+            resolved_cookie_override = cookie_override
+            if resolved_cookie_override is None and current_user is not None:
+                resolved_cookie_override = await _resolve_viyar_cookie_for_user(current_user)
             result = await persist_viyar_recommended_edges_for_material_import(
                 material_id=int(material_id),
                 material_source_url=material.get("source_url"),
-                selected_city=(current_user.city or "").strip() or None,
-                cookie_override=await _resolve_viyar_cookie_for_user(current_user),
+                selected_city=(selected_city or getattr(current_user, "city", "") or "").strip() or None,
+                cookie_override=resolved_cookie_override,
                 relation_source_url=material.get("source_url"),
+                progress_callback=edge_progress_callback,
+                request_id=progress_request_id or _request_id_for_performance(),
             )
+            if final_diagnostic_callback is not None:
+                try:
+                    callback_result = final_diagnostic_callback(result)
+                    if asyncio.iscoroutine(callback_result):
+                        await callback_result
+                except Exception:  # pragma: no cover - diagnostics must not affect import behavior
+                    logger.exception(
+                        "recommended-edge final diagnostic write failed request_id=%s material_id=%s",
+                        progress_request_id or "unknown",
+                        material_id,
+                    )
+            persistence = result.get("persistence") or {}
+            if not persistence.get("success", True):
+                failed_item = (persistence.get("items") or [])[:1]
+                failed_preview = (failed_item[0].get("preview_item") if failed_item else None) or {}
+                failed_canonical = failed_preview.get("canonical_candidate") or {}
+                logger.error(
+                    "[MATERIAL_EDGE_PERSISTENCE] request_id=%s material_id=%s phase=%s reason=%s failed_index=%s failed_supplier_article=%s failed_manufacturer_article=%s manufacturer=%s exception_type=%s rollback_performed=%s persisted_count=%s",
+                    progress_request_id or _request_id_for_performance(),
+                    material_id,
+                    persistence.get("failed_phase") or "validation",
+                    persistence.get("reason") or result.get("error") or "persistence_failed",
+                    persistence.get("failed_index"),
+                    persistence.get("failed_supplier_article"),
+                    persistence.get("failed_manufacturer_article") or failed_canonical.get("manufacturer_article"),
+                    failed_canonical.get("manufacturer"),
+                    persistence.get("exception_type"),
+                    persistence.get("rollback_performed"),
+                    persistence.get("persisted_count", 0),
+                )
             summary = MaterialRecommendedEdgesSummarySchema(**(result.get("summary") or {}))
-            warning = result.get("error")
+            if result.get("error") in {"preview_incomplete", "preview_result_incomplete"} or summary.reason in {"preview_incomplete", "preview_result_incomplete"}:
+                warning = _format_recommended_edges_preview_incomplete_warning(summary)
+            elif summary.status == "completed_with_warnings":
+                warning = _format_recommended_edges_partial_success(summary)
+            else:
+                warning = _friendly_recommended_edges_error(result.get("error") or persistence.get("reason"))
             review_items = list(result.get("review_items") or [])
+            progress_fields = {
+                "progress_phase": "recommended_complete",
+                "progress_status": "failed" if summary.status == "failed" else "warning" if summary.status == "completed_with_warnings" else "done",
+                "progress_total": summary.total or summary.discovered,
+                "progress_checked": summary.total or summary.discovered,
+                "progress_parsed": summary.parsed,
+                "progress_discovered": summary.discovered or summary.total,
+                "progress_needs_review": summary.needs_review,
+                "progress_failed": summary.failed,
+                "progress_error": warning,
+                "progress_reason": summary.reason,
+            }
+            if result.get("persistence") is not None:
+                progress_fields["progress_persisted"] = summary.persisted
+            update_progress(**progress_fields)
         except Exception as error:  # pragma: no cover - defensive isolation
-            warning = str(error) or "Unable to persist recommended edges"
+            warning = _friendly_recommended_edges_error(error)
             summary = MaterialRecommendedEdgesSummarySchema(
                 discovered=0,
                 persisted=0,
                 needs_review=0,
                 failed=1,
+                status="failed",
+                reason="preview_incomplete",
+            )
+            update_progress(
+                progress_phase="recommended_complete",
+                progress_status="warning",
+                progress_discovered=0,
+                progress_persisted=0,
+                progress_needs_review=0,
+                progress_failed=1,
+                progress_error=warning,
             )
 
     return summary, warning, review_items
+
+
+def _build_recommended_edge_final_diagnostic(
+    *,
+    result: dict,
+    material: dict,
+    material_id: int,
+    request_id: str,
+) -> dict:
+    """Keep only restart-safe import metadata, never raw browser payloads."""
+    preview = result.get("preview") or {}
+    preview_items = list(preview.get("items") or [])
+    summary = result.get("summary") or {}
+    persistence = result.get("persistence") or {}
+    persistence_items = list(persistence.get("items") or [])
+    persistence_counts = persistence.get("counts") or {}
+
+    def candidate_summary(item: dict, *, stage: str | None = None, reason: str | None = None) -> dict:
+        discovered = item.get("discovered_card") or {}
+        canonical = item.get("canonical_candidate") or {}
+        supplier = item.get("supplier_offer_candidate") or {}
+        conflict = item.get("preflight_conflict") or {}
+        return {
+            "supplier_article": discovered.get("supplier_article") or discovered.get("article") or supplier.get("article"),
+            "title": discovered.get("title") or discovered.get("name") or canonical.get("name"),
+            "manufacturer": canonical.get("manufacturer"),
+            "manufacturer_article": canonical.get("manufacturer_article"),
+            "decor_code": canonical.get("decor_code"),
+            "material_type": canonical.get("material_type"),
+            "technology_code": canonical.get("technology_code"),
+            "width": canonical.get("width_mm"),
+            "thickness": canonical.get("thickness_mm"),
+            "source_url": discovered.get("source_url") or supplier.get("source_url"),
+            "stage": stage or item.get("stage") or "canonical_preflight",
+            "reason_code": reason or item.get("reason") or item.get("error") or "needs_review",
+            "safe_details": {
+                "missing_fields": list(item.get("missing_fields") or []),
+                "conflicting_fields": list(conflict.get("incompatible_fields") or []),
+            },
+            "conflicting_edge_id": conflict.get("conflicting_edge_id") or item.get("conflicting_edge_id"),
+            "conflicting_offer_id": conflict.get("conflicting_offer_id") or item.get("conflicting_offer_id"),
+        }
+
+    review_candidates = [
+        candidate_summary(item)
+        for item in preview_items
+        if str(item.get("status") or "").strip().lower() in {"failed", "needs_review"}
+    ]
+    persisted_candidates = []
+    for persisted in persistence_items:
+        preview_item = persisted.get("preview_item") or {}
+        canonical = preview_item.get("canonical_candidate") or {}
+        supplier = preview_item.get("supplier_offer_candidate") or {}
+        persisted_candidates.append(
+            {
+                "supplier_article": supplier.get("article"),
+                "edge_id": persisted.get("edge_id"),
+                "offer_id": persisted.get("offer_id"),
+                "canonical_identity": {
+                    "manufacturer_id": persisted.get("manufacturer_id"),
+                    "manufacturer_article": canonical.get("manufacturer_article"),
+                    "material_type": canonical.get("material_type"),
+                    "technology_code": canonical.get("technology_code"),
+                    "width": canonical.get("width_mm"),
+                    "thickness": canonical.get("thickness_mm"),
+                },
+                "result": "created" if persisted.get("status") == "persisted" else "reused",
+            }
+        )
+
+    ready_to_persist = int(persistence_counts.get("items") or 0)
+    if not ready_to_persist:
+        ready_to_persist = sum(
+            1 for item in preview_items
+            if str(item.get("status") or "").strip().lower() == "parsed"
+        )
+    return {
+        "request_id": request_id,
+        "material_id": int(material_id),
+        "material_article": material.get("article"),
+        "source_url": material.get("source_url"),
+        "final_status": summary.get("status") or ("failed" if result.get("error") else "completed"),
+        "reason_code": summary.get("reason") or result.get("error"),
+        "counts": {
+            "recommendations_found": int(summary.get("total") or summary.get("discovered") or len(preview_items)),
+            "parsed": int(summary.get("parsed") or 0),
+            "ready_to_persist": ready_to_persist,
+            "persisted": int(summary.get("persisted") or persistence_counts.get("persisted") or 0),
+            "failed": int(summary.get("failed") or 0),
+            "needs_review": int(summary.get("needs_review") or 0),
+        },
+        "failed_or_needs_review": review_candidates,
+        "persisted_candidates": persisted_candidates,
+    }
+
+
+async def _persist_recommended_edge_final_diagnostic(
+    *,
+    result: dict,
+    material: dict,
+    material_id: int,
+    request_id: str,
+) -> None:
+    if not result.get("preview"):
+        return
+    diagnostic = _build_recommended_edge_final_diagnostic(
+        result=result,
+        material=material,
+        material_id=material_id,
+        request_id=request_id,
+    )
+    await asyncio.to_thread(
+        create_audit_log,
+        actor_user_id="system",
+        actor_email="",
+        action="catalog.material_recommended_edges_completed",
+        entity_type="material",
+        entity_id=str(material.get("article") or material_id),
+        details=diagnostic,
+    )
+
+
+async def _run_material_recommended_edges_background(
+    *,
+    material: dict,
+    material_id: int,
+    selected_city: str,
+    cookie_override: str | None,
+    request_id: str,
+) -> None:
+    """Enrich an already-created material without holding the POST request open."""
+
+    try:
+        summary, warning, _review_items = await _refresh_material_recommended_edges_for_item(
+            material=material,
+            material_id=material_id,
+            current_user=None,
+            selected_city=selected_city,
+            cookie_override=cookie_override,
+            progress_request_id=request_id,
+            final_diagnostic_callback=lambda result: _persist_recommended_edge_final_diagnostic(
+                result=result,
+                material=material,
+                material_id=material_id,
+                request_id=request_id,
+            ),
+        )
+        set_material_import_progress(
+            request_id,
+            status="failed" if summary.status == "failed" else "completed",
+            phase="complete",
+            stage="complete",
+            discovered=summary.discovered,
+            parsed=summary.parsed,
+            persisted=summary.persisted,
+            needs_review=summary.needs_review,
+            failed=summary.failed,
+            error=warning if summary.status == "completed_with_warnings" else warning or summary.reason,
+            reason=summary.reason,
+        )
+    except Exception as error:  # pragma: no cover - defensive background isolation
+        try:
+            await _persist_recommended_edge_final_diagnostic(
+                result={
+                    "preview": {"items": []},
+                    "summary": {
+                        "status": "failed",
+                        "reason": "background_task_failed",
+                        "failed": 1,
+                    },
+                    "error": str(error),
+                },
+                material=material,
+                material_id=material_id,
+                request_id=request_id,
+            )
+        except Exception:
+            logger.exception(
+                "recommended-edge final diagnostic fallback failed request_id=%s material_id=%s",
+                request_id,
+                material_id,
+            )
+        set_material_import_progress(
+            request_id,
+            status="failed",
+            phase="complete",
+            stage="complete",
+            discovered=0,
+            parsed=0,
+            persisted=0,
+            needs_review=0,
+            failed=1,
+            error=_friendly_recommended_edges_error(error),
+            reason="preview_incomplete",
+        )
+
+
+@router.get("/materials/import-progress/{request_id}")
+async def get_material_import_progress_route(
+    request_id: str,
+    current_user = Depends(require_roles([
+        "admin",
+        "trial",
+        "premium",
+        "pro",
+        "free",
+    ])),
+):
+    _ensure_material_feature_access(current_user, "materials.create")
+    progress = get_material_import_progress(request_id)
+    if not progress:
+        return {"success": False, "error": "Material import progress not found"}
+    return {"success": True, **progress}
 
 
 @router.post(
@@ -1792,6 +2182,7 @@ def _serialize_edge_catalog_item(
         "decor_code": edge.decor_code,
         "color": edge.color,
         "material_type": edge.material_type,
+        "technology_code": edge.technology_code,
         "width_mm": edge.width_mm,
         "thickness_mm": edge.thickness_mm,
         "finish": edge.finish,
@@ -1945,7 +2336,7 @@ async def list_materials_route(
         city=selected_city,
         viewer_user_id=str(current_user.id),
         viewer_role=current_user.role,
-        ownership_scope=ownership_scope if current_user.role == "admin" else None,
+        ownership_scope=ownership_scope,
     )
 
     # Прогрів картинок тимчасово вимкнено для діагностики швидкодії.
@@ -2157,6 +2548,7 @@ async def create_edge_route(
             decor_code=_normalize_admin_text(payload.decor_code) or None,
             color=_normalize_admin_text(payload.color) or None,
             material_type=_normalize_admin_text(payload.material_type) or None,
+            technology_code=_normalize_admin_text(payload.technology_code) or None,
             width_mm=float(payload.width_mm),
             thickness_mm=float(payload.thickness_mm),
             finish=_normalize_admin_text(payload.finish) or None,
@@ -2285,7 +2677,7 @@ async def update_edge_route(
                 }
             update_data["name"] = name
 
-        for field in ("manufacturer_article", "decor_code", "color", "material_type", "finish"):
+        for field in ("manufacturer_article", "decor_code", "color", "material_type", "technology_code", "finish"):
             value = getattr(payload, field)
             if value is not None:
                 update_data[field] = _normalize_admin_text(value) or None
@@ -2423,6 +2815,18 @@ async def delete_edge_route(
         repository.delete_edge(edge)
         db.commit()
 
+        create_audit_log(
+            actor_user_id=current_user.id,
+            actor_email=current_user.email,
+            action="catalog.edge_deleted",
+            entity_type="canonical_edge",
+            entity_id=canonical_edge_identity_key(edge),
+            details={
+                "edge_id": int(edge.id),
+                "manufacturer_article": edge.manufacturer_article,
+            },
+        )
+
         return {
             "success": True,
             "item": deleted_item,
@@ -2555,11 +2959,13 @@ async def get_material_edge_image_route(
 @router.post(
     "/materials",
     response_model=MaterialCatalogOperationResponseSchema,
+    response_model_exclude_none=True,
 )
 @material_performance_endpoint
 async def create_material_route(
 
     payload: MaterialCatalogCreateSchema,
+    background_tasks: BackgroundTasks,
     current_user = Depends(require_material_editor)
 ):
 
@@ -2848,6 +3254,37 @@ async def create_material_route(
                 base_item=item,
             ) or item
 
+            recommended_edges_summary = None
+            recommended_edges_warning = None
+            if source_site == "viyar" and material.get("source_url"):
+                if payload.import_recommended_edges:
+                    request_id = _request_id_for_performance() or str(uuid4())
+                    recommended_edges_summary = MaterialRecommendedEdgesSummarySchema(
+                        status="processing",
+                        request_id=request_id,
+                    )
+                    material_performance_update(
+                        progress_background_pending=True,
+                        progress_phase="material_saved",
+                        progress_status="processing",
+                    )
+                    background_tasks.add_task(
+                        _run_material_recommended_edges_background,
+                        material={
+                            "source_url": material.get("source_url") or effective_source_url,
+                            "article": material.get("article"),
+                        },
+                        material_id=int(item["id"]),
+                        selected_city=selected_city,
+                        cookie_override=cookie_override,
+                        request_id=request_id,
+                    )
+                else:
+                    recommended_edges_summary = MaterialRecommendedEdgesSummarySchema(
+                        status="skipped",
+                        reason="user_disabled",
+                    )
+
             create_audit_log(
                 actor_user_id=current_user.id,
                 actor_email=current_user.email,
@@ -2861,7 +3298,11 @@ async def create_material_route(
                     "source_url": item.get("source_url"),
                     "is_default": effective_is_default,
                     "prices_cities_count": len(prices_by_city),
-                    "recommended_edges": None,
+                    "recommended_edges": (
+                        recommended_edges_summary.model_dump()
+                        if recommended_edges_summary
+                        else None
+                    ),
                 },
             )
 
@@ -2870,8 +3311,12 @@ async def create_material_route(
                 "item": item,
                 "selected_city": selected_city,
                 "material_identity_validation": identity_validation,
-                "error": None,
-                "recommended_edges": None,
+                "error": recommended_edges_warning,
+                "recommended_edges": (
+                    recommended_edges_summary.model_dump()
+                    if recommended_edges_summary
+                    else None
+                ),
             }
         except Exception as error:
             error_message = _format_source_url_import_error(error, source_site)
@@ -3328,9 +3773,13 @@ async def refresh_material_recommended_edges_route(
                 selected_city=(current_user.city or "").strip() or None,
                 cookie_override=await _resolve_viyar_cookie_for_user(current_user),
                 relation_source_url=material.get("source_url"),
+                request_id=_request_id_for_performance(),
             )
             summary = MaterialRecommendedEdgesSummarySchema(**(result.get("summary") or {}))
-            warning = result.get("error")
+            if result.get("error") in {"preview_incomplete", "preview_result_incomplete"} or summary.reason in {"preview_incomplete", "preview_result_incomplete"}:
+                warning = _format_recommended_edges_preview_incomplete_warning(summary)
+            else:
+                warning = _friendly_recommended_edges_error(result.get("error"))
             review_items = list(result.get("review_items") or [])
         except Exception as error:  # pragma: no cover - defensive isolation
             warning = str(error) or "Unable to persist recommended edges"
@@ -4982,6 +5431,15 @@ async def delete_fitting_supplier_route(
                 "error": "Unable to delete supplier",
             }
 
+        create_audit_log(
+            actor_user_id=current_user.id,
+            actor_email=current_user.email,
+            action="admin.entity_deleted",
+            entity_type="supplier",
+            entity_id=item_payload.get("code") or str(supplier_id),
+            details=item_payload,
+        )
+
         return {
             "success": True,
             "item": item_payload,
@@ -5157,7 +5615,25 @@ async def delete_fitting_product_route(
         deleted_linked_items = delete_fittings_exact(linked_ids, db=db) if linked_ids else []
 
         deleted = get_fitting_product_by_id(item_id)
-        db.delete(product_row)
+        # Bulk deletion leaves loaded linked rows in the identity map; detach
+        # them before deleting the parent so the UoW cannot resurrect them.
+        db.expunge_all()
+        if linked_ids:
+            db.execute(
+                FittingSupplierOfferModel.__table__.delete().where(
+                    FittingSupplierOfferModel.fitting_id.in_(linked_ids),
+                )
+            )
+            db.execute(
+                FittingModel.__table__.delete().where(
+                    FittingModel.id.in_(linked_ids),
+                )
+            )
+        # Use a bulk delete after linked fittings were removed in bulk. This
+        # avoids the ORM relationship re-attaching a deleted fitting during UoW flush.
+        db.query(FittingProductModel).filter(
+            FittingProductModel.id == int(item_id),
+        ).delete(synchronize_session=False)
         db.commit()
     except Exception:
         db.rollback()
@@ -5404,6 +5880,15 @@ async def delete_fitting_manufacturer_route(
     if not deleted:
         return {"success": False, "error": "Не вдалося видалити виробника"}
 
+    create_audit_log(
+        actor_user_id=current_user.id,
+        actor_email=current_user.email,
+        action="admin.entity_deleted",
+        entity_type="fitting_manufacturer",
+        entity_id=deleted.get("code") or str(item_id),
+        details=deleted,
+    )
+
     return {"success": True, "item": deleted}
 
 
@@ -5548,6 +6033,15 @@ async def delete_fitting_series_route(
     deleted = delete_fitting_series(item_id)
     if not deleted:
         return {"success": False, "error": "Не вдалося видалити серію"}
+
+    create_audit_log(
+        actor_user_id=current_user.id,
+        actor_email=current_user.email,
+        action="admin.entity_deleted",
+        entity_type="fitting_series",
+        entity_id=deleted.get("code") or str(item_id),
+        details=deleted,
+    )
 
     return {"success": True, "item": deleted}
 
@@ -5704,6 +6198,15 @@ async def delete_fitting_category_route(
     deleted = delete_fitting_category(item_id)
     if not deleted:
         return {"success": False, "error": "Не вдалося видалити категорію"}
+
+    create_audit_log(
+        actor_user_id=current_user.id,
+        actor_email=current_user.email,
+        action="admin.entity_deleted",
+        entity_type="fitting_category",
+        entity_id=deleted.get("code") or str(item_id),
+        details=deleted,
+    )
 
     return {"success": True, "item": deleted}
 
@@ -5906,6 +6409,15 @@ async def delete_material_catalog_category_route(
     if not deleted:
         return {"success": False, "error": "Не вдалося видалити категорію"}
 
+    create_audit_log(
+        actor_user_id=current_user.id,
+        actor_email=current_user.email,
+        action="admin.entity_deleted",
+        entity_type="material_category",
+        entity_id=deleted.get("code") or str(item_id),
+        details=deleted,
+    )
+
     return {"success": True, "item": deleted}
 
 
@@ -6087,6 +6599,15 @@ async def delete_material_catalog_manufacturer_route(
     deleted = delete_material_manufacturer(item_id)
     if not deleted:
         return {"success": False, "error": "Не вдалося видалити виробника"}
+
+    create_audit_log(
+        actor_user_id=current_user.id,
+        actor_email=current_user.email,
+        action="admin.entity_deleted",
+        entity_type="material_manufacturer",
+        entity_id=deleted.get("code") or str(item_id),
+        details=deleted,
+    )
 
     return {"success": True, "item": deleted}
 
@@ -7343,6 +7864,16 @@ async def update_viyar_service_route(
             "success": False,
             "error": "Service catalog item not found"
         }
+
+    if payload.is_active is False:
+        create_audit_log(
+            actor_user_id=current_user.id,
+            actor_email=current_user.email,
+            action="admin.entity_deactivated",
+            entity_type="service_catalog_item",
+            entity_id=f"{item.get('source')}:{item.get('external_code')}",
+            details=item,
+        )
 
     create_audit_log(
 

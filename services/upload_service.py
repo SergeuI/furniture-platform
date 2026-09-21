@@ -13,6 +13,7 @@ MANUFACTURER_LOGO_UPLOAD_ROOT = Path("data/uploads/fitting-manufacturer-logos")
 MATERIAL_MANUFACTURER_LOGO_UPLOAD_ROOT = Path("data/uploads/material-manufacturer-logos")
 MATERIAL_CATEGORY_IMAGE_UPLOAD_ROOT = Path("data/uploads/material-category-images")
 EDGE_IMAGE_UPLOAD_ROOT = Path("data/uploads/edge-images")
+MOUNTING_NODE_PREVIEW_UPLOAD_ROOT = Path("data/uploads/mounting-node-previews")
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".pdf"}
 ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 ALLOWED_IMAGE_MIME_TYPES = {"image/jpeg", "image/png", "image/webp"}
@@ -150,6 +151,14 @@ async def save_edge_image_file(file: UploadFile) -> str:
         file,
         upload_root=EDGE_IMAGE_UPLOAD_ROOT,
         url_prefix="/uploads/edge-images",
+    )
+
+
+async def save_mounting_node_preview_file(file: UploadFile) -> str:
+    return await _save_uploaded_image_file(
+        file,
+        upload_root=MOUNTING_NODE_PREVIEW_UPLOAD_ROOT,
+        url_prefix="/uploads/mounting-node-previews",
     )
 
 

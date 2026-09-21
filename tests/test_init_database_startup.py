@@ -28,6 +28,8 @@ class InitDatabaseStartupTests(unittest.TestCase):
         ) as ensure_mounting_schemes_schema, patch(
             "database.init_db.ensure_edge_foundation_schema",
         ) as ensure_edge_foundation_schema, patch(
+            "database.init_db.ensure_edge_lifecycle_schema",
+        ) as ensure_edge_lifecycle_schema, patch(
             "database.init_db._backfill_mounting_node_versions",
         ) as backfill_mounting_node_versions, patch(
             "database.init_db.seed_demo_access_users",
@@ -49,6 +51,7 @@ class InitDatabaseStartupTests(unittest.TestCase):
         ensure_fitting_taxonomy_schema.assert_called_once()
         ensure_material_catalog_v2_schema.assert_called_once()
         ensure_edge_foundation_schema.assert_called_once()
+        ensure_edge_lifecycle_schema.assert_called_once()
         ensure_mounting_schemes_schema.assert_called_once()
         backfill_mounting_node_versions.assert_called_once()
         seed_demo_access_users.assert_called_once()
@@ -75,6 +78,8 @@ class InitDatabaseStartupTests(unittest.TestCase):
             "database.init_db.ensure_mounting_schemes_schema",
         ), patch(
             "database.init_db.ensure_edge_foundation_schema",
+        ), patch(
+            "database.init_db.ensure_edge_lifecycle_schema",
         ), patch(
             "database.init_db._backfill_mounting_node_versions",
         ), patch(

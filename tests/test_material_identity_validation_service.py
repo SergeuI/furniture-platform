@@ -168,7 +168,7 @@ class MaterialIdentityValidationServiceTests(unittest.TestCase):
                     "brand": "Kronospan",
                     "category": "dsp",
                 },
-                "needs_review",
+                "compatible",
             ),
         ]
 
@@ -214,8 +214,63 @@ class MaterialIdentityValidationServiceTests(unittest.TestCase):
             },
             expected_category="dsp",
         )
-        self.assertEqual(needs_review["status"], "needs_review")
+        self.assertEqual(needs_review["status"], "compatible")
         self.assertIn("structure", needs_review["missing_fields"])
+
+    def test_viyar_texture_is_enrichment_not_structure_conflict(self) -> None:
+        result = validate_material_supplier_offer_identity(
+            {
+                "article": "69962",
+                "name": "ДСП лам. Kronospan K351 RT Іржавий камінь",
+                "dimensions": None,
+                "thickness": "18 мм",
+                "source": "viyar",
+                "category": "dsp",
+            },
+            {
+                "article": "69962",
+                "name": "ДСП Kronospan K351 RT Іржавий камінь 2800x2070x18 мм",
+                "dimensions": "2800x2070x18 мм",
+                "thickness": "18 мм",
+                "brand": "Kronospan",
+                "category": "dsp",
+                "characteristics": {
+                    "Текстура поверхні (лицьова)": "SN",
+                    "Товщина, мм": "18",
+                    "Ширина, мм": "2070",
+                    "Довжина, мм": "2800",
+                },
+            },
+            expected_category="dsp",
+        )
+
+        self.assertEqual(result["status"], "compatible")
+        self.assertNotIn("structure", {item["field"] for item in result["conflicts"]})
+
+    def test_explicit_structure_conflict_remains_blocked(self) -> None:
+        result = validate_material_supplier_offer_identity(
+            {
+                "name": "ДСП лам. Kronospan K351 RT Іржавий камінь",
+                "thickness": "18 мм",
+                "dimensions": "2800x2070",
+                "category": "dsp",
+            },
+            {
+                "name": "ДСП Kronospan K351 RT Іржавий камінь 2800x2070x18 мм",
+                "thickness": "18 мм",
+                "dimensions": "2800x2070x18 мм",
+                "brand": "Kronospan",
+                "category": "dsp",
+                "characteristics": {"Structure": "DIFFERENT"},
+            },
+            expected_category="dsp",
+        )
+
+        self.assertEqual(result["status"], "conflict")
+        self.assertEqual(
+            [item["field"] for item in result["conflicts"]],
+            ["structure"],
+        )
 
 
 if __name__ == "__main__":

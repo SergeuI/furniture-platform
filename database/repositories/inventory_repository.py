@@ -7,7 +7,7 @@ from typing import Sequence
 from urllib.parse import urlparse
 from uuid import uuid4
 
-from sqlalchemy import func, text
+from sqlalchemy import func, or_, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import load_only, object_session, selectinload
 
@@ -68,6 +68,7 @@ from database.session import (
 from database.repositories.fitting_foundation_repository import (
     FittingFoundationRepository,
 )
+from database.deletion_protection import is_auto_recreate_suppressed
 from services.fitting_image_gallery_service import (
     PreparedFittingGalleryImage,
 )
@@ -3087,22 +3088,55 @@ def list_materials(
                     MaterialModel.owner_user_id != _normalize_fitting_value(viewer_user_id),
                 )
         elif viewer_role and viewer_role != "admin":
-            query = query.filter(
-                (
+            if ownership_scope is None:
+                query = query.filter(
                     (
-                        MaterialModel.is_default.is_(True)
-                        & MaterialModel.owner_user_id.is_(None)
+                        (
+                            MaterialModel.is_default.is_(True)
+                            & MaterialModel.owner_user_id.is_(None)
+                        )
+                        | (MaterialModel.owner_user_id == _normalize_fitting_value(viewer_user_id))
+                        | MaterialModel.article.in_(sorted(linked_article_ids))
                     )
-                    | (MaterialModel.owner_user_id == _normalize_fitting_value(viewer_user_id))
-                    | MaterialModel.article.in_(sorted(linked_article_ids))
                 )
-            )
+            elif normalized_ownership_scope == "system":
+                query = query.filter(
+                    MaterialModel.is_default.is_(True),
+                    MaterialModel.owner_user_id.is_(None),
+                )
+            elif normalized_ownership_scope == "mine":
+                query = query.filter(
+                    MaterialModel.is_default.is_(False),
+                    MaterialModel.owner_user_id == _normalize_fitting_value(viewer_user_id),
+                )
+            else:
+                query = query.filter(
+                    (
+                        (
+                            MaterialModel.is_default.is_(True)
+                            & MaterialModel.owner_user_id.is_(None)
+                        )
+                        | (MaterialModel.owner_user_id == _normalize_fitting_value(viewer_user_id))
+                    )
+                )
 
         if search:
             search_value = f"%{search.strip()}%"
+            manufacturer_match = db.query(MaterialManufacturerModel.id).filter(
+                MaterialManufacturerModel.id == MaterialModel.manufacturer_id,
+                MaterialManufacturerModel.name.ilike(search_value),
+            ).exists()
+            supplier_article_match = db.query(MaterialSupplierOfferModel.id).filter(
+                MaterialSupplierOfferModel.material_id == MaterialModel.id,
+                MaterialSupplierOfferModel.article.ilike(search_value),
+            ).exists()
             query = query.filter(
-                MaterialModel.name.ilike(search_value) |
-                MaterialModel.article.ilike(search_value)
+                or_(
+                    MaterialModel.name.ilike(search_value),
+                    MaterialModel.article.ilike(search_value),
+                    manufacturer_match,
+                    supplier_article_match,
+                )
             )
 
         materials = (
@@ -4616,26 +4650,60 @@ def delete_material(article: str) -> dict | None:
         if not item:
             return None
 
-        (
-            db.query(MaterialPriceModel)
-            .filter(MaterialPriceModel.article == article)
-            .delete(synchronize_session=False)
-        )
-        (
-            db.query(MaterialUserLinkModel)
-            .filter(MaterialUserLinkModel.material_article == article)
-            .delete(synchronize_session=False)
-        )
+        affected_edge_ids = [
+            int(edge_id)
+            for edge_id, in db.query(MaterialEdgeRelationModel.edge_id)
+            .filter(MaterialEdgeRelationModel.material_id == int(item.id))
+            .all()
+        ]
+        db.query(MaterialEdgeRelationModel).filter(
+            MaterialEdgeRelationModel.material_id == int(item.id)
+        ).delete(synchronize_session=False)
+        db.query(MaterialPriceModel).filter(
+            MaterialPriceModel.article == article
+        ).delete(synchronize_session=False)
+        db.query(MaterialUserLinkModel).filter(
+            MaterialUserLinkModel.material_article == article
+        ).delete(synchronize_session=False)
         db.query(MaterialImageModel).filter(
             MaterialImageModel.material_id == int(item.id)
         ).delete(synchronize_session=False)
+        is_default = bool(item.is_default)
         db.delete(item)
+
+        for edge_id in affected_edge_ids:
+            edge = db.get(CanonicalEdgeModel, edge_id)
+            if edge is None or str(edge.cleanup_policy or "protected") != "delete_when_orphan":
+                continue
+            if db.query(MaterialEdgeRelationModel.id).filter(
+                MaterialEdgeRelationModel.edge_id == edge_id
+            ).first() is not None:
+                continue
+            offer_ids = [
+                int(offer_id)
+                for offer_id, in db.query(EdgeSupplierOfferModel.id)
+                .filter(EdgeSupplierOfferModel.edge_id == edge_id)
+                .all()
+            ]
+            if offer_ids:
+                db.query(EdgeSupplierOfferPriceModel).filter(
+                    EdgeSupplierOfferPriceModel.offer_id.in_(offer_ids)
+                ).delete(synchronize_session=False)
+            db.query(EdgeSupplierOfferModel).filter(
+                EdgeSupplierOfferModel.edge_id == edge_id
+            ).delete(synchronize_session=False)
+            db.delete(edge)
+
         db.commit()
 
         return {
             "deleted": True,
-            "is_default": bool(item.is_default),
+            "is_default": is_default,
         }
+
+    except Exception:
+        db.rollback()
+        raise
 
     finally:
 

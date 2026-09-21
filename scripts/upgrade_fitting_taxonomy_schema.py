@@ -24,6 +24,7 @@ from database.repositories.inventory_repository import (
     FITTING_CATEGORY_DEFINITIONS,
     FITTING_GROUP_LABELS,
 )
+from database.deletion_protection import is_auto_recreate_suppressed
 
 
 PREREQUISITE_TABLES = ("fitting_products",)
@@ -565,7 +566,8 @@ def _build_plan(connection) -> dict[str, object]:
     manufacturer_seed_rows = [
         row
         for row in manufacturer_seed_rows
-        if not _manufacturer_seed_row_matches_existing(existing_manufacturer_rows.get(row["code"]), row)
+        if not is_auto_recreate_suppressed(connection, "fitting_manufacturer", row["code"])
+        and not _manufacturer_seed_row_matches_existing(existing_manufacturer_rows.get(row["code"]), row)
     ]
 
     category_code_to_row = {
@@ -575,6 +577,7 @@ def _build_plan(connection) -> dict[str, object]:
     category_seed_rows = [
         row
         for row in category_seed_rows
+        if not is_auto_recreate_suppressed(connection, "fitting_category", row["code"])
         if existing_category_rows.get(row["code"]) != {
             "code": row["code"],
             "name": row["name"],

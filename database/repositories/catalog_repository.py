@@ -5,6 +5,7 @@ from database.session import (
 from database.models.catalog_item import (
     CatalogItemModel
 )
+from database.deletion_protection import is_auto_recreate_suppressed
 from sqlalchemy.exc import (
     IntegrityError
 )
@@ -109,6 +110,13 @@ def seed_default_catalog_items():
 
                 if existing_item:
 
+                    continue
+
+                if is_auto_recreate_suppressed(
+                    db,
+                    "catalog_item",
+                    f"{category}:{value}",
+                ):
                     continue
 
                 db.add(

@@ -121,6 +121,7 @@ from database.repositories.hole_library_repository import (
 from database.repositories.user_repository import (
     get_user_by_email
 )
+from database.deletion_protection import is_auto_recreate_suppressed_for_entity
 from services.auth_service import (
     create_managed_user
 )
@@ -152,6 +153,7 @@ from scripts.upgrade_material_supplier_offers_schema import (
 from scripts.upgrade_edge_foundation_schema import (
     ensure_edge_foundation_schema,
 )
+from database.edge_lifecycle_schema import ensure_edge_lifecycle_schema
 
 
 def _get_column_names(
@@ -476,6 +478,10 @@ def upgrade_sqlite_schema():
 
         mounting_node_columns = {
             "fastening_type": "VARCHAR(32)",
+            "preview_mode": "VARCHAR(16) NOT NULL DEFAULT 'auto'",
+            "preview_generated_image_url": "TEXT",
+            "preview_custom_image_url": "TEXT",
+            "preview_generated_at": "DATETIME",
             "category_code": "VARCHAR",
             "functional_code": "VARCHAR",
             "is_archived": "BOOLEAN NOT NULL DEFAULT 0",
@@ -977,6 +983,9 @@ def seed_demo_access_users():
 
     for email, role in demo_users:
 
+        if is_auto_recreate_suppressed_for_entity("demo_user", email):
+            continue
+
         if get_user_by_email(email):
 
             continue
@@ -1007,6 +1016,7 @@ def init_database(*, run_legacy_migration: bool = False):
         ensure_material_catalog_v2_schema(connection)
         ensure_material_supplier_offers_schema(connection)
         ensure_edge_foundation_schema(connection)
+        ensure_edge_lifecycle_schema(connection)
         ensure_mounting_schemes_schema(connection)
     _backfill_mounting_node_versions()
     seed_demo_access_users()
