@@ -19,6 +19,7 @@ export default defineConfig(({ command }) => ({
     host: "127.0.0.1",
     port: 5173,
     proxy: {
+      "/assistant": "http://127.0.0.1:8000",
       "/auth": "http://127.0.0.1:8000",
       "/project": "http://127.0.0.1:8000",
       "/catalog": "http://127.0.0.1:8000",
