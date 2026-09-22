@@ -3,6 +3,7 @@ import './AssistantShell.css';
 import { executeAssistantAction } from './actions/actionRegistry.js';
 import { resolveAssistantCommand } from './commands/commandResolver.js';
 import { createBrowserSpeechRecognition, isBrowserSpeechRecognitionSupported } from './voice/browserSpeechRecognition.js';
+import { isBrowserSpeechSynthesisSupported, speakBrowserText } from './voice/browserSpeechSynthesis.js';
 
 export default function AssistantShell() {
   const [isOpen, setIsOpen] = useState(false);
@@ -55,7 +56,12 @@ export default function AssistantShell() {
     }
 
     const executed = executeAssistantAction(resolved.actionId);
-    setCommandResult(executed.success ? 'Команду виконано.' : 'Не вдалося виконати команду.');
+    const resultText = executed.success ? 'Команду виконано.' : 'Не вдалося виконати команду.';
+    setCommandResult(resultText);
+
+    if (executed.success && isBrowserSpeechSynthesisSupported()) {
+      speakBrowserText(resultText);
+    }
   }
 
   return (
