@@ -2,11 +2,47 @@ import React, { useState } from 'react';
 import './AssistantShell.css';
 import { executeAssistantAction } from './actions/actionRegistry.js';
 import { resolveAssistantCommand } from './commands/commandResolver.js';
+import { createBrowserSpeechRecognition, isBrowserSpeechRecognitionSupported } from './voice/browserSpeechRecognition.js';
 
 export default function AssistantShell() {
   const [isOpen, setIsOpen] = useState(false);
   const [commandText, setCommandText] = useState('');
   const [commandResult, setCommandResult] = useState('');
+  const [isListening, setIsListening] = useState(false);
+
+  function handleVoiceInput() {
+    if (!isBrowserSpeechRecognitionSupported()) {
+      setCommandResult('Voice recognition is not supported in this browser.');
+      return;
+    }
+
+    const recognition = createBrowserSpeechRecognition({
+      onResult: (transcript) => {
+        setCommandText(transcript);
+        setCommandResult('');
+      },
+      onError: () => {
+        setCommandResult('Voice recognition failed. Please try again.');
+      },
+      onEnd: () => {
+        setIsListening(false);
+      },
+    });
+
+    if (!recognition) {
+      return;
+    }
+
+    setIsListening(true);
+    setCommandResult('');
+
+    try {
+      recognition.start();
+    } catch {
+      setIsListening(false);
+      setCommandResult('Could not start microphone.');
+    }
+  }
 
   function handleCommandSubmit(event) {
     event.preventDefault();
@@ -46,6 +82,7 @@ export default function AssistantShell() {
                 style={{ flex: 1, minWidth: 0 }}
               />
               <button type='submit'>Виконати</button>
+              <button type='button' onClick={handleVoiceInput} disabled={isListening}>{isListening ? 'Listening...' : 'Mic'}</button>
             </form>
             {commandResult && <p role='status'>{commandResult}</p>}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '12px' }}>
