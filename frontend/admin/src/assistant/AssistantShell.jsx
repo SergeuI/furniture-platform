@@ -4,6 +4,7 @@ import { executeAssistantAction } from './actions/actionRegistry.js';
 import { resolveAssistantCommand } from './commands/commandResolver.js';
 import { createBrowserSpeechRecognition, isBrowserSpeechRecognitionSupported } from './voice/browserSpeechRecognition.js';
 import { isBrowserSpeechSynthesisSupported, speakBrowserText } from './voice/browserSpeechSynthesis.js';
+import { fetchAssistantVoice } from './voice/assistantVoiceClient.js';
 
 export default function AssistantShell() {
   const [isOpen, setIsOpen] = useState(false);
@@ -45,7 +46,30 @@ export default function AssistantShell() {
     }
   }
 
+  async function speakAssistantResponse(text) {
+    let audioUrl = null;
+
+    try {
+      const blob = await fetchAssistantVoice(text);
+      audioUrl = URL.createObjectURL(blob);
+      const audio = new Audio(audioUrl);
+      audio.addEventListener('ended', () => URL.revokeObjectURL(audioUrl), { once: true });
+      audio.addEventListener('error', () => URL.revokeObjectURL(audioUrl), { once: true });
+      await audio.play();
+      return;
+    } catch {
+      if (audioUrl) {
+        URL.revokeObjectURL(audioUrl);
+      }
+
+      if (isBrowserSpeechSynthesisSupported()) {
+        speakBrowserText(text);
+      }
+    }
+  }
+
   function handleCommandSubmit(event) {
+
     event.preventDefault();
 
     const resolved = resolveAssistantCommand(commandText);
@@ -59,8 +83,8 @@ export default function AssistantShell() {
     const resultText = executed.success ? 'Команду виконано.' : 'Не вдалося виконати команду.';
     setCommandResult(resultText);
 
-    if (executed.success && isBrowserSpeechSynthesisSupported()) {
-      speakBrowserText(resultText);
+    if (executed.success) {
+      void speakAssistantResponse(resultText);
     }
   }
 

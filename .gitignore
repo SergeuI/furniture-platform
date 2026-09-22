@@ -65,6 +65,7 @@ tmp_mproject_site/
 
 .pytest_cache/
 .mypy_cache/
+data/assistant_voice_cache/
 
 # =========================================
 # OS

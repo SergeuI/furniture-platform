@@ -47,6 +47,9 @@ from api.routes.processing import (
 from api.routes.service_drilling_rules import (
     router as service_drilling_rules_router
 )
+from api.routes.assistant_voice import (
+    router as assistant_voice_router
+)
 from services.material_import_queue_service import (
     start_material_import_queue_loop,
     stop_material_import_queue_loop,
@@ -239,6 +242,15 @@ app.include_router(
     prefix="/service-drilling-rules",
 
     tags=["Service Drilling Rules"]
+)
+
+app.include_router(
+
+    assistant_voice_router,
+
+    prefix="/assistant",
+
+    tags=["Assistant"]
 )
 
 
