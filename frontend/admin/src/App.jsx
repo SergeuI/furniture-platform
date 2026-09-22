@@ -5690,7 +5690,7 @@ function MaterialImage({ item, token, alt, loading = "lazy", placeholderLabel })
     setObjectUrl("");
     setFallbackIndex(-1);
 
-    if (!article || !token) {
+    if (!article || !token || !item?.has_cached_image) {
       setFallbackIndex(fallbackCandidates.length ? 0 : -1);
       return undefined;
     }
