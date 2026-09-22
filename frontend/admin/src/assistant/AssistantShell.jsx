@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import './AssistantShell.css';
 import { executeAssistantAction } from './actions/actionRegistry.js';
 import { resolveAssistantCommand } from './commands/commandResolver.js';
+import { getAssistantResponse } from './responses/responseRegistry.js';
+import { ASSISTANT_STATES } from './state/assistantState.js';
 import { createBrowserSpeechRecognition, isBrowserSpeechRecognitionSupported } from './voice/browserSpeechRecognition.js';
 import { isBrowserSpeechSynthesisSupported, speakBrowserText } from './voice/browserSpeechSynthesis.js';
 import { fetchAssistantVoice } from './voice/assistantVoiceClient.js';
@@ -11,23 +13,31 @@ export default function AssistantShell() {
   const [commandText, setCommandText] = useState('');
   const [commandResult, setCommandResult] = useState('');
   const [isListening, setIsListening] = useState(false);
+  const [assistantState, setAssistantState] = useState(ASSISTANT_STATES.IDLE);
 
   function handleVoiceInput() {
     if (!isBrowserSpeechRecognitionSupported()) {
+      setAssistantState(ASSISTANT_STATES.ERROR);
       setCommandResult('Voice recognition is not supported in this browser.');
       return;
     }
 
+    let recognitionFailed = false;
     const recognition = createBrowserSpeechRecognition({
       onResult: (transcript) => {
         setCommandText(transcript);
         setCommandResult('');
       },
       onError: () => {
+        recognitionFailed = true;
+        setAssistantState(ASSISTANT_STATES.ERROR);
         setCommandResult('Voice recognition failed. Please try again.');
       },
       onEnd: () => {
         setIsListening(false);
+        if (!recognitionFailed) {
+          setAssistantState(ASSISTANT_STATES.IDLE);
+        }
       },
     });
 
@@ -36,25 +46,28 @@ export default function AssistantShell() {
     }
 
     setIsListening(true);
+    setAssistantState(ASSISTANT_STATES.LISTENING);
     setCommandResult('');
 
     try {
       recognition.start();
     } catch {
       setIsListening(false);
+      setAssistantState(ASSISTANT_STATES.ERROR);
       setCommandResult('Could not start microphone.');
     }
   }
 
-  async function speakAssistantResponse(text) {
+  async function speakAssistantResponse(text, finalState = ASSISTANT_STATES.SUCCESS) {
     let audioUrl = null;
 
     try {
       const blob = await fetchAssistantVoice(text);
       audioUrl = URL.createObjectURL(blob);
       const audio = new Audio(audioUrl);
-      audio.addEventListener('ended', () => URL.revokeObjectURL(audioUrl), { once: true });
+      audio.addEventListener('ended', () => { URL.revokeObjectURL(audioUrl); setAssistantState(finalState); }, { once: true });
       audio.addEventListener('error', () => URL.revokeObjectURL(audioUrl), { once: true });
+      setAssistantState(ASSISTANT_STATES.SPEAKING);
       await audio.play();
       return;
     } catch {
@@ -63,7 +76,16 @@ export default function AssistantShell() {
       }
 
       if (isBrowserSpeechSynthesisSupported()) {
-        speakBrowserText(text);
+        setAssistantState(ASSISTANT_STATES.SPEAKING);
+        const started = speakBrowserText(text, {
+          onEnd: () => setAssistantState(finalState),
+          onError: () => setAssistantState(ASSISTANT_STATES.ERROR),
+        });
+        if (!started) {
+          setAssistantState(ASSISTANT_STATES.ERROR);
+        }
+      } else {
+        setAssistantState(ASSISTANT_STATES.ERROR);
       }
     }
   }
@@ -72,15 +94,23 @@ export default function AssistantShell() {
 
     event.preventDefault();
 
+    setAssistantState(ASSISTANT_STATES.PROCESSING);
     const resolved = resolveAssistantCommand(commandText);
 
     if (!resolved.success) {
-      setCommandResult(resolved.reason === 'empty_command' ? 'Введіть команду.' : 'Команду поки не розплізнано.');
+      const responseText = getAssistantResponse(resolved.reason === 'empty_command' ? 'assistant.command.empty' : 'assistant.command.unknown');
+      setAssistantState(resolved.reason === 'empty_command' ? ASSISTANT_STATES.IDLE : ASSISTANT_STATES.ERROR);
+      setCommandResult(responseText);
+      if (resolved.reason === 'unknown_command') {
+        void speakAssistantResponse(responseText, ASSISTANT_STATES.ERROR);
+      }
       return;
     }
 
+    setAssistantState(ASSISTANT_STATES.EXECUTING);
     const executed = executeAssistantAction(resolved.actionId);
-    const resultText = executed.success ? 'Команду виконано.' : 'Не вдалося виконати команду.';
+    setAssistantState(executed.success ? ASSISTANT_STATES.SUCCESS : ASSISTANT_STATES.ERROR);
+    const resultText = getAssistantResponse(executed.success ? `assistant.action.${resolved.actionId}.success` : 'assistant.command.error');
     setCommandResult(resultText);
 
     if (executed.success) {
