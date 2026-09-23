@@ -5673,9 +5673,7 @@ const MATERIAL_PREVIEW_IMAGE_CACHE_LIMIT = 40;
 const materialPreviewImageCache = new Map();
 
 function getMaterialPreviewImageCacheKey(item) {
-  const article = String(item?.article || "").trim();
-  const hash = String(item?.image_cached_hash || "").trim();
-  return article && hash ? `${article}::${hash}` : "";
+  return String(item?.article || "").trim();
 }
 
 function getCachedMaterialPreviewImage(key) {
