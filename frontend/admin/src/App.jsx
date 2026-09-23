@@ -5669,10 +5669,50 @@ function buildMaterialImageCandidates(item, token = "") {
   return candidates;
 }
 
+const MATERIAL_PREVIEW_IMAGE_CACHE_LIMIT = 40;
+const materialPreviewImageCache = new Map();
+
+function getMaterialPreviewImageCacheKey(item) {
+  const article = String(item?.article || "").trim();
+  const hash = String(item?.image_cached_hash || "").trim();
+  return article && hash ? `${article}::${hash}` : "";
+}
+
+function getCachedMaterialPreviewImage(key) {
+  const entry = materialPreviewImageCache.get(key);
+  if (entry) {
+    entry.lastUsedAt = Date.now();
+  }
+  return entry || null;
+}
+
+function cacheMaterialPreviewImage(key, blob) {
+  const existing = materialPreviewImageCache.get(key);
+  if (existing) {
+    existing.lastUsedAt = Date.now();
+    return existing;
+  }
+
+  const entry = {
+    blob,
+    objectUrl: URL.createObjectURL(blob),
+    lastUsedAt: Date.now(),
+  };
+  materialPreviewImageCache.set(key, entry);
+
+  while (materialPreviewImageCache.size > MATERIAL_PREVIEW_IMAGE_CACHE_LIMIT) {
+    const oldest = [...materialPreviewImageCache.entries()].sort((left, right) => left[1].lastUsedAt - right[1].lastUsedAt)[0];
+    if (!oldest) break;
+    URL.revokeObjectURL(oldest[1].objectUrl);
+    materialPreviewImageCache.delete(oldest[0]);
+  }
+
+  return entry;
+}
+
 function MaterialImage({ item, token, alt, loading = "lazy", placeholderLabel }) {
   const [objectUrl, setObjectUrl] = useState("");
   const [fallbackIndex, setFallbackIndex] = useState(-1);
-  const objectUrlRef = useRef("");
   const fallbackCandidates = useMemo(
     () => buildMaterialImageCandidates(item, token),
     [item?.image, item?.image_source_url, item?.supplier_offers, token],
@@ -5682,17 +5722,20 @@ function MaterialImage({ item, token, alt, loading = "lazy", placeholderLabel })
     const article = String(item?.article || "").trim();
     let active = true;
 
-    if (objectUrlRef.current) {
-      URL.revokeObjectURL(objectUrlRef.current);
-      objectUrlRef.current = "";
-    }
-
-    setObjectUrl("");
+    const cacheKey = getMaterialPreviewImageCacheKey(item);
+    const cachedEntry = cacheKey ? getCachedMaterialPreviewImage(cacheKey) : null;
+    setObjectUrl(cachedEntry?.objectUrl || "");
     setFallbackIndex(-1);
 
     if (!article || !token || !item?.has_cached_image) {
       setFallbackIndex(fallbackCandidates.length ? 0 : -1);
       return undefined;
+    }
+
+    if (cachedEntry) {
+      return () => {
+        active = false;
+      };
     }
 
     (async () => {
@@ -5703,9 +5746,8 @@ function MaterialImage({ item, token, alt, loading = "lazy", placeholderLabel })
       }
 
       if (result?.success && result.blob) {
-        const nextObjectUrl = URL.createObjectURL(result.blob);
-        objectUrlRef.current = nextObjectUrl;
-        setObjectUrl(nextObjectUrl);
+        const entry = cacheKey ? cacheMaterialPreviewImage(cacheKey, result.blob) : null;
+        setObjectUrl(entry?.objectUrl || "");
       } else {
         setFallbackIndex(fallbackCandidates.length ? 0 : -1);
       }
@@ -5713,11 +5755,6 @@ function MaterialImage({ item, token, alt, loading = "lazy", placeholderLabel })
 
     return () => {
       active = false;
-
-      if (objectUrlRef.current) {
-        URL.revokeObjectURL(objectUrlRef.current);
-        objectUrlRef.current = "";
-      }
     };
   }, [fallbackCandidates, item?.article, item?.has_cached_image, item?.image_cached_hash, token]);
 
@@ -15591,6 +15628,7 @@ export default function App() {
 
       setMaterialItems(result.items || []);
       setMaterialItemsLoadedContext(requestContextKey);
+      setMaterialsCatalogLoading(false);
       setMaterialCategories(rootCategories);
       setMaterialCategoryValidationReady(true);
       try {
