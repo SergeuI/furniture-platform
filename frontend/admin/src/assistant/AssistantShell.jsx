@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import './AssistantShell.css';
 import { executeAssistantAction } from './actions/actionRegistry.js';
 import { resolveAssistantCommand } from './commands/commandResolver.js';
+import { captureUnknownPhrase } from './phrases/assistantPhraseClient.js';
 import { getAssistantResponse } from './responses/responseRegistry.js';
 import { ASSISTANT_STATES } from './state/assistantState.js';
 import { createBrowserSpeechRecognition, isBrowserSpeechRecognitionSupported } from './voice/browserSpeechRecognition.js';
@@ -102,6 +103,7 @@ export default function AssistantShell() {
       setAssistantState(resolved.reason === 'empty_command' ? ASSISTANT_STATES.IDLE : ASSISTANT_STATES.ERROR);
       setCommandResult(responseText);
       if (resolved.reason === 'unknown_command') {
+        void captureUnknownPhrase(commandText).catch(() => {});
         void speakAssistantResponse(responseText, ASSISTANT_STATES.ERROR);
       }
       return;

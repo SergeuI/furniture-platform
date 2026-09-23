@@ -34,6 +34,10 @@ from database.models.user_change_request import (
 from database.models.audit_log import (
     AuditLogModel
 )
+
+from database.models.assistant_unknown_phrase import (
+    AssistantUnknownPhraseModel
+)
 from database.models.catalog_item import (
     CatalogItemModel
 )
