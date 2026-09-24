@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import './AssistantShell.css';
 import { executeAssistantAction } from './actions/actionRegistry.js';
-import { resolveAssistantCommand } from './commands/commandResolver.js';
-import { captureUnknownPhrase } from './phrases/assistantPhraseClient.js';
+import { resolveAssistantCommand, setAssistantPhraseMappings } from './commands/commandResolver.js';
+import { captureUnknownPhrase, fetchPhraseMappings } from './phrases/assistantPhraseClient.js';
 import { getAssistantResponse } from './responses/responseRegistry.js';
 import { ASSISTANT_STATES } from './state/assistantState.js';
 import { createBrowserSpeechRecognition, isBrowserSpeechRecognitionSupported } from './voice/browserSpeechRecognition.js';
@@ -15,6 +15,26 @@ export default function AssistantShell() {
   const [commandResult, setCommandResult] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [assistantState, setAssistantState] = useState(ASSISTANT_STATES.IDLE);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    void fetchPhraseMappings()
+      .then((items) => {
+        if (!cancelled) {
+          setAssistantPhraseMappings(items);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen]);
 
   function handleVoiceInput() {
     if (!isBrowserSpeechRecognitionSupported()) {

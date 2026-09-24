@@ -47,6 +47,11 @@ class AssistantUnknownPhraseModel(Base):
         index=True,
     )
 
+    mapped_action_id = Column(
+        String,
+        nullable=True,
+    )
+
     first_seen = Column(
         DateTime,
         nullable=False,

@@ -59,6 +59,7 @@ import {
   resolveAdminAssetUrl,
 } from "./api.js";
 import EntitlementsAdminPage from "./components/EntitlementsAdminPage.jsx";
+import AssistantPhraseMappingPage from "./components/AssistantPhraseMappingPage.jsx";
 import FittingHolesWorkspace from "./components/processing/FittingHolesWorkspace.jsx";
 import MountingNodesCreatePanel from "./components/processing/MountingNodesCreatePanel.jsx";
 import MountingNodesFittingSelectorModal from "./components/processing/MountingNodesFittingSelectorModal.jsx";
@@ -20854,6 +20855,14 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
     let nextProcessingTab = activeProcessingTab;
     let nextMountingNodesRoute = null;
 
+    if (nextView === "assistantPhrases" && viewer?.role !== "admin") {
+      const fallbackView = canViewMaterialCatalog ? "catalogMaterials" : "home";
+      setActiveView(fallbackView);
+      activeViewRef.current = fallbackView;
+      localStorage.setItem(ACTIVE_VIEW_STORAGE_KEY, fallbackView);
+      return;
+    }
+
     if ((nextView === "catalogFittings" || nextView === "catalogFasteners") && !canViewFittingCatalog) {
       return;
     }
@@ -23852,7 +23861,8 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
             activeView === "catalogHoles" ||
             activeView === "users" ||
             activeView === "audit" ||
-            activeView === "entitlements"
+            activeView === "entitlements" ||
+            activeView === "assistantPhrases"
           ) {
             return;
           }
@@ -24734,6 +24744,20 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   </span>
                   <span className="nav-item-label">{language === "uk" ? "\u0422\u0430\u0440\u0438\u0444\u0438 \u0442\u0430 \u043f\u0440\u0430\u0432\u0430" : "Entitlements"}</span>
                 </button>
+                <button
+                  className={isSidebarItemVisuallyActive("assistantPhrases", activeView === "assistantPhrases") ? "active" : ""}
+                  onClick={() => {
+                    switchView("assistantPhrases");
+                    closeSidebarOnMobile();
+                  }}
+                  type="button"
+                  title={isDesktopSidebarCollapsed ? (language === "uk" ? "Фрази асистента" : "Assistant phrases") : undefined}
+                >
+                  <span className="nav-item-icon" aria-hidden="true">
+                    {renderSidebarIcon(getSidebarNavIconAsset("assistantPhrases"), Sparkles, "sidebar-nav-icon")}
+                  </span>
+                  <span className="nav-item-label">{language === "uk" ? "Фрази асистента" : "Assistant phrases"}</span>
+                </button>
               </>
             ) : null}
             {canAccessProcessingWorkspace ? (
@@ -25408,6 +25432,8 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                       ? t.settings
                     : activeView === "entitlements"
                       ? "Тарифи та права"
+                    : activeView === "assistantPhrases"
+                      ? (language === "uk" ? "Фрази асистента" : "Assistant phrases")
                       : t.audit}
                 </h2>
               )}
@@ -26986,6 +27012,8 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
             token={token}
             user={user}
           />
+        ) : activeView === "assistantPhrases" ? (
+          <AssistantPhraseMappingPage language={language} />
         ) : activeView === "users" ? (
           <section className="table-panel full-panel">
             <form className="create-user-form" onSubmit={handleCreateUser}>

@@ -1013,6 +1013,12 @@ def init_database(*, run_legacy_migration: bool = False):
 
     upgrade_sqlite_schema()
     with engine.begin() as connection:
+        _add_column_if_missing(
+            connection,
+            "assistant_unknown_phrases",
+            "mapped_action_id",
+            "VARCHAR"
+        )
         ensure_fittings_foundation_schema(connection)
         ensure_suppliers_ownership_schema(connection)
         ensure_fitting_products_schema(connection)
