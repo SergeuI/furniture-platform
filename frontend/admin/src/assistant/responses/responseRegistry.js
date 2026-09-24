@@ -2,6 +2,7 @@ const RESPONSES = {
   'assistant.action.materials.open.success': 'Готово, відкрила матеріали.',
   'assistant.action.fittings.open.success': 'Готово, відкрила фурнітуру.',
   'assistant.action.fittings.hinges.open.success': 'Готово, відкрила завіси.',
+  'assistant.action.fittings.drawer_slides.open.success': 'Готово, відкрила напрямні для шухляд.',
   'assistant.action.mounting_nodes.open.success': 'Готово, відкрила монтажні вузли.',
   'assistant.command.unknown': 'Я поки не розумію цю команду.',
   'assistant.command.empty': 'Введіть команду.',

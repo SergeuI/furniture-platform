@@ -19,6 +19,12 @@ const ACTIONS = {
     risk: "safe",
     execute: () => navigateAdmin("?section=catalog-fittings&category=hinges"),
   },
+  "fittings.drawer_slides.open": {
+    id: "fittings.drawer_slides.open",
+    label: "Напрямні для шухляд",
+    risk: "safe",
+    execute: () => navigateAdmin("?section=catalog-fittings&category=drawer_slides"),
+  },
   "mounting_nodes.open": {
     id: "mounting_nodes.open",
     label: "Монтажні вузли",

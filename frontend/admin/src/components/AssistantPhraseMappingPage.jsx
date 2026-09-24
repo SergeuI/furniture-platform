@@ -10,6 +10,7 @@ const ACTIONS = [
   ["materials.open", "Матеріали"],
   ["fittings.open", "Фурнітура"],
   ["fittings.hinges.open", "Навіси меблеві"],
+  ["fittings.drawer_slides.open", "Напрямні для шухляд"],
   ["mounting_nodes.open", "Монтажні вузли"],
 ];
 

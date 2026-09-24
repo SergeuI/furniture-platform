@@ -17,6 +17,7 @@ SUPPORTED_ASSISTANT_ACTION_IDS = {
     "materials.open",
     "fittings.open",
     "fittings.hinges.open",
+    "fittings.drawer_slides.open",
     "mounting_nodes.open",
 }
 
