@@ -9228,6 +9228,7 @@ export default function App() {
   const [fittingOwnershipScope, setFittingOwnershipScope] = useState("all");
   const [fittingsCatalogLoading, setFittingsCatalogLoading] = useState(false);
   const [fittingCanonicalCatalogLoading, setFittingCanonicalCatalogLoading] = useState(false);
+  const [fittingCategoryValidationReady, setFittingCategoryValidationReady] = useState(false);
   const [selectedFittingCategory, setSelectedFittingCategory] = useState(
     () =>
       initialAdminRoute.view === "catalogFittings" || initialAdminRoute.view === "catalogFasteners"
@@ -12447,16 +12448,7 @@ export default function App() {
     () => fittingCanonicalCatalogView.categories || [],
     [fittingCanonicalCatalogView],
   );
-  const activeFittingCategory = useMemo(() => {
-    if (
-      selectedFittingCategory &&
-      visibleFittingCategories.some((item) => item.code === selectedFittingCategory)
-    ) {
-      return selectedFittingCategory;
-    }
-
-    return "";
-  }, [selectedFittingCategory, visibleFittingCategories]);
+  const activeFittingCategory = String(selectedFittingCategory || "").trim();
   const currentFittingCategoryMeta = useMemo(
     () =>
       visibleFittingCategories.find((item) => item.code === activeFittingCategory) ||
@@ -16799,6 +16791,7 @@ export default function App() {
 
       setFittingItems(result.items || []);
       setFittingCategories(result.categories || []);
+      setFittingCategoryValidationReady(true);
       if (result.city_options?.length) {
         setMaterialCityOptions(result.city_options);
       }
@@ -23961,7 +23954,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
       return;
     }
 
-    if (fittingCanonicalCatalogLoading) {
+    if (fittingsCatalogLoading || !fittingCategoryValidationReady) {
       return;
     }
 
@@ -23988,7 +23981,8 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
     );
   }, [
     activeView,
-    fittingCanonicalCatalogLoading,
+    fittingCategoryValidationReady,
+    fittingsCatalogLoading,
     fittingCategories,
     isCatalogFastenersView,
     isCatalogFittingsView,

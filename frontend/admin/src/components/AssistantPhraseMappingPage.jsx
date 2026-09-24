@@ -9,6 +9,7 @@ import "./AssistantPhraseMappingPage.css";
 const ACTIONS = [
   ["materials.open", "Матеріали"],
   ["fittings.open", "Фурнітура"],
+  ["fittings.hinges.open", "Навіси меблеві"],
   ["mounting_nodes.open", "Монтажні вузли"],
 ];
 

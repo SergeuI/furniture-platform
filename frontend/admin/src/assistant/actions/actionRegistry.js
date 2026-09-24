@@ -13,6 +13,12 @@ const ACTIONS = {
     risk: "safe",
     execute: () => navigateAdmin("?section=catalog-fittings"),
   },
+  "fittings.hinges.open": {
+    id: "fittings.hinges.open",
+    label: "Навіси меблеві",
+    risk: "safe",
+    execute: () => navigateAdmin("?section=catalog-fittings&category=hinges"),
+  },
   "mounting_nodes.open": {
     id: "mounting_nodes.open",
     label: "Монтажні вузли",

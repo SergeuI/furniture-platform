@@ -16,6 +16,7 @@ router = APIRouter()
 SUPPORTED_ASSISTANT_ACTION_IDS = {
     "materials.open",
     "fittings.open",
+    "fittings.hinges.open",
     "mounting_nodes.open",
 }
 
