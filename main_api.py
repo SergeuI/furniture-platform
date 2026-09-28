@@ -53,6 +53,9 @@ from api.routes.assistant_voice import (
 from api.routes.assistant_phrases import (
     router as assistant_phrases_router
 )
+from api.routes.workspace import (
+    router as workspace_router
+)
 from services.material_import_queue_service import (
     start_material_import_queue_loop,
     stop_material_import_queue_loop,
@@ -263,6 +266,15 @@ app.include_router(
     prefix="/assistant",
 
     tags=["Assistant"]
+)
+
+app.include_router(
+
+    workspace_router,
+
+    prefix="/workspace",
+
+    tags=["Workspace"]
 )
 
 
