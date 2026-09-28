@@ -9,16 +9,17 @@ from pydantic import BaseModel, Field
 from api.dependencies.auth import require_current_user
 from services.assistant_voice_provider import AssistantVoiceProviderError
 from services.assistant_voice_service import AssistantVoiceService
+from services.assistant_voice_config import get_assistant_voice_id
 
 
 router = APIRouter()
 
-DEV_VOICE_ID = "Xb7hH8MSUJpSbSDYk0k2"
 DEV_LANGUAGE = "uk-UA"
 
 
 class AssistantVoiceRequest(BaseModel):
     text: str = Field(min_length=1, max_length=2000)
+    voice_profile: str = Field(default="male", pattern="^(male|female)$")
 
 
 @router.post("/voice")
@@ -35,7 +36,7 @@ def generate_assistant_voice(
     try:
         result = service.generate_mp3(
             text=text,
-            voice_id=DEV_VOICE_ID,
+            voice_id=get_assistant_voice_id(payload.voice_profile),
             language=DEV_LANGUAGE,
         )
     except AssistantVoiceProviderError as exc:

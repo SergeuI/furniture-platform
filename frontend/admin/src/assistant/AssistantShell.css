@@ -64,33 +64,46 @@
   line-height: 1.45;
 }
 
+.mp-assistant__avatar {
+  display: block;
+  width: min(220px, 100%);
+  height: 180px;
+  margin: 0 auto 12px;
+  object-fit: contain;
+  object-position: center;
+}
+
 .mp-assistant__body p {
   margin: 0 0 8px;
 }
 
 .mp-assistant__launcher {
-  min-height: 52px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 7px 16px 7px 7px;
-  border: 1px solid #176f63;
-  border-radius: 999px;
-  background: #168276;
-  color: #fff;
-  box-shadow: 0 8px 24px rgba(20, 94, 83, 0.25);
-  cursor: pointer;
-  font-weight: 700;
-}
-
-.mp-assistant__mark {
-  width: 38px;
-  height: 38px;
+  width: 68px;
+  height: 68px;
   display: grid;
   place-items: center;
+  padding: 5px;
+  border: 1px solid #176f63;
   border-radius: 50%;
-  background: #fff;
-  color: #176f63;
-  font-size: 12px;
-  font-weight: 800;
+  background: #f3f8f6;
+  box-shadow: 0 8px 24px rgba(20, 94, 83, 0.25);
+  cursor: pointer;
 }
+
+.mp-assistant__launcher-image { width: 100%; height: 100%; object-fit: contain; border-radius: 50%; }
+
+.mp-assistant__mic { width: 40px; height: 40px; display: grid; place-items: center; flex: 0 0 40px; padding: 8px; border: 1px solid #b7cbc5; border-radius: 10px; background: #f3f8f6; color: #176f63; cursor: pointer; }
+.mp-assistant__mic:disabled { opacity: .55; cursor: default; }
+.mp-assistant__mic svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
+
+.mp-assistant__floating { position: fixed; right: 24px; bottom: 24px; z-index: 10000; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+.mp-assistant__floating-character { width: min(300px, 42vw); height: min(360px, 48vh); object-fit: contain; object-position: bottom center; }
+.mp-assistant__close { position: absolute; top: -6px; right: -6px; width: 28px; height: 28px; padding: 0; border: 1px solid #b7cbc5; border-radius: 50%; background: #fff; color: #526864; font-size: 20px; line-height: 1; cursor: pointer; }
+.mp-assistant__floating-actions { display: flex; gap: 8px; }
+.mp-assistant__action { width: 40px; height: 40px; display: grid; place-items: center; padding: 8px; border: 1px solid #b7cbc5; border-radius: 50%; background: #f3f8f6; color: #176f63; font-size: 21px; cursor: pointer; }
+.mp-assistant__action:disabled { opacity: .55; cursor: default; }
+.mp-assistant__action svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
+.mp-assistant__text-form { width: min(300px, 72vw); }
+.mp-assistant__text-form input { width: 100%; min-height: 40px; padding: 9px 12px; border: 1px solid #b7cbc5; border-radius: 12px; background: #fff; color: #263c38; font: inherit; box-shadow: 0 6px 18px rgba(24,61,55,.12); }
+.mp-assistant__bubble { max-width: min(320px, 76vw); padding: 10px 13px; border: 1px solid #d7e2df; border-radius: 14px 14px 4px 14px; background: #fff; color: #263c38; font-size: 13px; line-height: 1.4; box-shadow: 0 8px 22px rgba(24,61,55,.14); }
+@media (max-width: 600px) { .mp-assistant__floating { right: 12px; bottom: 12px; } .mp-assistant__floating-character { width: min(190px, 48vw); height: min(250px, 38vh); } }
