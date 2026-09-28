@@ -31,6 +31,8 @@ from database.models.user import (
 from database.models.user_change_request import (
     UserChangeRequestModel
 )
+from database.models.workspace import WorkspaceModel
+from database.models.workspace_membership import WorkspaceMembershipModel
 from database.models.audit_log import (
     AuditLogModel
 )
