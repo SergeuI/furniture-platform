@@ -21,6 +21,8 @@ from database.models.registration_identity import (
     RegistrationIdentityModel,
 )
 from database.models.user import UserModel
+from database.models.workspace import WorkspaceModel
+from database.models.workspace_membership import WorkspaceMembershipModel
 from database.repositories import user_repository
 from schemas.auth import (
     LoginUserSchema,
@@ -585,6 +587,8 @@ class RegistrationOnboardingFlowTests(unittest.IsolatedAsyncioTestCase):
             engine,
             tables=[
                 UserModel.__table__,
+                WorkspaceModel.__table__,
+                WorkspaceMembershipModel.__table__,
                 RegistrationIdentityModel.__table__,
                 RegistrationChallengeModel.__table__,
             ],
@@ -1133,6 +1137,8 @@ class RegistrationOnboardingHttpTests(unittest.TestCase):
                 UserModel.__table__,
                 RegistrationIdentityModel.__table__,
                 RegistrationChallengeModel.__table__,
+                WorkspaceModel.__table__,
+                WorkspaceMembershipModel.__table__,
             ],
         )
         return sessionmaker(bind=engine, autocommit=False, autoflush=False)

@@ -323,6 +323,8 @@ class TelegramRegistrationHandlerTests(unittest.IsolatedAsyncioTestCase):
 
     @staticmethod
     def _create_session_factory(database_path: Path):
+        from database.models.workspace import WorkspaceModel
+        from database.models.workspace_membership import WorkspaceMembershipModel
         from sqlalchemy import create_engine
         from sqlalchemy.orm import sessionmaker
 
@@ -341,6 +343,8 @@ class TelegramRegistrationHandlerTests(unittest.IsolatedAsyncioTestCase):
             engine,
             tables=[
                 UserModel.__table__,
+                WorkspaceModel.__table__,
+                WorkspaceMembershipModel.__table__,
                 RegistrationIdentityModel.__table__,
                 RegistrationChallengeModel.__table__,
             ],

@@ -31,6 +31,7 @@ from services.registration_identity_service import (
     normalize_phone_identity,
 )
 from services.subscription_service import build_subscription_status
+from services.workspace_provisioning_service import provision_initial_workspace
 
 
 REGISTRATION_STATUS_PENDING_PHONE = "pending_phone"
@@ -367,6 +368,8 @@ def start_pending_phone_registration(
         )
         db.add(user)
         db.flush()
+
+        provision_initial_workspace(db, user)
 
         challenge = RegistrationChallengeModel(
             user_id=user.id,
