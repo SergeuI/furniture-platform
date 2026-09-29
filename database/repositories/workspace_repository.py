@@ -10,11 +10,18 @@ def get_user_workspaces(user_id: str):
             db.query(WorkspaceModel, WorkspaceMembershipModel)
             .join(WorkspaceMembershipModel, WorkspaceMembershipModel.workspace_id == WorkspaceModel.id)
             .filter(WorkspaceMembershipModel.user_id == user_id)
+            .filter(WorkspaceMembershipModel.status == "active")
+            .filter(WorkspaceModel.is_active.is_(True))
             .order_by(WorkspaceModel.name.asc())
             .all()
         )
     finally:
         db.close()
+
+
+def get_single_active_workspace(user_id: str):
+    workspaces = get_user_workspaces(user_id)
+    return workspaces[0] if len(workspaces) == 1 else None
 
 
 def get_workspace_membership(user_id: str, workspace_id: str):

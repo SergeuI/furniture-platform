@@ -10,6 +10,11 @@ def get_user_workspaces(user_id: str):
     return repository_get_user_workspaces(user_id)
 
 
+def get_single_active_workspace(user_id: str):
+    from database.repositories.workspace_repository import get_single_active_workspace as repository_get_single_active_workspace
+    return repository_get_single_active_workspace(user_id)
+
+
 def get_workspace_membership(user_id: str, workspace_id: str):
     from database.repositories.workspace_repository import get_workspace_membership as repository_get_workspace_membership
     return repository_get_workspace_membership(user_id, workspace_id)
