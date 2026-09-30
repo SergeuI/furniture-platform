@@ -1,6 +1,7 @@
 import { Anchor, ChevronRight, GitBranch, Link2, Shuffle, TestTube2 } from "lucide-react";
 
 import mountingNodesImage from "../../assets/connections_overview/connections-mounting-nodes.png";
+import constructionRulesImage from "../../assets/connections_overview/connections-construction-rules.png";
 import fasteningSchemesImage from "../../assets/connections_overview/connections-fastening-schemes.png";
 import jointTypesImage from "../../assets/connections_overview/connections-joint-types.png";
 import compatibilityImage from "../../assets/connections_overview/connections-compatibility.png";
@@ -42,6 +43,16 @@ const CONNECTIONS_OVERVIEW_CARDS = [
     key: "connectionTypes",
     label: "Типи з'єднань",
     view: "connectionTypes",
+  },
+  {
+    accent: "#8b5e34",
+    chip: "конструкції",
+    description: "Правила взаємного розташування деталей та вибору способу їх кріплення.",
+    icon: GitBranch,
+    image: constructionRulesImage,
+    key: "constructionRules",
+    label: "Правила складання",
+    view: "constructionRules",
   },
   {
     accent: "#7c3aed",

@@ -16947,6 +16947,7 @@ section.main-panel.full-panel:has(> article.holes-view-card > .mounting-node-wor
 /* ui v70 system page canvas */
 .workspace > .table-panel.full-panel{background:transparent;border:0;border-radius:0;box-shadow:none;overflow:visible;}
 .workspace > .table-panel.full-panel > .catalog-card.service-catalog-card.service-catalog-card-full{background:transparent;border:0;border-radius:0;box-shadow:none;min-height:auto;}
+
 .workspace > .catalog-card.service-catalog-card.service-catalog-card-full{background:transparent;border:0;border-radius:0;box-shadow:none;min-height:auto;}
 
 /* shell v71 document sticky footer */

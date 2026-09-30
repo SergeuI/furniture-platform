@@ -69,6 +69,7 @@ import SchematicZoomSvg from "./components/processing/SchematicZoomSvg.jsx";
 import MountingNodesPanel from "./components/processing/MountingNodesPanelRefined.jsx";
 import ProcessingWorkspace from "./components/processing/ProcessingWorkspace.jsx";
 import ConnectionsWorkspace from "./components/connections/ConnectionsWorkspace.jsx";
+import ConstructionRulesReferencePage from "./components/ConstructionRulesReferencePage.jsx";
 import FittingSuppliersAdminWorkspace from "./components/FittingSuppliersAdminWorkspace.jsx";
 import MaterialSupplierOffersSection from "./components/MaterialSupplierOffersSection.jsx";
 import MaterialTaxonomyAdminWorkspace from "./components/MaterialTaxonomyAdminWorkspace.jsx";
@@ -483,6 +484,7 @@ const ADMIN_SECTION_BY_VIEW = {
   connectionTypes: "connection-types",
   connectionsOverview: "connections-overview",
   connectionsTesting: "connections-testing",
+  constructionRules: "construction-rules",
   entitlements: "entitlements",
   home: "home",
   mountingCompatibility: "mounting-compatibility",
@@ -545,6 +547,7 @@ function readAdminRouteFromLocation() {
       "connection-types",
       "mounting-compatibility",
       "connections-testing",
+      "construction-rules",
   ].includes(section)
   ) {
     return {
@@ -636,6 +639,7 @@ function buildAdminHistoryUrl(
       "connectionTypes",
       "mountingCompatibility",
       "connectionsTesting",
+      "constructionRules",
     ].includes(normalizedView)
   ) {
     params.set("section", ADMIN_SECTION_BY_VIEW[normalizedView] || "connections-overview");
@@ -11660,6 +11664,7 @@ export default function App() {
   const isConnectionTypesView = activeView === "connectionTypes";
   const isMountingCompatibilityView = activeView === "mountingCompatibility";
   const isConnectionsTestingView = activeView === "connectionsTesting";
+  const isConstructionRulesView = activeView === "constructionRules";
   const isConnectionsWorkspaceView =
     isConnectionsOverviewView ||
     isMountingSchemesView ||
@@ -13514,6 +13519,10 @@ export default function App() {
 
     if (isConnectionsWorkspaceView) {
       return isConnectionsOverviewView ? "" : getConnectionsWorkspacePageDescription(activeView, language);
+    }
+
+    if (isConstructionRulesView) {
+      return "";
     }
 
     if (activeView === "settings") {
@@ -25372,7 +25381,20 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
             >
               <Menu size={18} />
             </button>
-            {isCatalogHolesView
+            {isConstructionRulesView
+              ? renderCatalogHolesToolbarBreadcrumb([
+                  {
+                    label: language === "uk" ? "Кріплення та з’єднання" : "Connections",
+                    title: language === "uk" ? "Кріплення та з’єднання" : "Connections",
+                    onClick: () => switchView("connectionsOverview"),
+                  },
+                  {
+                    current: true,
+                    label: language === "uk" ? "Правила складання" : "Construction rules",
+                    title: language === "uk" ? "Правила складання" : "Construction rules",
+                  },
+                ])
+              : isCatalogHolesView
               ? renderCatalogHolesToolbarBreadcrumb(getMountingNodesToolbarBreadcrumbItemsCanonical())
               : isMountingSchemesView || isCatalogSuppliersView || shouldHideFittingsCatalogOuterToolbar
               ? null
@@ -25849,6 +25871,8 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
             onOpenFittingHolesEditor={(context) => switchView("catalogHoles", user, context)}
             token={token}
           />
+        ) : isConstructionRulesView ? (
+          <ConstructionRulesReferencePage />
         ) : isConnectionsWorkspaceView ? (
           <ConnectionsWorkspace
             activeView={activeView}

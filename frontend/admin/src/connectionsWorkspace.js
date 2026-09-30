@@ -49,6 +49,18 @@ const CONNECTIONS_WORKSPACE_TAB_DEFINITIONS = [
     section: "connection-types",
   },
   {
+    key: "constructionRules",
+    label: {
+      en: "Construction rules",
+      uk: "Правила складання",
+    },
+    description: {
+      en: "Canonical construction rules for furniture assemblies.",
+      uk: "Канонічні правила складання меблевих конструкцій.",
+    },
+    section: "construction-rules",
+  },
+  {
     key: "mountingCompatibility",
     label: {
       en: "Compatibility and replacements",
