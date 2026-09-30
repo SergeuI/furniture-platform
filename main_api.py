@@ -41,6 +41,9 @@ from api.routes.mounting_nodes import (
 from api.routes.mounting_schemes import (
     router as mounting_schemes_router
 )
+from api.routes.construction_rules import (
+    router as construction_rules_router
+)
 from api.routes.processing import (
     router as processing_router
 )
@@ -230,6 +233,15 @@ app.include_router(
     prefix="/mounting-schemes",
 
     tags=["Mounting Schemes"]
+)
+
+app.include_router(
+
+    construction_rules_router,
+
+    prefix="/construction-rules",
+
+    tags=["Construction Rules"]
 )
 
 app.include_router(
