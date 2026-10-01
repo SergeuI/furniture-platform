@@ -72,6 +72,7 @@ import ConnectionsWorkspace from "./components/connections/ConnectionsWorkspace.
 import ConstructionRulesReferencePage from "./components/ConstructionRulesReferencePage.jsx";
 import ConstructionRuleDetailPrototype from "./components/ConstructionRuleDetailPrototype.jsx";
 import FittingSuppliersAdminWorkspace from "./components/FittingSuppliersAdminWorkspace.jsx";
+import Fitting3DViewer from "./components/Fitting3DViewer.jsx";
 import MaterialSupplierOffersSection from "./components/MaterialSupplierOffersSection.jsx";
 import MaterialTaxonomyAdminWorkspace from "./components/MaterialTaxonomyAdminWorkspace.jsx";
 import CatalogBreadcrumbTrail from "./components/CatalogBreadcrumbTrail.jsx";
@@ -9274,6 +9275,7 @@ export default function App() {
   const [isFittingDescriptionOpen, setIsFittingDescriptionOpen] = useState(false);
   const [isFittingCharacteristicsOpen, setIsFittingCharacteristicsOpen] = useState(false);
   const [isFittingSuppliersOpen, setIsFittingSuppliersOpen] = useState(false);
+  const [isFitting3DOpen, setIsFitting3DOpen] = useState(false);
   const [fittingDetailLoading, setFittingDetailLoading] = useState(false);
   const [fittingDetailError, setFittingDetailError] = useState("");
   const fittingCanonicalCatalogRequestRef = useRef({ id: 0, pending: false });
@@ -36728,6 +36730,31 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                     ) : null}
                   </section>
                 ) : null}
+
+                <section className={`fitting-details-section-card${isFitting3DOpen ? " is-open" : ""}`}>
+                  <button
+                    className="fitting-details-section-header fitting-details-section-toggle"
+                    onClick={() => setIsFitting3DOpen((current) => !current)}
+                    type="button"
+                  >
+                    <strong>3D модель</strong>
+                    <ChevronRight className={isFitting3DOpen ? "expanded" : ""} size={16} />
+                  </button>
+                  {isFitting3DOpen ? (
+                    <div className="fitting-details-section-body">
+                      {selectedFittingDetail.three_d_asset ? (
+                        <Fitting3DViewer asset={selectedFittingDetail.three_d_asset} />
+                      ) : (
+                        <div className="fitting-3d-empty-state">
+                          <p>Для цієї фурнітури 3D-модель ще не додана.</p>
+                          <button className="ghost-button compact-button" disabled type="button">
+                            + Імпортувати 3D модель
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
+                </section>
 
                 <section className={`fitting-details-section-card${isFittingSuppliersOpen ? " is-open" : ""}`}>
                   <button
