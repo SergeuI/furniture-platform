@@ -553,8 +553,8 @@ function readAdminRouteFromLocation() {
   ) {
     const constructionRulesRoute = section === "construction-rules"
       ? {
-          mode: searchParams.get("mode") === "edit" ? "edit" : "list",
-          rule: String(searchParams.get("rule") || "").trim() || null,
+          mode: searchParams.get("mode") === "edit" && searchParams.get("rule") === "side-bottom" ? "edit" : "list",
+          rule: searchParams.get("rule") === "side-bottom" ? "side-bottom" : null,
         }
       : null;
 
@@ -11678,7 +11678,15 @@ export default function App() {
   const isMountingCompatibilityView = activeView === "mountingCompatibility";
   const isConnectionsTestingView = activeView === "connectionsTesting";
   const isConstructionRulesView = activeView === "constructionRules";
-  const isConstructionRulesDetailView = isConstructionRulesView && constructionRulesRoute?.mode === "edit";
+  const constructionRulesUrlParams = typeof window !== "undefined"
+    ? new URLSearchParams(window.location.search)
+    : null;
+  const isConstructionRulesDetailView = isConstructionRulesView && (
+    constructionRulesRoute?.mode === "edit" || (
+      constructionRulesUrlParams?.get("mode") === "edit" &&
+      constructionRulesUrlParams?.get("rule") === "side-bottom"
+    )
+  );
   const isConnectionsWorkspaceView =
     isConnectionsOverviewView ||
     isMountingSchemesView ||
@@ -23879,7 +23887,8 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
             activeView === "users" ||
             activeView === "audit" ||
             activeView === "entitlements" ||
-            activeView === "assistantPhrases"
+            activeView === "assistantPhrases" ||
+            activeView === "constructionRules"
           ) {
             return;
           }

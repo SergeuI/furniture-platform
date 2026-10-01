@@ -17016,23 +17016,6 @@ section.main-panel.full-panel:has(> article.holes-view-card > .mounting-node-wor
   width: 7px;
 }
 
-.construction-rule-detail-tabs {
-  align-items: center;
-  border-bottom: 1px solid #e7ece9;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 12px;
-  padding: 0 4px 10px;
-}
-
-.construction-rule-detail-tabs .ghost-button.active {
-  background: #eaf6ee;
-  border-color: #cfe6d7;
-  color: #247040;
-  font-weight: 700;
-}
-
 .construction-rule-geometry-section {
   margin-top: 18px;
 }
@@ -17125,6 +17108,162 @@ section.main-panel.full-panel:has(> article.holes-view-card > .mounting-node-wor
   stroke-width: 1.5;
 }
 
+.construction-rule-position-parameters {
+  background: #fff;
+  border: 1px solid #dfe7e2;
+  border-radius: 12px;
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+  max-width: 560px;
+  padding: 14px;
+}
+
+.construction-rule-workspace {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(300px, 0.9fr) minmax(0, 1.1fr);
+  margin-top: 18px;
+}
+
+.construction-rule-settings-card,
+.construction-rule-large-preview {
+  background: #fff;
+  border: 1px solid #dfe7e2;
+  border-radius: 12px;
+  min-width: 0;
+  padding: 16px;
+}
+
+.construction-rule-fastener-toggle {
+  align-items: center;
+  color: #405249;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 700;
+  gap: 8px;
+}
+
+.construction-rule-fastener-toggle input {
+  accent-color: #4f9a68;
+  height: 15px;
+  margin: 0;
+  width: 15px;
+}
+
+.construction-rule-settings-card h2,
+.construction-rule-large-preview h2 {
+  color: #273a31;
+  font-size: 16px;
+  line-height: 1.3;
+  margin: 0;
+}
+
+.construction-rule-selected-variant {
+  color: #405249;
+  font-size: 13px;
+  font-weight: 750;
+  margin: 6px 0 14px;
+}
+
+.construction-rule-settings-card .construction-rule-position-parameters {
+  margin-top: 0;
+  max-width: none;
+}
+
+.construction-rule-fastening-summary {
+  border-top: 1px solid #edf1ee;
+  display: grid;
+  gap: 5px;
+  margin-top: 16px;
+  padding-top: 14px;
+}
+
+.construction-rule-fastening-summary h3 {
+  color: #273a31;
+  font-size: 14px;
+  margin: 0 0 3px;
+}
+
+.construction-rule-fastening-summary strong {
+  color: #405249;
+  font-size: 13px;
+}
+
+.construction-rule-fastening-summary p {
+  color: #687780;
+  font-size: 12px;
+  margin: 0;
+}
+
+.construction-rule-large-preview {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+
+.construction-rule-3d-preview {
+  background: #f6f8f6;
+  border: 1px solid #edf1ee;
+  border-radius: 10px;
+  height: 330px;
+  overflow: hidden;
+  width: 100%;
+}
+
+.construction-rule-3d-preview canvas {
+  display: block;
+  height: 100% !important;
+  width: 100% !important;
+}
+
+.construction-rule-position-parameters h3 {
+  color: #273a31;
+  font-size: 14px;
+  line-height: 1.3;
+  margin: 0;
+}
+
+.construction-rule-position-field {
+  align-items: center;
+  color: #405249;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 12px;
+  font-weight: 700;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.construction-rule-position-input-wrap {
+  align-items: center;
+  display: inline-flex;
+  gap: 7px;
+}
+
+.construction-rule-position-input-wrap input {
+  border: 1px solid #d5dfd9;
+  border-radius: 7px;
+  color: #26372f;
+  font-size: 13px;
+  min-height: 34px;
+  padding: 6px 9px;
+  width: 86px;
+}
+
+.construction-rule-position-input-wrap > span {
+  color: #687780;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.construction-rule-position-parameters p {
+  color: #687780;
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 0;
+}
+
 @media (max-width: 1100px) {
   .construction-rule-geometry-options {
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -17134,6 +17273,14 @@ section.main-panel.full-panel:has(> article.holes-view-card > .mounting-node-wor
 @media (max-width: 700px) {
   .construction-rule-geometry-options {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .construction-rule-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .construction-rule-3d-preview {
+    height: 300px;
   }
 }
 
