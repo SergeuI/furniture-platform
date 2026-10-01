@@ -1015,6 +1015,45 @@ class FittingCatalogDetailItemSchema(FittingCatalogItemSchema):
     supplier_offers: List[FittingSupplierOfferSchema] = Field(default_factory=list)
     parsed_at: datetime | None = None
     price_updated_at: datetime | None = None
+    three_d_asset: "Fitting3DAssetSchema | None" = None
+
+
+class Fitting3DAssetSourceSchema(BaseModel):
+    id: int
+    file_role: str
+    file_format: str
+    file_name: str
+    file_url: str | None = None
+    file_size: int | None = None
+    sha256: str | None = None
+    order_index: int = 0
+
+
+class Fitting3DAssetSchema(BaseModel):
+    id: int
+    fitting_id: int
+    status: str
+    canonical_format: str
+    canonical_file_url: str | None = None
+    canonical_file_size: int | None = None
+    canonical_sha256: str | None = None
+    units: str | None = None
+    dimensions_x: float | None = None
+    dimensions_y: float | None = None
+    dimensions_z: float | None = None
+    bbox_min_x: float | None = None
+    bbox_min_y: float | None = None
+    bbox_min_z: float | None = None
+    bbox_max_x: float | None = None
+    bbox_max_y: float | None = None
+    bbox_max_z: float | None = None
+    axis_up: str | None = None
+    axis_forward: str | None = None
+    origin_x: float | None = None
+    origin_y: float | None = None
+    origin_z: float | None = None
+    validated_at: datetime | None = None
+    sources: List[Fitting3DAssetSourceSchema] = Field(default_factory=list)
 
 
 class FittingCatalogDetailResponseSchema(BaseModel):

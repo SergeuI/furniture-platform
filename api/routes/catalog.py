@@ -125,6 +125,7 @@ from database.models.fitting import (
     FittingSupplierOfferModel,
     SupplierModel,
 )
+from database.models.fitting_3d_asset import Fitting3DAssetModel
 from database.models.material_taxonomy import (
     MaterialManufacturerModel,
 )
@@ -1555,6 +1556,21 @@ def _serialize_fitting_detail(item: FittingModel) -> dict:
     serialized = dict(_serialize_fitting(item))
     serialized["id"] = int(item.id)
     serialized["supplier_offers"] = list_fitting_supplier_offers(item.id)
+    asset = item.three_d_asset
+    serialized["three_d_asset"] = None
+    if asset is not None:
+        serialized["three_d_asset"] = {
+            key: getattr(asset, key) for key in (
+                "id", "fitting_id", "status", "canonical_format", "canonical_file_url",
+                "canonical_file_size", "canonical_sha256", "units", "dimensions_x", "dimensions_y",
+                "dimensions_z", "bbox_min_x", "bbox_min_y", "bbox_min_z", "bbox_max_x", "bbox_max_y",
+                "bbox_max_z", "axis_up", "axis_forward", "origin_x", "origin_y", "origin_z", "validated_at",
+            )
+        }
+        serialized["three_d_asset"]["sources"] = [
+            {key: getattr(source, key) for key in ("id", "file_role", "file_format", "file_name", "file_url", "file_size", "sha256", "order_index")}
+            for source in asset.sources
+        ]
     source_payload = _safe_parse_source_payload_json(item.source_payload_json)
     parsed_item = source_payload.get("parsed_item") if isinstance(source_payload, dict) else {}
     if not isinstance(parsed_item, dict):

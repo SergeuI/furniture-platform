@@ -543,6 +543,13 @@ class FittingModel(Base):
         back_populates="fittings",
     )
 
+    three_d_asset = relationship(
+        "Fitting3DAssetModel",
+        back_populates="fitting",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+
 class SupplierModel(Base):
 
     __tablename__ = "suppliers"

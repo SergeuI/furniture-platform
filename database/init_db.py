@@ -117,6 +117,10 @@ from database.models.construction_rule import (
 from database.models.fitting_image import (
     FittingImageModel,
 )
+from database.models.fitting_3d_asset import (
+    Fitting3DAssetModel,
+    Fitting3DAssetSourceModel,
+)
 from database.models.user_service_catalog_price import (
     UserServiceCatalogPriceModel
 )
@@ -259,6 +263,26 @@ def _backfill_mounting_node_versions():
                 )
     finally:
         db.close()
+
+
+def _ensure_fitting_3d_assets_schema(connection):
+    connection.exec_driver_sql("""CREATE TABLE IF NOT EXISTS fitting_3d_assets (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, fitting_id INTEGER NOT NULL UNIQUE,
+        status VARCHAR(32) NOT NULL DEFAULT 'draft', canonical_format VARCHAR(16) NOT NULL DEFAULT 'glb',
+        canonical_file_url TEXT, canonical_file_size INTEGER, canonical_sha256 VARCHAR(64), units VARCHAR(16),
+        dimensions_x FLOAT, dimensions_y FLOAT, dimensions_z FLOAT,
+        bbox_min_x FLOAT, bbox_min_y FLOAT, bbox_min_z FLOAT,
+        bbox_max_x FLOAT, bbox_max_y FLOAT, bbox_max_z FLOAT,
+        axis_up VARCHAR(8), axis_forward VARCHAR(8), origin_x FLOAT, origin_y FLOAT, origin_z FLOAT,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        validated_at DATETIME, FOREIGN KEY(fitting_id) REFERENCES fittings(id) ON DELETE CASCADE)""")
+    connection.exec_driver_sql("""CREATE TABLE IF NOT EXISTS fitting_3d_asset_sources (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, asset_id INTEGER NOT NULL,
+        file_role VARCHAR(32) NOT NULL, file_format VARCHAR(16) NOT NULL,
+        file_name VARCHAR(255) NOT NULL, file_url TEXT, file_size INTEGER, sha256 VARCHAR(64),
+        order_index INTEGER NOT NULL DEFAULT 0, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(asset_id) REFERENCES fitting_3d_assets(id) ON DELETE CASCADE)""")
+    connection.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_fitting_3d_asset_sources_asset_order ON fitting_3d_asset_sources (asset_id, order_index)")
 
 
 def upgrade_sqlite_schema():
@@ -1034,6 +1058,7 @@ def init_database(*, run_legacy_migration: bool = False):
         ensure_material_supplier_offers_schema(connection)
         ensure_edge_foundation_schema(connection)
         ensure_edge_lifecycle_schema(connection)
+        _ensure_fitting_3d_assets_schema(connection)
         ensure_mounting_schemes_schema(connection)
     _backfill_mounting_node_versions()
     seed_demo_access_users()
