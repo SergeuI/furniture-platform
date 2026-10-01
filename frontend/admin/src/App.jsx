@@ -70,6 +70,7 @@ import MountingNodesPanel from "./components/processing/MountingNodesPanelRefine
 import ProcessingWorkspace from "./components/processing/ProcessingWorkspace.jsx";
 import ConnectionsWorkspace from "./components/connections/ConnectionsWorkspace.jsx";
 import ConstructionRulesReferencePage from "./components/ConstructionRulesReferencePage.jsx";
+import ConstructionRuleDetailPrototype from "./components/ConstructionRuleDetailPrototype.jsx";
 import FittingSuppliersAdminWorkspace from "./components/FittingSuppliersAdminWorkspace.jsx";
 import MaterialSupplierOffersSection from "./components/MaterialSupplierOffersSection.jsx";
 import MaterialTaxonomyAdminWorkspace from "./components/MaterialTaxonomyAdminWorkspace.jsx";
@@ -550,11 +551,19 @@ function readAdminRouteFromLocation() {
       "construction-rules",
   ].includes(section)
   ) {
+    const constructionRulesRoute = section === "construction-rules"
+      ? {
+          mode: searchParams.get("mode") === "edit" ? "edit" : "list",
+          rule: String(searchParams.get("rule") || "").trim() || null,
+        }
+      : null;
+
     return {
       hasSection: true,
       category: null,
       mountingNodesRoute: null,
       processingTab: null,
+      constructionRulesRoute,
       view: ADMIN_VIEW_BY_SECTION[section],
     };
   }
@@ -8826,6 +8835,9 @@ export default function App() {
   const initialAdminRoute = readAdminRouteFromLocation();
   const initialMountingNodesRoute =
     initialAdminRoute.view === "catalogHoles" ? initialAdminRoute.mountingNodesRoute : null;
+  const [constructionRulesRoute, setConstructionRulesRoute] = useState(
+    () => initialAdminRoute.constructionRulesRoute || null,
+  );
   const [language, setLanguage] = useState(
     () => localStorage.getItem(LANGUAGE_STORAGE_KEY) || "en",
   );
@@ -9589,6 +9601,7 @@ export default function App() {
       setActiveView(nextRoute.view || normalizeCatalogView(localStorage.getItem(ACTIVE_VIEW_STORAGE_KEY) || "home"));
       activeViewRef.current = nextRoute.view || normalizeCatalogView(localStorage.getItem(ACTIVE_VIEW_STORAGE_KEY) || "home");
       setMaterialCategoryFilter(nextMaterialCategoryFilter);
+      setConstructionRulesRoute(nextRoute.constructionRulesRoute || null);
       setSelectedFittingCategory(nextFittingCategory);
       setActiveProcessingTab(
         nextRoute.view === "processing"
@@ -11665,6 +11678,7 @@ export default function App() {
   const isMountingCompatibilityView = activeView === "mountingCompatibility";
   const isConnectionsTestingView = activeView === "connectionsTesting";
   const isConstructionRulesView = activeView === "constructionRules";
+  const isConstructionRulesDetailView = isConstructionRulesView && constructionRulesRoute?.mode === "edit";
   const isConnectionsWorkspaceView =
     isConnectionsOverviewView ||
     isMountingSchemesView ||
@@ -21053,6 +21067,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
 
     setActiveView(nextView);
     activeViewRef.current = nextView;
+    setConstructionRulesRoute(null);
     setStatus("");
 
     if (!skipHistoryUpdate) {
@@ -25389,10 +25404,18 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                     onClick: () => switchView("connectionsOverview"),
                   },
                   {
-                    current: true,
+                    current: !isConstructionRulesDetailView,
                     label: language === "uk" ? "Правила складання" : "Construction rules",
                     title: language === "uk" ? "Правила складання" : "Construction rules",
+                    onClick: isConstructionRulesDetailView ? () => switchView("constructionRules") : undefined,
                   },
+                  ...(isConstructionRulesDetailView
+                    ? [{
+                        current: true,
+                        label: language === "uk" ? "Боковина - Дно" : "Side - Bottom",
+                        title: language === "uk" ? "Боковина - Дно" : "Side - Bottom",
+                      }]
+                    : []),
                 ])
               : isCatalogHolesView
               ? renderCatalogHolesToolbarBreadcrumb(getMountingNodesToolbarBreadcrumbItemsCanonical())
@@ -25872,7 +25895,17 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
             token={token}
           />
         ) : isConstructionRulesView ? (
-          <ConstructionRulesReferencePage />
+          isConstructionRulesDetailView ? (
+            <ConstructionRuleDetailPrototype onBack={() => switchView("constructionRules")} />
+          ) : (
+            <ConstructionRulesReferencePage
+              onOpenRuleDetail={() => {
+                const nextUrl = `${window.location.pathname}?section=construction-rules&mode=edit&rule=side-bottom${window.location.hash || ""}`;
+                window.history.pushState({}, "", nextUrl);
+                window.dispatchEvent(new PopStateEvent("popstate"));
+              }}
+            />
+          )
         ) : isConnectionsWorkspaceView ? (
           <ConnectionsWorkspace
             activeView={activeView}
