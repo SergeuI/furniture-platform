@@ -1,4 +1,8 @@
 import asyncio
+import os
+import shutil
+import tempfile
+from pathlib import Path
 
 import base64
 import logging
@@ -47,6 +51,7 @@ from schemas.catalog import (
     CatalogItemOperationResponseSchema,
     FittingCatalogCreateSchema,
     FittingCatalogDetailResponseSchema,
+    Fitting3DAssetSchema,
     FittingCatalogListResponseSchema,
     FittingCatalogOperationResponseSchema,
     FittingCatalogUpdateSchema,
@@ -325,9 +330,25 @@ from services.upload_service import (
     save_material_category_image_file,
     save_edge_image_file,
 )
+from services.fitting_3d_asset_storage import Fitting3DAssetStorage
+from services.fitting_3d_conversion import (
+    Fitting3DCanonicalValidationError,
+    Fitting3DConversionError,
+    Fitting3DPackageValidationError,
+    convert_fitting_3d_package,
+)
+from services.fitting_3d_asset_service import (
+    Fitting3DAssetConflictError,
+    Fitting3DAssetPersistenceError,
+    persist_fitting_3d_asset,
+)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+FITTING_3D_MAX_FILES = 32
+FITTING_3D_MAX_FILE_SIZE = 50 * 1024 * 1024
+FITTING_3D_MAX_TOTAL_SIZE = 100 * 1024 * 1024
 
 _material_image_warm_lock = Lock()
 _material_images_being_warmed: set[str] = set()
@@ -7034,6 +7055,92 @@ async def get_fitting_detail_route(
         "success": True,
         "item": item,
     }
+
+
+@router.post(
+    "/fittings/{item_id}/3d-asset",
+    response_model=Fitting3DAssetSchema,
+)
+async def import_fitting_3d_asset_route(
+    item_id: int,
+    files: list[UploadFile] = File(
+        ...,
+        json_schema_extra={
+            "items": {
+                "type": "string",
+                "format": "binary",
+            },
+        },
+    ),
+    current_user = Depends(require_fitting_editor),
+):
+    _ensure_fitting_feature_access(current_user, "fittings.edit")
+    if not files or len(files) > FITTING_3D_MAX_FILES:
+        raise HTTPException(status_code=400, detail="Invalid 3D asset package")
+
+    upload_workspace = Path(tempfile.mkdtemp(prefix="fitting-3d-upload-"))
+    db = SessionLocal()
+    total_size = 0
+    saved_files = []
+    conversion_result = None
+    asset = None
+    try:
+        for upload in files:
+            filename = upload.filename or ""
+            if not filename or Path(filename).name != filename or ".." in Path(filename).parts:
+                raise HTTPException(status_code=400, detail="Invalid uploaded filename")
+            safe_name = Fitting3DAssetStorage.safe_filename(filename)
+            if safe_name != filename:
+                raise HTTPException(status_code=400, detail="Invalid uploaded filename")
+            target = upload_workspace / safe_name
+            size = 0
+            with target.open("wb") as output:
+                while True:
+                    chunk = await upload.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    size += len(chunk)
+                    total_size += len(chunk)
+                    if size > FITTING_3D_MAX_FILE_SIZE or total_size > FITTING_3D_MAX_TOTAL_SIZE:
+                        raise HTTPException(status_code=400, detail="3D asset package size limit exceeded")
+                    output.write(chunk)
+            if size == 0:
+                raise HTTPException(status_code=400, detail="Empty uploaded file")
+            saved_files.append(target)
+
+        executable = os.getenv("FITTING_3D_OBJ2GLTF_EXECUTABLE") or None
+        storage_root = Path(os.getenv("FITTING_3D_STORAGE_ROOT", "data/uploads"))
+        conversion_result = convert_fitting_3d_package(saved_files, executable=executable)
+        asset = persist_fitting_3d_asset(db, item_id, conversion_result, storage_root=storage_root)
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
+            if asset.canonical_file_url:
+                asset_dir = storage_root / "fitting-3d-assets" / asset.canonical_file_url.split("/")[-3]
+                shutil.rmtree(asset_dir, ignore_errors=True)
+            raise
+        db.refresh(asset)
+        return _serialize_fitting_detail(db.query(FittingModel).filter(FittingModel.id == item_id).one())["three_d_asset"]
+    except HTTPException:
+        db.rollback()
+        raise
+    except Fitting3DAssetConflictError as exc:
+        db.rollback(); raise HTTPException(status_code=409, detail="Fitting already has a 3D asset") from exc
+    except Fitting3DPackageValidationError as exc:
+        db.rollback(); raise HTTPException(status_code=400, detail="Invalid 3D asset package") from exc
+    except (Fitting3DConversionError, Fitting3DCanonicalValidationError) as exc:
+        db.rollback(); raise HTTPException(status_code=422, detail="3D asset conversion failed") from exc
+    except Fitting3DAssetPersistenceError as exc:
+        db.rollback()
+        if str(exc) == "fitting not found":
+            raise HTTPException(status_code=404, detail="Fitting not found") from exc
+        raise HTTPException(status_code=422, detail="3D asset persistence failed") from exc
+    finally:
+        db.close()
+        shutil.rmtree(upload_workspace, ignore_errors=True)
+        if conversion_result is not None and conversion_result.workspace is not None:
+            Fitting3DAssetStorage.cleanup(conversion_result.workspace)
 
 
 def _can_manage_fitting_item(current_user, item: dict | None) -> bool:
