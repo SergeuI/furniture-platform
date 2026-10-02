@@ -965,6 +965,18 @@ export async function uploadFitting3DAsset(token, itemId, files, timeoutMs = 180
   }
 }
 
+export async function updateFitting3DCoordinates(token, itemId, coordinates) {
+  const normalizedItemId = String(itemId || "").trim();
+  if (!normalizedItemId) return { success: false, error: "Fitting item ID is required", status: 0 };
+  const result = await request(`/catalog/fittings/${encodeURIComponent(normalizedItemId)}/3d-asset/coordinates`, {
+    method: "PATCH",
+    headers: authHeaders(token),
+    body: JSON.stringify(coordinates),
+  });
+  if (result?.success === false) return result;
+  return { success: true, item: result, status: 200 };
+}
+
 export async function createFitting(token, payload) {
   return request("/catalog/fittings", {
     method: "POST",

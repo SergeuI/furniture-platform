@@ -52,6 +52,7 @@ from schemas.catalog import (
     FittingCatalogCreateSchema,
     FittingCatalogDetailResponseSchema,
     Fitting3DAssetSchema,
+    Fitting3DCoordinateUpdateSchema,
     FittingCatalogListResponseSchema,
     FittingCatalogOperationResponseSchema,
     FittingCatalogUpdateSchema,
@@ -1585,7 +1586,8 @@ def _serialize_fitting_detail(item: FittingModel) -> dict:
                 "id", "fitting_id", "status", "canonical_format", "canonical_file_url",
                 "canonical_file_size", "canonical_sha256", "units", "dimensions_x", "dimensions_y",
                 "dimensions_z", "bbox_min_x", "bbox_min_y", "bbox_min_z", "bbox_max_x", "bbox_max_y",
-                "bbox_max_z", "axis_up", "axis_forward", "origin_x", "origin_y", "origin_z", "validated_at",
+                "bbox_max_z", "axis_up", "axis_forward", "origin_x", "origin_y", "origin_z",
+                "rotation_x", "rotation_y", "rotation_z", "coordinate_system_configured", "validated_at",
             )
         }
         serialized["three_d_asset"]["sources"] = [
@@ -7143,6 +7145,37 @@ async def import_fitting_3d_asset_route(
         shutil.rmtree(upload_workspace, ignore_errors=True)
         if conversion_result is not None and conversion_result.workspace is not None:
             Fitting3DAssetStorage.cleanup(conversion_result.workspace)
+
+
+@router.patch(
+    "/fittings/{item_id}/3d-asset/coordinates",
+    response_model=Fitting3DAssetSchema,
+)
+def update_fitting_3d_coordinates_route(
+    item_id: int,
+    payload: Fitting3DCoordinateUpdateSchema,
+    current_user = Depends(require_fitting_editor),
+):
+    _ensure_fitting_feature_access(current_user, "fittings.edit")
+    db = SessionLocal()
+    try:
+        asset = db.query(Fitting3DAssetModel).filter(Fitting3DAssetModel.fitting_id == item_id).one_or_none()
+        if asset is None:
+            raise HTTPException(status_code=404, detail="Fitting 3D asset not found")
+        asset.origin_x = payload.origin_x
+        asset.origin_y = payload.origin_y
+        asset.origin_z = payload.origin_z
+        asset.rotation_x = payload.rotation_x
+        asset.rotation_y = payload.rotation_y
+        asset.rotation_z = payload.rotation_z
+        asset.coordinate_system_configured = 1
+        db.commit()
+        db.refresh(asset)
+        return _serialize_fitting_detail(db.query(FittingModel).filter(FittingModel.id == item_id).one())[
+            "three_d_asset"
+        ]
+    finally:
+        db.close()
 
 
 def _can_manage_fitting_item(current_user, item: dict | None) -> bool:

@@ -1052,8 +1052,21 @@ class Fitting3DAssetSchema(BaseModel):
     origin_x: float | None = None
     origin_y: float | None = None
     origin_z: float | None = None
+    rotation_x: float | None = None
+    rotation_y: float | None = None
+    rotation_z: float | None = None
+    coordinate_system_configured: bool = False
     validated_at: datetime | None = None
     sources: List[Fitting3DAssetSourceSchema] = Field(default_factory=list)
+
+
+class Fitting3DCoordinateUpdateSchema(BaseModel):
+    origin_x: float
+    origin_y: float
+    origin_z: float
+    rotation_x: float = Field(default=0.0, ge=-360.0, le=360.0)
+    rotation_y: float = Field(default=0.0, ge=-360.0, le=360.0)
+    rotation_z: float = Field(default=0.0, ge=-360.0, le=360.0)
 
 
 class FittingCatalogDetailResponseSchema(BaseModel):

@@ -58,6 +58,7 @@ import {
   listMaterialSupplierOffers,
   resolveAdminAssetUrl,
   uploadFitting3DAsset,
+  updateFitting3DCoordinates,
 } from "./api.js";
 import EntitlementsAdminPage from "./components/EntitlementsAdminPage.jsx";
 import AssistantPhraseMappingPage from "./components/AssistantPhraseMappingPage.jsx";
@@ -16767,6 +16768,14 @@ export default function App() {
     setSelectedFittingDetail((current) => current ? { ...current, three_d_asset: result.item || null } : current);
     setFitting3DImportLoading(false);
     closeFitting3DImport();
+  }
+
+  async function saveFitting3DCoordinates(coordinates) {
+    const result = await updateFitting3DCoordinates(token, selectedFittingDetail?.id, coordinates);
+    if (result.success && result.item) {
+      setSelectedFittingDetail((current) => current ? { ...current, three_d_asset: result.item } : current);
+    }
+    return result;
   }
 
   function closeFittingDetails() {
@@ -36778,7 +36787,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   {isFitting3DOpen ? (
                     <div className="fitting-details-section-body">
                       {selectedFittingDetail.three_d_asset ? (
-                        <Fitting3DViewer asset={selectedFittingDetail.three_d_asset} />
+                        <Fitting3DViewer asset={selectedFittingDetail.three_d_asset} onSaveCoordinates={saveFitting3DCoordinates} />
                       ) : (
                         <div className="fitting-3d-empty-state">
                           <p>Для цієї фурнітури 3D-модель ще не додана.</p>

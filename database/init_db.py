@@ -274,6 +274,7 @@ def _ensure_fitting_3d_assets_schema(connection):
         bbox_min_x FLOAT, bbox_min_y FLOAT, bbox_min_z FLOAT,
         bbox_max_x FLOAT, bbox_max_y FLOAT, bbox_max_z FLOAT,
         axis_up VARCHAR(8), axis_forward VARCHAR(8), origin_x FLOAT, origin_y FLOAT, origin_z FLOAT,
+        rotation_x FLOAT, rotation_y FLOAT, rotation_z FLOAT, coordinate_system_configured INTEGER NOT NULL DEFAULT 0,
         created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         validated_at DATETIME, FOREIGN KEY(fitting_id) REFERENCES fittings(id) ON DELETE CASCADE)""")
     connection.exec_driver_sql("""CREATE TABLE IF NOT EXISTS fitting_3d_asset_sources (
@@ -288,6 +289,15 @@ def _ensure_fitting_3d_assets_schema(connection):
 def upgrade_sqlite_schema():
 
     with engine.begin() as connection:
+
+        fitting_3d_coordinate_columns = {
+            "rotation_x": "FLOAT",
+            "rotation_y": "FLOAT",
+            "rotation_z": "FLOAT",
+            "coordinate_system_configured": "INTEGER NOT NULL DEFAULT 0",
+        }
+        for column_name, column_type in fitting_3d_coordinate_columns.items():
+            _add_column_if_missing(connection, "fitting_3d_assets", column_name, column_type)
 
         project_specification_columns = {
             "project_name": "VARCHAR",
