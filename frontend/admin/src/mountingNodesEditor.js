@@ -1,5 +1,6 @@
 import { normalizeMountingNodeCategoryCode } from "./mountingNodeCategories.js";
 import { normalizeMountingNodeFunctionalCode } from "./mountingNodeFunctionalCodes.js";
+import { resolveAdminAssetUrl } from "./api.js";
 
 function normalizeText(value) {
   return String(value || "").trim();
@@ -545,11 +546,11 @@ export function resolveMountingNodePreviewUrl(node = {}, fallbackUrl = "") {
   const threeDPreviewUrl = normalizeText(node?.preview_3d_image_url) || normalizeText(node?.preview_generated_image_url);
 
   if (previewMode === "custom" && customPreviewUrl) {
-    return customPreviewUrl;
+    return resolveAdminAssetUrl(customPreviewUrl);
   }
 
-  if (previewMode === "three_d") return threeDPreviewUrl;
-  return normalizeText(node?.preview_auto_image_url) || normalizeText(fallbackUrl);
+  if (previewMode === "three_d") return resolveAdminAssetUrl(threeDPreviewUrl);
+  return resolveAdminAssetUrl(normalizeText(node?.preview_auto_image_url) || normalizeText(fallbackUrl));
 }
 
 export function buildMountingNodeEditorSavePayload({

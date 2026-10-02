@@ -72,12 +72,14 @@ CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 LOCAL_API_HEALTH_URL = "http://127.0.0.1:8000/health"
 LOCAL_API_DOCS_URL = "http://127.0.0.1:8000/docs"
 LOCAL_APP_URL = "http://127.0.0.1:5175"
-LOCAL_ADMIN_URL = "http://127.0.0.1:5173"
+LOCAL_ADMIN_PRODUCTION_URL = "http://127.0.0.1:4175/admin/"
+LOCAL_ADMIN_URL = LOCAL_ADMIN_PRODUCTION_URL
 REMOTE_ADMIN_WEBROOT = "/var/www/furniture-admin"
 CANONICAL_MAIN_API = (PROJECT_ROOT / "main_api.py").as_posix().lower()
 CANONICAL_MAIN_BOT = (PROJECT_ROOT / "main.py").as_posix().lower()
 CANONICAL_FRONTEND_APP = (PROJECT_ROOT / "frontend" / "app").as_posix().lower()
 CANONICAL_FRONTEND_ADMIN = (PROJECT_ROOT / "frontend" / "admin").as_posix().lower()
+CANONICAL_ADMIN_PRODUCTION_PREVIEW = (PROJECT_ROOT / "scripts" / "admin_production_preview.py").as_posix().lower()
 NODE_EXECUTABLE = (shutil.which("node") or shutil.which("node.exe") or "node.exe").replace("\\", "/").lower()
 
 
@@ -1183,15 +1185,16 @@ def build_product_component_specs() -> list[dict[str, object]]:
             "summary": "Адмін-панель для керування продуктом.",
             "responsibility": "Дає доступ до керування проектами, каталогом, аудитом і сервісними діями.",
             "process_key": "frontend-admin",
-            "start_command": ["npm", "run", "dev"],
-            "cwd": PROJECT_ROOT / "frontend" / "admin",
-            "open_targets": [LOCAL_ADMIN_URL],
+            "start_command": python_command(str(PROJECT_ROOT / "scripts" / "admin_production_preview.py")),
+            "cwd": PROJECT_ROOT,
+            "open_targets": [LOCAL_ADMIN_PRODUCTION_URL],
             "file_patterns": [
                 "frontend/admin/src/*.jsx",
                 "frontend/admin/src/components/*.jsx",
                 "frontend/admin/src/*.css",
                 "frontend/admin/vite.config.js",
                 "frontend/admin/package.json",
+                "scripts/admin_production_preview.py",
             ],
             "depends_on": ["API", "База даних"],
             "control": "Запуск / стоп",
@@ -1586,7 +1589,7 @@ class WizardApp(tk.Tk):
         if key == "frontend-app":
             return LOCAL_APP_URL
         if key == "frontend-admin":
-            return LOCAL_ADMIN_URL
+            return LOCAL_ADMIN_PRODUCTION_URL
         return None
 
     def _cached_service_health(self, key: str) -> bool | None:
@@ -4166,7 +4169,7 @@ class WizardApp(tk.Tk):
         webbrowser.open(LOCAL_APP_URL)
 
     def open_frontend_admin(self) -> None:
-        webbrowser.open(LOCAL_ADMIN_URL)
+        webbrowser.open(LOCAL_ADMIN_PRODUCTION_URL)
 
     def open_maintenance_owner_login(self) -> None:
         webbrowser.open(OWNER_LOGIN_URL)
@@ -4176,7 +4179,7 @@ class WizardApp(tk.Tk):
 
     def open_all_local_pages(self) -> None:
         webbrowser.open(LOCAL_API_DOCS_URL)
-        webbrowser.open(LOCAL_ADMIN_URL)
+        webbrowser.open(LOCAL_ADMIN_PRODUCTION_URL)
         webbrowser.open(LOCAL_APP_URL)
 
     def preview_maintenance_page(self) -> None:
@@ -4992,11 +4995,7 @@ class WizardApp(tk.Tk):
                 return True
             return "npm run dev" in search_text or "npm-cli.js" in search_text
         if key == "frontend-admin":
-            if CANONICAL_FRONTEND_ADMIN not in search_text:
-                return False
-            if "vite.js" in search_text and (port is None or f"--port {port}" in search_text):
-                return True
-            return "npm run dev" in search_text or "npm-cli.js" in search_text
+            return CANONICAL_ADMIN_PRODUCTION_PREVIEW in search_text
         return False
 
     def _row_pid(self, row: dict[str, object]) -> int | None:
@@ -5061,8 +5060,8 @@ class WizardApp(tk.Tk):
         if api_listener_pid and api_listener_pid in rows_by_pid:
             targets["api"].add(api_listener_pid)
 
-        for pid in python_rows:
-            if pid != api_listener_pid:
+        for pid, row in python_rows.items():
+            if pid != api_listener_pid and CANONICAL_ADMIN_PRODUCTION_PREVIEW not in self._process_search_text(row):
                 targets["bot"].add(pid)
 
         for listener in listener_rows:
@@ -5072,7 +5071,11 @@ class WizardApp(tk.Tk):
             except (TypeError, ValueError):
                 continue
 
-            key = "frontend-app" if port == 5175 else "frontend-admin" if port == 5173 else None
+            key = (
+                "frontend-app" if port == 5175
+                else "frontend-admin" if port == 4175
+                else None
+            )
             if not key:
                 continue
 
@@ -5083,7 +5086,7 @@ class WizardApp(tk.Tk):
                 continue
             if row is None:
                 continue
-            if self._is_node_process_row(row):
+            if self._is_verified_process_row_for_key(key, row, port=port):
                 targets[key].add(listener_pid)
 
         if include_history:
@@ -5114,10 +5117,10 @@ class WizardApp(tk.Tk):
                         targets[key].add(pid)
                 elif key == "frontend-admin":
                     if any(
-                        int(listener.get("LocalPort") or 0) == 5173
+                        int(listener.get("LocalPort") or 0) == 4175
                         and int(listener.get("OwningProcess") or 0) == pid
                         for listener in listener_rows
-                    ) and (live_row is None or self._is_node_process_row(live_row)):
+                    ) and self._is_verified_process_row_for_key(key, live_row):
                         targets[key].add(pid)
 
         return {key: {pid for pid in pids if pid > 0} for key, pids in targets.items()}
@@ -5324,7 +5327,7 @@ class WizardApp(tk.Tk):
             try:
                 api_up = self._api_service_responds()
                 app_up = self._service_responds(LOCAL_APP_URL)
-                admin_up = self._service_responds(LOCAL_ADMIN_URL)
+                admin_up = self._service_responds(LOCAL_ADMIN_PRODUCTION_URL)
             finally:
                 def finish() -> None:
                     self._service_health_state["api"] = api_up
@@ -5339,7 +5342,7 @@ class WizardApp(tk.Tk):
                         health_ok=app_up,
                     )
                     self._runtime_status_state["frontend-admin"] = resolve_runtime_status(
-                        listener_present=5173 in ports,
+                        listener_present=4175 in ports,
                         health_ok=admin_up,
                     )
                     self._runtime_status_state["bot"] = "online" if bot_running else "offline"
@@ -5665,7 +5668,7 @@ class WizardApp(tk.Tk):
         ports = listener_ports()
         api_up = 8000 in ports and self._api_service_responds()
         app_up = 5175 in ports and self._service_responds(LOCAL_APP_URL)
-        admin_up = 5173 in ports and self._service_responds(LOCAL_ADMIN_URL)
+        admin_up = 4175 in ports and self._service_responds(LOCAL_ADMIN_PRODUCTION_URL)
         bot_proc = self.managed_processes.get("bot")
         bot_running = bot_proc is not None and bot_proc.poll() is None
         return api_up and app_up and admin_up and bot_running
@@ -5971,17 +5974,17 @@ class WizardApp(tk.Tk):
         )
 
     def start_admin_frontend(self) -> None:
-        if 5173 in listener_ports() and self._service_responds(LOCAL_ADMIN_URL):
+        if 4175 in listener_ports() and self._service_responds(LOCAL_ADMIN_PRODUCTION_URL):
             self._set_launch_status("Frontend admin уже запущено.")
-            self._append_product_log("[Frontend admin] already responding on 127.0.0.1:5173; duplicate launch skipped")
+            self._append_product_log("[Frontend admin] already responding on 127.0.0.1:4175; duplicate launch skipped")
             self._set_action_button_state("frontend-admin", "success")
             self.refresh_managed_processes()
             return
         self._start_managed_process(
             "frontend-admin",
             "Frontend admin",
-            npm_command("run", "dev"),
-            cwd=PROJECT_ROOT / "frontend" / "admin",
+            python_command(str(PROJECT_ROOT / "scripts" / "admin_production_preview.py")),
+            cwd=PROJECT_ROOT,
         )
 
 
