@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from datetime import datetime, timezone
 from typing import Any, Mapping, Optional
@@ -16,6 +17,7 @@ from database.models.mounting_node import (
     MountingNodeModel,
     MountingNodeVersionModel,
 )
+from database.models.fitting_3d_asset import Fitting3DAssetModel  # noqa: F401 - register mapper for fitting assets
 from database.mounting_node_categories import (
     ALLOWED_MOUNTING_NODE_CATEGORY_CODES,
     normalize_mounting_node_category_code,
@@ -370,6 +372,24 @@ class MountingNodeService:
     @staticmethod
     def _serialize_item(item) -> dict[str, Any]:
         fitting = getattr(item, "fitting", None)
+        asset = getattr(fitting, "three_d_asset", None)
+        asset_payload = None
+        if asset is not None and getattr(asset, "canonical_file_url", None):
+            try:
+                material_overrides = json.loads(asset.material_overrides_json) if asset.material_overrides_json else None
+            except (TypeError, ValueError):
+                material_overrides = None
+            asset_payload = {
+                "id": asset.id,
+                "canonical_file_url": asset.canonical_file_url,
+                "canonical_format": asset.canonical_format,
+                "status": asset.status,
+                "material_color_override": asset.material_color_override,
+                "material_overrides": material_overrides,
+                "coordinate_system_configured": bool(asset.coordinate_system_configured),
+                "origin_x": asset.origin_x, "origin_y": asset.origin_y, "origin_z": asset.origin_z,
+                "rotation_x": asset.rotation_x, "rotation_y": asset.rotation_y, "rotation_z": asset.rotation_z,
+            }
         return {
             "id": item.id,
             "node_id": item.node_id,
@@ -385,6 +405,15 @@ class MountingNodeService:
             "is_required": bool(getattr(item, "is_required", True)),
             "affects_processing": bool(getattr(item, "affects_processing", True)),
             "order_index": int(getattr(item, "order_index", 0) or 0),
+            "visual_anchor_panel": getattr(item, "visual_anchor_panel", None),
+            "visual_anchor_surface": getattr(item, "visual_anchor_surface", None),
+            "visual_offset_x": float(getattr(item, "visual_offset_x", 0) or 0),
+            "visual_offset_y": float(getattr(item, "visual_offset_y", 0) or 0),
+            "visual_offset_z": float(getattr(item, "visual_offset_z", 0) or 0),
+            "visual_rotation_x": float(getattr(item, "visual_rotation_x", 0) or 0),
+            "visual_rotation_y": float(getattr(item, "visual_rotation_y", 0) or 0),
+            "visual_rotation_z": float(getattr(item, "visual_rotation_z", 0) or 0),
+            "three_d_asset": asset_payload,
         }
 
     @staticmethod
@@ -621,6 +650,14 @@ class MountingNodeService:
             "is_required": MountingNodeService._normalize_bool(item.get("is_required"), True),
             "affects_processing": MountingNodeService._normalize_bool(item.get("affects_processing"), True),
             "order_index": int(item.get("order_index", 0) or 0),
+            "visual_anchor_panel": MountingNodeService._optional_text(item.get("visual_anchor_panel")),
+            "visual_anchor_surface": MountingNodeService._optional_text(item.get("visual_anchor_surface")),
+            "visual_offset_x": float(item.get("visual_offset_x", 0) or 0),
+            "visual_offset_y": float(item.get("visual_offset_y", 0) or 0),
+            "visual_offset_z": float(item.get("visual_offset_z", 0) or 0),
+            "visual_rotation_x": float(item.get("visual_rotation_x", 0) or 0),
+            "visual_rotation_y": float(item.get("visual_rotation_y", 0) or 0),
+            "visual_rotation_z": float(item.get("visual_rotation_z", 0) or 0),
         }
 
     @staticmethod
@@ -1339,6 +1376,14 @@ class MountingNodeService:
                     "is_required": item.is_required,
                     "affects_processing": item.affects_processing,
                     "order_index": item.order_index,
+                    "visual_anchor_panel": item.visual_anchor_panel,
+                    "visual_anchor_surface": item.visual_anchor_surface,
+                    "visual_offset_x": item.visual_offset_x,
+                    "visual_offset_y": item.visual_offset_y,
+                    "visual_offset_z": item.visual_offset_z,
+                    "visual_rotation_x": item.visual_rotation_x,
+                    "visual_rotation_y": item.visual_rotation_y,
+                    "visual_rotation_z": item.visual_rotation_z,
                 }
                 for item in getattr(node, "items", []) or []
             ]

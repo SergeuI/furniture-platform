@@ -50,6 +50,14 @@ function normalizeNodeItem(item) {
     is_required: normalizeBoolean(item?.is_required, true),
     affects_processing: normalizeBoolean(item?.affects_processing, true),
     order_index: normalizeInteger(item?.order_index),
+    visual_anchor_panel: normalizeOptionalText(item?.visual_anchor_panel),
+    visual_anchor_surface: normalizeOptionalText(item?.visual_anchor_surface),
+    visual_offset_x: Number(item?.visual_offset_x || 0),
+    visual_offset_y: Number(item?.visual_offset_y || 0),
+    visual_offset_z: Number(item?.visual_offset_z || 0),
+    visual_rotation_x: Number(item?.visual_rotation_x || 0),
+    visual_rotation_y: Number(item?.visual_rotation_y || 0),
+    visual_rotation_z: Number(item?.visual_rotation_z || 0),
   };
 }
 
@@ -271,7 +279,13 @@ function resolveMountingNodeEditorSnapshot(nodeDetail) {
     name: snapshot.name ?? nodeDetail.name,
     description: snapshot.description ?? nodeDetail.description,
     items: snapshotItems.length
-      ? snapshotItems.map((item) => ({ ...item }))
+      ? snapshotItems.map((item) => {
+          const liveItem = liveItems.find((candidate) =>
+            (item?.id != null && candidate?.id != null && String(candidate.id) === String(item.id)) ||
+            (item?.fitting_id != null && candidate?.fitting_id != null && String(candidate.fitting_id) === String(item.fitting_id)),
+          );
+          return liveItem ? { ...liveItem, ...item, three_d_asset: liveItem.three_d_asset || item.three_d_asset || null } : { ...item };
+        })
       : liveItems.map((item) => ({ ...item })),
     templates: snapshotTemplates.length
       ? snapshotTemplates.map((template) => cloneMountingNodeEditorTemplate(template)).filter(Boolean)

@@ -1,7 +1,8 @@
-import { memo, useEffect, useMemo, useState } from "react";
+import { memo, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
-import { OrbitControls } from "@react-three/drei";
+import { OrbitControls, useGLTF } from "@react-three/drei";
 import { BoxGeometry, CanvasTexture, DoubleSide, EdgesGeometry, Float32BufferAttribute, LinearFilter, MOUSE, Quaternion, Vector3 } from "three";
+import { resolveAdminAssetUrl } from "../../api.js";
 
 import {
   buildSurfaceMountThreePreviewHoleVolumes,
@@ -656,6 +657,26 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
   return new Quaternion().setFromUnitVectors(new Vector3(0, 1, 0), direction.normalize());
 }
 
+function FittingAssemblyModel({ item, layout }) {
+  const asset = item?.three_d_asset;
+  const { scene } = useGLTF(resolveAdminAssetUrl(asset.canonical_file_url));
+  const panel = String(item.visual_anchor_panel || "").trim();
+  const surface = String(item.visual_anchor_surface || "").trim();
+  const vertical = layout.panels?.[0];
+  const horizontal = layout.panels?.[1];
+  let anchor = [0, 0, 0];
+  if (panel === "vertical_panel" && vertical) {
+    const thickness = Number(vertical.args?.[0] || 0);
+    anchor = [surface === "outer_face" ? Number(vertical.position?.[0] || 0) - thickness / 2 : Number(vertical.position?.[0] || 0) + thickness / 2, Number(vertical.position?.[1] || 0), Number(vertical.position?.[2] || 0)];
+  } else if (panel === "horizontal_panel" && horizontal) {
+    const thickness = Number(horizontal.args?.[1] || 0);
+    anchor = [Number(horizontal.position?.[0] || 0), surface === "edge" ? Number(horizontal.position?.[1] || 0) + thickness / 2 : Number(horizontal.position?.[1] || 0), Number(horizontal.position?.[2] || 0)];
+  }
+  const offset = [item.visual_offset_x, item.visual_offset_y, item.visual_offset_z].map((value) => Number(value || 0) * 0.01);
+  const rotation = [item.visual_rotation_x, item.visual_rotation_y, item.visual_rotation_z].map((value) => Number(value || 0) * Math.PI / 180);
+  return <group position={anchor}><group position={offset} rotation={rotation}><primitive object={scene} scale={[0.01, 0.01, 0.01]} /></group></group>;
+}
+
 export default function HolesMountingThreePreview({
   holes,
   mountingVariantKey,
@@ -669,7 +690,46 @@ export default function HolesMountingThreePreview({
   faceToEdgeHorizontalPreviewThicknessMm,
   onFaceToEdgeVerticalPreviewThicknessMmChange,
   onFaceToEdgeHorizontalPreviewThicknessMmChange,
+  fittingItems = [],
+  onFittingPlacementChange,
+  onSaveFittingPlacement,
 }) {
+        const fittingItemsWithAssets = fittingItems.filter((item) => item?.three_d_asset?.canonical_file_url);
+        const [fittingPlacementDrafts, setFittingPlacementDrafts] = useState({});
+        const [fittingPlacementPersisted, setFittingPlacementPersisted] = useState({});
+        const [fittingPlacementSaving, setFittingPlacementSaving] = useState(false);
+        const [fittingPlacementStatus, setFittingPlacementStatus] = useState("");
+        const [fittingPlacementEditorOpen, setFittingPlacementEditorOpen] = useState(false);
+        const fittingPlacementTimer = useRef(null);
+        useEffect(() => {
+          const next = Object.fromEntries(fittingItemsWithAssets.map((item) => [String(item.id), {
+            visual_anchor_panel: item.visual_anchor_panel || "",
+            visual_anchor_surface: item.visual_anchor_surface || "",
+            visual_offset_x: item.visual_offset_x || 0,
+            visual_offset_y: item.visual_offset_y || 0,
+            visual_offset_z: item.visual_offset_z || 0,
+            visual_rotation_x: item.visual_rotation_x || 0,
+            visual_rotation_y: item.visual_rotation_y || 0,
+            visual_rotation_z: item.visual_rotation_z || 0,
+          }]));
+          setFittingPlacementDrafts(next);
+          setFittingPlacementPersisted(next);
+        }, [fittingItems]);
+        useEffect(() => () => clearTimeout(fittingPlacementTimer.current), []);
+        const updateFittingPlacement = (itemId, key, value) => {
+          setFittingPlacementStatus("");
+          setFittingPlacementDrafts((current) => {
+            const next = { ...current, [itemId]: { ...current[itemId], [key]: value } };
+            onFittingPlacementChange?.(itemId, next[itemId]);
+            return next;
+          });
+        };
+        const resetFittingPlacement = (itemId) => {
+          const persisted = fittingPlacementPersisted[itemId];
+          setFittingPlacementStatus("");
+          setFittingPlacementDrafts((current) => ({ ...current, [itemId]: { ...persisted } }));
+          onFittingPlacementChange?.(itemId, persisted);
+        };
         const [surfaceMountPreviewThicknessMm, setSurfaceMountPreviewThicknessMm] = useState(
           SURFACE_MOUNT_PREVIEW_THICKNESS_MM_DEFAULT,
         );
@@ -1080,6 +1140,25 @@ export default function HolesMountingThreePreview({
 
     return (
       <div className="holes-three-preview">
+        {fittingItemsWithAssets.length ? <div className={`mounting-node-fitting-placement-editor${fittingPlacementEditorOpen ? " is-open" : ""}`}>
+          <button className="mounting-node-fitting-placement-editor-toggle" type="button" onClick={() => setFittingPlacementEditorOpen((current) => !current)} aria-expanded={fittingPlacementEditorOpen}>
+            <strong>{fittingPlacementEditorOpen ? "▾" : "▸"} 3D фурнітура</strong>
+            <span>{fittingItemsWithAssets.map((item) => item.fitting_name || item.fitting_article || item.fitting_code || `Fitting ${item.fitting_id}`).join(", ")}</span>
+          </button>
+          {fittingPlacementEditorOpen ? fittingItemsWithAssets.map((item) => {
+            const itemId = String(item.id);
+            const draft = fittingPlacementDrafts[itemId] || {};
+            return <div className="mounting-node-fitting-placement" key={itemId}>
+              <strong>{item.fitting_name || item.fitting_article || item.fitting_code || `Fitting ${item.fitting_id}`}</strong>
+              <label>Панель<select value={draft.visual_anchor_panel || ""} onChange={(event) => updateFittingPlacement(itemId, "visual_anchor_panel", event.target.value || null)}><option value="">Не задано</option><option value="vertical_panel">Вертикальна панель</option><option value="horizontal_panel">Горизонтальна панель</option></select></label>
+              <label>Площина<select value={draft.visual_anchor_surface || ""} onChange={(event) => updateFittingPlacement(itemId, "visual_anchor_surface", event.target.value || null)}><option value="">Не задано</option><option value="outer_face">Зовнішня площина</option><option value="inner_face">Внутрішня площина</option><option value="edge">Торець</option></select></label>
+              <div className="mounting-node-fitting-placement-fields"><span>Зміщення, мм</span>{["x", "y", "z"].map((axis) => <label key={`o-${axis}`}>{axis.toUpperCase()}<input type="number" step="any" value={draft[`visual_offset_${axis}`] ?? 0} onChange={(event) => updateFittingPlacement(itemId, `visual_offset_${axis}`, Number(event.target.value) || 0)} /></label>)}</div>
+              <div className="mounting-node-fitting-placement-fields"><span>Обертання, °</span>{["x", "y", "z"].map((axis) => <label key={`r-${axis}`}>{axis.toUpperCase()}<input type="number" step="1" value={draft[`visual_rotation_${axis}`] ?? 0} onChange={(event) => updateFittingPlacement(itemId, `visual_rotation_${axis}`, Number(event.target.value) || 0)} /></label>)}</div>
+              <div className="mounting-node-fitting-placement-actions"><button className="ghost-button compact-button" type="button" onClick={() => resetFittingPlacement(itemId)}>Скинути</button><button className="primary-button compact-button" disabled={fittingPlacementSaving} type="button" onClick={async () => { setFittingPlacementSaving(true); setFittingPlacementStatus(""); const result = await onSaveFittingPlacement?.(itemId, draft); if (result?.success) { setFittingPlacementPersisted((current) => ({ ...current, [itemId]: { ...draft } })); setFittingPlacementStatus("✓ Зміни збережено"); fittingPlacementTimer.current = setTimeout(() => setFittingPlacementStatus(""), 2500); } else setFittingPlacementStatus("Не вдалося зберегти зміни."); setFittingPlacementSaving(false); }}>{fittingPlacementSaving ? "Зберігаю…" : "Зберегти"}</button></div>
+            </div>;
+          }) : null}
+          {fittingPlacementStatus ? <span className={fittingPlacementStatus.startsWith("✓") ? "fitting-3d-appearance-status" : "fitting-3d-appearance-error"}>{fittingPlacementStatus}</span> : null}
+        </div> : null}
         {isSurfaceMountPreview ? (
           <div className="holes-three-preview-thickness-toolbar is-single">
             <strong style={{ fontSize: "0.85rem" }}>Товщина панелі для перегляду, мм</strong>
@@ -1480,6 +1559,11 @@ export default function HolesMountingThreePreview({
               </group>
             )}
           </group>
+          <Suspense fallback={null}>
+            {fittingItems.filter((item) => item?.three_d_asset?.canonical_file_url).map((item) => (
+              <FittingAssemblyModel key={item.id} item={item} layout={layout} />
+            ))}
+          </Suspense>
           <OrbitControls
             enableDamping
             enablePan

@@ -10773,6 +10773,20 @@ export default function App() {
       selectedHolePointPanelKey,
     ],
   );
+  const updateFittingPlacementDraft = useCallback((itemId, placement) => {
+    setMountingNodeEditorDraft((current) => current ? {
+      ...current,
+      items: (current.items || []).map((item) => String(item.id) === String(itemId) ? { ...item, ...placement } : item),
+    } : current);
+  }, []);
+  const saveFittingPlacement = useCallback(async (itemId, placement) => {
+    const nodeId = String(mountingNodeEditorDraftNodeId || "").trim();
+    const currentItems = Array.isArray(mountingNodeEditorDraft?.items) ? mountingNodeEditorDraft.items : [];
+    const items = currentItems.map((item) => String(item.id) === String(itemId) ? { ...item, ...placement } : item);
+    const result = await updateMountingNode(token, nodeId, { items });
+    if (result?.success && result.node) setMountingNodeEditorDraft(result.node);
+    return result;
+  }, [mountingNodeEditorDraft, mountingNodeEditorDraftNodeId, token]);
   const inferStatusTone = useCallback((message) => {
     const normalizedMessage = String(message || "").toLowerCase();
 
@@ -30810,6 +30824,9 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                     shouldRenderAngledTwoPlanesThreePreview(normalizedSelectedHoleMountingVariantKey) ? (
                     <HolesMountingThreePreview
                       holes={holesPreviewModel.scene?.holes || []}
+                      fittingItems={mountingNodeEditorDraft?.items || []}
+                      onFittingPlacementChange={updateFittingPlacementDraft}
+                      onSaveFittingPlacement={saveFittingPlacement}
                       mountingVariantKey={normalizedSelectedHoleMountingVariantKey}
                       faceToEdgeVerticalPreviewThicknessMm={faceToEdgeVerticalPreviewThicknessMm}
                       faceToEdgeHorizontalPreviewThicknessMm={faceToEdgeHorizontalPreviewThicknessMm}

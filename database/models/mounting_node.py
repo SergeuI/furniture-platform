@@ -4,6 +4,7 @@ from sqlalchemy import (
     Boolean,
     Column,
     DateTime,
+    Float,
     ForeignKey,
     Integer,
     JSON,
@@ -226,6 +227,15 @@ class MountingNodeItemModel(Base):
         default=0,
         server_default=text("0"),
     )
+
+    visual_anchor_panel = Column(String(64), nullable=True)
+    visual_anchor_surface = Column(String(64), nullable=True)
+    visual_offset_x = Column(Float, nullable=False, default=0.0, server_default=text("0"))
+    visual_offset_y = Column(Float, nullable=False, default=0.0, server_default=text("0"))
+    visual_offset_z = Column(Float, nullable=False, default=0.0, server_default=text("0"))
+    visual_rotation_x = Column(Float, nullable=False, default=0.0, server_default=text("0"))
+    visual_rotation_y = Column(Float, nullable=False, default=0.0, server_default=text("0"))
+    visual_rotation_z = Column(Float, nullable=False, default=0.0, server_default=text("0"))
 
     created_at = Column(
         DateTime,

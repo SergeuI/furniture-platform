@@ -138,7 +138,7 @@ class MountingNodeRepository:
         return (
             self.session.query(MountingNodeModel)
             .options(load_only(*load_columns))
-            .options(selectinload(MountingNodeModel.items).selectinload(MountingNodeItemModel.fitting))
+            .options(selectinload(MountingNodeModel.items).selectinload(MountingNodeItemModel.fitting).selectinload(FittingModel.three_d_asset))
             .options(
                 selectinload(MountingNodeModel.templates)
                 .selectinload(MountingNodeTemplateModel.template)

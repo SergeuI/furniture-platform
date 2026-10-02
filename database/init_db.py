@@ -292,6 +292,18 @@ def upgrade_sqlite_schema():
 
     with engine.begin() as connection:
 
+        for column_name, column_type in {
+            "visual_anchor_panel": "VARCHAR(64)",
+            "visual_anchor_surface": "VARCHAR(64)",
+            "visual_offset_x": "FLOAT NOT NULL DEFAULT 0",
+            "visual_offset_y": "FLOAT NOT NULL DEFAULT 0",
+            "visual_offset_z": "FLOAT NOT NULL DEFAULT 0",
+            "visual_rotation_x": "FLOAT NOT NULL DEFAULT 0",
+            "visual_rotation_y": "FLOAT NOT NULL DEFAULT 0",
+            "visual_rotation_z": "FLOAT NOT NULL DEFAULT 0",
+        }.items():
+            _add_column_if_missing(connection, "mounting_node_items", column_name, column_type)
+
         fitting_3d_coordinate_columns = {
             "rotation_x": "FLOAT",
             "rotation_y": "FLOAT",

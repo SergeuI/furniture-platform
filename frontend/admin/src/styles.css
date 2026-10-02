@@ -15307,8 +15307,9 @@ tbody tr.selected {
 
 .mounting-node-editor-workspace .holes-three-preview {
   min-height: 0;
-  height: 320px;
-  max-height: 320px;
+  height: auto;
+  max-height: none;
+  overflow: visible;
 }
 
 /* ---------------------------------------------------------
@@ -16690,6 +16691,9 @@ section.main-panel.full-panel:has(> article.holes-view-card > .mounting-node-wor
 
 
 /* workspace v34 three preview inner sizing */
+.mounting-node-editor-workspace .mounting-node-editor-right-column .holes-three-preview-canvas{order:1!important}
+.mounting-node-editor-workspace .mounting-node-editor-right-column .mounting-node-fitting-placement-editor{order:2!important}
+.mounting-node-editor-workspace .mounting-node-editor-right-column .holes-three-preview-thickness-toolbar{order:3!important}
 .mounting-node-editor-workspace .mounting-node-editor-right-column .holes-three-preview-canvas>div{width:100%!important;height:auto!important}
 
 
@@ -17511,3 +17515,21 @@ section.main-panel.full-panel:has(> article.holes-view-card > .mounting-node-wor
 .fitting-3d-appearance-controls{display:grid;gap:7px;padding:8px 0;border-top:1px solid #edf1ee}.fitting-3d-appearance-picker-row{display:flex;align-items:center;gap:8px;font-size:12px}.fitting-3d-appearance-swatch{display:block!important;width:36px!important;height:32px!important;min-width:36px;padding:2px;border:1px solid #cfdad3;border-radius:6px;cursor:pointer}.fitting-3d-appearance-controls label{display:flex;align-items:center;gap:8px;font-size:12px}.fitting-3d-appearance-controls label input:not([type=color]){width:100px;box-sizing:border-box;font-family:monospace}.fitting-3d-appearance-presets,.fitting-3d-appearance-actions{display:flex;gap:8px;flex-wrap:wrap}.fitting-3d-appearance-actions{justify-content:space-between}
 .fitting-3d-material-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 0;border-top:1px solid #edf1ee}.fitting-3d-material-row>strong{min-width:120px}.fitting-3d-material-row label{margin-left:auto}.fitting-3d-appearance-hint{font-size:12px;color:#68756e}
 .fitting-3d-appearance-status{color:#287a4b;font-size:12px;font-weight:700}.fitting-3d-appearance-error{margin:0;color:#b42318;font-size:12px}
+.mounting-node-fitting-placement-editor{display:grid;gap:8px;padding:8px;border:1px solid #dfe7e3;border-radius:8px;background:#fbfdfc;font-size:12px}.mounting-node-fitting-placement{display:grid;grid-template-columns:repeat(2,minmax(150px,1fr));gap:7px;align-items:end}.mounting-node-fitting-placement>strong,.mounting-node-fitting-placement-fields,.mounting-node-fitting-placement-actions{grid-column:1/-1}.mounting-node-fitting-placement label{display:grid;gap:3px}.mounting-node-fitting-placement select,.mounting-node-fitting-placement input{box-sizing:border-box;width:100%;min-height:30px}.mounting-node-fitting-placement-fields{display:flex;flex-wrap:wrap;gap:7px;align-items:end}.mounting-node-fitting-placement-fields>span{width:100%;font-weight:700;color:#2f443a}.mounting-node-fitting-placement-fields label{grid-template-columns:auto 90px;align-items:center}.mounting-node-fitting-placement-actions{display:flex;justify-content:flex-end;gap:8px}@media(max-width:640px){.mounting-node-fitting-placement{grid-template-columns:1fr}}
+.mounting-node-editor-workspace .mounting-node-fitting-placement-editor{gap:5px;padding:6px 8px}
+.mounting-node-editor-workspace .mounting-node-fitting-placement{grid-template-columns:repeat(2,minmax(0,1fr));gap:5px 8px}
+.mounting-node-editor-workspace .mounting-node-fitting-placement-fields{gap:5px}
+.mounting-node-editor-workspace .mounting-node-fitting-placement-fields>span{width:auto;min-width:88px}
+.mounting-node-editor-workspace .mounting-node-fitting-placement-fields label{grid-template-columns:auto minmax(58px,76px)}
+.mounting-node-editor-workspace .mounting-node-fitting-placement select,.mounting-node-editor-workspace .mounting-node-fitting-placement input{min-height:28px}
+.mounting-node-editor-workspace .mounting-node-fitting-placement-actions{gap:6px}
+.mounting-node-editor-workspace .mounting-node-fitting-placement-editor{order:3!important;gap:4px;padding:5px 7px}
+.mounting-node-editor-workspace .mounting-node-fitting-placement-editor-toggle{align-items:center;background:transparent;border:0;color:#2f443a;cursor:pointer;display:flex;font:inherit;gap:8px;justify-content:flex-start;min-height:28px;padding:2px 0;text-align:left;width:100%}
+.mounting-node-editor-workspace .mounting-node-fitting-placement-editor-toggle strong{white-space:nowrap}
+.mounting-node-editor-workspace .mounting-node-fitting-placement-editor-toggle span{color:#687b72;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mounting-node-editor-workspace .mounting-node-editor-right-column .holes-three-preview-thickness-toolbar{order:1!important}
+.mounting-node-editor-workspace .mounting-node-editor-right-column .holes-three-preview-canvas{order:2!important}
+.mounting-node-editor-workspace .mounting-node-editor-right-column .mounting-node-fitting-placement-editor{order:3!important}
+.mounting-node-editor-workspace.is-ordered-columns>.is-center>.mounting-node-editor-right-column{max-height:calc(100vh - 170px);overflow-x:hidden;overflow-y:auto}
+@media(max-width:900px){.mounting-node-editor-workspace.is-ordered-columns>.is-center>.mounting-node-editor-right-column{max-height:none;overflow:visible}}
+@media(min-width:901px){.mounting-node-editor-workspace .holes-three-preview-canvas{height:320px!important;min-height:0!important;max-height:320px!important}}

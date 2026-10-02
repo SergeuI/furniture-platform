@@ -23,6 +23,14 @@ class MountingNodeItemCreateSchema(BaseModel):
     is_required: bool = True
     affects_processing: bool = True
     order_index: int = 0
+    visual_anchor_panel: Literal["vertical_panel", "horizontal_panel"] | None = None
+    visual_anchor_surface: Literal["outer_face", "inner_face", "edge"] | None = None
+    visual_offset_x: float = 0.0
+    visual_offset_y: float = 0.0
+    visual_offset_z: float = 0.0
+    visual_rotation_x: float = 0.0
+    visual_rotation_y: float = 0.0
+    visual_rotation_z: float = 0.0
 
 
 class MountingNodeItemReadSchema(BaseModel):
@@ -39,6 +47,15 @@ class MountingNodeItemReadSchema(BaseModel):
     is_required: bool = True
     affects_processing: bool = True
     order_index: int = 0
+    visual_anchor_panel: str | None = None
+    visual_anchor_surface: str | None = None
+    visual_offset_x: float = 0.0
+    visual_offset_y: float = 0.0
+    visual_offset_z: float = 0.0
+    visual_rotation_x: float = 0.0
+    visual_rotation_y: float = 0.0
+    visual_rotation_z: float = 0.0
+    three_d_asset: dict[str, Any] | None = None
 
 
 class MountingNodeTemplateLinkCreateSchema(BaseModel):
