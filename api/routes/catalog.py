@@ -7128,8 +7128,10 @@ async def import_fitting_3d_asset_route(
     except Fitting3DAssetConflictError as exc:
         db.rollback(); raise HTTPException(status_code=409, detail="Fitting already has a 3D asset") from exc
     except Fitting3DPackageValidationError as exc:
+        logger.warning("Fitting 3D package validation failed: %s", str(exc))
         db.rollback(); raise HTTPException(status_code=400, detail="Invalid 3D asset package") from exc
     except (Fitting3DConversionError, Fitting3DCanonicalValidationError) as exc:
+        logger.warning("Fitting 3D conversion request failed: stage=conversion reason=%s", str(exc))
         db.rollback(); raise HTTPException(status_code=422, detail="3D asset conversion failed") from exc
     except Fitting3DAssetPersistenceError as exc:
         db.rollback()

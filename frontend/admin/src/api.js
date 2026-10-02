@@ -934,6 +934,37 @@ export async function getFittingDetails(token, itemId) {
   });
 }
 
+export async function uploadFitting3DAsset(token, itemId, files, timeoutMs = 180000) {
+  const normalizedItemId = String(itemId || "").trim();
+  const selectedFiles = Array.isArray(files) ? files.filter(Boolean) : [];
+  if (!normalizedItemId || !selectedFiles.length) {
+    return { success: false, error: "Fitting ID and 3D asset files are required", status: 0 };
+  }
+
+  const formData = new FormData();
+  selectedFiles.forEach((file) => formData.append("files", file));
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/catalog/fittings/${encodeURIComponent(normalizedItemId)}/3d-asset`, {
+      method: "POST",
+      headers: authHeaders(token),
+      body: formData,
+      signal: controller.signal,
+    });
+    const responseText = await response.text();
+    let payload = {};
+    try { payload = responseText ? JSON.parse(responseText) : {}; } catch { payload = {}; }
+    if (!response.ok) return { success: false, error: extractErrorMessage(payload), status: response.status };
+    return { success: true, item: payload, status: response.status };
+  } catch (error) {
+    return { success: false, error: error?.name === "AbortError" ? "3D asset import timed out" : error?.message || "3D asset import failed", status: 0 };
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 export async function createFitting(token, payload) {
   return request("/catalog/fittings", {
     method: "POST",

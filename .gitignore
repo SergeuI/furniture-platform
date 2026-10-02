@@ -44,6 +44,7 @@ venv/
 # =========================================
 
 frontend/**/node_modules/
+tools/**/node_modules/
 frontend/**/dist/
 
 # =========================================

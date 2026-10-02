@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import json
 import os
 import shutil
@@ -13,6 +14,9 @@ from typing import Any, Sequence
 
 from services.fitting_3d_asset_storage import Fitting3DAssetStorage
 
+logger = logging.getLogger(__name__)
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
 
 class Fitting3DPackageValidationError(ValueError):
     pass
@@ -24,6 +28,25 @@ class Fitting3DConversionError(RuntimeError):
 
 class Fitting3DCanonicalValidationError(ValueError):
     pass
+
+
+def resolve_obj2gltf_executable(explicit: str | None = None) -> str:
+    override = explicit or os.getenv("FITTING_3D_OBJ2GLTF_EXECUTABLE")
+    if override:
+        return override
+
+    local_name = "obj2gltf.cmd" if os.name == "nt" else "obj2gltf"
+    local_path = PROJECT_ROOT / "tools" / "fitting-3d" / "node_modules" / ".bin" / local_name
+    if local_path.is_file():
+        return str(local_path)
+
+    path_executable = shutil.which("obj2gltf")
+    if path_executable:
+        return path_executable
+
+    raise Fitting3DConversionError(
+        "obj2gltf executable not found: checked environment override, project tool, and PATH"
+    )
 
 
 @dataclass(frozen=True)
@@ -116,17 +139,15 @@ class Fitting3DSourceValidator:
         for line in text.splitlines():
             if line.strip().lower().startswith("mtllib "):
                 references.append(line.split(None, 1)[1].strip())
-        if not references:
-            raise Fitting3DPackageValidationError("OBJ has no MTL reference")
         for reference in references:
-            if Path(reference).name != reference or ".." in Path(reference).parts or reference.casefold() not in names:
+            if Path(reference).name != reference or ".." in Path(reference).parts:
                 raise Fitting3DPackageValidationError("OBJ references MTL outside package")
         for mtl in files:
             if Path(mtl).suffix.casefold() != ".mtl": continue
             for line in Path(mtl).read_text(encoding="utf-8", errors="strict").splitlines():
                 if line.strip().lower().startswith(("map_kd ", "map_ks ", "map_bump ", "bump ")):
                     reference = line.split()[-1]
-                    if Path(reference).name != reference or ".." in Path(reference).parts or reference.casefold() not in names:
+                    if Path(reference).name != reference or ".." in Path(reference).parts:
                         raise Fitting3DPackageValidationError("MTL references texture outside package")
 
 
@@ -143,13 +164,26 @@ def _chunks(data: bytes):
     return result
 
 
-def normalize_glb_material(input_path: Path, output_path: Path) -> dict[str, Any]:
+def normalize_glb_material(input_path: Path, output_path: Path, apply_default_material: bool = False) -> dict[str, Any]:
     data = Path(input_path).read_bytes(); chunks = _chunks(data)
     json_bytes = next((p for k, p in chunks if k == b"JSON"), None)
     bin_payload = next((p for k, p in chunks if k == b"BIN\x00"), None)
     if json_bytes is None or bin_payload is None: raise Fitting3DCanonicalValidationError("JSON and BIN chunks required")
     document = json.loads(json_bytes.rstrip(b" \t\r\n\x00"))
     changes = []
+    if apply_default_material:
+        document["materials"] = [{
+            "name": "Metal / Nickel",
+            "pbrMetallicRoughness": {
+                "baseColorFactor": [0.58, 0.61, 0.65, 1.0],
+                "metallicFactor": 0.85,
+                "roughnessFactor": 0.28,
+            },
+        }]
+        for mesh in document.get("meshes", []):
+            for primitive in mesh.get("primitives", []):
+                primitive.setdefault("material", 0)
+        changes.append({"material": "Metal / Nickel", "reason": "default fitting material"})
     for material in document.get("materials", []):
         pbr = material.get("pbrMetallicRoughness", {}); factor = pbr.get("baseColorFactor")
         if factor is None: continue
@@ -188,15 +222,65 @@ class Obj2GltfAdapter:
     name = "obj2gltf"
     version = "3.2.0"
     def __init__(self, executable: str | None = None, timeout_seconds: int = 120):
-        self.executable = executable or os.getenv("FITTING_3D_OBJ2GLTF_EXECUTABLE", "obj2gltf")
+        self.executable = resolve_obj2gltf_executable(executable)
         self.timeout_seconds = timeout_seconds
     def convert(self, obj: Path, output: Path) -> subprocess.CompletedProcess:
         command = [self.executable, "-i", str(obj), "-o", str(output), "-b", "--secure"]
         try: result = subprocess.run(command, capture_output=True, text=True, timeout=self.timeout_seconds, shell=False)
-        except (OSError, subprocess.TimeoutExpired) as exc: raise Fitting3DConversionError("obj2gltf execution failed") from exc
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            logger.exception("Fitting 3D conversion stage failed: tool=%s command=%s reason=%s", self.name, command, exc)
+            raise Fitting3DConversionError("obj2gltf execution failed") from exc
         if result.returncode != 0 or not output.is_file() or output.stat().st_size == 0:
+            logger.warning(
+                "Fitting 3D conversion stage failed: tool=%s command=%s exit_code=%s stderr=%s stdout=%s",
+                self.name,
+                command,
+                result.returncode,
+                (result.stderr or "")[-2000:],
+                (result.stdout or "")[-2000:],
+            )
             raise Fitting3DConversionError(f"obj2gltf failed: {result.stderr[-2000:]}")
         return result
+
+
+def _resolve_material_package(files: Sequence[Path], obj: Path) -> tuple[bool, str]:
+    names = {Path(path).name.casefold() for path in files}
+    references = [
+        line.split(None, 1)[1].strip()
+        for line in obj.read_text(encoding="utf-8", errors="strict").splitlines()
+        if line.strip().lower().startswith("mtllib ")
+    ]
+    if not references:
+        return False, "OBJ has no material reference"
+    for reference in references:
+        if Path(reference).name != reference or ".." in Path(reference).parts:
+            raise Fitting3DPackageValidationError("OBJ references MTL outside package")
+        if reference.casefold() not in names:
+            return False, "referenced MTL missing"
+    for mtl in files:
+        if Path(mtl).suffix.casefold() != ".mtl":
+            continue
+        for line in Path(mtl).read_text(encoding="utf-8", errors="strict").splitlines():
+            if not line.strip().lower().startswith(("map_kd ", "map_ks ", "map_bump ", "bump ")):
+                continue
+            reference = line.split()[-1]
+            if Path(reference).name != reference or ".." in Path(reference).parts:
+                raise Fitting3DPackageValidationError("MTL references texture outside package")
+            if reference.casefold() not in names:
+                return False, "referenced texture missing"
+    return True, ""
+
+
+def _sanitize_obj_for_material_fallback(source: Path, target: Path) -> None:
+    lines = source.read_text(encoding="utf-8", errors="strict").splitlines(keepends=True)
+    target.write_text(
+        "".join(
+            line
+            for line in lines
+            if not line.strip().lower().startswith(("mtllib ", "usemtl "))
+        ),
+        encoding="utf-8",
+    )
 
 
 def convert_fitting_3d_package(files: Sequence[Path], executable: str | None = None, storage: Fitting3DAssetStorage | None = None, keep_workspace: bool = True) -> ConversionResult:
@@ -208,7 +292,13 @@ def convert_fitting_3d_package(files: Sequence[Path], executable: str | None = N
         for source in files:
             target = source_dir / Fitting3DAssetStorage.safe_filename(Path(source).name); shutil.copyfile(source, target); copied.append(target)
         obj = next(p for p in copied if p.suffix.casefold() == ".obj"); raw = workspace / "raw.glb"; canonical = workspace / "canonical.glb"
-        Obj2GltfAdapter(executable).convert(obj, raw); normalize_glb_material(raw, canonical); glb = validate_glb(canonical)
+        conversion_obj = obj
+        material_usable, material_reason = _resolve_material_package(copied, obj)
+        if not material_usable:
+            conversion_obj = workspace / "geometry-only.obj"
+            _sanitize_obj_for_material_fallback(obj, conversion_obj)
+            logger.warning("Fitting 3D material fallback: %s; using default material", material_reason)
+        Obj2GltfAdapter(executable).convert(conversion_obj, raw); normalize_glb_material(raw, canonical, apply_default_material=not material_usable); glb = validate_glb(canonical)
         return ConversionResult(canonical, "glb", glb, metadata, "unknown", "obj2gltf", "3.2.0", {"self_contained": True}, workspace if keep_workspace else None)
     except Exception:
         storage.cleanup(workspace); raise
