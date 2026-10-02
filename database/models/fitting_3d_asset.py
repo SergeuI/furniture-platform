@@ -35,6 +35,8 @@ class Fitting3DAssetModel(Base):
     rotation_y = Column(Float, nullable=True)
     rotation_z = Column(Float, nullable=True)
     coordinate_system_configured = Column(Integer, nullable=False, default=0)
+    material_color_override = Column(String(7), nullable=True)
+    material_overrides_json = Column(Text, nullable=True)
     created_at = Column(DateTime, nullable=False, server_default=func.now())
     updated_at = Column(DateTime, nullable=False, server_default=func.now(), onupdate=func.now())
     validated_at = Column(DateTime, nullable=True)

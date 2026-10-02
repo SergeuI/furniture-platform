@@ -53,6 +53,7 @@ from schemas.catalog import (
     FittingCatalogDetailResponseSchema,
     Fitting3DAssetSchema,
     Fitting3DCoordinateUpdateSchema,
+    Fitting3DAppearanceUpdateSchema,
     FittingCatalogListResponseSchema,
     FittingCatalogOperationResponseSchema,
     FittingCatalogUpdateSchema,
@@ -1447,7 +1448,7 @@ async def _run_material_recommended_edges_background(
                 material_id=material_id,
                 request_id=request_id,
             )
-        except Exception:
+        except Exception as exc:
             logger.exception(
                 "recommended-edge final diagnostic fallback failed request_id=%s material_id=%s",
                 request_id,
@@ -1587,9 +1588,14 @@ def _serialize_fitting_detail(item: FittingModel) -> dict:
                 "canonical_file_size", "canonical_sha256", "units", "dimensions_x", "dimensions_y",
                 "dimensions_z", "bbox_min_x", "bbox_min_y", "bbox_min_z", "bbox_max_x", "bbox_max_y",
                 "bbox_max_z", "axis_up", "axis_forward", "origin_x", "origin_y", "origin_z",
-                "rotation_x", "rotation_y", "rotation_z", "coordinate_system_configured", "validated_at",
+                "rotation_x", "rotation_y", "rotation_z", "coordinate_system_configured", "material_color_override", "validated_at",
             )
         }
+        raw_material_overrides = asset.material_overrides_json
+        try:
+            serialized["three_d_asset"]["material_overrides"] = json.loads(raw_material_overrides) if raw_material_overrides else None
+        except (TypeError, ValueError):
+            serialized["three_d_asset"]["material_overrides"] = None
         serialized["three_d_asset"]["sources"] = [
             {key: getattr(source, key) for key in ("id", "file_role", "file_format", "file_name", "file_url", "file_size", "sha256", "order_index")}
             for source in asset.sources
@@ -7075,6 +7081,7 @@ async def import_fitting_3d_asset_route(
         },
     ),
     current_user = Depends(require_fitting_editor),
+    replace: bool = Query(default=False),
 ):
     _ensure_fitting_feature_access(current_user, "fittings.edit")
     if not files or len(files) > FITTING_3D_MAX_FILES:
@@ -7113,10 +7120,17 @@ async def import_fitting_3d_asset_route(
         executable = os.getenv("FITTING_3D_OBJ2GLTF_EXECUTABLE") or None
         storage_root = Path(os.getenv("FITTING_3D_STORAGE_ROOT", "data/uploads"))
         conversion_result = convert_fitting_3d_package(saved_files, executable=executable)
-        asset = persist_fitting_3d_asset(db, item_id, conversion_result, storage_root=storage_root)
+        asset = persist_fitting_3d_asset(db, item_id, conversion_result, storage_root=storage_root, replace_existing=replace)
         try:
             db.commit()
         except Exception:
+            logger.exception(
+                "Fitting 3D persistence failed: fitting_id=%s replace=%s stage=commit canonical_url=%s exception_type=%s",
+                item_id,
+                replace,
+                getattr(asset, "canonical_file_url", None),
+                type(exc).__name__,
+            )
             db.rollback()
             if asset.canonical_file_url:
                 asset_dir = storage_root / "fitting-3d-assets" / asset.canonical_file_url.split("/")[-3]
@@ -7174,6 +7188,33 @@ def update_fitting_3d_coordinates_route(
         return _serialize_fitting_detail(db.query(FittingModel).filter(FittingModel.id == item_id).one())[
             "three_d_asset"
         ]
+    finally:
+        db.close()
+
+
+@router.patch(
+    "/fittings/{item_id}/3d-asset/appearance",
+    response_model=Fitting3DAssetSchema,
+)
+def update_fitting_3d_appearance_route(
+    item_id: int,
+    payload: Fitting3DAppearanceUpdateSchema,
+    current_user = Depends(require_fitting_editor),
+):
+    _ensure_fitting_feature_access(current_user, "fittings.edit")
+    db = SessionLocal()
+    try:
+        asset = db.query(Fitting3DAssetModel).filter(Fitting3DAssetModel.fitting_id == item_id).one_or_none()
+        if asset is None:
+            raise HTTPException(status_code=404, detail="Fitting 3D asset not found")
+        asset.material_color_override = payload.material_color_override
+        asset.material_overrides_json = json.dumps(
+            [override.model_dump() for override in payload.material_overrides],
+            ensure_ascii=False,
+        ) if payload.material_overrides else None
+        db.commit()
+        db.refresh(asset)
+        return _serialize_fitting_detail(db.query(FittingModel).filter(FittingModel.id == item_id).one())["three_d_asset"]
     finally:
         db.close()
 

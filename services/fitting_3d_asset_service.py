@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import os
 import shutil
 import uuid
@@ -10,6 +11,8 @@ from pathlib import Path
 from database.models.fitting import FittingModel
 from database.models.fitting_3d_asset import Fitting3DAssetModel, Fitting3DAssetSourceModel
 from services.fitting_3d_conversion import ConversionResult
+
+logger = logging.getLogger(__name__)
 
 
 class Fitting3DAssetPersistenceError(RuntimeError):
@@ -32,11 +35,12 @@ def _role(path: Path) -> str:
     return "model" if path.suffix.casefold() == ".obj" else "material" if path.suffix.casefold() == ".mtl" else "texture"
 
 
-def persist_fitting_3d_asset(db, fitting_id: int, conversion_result: ConversionResult, storage_root: Path | str = Path("data/uploads")):
+def persist_fitting_3d_asset(db, fitting_id: int, conversion_result: ConversionResult, storage_root: Path | str = Path("data/uploads"), replace_existing: bool = False):
     fitting = db.query(FittingModel).filter(FittingModel.id == fitting_id).one_or_none()
     if fitting is None:
         raise Fitting3DAssetPersistenceError("fitting not found")
-    if db.query(Fitting3DAssetModel).filter(Fitting3DAssetModel.fitting_id == fitting_id).one_or_none():
+    existing_asset = db.query(Fitting3DAssetModel).filter(Fitting3DAssetModel.fitting_id == fitting_id).one_or_none()
+    if existing_asset is not None and not replace_existing:
         raise Fitting3DAssetConflictError("fitting already has a 3D asset")
     if conversion_result.canonical_format != "glb" or not conversion_result.canonical_path.is_file():
         raise Fitting3DAssetPersistenceError("invalid canonical conversion result")
@@ -50,6 +54,7 @@ def persist_fitting_3d_asset(db, fitting_id: int, conversion_result: ConversionR
     root = Path(storage_root) / "fitting-3d-assets"
     staging = root / f".{asset_uuid}.staging"
     final = root / asset_uuid
+    stage = "filesystem_persist"
     try:
         (staging / "canonical").mkdir(parents=True)
         (staging / "sources").mkdir()
@@ -71,14 +76,42 @@ def persist_fitting_3d_asset(db, fitting_id: int, conversion_result: ConversionR
         dimensions = conversion_result.canonical.dimensions or (None, None, None)
         bbox_min = conversion_result.canonical.bbox_min or (None, None, None)
         bbox_max = conversion_result.canonical.bbox_max or (None, None, None)
-        asset = Fitting3DAssetModel(fitting_id=fitting_id, status="validated", canonical_format="glb", canonical_file_url=f"/uploads/fitting-3d-assets/{asset_uuid}/canonical/model.glb", canonical_file_size=conversion_result.canonical.file_size, canonical_sha256=conversion_result.canonical.sha256, units=conversion_result.units, dimensions_x=dimensions[0], dimensions_y=dimensions[1], dimensions_z=dimensions[2], bbox_min_x=bbox_min[0], bbox_min_y=bbox_min[1], bbox_min_z=bbox_min[2], bbox_max_x=bbox_max[0], bbox_max_y=bbox_max[1], bbox_max_z=bbox_max[2], validated_at=datetime.now(timezone.utc))
-        db.add(asset)
+        if existing_asset is None:
+            asset = Fitting3DAssetModel(fitting_id=fitting_id)
+            db.add(asset)
+        else:
+            asset = existing_asset
+            asset.sources.clear()
+        asset.status = "validated"
+        asset.canonical_format = "glb"
+        asset.canonical_file_url = f"/uploads/fitting-3d-assets/{asset_uuid}/canonical/model.glb"
+        asset.canonical_file_size = conversion_result.canonical.file_size
+        asset.canonical_sha256 = conversion_result.canonical.sha256
+        asset.units = conversion_result.units
+        asset.dimensions_x, asset.dimensions_y, asset.dimensions_z = dimensions
+        asset.bbox_min_x, asset.bbox_min_y, asset.bbox_min_z = bbox_min
+        asset.bbox_max_x, asset.bbox_max_y, asset.bbox_max_z = bbox_max
+        asset.coordinate_system_configured = 0
+        asset.material_color_override = None
+        asset.material_overrides_json = None
+        asset.validated_at = datetime.now(timezone.utc)
+        stage = "db_asset_update"
         db.flush()
+        stage = "source_record_persist"
         for source, url, order in source_rows:
             db.add(Fitting3DAssetSourceModel(asset_id=asset.id, file_role=_role(Path(source.filename)), file_format=source.extension.lstrip("."), file_name=source.filename, file_url=url, file_size=source.size, sha256=source.sha256, order_index=order))
+        stage = "flush"
         db.flush()
         return asset
-    except Exception:
+    except Exception as exc:
+        logger.exception(
+            "Fitting 3D persistence failed: fitting_id=%s replace=%s stage=%s canonical_path=%s exception_type=%s",
+            fitting_id,
+            replace_existing,
+            stage,
+            str(final / "canonical" / "model.glb"),
+            type(exc).__name__,
+        )
         shutil.rmtree(staging, ignore_errors=True)
         shutil.rmtree(final, ignore_errors=True)
         try:
@@ -89,4 +122,6 @@ def persist_fitting_3d_asset(db, fitting_id: int, conversion_result: ConversionR
             Path(storage_root).rmdir()
         except OSError:
             pass
-        raise
+        if isinstance(exc, Fitting3DAssetPersistenceError):
+            raise
+        raise Fitting3DAssetPersistenceError(f"persistence failed at {stage}") from exc

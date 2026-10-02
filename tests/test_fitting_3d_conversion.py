@@ -26,6 +26,12 @@ def make_glb(path, factor=(192, 192, 192, 1), external=False):
     path.write_bytes(struct.pack("<4sII", b"glTF", 2, 12 + 8 + len(payload) + 8 + len(binary)) + struct.pack("<I4s", len(payload), b"JSON") + payload + struct.pack("<I4s", len(binary), b"BIN\x00") + binary)
 
 
+def make_multi_material_glb(path):
+    doc = {"asset": {"version": "2.0"}, "scenes": [{}], "nodes": [{}], "meshes": [{"primitives": [{"attributes": {"POSITION": 0, "NORMAL": 1}, "indices": 2, "material": 0}, {"attributes": {"POSITION": 0, "NORMAL": 1}, "indices": 2, "material": 1}]}], "materials": [{"name": "Білий", "pbrMetallicRoughness": {"baseColorFactor": [245, 245, 245, 1]}}, {"name": "Метал никель", "pbrMetallicRoughness": {"baseColorFactor": [215, 215, 215, 1], "metallicFactor": 0.85}}], "accessors": [{"count": 3, "min": [0, 0, 0], "max": [2, 1, 1]}, {"count": 3}, {"count": 3}], "buffers": [{"byteLength": 4}], "bufferViews": [{"buffer": 0, "byteOffset": 0, "byteLength": 4}], "images": [], "textures": []}
+    payload = json.dumps(doc, ensure_ascii=False, separators=(",", ":")).encode(); payload += b" " * ((4 - len(payload) % 4) % 4)
+    binary = b"ABCD"; path.write_bytes(struct.pack("<4sII", b"glTF", 2, 12 + 8 + len(payload) + 8 + len(binary)) + struct.pack("<I4s", len(payload), b"JSON") + payload + struct.pack("<I4s", len(binary), b"BIN\x00") + binary)
+
+
 class Fitting3DConversionTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -71,6 +77,27 @@ class Fitting3DConversionTests(unittest.TestCase):
         texture = self.root / "metal.png"; texture.write_bytes(b"png")
         (self.root / "part.mtl").write_text("newmtl m\nmap_Kd metal.png\n", encoding="utf-8")
         self.assertEqual(len(Fitting3DSourceValidator().validate(self.files() + [texture])), 3)
+
+    def test_cyrillic_package_with_missing_windows_texture_uses_fallback(self):
+        obj = self.root / "рафікс білий.obj"
+        mtl = self.root / "рафікс білий.mtl"
+        obj.write_text("mtllib рафікс білий.mtl\nusemtl Білий\nv 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n", encoding="utf-8")
+        mtl.write_text("newmtl DefaultMaterial\nillum 1\nmap_Kd рафікс білий_textures\\default.bmp\nnewmtl Білий\nKd 245 245 245\nillum 1\n", encoding="utf-8")
+        original_mtl = mtl.read_bytes()
+        with patch("services.fitting_3d_conversion.Obj2GltfAdapter.convert") as convert:
+            def fake_convert(source, output):
+                self.assertEqual(source.parent.name, "conversion")
+                self.assertEqual(source.name, "рафікс білий.obj")
+                self.assertIn("usemtl", obj.read_text(encoding="utf-8").lower())
+                self.assertNotIn("map_kd", (source.parent / "рафікс білий.mtl").read_text(encoding="utf-8").lower())
+                make_multi_material_glb(output)
+            convert.side_effect = fake_convert
+            result = convert_fitting_3d_package([obj, mtl], storage=__import__("services.fitting_3d_asset_storage", fromlist=["Fitting3DAssetStorage"]).Fitting3DAssetStorage(self.root))
+        self.assertEqual(mtl.read_bytes(), original_mtl)
+        self.assertEqual((result.workspace / "source" / "рафікс білий.mtl").read_bytes(), original_mtl)
+        self.assertNotIn("map_kd", (result.workspace / "conversion" / "рафікс білий.mtl").read_text(encoding="utf-8").lower())
+        self.assertEqual(result.canonical.materials, 2)
+        self.assertEqual(validate_glb(result.canonical_path).triangle_count, 1)
 
     def test_obj_only_gets_default_material(self):
         raw = self.root / "raw.glb"; out = self.root / "out.glb"; make_glb(raw)

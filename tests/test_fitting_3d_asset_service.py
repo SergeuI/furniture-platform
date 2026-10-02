@@ -39,5 +39,28 @@ class Fitting3DAssetServiceTests(unittest.TestCase):
         with self.assertRaises(Exception): persist_fitting_3d_asset(self.db, 1, self.result, self.root / "uploads")
         self.assertFalse((self.root / "uploads").exists())
 
+    def test_replace_updates_asset_without_losing_fitting_and_resets_metadata(self):
+        asset = persist_fitting_3d_asset(self.db, 1, self.result, self.root / "uploads"); self.db.commit()
+        asset.material_color_override = "#FFFFFF"; asset.material_overrides_json = '[{"material_index": 0, "material_name": "Білий", "color": "#FFFFFF"}]'; asset.coordinate_system_configured = 1; self.db.commit()
+        old_url = asset.canonical_file_url
+        replaced = persist_fitting_3d_asset(self.db, 1, self.result, self.root / "uploads", replace_existing=True); self.db.commit()
+        self.assertEqual(replaced.id, asset.id)
+        self.assertEqual(replaced.fitting_id, 1)
+        self.assertNotEqual(replaced.canonical_file_url, old_url)
+        self.assertEqual(replaced.coordinate_system_configured, 0)
+        self.assertIsNone(replaced.material_color_override)
+        self.assertIsNone(replaced.material_overrides_json)
+        self.assertTrue((self.root / "uploads" / "fitting-3d-assets" / old_url.split("/")[-3]).exists())
+
+    def test_failed_replace_leaves_old_asset_active(self):
+        asset = persist_fitting_3d_asset(self.db, 1, self.result, self.root / "uploads"); self.db.commit()
+        old_url = asset.canonical_file_url
+        (self.workspace / "source" / "model.mtl").unlink()
+        with self.assertRaises(Exception):
+            persist_fitting_3d_asset(self.db, 1, self.result, self.root / "uploads", replace_existing=True)
+        self.db.rollback()
+        active = self.db.query(Fitting3DAssetModel).filter(Fitting3DAssetModel.fitting_id == 1).one()
+        self.assertEqual(active.canonical_file_url, old_url)
+
 
 if __name__ == "__main__": unittest.main()

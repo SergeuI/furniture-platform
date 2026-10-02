@@ -934,7 +934,7 @@ export async function getFittingDetails(token, itemId) {
   });
 }
 
-export async function uploadFitting3DAsset(token, itemId, files, timeoutMs = 180000) {
+export async function uploadFitting3DAsset(token, itemId, files, timeoutMs = 180000, replace = false) {
   const normalizedItemId = String(itemId || "").trim();
   const selectedFiles = Array.isArray(files) ? files.filter(Boolean) : [];
   if (!normalizedItemId || !selectedFiles.length) {
@@ -947,7 +947,7 @@ export async function uploadFitting3DAsset(token, itemId, files, timeoutMs = 180
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const response = await fetch(`${API_BASE_URL}/catalog/fittings/${encodeURIComponent(normalizedItemId)}/3d-asset`, {
+    const response = await fetch(`${API_BASE_URL}/catalog/fittings/${encodeURIComponent(normalizedItemId)}/3d-asset${replace ? "?replace=true" : ""}`, {
       method: "POST",
       headers: authHeaders(token),
       body: formData,
@@ -963,6 +963,24 @@ export async function uploadFitting3DAsset(token, itemId, files, timeoutMs = 180
   } finally {
     clearTimeout(timeoutId);
   }
+}
+
+export async function updateFitting3DAppearance(token, itemId, appearance = {}) {
+  const normalizedItemId = String(itemId || "").trim();
+  if (!normalizedItemId) return { success: false, error: "Fitting item ID is required", status: 0 };
+  const normalizedAppearance = typeof appearance === "string" || appearance === null
+    ? { materialColorOverride: appearance, materialOverrides: null }
+    : appearance;
+  const result = await request(`/catalog/fittings/${encodeURIComponent(normalizedItemId)}/3d-asset/appearance`, {
+    method: "PATCH",
+    headers: authHeaders(token),
+    body: JSON.stringify({
+      material_color_override: normalizedAppearance.materialColorOverride ?? null,
+      material_overrides: normalizedAppearance.materialOverrides ?? null,
+    }),
+  });
+  if (result?.success === false) return result;
+  return { success: true, item: result, status: 200 };
 }
 
 export async function updateFitting3DCoordinates(token, itemId, coordinates) {

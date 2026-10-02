@@ -7,7 +7,8 @@ from typing import Literal
 from pydantic import (
     BaseModel,
     ConfigDict,
-    Field
+    Field,
+    model_validator,
 )
 
 
@@ -1029,6 +1030,12 @@ class Fitting3DAssetSourceSchema(BaseModel):
     order_index: int = 0
 
 
+class Fitting3DMaterialOverrideSchema(BaseModel):
+    material_index: int = Field(ge=0)
+    material_name: str = Field(default="", max_length=255)
+    color: str = Field(pattern=r"^#[0-9A-Fa-f]{6}$")
+
+
 class Fitting3DAssetSchema(BaseModel):
     id: int
     fitting_id: int
@@ -1056,6 +1063,8 @@ class Fitting3DAssetSchema(BaseModel):
     rotation_y: float | None = None
     rotation_z: float | None = None
     coordinate_system_configured: bool = False
+    material_color_override: str | None = None
+    material_overrides: List[Fitting3DMaterialOverrideSchema] | None = None
     validated_at: datetime | None = None
     sources: List[Fitting3DAssetSourceSchema] = Field(default_factory=list)
 
@@ -1067,6 +1076,18 @@ class Fitting3DCoordinateUpdateSchema(BaseModel):
     rotation_x: float = Field(default=0.0, ge=-360.0, le=360.0)
     rotation_y: float = Field(default=0.0, ge=-360.0, le=360.0)
     rotation_z: float = Field(default=0.0, ge=-360.0, le=360.0)
+
+
+class Fitting3DAppearanceUpdateSchema(BaseModel):
+    material_color_override: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
+    material_overrides: List[Fitting3DMaterialOverrideSchema] | None = None
+
+    @model_validator(mode="after")
+    def reject_duplicate_materials(self):
+        identities = [(item.material_index, item.material_name) for item in (self.material_overrides or [])]
+        if len(identities) != len(set(identities)):
+            raise ValueError("Duplicate material override identity")
+        return self
 
 
 class FittingCatalogDetailResponseSchema(BaseModel):

@@ -4,6 +4,7 @@ import hashlib
 import logging
 import json
 import os
+import re
 import shutil
 import struct
 import subprocess
@@ -147,7 +148,8 @@ class Fitting3DSourceValidator:
             for line in Path(mtl).read_text(encoding="utf-8", errors="strict").splitlines():
                 if line.strip().lower().startswith(("map_kd ", "map_ks ", "map_bump ", "bump ")):
                     reference = line.split()[-1]
-                    if Path(reference).name != reference or ".." in Path(reference).parts:
+                    normalized_reference = reference.replace("\\", "/")
+                    if normalized_reference.startswith("/") or re.match(r"^[A-Za-z]:", normalized_reference) or ".." in normalized_reference.split("/"):
                         raise Fitting3DPackageValidationError("MTL references texture outside package")
 
 
@@ -257,6 +259,7 @@ def _resolve_material_package(files: Sequence[Path], obj: Path) -> tuple[bool, s
             raise Fitting3DPackageValidationError("OBJ references MTL outside package")
         if reference.casefold() not in names:
             return False, "referenced MTL missing"
+    missing_texture = False
     for mtl in files:
         if Path(mtl).suffix.casefold() != ".mtl":
             continue
@@ -264,11 +267,35 @@ def _resolve_material_package(files: Sequence[Path], obj: Path) -> tuple[bool, s
             if not line.strip().lower().startswith(("map_kd ", "map_ks ", "map_bump ", "bump ")):
                 continue
             reference = line.split()[-1]
-            if Path(reference).name != reference or ".." in Path(reference).parts:
+            normalized_reference = reference.replace("\\", "/")
+            if normalized_reference.startswith("/") or re.match(r"^[A-Za-z]:", normalized_reference) or ".." in normalized_reference.split("/"):
                 raise Fitting3DPackageValidationError("MTL references texture outside package")
-            if reference.casefold() not in names:
-                return False, "referenced texture missing"
-    return True, ""
+            if Path(normalized_reference).name.casefold() not in names:
+                missing_texture = True
+    return True, "referenced texture missing" if missing_texture else ""
+
+
+def _sanitize_mtl_for_missing_textures(files: Sequence[Path]) -> bool:
+    names = {Path(path).name.casefold() for path in files}
+    changed = False
+    for mtl in files:
+        if Path(mtl).suffix.casefold() != ".mtl":
+            continue
+        source = Path(mtl)
+        lines = source.read_text(encoding="utf-8", errors="strict").splitlines(keepends=True)
+        sanitized = []
+        for line in lines:
+            stripped = line.strip().lower()
+            if stripped.startswith(("map_kd ", "map_ks ", "map_bump ", "bump ")):
+                reference = line.split()[-1]
+                normalized_reference = reference.replace("\\", "/")
+                if Path(normalized_reference).name.casefold() not in names:
+                    changed = True
+                    continue
+            sanitized.append(line)
+        if sanitized != lines:
+            source.write_text("".join(sanitized), encoding="utf-8")
+    return changed
 
 
 def _sanitize_obj_for_material_fallback(source: Path, target: Path) -> None:
@@ -294,7 +321,18 @@ def convert_fitting_3d_package(files: Sequence[Path], executable: str | None = N
         obj = next(p for p in copied if p.suffix.casefold() == ".obj"); raw = workspace / "raw.glb"; canonical = workspace / "canonical.glb"
         conversion_obj = obj
         material_usable, material_reason = _resolve_material_package(copied, obj)
-        if not material_usable:
+        if material_usable and material_reason == "referenced texture missing":
+            conversion_dir = workspace / "conversion"
+            conversion_dir.mkdir()
+            conversion_files = []
+            for source in copied:
+                target = conversion_dir / source.name
+                shutil.copyfile(source, target)
+                conversion_files.append(target)
+            _sanitize_mtl_for_missing_textures(conversion_files)
+            conversion_obj = next(path for path in conversion_files if path.suffix.casefold() == ".obj")
+            logger.warning("Fitting 3D material fallback: %s; preserving MTL materials", material_reason)
+        elif not material_usable:
             conversion_obj = workspace / "geometry-only.obj"
             _sanitize_obj_for_material_fallback(obj, conversion_obj)
             logger.warning("Fitting 3D material fallback: %s; using default material", material_reason)

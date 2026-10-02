@@ -59,6 +59,7 @@ import {
   resolveAdminAssetUrl,
   uploadFitting3DAsset,
   updateFitting3DCoordinates,
+  updateFitting3DAppearance,
 } from "./api.js";
 import EntitlementsAdminPage from "./components/EntitlementsAdminPage.jsx";
 import AssistantPhraseMappingPage from "./components/AssistantPhraseMappingPage.jsx";
@@ -9282,6 +9283,8 @@ export default function App() {
   const [fitting3DImportObjFile, setFitting3DImportObjFile] = useState(null);
   const [fitting3DImportMtlFile, setFitting3DImportMtlFile] = useState(null);
   const [fitting3DImportLoading, setFitting3DImportLoading] = useState(false);
+  const [fitting3DImportReplacing, setFitting3DImportReplacing] = useState(false);
+  const [fitting3DReplaceNotice, setFitting3DReplaceNotice] = useState("");
   const [fitting3DImportError, setFitting3DImportError] = useState("");
   const [fittingDetailLoading, setFittingDetailLoading] = useState(false);
   const [fittingDetailError, setFittingDetailError] = useState("");
@@ -16741,8 +16744,10 @@ export default function App() {
     setSelectedFittingDetailReturnFocusTarget(returnFocusTarget || null);
   }
 
-  function openFitting3DImport() {
+  function openFitting3DImport(replace = false) {
     setFitting3DImportError("");
+    setFitting3DReplaceNotice("");
+    setFitting3DImportReplacing(replace);
     setIsFitting3DImportOpen(true);
   }
 
@@ -16752,6 +16757,7 @@ export default function App() {
     setFitting3DImportObjFile(null);
     setFitting3DImportMtlFile(null);
     setFitting3DImportError("");
+    setFitting3DImportReplacing(false);
   }
 
   async function submitFitting3DImport() {
@@ -16759,19 +16765,28 @@ export default function App() {
     setFitting3DImportLoading(true);
     setFitting3DImportError("");
     const files = [fitting3DImportObjFile, fitting3DImportMtlFile].filter(Boolean);
-    const result = await uploadFitting3DAsset(token, selectedFittingDetail.id, files);
+    const result = await uploadFitting3DAsset(token, selectedFittingDetail.id, files, 180000, fitting3DImportReplacing);
     if (!result.success) {
       setFitting3DImportError(result.error || "Не вдалося імпортувати 3D-модель.");
       setFitting3DImportLoading(false);
       return;
     }
     setSelectedFittingDetail((current) => current ? { ...current, three_d_asset: result.item || null } : current);
+    if (fitting3DImportReplacing) setFitting3DReplaceNotice("3D модель замінено. Перевірте координати.");
     setFitting3DImportLoading(false);
     closeFitting3DImport();
   }
 
   async function saveFitting3DCoordinates(coordinates) {
     const result = await updateFitting3DCoordinates(token, selectedFittingDetail?.id, coordinates);
+    if (result.success && result.item) {
+      setSelectedFittingDetail((current) => current ? { ...current, three_d_asset: result.item } : current);
+    }
+    return result;
+  }
+
+  async function saveFitting3DAppearance(appearance) {
+    const result = await updateFitting3DAppearance(token, selectedFittingDetail?.id, appearance);
     if (result.success && result.item) {
       setSelectedFittingDetail((current) => current ? { ...current, three_d_asset: result.item } : current);
     }
@@ -36787,7 +36802,11 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                   {isFitting3DOpen ? (
                     <div className="fitting-details-section-body">
                       {selectedFittingDetail.three_d_asset ? (
-                        <Fitting3DViewer asset={selectedFittingDetail.three_d_asset} onSaveCoordinates={saveFitting3DCoordinates} />
+                        <>
+                          <Fitting3DViewer asset={selectedFittingDetail.three_d_asset} onSaveCoordinates={saveFitting3DCoordinates} onSaveAppearance={saveFitting3DAppearance} />
+                          {fitting3DReplaceNotice ? <p role="status">{fitting3DReplaceNotice}</p> : null}
+                          <button className="ghost-button compact-button" onClick={() => openFitting3DImport(true)} type="button">Замінити 3D модель</button>
+                        </>
                       ) : (
                         <div className="fitting-3d-empty-state">
                           <p>Для цієї фурнітури 3D-модель ще не додана.</p>
@@ -36798,15 +36817,16 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                       )}
                       {isFitting3DImportOpen ? (
                         <div className="fitting-3d-import-dialog" role="dialog" aria-label="Імпорт 3D моделі">
-                          <strong>Імпорт 3D моделі</strong>
+                          <strong>{fitting3DImportReplacing ? "Замінити 3D модель" : "Імпорт 3D моделі"}</strong>
                           <label>OBJ файл<input accept=".obj,model/obj,text/plain" onChange={(event) => setFitting3DImportObjFile(event.target.files?.[0] || null)} type="file" /></label>
                           <label>MTL файл (необов’язково)<input accept=".mtl,text/plain" onChange={(event) => setFitting3DImportMtlFile(event.target.files?.[0] || null)} type="file" /></label>
+                          <p>OBJ — обов’язковий. MTL та файли матеріалів/текстур — необов’язкові.</p>
                           {!fitting3DImportMtlFile ? <p>Буде використано стандартний матеріал фурнітури.</p> : null}
                           {fitting3DImportError ? <p role="alert">{fitting3DImportError}</p> : null}
                           {fitting3DImportLoading ? <p>Імпортую 3D модель…</p> : null}
                           <div>
                             <button className="ghost-button compact-button" disabled={fitting3DImportLoading} onClick={closeFitting3DImport} type="button">Скасувати</button>
-                            <button className="primary-button compact-button" disabled={!fitting3DImportObjFile || fitting3DImportLoading} onClick={submitFitting3DImport} type="button">Імпортувати</button>
+                            <button className="primary-button compact-button" disabled={!fitting3DImportObjFile || fitting3DImportLoading} onClick={submitFitting3DImport} type="button">{fitting3DImportReplacing ? "Замінити" : "Імпортувати"}</button>
                           </div>
                         </div>
                       ) : null}
