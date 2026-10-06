@@ -12071,6 +12071,28 @@ tbody tr.selected {
   width: 100%;
 }
 
+.mounting-node-fitting-link {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-align: left;
+}
+
+.mounting-node-fitting-link:hover,
+.mounting-node-fitting-link:focus-visible {
+  color: #0f766e;
+  text-decoration: underline;
+}
+
+.mounting-node-fitting-image-link {
+  display: block;
+  height: 100%;
+  width: 100%;
+}
+
 .hole-bundle-selected-item-placeholder {
   color: #607080;
   font-size: 11px;

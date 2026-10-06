@@ -9421,6 +9421,7 @@ export default function App() {
   }, [materialDetailModalOpen, selectedMaterialDetail?.article]);
   const materialOwnersRequestRef = useRef({ id: 0, article: "", open: false });
   const fittingDetailsRequestRef = useRef({ id: 0, itemId: "", open: false });
+  const fittingDetailsParentStateRef = useRef(null);
   const fittingDetailsReturnFocusRef = useRef(null);
   const fittingDetailsCloseButtonRef = useRef(null);
   const bundleDetailsRequestRef = useRef({ id: 0, bundleKey: "", open: false });
@@ -16702,6 +16703,14 @@ export default function App() {
 
     const requestId = fittingDetailsRequestRef.current.id + 1;
     const viewAtStart = activeViewRef.current;
+    if (options.allowExternalView && viewAtStart === "catalogHoles") {
+      fittingDetailsParentStateRef.current = {
+        activeView: viewAtStart,
+        catalogHolesMode,
+        mountingNodesRouteState,
+        mountingNodeEditorDraftNodeId,
+      };
+    }
 
     fittingDetailsRequestRef.current = {
       id: requestId,
@@ -16729,8 +16738,7 @@ export default function App() {
         fittingDetailsRequestRef.current.id !== requestId ||
         fittingDetailsRequestRef.current.itemId !== itemId ||
         !fittingDetailsRequestRef.current.open ||
-        !["catalogFittings", "catalogFasteners"].includes(activeViewRef.current) ||
-        activeViewRef.current !== viewAtStart
+        (!options.allowExternalView && (!['catalogFittings', 'catalogFasteners'].includes(activeViewRef.current) || activeViewRef.current !== viewAtStart))
       ) {
         return;
       }
@@ -16841,6 +16849,16 @@ export default function App() {
     setSelectedFittingDetail(null);
     setFittingDetailLoading(false);
     setFittingDetailError("");
+
+    const parentState = fittingDetailsParentStateRef.current;
+    fittingDetailsParentStateRef.current = null;
+    if (parentState?.activeView === "catalogHoles" && activeViewRef.current !== "catalogHoles") {
+      setActiveView("catalogHoles");
+      activeViewRef.current = "catalogHoles";
+      setCatalogHolesMode(parentState.catalogHolesMode || "editor");
+      setMountingNodesRouteState(parentState.mountingNodesRouteState || null);
+      setMountingNodeEditorDraftNodeId(parentState.mountingNodeEditorDraftNodeId || "");
+    }
 
     if (
       typeof window !== "undefined" &&
@@ -30374,8 +30392,13 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                       <div className="holes-bundle-selected-list mounting-node-create-items-list">
                         {mountingNodeEditorSelectedItems.map((item, index) => {
                           const fittingId = getMountingNodeEditorItemFittingId(item);
+                          const fittingCatalogItem = fittingItems.find((candidate) => String(candidate?.id || "") === String(fittingId)) || item;
                           const itemKey = `editor-selected-item-${index}-${fittingId || getMountingNodeEditorItemArticle(item) || getMountingNodeEditorItemName(item) || "fallback"}`;
                           const imageUrl = getMountingNodeEditorItemImageUrl(item);
+                          const openFittingCard = (event) => {
+                            event.stopPropagation();
+                            void openFittingDetails(fittingCatalogItem, event.currentTarget, { allowExternalView: true });
+                          };
 
                           return (
                             <article
@@ -30385,7 +30408,9 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                             >
                               <div className="hole-bundle-selected-item-media">
                                 {imageUrl ? (
-                                  <img alt="" loading="lazy" src={imageUrl} />
+                                  <button className="mounting-node-fitting-link mounting-node-fitting-image-link" onClick={openFittingCard} type="button" aria-label={`Відкрити фурнітуру: ${getMountingNodeEditorItemName(item) || fittingId}`}>
+                                    <img alt="" loading="lazy" src={imageUrl} />
+                                  </button>
                                 ) : (
                                   <span className="hole-bundle-selected-item-placeholder">
                                     {language === "uk" ? "Немає фото" : "No image"}
@@ -30394,7 +30419,9 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                               </div>
 
                               <div className="hole-bundle-selected-item-copy">
-                                <strong>{getMountingNodeEditorItemName(item) || fittingId}</strong>
+                                <button className="mounting-node-fitting-link" onClick={openFittingCard} type="button">
+                                  {getMountingNodeEditorItemName(item) || fittingId}
+                                </button>
                                 <span>{getMountingNodeEditorItemArticle(item) || fittingId || "—"}</span>
                               </div>
 
