@@ -14389,17 +14389,19 @@ export default function App() {
     setMountingNodesRouteError("");
     setMountingNodeEditorHasChanges(false);
     if (hydratedEditorState) {
+      const canonicalTemplateLink = (Array.isArray(hydratedEditorState.templateItems) ? hydratedEditorState.templateItems : []).find((item) => String(item?.template?.mounting_variant_key || item?.mounting_variant_key || "").trim() === "face_to_edge") || hydratedEditorState.selectedTemplateLink;
+      const canonicalTemplate = canonicalTemplateLink?.template || canonicalTemplateLink?.fitting_hole_template || canonicalTemplateLink;
       setHoleWorkspaceMode("existing");
-      setSelectedHoleMountingVariantKey(hydratedEditorState.context.mountingVariantKey || "surface_mount");
-      setHoleSelectedFittingId(hydratedEditorState.context.fittingId);
-      setHoleSelectedTemplateId(hydratedEditorState.context.templateId);
+      setSelectedHoleMountingVariantKey(canonicalTemplate?.mounting_variant_key || hydratedEditorState.context.mountingVariantKey || "surface_mount");
+      setHoleSelectedFittingId(canonicalTemplate?.fitting_id || hydratedEditorState.context.fittingId);
+      setHoleSelectedTemplateId(canonicalTemplate?.id || hydratedEditorState.context.templateId);
       setHoleSelectedTemplate(
-        hydratedEditorState.selectedTemplateLink
-          ? cloneMountingNodeEditorDraft(hydratedEditorState.selectedTemplateLink)
+        canonicalTemplateLink
+          ? cloneMountingNodeEditorDraft(canonicalTemplateLink)
           : null,
       );
       setHoleTemplateItems(hydratedEditorState.templateItems);
-      setHolePoints(hydratedEditorState.points);
+      setHolePoints(Array.isArray(canonicalTemplate?.points) ? cloneMountingNodeEditorPoints(canonicalTemplate.points) : hydratedEditorState.points);
       setSelectedHolePointId("");
       setHoveredHolePointId("");
       setHoleTemplateDetailsLoaded(true);
@@ -14710,6 +14712,18 @@ export default function App() {
   const mountingNodeEditorSelectedVariantLabel =
     getProcessingTemplateMountingVariantLabel(mountingNodeEditorSelectedVariantKey, language) ||
     mountingNodeEditorSelectedVariantKey;
+  const mountingNodeEditorTemplateOptions = useMemo(() => {
+    const links = Array.isArray(mountingNodeEditorDraft?.templates) ? mountingNodeEditorDraft.templates : [];
+    const options = links.map((link) => {
+      const template = link?.template || link?.fitting_hole_template || link;
+      if (!template || typeof template !== "object") return null;
+      return { link, template, id: String(template.id || link.template_id || link.id || ""), variant: String(template.mounting_variant_key || link.mounting_variant_key || "").trim() };
+    }).filter((item) => item?.id);
+    const hasCanonical = options.some((item) => item.variant === "face_to_edge");
+    const hasTopologyAlias = options.some((item) => item.variant === "bottom_to_side");
+    return hasCanonical && hasTopologyAlias ? options.filter((item) => item.variant !== "bottom_to_side") : options;
+  }, [mountingNodeEditorDraft?.templates]);
+  const mountingNodeEditorActiveTemplate = mountingNodeEditorTemplateOptions.find((item) => String(item.id) === String(holeSelectedTemplateId)) || null;
   const mountingNodeEditorSelectedTemplateForSave =
     selectedHoleTemplate ||
     mountingNodeEditorDraft?.templates?.find((link) => Boolean(link?.is_default))?.template ||
@@ -14889,17 +14903,19 @@ export default function App() {
     }
 
     mountingNodeEditorHydrationKeyRef.current = hydrationKey;
+    const canonicalTemplateLink = (Array.isArray(editorState.templateItems) ? editorState.templateItems : []).find((item) => String(item?.template?.mounting_variant_key || item?.mounting_variant_key || "").trim() === "face_to_edge") || editorState.selectedTemplateLink;
+    const canonicalTemplate = canonicalTemplateLink?.template || canonicalTemplateLink?.fitting_hole_template || canonicalTemplateLink;
     setMountingNodeEditorDraft(cloneMountingNodeEditorPreviewDraft(editorState.context.nodeDetail));
     setMountingNodeEditorDraftNodeId(editorContext.mountingNodeId);
     setHoleWorkspaceMode("existing");
-    setSelectedHoleMountingVariantKey(editorContext.mountingVariantKey || "surface_mount");
-    setHoleSelectedFittingId(editorContext.fittingId);
-    setHoleSelectedTemplateId(editorContext.templateId);
+    setSelectedHoleMountingVariantKey(canonicalTemplate?.mounting_variant_key || editorContext.mountingVariantKey || "surface_mount");
+    setHoleSelectedFittingId(canonicalTemplate?.fitting_id || editorContext.fittingId);
+    setHoleSelectedTemplateId(canonicalTemplate?.id || editorContext.templateId);
     setHoleSelectedTemplate(
-      editorState.selectedTemplateLink ? cloneMountingNodeEditorDraft(editorState.selectedTemplateLink) : null,
+      canonicalTemplateLink ? cloneMountingNodeEditorDraft(canonicalTemplateLink) : null,
     );
     setHoleTemplateItems(Array.isArray(editorState.templateItems) ? editorState.templateItems : []);
-    setHolePoints(cloneMountingNodeEditorPoints(editorState.points));
+    setHolePoints(Array.isArray(canonicalTemplate?.points) ? cloneMountingNodeEditorPoints(canonicalTemplate.points) : cloneMountingNodeEditorPoints(editorState.points));
     setSelectedHolePointId("");
     setHoveredHolePointId("");
     setHoleTemplateDetailsLoaded(true);
@@ -14938,6 +14954,19 @@ export default function App() {
         is_dirty: true,
       };
     });
+  }
+
+  function handleMountingNodeEditorTemplateChange(templateId) {
+    const option = mountingNodeEditorTemplateOptions.find((item) => String(item.id) === String(templateId));
+    if (!option) return;
+    const points = Array.isArray(option.template.points) ? option.template.points : Array.isArray(option.link?.points) ? option.link.points : [];
+    setHoleSelectedTemplateId(option.id);
+    setHoleSelectedTemplate(cloneMountingNodeEditorDraft(option.link || option.template));
+    setHolePoints(cloneMountingNodeEditorPoints(points));
+    setSelectedHoleMountingVariantKey(normalizeHoleWorkspaceMountingVariantKey(option.variant));
+    setSelectedHolePointId("");
+    setHoveredHolePointId("");
+    setHoleTemplateDetailsLoaded(true);
   }
 
   function handleMountingNodeEditorRemoveItem(fittingId) {
@@ -17333,6 +17362,7 @@ export default function App() {
       "surface_mount",
       "angled_two_planes",
       "face_to_edge",
+      "bottom_to_side",
       "edge_to_edge",
       "drawer_slides",
     ]);
@@ -18363,6 +18393,7 @@ export default function App() {
       "surface_mount",
       "angled_two_planes",
       "face_to_edge",
+      "bottom_to_side",
       "edge_to_edge",
       "drawer_slides",
     ]);
@@ -25980,7 +26011,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
           />
         ) : isConstructionRulesView ? (
           isConstructionRulesDetailView ? (
-            <ConstructionRuleDetailPrototype onBack={() => switchView("constructionRules")} />
+            <ConstructionRuleDetailPrototype onBack={() => switchView("constructionRules")} token={token} />
           ) : (
             <ConstructionRulesReferencePage
               onOpenRuleDetail={() => {
@@ -29934,6 +29965,14 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                         :
                         <strong>{mountingNodeEditorSelectedVariantLabel}</strong>
                       </span>
+                      {mountingNodeEditorTemplateOptions.length > 1 ? (
+                        <label className="mounting-node-template-selector">
+                          <span>Варіант монтажу</span>
+                          <select value={mountingNodeEditorActiveTemplate?.id || ""} onChange={(event) => handleMountingNodeEditorTemplateChange(event.target.value)}>
+                            {mountingNodeEditorTemplateOptions.map((option) => <option key={option.id} value={option.id}>{option.template.name || option.variant || option.id}{option.variant ? ` · ${option.variant}` : ""}</option>)}
+                          </select>
+                        </label>
+                      ) : null}
 
                       <span>
                         {language === "uk"
@@ -30820,6 +30859,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                       { showHeader: false },
                     )
                   ) : normalizedSelectedHoleMountingVariantKey === "face_to_edge" ||
+                    normalizedSelectedHoleMountingVariantKey === "bottom_to_side" ||
                     normalizedSelectedHoleMountingVariantKey === "surface_mount" ||
                     shouldRenderAngledTwoPlanesThreePreview(normalizedSelectedHoleMountingVariantKey) ? (
                     <HolesMountingThreePreview

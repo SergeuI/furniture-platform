@@ -1,8 +1,12 @@
 import { memo, Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { Canvas } from "@react-three/fiber";
-import { OrbitControls, useGLTF } from "@react-three/drei";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { Html, Line, OrbitControls, useGLTF } from "@react-three/drei";
 import { BoxGeometry, CanvasTexture, DoubleSide, EdgesGeometry, Float32BufferAttribute, LinearFilter, MOUSE, Quaternion, Vector3 } from "three";
 import { resolveAdminAssetUrl } from "../../api.js";
+import { resolveFaceToEdgeHolePlacement } from "../../mountingNodeGeometry.js";
+import { buildHoleRingPoints, getHoleSilhouetteRadial } from "../../holeOutlineGeometry.js";
+import { fittingSurfaceOptionsForPanel, normalizeFittingSurfaceForPanel, resolveFaceToEdgeFittingFrame, resolveFittingLocalFrame, resolveSelectedFittingAnchor } from "../../fittingPreviewGeometry.js";
+import EngineeringHoleOutline from "./EngineeringHoleOutline.jsx";
 
 import {
   buildSurfaceMountThreePreviewHoleVolumes,
@@ -31,6 +35,7 @@ import {
       "surface_mount",
       "angled_two_planes",
       "face_to_edge",
+      "bottom_to_side",
       "edge_to_edge",
       "drawer_slides",
     ]);
@@ -61,15 +66,17 @@ import {
             },
             {
               args: [0.24, 1.55, 1.18],
-              color: "#e4f2e8",
-              opacity: 0.5,
+              color: "#d9dcdf",
+              opacity: 0.24,
               position: [0.65, -0.28, 0.1],
               rotation: [0, 0, -0.72],
             },
           ],
           subtitle: "Панель A → панель B · angled_two_planes",
         };
-      case "face_to_edge": {
+      case "face_to_edge":
+      case "bottom_to_side": {
+        const isBottomToSide = variantKey === "bottom_to_side";
         const sourceHoles = Array.isArray(holes) ? holes : [];
         const mmToScene = 0.01;
         const maxAbsY = sourceHoles.reduce((maxValue, hole) => {
@@ -98,20 +105,20 @@ import {
           panels: [
             {
               args: [verticalPanelThickness, panelHeight, panelDepth],
-              color: "#b9ffb9",
-              opacity: 0.28,
-              position: [-verticalPanelThickness / 2, 0, 0],
+              color: "#d9dcdf",
+              opacity: 0.24,
+              position: isBottomToSide ? [0, panelHeight / 2, 0] : [-verticalPanelThickness / 2, 0, 0],
               rotation: [0, 0, 0],
             },
             {
               args: [panelWidth, horizontalPanelThickness, panelDepth],
-              color: "#b9ffb9",
-              opacity: 0.28,
+              color: "#d9dcdf",
+              opacity: 0.24,
               position: [panelWidth / 2, -horizontalPanelThickness / 2, 0],
               rotation: [0, 0, 0],
             },
           ],
-          subtitle: "Пласть панелі → торець панелі · face_to_edge",
+          subtitle: isBottomToSide ? "Дно панелі → боковина · bottom_to_side" : "Пласть панелі → торець панелі · face_to_edge",
         };
       }
       case "edge_to_edge":
@@ -438,6 +445,8 @@ export function getFaceToEdgeHolePlacement(layout, hole, index) {
     return null;
   }
 
+  return resolveFaceToEdgeHolePlacement({ panelA, panelB, point: sourceHole, index, location });
+
   const panelAThickness = Number(panelA?.args?.[0]) || 0.28;
   const panelAHeight = Number(panelA?.args?.[1]) || 2.18;
   const panelBWidth = Number(panelB?.args?.[0]) || 1.96;
@@ -473,7 +482,6 @@ export function getFaceToEdgeHolePlacement(layout, hole, index) {
         ? (Number(panelB?.position?.[0]) || 0) + panelBWidth / 2
         : (Number(panelB?.position?.[0]) || 0) - panelBWidth / 2;
     const directionSign = location.targetSide === "edge_far_vertical" ? -1 : 1;
-    const previewInset = 0.002;
     const startPosition = [edgeX + xOffset, originY + yOffset, originZ + zOffset];
     const directionVector = [directionSign, 0, 0];
     const endPosition = [edgeX + directionSign * depthScene + xOffset, originY + yOffset, originZ + zOffset];
@@ -483,7 +491,7 @@ export function getFaceToEdgeHolePlacement(layout, hole, index) {
       label: String(sourceHole?.label ?? hole?.label ?? `P${index + 1}`),
       axis: "x",
       centerPosition: [
-        edgeX + directionSign * (holeLength * 0.5 + previewInset) + xOffset,
+        edgeX + directionSign * holeLength * 0.5 + xOffset,
         originY + yOffset,
         originZ + zOffset,
       ],
@@ -657,7 +665,7 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
   return new Quaternion().setFromUnitVectors(new Vector3(0, 1, 0), direction.normalize());
 }
 
-function FittingAssemblyModel({ item, layout }) {
+function FittingAssemblyModel({ item, layout, engineeringFrame }) {
   const asset = item?.three_d_asset;
   const { scene } = useGLTF(resolveAdminAssetUrl(asset.canonical_file_url));
   const panel = String(item.visual_anchor_panel || "").trim();
@@ -674,7 +682,44 @@ function FittingAssemblyModel({ item, layout }) {
   }
   const offset = [item.visual_offset_x, item.visual_offset_y, item.visual_offset_z].map((value) => Number(value || 0) * 0.01);
   const rotation = [item.visual_rotation_x, item.visual_rotation_y, item.visual_rotation_z].map((value) => Number(value || 0) * Math.PI / 180);
+  if (engineeringFrame) {
+    const frame = resolveFittingLocalFrame(asset, engineeringFrame);
+    const forwardQuaternion = new Quaternion().setFromUnitVectors(
+      new Vector3(...frame.localForward).normalize(),
+      new Vector3(...frame.engineeringForward).normalize(),
+    );
+    const engineeringUp = new Vector3(0, 1, 0);
+    const forward = new Vector3(...frame.engineeringForward).normalize();
+    if (Math.abs(engineeringUp.dot(forward)) > 0.98) engineeringUp.set(0, 0, 1);
+    engineeringUp.addScaledVector(forward, -engineeringUp.dot(forward)).normalize();
+    const localUp = new Vector3(...(frame.localUp || [0, 1, 0])).applyQuaternion(forwardQuaternion);
+    localUp.addScaledVector(forward, -localUp.dot(forward));
+    const frameQuaternion = localUp.lengthSq() > 1e-8
+      ? new Quaternion().setFromUnitVectors(localUp.normalize(), engineeringUp).multiply(forwardQuaternion)
+      : forwardQuaternion;
+    const selectedAnchor = resolveSelectedFittingAnchor(layout, panel, surface, engineeringFrame);
+    const mountingPoint = new Vector3(...frame.mountingPoint).multiplyScalar(0.01).applyQuaternion(frameQuaternion);
+    const fittedOrigin = new Vector3(...(selectedAnchor?.anchorPoint || frame.entryPoint)).sub(mountingPoint);
+    return <group position={fittedOrigin.toArray()} quaternion={frameQuaternion}>
+      <group position={offset} rotation={rotation}><primitive object={scene} scale={[0.01, 0.01, 0.01]} /></group>
+    </group>;
+  }
   return <group position={anchor}><group position={offset} rotation={rotation}><primitive object={scene} scale={[0.01, 0.01, 0.01]} /></group></group>;
+}
+
+function MountingNodeEngineeringDiagnostic({ holeVolumes }) {
+  const points = (Array.isArray(holeVolumes) ? holeVolumes : [])
+    .filter((hole) => ["P1", "P2"].includes(String(hole?.label || "").toUpperCase()))
+    .map((hole) => ({ label: String(hole.label).toUpperCase(), position: hole.debugStartPosition || hole.surfacePoint || hole.centerPosition }))
+    .filter((hole) => Array.isArray(hole.position));
+  const p1 = points.find((point) => point.label === "P1");
+  const p2 = points.find((point) => point.label === "P2");
+  if (!p1 || !p2) return null;
+  return <group>
+    <Html position={p1.position} center zIndexRange={[0, 19]} style={{ width: "7px", height: "7px", border: "2px solid #2563eb", borderRadius: "50%", boxSizing: "border-box", pointerEvents: "none", filter: "drop-shadow(0 0 1px #ffffff)" }} />
+    <Html position={p2.position} center zIndexRange={[0, 19]} style={{ width: "7px", height: "7px", border: "2px solid #dc2626", borderRadius: "50%", boxSizing: "border-box", pointerEvents: "none", filter: "drop-shadow(0 0 1px #ffffff)" }} />
+    <Line points={[p1.position, p2.position]} color="#7c3aed" lineWidth={1.2} />
+  </group>;
 }
 
 export default function HolesMountingThreePreview({
@@ -773,7 +818,7 @@ export default function HolesMountingThreePreview({
         };
         const isSurfaceMountPreview = normalizedVariantKey === "surface_mount";
         const isAngledTwoPlanesPreview = normalizedVariantKey === "angled_two_planes";
-        const isFaceToEdgePreview = normalizedVariantKey === "face_to_edge" || isSurfaceMountPreview;
+        const isFaceToEdgePreview = normalizedVariantKey === "face_to_edge" || normalizedVariantKey === "bottom_to_side" || isSurfaceMountPreview;
         const isCompactThreePreview = isFaceToEdgePreview || isAngledTwoPlanesPreview;
         const baseLayout = useMemo(
           () => getHoleWorkspaceThreePreviewLayout(
@@ -797,7 +842,7 @@ export default function HolesMountingThreePreview({
         );
         const holeVolumes = useMemo(
           () => {
-            const isFaceToEdge = normalizedVariantKey === "face_to_edge";
+            const isFaceToEdge = normalizedVariantKey === "face_to_edge" || normalizedVariantKey === "bottom_to_side";
             const isSurfaceMountPreview = normalizedVariantKey === "surface_mount";
             const isAngledTwoPlanesPreview = normalizedVariantKey === "angled_two_planes";
 
@@ -1138,6 +1183,10 @@ export default function HolesMountingThreePreview({
           [faceToEdgeHoleIdTextures],
         );
 
+    const fittingEngineeringFrame = normalizedVariantKey === "face_to_edge"
+      ? resolveFaceToEdgeFittingFrame(holeVolumes)
+      : null;
+
     return (
       <div className="holes-three-preview">
         {fittingItemsWithAssets.length ? <div className={`mounting-node-fitting-placement-editor${fittingPlacementEditorOpen ? " is-open" : ""}`}>
@@ -1150,8 +1199,8 @@ export default function HolesMountingThreePreview({
             const draft = fittingPlacementDrafts[itemId] || {};
             return <div className="mounting-node-fitting-placement" key={itemId}>
               <strong>{item.fitting_name || item.fitting_article || item.fitting_code || `Fitting ${item.fitting_id}`}</strong>
-              <label>Панель<select value={draft.visual_anchor_panel || ""} onChange={(event) => updateFittingPlacement(itemId, "visual_anchor_panel", event.target.value || null)}><option value="">Не задано</option><option value="vertical_panel">Вертикальна панель</option><option value="horizontal_panel">Горизонтальна панель</option></select></label>
-              <label>Площина<select value={draft.visual_anchor_surface || ""} onChange={(event) => updateFittingPlacement(itemId, "visual_anchor_surface", event.target.value || null)}><option value="">Не задано</option><option value="outer_face">Зовнішня площина</option><option value="inner_face">Внутрішня площина</option><option value="edge">Торець</option></select></label>
+              <label>Панель<select value={draft.visual_anchor_panel || ""} onChange={(event) => { const panelValue = event.target.value || null; const safeSurface = panelValue ? normalizeFittingSurfaceForPanel(panelValue, draft.visual_anchor_surface) : null; updateFittingPlacement(itemId, "visual_anchor_panel", panelValue); updateFittingPlacement(itemId, "visual_anchor_surface", safeSurface); }}><option value="">Не задано</option><option value="vertical_panel">Вертикальна панель</option><option value="horizontal_panel">Горизонтальна панель</option></select></label>
+              <label>Поверхня<select value={draft.visual_anchor_surface || ""} onChange={(event) => updateFittingPlacement(itemId, "visual_anchor_surface", event.target.value || null)}><option value="">Не задано</option>{fittingSurfaceOptionsForPanel(draft.visual_anchor_panel).map((surfaceValue) => <option key={surfaceValue} value={surfaceValue}>{({ inner_face: "Внутрішня площина", outer_face: "Зовнішня площина", top_face: "Верхня площина", bottom_face: "Нижня площина" })[surfaceValue]}</option>)}</select></label>
               <div className="mounting-node-fitting-placement-fields"><span>Зміщення, мм</span>{["x", "y", "z"].map((axis) => <label key={`o-${axis}`}>{axis.toUpperCase()}<input type="number" step="any" value={draft[`visual_offset_${axis}`] ?? 0} onChange={(event) => updateFittingPlacement(itemId, `visual_offset_${axis}`, Number(event.target.value) || 0)} /></label>)}</div>
               <div className="mounting-node-fitting-placement-fields"><span>Обертання, °</span>{["x", "y", "z"].map((axis) => <label key={`r-${axis}`}>{axis.toUpperCase()}<input type="number" step="1" value={draft[`visual_rotation_${axis}`] ?? 0} onChange={(event) => updateFittingPlacement(itemId, `visual_rotation_${axis}`, Number(event.target.value) || 0)} /></label>)}</div>
               <div className="mounting-node-fitting-placement-actions"><button className="ghost-button compact-button" type="button" onClick={() => resetFittingPlacement(itemId)}>Скинути</button><button className="primary-button compact-button" disabled={fittingPlacementSaving} type="button" onClick={async () => { setFittingPlacementSaving(true); setFittingPlacementStatus(""); const result = await onSaveFittingPlacement?.(itemId, draft); if (result?.success) { setFittingPlacementPersisted((current) => ({ ...current, [itemId]: { ...draft } })); setFittingPlacementStatus("✓ Зміни збережено"); fittingPlacementTimer.current = setTimeout(() => setFittingPlacementStatus(""), 2500); } else setFittingPlacementStatus("Не вдалося зберегти зміни."); setFittingPlacementSaving(false); }}>{fittingPlacementSaving ? "Зберігаю…" : "Зберегти"}</button></div>
@@ -1270,7 +1319,7 @@ export default function HolesMountingThreePreview({
           )}
           <group>
             {previewPanels.map((panel, index) => (
-              <group
+                    <group
                 key={`${mountingVariantKey}-panel-${index}`}
                 position={panel.position}
                 rotation={panel.rotation}
@@ -1325,13 +1374,9 @@ export default function HolesMountingThreePreview({
                     const isSelected = String(selectedHoleId) === String(marker.id);
                     const isHovered = String(hoveredHoleId) === String(marker.id);
                     const isActive = isSelected || isHovered;
-                    const holeColor = isSelected ? "#2563eb" : isHovered ? "#475569" : "#6b7280";
-                    const holeEmissive = isSelected ? "#93c5fd" : isHovered ? "#dbeafe" : "#cfd8e3";
-                    const holeOpacity = isSelected ? 0.92 : isHovered ? 0.78 : 0.58;
-                    const holeEmissiveIntensity = isSelected ? 0.42 : isHovered ? 0.22 : 0.08;
                     const labelScale = isSelected ? 0.22 : isHovered ? 0.2 : 0.18;
-                    const lineColor = isSelected ? "#3b82f6" : isHovered ? "#0f766e" : "#94a3b8";
-                    const lineOpacity = isSelected ? 0.92 : isHovered ? 0.88 : 0.72;
+                    const lineColor = isSelected ? "#22ff77" : isHovered ? "#62ff9b" : "#00d95f";
+                    const lineOpacity = isSelected ? 1 : isHovered ? 0.98 : 0.94;
                     return (
                   <group
                     key={`face-to-edge-${index}-${String(marker.id ?? marker.point?.client_key ?? "fallback")}`}
@@ -1347,47 +1392,15 @@ export default function HolesMountingThreePreview({
                       event.stopPropagation();
                       onHoverHole?.(marker.id);
                     }}
-                    position={marker.centerPosition}
+                    position={[0, 0, 0]}
                     renderOrder={2}
-                    quaternion={marker.quaternion}
-                    rotation={marker.quaternion ? undefined : marker.rotation}
+                    rotation={[0, 0, 0]}
                   >
-                    <mesh castShadow renderOrder={2}>
-                      <cylinderGeometry args={[marker.holeRadius * (isSelected ? 0.96 : isHovered ? 0.94 : 0.92), marker.holeRadius * (isSelected ? 0.96 : isHovered ? 0.94 : 0.92), marker.holeLength, 24, 1, false]} />
-                      <meshStandardMaterial
-                        color={holeColor}
-                        emissive={holeEmissive}
-                        emissiveIntensity={holeEmissiveIntensity}
-                        opacity={isSelected ? 0.88 : holeOpacity}
-                        transparent
-                        depthWrite={false}
-                        roughness={isActive ? 0.28 : 0.36}
-                        metalness={isActive ? 0.2 : 0.18}
-                      />
-                    </mesh>
+                    <EngineeringHoleOutline marker={marker} color={lineColor} opacity={lineOpacity} />
                     {faceToEdgeHoleIdTextures[marker.id] ? (
                       <>
-                        <line renderOrder={isActive ? 4 : 3}>
-                          <bufferGeometry>
-                            <bufferAttribute
-                              attach="attributes-position"
-                              args={[
-                                new Float32Array([
-                                  0,
-                                  0,
-                                  0,
-                                  faceToEdgeLabelPlacements[String(marker.id)]?.lineEnd?.[0] ?? 0,
-                                  faceToEdgeLabelPlacements[String(marker.id)]?.lineEnd?.[1] ?? marker.holeRadius * 2.4,
-                                  faceToEdgeLabelPlacements[String(marker.id)]?.lineEnd?.[2] ?? 0,
-                                ]),
-                                3,
-                              ]}
-                            />
-                          </bufferGeometry>
-                          <lineBasicMaterial color={lineColor} depthTest={false} opacity={lineOpacity} transparent />
-                        </line>
                         <sprite
-                          position={faceToEdgeLabelPlacements[String(marker.id)]?.labelPosition || [0, marker.holeRadius * 3.1, 0.08]}
+                          position={(faceToEdgeLabelPlacements[String(marker.id)]?.labelPosition || [0, marker.holeRadius * 3.1, 0.08]).map((value, axis) => value + marker.centerPosition[axis])}
                           renderOrder={isActive ? 5 : 4}
                           scale={[labelScale, labelScale, labelScale]}
                         >
@@ -1533,6 +1546,7 @@ export default function HolesMountingThreePreview({
                 <meshStandardMaterial color="#94a3b8" emissive="#cbd5e1" emissiveIntensity={0.12} />
               </mesh>
             )}
+            {normalizedVariantKey === "face_to_edge" ? <MountingNodeEngineeringDiagnostic holeVolumes={holeVolumes} /> : null}
             {isFaceToEdgePreview ? (
               <group position={faceToEdgeOrigin || layout.markerPlane.origin}>
                 <sprite position={axisLabelPresentation.positions.x} scale={[axisLabelPresentation.scale, axisLabelPresentation.scale, axisLabelPresentation.scale]}>
@@ -1561,7 +1575,7 @@ export default function HolesMountingThreePreview({
           </group>
           <Suspense fallback={null}>
             {fittingItems.filter((item) => item?.three_d_asset?.canonical_file_url).map((item) => (
-              <FittingAssemblyModel key={item.id} item={item} layout={layout} />
+              <FittingAssemblyModel key={item.id} item={item} layout={layout} engineeringFrame={fittingEngineeringFrame} />
             ))}
           </Suspense>
           <OrbitControls
@@ -1570,7 +1584,7 @@ export default function HolesMountingThreePreview({
             enableRotate
             enableZoom
             maxDistance={11}
-            minDistance={4.2}
+            minDistance={1.1}
             maxPolarAngle={Math.PI}
             minPolarAngle={0}
             mouseButtons={{ LEFT: MOUSE.ROTATE, MIDDLE: MOUSE.DOLLY, RIGHT: MOUSE.PAN }}

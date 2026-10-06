@@ -35,8 +35,26 @@ test("holes mounting three preview is extracted into a reusable component", () =
   assert.equal(componentSource.includes("const hasDepth = Number.isFinite(depthValue) && depthValue > 0"), true);
   assert.equal(componentSource.includes("const throughHoleLength = isHorizontalEdge || isHorizontalPlane ? panelBThickness : panelAThickness"), true);
   assert.equal(componentSource.includes("const depthScene = hasDepth ? Math.abs(depthValue) * mmToScene : holeLength"), true);
-  assert.equal(componentSource.includes('color: "#b9ffb9"'), true);
-  assert.equal(componentSource.includes("opacity: 0.28"), true);
+  assert.equal(componentSource.includes('color: "#d9dcdf"'), true);
+  assert.equal(componentSource.includes("opacity: 0.24"), true);
+  assert.equal(componentSource.includes('zIndexRange={[0, 19]}'), true);
+  assert.equal(componentSource.includes('rotation={marker.quaternion ? undefined : marker.rotation}'), false);
+  assert.equal(componentSource.includes('marker.axis === "x" ? [0, 0, Math.PI / 2]'), false);
+  assert.equal(componentSource.includes("EngineeringHoleOutline"), true);
+  const outlinePath = fileURLToPath(new URL("../src/components/processing/EngineeringHoleOutline.jsx", import.meta.url));
+  const outlineSource = readFileSync(outlinePath, "utf8");
+  assert.equal(outlineSource.includes("buildHoleRingPoints"), true);
+  assert.equal(outlineSource.includes("getHoleSilhouetteRadial"), true);
+  assert.equal(outlineSource.includes("lineWidth={3}"), true);
+  assert.equal(outlineSource.includes("lineWidth={3}"), true);
+  assert.equal(componentSource.includes("outlinePoints.map"), false);
+  assert.equal(componentSource.includes("index < 4; index += 1"), false);
+  assert.equal(componentSource.includes("faceToEdgeLabelPlacements[String(marker.id)]?.lineEnd"), false);
+  assert.equal(componentSource.includes("position={[0, 0, 0]}"), true);
+  assert.equal(componentSource.includes("rotation={[0, 0, 0]}"), true);
+  assert.equal(outlineSource.includes("lineWidth={3} opacity={1} depthTest renderOrder={6}"), true);
+  assert.equal(outlineSource.includes("lineWidth={3} opacity={opacity} depthTest={false}"), true);
+  assert.equal(componentSource.includes("index < 4; index += 1"), false);
 
   assert.equal(
     appSource.includes('import HolesMountingThreePreview from "./components/processing/HolesMountingThreePreview.jsx";'),

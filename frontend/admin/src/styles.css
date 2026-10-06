@@ -17130,6 +17130,37 @@ section.main-panel.full-panel:has(> article.holes-view-card > .mounting-node-wor
   margin-top: 18px;
 }
 
+@media (min-width: 701px) {
+  .construction-rule-geometry-section {
+    display: grid;
+    gap: 18px 16px;
+    grid-template-columns: minmax(300px, 0.9fr) minmax(0, 1.1fr);
+  }
+
+  .construction-rule-geometry-heading {
+    grid-column: 1 / -1;
+  }
+
+  .construction-rule-geometry-options {
+    grid-column: 1;
+    grid-row: 2 / span 2;
+  }
+
+  .construction-rule-workspace {
+    display: contents;
+  }
+
+  .construction-rule-settings-card {
+    grid-column: 1;
+    grid-row: 4;
+  }
+
+  .construction-rule-large-preview {
+    grid-column: 2;
+    grid-row: 2 / span 3;
+  }
+}
+
 .construction-rule-settings-card,
 .construction-rule-large-preview {
   background: #fff;
@@ -17207,12 +17238,58 @@ section.main-panel.full-panel:has(> article.holes-view-card > .mounting-node-wor
 }
 
 .construction-rule-3d-preview {
+  min-height: 520px;
   background: #f6f8f6;
   border: 1px solid #edf1ee;
   border-radius: 10px;
-  height: 330px;
+  height: 560px;
+  position: relative;
   overflow: hidden;
   width: 100%;
+}
+
+.construction-rule-preview-toggles {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+}
+
+.construction-rule-camera-controls {
+  bottom: 14px;
+  display: grid;
+  gap: 3px;
+  position: absolute;
+  right: 14px;
+  z-index: 5;
+}
+
+.construction-rule-camera-row,
+.construction-rule-camera-zoom-row {
+  display: flex;
+  gap: 3px;
+  justify-content: center;
+}
+
+.construction-rule-camera-controls button {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid #cbd8d0;
+  border-radius: 7px;
+  color: #30463a;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 20px;
+  height: 38px;
+  justify-content: center;
+  line-height: 1;
+  padding: 0;
+  touch-action: manipulation;
+  width: 38px;
+}
+
+.construction-rule-camera-zoom-row {
+  margin-top: 5px;
 }
 
 .construction-rule-3d-preview canvas {
@@ -17284,7 +17361,8 @@ section.main-panel.full-panel:has(> article.holes-view-card > .mounting-node-wor
   }
 
   .construction-rule-3d-preview {
-    height: 300px;
+    height: clamp(460px, 68vw, 540px);
+    min-height: 460px;
   }
 }
 

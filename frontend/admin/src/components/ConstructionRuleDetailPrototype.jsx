@@ -1,12 +1,19 @@
 import { ArrowLeft } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import ConstructionRule3DPreview from "./ConstructionRule3DPreview.jsx";
+import { getMountingNode, getMountingScheme, previewMountingSchemePlacement } from "../api.js";
 
 const GEOMETRY_OPTIONS = [
   { key: "on-top", label: "Боковини на дні" },
   { key: "offset", label: "Зі зміщенням" },
   { key: "between", label: "Дно між боковинами" },
 ];
+
+const MOUNTING_VARIANT_BY_CONSTRUCTION_VARIANT = {
+  "on-top": "bottom_to_side",
+  offset: "face_to_edge",
+  between: "face_to_edge",
+};
 
 function GeometryOptionVisual({ offsetMm = 100, variant }) {
   const isBetween = variant === "between";
@@ -46,14 +53,60 @@ function GeometryOptionVisual({ offsetMm = 100, variant }) {
   );
 }
 
-export default function ConstructionRuleDetailPrototype({ onBack = null }) {
+export default function ConstructionRuleDetailPrototype({ onBack = null, token = "" }) {
   const [selectedGeometry, setSelectedGeometry] = useState(GEOMETRY_OPTIONS[0].key);
   const [offsetMm, setOffsetMm] = useState(100);
-  const [showFasteners, setShowFasteners] = useState(false);
+  const [transparentPanels, setTransparentPanels] = useState(false);
+  const [showFittings, setShowFittings] = useState(true);
   const [depthMm, setDepthMm] = useState(500);
   const [edgeOffsetMm, setEdgeOffsetMm] = useState(50);
-  const selectedGeometryLabel = GEOMETRY_OPTIONS.find((option) => option.key === selectedGeometry)?.label || "";
+  const [schemeData, setSchemeData] = useState(null);
+  const [nodeData, setNodeData] = useState(null);
+  const [schemePositions, setSchemePositions] = useState([]);
+  const [assemblyError, setAssemblyError] = useState("");
 
+  useEffect(() => {
+    let cancelled = false;
+    async function loadAssemblyData() {
+      const [schemeResult, nodeResult] = await Promise.all([
+        getMountingScheme(token, 1),
+        getMountingNode(token, 19),
+      ]);
+      if (cancelled) return;
+      if (!schemeResult?.success || !nodeResult?.success) {
+        setAssemblyError("Не вдалося завантажити дані реального кріплення.");
+        return;
+      }
+      const scheme = schemeResult.scheme || null;
+      const node = nodeResult.node || null;
+      const rule = Array.isArray(scheme?.placement_rules) ? scheme.placement_rules[0] : null;
+      const placementResult = rule
+        ? await previewMountingSchemePlacement(token, { joint_length_mm: depthMm, rule })
+        : null;
+      if (cancelled) return;
+      if (!placementResult?.success || !placementResult.result?.valid) {
+        setAssemblyError(placementResult?.error || placementResult?.result?.reason || "Не вдалося розрахувати розташування кріплень.");
+        return;
+      }
+      setSchemeData(scheme);
+      setNodeData(node);
+      setSchemePositions(placementResult.result.positions || []);
+      setAssemblyError("");
+    }
+    loadAssemblyData().catch(() => {
+      if (!cancelled) setAssemblyError("Не вдалося завантажити дані реального кріплення.");
+    });
+    return () => { cancelled = true; };
+  }, [depthMm, token]);
+
+  const primaryItem = Array.isArray(nodeData?.items) ? nodeData.items[0] : null;
+  const fittingAsset = primaryItem?.three_d_asset || null;
+  const requiredMountingVariantKey = MOUNTING_VARIANT_BY_CONSTRUCTION_VARIANT[selectedGeometry] || "face_to_edge";
+  const selectedTemplate = Array.isArray(nodeData?.templates)
+    ? nodeData.templates.find((link) => link?.template?.mounting_variant_key === requiredMountingVariantKey)?.template || null
+    : null;
+  const holePoints = Array.isArray(selectedTemplate?.points) ? selectedTemplate.points : [];
+  const selectedGeometryLabel = GEOMETRY_OPTIONS.find((option) => option.key === selectedGeometry)?.label || "";
   return (
     <section className="dashboard-panel mounting-node-catalog-page construction-rule-detail-page">
       <div className="mounting-node-catalog-intro">
@@ -150,11 +203,17 @@ export default function ConstructionRuleDetailPrototype({ onBack = null }) {
           </section>
           <section className="construction-rule-large-preview" aria-labelledby="construction-rule-preview-title">
             <h2 id="construction-rule-preview-title">Візуалізація</h2>
+            <div className="construction-rule-preview-toggles">
             <label className="construction-rule-fastener-toggle">
-              <input checked={showFasteners} onChange={(event) => setShowFasteners(event.target.checked)} type="checkbox" />
-              <span>Показати кріплення</span>
+              <input checked={transparentPanels} onChange={(event) => setTransparentPanels(event.target.checked)} type="checkbox" />
+              <span>Прозорі панелі</span>
             </label>
-            <ConstructionRule3DPreview depthMm={depthMm} edgeOffsetMm={edgeOffsetMm} offsetMm={offsetMm} selectedVariant={selectedGeometry} showFasteners={showFasteners} />
+            <label className="construction-rule-fastener-toggle">
+              <input checked={showFittings} onChange={(event) => setShowFittings(event.target.checked)} type="checkbox" />
+              <span>Показати фурнітуру</span>
+            </label>
+            </div>
+            <ConstructionRule3DPreview assemblyError={assemblyError} depthMm={depthMm} edgeOffsetMm={edgeOffsetMm} fittingAsset={fittingAsset} holePoints={holePoints} nodeItem={primaryItem} offsetMm={offsetMm} scheme={schemeData} schemePositions={schemePositions} selectedVariant={selectedGeometry} showFittings={showFittings} transparentPanels={transparentPanels} />
           </section>
         </div>
       </section>

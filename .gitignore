@@ -92,6 +92,7 @@ backups/
 .codex-chrome-profile-*/
 .server-catalog-sync/
 _stage_smoke/
+_spike/
 temp/
 *.bak-*
 furniture_platform.db.backup-*
