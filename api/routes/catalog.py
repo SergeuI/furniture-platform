@@ -1588,7 +1588,7 @@ def _serialize_fitting_detail(item: FittingModel) -> dict:
                 "canonical_file_size", "canonical_sha256", "units", "dimensions_x", "dimensions_y",
                 "dimensions_z", "bbox_min_x", "bbox_min_y", "bbox_min_z", "bbox_max_x", "bbox_max_y",
                 "bbox_max_z", "axis_up", "axis_forward", "origin_x", "origin_y", "origin_z",
-                "rotation_x", "rotation_y", "rotation_z", "coordinate_system_configured", "material_color_override", "validated_at",
+                "rotation_x", "rotation_y", "rotation_z", "coordinate_system_configured", "mounting_point_x", "mounting_point_y", "mounting_point_z", "mounting_coordinate_system_configured", "material_color_override", "validated_at",
             )
         }
         raw_material_overrides = asset.material_overrides_json
@@ -7183,6 +7183,12 @@ def update_fitting_3d_coordinates_route(
         asset.rotation_y = payload.rotation_y
         asset.rotation_z = payload.rotation_z
         asset.coordinate_system_configured = 1
+        asset.mounting_point_x = payload.mounting_point_x
+        asset.mounting_point_y = payload.mounting_point_y
+        asset.mounting_point_z = payload.mounting_point_z
+        asset.axis_forward = payload.axis_forward
+        asset.axis_up = payload.axis_up
+        asset.mounting_coordinate_system_configured = int(payload.mounting_coordinate_system_configured)
         db.commit()
         db.refresh(asset)
         return _serialize_fitting_detail(db.query(FittingModel).filter(FittingModel.id == item_id).one())[

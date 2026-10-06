@@ -389,6 +389,8 @@ class MountingNodeService:
                 "coordinate_system_configured": bool(asset.coordinate_system_configured),
                 "origin_x": asset.origin_x, "origin_y": asset.origin_y, "origin_z": asset.origin_z,
                 "rotation_x": asset.rotation_x, "rotation_y": asset.rotation_y, "rotation_z": asset.rotation_z,
+                "mounting_point_x": asset.mounting_point_x, "mounting_point_y": asset.mounting_point_y, "mounting_point_z": asset.mounting_point_z,
+                "mounting_coordinate_system_configured": bool(asset.mounting_coordinate_system_configured),
             }
         return {
             "id": item.id,

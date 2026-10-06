@@ -1,9 +1,11 @@
 import { Canvas } from "@react-three/fiber";
 import { Bounds, Html, OrbitControls, useGLTF } from "@react-three/drei";
-import { AxesHelper } from "three";
+import { AxesHelper, Vector3 } from "three";
 import { Suspense, Component, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { resolveAdminAssetUrl } from "../api.js";
+import { CANONICAL_AXES, canonicalAxisToVector, mountingPointPreset, buildFitting3DCoordinateSavePayload, resolveEffectiveMountingPoint } from "../fitting3DCoordinates.js";
+import { snapMountingPoint, worldPointToLocalPoint } from "../fitting3DTransform.js";
 
 class ViewerErrorBoundary extends Component {
   state = { hasError: false };
@@ -19,8 +21,9 @@ class ViewerErrorBoundary extends Component {
   }
 }
 
-function FittingModel({ url, transform, materialColor, materialOverrides, onMaterialsDetected }) {
+function FittingModel({ url, transform, materialColor, materialOverrides, onMaterialsDetected, pickingEnabled, onMountingPointHover, onMountingPointPick }) {
   const { scene } = useGLTF(url);
+  const groupRef = useRef();
   const isolatedScene = useMemo(() => {
     const cloned = scene.clone(true);
     const materialKeys = new Map();
@@ -60,10 +63,21 @@ function FittingModel({ url, transform, materialColor, materialOverrides, onMate
       }
     });
   }, [isolatedScene, materialColor, materialOverrides]);
-  return <group position={transform.position} rotation={transform.rotation}><primitive object={isolatedScene.scene} /></group>;
+  const handlePointerMove = (event) => {
+    if (!pickingEnabled || !groupRef.current) return;
+    event.stopPropagation();
+    onMountingPointHover?.(worldPointToLocalPoint(event.point, groupRef.current.matrixWorld));
+  };
+  const handlePointerLeave = () => onMountingPointHover?.(null);
+  const handlePointerDown = (event) => {
+    if (!pickingEnabled || !groupRef.current) return;
+    event.stopPropagation();
+    onMountingPointPick?.(worldPointToLocalPoint(event.point, groupRef.current.matrixWorld));
+  };
+  return <group ref={groupRef} position={transform.position} rotation={transform.rotation} onPointerMove={handlePointerMove} onPointerLeave={handlePointerLeave} onPointerDown={handlePointerDown}><primitive object={isolatedScene.scene} /></group>;
 }
 
-function Fitting3DCanvas({ url, transform, materialColor, materialOverrides, onMaterialsDetected }) {
+function Fitting3DCanvas({ url, transform, materialColor, materialOverrides, onMaterialsDetected, mountingPoint, previewPoint, axisForward, axisUp, axisLength, markerRadius, pickingEnabled, onMountingPointHover, onMountingPointPick }) {
   return (
     <Canvas
       className="fitting-3d-viewer-canvas"
@@ -76,25 +90,47 @@ function Fitting3DCanvas({ url, transform, materialColor, materialOverrides, onM
       <ambientLight intensity={1.5} />
       <directionalLight intensity={2.2} position={[4, 6, 5]} />
       <directionalLight intensity={0.8} position={[-4, 2, -3]} />
-      <primitive object={new AxesHelper(10)} />
-      <Html position={[10.5, 0, 0]} center className="fitting-3d-axis-label fitting-3d-axis-label-x">X</Html>
-      <Html position={[0, 10.5, 0]} center className="fitting-3d-axis-label fitting-3d-axis-label-y">Y</Html>
-      <Html position={[0, 0, 10.5]} center className="fitting-3d-axis-label fitting-3d-axis-label-z">Z</Html>
-      <mesh position={[0, 0, 0]}>
-        <sphereGeometry args={[0.12, 16, 16]} />
-        <meshStandardMaterial color="#d24b4b" />
-      </mesh>
-      <Html position={[0, 0, 0]} center className="fitting-3d-origin-label">0</Html>
+      <primitive object={new AxesHelper(axisLength)} />
+      <Html position={[axisLength * 1.08, 0, 0]} center className="fitting-3d-axis-label fitting-3d-axis-label-x">X</Html>
+      <Html position={[0, axisLength * 1.08, 0]} center className="fitting-3d-axis-label fitting-3d-axis-label-y">Y</Html>
+      <Html position={[0, 0, axisLength * 1.08]} center className="fitting-3d-axis-label fitting-3d-axis-label-z">Z</Html>
+      <Html position={[0, 0, 0]} center className="fitting-3d-origin-marker" style={{ width: "6px", height: "6px", border: "1px solid #d24b4b", borderRadius: "50%", boxSizing: "border-box", pointerEvents: "none", filter: "drop-shadow(0 0 1px #ffffff)" }} />
+      <Html position={[0, 0, 0]} center className="fitting-3d-origin-label" style={{ transform: "translate(6px, -6px)", fontSize: "10px", lineHeight: 1 }}>0</Html>
+      <MountingCoordinateOverlay transform={transform} point={mountingPoint} previewPoint={previewPoint} axisForward={axisForward} axisUp={axisUp} length={axisLength} markerRadius={markerRadius} />
       <ViewerErrorBoundary>
         <Suspense fallback={<Html center>Завантаження 3D-моделі…</Html>}>
           <Bounds fit clip observe margin={1.2}>
-            <FittingModel url={url} transform={transform} materialColor={materialColor} materialOverrides={materialOverrides} onMaterialsDetected={onMaterialsDetected} />
+            <FittingModel url={url} transform={transform} materialColor={materialColor} materialOverrides={materialOverrides} onMaterialsDetected={onMaterialsDetected} pickingEnabled={pickingEnabled} onMountingPointHover={onMountingPointHover} onMountingPointPick={onMountingPointPick} />
           </Bounds>
         </Suspense>
       </ViewerErrorBoundary>
       <OrbitControls makeDefault enableDamping enablePan enableZoom />
     </Canvas>
   );
+}
+
+function MountingCoordinateOverlay({ transform, point, previewPoint, axisForward, axisUp, length, markerRadius }) {
+  const forward = canonicalAxisToVector(axisForward);
+  const up = canonicalAxisToVector(axisUp);
+  const selectedPoint = point.every((value) => value !== "" && value !== null && value !== undefined && Number.isFinite(Number(value))) ? point.map(Number) : null;
+  const hoverPoint = previewPoint?.every((value) => Number.isFinite(Number(value))) ? previewPoint.map(Number) : null;
+  const localPoint = selectedPoint || hoverPoint;
+  if (!localPoint) return null;
+  const end = (axis) => localPoint.map((value, index) => value + axis[index] * length);
+  return <group position={transform.position} rotation={transform.rotation}>
+    <Html position={localPoint} center className="fitting-3d-mounting-point-marker" style={{ width: "7px", height: "7px", border: `1px solid ${hoverPoint && !selectedPoint ? "#1d78a8" : "#c43d3d"}`, borderRadius: "50%", boxSizing: "border-box", pointerEvents: "none", filter: "drop-shadow(0 0 1px #ffffff)" }} />
+    {selectedPoint ? <Html position={localPoint} center className="fitting-3d-origin-label" style={{ transform: "translate(7px, -7px)", fontSize: "10px", lineHeight: 1, padding: 0 }}>M</Html> : null}
+    {forward ? <line>
+      <bufferGeometry attach="geometry" onUpdate={(geometry) => geometry.setFromPoints([new Vector3(...localPoint), new Vector3(...end(forward))])} />
+      <lineBasicMaterial attach="material" color="#c43d3d" />
+    </line> : null}
+    {up ? <line>
+      <bufferGeometry attach="geometry" onUpdate={(geometry) => geometry.setFromPoints([new Vector3(...localPoint), new Vector3(...end(up))])} />
+      <lineBasicMaterial attach="material" color="#3d6fc4" />
+    </line> : null}
+    {forward ? <Html position={end(forward)} center className="fitting-3d-origin-label" style={{ fontSize: "10px", lineHeight: 1, padding: 0 }}>Forward</Html> : null}
+    {up ? <Html position={end(up)} center className="fitting-3d-origin-label" style={{ fontSize: "10px", lineHeight: 1, padding: 0 }}>Up</Html> : null}
+  </group>;
 }
 
 function formatDimension(value) {
@@ -106,9 +142,15 @@ export default function Fitting3DViewer({ asset, onSaveCoordinates, onSaveAppear
   const initialCoordinates = {
     origin_x: Number(asset?.origin_x ?? 0), origin_y: Number(asset?.origin_y ?? 0), origin_z: Number(asset?.origin_z ?? 0),
     rotation_x: Number(asset?.rotation_x ?? 0), rotation_y: Number(asset?.rotation_y ?? 0), rotation_z: Number(asset?.rotation_z ?? 0),
+    mounting_point_x: asset?.mounting_point_x ?? "", mounting_point_y: asset?.mounting_point_y ?? "", mounting_point_z: asset?.mounting_point_z ?? "",
+    axis_forward: asset?.axis_forward || "", axis_up: asset?.axis_up || "",
   };
   const [coordinates, setCoordinates] = useState(initialCoordinates);
   const [editing, setEditing] = useState(false);
+  const [pickingMountingPoint, setPickingMountingPoint] = useState(false);
+  const [mountingPointOverride, setMountingPointOverride] = useState([asset?.mounting_point_x, asset?.mounting_point_y, asset?.mounting_point_z].every((value) => value !== null && value !== undefined));
+  const [mountingPointPreview, setMountingPointPreview] = useState(null);
+  const [mountingPointSnapLabel, setMountingPointSnapLabel] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [materials, setMaterials] = useState([]);
@@ -117,7 +159,7 @@ export default function Fitting3DViewer({ asset, onSaveCoordinates, onSaveAppear
   const [appearanceError, setAppearanceError] = useState("");
   const [appearanceStatus, setAppearanceStatus] = useState("");
   const appearanceStatusTimer = useRef(null);
-  useEffect(() => setCoordinates(initialCoordinates), [asset?.id, asset?.updated_at, asset?.canonical_file_url]);
+  useEffect(() => { setCoordinates(initialCoordinates); setMountingPointOverride([asset?.mounting_point_x, asset?.mounting_point_y, asset?.mounting_point_z].every((value) => value !== null && value !== undefined)); }, [asset?.id, asset?.updated_at, asset?.canonical_file_url]);
   useEffect(() => {
     const next = {};
     (asset?.material_overrides || []).forEach((override) => {
@@ -152,10 +194,19 @@ export default function Fitting3DViewer({ asset, onSaveCoordinates, onSaveAppear
     rotation: coordinates.rotation_x * Math.PI / 180,
   };
   transform.rotation = [coordinates.rotation_x * Math.PI / 180, coordinates.rotation_y * Math.PI / 180, coordinates.rotation_z * Math.PI / 180];
-  const setValue = (key, value) => setCoordinates((current) => ({ ...current, [key]: Number(value) || 0 }));
+  const setValue = (key, value) => setCoordinates((current) => ({ ...current, [key]: key.startsWith("mounting_point_") ? (value === "" ? "" : Number(value)) : Number(value) || 0 }));
   const bbox = { x: [asset?.bbox_min_x, asset?.bbox_max_x], y: [asset?.bbox_min_y, asset?.bbox_max_y], z: [asset?.bbox_min_z, asset?.bbox_max_z] };
   const applyPreset = (axis, side) => setValue(`origin_${axis}`, side === "min" ? bbox[axis][0] : side === "max" ? bbox[axis][1] : ((bbox[axis][0] || 0) + (bbox[axis][1] || 0)) / 2);
-  const save = async () => { setSaving(true); setError(""); const result = await onSaveCoordinates?.(coordinates); setSaving(false); if (result?.success) setEditing(false); else setError(result?.error || "Не вдалося зберегти координати."); };
+  const applyMountingPreset = (preset) => { const point = mountingPointPreset(bbox, preset); if (point) { setMountingPointOverride(true); setCoordinates((current) => ({ ...current, mounting_point_x: point[0], mounting_point_y: point[1], mounting_point_z: point[2] })); } };
+  const selectMountingPoint = (point) => { const snapped = snapMountingPoint(point, bbox, snapThreshold); setMountingPointOverride(true); setCoordinates((current) => ({ ...current, mounting_point_x: snapped.point[0], mounting_point_y: snapped.point[1], mounting_point_z: snapped.point[2] })); setMountingPointPreview(null); setMountingPointSnapLabel(snapped.label); setPickingMountingPoint(false); };
+  const handleMountingPointHover = (point) => { setMountingPointPreview(point); if (point) setMountingPointSnapLabel(snapMountingPoint(point, bbox, snapThreshold).label); };
+  const handleMountingPointPick = (point) => selectMountingPoint(point);
+  const save = async () => { const mounting = buildFitting3DCoordinateSavePayload(coordinates, { mountingPointOverride }); if (!mounting.ok) { setError(mounting.error); return; } setSaving(true); setError(""); const result = await onSaveCoordinates?.({ ...coordinates, ...mounting.payload }); setSaving(false); if (result?.success) setEditing(false); else setError(result?.error || "Не вдалося зберегти координати."); };
+  const mountingPoint = resolveEffectiveMountingPoint(mountingPointOverride ? coordinates : asset);
+  const fittingSize = Math.max(1, ...["x", "y", "z"].map((axis) => Math.abs(Number(bbox[axis][1]) - Number(bbox[axis][0])) || 0));
+  const snapThreshold = Math.max(0.02, Math.min(0.25, fittingSize * 0.08));
+  const markerRadius = Math.max(0.03, Math.min(0.12, fittingSize * 0.012));
+  const axisLength = Math.max(0.08, Math.min(2.5, fittingSize * 0.25));
   const dimensions = [asset?.dimensions_x, asset?.dimensions_y, asset?.dimensions_z]
     .map(formatDimension)
     .join(" × ");
@@ -167,7 +218,7 @@ export default function Fitting3DViewer({ asset, onSaveCoordinates, onSaveAppear
     <div className="fitting-3d-viewer">
       {url ? (
         <div className="fitting-3d-viewer-stage">
-          <Fitting3DCanvas url={url} transform={transform} materialColor={null} materialOverrides={materialOverrides} onMaterialsDetected={handleMaterialsDetected} />
+          <Fitting3DCanvas url={url} transform={transform} materialColor={null} materialOverrides={materialOverrides} onMaterialsDetected={handleMaterialsDetected} mountingPoint={mountingPoint} previewPoint={mountingPointPreview} axisForward={coordinates.axis_forward} axisUp={coordinates.axis_up} axisLength={axisLength} markerRadius={markerRadius} pickingEnabled={editing && pickingMountingPoint} onMountingPointHover={handleMountingPointHover} onMountingPointPick={handleMountingPointPick} />
         </div>
       ) : (
         <div className="fitting-3d-viewer-state">Не вдалося завантажити 3D-модель.</div>
@@ -190,6 +241,8 @@ export default function Fitting3DViewer({ asset, onSaveCoordinates, onSaveAppear
       {editing ? (
         <div className="fitting-3d-coordinate-editor">
           <strong className="fitting-3d-coordinate-title">Локальна координатна система</strong>
+          <button className="ghost-button compact-button" onClick={() => { setMountingPointPreview(null); setPickingMountingPoint((current) => !current); }} type="button">{pickingMountingPoint ? "Клікніть по моделі…" : "Вказати точку на моделі"}</button>
+          {pickingMountingPoint || mountingPointSnapLabel ? <small className="fitting-3d-coordinate-hint">{pickingMountingPoint ? `Прив'язка: ${mountingPointSnapLabel.replace("Прив'язка: ", "")}` : mountingPointSnapLabel}</small> : null}
           <section className="fitting-3d-coordinate-section">
             <strong className="fitting-3d-coordinate-title">Положення нульової точки</strong>
             <div className="fitting-3d-coordinate-row">
@@ -208,7 +261,23 @@ export default function Fitting3DViewer({ asset, onSaveCoordinates, onSaveAppear
               {["x", "y", "z"].map((axis) => <label className="fitting-3d-coordinate-field" key={`r-${axis}`}><span>{axis.toUpperCase()}°</span><input type="number" step="1" value={coordinates[`rotation_${axis}`]} onChange={(event) => setValue(`rotation_${axis}`, event.target.value)} /></label>)}
             </div>
           </section>
-          <div className="fitting-3d-coordinate-actions"><button className="ghost-button compact-button" onClick={() => setCoordinates({ ...initialCoordinates, rotation_x: 0, rotation_y: 0, rotation_z: 0 })} type="button">Скинути</button><div className="fitting-3d-coordinate-actions-right"><button className="ghost-button compact-button" onClick={() => { setCoordinates(initialCoordinates); setEditing(false); }} type="button">Скасувати</button><button className="primary-button compact-button" disabled={saving} onClick={save} type="button">{saving ? "Зберігаю…" : "Зберегти"}</button></div></div>
+          <section className="fitting-3d-coordinate-section">
+            <strong className="fitting-3d-coordinate-title">Монтажна система координат</strong>
+            <div className="fitting-3d-coordinate-row"><strong>Точка монтажу</strong><span className="fitting-3d-coordinate-hint">За замовчуванням: локальний нуль моделі (0, 0, 0)</span></div>
+            <p className="fitting-3d-coordinate-hint">{mountingPointOverride ? "Монтажна точка: користувацький override" : "Монтажна точка: нуль моделі"}</p>
+            <div className="fitting-3d-coordinate-row">{!mountingPointOverride ? <button className="ghost-button compact-button" onClick={() => { setMountingPointOverride(true); setCoordinates((current) => ({ ...current, mounting_point_x: 0, mounting_point_y: 0, mounting_point_z: 0 })); }} type="button">Змінити точку монтажу</button> : <button className="ghost-button compact-button" onClick={() => { setMountingPointOverride(false); setMountingPointPreview(null); setPickingMountingPoint(false); setMountingPointSnapLabel(""); setCoordinates((current) => ({ ...current, mounting_point_x: "", mounting_point_y: "", mounting_point_z: "" })); }} type="button">Використовувати нуль моделі</button>}</div>
+            <div className="fitting-3d-coordinate-row">
+              {["x", "y", "z"].map((axis) => <label className="fitting-3d-coordinate-field" key={`m-${axis}`}><span>{axis.toUpperCase()} мм</span><input type="number" step="any" value={coordinates[`mounting_point_${axis}`]} onChange={(event) => { setMountingPointOverride(true); setValue(`mounting_point_${axis}`, event.target.value); }} /></label>)}
+            </div>
+            <div className="fitting-3d-coordinate-row">
+              <label className="fitting-3d-coordinate-field"><span>Напрям монтажу</span><select value={coordinates.axis_forward} onChange={(event) => setCoordinates((current) => ({ ...current, axis_forward: event.target.value }))}><option value="">Не задано</option>{CANONICAL_AXES.map((axis) => <option key={`f-${axis}`} value={axis}>{axis}</option>)}</select></label>
+              <label className="fitting-3d-coordinate-field"><span>Орієнтація вгору</span><select value={coordinates.axis_up} onChange={(event) => setCoordinates((current) => ({ ...current, axis_up: event.target.value }))}><option value="">Не задано</option>{CANONICAL_AXES.map((axis) => <option key={`u-${axis}`} value={axis}>{axis}</option>)}</select></label>
+            </div>
+            <div className="fitting-3d-coordinate-presets">
+              {[['center', 'Центр'], ['xMin', 'X мін'], ['xMax', 'X макс'], ['yMin', 'Y мін'], ['yMax', 'Y макс'], ['zMin', 'Z мін'], ['zMax', 'Z макс']].map(([preset, label]) => <button key={preset} type="button" onClick={() => applyMountingPreset(preset)}>{label}</button>)}
+            </div>
+          </section>
+          <div className="fitting-3d-coordinate-actions"><button className="ghost-button compact-button" onClick={() => { setCoordinates({ ...initialCoordinates, rotation_x: 0, rotation_y: 0, rotation_z: 0 }); setMountingPointOverride([asset?.mounting_point_x, asset?.mounting_point_y, asset?.mounting_point_z].every((value) => value !== null && value !== undefined)); }} type="button">Скинути</button><div className="fitting-3d-coordinate-actions-right"><button className="ghost-button compact-button" onClick={() => { setCoordinates(initialCoordinates); setMountingPointOverride([asset?.mounting_point_x, asset?.mounting_point_y, asset?.mounting_point_z].every((value) => value !== null && value !== undefined)); setEditing(false); }} type="button">Скасувати</button><button className="primary-button compact-button" disabled={saving} onClick={save} type="button">{saving ? "Зберігаю…" : "Зберегти"}</button></div></div>
           {error ? <p role="alert">{error}</p> : null}
         </div>
       ) : null}

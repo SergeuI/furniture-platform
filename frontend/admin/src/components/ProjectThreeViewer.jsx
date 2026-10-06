@@ -1566,9 +1566,7 @@ function AssemblyPanelMesh({
                 ? 0.14
                 : 0.24
             : displayMode === "transparent"
-              ? isSelected
-                ? 0.9
-                : 0.78
+              ? 0.2
               : 1
         }
         roughness={0.82}

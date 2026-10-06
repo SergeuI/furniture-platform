@@ -305,6 +305,10 @@ def upgrade_sqlite_schema():
             _add_column_if_missing(connection, "mounting_node_items", column_name, column_type)
 
         fitting_3d_coordinate_columns = {
+            "mounting_point_x": "FLOAT",
+            "mounting_point_y": "FLOAT",
+            "mounting_point_z": "FLOAT",
+            "mounting_coordinate_system_configured": "INTEGER NOT NULL DEFAULT 0",
             "rotation_x": "FLOAT",
             "rotation_y": "FLOAT",
             "rotation_z": "FLOAT",

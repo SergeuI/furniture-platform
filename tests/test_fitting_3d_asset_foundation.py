@@ -68,7 +68,21 @@ class Fitting3DAssetFoundationTests(unittest.TestCase):
             self.assertEqual(payload["canonical_format"], "glb")
             self.assertEqual(payload["dimensions_y"], 50.0)
             self.assertEqual(payload["axis_forward"], "Y")
+            self.assertIsNone(payload["mounting_point_x"])
+            self.assertFalse(payload["mounting_coordinate_system_configured"])
             self.assertEqual([source["order_index"] for source in payload["sources"]], [10, 20])
+
+    def test_new_mounting_fields_default_to_unconfigured(self):
+        with self.Session() as session:
+            fitting = FittingModel(name="Minifix")
+            fitting.three_d_asset = Fitting3DAssetModel()
+            session.add(fitting)
+            session.commit()
+            asset = session.query(Fitting3DAssetModel).one()
+            self.assertIsNone(asset.mounting_point_x)
+            self.assertIsNone(asset.mounting_point_y)
+            self.assertIsNone(asset.mounting_point_z)
+            self.assertEqual(asset.mounting_coordinate_system_configured, 0)
 
     def test_unique_fitting_and_cascade_delete(self):
         with self.Session() as session:

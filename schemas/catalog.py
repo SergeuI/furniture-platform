@@ -1063,6 +1063,10 @@ class Fitting3DAssetSchema(BaseModel):
     rotation_y: float | None = None
     rotation_z: float | None = None
     coordinate_system_configured: bool = False
+    mounting_point_x: float | None = None
+    mounting_point_y: float | None = None
+    mounting_point_z: float | None = None
+    mounting_coordinate_system_configured: bool = False
     material_color_override: str | None = None
     material_overrides: List[Fitting3DMaterialOverrideSchema] | None = None
     validated_at: datetime | None = None
@@ -1076,6 +1080,24 @@ class Fitting3DCoordinateUpdateSchema(BaseModel):
     rotation_x: float = Field(default=0.0, ge=-360.0, le=360.0)
     rotation_y: float = Field(default=0.0, ge=-360.0, le=360.0)
     rotation_z: float = Field(default=0.0, ge=-360.0, le=360.0)
+    mounting_point_x: float | None = None
+    mounting_point_y: float | None = None
+    mounting_point_z: float | None = None
+    axis_forward: str | None = None
+    axis_up: str | None = None
+    mounting_coordinate_system_configured: bool = False
+
+    @model_validator(mode="after")
+    def validate_mounting_frame(self):
+        point = (self.mounting_point_x, self.mounting_point_y, self.mounting_point_z)
+        if self.mounting_coordinate_system_configured and any(value is None for value in point):
+            raise ValueError("Configured mounting coordinate system requires a complete mounting point")
+        axes = {"X", "-X", "Y", "-Y", "Z", "-Z"}
+        if self.mounting_coordinate_system_configured and (self.axis_forward or self.axis_up) and (self.axis_forward not in axes or self.axis_up not in axes):
+            raise ValueError("Configured mounting coordinate system requires canonical axes")
+        if self.axis_forward and self.axis_up and self.axis_forward.replace("-", "") == self.axis_up.replace("-", ""):
+            raise ValueError("Mounting forward and up axes cannot be parallel")
+        return self
 
 
 class Fitting3DAppearanceUpdateSchema(BaseModel):
