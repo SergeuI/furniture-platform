@@ -32,6 +32,7 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 from scripts.maintenance_preview import create_preview_file as create_maintenance_preview_file
+from scripts.product_map_parser import filter_product_map_records, parse_product_map, summarize_product_map_records
 from scripts.maintenance_owner_bypass import OWNER_LOGIN_URL, OWNER_LOGOUT_URL
 from scripts.maintenance_server_control import (
     run_disable as run_maintenance_server_disable,
@@ -58,6 +59,9 @@ APP_LOG_PATH = PROJECT_ROOT / "product_center_app.log"
 API_STARTUP_LOG_PATH = PROJECT_ROOT / "product_center_api.log"
 UPDATE_PACKAGES_DIR = PROJECT_ROOT / "docs" / "update_packages"
 UPDATE_PACKAGES_STATE_FILE = UPDATE_PACKAGES_DIR / ".update_package_state.json"
+DEVELOPMENT_MAP_PATH = PROJECT_ROOT / "docs" / "MPFC_MASTER_PRODUCT_MAP.md"
+DEVELOPMENT_STATUS_DISPLAY = {"DONE": "Виконано", "IN PROGRESS": "У розробці", "PLANNED": "У плані", "IDEA": "Ідея", "BLOCKED": "Заблоковано", "V2": "Версія 2", "BASE": "Базова частина", "UNKNOWN": "Не визначено"}
+DEVELOPMENT_STATUS_INTERNAL = {label: value for value, label in DEVELOPMENT_STATUS_DISPLAY.items()}
 
 
 def resolve_repo_python(root: Path) -> Path:
@@ -1413,6 +1417,12 @@ class WizardApp(tk.Tk):
         self.product_map_specs = build_product_component_specs()
         self.product_map_specs_by_key = {str(spec["key"]): spec for spec in self.product_map_specs}
         self.product_map_selected_key: str | None = None
+        self.development_map_records: list[dict[str, object]] = []
+        self.development_map_by_id: dict[str, dict[str, object]] = {}
+        self.development_map_selected_id: str | None = None
+        self.development_map_search = tk.StringVar(value="")
+        self.development_map_status_filter = tk.StringVar(value="Усі")
+        self.development_map_summary_var = tk.StringVar(value="Всього: 0 | Прогрес: 0%")
         self._saved_settings_snapshot = self.settings_data()
         self._startup_ready = False
 
@@ -1454,6 +1464,7 @@ class WizardApp(tk.Tk):
         self.refresh_git_status_async()
         self.refresh_product_status_async()
         self.refresh_product_map()
+        self.refresh_development_map()
 
     def _setup_style(self) -> None:
         style = ttk.Style(self)
@@ -2193,7 +2204,13 @@ class WizardApp(tk.Tk):
         self._history_tab_canvas = canvas
 
     def _build_map_tab(self) -> None:
-        body, canvas = self._build_scrollable_tab(self.map_tab)
+        modes = ttk.Notebook(self.map_tab)
+        modes.pack(fill="both", expand=True)
+        technical_tab = ttk.Frame(modes, style="Root.TFrame")
+        development_tab = ttk.Frame(modes, style="Root.TFrame")
+        modes.add(technical_tab, text="Технічна карта")
+        modes.add(development_tab, text="Карта розвитку")
+        body, canvas = self._build_scrollable_tab(technical_tab)
         body.columnconfigure(0, weight=1)
         body.columnconfigure(1, weight=1)
         body.rowconfigure(1, weight=1)
@@ -2315,7 +2332,90 @@ class WizardApp(tk.Tk):
 
         self.clear_map_detail()
         self._map_tab_canvas = canvas
+        self._build_development_map_tab(development_tab)
 
+    def _build_development_map_tab(self, tab: ttk.Frame) -> None:
+        body = ttk.Frame(tab, style="Root.TFrame", padding=8)
+        body.pack(fill="both", expand=True)
+        body.columnconfigure(0, weight=1); body.columnconfigure(1, weight=1); body.rowconfigure(3, weight=1)
+        header = ttk.Frame(body, style="Root.TFrame"); header.grid(row=0, column=0, columnspan=2, sticky="ew")
+        ttk.Label(header, text="Карта розвитку MP Furniture Platform", style="Title.TLabel").pack(side="left")
+        ttk.Button(header, text="Оновити карту розвитку", command=self.refresh_development_map).pack(side="right")
+        filters = ttk.Frame(body, style="Root.TFrame")
+        summary = ttk.Label(body, textvariable=self.development_map_summary_var, style="Hint.TLabel")
+        summary.grid(row=1, column=0, columnspan=2, sticky="w", pady=(8, 0))
+        filters.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(6, 0))
+        ttk.Label(filters, text="Пошук", style="Hint.TLabel").pack(side="left")
+        search = ttk.Entry(filters, textvariable=self.development_map_search)
+        search.pack(side="left", fill="x", expand=True, padx=(8, 12))
+        search.bind("<KeyRelease>", lambda _event: self.refresh_development_map_view())
+        ttk.Label(filters, text="Статус", style="Hint.TLabel").pack(side="left")
+        status = ttk.Combobox(filters, textvariable=self.development_map_status_filter, state="readonly", values=("Усі", "Виконано", "У розробці", "У плані", "Ідея", "Заблоковано", "Версія 2", "Базова частина", "Не визначено"), width=14)
+        status.pack(side="left", padx=(8, 8))
+        status.bind("<<ComboboxSelected>>", lambda _event: self.refresh_development_map_view())
+        ttk.Button(filters, text="Очистити", command=self.clear_development_map_filters).pack(side="left")
+        left = ttk.LabelFrame(body, text="Записи карти", style="Card.TLabelframe")
+        left.grid(row=3, column=0, sticky="nsew", padx=(0, 10), pady=(12, 0))
+        left.columnconfigure(0, weight=1); left.rowconfigure(0, weight=1)
+        self.development_map_tree = ttk.Treeview(
+            left,
+            columns=("id", "status", "group"),
+            show="tree headings",
+            selectmode="browse",
+        )
+        for column, label in (("#0", "Назва"), ("id", "ID"), ("status", "Стан"), ("group", "Група")): self.development_map_tree.heading(column, text=label)
+        self.development_map_tree.column("#0", width=250, anchor="w"); self.development_map_tree.column("id", width=90, anchor="w"); self.development_map_tree.column("status", width=120, anchor="w"); self.development_map_tree.column("group", width=250, anchor="w")
+        self.development_map_tree.grid(row=0, column=0, sticky="nsew")
+        scroll = ttk.Scrollbar(left, orient="vertical", command=self.development_map_tree.yview); scroll.grid(row=0, column=1, sticky="ns"); self.development_map_tree.configure(yscrollcommand=scroll.set)
+        self.development_map_tree.bind("<<TreeviewSelect>>", lambda _event: self.show_selected_development_map())
+        right = ttk.LabelFrame(body, text="Деталі запису", style="Card.TLabelframe"); right.grid(row=3, column=1, sticky="nsew", pady=(12, 0)); right.columnconfigure(0, weight=1); right.rowconfigure(0, weight=1)
+        self.development_map_detail = tk.Text(right, wrap="word", height=20, bg="#fbfaf7", fg="#1f2a29", relief="flat", borderwidth=0, padx=12, pady=12); self.development_map_detail.grid(row=0, column=0, sticky="nsew")
+        detail_scroll = ttk.Scrollbar(right, orient="vertical", command=self.development_map_detail.yview); detail_scroll.grid(row=0, column=1, sticky="ns"); self.development_map_detail.configure(yscrollcommand=detail_scroll.set)
+        self.clear_development_map_detail()
+
+    def refresh_development_map(self) -> None:
+        if not hasattr(self, "development_map_tree"): return
+        try: records = parse_product_map(DEVELOPMENT_MAP_PATH)
+        except (OSError, UnicodeError, ValueError) as exc:
+            self.development_map_records = []; self.development_map_by_id = {}; self.development_map_tree.delete(*self.development_map_tree.get_children()); self.clear_development_map_detail(); messagebox.showerror("Карта розвитку", f"Не вдалося прочитати карту розвитку:\n{exc}"); return
+        self.development_map_records = records; self.development_map_by_id = {str(r["id"]): r for r in records}
+        summary = summarize_product_map_records(records)
+        summary_text = "Всього: {} | Виконано: {} | У розробці: {} | У плані: {} | Заблоковано: {} | Базова частина: {} | Версія 2: {} | Ідеї: {} | Не визначено: {} | Загальний прогрес: {}%".format(summary["total"], summary["DONE"], summary["IN PROGRESS"], summary["PLANNED"], summary["BLOCKED"], summary["BASE"], summary["V2"], summary["IDEA"], summary["UNKNOWN"], summary["progress"])
+        self.development_map_summary_var.set(summary_text)
+        self.refresh_development_map_view()
+        if self.development_map_selected_id in self.development_map_by_id: self.development_map_tree.selection_set(self.development_map_selected_id); self.show_selected_development_map()
+        elif records: self.development_map_tree.selection_set(str(records[0]["id"])); self.show_selected_development_map()
+        else: self.clear_development_map_detail()
+
+    def refresh_development_map_view(self) -> None:
+        selected_status = DEVELOPMENT_STATUS_INTERNAL.get(self.development_map_status_filter.get(), "Усі")
+        visible = filter_product_map_records(self.development_map_records, self.development_map_search.get(), selected_status)
+        self.development_map_tree.delete(*self.development_map_tree.get_children())
+        visible_ids = set()
+        for record in visible:
+            item = str(record["id"]); visible_ids.add(item)
+            self.development_map_tree.insert("", "end", iid=item, text=str(record["title"]), values=(item, DEVELOPMENT_STATUS_DISPLAY.get(str(record["normalized_status"]), "Не визначено"), str(record["group"])))
+        if self.development_map_selected_id in visible_ids:
+            self.development_map_tree.selection_set(self.development_map_selected_id); self.show_selected_development_map()
+        elif visible:
+            self.development_map_tree.selection_set(str(visible[0]["id"])); self.show_selected_development_map()
+        else:
+            self.development_map_selected_id = None; self.clear_development_map_detail()
+
+    def clear_development_map_filters(self) -> None:
+        self.development_map_search.set(""); self.development_map_status_filter.set("Усі"); self.refresh_development_map_view()
+    def show_selected_development_map(self) -> None:
+        selection = self.development_map_tree.selection() if hasattr(self, "development_map_tree") else ()
+        if not selection: self.clear_development_map_detail(); return
+        record = self.development_map_by_id.get(selection[0])
+        if record is None: self.clear_development_map_detail(); return
+        self.development_map_selected_id = str(record["id"])
+        decisions = "\n".join("- " + str(item) for item in record["decisions"]) or "Немає"
+        lines = [f"ID: {record['id']}", f"Назва: {record['title']}", f"Оригінальний статус: {record['original_status']}", f"Стан: {DEVELOPMENT_STATUS_DISPLAY.get(str(record['normalized_status']), 'Не визначено')}", f"Група: {record['group']}", "", f"Мета:\n{record['goal']}", f"\nЗалежності:\n{', '.join(record['dependencies']) or 'Немає'}", f"\nОпис:\n{record['description'] or 'Немає детального опису'}", f"\nКритерії приймання:\n{record['acceptance_criteria'] or 'Немає'}", f"\nРішення:\n{decisions}"]
+        self.development_map_detail.delete("1.0", "end"); self.development_map_detail.insert("1.0", "\n".join(lines))
+
+    def clear_development_map_detail(self) -> None:
+        if hasattr(self, "development_map_detail"): self.development_map_detail.delete("1.0", "end"); self.development_map_detail.insert("1.0", "Карта розвитку ще не завантажена.")
     def _build_product_tab(self) -> None:
         container = ttk.Frame(self.product_tab, style="Root.TFrame")
         container.pack(fill="both", expand=True)
