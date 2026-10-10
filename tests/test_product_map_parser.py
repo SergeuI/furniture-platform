@@ -1,5 +1,6 @@
 from __future__ import annotations
 import unittest
+import tempfile
 from pathlib import Path
 from scripts.product_map_parser import filter_product_map_records, group_for_id, normalize_status, parse_product_map, summarize_product_map_records
 
@@ -36,11 +37,60 @@ class ProductMapParserTests(unittest.TestCase):
         records = parse_product_map(path)
         after = path.read_bytes()
         self.assertEqual(before, after)
-        self.assertEqual(len(records), 16)
+        self.assertEqual(len(records), 22)
         self.assertEqual(records[0]["id"], "CORE-001")
         self.assertEqual(records[0]["group"], "Core / Реєстрація і тарифи")
         self.assertEqual(records[0]["normalized_status"], "PLANNED")
+        records_by_id = {record["id"]: record for record in records}
+        for record_id in ("CORE-3D-001", "CORE-CAD-001", "CORE-KIN-001", "UX-TOOLS-001"):
+            self.assertIn(record_id, records_by_id)
+            self.assertTrue(records_by_id[record_id]["description"])
+        self.assertEqual(records_by_id["CORE-001"]["description"], records_by_id["CORE-001"]["goal"])
         self.assertTrue(records[0]["source_lines"])
+
+    def test_table_only_id_is_parsed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "map.md"
+            path.write_text(
+                "| ID | Напрям | Бажаний результат | Статус | Ключові залежності |\n"
+                "|---|---|---|---|---|\n"
+                "| TEST-001 | Тест | Мета тесту | [ПЛАН] | CORE-001 |\n",
+                encoding="utf-8",
+            )
+            record = parse_product_map(path)[0]
+            self.assertEqual(record["id"], "TEST-001")
+            self.assertEqual(record["description"], "Мета тесту")
+
+    def test_heading_only_id_is_parsed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "map.md"
+            path.write_text(
+                "## TEST-002 — Заголовок тесту\n\nОпис із заголовка.\n\n"
+                "**Критерії приймання:** критерій тесту.\n",
+                encoding="utf-8",
+            )
+            record = parse_product_map(path)[0]
+            self.assertEqual(record["id"], "TEST-002")
+            self.assertEqual(record["title"], "Заголовок тесту")
+            self.assertEqual(record["original_status"], "")
+            self.assertEqual(record["normalized_status"], "UNKNOWN")
+            self.assertIn("Опис із заголовка.", record["description"])
+            self.assertEqual(record["acceptance_criteria"], "критерій тесту.")
+
+    def test_table_and_heading_id_has_one_record(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "map.md"
+            path.write_text(
+                "| ID | Напрям | Бажаний результат | Статус | Ключові залежності |\n"
+                "|---|---|---|---|---|\n"
+                "| TEST-003 | Табличний тест | Таблична мета | [УЗГОДЖЕНО] | Немає |\n\n"
+                "### TEST-003 — Деталі тесту\n\nОпис тесту.\n",
+                encoding="utf-8",
+            )
+            records = parse_product_map(path)
+            self.assertEqual([record["id"] for record in records], ["TEST-003"])
+            self.assertEqual(records[0]["section"], "TEST-003 — Деталі тесту")
+            self.assertIn("Опис тесту.", records[0]["description"])
 
 if __name__ == "__main__":
     unittest.main()

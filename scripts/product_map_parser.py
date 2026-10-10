@@ -17,7 +17,7 @@ class ProductMapRecord(TypedDict):
     decisions: list[str]
     source_lines: list[int]
     group: str
-_ID_RE = re.compile(r"\b[A-Z][A-Z0-9]+-\d{3}\b")
+_ID_RE = re.compile(r"(?<![A-Z0-9-])[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*-\d{3}\b")
 _STATUS_RE = re.compile(r"\[([^]]+)\]")
 def group_for_id(record_id: str) -> str:
     prefix = record_id.split("-", 1)[0].upper()
@@ -31,14 +31,43 @@ def normalize_status(original_status: str) -> str:
     return max(statuses, key=lambda status: priority[status])
 def _table_cells(line: str) -> list[str]: return [cell.strip() for cell in line.strip().strip("|").split("|")]
 def _section_blocks(lines: list[str]) -> list[tuple[int, str, list[str]]]:
-    blocks=[]; start=None; title=""; block=[]
-    for number,line in enumerate(lines,1):
-        if line.startswith("## "):
-            if start is not None: blocks.append((start,title,block))
-            start,title,block=number,line[3:].strip(),[line]
-        elif start is not None: block.append(line)
-    if start is not None: blocks.append((start,title,block))
+    blocks = []
+    headings: list[tuple[int, int, str]] = []
+    for number, line in enumerate(lines, 1):
+        match = re.match(r"^(#{2,3})\s+(.+?)\s*$", line)
+        if match:
+            headings.append((number, len(match.group(1)), match.group(2)))
+
+    for index, (start, level, title) in enumerate(headings):
+        end = len(lines)
+        for next_start, next_level, _next_title in headings[index + 1:]:
+            if next_level <= level:
+                end = next_start - 1
+                break
+        blocks.append((start, title, lines[start - 1:end]))
     return blocks
+
+
+def _title_without_ids(title: str, record_id: str) -> str:
+    cleaned = re.sub(rf"\b{re.escape(record_id)}\b\s*[-—:]?\s*", "", title, count=1).strip()
+    return cleaned or record_id
+
+
+def _empty_record(record_id: str, *, title: str = "", section: str = "", source_line: int | None = None) -> ProductMapRecord:
+    return {
+        "id": record_id,
+        "title": title or record_id,
+        "group": group_for_id(record_id),
+        "section": section,
+        "original_status": "",
+        "normalized_status": "UNKNOWN",
+        "goal": "",
+        "dependencies": [],
+        "description": "",
+        "acceptance_criteria": "",
+        "decisions": [],
+        "source_lines": [source_line] if source_line is not None else [],
+    }
 def parse_product_map(path: str | Path) -> list[ProductMapRecord]:
     lines=Path(path).read_text(encoding="utf-8").splitlines(); records={}
     for number,line in enumerate(lines,1):
@@ -54,7 +83,17 @@ def parse_product_map(path: str | Path) -> list[ProductMapRecord]:
         match=re.search(r"\*\*Критерії приймання:\*\*\s*(.*?)(?=\n\n|\Z)",text,re.S)
         for record_id in ids:
             record=records.get(record_id)
-            if record is None: continue
+            if record is None:
+                record = _empty_record(
+                    record_id,
+                    title=_title_without_ids(title, record_id),
+                    section=title,
+                    source_line=start,
+                )
+                records[record_id] = record
+            else:
+                record["section"] = title
+                record["source_lines"].append(start)
             record["description"]=text; record["acceptance_criteria"]=match.group(1).strip() if match else ""; record["source_lines"].extend(range(start,start+len(block)))
     for number,line in enumerate(lines,1):
         if not line.startswith("|"): continue
@@ -62,7 +101,10 @@ def parse_product_map(path: str | Path) -> list[ProductMapRecord]:
         if len(cells)<4 or not cells[0].startswith("2026-"): continue
         for record_id in _ID_RE.findall(cells[1]):
             if record_id in records: records[record_id]["decisions"].append(cells[2]); records[record_id]["source_lines"].append(number)
-    for record in records.values(): record["source_lines"]=sorted(set(record["source_lines"]))
+    for record in records.values():
+        if not record["description"] and record["goal"]:
+            record["description"] = record["goal"]
+        record["source_lines"]=sorted(set(record["source_lines"]))
     return list(records.values())
 
 def filter_product_map_records(records: list[ProductMapRecord], query: str = "", status: str = "Усі") -> list[ProductMapRecord]:
