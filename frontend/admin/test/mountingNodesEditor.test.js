@@ -117,6 +117,64 @@ test("old snapshot does not inherit current fastening type", () => {
   assert.equal(context.fastening_type, null);
 });
 
+test("editor permissions always come from the live node detail", () => {
+  const liveNodeDetail = {
+    ...fixtureNodeDetail,
+    can_edit: true,
+    can_delete: true,
+    is_owner: true,
+    is_system: false,
+    owner_user_id: "live-owner",
+    versions: [{
+      id: 1,
+      version_number: 1,
+      is_current: true,
+      snapshot: {
+        can_edit: false,
+        can_delete: false,
+        is_owner: false,
+        is_system: true,
+        owner_user_id: null,
+      },
+    }],
+  };
+
+  const context = resolveMountingNodeEditorContext(liveNodeDetail);
+  assert.equal(context.nodeDetail.can_edit, true);
+  assert.equal(context.nodeDetail.can_delete, true);
+  assert.equal(context.nodeDetail.is_owner, true);
+  assert.equal(context.nodeDetail.is_system, false);
+  assert.equal(context.nodeDetail.owner_user_id, "live-owner");
+
+  const liveReadOnlyNodeDetail = {
+    ...liveNodeDetail,
+    can_edit: false,
+    can_delete: false,
+    is_owner: false,
+    is_system: true,
+    owner_user_id: null,
+    versions: [{
+      id: 2,
+      version_number: 2,
+      is_current: true,
+      snapshot: {
+        can_edit: true,
+        can_delete: true,
+        is_owner: true,
+        is_system: false,
+        owner_user_id: "stale-owner",
+      },
+    }],
+  };
+
+  const readOnlyContext = resolveMountingNodeEditorContext(liveReadOnlyNodeDetail);
+  assert.equal(readOnlyContext.nodeDetail.can_edit, false);
+  assert.equal(readOnlyContext.nodeDetail.can_delete, false);
+  assert.equal(readOnlyContext.nodeDetail.is_owner, false);
+  assert.equal(readOnlyContext.nodeDetail.is_system, true);
+  assert.equal(readOnlyContext.nodeDetail.owner_user_id, null);
+});
+
 const nestedLinkNodeDetail = {
   ...fixtureNodeDetail,
   templates: [

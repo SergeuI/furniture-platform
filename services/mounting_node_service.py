@@ -17,6 +17,8 @@ from database.models.mounting_node import (
     MountingNodeModel,
     MountingNodeVersionModel,
 )
+from database.models.construction_rule import ConstructionRuleMountingOptionModel
+from database.models.mounting_scheme import MountingSchemeNodeModel
 from database.models.fitting_3d_asset import Fitting3DAssetModel  # noqa: F401 - register mapper for fitting assets
 from database.mounting_node_categories import (
     ALLOWED_MOUNTING_NODE_CATEGORY_CODES,
@@ -33,6 +35,10 @@ from database.models.service_drilling_rule import ServiceDrillingRuleModel
 
 
 class MountingNodePermissionError(PermissionError):
+    pass
+
+
+class MountingNodeDependencyError(ValueError):
     pass
 
 
@@ -1510,6 +1516,20 @@ class MountingNodeService:
             include_versions=True,
         )
 
+    def _get_delete_dependencies(self, node_id: int) -> dict[str, int]:
+        return {
+            "mounting_scheme_nodes": int(
+                self.session.query(MountingSchemeNodeModel)
+                .filter(MountingSchemeNodeModel.node_id == node_id)
+                .count()
+            ),
+            "construction_rule_mounting_options": int(
+                self.session.query(ConstructionRuleMountingOptionModel)
+                .filter(ConstructionRuleMountingOptionModel.mounting_node_id == node_id)
+                .count()
+            ),
+        }
+
     def delete_mounting_node(
         self,
         node_id: int,
@@ -1530,6 +1550,18 @@ class MountingNodeService:
         if access_snapshot is None:
             return None
 
+        dependencies = self._get_delete_dependencies(node.id)
+        active_dependencies = {
+            name: count for name, count in dependencies.items() if count > 0
+        }
+        if active_dependencies:
+            dependency_summary = ", ".join(
+                f"{name}={count}" for name, count in active_dependencies.items()
+            )
+            raise MountingNodeDependencyError(
+                f"Mounting node id={node.id} is in use and must be unlinked before deletion: {dependency_summary}"
+            )
+
         self.session.rollback()
         with self.session.begin():
             self.session.query(MountingNodeVersionModel).filter(
@@ -1542,6 +1574,7 @@ class MountingNodeService:
 
 
 __all__ = [
+    "MountingNodeDependencyError",
     "MountingNodePermissionError",
     "MountingNodeService",
 ]

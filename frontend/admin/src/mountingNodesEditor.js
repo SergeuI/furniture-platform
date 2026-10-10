@@ -269,7 +269,7 @@ function resolveMountingNodeEditorSnapshot(nodeDetail) {
   const snapshotItems = Array.isArray(snapshot.items) ? snapshot.items : [];
   const liveItems = Array.isArray(nodeDetail?.items) ? nodeDetail.items : [];
 
-  return {
+  const mergedNodeDetail = {
     ...nodeDetail,
     ...snapshot,
     fastening_type: snapshot.fastening_type ?? null,
@@ -292,6 +292,26 @@ function resolveMountingNodeEditorSnapshot(nodeDetail) {
       : liveTemplates.map((template) => cloneMountingNodeEditorTemplate(template)).filter(Boolean),
     versions,
   };
+
+  // Permissions and ownership describe the current live node, not its historical version.
+  // Keep stale snapshot metadata from changing what the current user may do in the editor.
+  for (const field of [
+    "owner_user_id",
+    "ownership_type",
+    "is_system",
+    "is_owner",
+    "is_archived",
+    "archived_at",
+    "archived_by_user_id",
+    "can_edit",
+    "can_delete",
+  ]) {
+    if (Object.prototype.hasOwnProperty.call(nodeDetail, field)) {
+      mergedNodeDetail[field] = nodeDetail[field];
+    }
+  }
+
+  return mergedNodeDetail;
 }
 
 export function resolveMountingNodeEditorContext(nodeDetail, fallbackNodeId = "") {

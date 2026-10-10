@@ -807,6 +807,7 @@ export default function MountingNodesPanelRefined({
   const [deleteConfirmNode, setDeleteConfirmNode] = useState(null);
   const [deleteConfirmError, setDeleteConfirmError] = useState("");
   const [deleteConfirmLoading, setDeleteConfirmLoading] = useState(false);
+  const [deleteSuccessMessage, setDeleteSuccessMessage] = useState("");
   const [selectedNodeVariantKey, setSelectedNodeVariantKey] = useState("");
   const [variantDropdownOpen, setVariantDropdownOpen] = useState(false);
   const [variantDropdownPosition, setVariantDropdownPosition] = useState(null);
@@ -1752,6 +1753,7 @@ export default function MountingNodesPanelRefined({
     }
 
     setDeleteConfirmError("");
+    setDeleteSuccessMessage("");
     setDeleteConfirmNode(selectedNodeDetail);
   }
 
@@ -1775,16 +1777,25 @@ export default function MountingNodesPanelRefined({
     try {
       const result = await deleteMountingNode(token, deleteConfirmNode.id);
       if (!result.success) {
-        setDeleteConfirmError(result.error || (language === "uk" ? "Не вдалося архівувати монтажний вузол." : "Unable to archive mounting node."));
+        const errorText = String(result.error || "").trim();
+        const dependencyError = /in use|must be unlinked|mounting_scheme_nodes|construction_rule_mounting_options/i.test(errorText);
+        setDeleteConfirmError(
+          dependencyError
+            ? (language === "uk"
+              ? `Монтажний вузол використовується в інших даних і не може бути видалений. Спочатку відв'яжіть його. Деталі: ${errorText}`
+              : `This mounting node is used by other data and cannot be deleted. Unlink it first. Details: ${errorText}`)
+            : (errorText || (language === "uk" ? "Не вдалося видалити монтажний вузол." : "Unable to delete mounting node.")),
+        );
         return;
       }
 
       setDeleteConfirmNode(null);
       setMountingNodesViewMode("list");
       setSelectedNodeId("");
+      setDeleteSuccessMessage(language === "uk" ? "Монтажний вузол фізично видалено." : "The mounting node was permanently deleted.");
       handleRefresh();
     } catch (error) {
-      setDeleteConfirmError(error?.message || (language === "uk" ? "Не вдалося архівувати монтажний вузол." : "Unable to archive mounting node."));
+      setDeleteConfirmError(error?.message || (language === "uk" ? "Не вдалося видалити монтажний вузол." : "Unable to delete mounting node."));
     } finally {
       setDeleteConfirmLoading(false);
     }
@@ -1972,6 +1983,11 @@ export default function MountingNodesPanelRefined({
               </button>
             </aside>
             <div className="mounting-node-catalog-results">
+          {deleteSuccessMessage ? (
+            <div className="success-message" role="status">
+              {deleteSuccessMessage}
+            </div>
+          ) : null}
           {listLoading ? (
             <div className="empty-state compact-empty-state">
               <span>{t.mountingNodesLoading || (language === "uk" ? "Завантаження монтажних вузлів…" : "Loading mounting nodes…")}</span>
@@ -2146,7 +2162,7 @@ export default function MountingNodesPanelRefined({
                   {selectedNodeDetail.can_delete ? (
                     <button className="danger-button mounting-node-detail-action-button mounting-node-delete-button" onClick={handleOpenDeleteConfirm} type="button">
                       <Trash2 size={16} />
-                      {language === "uk" ? "Архівувати" : "Archive"}
+                      {language === "uk" ? "Видалити монтажний вузол" : "Delete mounting node"}
                     </button>
                   ) : null}
                 </>
@@ -2298,17 +2314,26 @@ export default function MountingNodesPanelRefined({
                 <article className="settings-card mounting-node-detail-variant-card">
                   <div className="settings-card-header">
                     <div>
-                      <strong>{language === "uk" ? "Спосіб з'єднання деталей" : "Mounting variant"}</strong>
+                      <strong>{language === "uk" ? "Спосіб кріплення" : "Mounting method"}</strong>
                       <p>
                         {selectedNodeVersionBanner
                           ? (language === "uk"
                             ? "Ви переглядаєте read-only snapshot версії."
                             : "You are viewing a read-only version snapshot.")
                           : (language === "uk"
-                            ? "Змініть спосіб з'єднання деталей поточного вузла та збережіть зміни."
-                            : "Change the current node mounting variant and save the update.")}
+                            ? "Поточний спосіб кріплення:"
+                            : "Current mounting method:")}
                       </p>
                     </div>
+                    {canEditVariant ? (
+                      <button
+                        className="ghost-button compact-button"
+                        onClick={openVariantDropdown}
+                        type="button"
+                      >
+                        {language === "uk" ? "Змінити спосіб кріплення" : "Change mounting method"}
+                      </button>
+                    ) : null}
                   </div>
                   <div className="mounting-node-detail-variant-body">
                     <div
@@ -2480,15 +2505,15 @@ export default function MountingNodesPanelRefined({
         <div aria-modal="true" className="modal-backdrop" onClick={closeDeleteConfirm} role="dialog">
           <section className="confirm-modal" onClick={(event) => event.stopPropagation()}>
             <header className="confirm-header">
-              <h2>{language === "uk" ? "Архівувати монтажний вузол" : "Archive mounting node"}</h2>
+              <h2>{language === "uk" ? "Видалити монтажний вузол" : "Delete mounting node"}</h2>
               <button aria-label={language === "uk" ? "Закрити підтвердження" : "Close confirmation"} className="icon-button" disabled={deleteConfirmLoading} onClick={closeDeleteConfirm} type="button">
                 <X size={18} />
               </button>
             </header>
             <p>
               {language === "uk"
-                ? `Архівувати вузол "${deleteConfirmNode.name || deleteConfirmNode.code || deleteConfirmNode.id}"?`
-                : `Archive mounting node "${deleteConfirmNode.name || deleteConfirmNode.code || deleteConfirmNode.id}"?`}
+                ? `Фізично видалити монтажний вузол "${deleteConfirmNode.name || deleteConfirmNode.code || deleteConfirmNode.id}"? Ця дія незворотна. Пов'язані склад і шаблони можуть бути видалені каскадно. Якщо вузол використовується у схемах або правилах, backend заблокує видалення.`
+                : `Permanently delete mounting node "${deleteConfirmNode.name || deleteConfirmNode.code || deleteConfirmNode.id}"? This action cannot be undone. Related items and templates may be deleted by cascade. If the node is used by schemes or rules, the backend will block deletion.`}
             </p>
             {deleteConfirmError ? <p className="form-error">{deleteConfirmError}</p> : null}
             <div className="confirm-actions">
@@ -2496,7 +2521,7 @@ export default function MountingNodesPanelRefined({
                 {language === "uk" ? "Скасувати" : "Cancel"}
               </button>
               <button className="danger-button" disabled={deleteConfirmLoading} onClick={handleConfirmDelete} type="button">
-                {deleteConfirmLoading ? (language === "uk" ? "Архівування..." : "Archiving...") : (language === "uk" ? "Архівувати" : "Archive")}
+                {deleteConfirmLoading ? (language === "uk" ? "Видалення..." : "Deleting...") : (language === "uk" ? "Видалити монтажний вузол" : "Delete mounting node")}
               </button>
             </div>
           </section>

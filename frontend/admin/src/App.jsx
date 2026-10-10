@@ -307,6 +307,7 @@ import {
   createManualService,
   createMyEmailChangeRequest,
   createCatalogItem,
+  deleteMountingNode,
   createUser,
   deleteFitting,
   deleteFittingProduct,
@@ -9406,6 +9407,8 @@ export default function App() {
   const [catalogHolesCreateError, setCatalogHolesCreateError] = useState("");
   const [catalogHolesCreating, setCatalogHolesCreating] = useState(false);
   const [catalogHolesSaving, setCatalogHolesSaving] = useState(false);
+  const [mountingNodeEditorDeleteBusy, setMountingNodeEditorDeleteBusy] = useState(false);
+  const [mountingNodeEditorDeleteConfirmOpen, setMountingNodeEditorDeleteConfirmOpen] = useState(false);
   const [mountingNodePreviewBusy, setMountingNodePreviewBusy] = useState(false);
   const [mountingNodePreviewMessage, setMountingNodePreviewMessage] = useState(null);
   const [holeMountingVariantDropdownOpen, setHoleMountingVariantDropdownOpen] = useState(false);
@@ -14103,6 +14106,68 @@ export default function App() {
     setCatalogHolesCreating(false);
   }
 
+  async function handleMountingNodeEditorDelete() {
+    const nodeDetail = catalogHolesOpenContext?.nodeDetail;
+    const nodeId = String(catalogHolesOpenContext?.mountingNodeId || nodeDetail?.id || "").trim();
+    if (!nodeId || !nodeDetail?.can_delete || mountingNodeEditorDeleteBusy) {
+      return;
+    }
+
+    setMountingNodeEditorDeleteBusy(true);
+    try {
+      const result = await deleteMountingNode(token, nodeId);
+      if (!result.success) {
+        const errorText = String(result.error || "").trim();
+        const dependencyError = /in use|must be unlinked|mounting_scheme_nodes|construction_rule_mounting_options/i.test(errorText);
+        setStatus({
+          message: dependencyError
+            ? (language === "uk"
+              ? `Монтажний вузол використовується в інших даних і не може бути видалений. Спочатку відв'яжіть його. Деталі: ${errorText}`
+              : `This mounting node is used by other data and cannot be deleted. Unlink it first. Details: ${errorText}`)
+            : (errorText || (language === "uk" ? "Не вдалося видалити монтажний вузол." : "Unable to delete mounting node.")),
+          tone: "error",
+        });
+        setMountingNodeEditorDeleteConfirmOpen(false);
+        return;
+      }
+
+      setCatalogHolesMode("list");
+      setMountingNodeEditorDeleteConfirmOpen(false);
+      setCatalogHolesOpenContext(null);
+      setCatalogHolesReturnState(null);
+      setMountingNodeEditorDraft(null);
+      setMountingNodeEditorDraftNodeId("");
+      setMountingNodeEditorHasChanges(false);
+      const nextRoute = buildMountingNodesRouteForMode(mountingNodesRouteState, "list");
+      setMountingNodesRouteState(nextRoute);
+      updateMountingNodesHistory(nextRoute);
+      setStatus({
+        message: language === "uk" ? "Монтажний вузол фізично видалено." : "The mounting node was permanently deleted.",
+        tone: "success",
+      });
+    } catch (error) {
+      setMountingNodeEditorDeleteConfirmOpen(false);
+      setStatus({
+        message: error?.message || (language === "uk" ? "Не вдалося видалити монтажний вузол." : "Unable to delete mounting node."),
+        tone: "error",
+      });
+    } finally {
+      setMountingNodeEditorDeleteBusy(false);
+    }
+  }
+
+  function openMountingNodeEditorDeleteConfirm() {
+    if (catalogHolesOpenContext?.nodeDetail?.can_delete && !mountingNodeEditorDeleteBusy) {
+      setMountingNodeEditorDeleteConfirmOpen(true);
+    }
+  }
+
+  function closeMountingNodeEditorDeleteConfirm() {
+    if (!mountingNodeEditorDeleteBusy) {
+      setMountingNodeEditorDeleteConfirmOpen(false);
+    }
+  }
+
   function handleMountingNodesEditorRestoreBackToList() {
     mountingNodesDetailRestoreCoordinatorRef.current?.reset();
     mountingNodesEditorRestoreKeyRef.current = "";
@@ -14944,6 +15009,24 @@ export default function App() {
   });
 
   function handleMountingNodeEditorVariantChange(variantKey) {
+    const nextVariantKey = normalizeHoleWorkspaceMountingVariantKey(variantKey);
+    if (!nextVariantKey || nextVariantKey === mountingNodeEditorSelectedVariantKey) {
+      return;
+    }
+
+    const hasMountingPoints = Array.isArray(holePoints) && holePoints.length > 0;
+    if (
+      hasMountingPoints &&
+      typeof window !== "undefined" &&
+      !window.confirm(
+        language === "uk"
+          ? "У вузлі вже є налаштовані монтажні отвори. Зміна способу кріплення може змінити їх відображення. Після збереження перевірте монтажні отвори у розділі «Отвори та 3D». Продовжити?"
+          : 'This node already has configured mounting points. Changing the mounting method may affect how they are shown. Check the points in "Openings and 3D" after saving. Continue?',
+      )
+    ) {
+      return;
+    }
+
     setMountingNodeEditorDraft((current) => {
       if (!current || typeof current !== "object") {
         return current;
@@ -14951,10 +15034,34 @@ export default function App() {
 
       return {
         ...current,
-        mounting_variant_key: variantKey,
+        mounting_variant_key: nextVariantKey,
         is_dirty: true,
       };
     });
+
+    setHoleSelectedTemplate((current) => {
+      if (!current || typeof current !== "object") {
+        return current;
+      }
+
+      if (current.template && typeof current.template === "object") {
+        return {
+          ...current,
+          mounting_variant_key: nextVariantKey,
+          template: {
+            ...current.template,
+            mounting_variant_key: nextVariantKey,
+          },
+        };
+      }
+
+      return {
+        ...current,
+        mounting_variant_key: nextVariantKey,
+      };
+    });
+    setSelectedHoleMountingVariantKey(nextVariantKey);
+    setMountingNodeEditorHasChanges(true);
   }
 
   function handleMountingNodeEditorTemplateChange(templateId) {
@@ -30038,7 +30145,74 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                             : "Save"}
                         </button>
                       ) : null}
+                      {catalogHolesOpenContext?.nodeDetail?.can_delete ? (
+                        <button
+                          className="danger-button mounting-node-detail-action-button mounting-node-delete-button"
+                          disabled={mountingNodeEditorDeleteBusy || catalogHolesSaving}
+                          onClick={openMountingNodeEditorDeleteConfirm}
+                          type="button"
+                        >
+                          <Trash2 size={16} />
+                          {mountingNodeEditorDeleteBusy
+                            ? (language === "uk" ? "Видалення..." : "Deleting...")
+                            : (language === "uk" ? "Видалити монтажний вузол" : "Delete mounting node")}
+                        </button>
+                      ) : null}
                     </div>
+
+                    {mountingNodeEditorDeleteConfirmOpen ? (
+                      <div
+                        aria-modal="true"
+                        className="modal-backdrop"
+                        onClick={closeMountingNodeEditorDeleteConfirm}
+                        role="dialog"
+                      >
+                        <section className="confirm-modal" onClick={(event) => event.stopPropagation()}>
+                          <header className="confirm-header">
+                            <div>
+                              <h2>Видалити монтажний вузол?</h2>
+                            </div>
+                            <button
+                              aria-label="Скасувати"
+                              className="icon-button"
+                              disabled={mountingNodeEditorDeleteBusy}
+                              onClick={closeMountingNodeEditorDeleteConfirm}
+                              type="button"
+                            >
+                              <X size={18} />
+                            </button>
+                          </header>
+                          <p>
+                            Ви збираєтесь фізично видалити монтажний вузол “{String(catalogHolesOpenContext?.nodeDetail?.name || catalogHolesOpenContext?.nodeDetail?.code || catalogHolesOpenContext?.mountingNodeId || "").trim()}”.
+                            <br />
+                            Ця дія незворотна.
+                          </p>
+                          <p>
+                            Пов’язані склад і шаблони можуть бути видалені.
+                            <br />
+                            Якщо вузол використовується у схемах або правилах, видалення буде заблоковано.
+                          </p>
+                          <div className="confirm-actions">
+                            <button
+                              className="ghost-button"
+                              disabled={mountingNodeEditorDeleteBusy}
+                              onClick={closeMountingNodeEditorDeleteConfirm}
+                              type="button"
+                            >
+                              Скасувати
+                            </button>
+                            <button
+                              className="danger-button"
+                              disabled={mountingNodeEditorDeleteBusy}
+                              onClick={handleMountingNodeEditorDelete}
+                              type="button"
+                            >
+                              {mountingNodeEditorDeleteBusy ? "Видалення…" : "Видалити монтажний вузол"}
+                            </button>
+                          </div>
+                        </section>
+                      </div>
+                    ) : null}
 
                     {isMountingNodeEditorMode ? (
                       <>
@@ -30370,6 +30544,77 @@ function buildSurfaceMountHoleQuaternion(inwardNormal) {
                         value={mountingNodeEditorDraft?.description || ""}
                       />
                     </label>
+                  </section>
+
+                  <section className="mounting-node-create-card holes-mounting-variant-dropdown mounting-node-editor-variant-card">
+                    <div className="holes-mounting-variant-dropdown-head">
+                      <div>
+                        <strong>
+                          {language === "uk" ? "Спосіб з'єднання деталей" : "Mounting variant"}
+                        </strong>
+                        <p>
+                          {language === "uk"
+                            ? "Оберіть спосіб кріплення для поточного монтажного вузла."
+                            : "Choose the mounting method for the current mounting node."}
+                        </p>
+                      </div>
+                    </div>
+                    <div className={`holes-mounting-variant-dropdown-shell${holeMountingVariantDropdownOpen ? " is-open" : ""}`}>
+                      <button
+                        aria-expanded={holeMountingVariantDropdownOpen}
+                        aria-haspopup="listbox"
+                        className="holes-mounting-variant-toggle"
+                        disabled={catalogHolesSaving}
+                        onClick={() => setHoleMountingVariantDropdownOpen((current) => !current)}
+                        type="button"
+                      >
+                        <span className="holes-mounting-variant-toggle-mark" aria-hidden="true">
+                          {holeMountingVariantOptions.find(
+                            (variant) => variant.key === mountingNodeEditorSelectedVariantKey,
+                          )?.icon ? (
+                            <img
+                              alt=""
+                              src={holeMountingVariantOptions.find(
+                                (variant) => variant.key === mountingNodeEditorSelectedVariantKey,
+                              ).icon}
+                            />
+                          ) : <span>⋯</span>}
+                        </span>
+                        <span className="holes-mounting-variant-toggle-copy">
+                          <strong>{mountingNodeEditorSelectedVariantLabel}</strong>
+                          <span>
+                            {holeMountingVariantOptions.find(
+                              (variant) => variant.key === mountingNodeEditorSelectedVariantKey,
+                            )?.description || ""}
+                          </span>
+                        </span>
+                        <ChevronRight className="holes-mounting-variant-toggle-arrow" size={16} />
+                      </button>
+                      {holeMountingVariantDropdownOpen ? (
+                        <div className="holes-mounting-variant-menu" role="listbox">
+                          {holeMountingVariantOptions.map((variant) => (
+                            <button
+                              aria-pressed={mountingNodeEditorSelectedVariantKey === variant.key}
+                              className={`holes-mounting-variant-option${mountingNodeEditorSelectedVariantKey === variant.key ? " active" : ""}`}
+                              key={variant.key}
+                              onClick={() => {
+                                handleMountingNodeEditorVariantChange(variant.key);
+                                setHoleMountingVariantDropdownOpen(false);
+                              }}
+                              type="button"
+                            >
+                              <span className="holes-mounting-variant-option-mark" aria-hidden="true">
+                                <img alt="" src={variant.icon} />
+                              </span>
+                              <span className="holes-mounting-variant-option-copy">
+                                <strong>{variant.label}</strong>
+                                <span>{variant.description}</span>
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
                   </section>
 
                   <section className="mounting-node-create-card mounting-node-editor-items-card">

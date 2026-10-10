@@ -3,6 +3,8 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -23,10 +25,47 @@ from database.models.mounting_node import (
 from database.models.service_catalog_item import ServiceCatalogItemModel
 from database.models.service_drilling_rule import ServiceDrillingRuleModel
 from database.models.user import UserModel
-from services.mounting_node_service import MountingNodePermissionError, MountingNodeService
+from services.mounting_node_service import (
+    MountingNodeDependencyError,
+    MountingNodePermissionError,
+    MountingNodeService,
+)
 
 
 class MountingNodeServiceTests(unittest.TestCase):
+    def test_delete_mounting_node_allows_node_without_dependencies(self) -> None:
+        service, session = self._build_delete_service(dependency_counts=(0, 0))
+
+        self.assertTrue(service.delete_mounting_node(41, viewer_role="admin"))
+        session.delete.assert_called_once()
+
+    def test_delete_mounting_node_blocks_mounting_scheme_dependency(self) -> None:
+        service, session = self._build_delete_service(dependency_counts=(1, 0))
+
+        with self.assertRaisesRegex(MountingNodeDependencyError, "mounting_scheme_nodes=1"):
+            service.delete_mounting_node(41, viewer_role="admin")
+
+        session.delete.assert_not_called()
+
+    def test_delete_mounting_node_blocks_construction_rule_dependency(self) -> None:
+        service, session = self._build_delete_service(dependency_counts=(0, 2))
+
+        with self.assertRaisesRegex(
+            MountingNodeDependencyError,
+            "construction_rule_mounting_options=2",
+        ):
+            service.delete_mounting_node(41, viewer_role="admin")
+
+        session.delete.assert_not_called()
+
+    def test_delete_mounting_node_does_not_delete_when_any_dependency_exists(self) -> None:
+        service, session = self._build_delete_service(dependency_counts=(1, 1))
+
+        with self.assertRaises(MountingNodeDependencyError):
+            service.delete_mounting_node(41, viewer_role="admin")
+
+        session.delete.assert_not_called()
+
     def test_preview_fields_roundtrip_and_custom_delete(self) -> None:
         session, engine = self._build_session()
         try:
@@ -1560,6 +1599,20 @@ class MountingNodeServiceTests(unittest.TestCase):
         Session = sessionmaker(bind=engine, expire_on_commit=False)
         session = Session()
         return session, engine
+
+    @staticmethod
+    def _build_delete_service(dependency_counts: tuple[int, int]):
+        session = MagicMock()
+        query = session.query.return_value
+        query.filter.return_value.count.side_effect = list(dependency_counts)
+        repository = MagicMock()
+        repository.get_node_by_id.return_value = SimpleNamespace(
+            id=41,
+            owner_user_id=None,
+            is_archived=False,
+        )
+        service = MountingNodeService(session=session, repository=repository)
+        return service, session
 
     @staticmethod
     def _create_fitting(session, name: str, code: str, article: str) -> FittingModel:
